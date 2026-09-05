@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1878,
+    "entries": 1881,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -12729,7 +12729,7 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
-        "transaction": false
+        "transaction": true
       },
       "file": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
       "finalCriterion": "W3/W4 owner cutover",
@@ -12738,8 +12738,7 @@
         "audit",
         "authority",
         "authorization",
-        "event",
-        "transaction"
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#createDevelopmentAdapterResourceCatalogAclAdapter",
       "symbol": "createDevelopmentAdapterResourceCatalogAclAdapter",
@@ -13487,6 +13486,100 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
+      "symbol": "createDevelopmentAdapterAclIdentity",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createDevelopmentAdapterStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createDevelopmentAdapterStore",
+      "symbol": "createDevelopmentAdapterStore",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createPostgresqlDevelopmentAdapterRevisionStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createPostgresqlDevelopmentAdapterRevisionStore",
+      "symbol": "createPostgresqlDevelopmentAdapterRevisionStore",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
+      "symbol": "createSqliteDevelopmentAdapterStore",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -13743,30 +13836,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlDevelopmentAdapterRevisionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlDevelopmentAdapterRevisionStore.ts#createPostgresqlDevelopmentAdapterRevisionStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlDevelopmentAdapterRevisionStore.ts#createPostgresqlDevelopmentAdapterRevisionStore",
-      "symbol": "createPostgresqlDevelopmentAdapterRevisionStore",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "internal-family",
         "authorization": true,
         "event": false,
@@ -13782,51 +13851,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
       "symbol": "createScheduledTaskPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
-      "symbol": "createDevelopmentAdapterAclIdentity",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
-      "symbol": "createSqliteDevelopmentAdapterStore",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -16983,6 +17007,54 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#SyncResourceAclIdentityMutation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#SyncResourceAclIdentityMutation",
+      "symbol": "SyncResourceAclIdentityMutation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#SyncResourceAclIdentityPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#SyncResourceAclIdentityPersistence",
+      "symbol": "SyncResourceAclIdentityPersistence",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -18623,7 +18695,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": true
@@ -18634,7 +18706,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aclReadRepository.ts#createResourceAclReadPort",
@@ -44787,7 +44858,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:741e52515c5f3910c5de1a6c837f2cc5b38d3cc56db97f3c021ab1775270f7c4",
+  "sourceDigest": "sha256:88780f166672b8a9a61e265359df35c3c4ec1a0ef1a22d9161964ed658e1ca6d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

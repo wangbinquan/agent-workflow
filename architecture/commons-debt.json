@@ -4424,11 +4424,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:5a4e74dcd00648adb9bc"
+        "import:c615cc134164c4061f18"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#ResourceAclIdentityPersistence"
+        "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#SyncResourceAclIdentityPersistence"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -8771,15 +8771,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:741e52515c5f3910c5de1a6c837f2cc5b38d3cc56db97f3c021ab1775270f7c4",
+    "sourceDigest": "sha256:88780f166672b8a9a61e265359df35c3c4ec1a0ef1a22d9161964ed658e1ca6d",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "690080f38dd12e33f8559cc6255628ee5699c703",
-    "contentDigest": "sha256:2a51d35c378d0ba6638737c4ac92b3c780a7627d57f4ad5c07a049a01a0d1c34",
+    "currentSnapshotSha": "15d1ff73cc9f09e491042f0db23ecf185bece0bc",
+    "contentDigest": "sha256:9becf8478fb0115b1588e65ec3c7a815f9487bc7f1053297fd3b61a32739cf53",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

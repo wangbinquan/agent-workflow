@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 44,
-    "transactionCallbacks": 398
+    "transactionCallbacks": 396
   },
   "entries": [
     {
@@ -1813,13 +1813,13 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts#transaction:243",
-      "line": 243,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts#composePostgresqlDevelopmentAdapterConfigOperations",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#transaction:204",
+      "line": 204,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createDevelopmentAdapterStore",
       "status": "clear",
-      "symbol": "composePostgresqlDevelopmentAdapterConfigOperations",
+      "symbol": "createDevelopmentAdapterStore",
       "targetContext": "integration",
       "transactionCallee": "transaction"
     },
@@ -1944,30 +1944,6 @@
       "symbol": "createScheduledTaskPersistence",
       "targetContext": "integration",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#dbTxSync:160",
-      "line": 160,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
-      "status": "clear",
-      "symbol": "createSqliteDevelopmentAdapterStore",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#dbTxSync:52",
-      "line": 52,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
-      "status": "clear",
-      "symbol": "createDevelopmentAdapterAclIdentity",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -4881,7 +4857,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:741e52515c5f3910c5de1a6c837f2cc5b38d3cc56db97f3c021ab1775270f7c4",
+  "sourceDigest": "sha256:88780f166672b8a9a61e265359df35c3c4ec1a0ef1a22d9161964ed658e1ca6d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

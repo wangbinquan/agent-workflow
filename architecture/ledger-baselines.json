@@ -349,8 +349,8 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 47,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。"
+      "baseline": 46,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。"
     },
     {
       "id": "rfc349-provider-specific-business-dependencies",
@@ -391,8 +391,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1878,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1881,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D6a：development adapter 链合一与 foreign-owner ACL 异步 identity 端口后的账本重采（一次性）"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -405,7 +408,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 398,
+      "baseline": 396,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -426,7 +429,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5960,
+      "baseline": 5945,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,11 +450,8 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5203,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D5：融合链合一后跨 context 例外改指中立文件"
-      }
+      "baseline": 5189,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -464,7 +464,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 984,
+      "baseline": 983,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -485,12 +485,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25817,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25819,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D6a：development adapter 链合一与 foreign-owner ACL 异步 identity 端口后的账本重采（一次性）"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:741e52515c5f3910c5de1a6c837f2cc5b38d3cc56db97f3c021ab1775270f7c4",
+    "sourceDigest": "sha256:88780f166672b8a9a61e265359df35c3c4ec1a0ef1a22d9161964ed658e1ca6d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -503,8 +506,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "690080f38dd12e33f8559cc6255628ee5699c703",
-    "contentDigest": "sha256:6c78e87eec5a24db3c2301a89fdc5e8b81bea539b6cfae938856d2a45ad91293",
+    "currentSnapshotSha": "15d1ff73cc9f09e491042f0db23ecf185bece0bc",
+    "contentDigest": "sha256:6e2038f29821f8dfe36e3774b773ff9de3a89d778b4f3d94e31732cd3d436964",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
