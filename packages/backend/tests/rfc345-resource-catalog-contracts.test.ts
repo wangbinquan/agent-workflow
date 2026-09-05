@@ -1288,7 +1288,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteAgentRepository.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/agentRepository.ts'),
       'utf8',
     )
     const composition = readFileSync(
@@ -1346,14 +1346,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('const referenceQueries: AgentReferenceQueries = Object.freeze')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
-    expect(repository).toContain("from './legacy/agent'")
-    expect(repository).toContain('explicit compatibility island')
-    expect(repository).toContain('loadClosureRefNames(')
-    expect(composition).toContain('createSqliteAgentRepository')
+    // RFC-359 W4-D14：Agent 仓库只有一份中立实现，不再有 legacy 包装的 SQLite 兼容岛。
+    expect(repository).not.toContain("from './legacy/agent'")
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('runResourceCatalogTransaction(')
+    expect(repository).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync/)
     expect(composition).toContain('createAgentApplication')
     expect(composition).toContain('composeAgentCatalogFromAdapters')
-    expect(composition).toContain('export function composePostgresqlAgentCatalog(')
-    expect(composition).toContain('createPostgresqlAgentRepository({')
+    expect(composition).toContain('export function composeAgentCatalog(')
+    expect(composition).toContain('createAgentRepository({')
     expect(composition).toContain(
       "resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>",
     )
@@ -1361,20 +1362,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       "composeProviderResourceAclOperationApplication<AgentOperationContext, 'agent', Agent>",
     )
 
-    const postgresqlCompositionStart = composition.indexOf(
-      'export function composePostgresqlAgentCatalog(',
-    )
-    const postgresqlCompositionEnd = composition.indexOf(
-      'export function composeAgentCatalog(',
-      postgresqlCompositionStart,
-    )
-    const postgresqlComposition = composition.slice(
-      postgresqlCompositionStart,
-      postgresqlCompositionEnd,
-    )
-    expect(postgresqlComposition).not.toContain('createSqliteAgentRepository')
-    expect(postgresqlComposition).not.toContain('composeResourceAclOperationApplication')
-    expect(postgresqlComposition).not.toContain('as DbClient')
+    expect(composition).not.toContain('createSqliteAgentRepository')
+    expect(composition).not.toContain('composePostgresqlAgentCatalog')
+    expect(composition).not.toMatch(/composeResourceAclOperationApplication\b/)
+    expect(composition).not.toContain('as DbClient')
 
     const updateCommandStart = application.indexOf('async update(')
     const parseUpdate = application.indexOf('parseUpdateSubmission(input)', updateCommandStart)

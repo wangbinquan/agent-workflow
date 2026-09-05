@@ -537,6 +537,26 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   commit / publish 原子、轮次校验取最高 attempt、仓库解析（未缓存 / volatile / SecretBox 解封）与 MR 事实目标、排空视图
   计数与 truncated + 源码锁。**development-automation 至此没有任何 provider 命名的持久化或装配孪生。**
   **下一刀 D14**：resource-catalog legacy 对（16 对）。
+  **D14 ✅（resource-catalog · Agent 聚合：一份实现，SQLite 装配切过去）**：resource-catalog 的两侧形态不对称——
+  SQLite 侧是 `legacy/*` 同步服务外面的薄包装（`sqliteAgentRepository.ts` 50 行），PG 侧是完整的异步重写
+  （`postgresqlAgentRepository.ts` 231 行 + `postgresqlAgentPersistenceSemantics.ts` 420 行）。合一的办法是让异步实现成为
+  唯一实现：`infrastructure/agentRepository.ts`（`createAgentRepository`：写路径全在 `runResourceCatalogTransaction`
+  的 serializable 事务里；owner + name 唯一冲突经能力矩阵 `uniqueViolationTarget` 映射回 `agent-name-in-use`——PG 给
+  约束名 `agents_owner_name_unique`、SQLite 给列清单 `agents.owner_user_id, …`，一条正则两边都认）、
+  `agentPersistenceSemantics.ts`（`createAgentPersistenceSemantics`：引用 / runtime / 依赖环 / 删除受引用校验）、
+  `agentImportQueries.ts`（`createAgentImportReferenceReadPort` + `createImportReferenceReadPortInTransaction`，
+  `ACL_TABLES` 只有一份）。装配层 `composeAgentCatalog` 一份（`db: ProviderNeutralDatabase` + persistence +
+  resourceCatalog），`composeAgentImportQueries` / `composeDatabaseAgentResourceInventorySource` /
+  `composeDatabaseAgentResourceIntegrity` / `composePortableImportReferences(InTransaction)` 各一份；server.ts 与 start.ts
+  的 SQLite 装配改成与 PG daemon 同一套（persistence 语义层 + runtimeProfiles 走 runtimeRegistry）；
+  `postgresqlClassicCatalogs.ts` 的 Agent 分支改接中立入口。SQLite 专属的同步 portable-import 终写围栏
+  （`createPortableImportReferenceSyncFence` / `TransactionBoundImportReferenceSyncReadPort`，无生产消费方）删除。
+  五个 provider 文件删除；rfc345（contracts / classic-facades / agent-import-queries）与 rfc349 classic adapters、rfc305
+  跨界账本改指中立文件；七个测试与 legacy/workgroup/launch.ts 改接。`rfc359-w4-d14-adapters.test.ts` 两引擎各跑创建 /
+  同 owner 同名冲突 / 引用与 runtime 校验 / fence 过期 / 改名冲突 / 删除受引用保护 / 引用标签 / import 快照 + 源码锁。
+  **留下的债**：`legacy/agent.ts` 同步服务仍被 services/agent.ts 门面、task-execution、code-capability 等消费，它不是
+  provider 对而是「只有 SQLite 能走」的旧路径，随各消费方切到 `AgentCatalogModule` 后再删。**下一刀 D15**：
+  resource-catalog 的 Skill / Workflow 聚合按同一办法合一（PG 异步实现成为唯一实现）。
 
 ## 5. W5 —— 防复辟
 

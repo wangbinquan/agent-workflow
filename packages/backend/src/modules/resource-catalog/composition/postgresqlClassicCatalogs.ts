@@ -8,21 +8,21 @@ import type {
 } from '../public/operations'
 import type { PostgresqlSkillContentLifecycle } from '../infrastructure/postgresqlSkillRepository'
 import {
-  createPostgresqlAgentPersistenceSemantics,
+  createAgentPersistenceSemantics,
   type AgentRuntimeProfileLookup,
-} from '../infrastructure/postgresqlAgentPersistenceSemantics'
+} from '../infrastructure/agentPersistenceSemantics'
 import {
   createPostgresqlSkillContentLifecycle,
   type PostgresqlSkillRestoreMembershipPort,
 } from '../infrastructure/postgresqlSkillContentLifecycle'
 import { createPostgresqlWorkflowPersistenceSemantics } from '../infrastructure/postgresqlWorkflowPersistenceSemantics'
-import { composePostgresqlAgentImportQueries } from './agentImportQueries'
+import { composeAgentImportQueries } from './agentImportQueries'
 import {
   composeAgentResourceIntegrity,
-  composePostgresqlAgentResourceInventorySource,
+  composeDatabaseAgentResourceInventorySource,
   type AgentResourceIntegrityComposition,
 } from './agentResourceIntegrity'
-import { composePostgresqlAgentCatalog } from './agentOperations'
+import { composeAgentCatalog } from './agentOperations'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { composePostgresqlSkillCatalog } from './skillOperations'
 import { composePostgresqlWorkflowCatalog } from './workflowOperations'
@@ -54,21 +54,21 @@ export function composePostgresqlClassicCatalogs(input: {
     appHome: input.appHome,
     restoreMembership: input.restoreMembership,
   })
-  const agentResourceInventory = composePostgresqlAgentResourceInventorySource({
+  const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: input.db,
     authorization: input.resourceCatalog.authorization,
   })
   const agentResourceIntegrity = composeAgentResourceIntegrity(agentResourceInventory)
-  const agent = composePostgresqlAgentCatalog({
+  const agent = composeAgentCatalog({
     db: input.db,
-    persistence: createPostgresqlAgentPersistenceSemantics({
+    persistence: createAgentPersistenceSemantics({
       db: input.db,
       authorization: input.resourceCatalog.authorization,
       resourceInventory: agentResourceInventory,
       runtimeProfiles: input.runtimeProfiles,
     }),
     resourceCatalog: input.resourceCatalog,
-    importQueries: composePostgresqlAgentImportQueries(input.db),
+    importQueries: composeAgentImportQueries(input.db),
     resourceIntegrityQueries: agentResourceIntegrity.queries,
   })
   const skill = composePostgresqlSkillCatalog({

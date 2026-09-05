@@ -7,7 +7,7 @@ import {
 import { composeIntegrationTriggerResourceSnapshotFactory } from '../../src/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeSqliteAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createSqliteTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { assertNotBuiltin } from '../../src/services/systemResources'
 import {
@@ -45,7 +45,7 @@ export function taskExecutionResourceBinding(db: DbClient) {
 
 export function scheduledTaskRuntime(db: DbClient) {
   const resourceCatalog = composeSqliteResourceCatalog({ db })
-  const agentResourceInventory = composeSqliteAgentResourceInventorySource({
+  const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
     authorization: resourceCatalog.authorization,
   })

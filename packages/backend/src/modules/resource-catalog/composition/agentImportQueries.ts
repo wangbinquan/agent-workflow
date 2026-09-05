@@ -1,16 +1,9 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createAgentImportQueries } from '../application/agents/agentImportQueries'
-import { createPostgresqlAgentImportReferenceReadPort } from '../infrastructure/postgresqlAgentImportQueries'
-import { createSqliteAgentImportReferenceReadPort } from '../infrastructure/sqliteAgentImportQueries'
+import { createAgentImportReferenceReadPort } from '../infrastructure/agentImportQueries'
 import type { AgentImportQueries } from '../public/queries'
 
-export function composeSqliteAgentImportQueries(db: DbClient): AgentImportQueries {
-  return createAgentImportQueries(createSqliteAgentImportReferenceReadPort(db))
-}
-
-export function composePostgresqlAgentImportQueries(
-  db: PostgresqlDatabaseClient,
-): AgentImportQueries {
-  return createAgentImportQueries(createPostgresqlAgentImportReferenceReadPort(db))
+/** 一份装配，两个 provider 共用（RFC-359 W4-D14）。 */
+export function composeAgentImportQueries(db: ProviderNeutralDatabase): AgentImportQueries {
+  return createAgentImportQueries(createAgentImportReferenceReadPort(db))
 }

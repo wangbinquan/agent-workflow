@@ -45,7 +45,7 @@ import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
-import { composeSqliteAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
@@ -62,7 +62,7 @@ const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 function buildRealScheduleLaunch(db: DbClient, configPath: string) {
   const catalog = composeSqliteResourceCatalog({ db })
-  const integrity = composeSqliteAgentResourceIntegrity({
+  const integrity = composeDatabaseAgentResourceIntegrity({
     db,
     authorization: catalog.authorization,
   })

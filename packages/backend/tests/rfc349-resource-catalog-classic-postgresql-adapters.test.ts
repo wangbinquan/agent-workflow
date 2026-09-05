@@ -9,11 +9,25 @@ function source(path: string): string {
 }
 
 describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
+  // RFC-359 W4-D14：Agent 聚合已是一份中立实现（见下面单独的断言），不再有 postgresql* 孪生。
   const aggregates = [
-    ['Agent', 'agentOperations'],
     ['Skill', 'skillOperations'],
     ['Workflow', 'workflowOperations'],
   ] as const
+
+  test('agent repository and composition are one provider-neutral implementation (RFC-359 W4-D14)', () => {
+    const repository = source('src/modules/resource-catalog/infrastructure/agentRepository.ts')
+    const composition = source('src/modules/resource-catalog/composition/agentOperations.ts')
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('runResourceCatalogTransaction')
+    expect(repository).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
+    )
+    expect(composition).toContain('composeAgentCatalogFromAdapters')
+    expect(composition).toContain('createAgentRepository({')
+    expect(composition).toContain('export function composeAgentCatalog(')
+    expect(composition).not.toMatch(/composePostgresqlAgentCatalog|createSqliteAgentRepository/)
+  })
 
   test('repositories use the shared asynchronous transaction boundary without SQLite fallback', () => {
     for (const [aggregate] of aggregates) {
@@ -57,9 +71,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
 
   test('one owner-native bundle supplies all PostgreSQL classic catalog semantics', () => {
     const bundle = source('src/modules/resource-catalog/composition/postgresqlClassicCatalogs.ts')
-    const agent = source(
-      'src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts',
-    )
+    const agent = source('src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts')
     const workflow = source(
       'src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts',
     )
@@ -68,19 +80,19 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     )
 
     expect(bundle).toContain('export function composePostgresqlClassicCatalogs(')
-    expect(bundle).toContain('createPostgresqlAgentPersistenceSemantics({')
+    expect(bundle).toContain('createAgentPersistenceSemantics({')
     expect(bundle).toContain('createPostgresqlWorkflowPersistenceSemantics({')
     expect(bundle).toContain('createPostgresqlSkillContentLifecycle({')
     // RFC-353 T7：回滚成员关系由 knowledge-evolution 裁定、bootstrap 注入，
     // 这里断言的是「bundle 把它原样传给内容生命周期」这条装配事实（名字随之改了）。
     expect(bundle).toContain('restoreMembership: input.restoreMembership')
     expect(bundle).toContain('runtimeProfiles: input.runtimeProfiles')
-    expect(bundle).toContain('composePostgresqlAgentCatalog({')
+    expect(bundle).toContain('composeAgentCatalog({')
     expect(bundle).toContain('composePostgresqlWorkflowCatalog({')
     expect(bundle).toContain('composePostgresqlSkillCatalog({')
     expect(bundle).not.toMatch(/createSqlite|as DbClient|as PostgresqlDatabaseClient/)
 
-    expect(agent).toContain('export function createPostgresqlAgentPersistenceSemantics(')
+    expect(agent).toContain('export function createAgentPersistenceSemantics(')
     expect(agent).toContain('assertReferencesUsable({')
     expect(agent).toContain('assertDependencyGraph(')
     expect(agent).toContain('readonly runtimeProfiles: AgentRuntimeProfileLookup')

@@ -45,7 +45,7 @@ import {
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
-import { composeSqliteAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import {
@@ -94,7 +94,7 @@ function daemonActor(): Actor {
 }
 
 function agentResourceIntegrity(db: DbClient) {
-  return composeSqliteAgentResourceIntegrity({
+  return composeDatabaseAgentResourceIntegrity({
     db,
     authorization: composeSqliteResourceCatalog({ db }).authorization,
   }).launch

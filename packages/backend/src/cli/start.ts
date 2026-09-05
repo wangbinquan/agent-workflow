@@ -107,13 +107,13 @@ import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { admitDaemonIdentity } from '@/auth/session'
 import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
+import { composeDatabaseAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
-import { composeSqliteAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
+import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
 import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
@@ -148,7 +148,10 @@ import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalo
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import {
+  composeAgentResourceIntegrity,
+  composeDatabaseAgentResourceInventorySource,
+} from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
 import {
@@ -1793,10 +1796,11 @@ async function composeSqliteProviderSession(
   })
   const identityAccess = providerCore.identityAccess
   const resourceCatalog = composeSqliteResourceCatalog({ db })
-  const agentResourceIntegrity = composeSqliteAgentResourceIntegrity({
+  const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
     authorization: resourceCatalog.authorization,
   })
+  const agentResourceIntegrity = composeAgentResourceIntegrity(agentResourceInventory)
   const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
     legacyTaskExecutionResourceDependencies,
   )
@@ -2299,9 +2303,12 @@ async function composeSqliteProviderSession(
     deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
   })
   mcpCatalogRef = mcpCatalog
-  const agentCatalog = composeAgentCatalog({
+  const agentCatalog = composeDatabaseAgentCatalog({
     db,
-    importQueries: composeSqliteAgentImportQueries(db),
+    resourceCatalog,
+    resourceInventory: agentResourceInventory,
+    runtimeProfiles: { get: (name) => runtimeRegistry.getRuntime(name) },
+    importQueries: composeAgentImportQueries(db),
     resourceIntegrityQueries: agentResourceIntegrity.queries,
   })
   const skillCatalog = composeSkillCatalog({

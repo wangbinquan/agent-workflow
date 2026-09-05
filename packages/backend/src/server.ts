@@ -75,9 +75,13 @@ import {
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
-import { composeSqliteAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
-import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
+import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
+import {
+  composeAgentResourceIntegrity,
+  composeDatabaseAgentResourceInventorySource,
+  type AgentResourceIntegrityComposition,
+} from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
@@ -1987,14 +1991,18 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
         : { capacity: effectiveDeps.mcpRuntimeTestDependencies.capacity }),
     })
   const providerResourceCatalog = composeSqliteResourceCatalog({ db: effectiveDeps.db })
-  const agentResourceIntegrity = composeSqliteAgentResourceIntegrity({
+  const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: effectiveDeps.db,
     authorization: providerResourceCatalog.authorization,
   })
+  const agentResourceIntegrity = composeAgentResourceIntegrity(agentResourceInventory)
   const agentResourceIntegrityQueries = agentResourceIntegrity.queries
-  const agentCatalog = composeAgentCatalog({
+  const agentCatalog = composeDatabaseAgentCatalog({
     db: effectiveDeps.db,
-    importQueries: composeSqliteAgentImportQueries(effectiveDeps.db),
+    resourceCatalog: providerResourceCatalog,
+    resourceInventory: agentResourceInventory,
+    runtimeProfiles: { get: (name) => effectiveDeps.runtimeRegistry.getRuntime(name) },
+    importQueries: composeAgentImportQueries(effectiveDeps.db),
     resourceIntegrityQueries: agentResourceIntegrityQueries,
   })
   agentCatalogRef = agentCatalog
@@ -2299,7 +2307,7 @@ function composeSqliteApiRouteMounts(
   resourcePackageCatalog: ComposedResourcePackageCatalog | null,
   providerResourceCatalog: ReturnType<typeof composeSqliteResourceCatalog>,
   composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
-  agentResourceIntegrity: ReturnType<typeof composeSqliteAgentResourceIntegrity>,
+  agentResourceIntegrity: AgentResourceIntegrityComposition,
   overviewQuery: OverviewRouteQuery,
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createSqliteTaskExecutionPersistence>,

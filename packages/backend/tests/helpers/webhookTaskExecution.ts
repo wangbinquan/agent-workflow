@@ -2,7 +2,7 @@ import type { SecretBox } from '../../src/auth/secretBox'
 import type { DbClient } from '../../src/db/client'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import { composeSqliteAgentLaunchResourceOperations } from '../../src/modules/task-execution/composition/agentLaunchResources'
-import { composeSqliteAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/webhookDispatch'
 import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
@@ -22,7 +22,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
   const resourceCatalog = composeSqliteResourceCatalog({ db: input.db })
   const agentLaunchResources = Object.freeze({
     resources: composeSqliteAgentLaunchResourceOperations(input.db),
-    integrity: composeSqliteAgentResourceIntegrity({
+    integrity: composeDatabaseAgentResourceIntegrity({
       db: input.db,
       authorization: resourceCatalog.authorization,
     }).launch,

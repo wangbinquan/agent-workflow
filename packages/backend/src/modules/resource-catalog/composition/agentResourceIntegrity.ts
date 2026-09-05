@@ -1,6 +1,5 @@
 import type { AclResourceType } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createDatabaseAgentResourceInventoryReadPort } from '../infrastructure/agentResourceInventory'
 import { isSkillAvailableThisBoot } from '../infrastructure/legacy/skillBootVerify'
 import type {
@@ -71,9 +70,9 @@ const skillAvailability = Object.freeze({
   },
 })
 
-/** Provider-private SQLite composition; consumers receive only the closed source. */
-export function composeSqliteAgentResourceInventorySource(input: {
-  readonly db: DbClient
+/** 数据库句柄直入的装配：一份实现，两个 provider 共用（RFC-359 W4-D14）。消费者只拿到闭合的 source。 */
+export function composeDatabaseAgentResourceInventorySource(input: {
+  readonly db: ProviderNeutralDatabase
   readonly authorization: ResourceAuthorizationApplication
 }): AgentResourceInventorySource {
   return composeAgentResourceInventorySource({
@@ -85,30 +84,9 @@ export function composeSqliteAgentResourceInventorySource(input: {
   })
 }
 
-export function composeSqliteAgentResourceIntegrity(input: {
-  readonly db: DbClient
+export function composeDatabaseAgentResourceIntegrity(input: {
+  readonly db: ProviderNeutralDatabase
   readonly authorization: ResourceAuthorizationApplication
 }): AgentResourceIntegrityComposition {
-  return composeAgentResourceIntegrity(composeSqliteAgentResourceInventorySource(input))
-}
-
-/** Provider-private PostgreSQL composition; consumers receive only the closed source. */
-export function composePostgresqlAgentResourceInventorySource(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly authorization: ResourceAuthorizationApplication
-}): AgentResourceInventorySource {
-  return composeAgentResourceInventorySource({
-    inventory: createDatabaseAgentResourceInventoryReadPort({
-      db: input.db,
-      skillAvailability,
-    }),
-    authorization: input.authorization,
-  })
-}
-
-export function composePostgresqlAgentResourceIntegrity(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly authorization: ResourceAuthorizationApplication
-}): AgentResourceIntegrityComposition {
-  return composeAgentResourceIntegrity(composePostgresqlAgentResourceInventorySource(input))
+  return composeAgentResourceIntegrity(composeDatabaseAgentResourceInventorySource(input))
 }

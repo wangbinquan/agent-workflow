@@ -36,7 +36,7 @@ import {
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
-import { composeSqliteAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
 function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
@@ -991,7 +991,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
 
     // ① 不再抛：接线前，准备在落行之前跑，克隆一失败 fireSchedule 就整个抛出去。
     const resourceCatalog = composeSqliteResourceCatalog({ db: db2 })
-    const agentIntegrity = composeSqliteAgentResourceIntegrity({
+    const agentIntegrity = composeDatabaseAgentResourceIntegrity({
       db: db2,
       authorization: resourceCatalog.authorization,
     })

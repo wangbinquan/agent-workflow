@@ -11,7 +11,6 @@ import { ConflictError, ValidationError } from '@/util/errors'
 import type {
   AgentImportResolutionSnapshot,
   TransactionBoundImportReferenceReadPort,
-  TransactionBoundImportReferenceSyncReadPort,
 } from './agents/importPorts'
 
 const DANGLE_TOLERANT_IMPORT_REF_TYPES: ReadonlySet<ImportRefType> = new Set([
@@ -251,30 +250,6 @@ export function createPortableImportReferenceApplication(
   })
 }
 
-/** SQLite-only final-write fence for an already-open synchronous transaction. */
-export function createPortableImportReferenceSyncFence(
-  reads: TransactionBoundImportReferenceSyncReadPort,
-) {
-  return Object.freeze({
-    assertStable(
-      authority: DirectAuthenticatedAuthority,
-      fence: PortableImportReferenceFence,
-    ): void {
-      const selectors = fence.entries.map((entry) => entry.selector)
-      const selections = fence.entries.map((entry) => ({
-        selector: entry.selector,
-        resourceId: entry.selectedId,
-        expectedAclRevision:
-          entry.candidates.find((candidate) => candidate.id === entry.selectedId)?.aclRevision ?? 0,
-      }))
-      assertStableFromSnapshot(fence, reads.snapshotSync(authority, selectors, selections))
-    },
-  })
-}
-
 export type PortableImportReferenceApplication = ReturnType<
   typeof createPortableImportReferenceApplication
->
-export type PortableImportReferenceSyncFence = ReturnType<
-  typeof createPortableImportReferenceSyncFence
 >

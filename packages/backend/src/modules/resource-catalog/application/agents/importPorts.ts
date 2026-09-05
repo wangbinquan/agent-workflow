@@ -30,20 +30,11 @@ export interface AgentImportReferenceReadPort {
   ): Promise<AgentImportResolutionSnapshot>
 }
 
-/** Current-provider transaction reads used by PostgreSQL fence validation. */
+/** 绑定到调用方已开事务的读面：终写围栏与写入同一快照（RFC-359 W4-D14 起两个 provider 同一份）。 */
 export interface TransactionBoundImportReferenceReadPort {
   snapshot(
     authority: DirectAuthenticatedAuthority,
     selectors: readonly ImportRefSelector[],
     selections: readonly ImportRefSelection[],
   ): Promise<AgentImportResolutionSnapshot>
-}
-
-/** SQLite-only reads that stay inside the caller's synchronous transaction. */
-export interface TransactionBoundImportReferenceSyncReadPort {
-  snapshotSync(
-    authority: DirectAuthenticatedAuthority,
-    selectors: readonly ImportRefSelector[],
-    selections: readonly ImportRefSelection[],
-  ): AgentImportResolutionSnapshot
 }

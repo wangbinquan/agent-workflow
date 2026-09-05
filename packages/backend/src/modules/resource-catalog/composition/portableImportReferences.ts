@@ -1,38 +1,21 @@
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { createPortableImportReferenceApplication } from '../application/portableImportReferences'
 import {
-  createPortableImportReferenceApplication,
-  createPortableImportReferenceSyncFence,
-} from '../application/portableImportReferences'
-import {
-  createPostgresqlAgentImportReferenceReadPort,
-  createPostgresqlImportReferenceReadPortInTransaction,
-} from '../infrastructure/postgresqlAgentImportQueries'
-import type { PostgresqlResourceCatalogTransaction } from '../infrastructure/postgresql/repositorySupport'
-import {
-  createSqliteAgentImportReferenceReadPort,
-  createSqliteImportReferenceSyncReadPort,
-} from '../infrastructure/sqliteAgentImportQueries'
+  createAgentImportReferenceReadPort,
+  createImportReferenceReadPortInTransaction,
+} from '../infrastructure/agentImportQueries'
+import type { ResourceCatalogTransaction } from '../infrastructure/resourceCatalogTransaction'
 
-export function composeSqlitePortableImportReferences(db: DbClient) {
-  return createPortableImportReferenceApplication(createSqliteAgentImportReferenceReadPort(db))
+/** 一份装配，两个 provider 共用（RFC-359 W4-D14）。 */
+export function composePortableImportReferences(db: ProviderNeutralDatabase) {
+  return createPortableImportReferenceApplication(createAgentImportReferenceReadPort(db))
 }
 
-export function composeSqlitePortableImportReferenceSyncFence(transaction: DbTxSync) {
-  return createPortableImportReferenceSyncFence(
-    createSqliteImportReferenceSyncReadPort(transaction),
-  )
-}
-
-export function composePostgresqlPortableImportReferences(db: PostgresqlDatabaseClient) {
-  return createPortableImportReferenceApplication(createPostgresqlAgentImportReferenceReadPort(db))
-}
-
-export function composePostgresqlPortableImportReferencesInTransaction(
-  transaction: PostgresqlResourceCatalogTransaction,
+/** 绑定到调用方已开的统一事务：终写围栏与写入同一快照。 */
+export function composePortableImportReferencesInTransaction(
+  transaction: ResourceCatalogTransaction,
 ) {
   return createPortableImportReferenceApplication(
-    createPostgresqlImportReferenceReadPortInTransaction(transaction),
+    createImportReferenceReadPortInTransaction(transaction),
   )
 }

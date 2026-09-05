@@ -1,33 +1,27 @@
 import type { Agent } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import {
-  canViewResource,
-  composeProviderResourceAclOperationApplication,
-  composeResourceAclOperationApplication,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from './resourceAcl'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { assertNotBuiltin, excludeBuiltinAgents } from '@/services/systemResources'
 import { createAgentApplication } from '../application/agents/agentApplication'
-import type { AgentAccessPort, AgentPolicyPort, AgentRepository } from '../application/agents/ports'
-import { createSqliteAgentRepository } from '../infrastructure/sqliteAgentRepository'
+import type {
+  AgentAccessPort,
+  AgentPolicyPort,
+  AgentRepository,
+  AgentResourceInventorySource,
+} from '../application/agents/ports'
 import {
-  createPostgresqlAgentRepository,
-  type PostgresqlAgentPersistenceSemantics,
-} from '../infrastructure/postgresqlAgentRepository'
+  createAgentRepository,
+  type AgentPersistenceSemantics,
+} from '../infrastructure/agentRepository'
+import {
+  createAgentPersistenceSemantics,
+  type AgentRuntimeProfileLookup,
+} from '../infrastructure/agentPersistenceSemantics'
 import { createAgentOperationDescriptors } from './catalogOperationDescriptors'
 import type { AgentCatalogModule } from '../public/operations'
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentImportQueries, AgentResourceIntegrityQueries } from '../public/queries'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-
-export interface AgentCatalogCompositionDependencies {
-  readonly db: DbClient
-  readonly importQueries: AgentImportQueries
-  readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
-}
 
 type AgentAclOperationApplication = Parameters<typeof createAgentOperationDescriptors>[2]
 
@@ -40,9 +34,9 @@ export interface AgentCatalogAdapterCompositionDependencies {
   readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
 }
 
-export interface PostgresqlAgentCatalogCompositionDependencies {
-  readonly db: PostgresqlDatabaseClient
-  readonly persistence: PostgresqlAgentPersistenceSemantics
+export interface AgentCatalogCompositionDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly persistence: AgentPersistenceSemantics
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly importQueries: AgentImportQueries
   readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
@@ -71,10 +65,11 @@ export function composeAgentCatalogFromAdapters(
   })
 }
 
-export function composePostgresqlAgentCatalog(
-  input: PostgresqlAgentCatalogCompositionDependencies,
+/** 一份装配，两个 provider 共用（RFC-359 W4-D14）：仓库 / 语义 / ACL 应用都已是中立实现。 */
+export function composeAgentCatalog(
+  input: AgentCatalogCompositionDependencies,
 ): AgentCatalogModule {
-  const repository = createPostgresqlAgentRepository({
+  const repository = createAgentRepository({
     db: input.db,
     semantics: input.persistence,
   })
@@ -110,35 +105,27 @@ export function composePostgresqlAgentCatalog(
   })
 }
 
-export function composeAgentCatalog(
-  input: AgentCatalogCompositionDependencies,
-): AgentCatalogModule {
-  const repository = createSqliteAgentRepository(input.db)
-  const access: AgentAccessPort = Object.freeze({
-    filterVisible: (authority: AgentOperationContext, rows: readonly Agent[]) =>
-      filterVisibleRows(input.db, authority, 'agent', [...rows]),
-    canView: (authority: AgentOperationContext, row: Agent) =>
-      canViewResource(input.db, authority, 'agent', row),
-    requireResourceEdit: async (authority: AgentOperationContext, row: Agent) => {
-      await requireResourceEdit(input.db, authority, 'agent', row)
-    },
-    requireResourceGovern: (authority: AgentOperationContext, row: Agent) =>
-      requireResourceGovern(input.db, authority, 'agent', row),
-  })
-  const policy: AgentPolicyPort = Object.freeze({
-    excludeBuiltin: (rows: readonly Agent[]) => excludeBuiltinAgents([...rows]),
-    assertMutable: (row: Agent) => assertNotBuiltin('agent', row),
-  })
-  const acl = composeResourceAclOperationApplication<AgentOperationContext, Agent>({
+/**
+ * Bootstrap 装配：从数据库句柄直接装出 Agent 目录——语义层在这里装，bootstrap 不碰 infrastructure
+ * （RFC-294 §3.1 的 offered 边只允许 bootstrap → composition）。
+ */
+export function composeDatabaseAgentCatalog(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
+  readonly resourceInventory: AgentResourceInventorySource
+  readonly runtimeProfiles: AgentRuntimeProfileLookup
+  readonly importQueries: AgentImportQueries
+  readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
+}): AgentCatalogModule {
+  return composeAgentCatalog({
     db: input.db,
-    type: 'agent',
-    load: (id) => repository.get(id),
-  })
-  return composeAgentCatalogFromAdapters({
-    repository,
-    access,
-    policy,
-    acl,
+    persistence: createAgentPersistenceSemantics({
+      db: input.db,
+      authorization: input.resourceCatalog.authorization,
+      resourceInventory: input.resourceInventory,
+      runtimeProfiles: input.runtimeProfiles,
+    }),
+    resourceCatalog: input.resourceCatalog,
     importQueries: input.importQueries,
     resourceIntegrityQueries: input.resourceIntegrityQueries,
   })

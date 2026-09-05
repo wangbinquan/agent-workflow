@@ -17,17 +17,14 @@ describe('RFC-345 Agent import queries', () => {
     expect(ports).not.toMatch(/DbClient|DbTxSync|Postgresql|drizzle|schema/)
   })
 
-  test('SQLite and PostgreSQL resolve one coherent provider snapshot', () => {
+  test('one provider-neutral snapshot serves both engines (RFC-359 W4-D14)', () => {
     const composition = source('composition/agentImportQueries.ts')
-    const sqlite = source('infrastructure/sqliteAgentImportQueries.ts')
-    const postgresql = source('infrastructure/postgresqlAgentImportQueries.ts')
+    const infrastructure = source('infrastructure/agentImportQueries.ts')
 
-    expect(composition).toContain('composeSqliteAgentImportQueries')
-    expect(composition).toContain('composePostgresqlAgentImportQueries')
-    expect(sqlite).toContain('dbTxSync(db')
-    expect(postgresql).toContain('runPostgresqlResourceCatalogTransaction')
-    expect(sqlite).not.toMatch(/as unknown|Postgresql|fallback/)
-    expect(postgresql).not.toMatch(/as unknown|DbClient|SQLite|fallback/)
+    expect(composition).toContain('composeAgentImportQueries')
+    expect(composition).not.toMatch(/composeSqlite|composePostgresql/)
+    expect(infrastructure).toContain('runResourceCatalogTransaction')
+    expect(infrastructure).not.toMatch(/as unknown|DbClient|dbTxSync|Postgresql|fallback/)
   })
 
   test('portable import fences bind to the caller-owned provider transaction', () => {
@@ -35,11 +32,11 @@ describe('RFC-345 Agent import queries', () => {
     const composition = source('composition/portableImportReferences.ts')
 
     expect(application).toContain('createPortableImportReferenceApplication')
-    expect(application).toContain('createPortableImportReferenceSyncFence')
+    // RFC-359 W4-D14：SQLite 专属的同步终写围栏（无生产消费方）退役，只剩绑定统一事务的一份。
+    expect(application).not.toContain('createPortableImportReferenceSyncFence')
     expect(application).toContain("'workflow',")
     expect(application).toContain("'workgroup',")
-    expect(composition).toContain('composeSqlitePortableImportReferenceSyncFence')
-    expect(composition).toContain('composePostgresqlPortableImportReferencesInTransaction')
-    expect(composition).not.toMatch(/as unknown|deasync|fallback/)
+    expect(composition).toContain('composePortableImportReferencesInTransaction')
+    expect(composition).not.toMatch(/as unknown|deasync|fallback|Sqlite|Postgresql/)
   })
 })

@@ -6,7 +6,7 @@ import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
 } from '@/modules/execution-contract/public/commands'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { ConflictError, ValidationError } from '@/util/errors'
 
 import { assertAgentResourceIntegrity } from '../application/agents/agentResourceIntegrity'
@@ -16,8 +16,8 @@ import { hasResourceAclBypass, isVisibleRow, type AclRow } from '../domain/resou
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
-import type { PostgresqlAgentPersistenceSemantics } from './postgresqlAgentRepository'
-import type { PostgresqlResourceCatalogTransaction } from './postgresql/repositorySupport'
+import type { AgentPersistenceSemantics } from './agentRepository'
+import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 interface NamedAclRow extends AclRow {
   readonly id: string
@@ -47,7 +47,7 @@ function assertBranchPortsDeclared(agent: Pick<CreateAgent, 'outputs' | 'branchP
 }
 
 async function rowsByIds(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   type: Extract<AclResourceType, 'agent' | 'skill' | 'mcp' | 'plugin'>,
   ids: readonly string[],
 ): Promise<readonly NamedAclRow[]> {
@@ -63,7 +63,6 @@ async function rowsByIds(
         })
         .from(agents)
         .where(inArray(agents.id, [...ids]))
-        .all()
     case 'skill':
       return transaction
         .select({
@@ -74,7 +73,6 @@ async function rowsByIds(
         })
         .from(skills)
         .where(and(inArray(skills.id, [...ids]), eq(skills.reservationState, 'ready')))
-        .all()
     case 'mcp':
       return transaction
         .select({
@@ -85,7 +83,6 @@ async function rowsByIds(
         })
         .from(mcps)
         .where(inArray(mcps.id, [...ids]))
-        .all()
     case 'plugin':
       return transaction
         .select({
@@ -96,12 +93,11 @@ async function rowsByIds(
         })
         .from(plugins)
         .where(and(inArray(plugins.id, [...ids]), eq(plugins.enabled, true)))
-        .all()
   }
 }
 
 async function grantedIds(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   authority: AgentOperationContext,
   type: Extract<AclResourceType, 'agent' | 'skill' | 'mcp' | 'plugin'>,
 ): Promise<ReadonlySet<string>> {
@@ -110,12 +106,11 @@ async function grantedIds(
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
     .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, authority.user.id)))
-    .all()
   return new Set(rows.map((row) => row.resourceId))
 }
 
 async function assertReferencesUsable(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
+  readonly transaction: ResourceCatalogTransaction
   readonly authority: AgentOperationContext
   readonly type: Extract<AclResourceType, 'agent' | 'skill' | 'mcp' | 'plugin'>
   readonly ids: readonly string[]
@@ -172,7 +167,7 @@ async function assertRuntime(
 }
 
 async function assertDependencyGraph(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   candidateId: string,
   dependencyIds: readonly string[],
 ): Promise<void> {
@@ -187,11 +182,13 @@ async function assertDependencyGraph(
     }
     if (visited.has(id)) return
     visiting.add(id)
-    const row = await transaction
-      .select({ dependsOn: agents.dependsOn })
-      .from(agents)
-      .where(eq(agents.id, id))
-      .get()
+    const row = (
+      await transaction
+        .select({ dependsOn: agents.dependsOn })
+        .from(agents)
+        .where(eq(agents.id, id))
+        .limit(1)
+    )[0]
     if (row === undefined) {
       throw new ValidationError(
         'agent-dependency-not-found',
@@ -218,7 +215,7 @@ async function assertDependencyGraph(
 }
 
 async function assertCandidate(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
+  readonly transaction: ResourceCatalogTransaction
   readonly authority: AgentOperationContext
   readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly candidate: Agent
@@ -269,13 +266,12 @@ async function assertCandidate(input: {
 }
 
 async function assertNotReferenced(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   current: Agent,
 ): Promise<void> {
   const agentRows = await transaction
     .select({ id: agents.id, dependsOn: agents.dependsOn })
     .from(agents)
-    .all()
   const dependent = agentRows.find((row) => {
     if (row.id === current.id) return false
     try {
@@ -291,7 +287,6 @@ async function assertNotReferenced(
   const workflowRows = await transaction
     .select({ id: workflows.id, definition: workflows.definition })
     .from(workflows)
-    .all()
   const referenced = workflowRows.find((row) => {
     try {
       const decoded: unknown = JSON.parse(row.definition)
@@ -314,13 +309,13 @@ export interface AgentRuntimeProfileLookup {
   get(name: string): Promise<Readonly<{ enabled: boolean }> | null>
 }
 
-/** Owner-native semantics for the PostgreSQL Agent repository. */
-export function createPostgresqlAgentPersistenceSemantics(input: {
-  readonly db: PostgresqlDatabaseClient
+/** Owner-native semantics for the Agent repository（RFC-359 W4-D14：一份实现，两个 provider 共用）。 */
+export function createAgentPersistenceSemantics(input: {
+  readonly db: ProviderNeutralDatabase
   readonly authorization: ResourceAuthorizationApplication
   readonly resourceInventory: AgentResourceInventorySource
   readonly runtimeProfiles: AgentRuntimeProfileLookup
-}): PostgresqlAgentPersistenceSemantics {
+}): AgentPersistenceSemantics {
   const labels = async (
     authority: AgentOperationContext,
     request: AgentReferenceLabelsInput,
@@ -341,8 +336,7 @@ export function createPostgresqlAgentPersistenceSemantics(input: {
               visibility: skills.visibility,
             })
             .from(skills)
-            .where(inArray(skills.id, skillIds))
-            .all(),
+            .where(inArray(skills.id, skillIds)),
       mcpIds.length === 0
         ? Promise.resolve([])
         : input.db
@@ -353,8 +347,7 @@ export function createPostgresqlAgentPersistenceSemantics(input: {
               visibility: mcps.visibility,
             })
             .from(mcps)
-            .where(inArray(mcps.id, mcpIds))
-            .all(),
+            .where(inArray(mcps.id, mcpIds)),
       pluginIds.length === 0
         ? Promise.resolve([])
         : input.db
@@ -365,8 +358,7 @@ export function createPostgresqlAgentPersistenceSemantics(input: {
               visibility: plugins.visibility,
             })
             .from(plugins)
-            .where(inArray(plugins.id, pluginIds))
-            .all(),
+            .where(inArray(plugins.id, pluginIds)),
     ])
     const [visibleSkills, visibleMcps, visiblePlugins] = await Promise.all([
       input.authorization.filterVisibleRows(authority, 'skill', skillRows),
@@ -382,7 +374,7 @@ export function createPostgresqlAgentPersistenceSemantics(input: {
     })
   }
 
-  return Object.freeze<PostgresqlAgentPersistenceSemantics>({
+  return Object.freeze<AgentPersistenceSemantics>({
     async canonicalizeCreate(_authority, submitted, _id) {
       return reconcileCreatedAgentExecutionContractPorts(submitted)
     },

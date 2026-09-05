@@ -46,7 +46,7 @@ import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/lega
 import { startTask, type StartTaskDeps } from '@/services/task'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertAgentResourceIntegrity } from '../../../application/agents/agentResourceIntegrity'
-import { composeSqliteAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 
 // RFC-217 T1 — sentinel constants moved to ./constants (zero-dep leaf; cycle
@@ -208,7 +208,7 @@ export async function startWorkgroupTask(
   input: StartWorkgroupTask,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  const resourceInventory = composeSqliteAgentResourceInventorySource({
+  const resourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
     authorization: composeSqliteResourceCatalog({ db }).authorization,
   })
@@ -382,7 +382,7 @@ export async function startWorkgroupTaskFromFrozen(
   args: StartWorkgroupTaskFromFrozenArgs,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  const resourceInventory = composeSqliteAgentResourceInventorySource({
+  const resourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
     authorization: composeSqliteResourceCatalog({ db }).authorization,
   })

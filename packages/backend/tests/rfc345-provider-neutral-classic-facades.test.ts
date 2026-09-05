@@ -9,13 +9,14 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
   test('Agent compatibility facade delegates SQLite mechanics to owner infrastructure', () => {
     const facade = source('services/agent.ts')
     const implementation = source('modules/resource-catalog/infrastructure/legacy/agent.ts')
-    const repository = source('modules/resource-catalog/infrastructure/sqliteAgentRepository.ts')
+    // RFC-359 W4-D14：Agent 仓库只有一份中立实现（agentRepository.ts），不再经 legacy/agent 包装。
+    const repository = source('modules/resource-catalog/infrastructure/agentRepository.ts')
 
     expect(facade).toContain('RFC-345 compatibility facade')
     expect(facade).toContain('@/modules/resource-catalog/infrastructure/legacy/agent')
     expect(facade).not.toMatch(/@\/db|drizzle-orm|dbTxSync|DbClient|DbTxSync/)
     expect(implementation).toContain("from '@/db/schema'")
-    expect(repository).toContain("from './legacy/agent'")
+    expect(repository).not.toContain("from './legacy/agent'")
     expect(repository).not.toContain("from '@/services/agent'")
   })
 
