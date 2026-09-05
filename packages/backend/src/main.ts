@@ -37,7 +37,7 @@ import { runUserCommand, type UserCommandIdentityHandle } from './cli/userBootst
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import { loadConfig } from './config'
-import { createPostgresqlAuthRuntime, createSqliteAuthRuntime } from './auth/composition'
+import { createAuthRuntimeFor } from './auth/composition'
 import { createIdentityAccessRuntime } from './modules/identity-access/composition'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import {
@@ -108,14 +108,11 @@ async function composeUserCommandBootstrap() {
     return unhandledDatabaseProvider(provider)
   }
   const identityAccess = createIdentityAccessRuntime({ db: provider.db })
-  const auth =
-    provider.provider === 'sqlite'
-      ? createSqliteAuthRuntime({ db: provider.db })
-      : createPostgresqlAuthRuntime({
-          db: provider.db,
-          // A standalone CLI has no live HTTP/WS credential cache to invalidate.
-          onCredentialRevoked: () => undefined,
-        })
+  const auth = createAuthRuntimeFor({
+    db: provider.db,
+    // A standalone CLI has no live HTTP/WS credential cache to invalidate.
+    onCredentialRevoked: () => undefined,
+  })
   const operations = composeIdentityUserOperations({ identityAccess, auth })
   const localOperator = await identityAccess.localOperator.forUser(SYSTEM_USER_ID)
   if (localOperator === null) {

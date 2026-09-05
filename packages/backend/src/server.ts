@@ -21,10 +21,9 @@ import { actorOf, tryActorOf, type Actor } from '@/auth/actor'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import {
+  createAuthRuntimeFor,
   createPostgresqlAuthRuntime,
-  createPostgresqlTokenCallAudit,
-  createSqliteAuthRuntime,
-  createSqliteTokenCallAudit,
+  createTokenCallAudit,
 } from '@/auth/composition'
 import {
   ALWAYS_WRITABLE_DATABASE_SOURCE,
@@ -481,11 +480,11 @@ export interface DaemonPresenceProjectionSink {
   publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
 }
 
-type SqliteAuthRevalidation = NonNullable<
-  Parameters<typeof createSqliteAuthRuntime>[0]['revalidate']
+type AuthRevalidation = NonNullable<
+  Parameters<typeof createAuthRuntimeFor>[0]['onCredentialRevoked']
 >
 
-export type DaemonCredentialRevocationReason = Parameters<SqliteAuthRevalidation>[0]
+export type DaemonCredentialRevocationReason = Parameters<AuthRevalidation>[0]
 
 interface DaemonProviderCoreCommonInput {
   readonly appHome: string
@@ -564,9 +563,9 @@ export function composeSqliteDaemonProviderCore(
     input.db,
   )
   const sourceWriteWindow = input.sourceWriteWindow ?? ALWAYS_WRITABLE_DATABASE_SOURCE
-  const authRuntime = createSqliteAuthRuntime({
+  const authRuntime = createAuthRuntimeFor({
     db: input.db,
-    revalidate: input.onCredentialRevoked,
+    onCredentialRevoked: input.onCredentialRevoked,
     sourceWriteWindow,
   })
   const identityAccess = createIdentityAccessRuntime({
@@ -578,7 +577,7 @@ export function composeSqliteDaemonProviderCore(
     provider: 'sqlite',
     authRuntime,
     sourceWriteWindow,
-    tokenCallAudit: createSqliteTokenCallAudit(input.db),
+    tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createSqliteHealthDatabaseReadModel(input.db),
     runtimeRegistry: composeSqliteRuntimeRegistryOperations(input.db),
@@ -632,7 +631,7 @@ export function composePostgresqlDaemonProviderCore(
     provider: 'postgresql',
     authRuntime,
     sourceWriteWindow,
-    tokenCallAudit: createPostgresqlTokenCallAudit(input.db),
+    tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createPostgresqlHealthDatabaseReadModel(input.db),
     runtimeRegistry: composePostgresqlRuntimeRegistryOperations(input.db),
@@ -1782,9 +1781,9 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       createIdentityAccessRuntime({ db: deps.db }),
   )
   const authRuntime =
-    deps.authRuntime ?? deps.providerCore?.authRuntime ?? createSqliteAuthRuntime({ db: deps.db })
+    deps.authRuntime ?? deps.providerCore?.authRuntime ?? createAuthRuntimeFor({ db: deps.db })
   const tokenCallAudit =
-    deps.tokenCallAudit ?? deps.providerCore?.tokenCallAudit ?? createSqliteTokenCallAudit(deps.db)
+    deps.tokenCallAudit ?? deps.providerCore?.tokenCallAudit ?? createTokenCallAudit(deps.db)
   const healthDatabase =
     deps.healthDatabase ??
     deps.providerCore?.healthDatabase ??

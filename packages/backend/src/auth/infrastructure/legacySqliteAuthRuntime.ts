@@ -1,5 +1,5 @@
 import type { AuthRuntime } from '../application/authRuntime'
-import { createSqliteAuthRuntime } from '../composition'
+import { createAuthRuntimeFor } from '../composition'
 import type { DbClient } from '@/db/client'
 
 export interface LegacySqliteAuthRuntimeBinding {
@@ -15,5 +15,5 @@ export function legacySqliteAuthRuntimeOf(
 ): AuthRuntime {
   if ('lookupActiveSession' in input && 'getLoginPolicy' in input) return input
   if ('auth' in input && input.auth !== undefined) return input.auth
-  return createSqliteAuthRuntime({ db: 'db' in input ? input.db : input })
+  return createAuthRuntimeFor({ db: 'db' in input ? input.db : input })
 }

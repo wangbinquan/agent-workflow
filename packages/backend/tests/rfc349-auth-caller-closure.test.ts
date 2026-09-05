@@ -8,7 +8,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 
 import { buildActor } from '@/auth/actor'
 import { authCommand } from '@/cli/auth'
-import { createSqliteAuthRuntime } from '@/auth/composition'
+import { createAuthRuntimeFor } from '@/auth/composition'
 import { createInMemoryDb } from '@/db/client'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { resetRouteMetaRegistry } from '@/routes/registry'
@@ -51,7 +51,7 @@ describe('RFC-349 auth caller closure', () => {
 
   test('auth recovery CLI consumes the same Promise runtime as the daemon', async () => {
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-    const auth = createSqliteAuthRuntime({ db, revalidate: () => {} })
+    const auth = createAuthRuntimeFor({ db, onCredentialRevoked: () => {} })
     await auth.completeBootstrap(
       {
         id: 'cli-admin',
@@ -74,7 +74,7 @@ describe('RFC-349 auth caller closure', () => {
   test('OIDC policy route awaits its injected auth runtime without a database handle', async () => {
     resetRouteMetaRegistry()
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-    const auth = createSqliteAuthRuntime({ db, revalidate: () => {} })
+    const auth = createAuthRuntimeFor({ db, onCredentialRevoked: () => {} })
     await auth.completeBootstrap(
       {
         id: 'route-admin',

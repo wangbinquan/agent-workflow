@@ -401,7 +401,7 @@ describe('RFC-247 — the audit listings are pushed into SQL', () => {
     // is what stops the next refactor from quietly reintroducing the full-table
     // read that the impl-gate flagged.
     const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src/auth/infrastructure/sqliteTokenCallAudit.ts'),
+      resolve(import.meta.dir, '..', 'src/auth/infrastructure/tokenCallAudit.ts'),
     ).text()
     const listings = src.slice(src.indexOf('async listForUser'))
     expect(listings).not.toContain('.sort(')

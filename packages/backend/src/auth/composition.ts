@@ -1,3 +1,5 @@
+// RFC-359 W4-D9 —— 认证运行时与 PAT 审计的装配：两个 provider 同一份实现，入口收中立句柄。
+
 import { createAuthRuntime, type AuthRuntime } from './application/authRuntime'
 import type { AuthRuntimeOptions, DatabaseSourceWriteWindow } from './application/authPersistence'
 import {
@@ -5,29 +7,31 @@ import {
   type TokenCallAuditParticipant,
   type TokenCallRecord,
 } from './application/tokenCallAudit'
-import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { allowsLegacyDaemonTestAccess } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
-import { PostgresqlAuthPersistence } from './infrastructure/postgresqlAuthPersistence'
-import { PostgresqlTokenCallAuditPersistence } from './infrastructure/postgresqlTokenCallAudit'
-import { SqliteAuthPersistence } from './infrastructure/sqliteAuthPersistence'
-import { SqliteTokenCallAuditPersistence } from './infrastructure/sqliteTokenCallAudit'
+import { createAuthPersistence } from './infrastructure/authPersistence'
+import { createTokenCallAuditPersistence } from './infrastructure/tokenCallAudit'
 
-export function createSqliteAuthRuntime(input: {
-  readonly db: DbClient
-  readonly revalidate?: (reason: Parameters<typeof triggerRevalidation>[0]) => void
+export interface CreateAuthRuntimeInput {
+  readonly db: ProviderNeutralDatabase
+  /**
+   * Post-commit transport invalidation; never receives a DB handle. Defaults to the WS
+   * revalidation hook (the daemon's live credential cache); standalone CLI / tests pass their own.
+   */
+  readonly onCredentialRevoked?: NonNullable<AuthRuntimeOptions['onCredentialRevoked']>
   /** RFC-349 T10: omitted everywhere except daemon bootstrap (always writable). */
   readonly sourceWriteWindow?: DatabaseSourceWriteWindow
-}): AuthRuntime {
+}
+
+export function createAuthRuntimeFor(input: CreateAuthRuntimeInput): AuthRuntime {
   return createAuthRuntime({
-    provider: 'sqlite',
-    persistence: new SqliteAuthPersistence(input.db),
+    provider: databaseSessionFor(input.db).engine.provider,
+    persistence: createAuthPersistence(input.db),
     options: {
       allowLegacyDaemonTestAccess: allowsLegacyDaemonTestAccess(input.db),
-      onCredentialRevoked: (reason) => {
-        if (input.revalidate !== undefined) input.revalidate(reason)
-        else triggerRevalidation(reason)
-      },
+      onCredentialRevoked: input.onCredentialRevoked ?? ((reason) => triggerRevalidation(reason)),
       ...(input.sourceWriteWindow === undefined
         ? {}
         : { sourceWriteWindow: input.sourceWriteWindow }),
@@ -35,33 +39,17 @@ export function createSqliteAuthRuntime(input: {
   })
 }
 
-export function createPostgresqlAuthRuntime(input: {
-  readonly db: PostgresqlDatabaseClient
-  /** Required post-commit transport invalidation; never receives a DB handle. */
-  readonly onCredentialRevoked: NonNullable<AuthRuntimeOptions['onCredentialRevoked']>
-  /** RFC-349 T10: omitted everywhere except daemon bootstrap (always writable). */
-  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
-}): AuthRuntime {
-  return createAuthRuntime({
-    provider: 'postgresql',
-    persistence: new PostgresqlAuthPersistence(input.db),
-    options: {
-      onCredentialRevoked: input.onCredentialRevoked,
-      ...(input.sourceWriteWindow === undefined
-        ? {}
-        : { sourceWriteWindow: input.sourceWriteWindow }),
-    },
-  })
+/** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
+export function createPostgresqlAuthRuntime(
+  input: CreateAuthRuntimeInput & {
+    readonly onCredentialRevoked: NonNullable<AuthRuntimeOptions['onCredentialRevoked']>
+  },
+): AuthRuntime {
+  return createAuthRuntimeFor(input)
 }
 
-export function createSqliteTokenCallAudit(db: DbClient): TokenCallAuditParticipant {
-  return createTokenCallAuditParticipant(new SqliteTokenCallAuditPersistence(db))
-}
-
-export function createPostgresqlTokenCallAudit(
-  db: PostgresqlDatabaseClient,
-): TokenCallAuditParticipant {
-  return createTokenCallAuditParticipant(new PostgresqlTokenCallAuditPersistence(db))
+export function createTokenCallAudit(db: ProviderNeutralDatabase): TokenCallAuditParticipant {
+  return createTokenCallAuditParticipant(createTokenCallAuditPersistence(db))
 }
 
 /**
@@ -69,26 +57,26 @@ export function createPostgresqlTokenCallAudit(
  * The legacy service delegates here and therefore contains no SQL mechanism;
  * root composition can replace each call site with one long-lived participant.
  */
-export const legacySqliteTokenCallAudit = Object.freeze({
-  record(db: DbClient, record: TokenCallRecord, now?: number) {
-    return createSqliteTokenCallAudit(db).record(record, now)
+export const legacyTokenCallAudit = Object.freeze({
+  record(db: ProviderNeutralDatabase, record: TokenCallRecord, now?: number) {
+    return createTokenCallAudit(db).record(record, now)
   },
-  listForUser(db: DbClient, userId: string, limit?: number) {
-    return createSqliteTokenCallAudit(db).listForUser(userId, limit)
+  listForUser(db: ProviderNeutralDatabase, userId: string, limit?: number) {
+    return createTokenCallAudit(db).listForUser(userId, limit)
   },
-  list(db: DbClient, limit?: number) {
-    return createSqliteTokenCallAudit(db).list(limit)
+  list(db: ProviderNeutralDatabase, limit?: number) {
+    return createTokenCallAudit(db).list(limit)
   },
-  prune(db: DbClient, retentionDays: number, now?: number) {
-    return createSqliteTokenCallAudit(db).prune(retentionDays, now)
+  prune(db: ProviderNeutralDatabase, retentionDays: number, now?: number) {
+    return createTokenCallAudit(db).prune(retentionDays, now)
   },
   pruneSlice(
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     retentionDays: number,
     cursor: unknown,
     now?: number,
     batchSize?: number,
   ) {
-    return createSqliteTokenCallAudit(db).pruneSlice(retentionDays, cursor, now, batchSize)
+    return createTokenCallAudit(db).pruneSlice(retentionDays, cursor, now, batchSize)
   },
 })

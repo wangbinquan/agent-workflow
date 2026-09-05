@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createSqliteAuthRuntime } from '../src/auth/composition'
+import { createAuthRuntimeFor } from '../src/auth/composition'
 import { createPat } from '../src/auth/patStore'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -55,7 +55,7 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
     const created = await createSession({ db, userId: 'u-frozen', now: 1_000 })
     const before = sessionRow(created.session.id)!.lastUsedAt
 
-    const frozen = createSqliteAuthRuntime({ db, sourceWriteWindow: FROZEN })
+    const frozen = createAuthRuntimeFor({ db, sourceWriteWindow: FROZEN })
     const resolvedWhileFrozen = await frozen.lookupActiveSession(created.token, 900_000)
     expect(
       resolvedWhileFrozen,
@@ -66,7 +66,7 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
       '冻结窗内写了 last_used_at ⇒ 源库被改，拷贝随后以 sqlite-source-mutated 收场',
     ).toBe(before)
 
-    const open = createSqliteAuthRuntime({ db, sourceWriteWindow: OPEN })
+    const open = createAuthRuntimeFor({ db, sourceWriteWindow: OPEN })
     await open.lookupActiveSession(created.token, 900_000)
     expect(
       sessionRow(created.session.id)!.lastUsedAt,
@@ -84,21 +84,21 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
     })
     const before = patRow(created.meta.id)!.lastUsedAt
 
-    const frozen = createSqliteAuthRuntime({ db, sourceWriteWindow: FROZEN })
+    const frozen = createAuthRuntimeFor({ db, sourceWriteWindow: FROZEN })
     expect(await frozen.lookupActivePat(created.token, 900_000)).not.toBeNull()
     expect(
       patRow(created.meta.id)!.lastUsedAt,
       'PAT 的 last_used_at 每次请求都写，冻结窗内一次就够把拷贝判红',
     ).toBe(before)
 
-    const open = createSqliteAuthRuntime({ db, sourceWriteWindow: OPEN })
+    const open = createAuthRuntimeFor({ db, sourceWriteWindow: OPEN })
     await open.lookupActivePat(created.token, 900_000)
     expect(patRow(created.meta.id)!.lastUsedAt).toBe(900_000)
   })
 
   test('omitting the window keeps today’s behaviour: every composition without a migration writes', async () => {
     const created = await createSession({ db, userId: 'u-frozen', now: 1_000 })
-    const runtime = createSqliteAuthRuntime({ db })
+    const runtime = createAuthRuntimeFor({ db })
     await runtime.lookupActiveSession(created.token, 900_000)
     expect(
       sessionRow(created.session.id)!.lastUsedAt,

@@ -515,8 +515,7 @@ describe('RFC-305 identity-access architecture', () => {
     // RFC-359 W4-D8：identity-access 的持久化只剩一份中立实现，授权与审计不再有裸 SQL 写者——
     // 写点按 drizzle 表标识符扫。bootstrap 首管理员的用户与审计行由 auth 自己落（admin 没有默认附加授权）。
     expect(filesCallingTableMethod(BACKEND_SRC, 'insert', 'users')).toEqual([
-      'packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts',
-      'packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts',
+      'packages/backend/src/auth/infrastructure/authPersistence.ts',
       'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
     ])
     expect(
@@ -535,8 +534,7 @@ describe('RFC-305 identity-access architecture', () => {
       [],
     )
     expect(filesCallingTableMethod(BACKEND_SRC, 'insert', 'userAccessAudit')).toEqual([
-      'packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts',
-      'packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts',
+      'packages/backend/src/auth/infrastructure/authPersistence.ts',
       'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
     ])
     expect(

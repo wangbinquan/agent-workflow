@@ -95,8 +95,8 @@ const PROVIDER_FORK_LEDGER = {
   // cli/start.ts：RFC-359 W3-T16 后没有 provider 执行分支——会话装配按 DatabaseProvider 查表，
   // 运行时收窄走 platform/persistence 的 requireDatabaseProviderRuntime。
   'db/providerSchema.ts': { forks: 1, fence: 'projection-fenced' },
-  // RFC-359 W4-D8：identity-access 运行时的装配入口收中立句柄，main.ts 少了两个 provider 三元分支。
-  'main.ts': { forks: 5, fence: 'fenced-dispatch' },
+  // RFC-359 W4-D8 / D9：identity-access 与 auth 运行时的装配入口收中立句柄，main.ts 少了三个 provider 三元分支。
+  'main.ts': { forks: 4, fence: 'fenced-dispatch' },
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in

@@ -13,7 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
-import { createSqliteAuthRuntime } from '@/auth/composition'
+import { createAuthRuntimeFor } from '@/auth/composition'
 import { hashPassword } from '@/auth/passwords'
 import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
@@ -121,7 +121,7 @@ export async function resetPassword(
   db: DbClient,
   id: string,
   input: ResetPasswordInput,
-  auth: AuthRuntime = createSqliteAuthRuntime({ db }),
+  auth: AuthRuntime = createAuthRuntimeFor({ db }),
 ): Promise<void> {
   if (id === SYSTEM_USER_ID) {
     throw new ValidationError('system-user-immutable', 'cannot reset password for __system__')
@@ -143,7 +143,7 @@ export async function disableUser(
   id: string,
   now: number = Date.now(),
   actorId?: string,
-  auth: AuthRuntime = createSqliteAuthRuntime({ db }),
+  auth: AuthRuntime = createAuthRuntimeFor({ db }),
 ): Promise<void> {
   if (id === SYSTEM_USER_ID) {
     throw new ValidationError('system-user-immutable', 'cannot disable __system__')
@@ -175,7 +175,7 @@ export async function patchUser(
   patch: PatchUserBody,
   now: number = Date.now(),
   actorId?: string,
-  auth: AuthRuntime = createSqliteAuthRuntime({ db }),
+  auth: AuthRuntime = createAuthRuntimeFor({ db }),
 ): Promise<UserRow> {
   // Legacy test/setup fixture; production routes use their injected runtime.
   const module = await createLegacyIdentityAccessRuntime(db)

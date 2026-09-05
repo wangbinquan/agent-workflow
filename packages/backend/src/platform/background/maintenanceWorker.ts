@@ -6,7 +6,7 @@ import { MaintenanceJobKeySchema } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { join } from 'node:path'
 
-import { createPostgresqlTokenCallAudit, createSqliteTokenCallAudit } from '@/auth/composition'
+import { createTokenCallAudit } from '@/auth/composition'
 import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { openDb, type DbClient } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
@@ -564,7 +564,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
           invalidateWorkspacePath: invalidateCallGraphIndex,
         }),
       )
-      tokenCallAudit = createPostgresqlTokenCallAudit(client)
+      tokenCallAudit = createTokenCallAudit(client)
       pluginGenerationGcCommand = composePostgresqlPluginGenerationGcCommand(
         client,
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
@@ -723,7 +723,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         },
         log: intentMaintenanceLog,
       })
-      tokenCallAudit = createSqliteTokenCallAudit(sqliteDb)
+      tokenCallAudit = createTokenCallAudit(sqliteDb)
       pluginGenerationGcCommand = composeSqlitePluginGenerationGcCommand(
         sqliteDb,
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),

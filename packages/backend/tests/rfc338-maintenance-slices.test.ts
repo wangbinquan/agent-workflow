@@ -28,7 +28,7 @@ import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastr
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import { createSqliteTokenCallAudit } from '@/auth/composition'
+import { createTokenCallAudit } from '@/auth/composition'
 import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
 import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
@@ -72,7 +72,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
   taskRecovery: createSqliteTaskExecutionPersistence(db).recoveryAdministration,
   taskArchive: createSqliteTaskArchiveMaintenanceCommand(db),
-  tokenAudit: createSqliteTokenCallAudit(db),
+  tokenAudit: createTokenCallAudit(db),
   system: {
     eventsArchive: createEventsArchiveMaintenanceCommand({
       store: createSqliteEventsArchiveStore(db),

@@ -1,4 +1,3 @@
-import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type {
   AuthLoginPolicy,
   AuthMethodDiscovery,
@@ -173,11 +172,4 @@ export interface AuthRuntimeOptions {
   readonly onCredentialRevoked?: (reason: AuthCredentialRevocationReason) => void
   /** Defaults to always-writable; only daemon bootstrap supplies a real one. */
   readonly sourceWriteWindow?: DatabaseSourceWriteWindow
-}
-
-export type AuthProvider = DatabaseProvider
-
-export interface AuthPersistenceBinding {
-  readonly provider: AuthProvider
-  readonly persistence: AuthPersistence
 }

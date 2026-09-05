@@ -14,7 +14,7 @@ async function createUserCommandFixture() {
   const [
     { SYSTEM_USER_ID },
     { runUserCommand },
-    { createSqliteAuthRuntime },
+    { createAuthRuntimeFor },
     { openDb },
     { composeIdentityAccess },
     { composeIdentityUserOperations },
@@ -32,7 +32,7 @@ async function createUserCommandFixture() {
   ])
   const migrationsFolder = await resolveMigrationsFolder()
   const db = openDb({ path: Paths.db, migrationsFolder })
-  const auth = createSqliteAuthRuntime({ db })
+  const auth = createAuthRuntimeFor({ db })
   const identityAccess = composeIdentityAccess(db)
   const operations = composeIdentityUserOperations({ auth, identityAccess })
   const principal = { userId: SYSTEM_USER_ID, source: 'cli' } as const

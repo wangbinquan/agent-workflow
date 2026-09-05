@@ -20,7 +20,7 @@ import {
   setPasswordLoginEnabled,
 } from '../src/auth/loginPolicy'
 import { createUser } from '../src/services/users'
-import { createSqliteAuthRuntime } from '../src/auth/composition'
+import { createAuthRuntimeFor } from '../src/auth/composition'
 import { DomainError } from '../src/util/errors'
 import { freezeAt } from './migration-freeze'
 
@@ -137,7 +137,7 @@ describe('RFC-221 auth policy service', () => {
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
     // RFC-359 W4-D8：bootstrap 首管理员只剩 auth.completeBootstrap 这一条生产路径（旧的
     // completeBootstrapWithAdmin + identity-access TransactionScope 认领桥随 provider 适配器退役）。
-    const auth = createSqliteAuthRuntime({ db, revalidate: () => undefined })
+    const auth = createAuthRuntimeFor({ db, onCredentialRevoked: () => undefined })
     expect(getAuthLoginPolicy(db).bootstrapCompletedAt).toBeNull()
     const created = await auth.completeBootstrap(
       {

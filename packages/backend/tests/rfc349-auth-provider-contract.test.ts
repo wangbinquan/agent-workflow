@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createSqliteAuthRuntime } from '@/auth/composition'
+import { createAuthRuntimeFor } from '@/auth/composition'
 import { createInMemoryDb } from '@/db/client'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -62,9 +62,9 @@ describe('RFC-349 auth provider contract', () => {
   test('SQLite bootstrap, password login and revocation share the Promise runtime', async () => {
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
     const revalidations: string[] = []
-    const auth = createSqliteAuthRuntime({
+    const auth = createAuthRuntimeFor({
       db,
-      revalidate: (reason) => revalidations.push(reason),
+      onCredentialRevoked: (reason) => revalidations.push(reason),
     })
 
     expect(auth.provider).toBe('sqlite')
@@ -111,7 +111,7 @@ describe('RFC-349 auth provider contract', () => {
 
   test('PAT resolution and password ownership fences stay provider-neutral', async () => {
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-    const auth = createSqliteAuthRuntime({ db, revalidate: () => {} })
+    const auth = createAuthRuntimeFor({ db, onCredentialRevoked: () => {} })
     await auth.completeBootstrap(
       {
         id: 'pat-admin',

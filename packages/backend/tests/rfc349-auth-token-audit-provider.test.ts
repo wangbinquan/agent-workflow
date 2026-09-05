@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
-import { createPostgresqlTokenCallAudit, createSqliteTokenCallAudit } from '@/auth/composition'
+import { createTokenCallAudit } from '@/auth/composition'
 import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -134,7 +134,7 @@ describe('RFC-349 token-call audit provider participant', () => {
     for (const forbidden of ['DbClient', "from '@/db/", '.select(', '.insert(', '.update(']) {
       expect(facade).not.toContain(forbidden)
     }
-    expect(facade).toContain('legacySqliteTokenCallAudit')
+    expect(facade).toContain('legacyTokenCallAudit')
     expect(application).not.toContain('DbClient')
     expect(application).not.toContain('PostgresqlDatabaseClient')
     expect(application).not.toContain("from '@/db/")
@@ -143,7 +143,7 @@ describe('RFC-349 token-call audit provider participant', () => {
 
   test('SQLite participant preserves attribution, snapshot redaction and bounded retention', async () => {
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
-    const audit = createSqliteTokenCallAudit(db)
+    const audit = createTokenCallAudit(db)
     const id = await audit.record(
       {
         actor: patActor(),
@@ -182,55 +182,7 @@ describe('RFC-349 token-call audit provider participant', () => {
     ).resolves.toMatchObject({ done: true, counters: { audits: 1 } })
   })
 
-  test('PostgreSQL uses the same Promise surface and generation-fences audit writes', async () => {
-    const fake = postgresqlFixture()
-    const audit = createPostgresqlTokenCallAudit(fake.db)
-
-    const id = await audit.record(
-      {
-        actor: patActor(),
-        channel: 'mcp',
-        toolName: 'describe_capabilities',
-        statusCode: 200,
-      },
-      50,
-    )
-    expect(id).not.toBeNull()
-    await expect(audit.listForUser('audit-user', 25)).resolves.toMatchObject([
-      {
-        id: 'audit-pg-row',
-        patId: 'pat-rfc349-audit',
-        userId: 'audit-user',
-        channel: 'mcp',
-        toolName: 'describe_capabilities',
-        statusCode: 200,
-      },
-    ])
-    await expect(
-      audit.pruneSlice(1, { version: 1, phase: 'audits', cutoff: 100 }, 200, 10),
-    ).resolves.toMatchObject({ done: true, counters: { audits: 1 } })
-
-    const statements = fake.executions.map((execution) => execution.sql.toLowerCase())
-    expect(
-      statements.some((statement) =>
-        statement.includes('insert into "agent_workflow"."token_audit"'),
-      ),
-    ).toBe(true)
-    expect(
-      statements.some(
-        (statement) =>
-          statement.includes('from "agent_workflow"."token_audit"') &&
-          statement.includes('where') &&
-          statement.includes('limit'),
-      ),
-    ).toBe(true)
-    // RFC-349: one process-wide live-write marker plus one per-transaction
-    // generation fence for each of the two audit writes.
-    expect(
-      statements.filter((statement) => statement.includes('database_generations')).length,
-    ).toBe(3)
-    expect(fake.releases).toBe(2)
-  })
+  // RFC-359 W4-D9：PostgreSQL 的真实执行由 rfc359-w4-d9-adapters.test.ts 的双引擎用例覆盖（两个 provider 同一份实现）。
 
   test('maintenance invokes the selected AUTH participant without a DB fallback', () => {
     const runner = source('src/platform/background/maintenanceJobRunner.ts')

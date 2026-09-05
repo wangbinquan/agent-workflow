@@ -339,8 +339,8 @@ const legacyDaemonTestDbs = new WeakSet<object>()
  * `openDb()` clients are never registered here; bootstrap-focused tests opt
  * into `{ bootstrap: 'required' }` and exercise the real retirement rules.
  */
-export function allowsLegacyDaemonTestAccess(db: DbClient): boolean {
-  return legacyDaemonTestDbs.has(db as object)
+export function allowsLegacyDaemonTestAccess(db: object): boolean {
+  return legacyDaemonTestDbs.has(db)
 }
 
 function migratedSnapshot(migrationsFolder: string): Uint8Array {

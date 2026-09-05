@@ -454,6 +454,21 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   提交、绑定 / 解绑 / 用户不存在），能力矩阵两新项在 `rfc359-engine-capabilities` 两侧各有真实执行；rfc305 / rfc347 / rfc345 /
   rfc349 各锁与账本改指中立文件。**下一刀 D9**：auth 的 `sqliteAuthPersistence` / `postgresqlAuthPersistence` 对（含 legacy
   login policy / session / pat store）。
+  **D9 ✅（auth 认证持久化 + PAT 调用审计）**：`auth/infrastructure/authPersistence.ts` 一份（登录策略 / bootstrap 首管理员 /
+  会话 / PAT / 本地口令）——事务形态按统一原语与能力矩阵取最优而不是照搬 PG 版的「全 SERIALIZABLE」：读—改—写先
+  `lockAggregateRoot` 锁策略单例行 / 用户行（RFC-221 的登录 / 策略线性化点在两边都成立），登录方法发现用只读
+  `serializable` 快照，会话 / PAT 解析这条每请求热路径改成一条 join 读 + 一条带 `revoked_at is null` 谓词的单语句 touch
+  （PG 上不再每请求一笔 SERIALIZABLE，SQLite 上不再抢 writer 租约做只读解析），bootstrap 的唯一冲突经能力矩阵
+  `uniqueViolationTarget` 映射回 `username-taken` / `email-taken`。`tokenCallAudit.ts` 一份（有界清扫是「子查询取一批 id +
+  DELETE … RETURNING」一条语句，两引擎同形）。装配：`createAuthRuntimeFor({db, onCredentialRevoked?, sourceWriteWindow?})`
+  收中立句柄（`provider` 字段由会话引擎给出，`allowsLegacyDaemonTestAccess` 收任意客户端句柄），`createPostgresqlAuthRuntime`
+  成别名，`createTokenCallAudit` / `legacyTokenCallAudit` 各一个中立入口；`createSqliteAuthRuntime` /
+  `createSqliteTokenCallAudit` / `createPostgresqlTokenCallAudit` / `legacySqliteTokenCallAudit` 与应用层从未被消费的
+  `AuthProvider` / `AuthPersistenceBinding` 删除，main.ts / server.ts / maintenanceWorker / services 消费者改名。四个 provider
+  文件（495 + 574 + 79 + 96 行）与假 PG 测试删除；`rfc359-w4-d9-adapters.test.ts` 两引擎各跑（bootstrap 与策略门、唯一冲突映射、
+  登录方法发现、口令登录 / 会话解析 / touch 节流 / 撤销 / 清扫、PAT 解析与本地口令写入、审计归属 / 脱敏 / 逆序 / 有界清扫）。
+  legacy SQLite 夹具（`legacySqliteLoginPolicy` / `SessionStore` / `PatStore` / `AuthRuntime`）不是 provider 对，仍为测试夹具，
+  另行退役。**下一刀 D10**：development-automation 剩余的 mission / playbook / upload store 对与 resource-catalog legacy 对。
 
 ## 5. W5 —— 防复辟
 

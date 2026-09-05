@@ -74,7 +74,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
   'packages/backend/src/services/taskQuestionDispatch.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch :: export:*',
   'packages/backend/src/services/taskQuestions.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestions :: export:*',
-  'packages/backend/src/services/tokenAudit.ts -> @/auth/composition :: legacySqliteTokenCallAudit',
   'packages/backend/src/services/users.ts -> @/modules/identity-access/composition/legacySqliteUserService :: legacySqliteUserService',
 ] as const
 

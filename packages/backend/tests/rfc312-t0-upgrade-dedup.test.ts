@@ -22,7 +22,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { resolveActorWithWsCredential } from '../src/auth/session'
 import { userSessions } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { createSqliteAuthRuntime } from '../src/auth/composition'
+import { createAuthRuntimeFor } from '../src/auth/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -60,7 +60,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
     seedUser(db, 'u-1')
     const { token } = await createSession({ db, userId: 'u-1', now: 1_000 })
 
-    const auth = createSqliteAuthRuntime({ db })
+    const auth = createAuthRuntimeFor({ db })
     const lookupActiveSession = auth.lookupActiveSession.bind(auth)
     let lookups = 0
     const countedAuth = Object.freeze({

@@ -1,5 +1,5 @@
 import type { ActorSource } from '../../src/auth/actor'
-import { createSqliteAuthRuntime } from '../../src/auth/composition'
+import { createAuthRuntimeFor } from '../../src/auth/composition'
 import type { DbClient } from '../../src/db/client'
 import type { IdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeSqliteRealtimeRuntime } from '../../src/modules/runtime-management/composition'
@@ -49,7 +49,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
   const resourceCatalog = composeSqliteResourceCatalog({ db: input.db })
   return composeSqliteRealtimeRuntime({
     db: input.db,
-    auth: createSqliteAuthRuntime({ db: input.db, revalidate: () => {} }),
+    auth: createAuthRuntimeFor({ db: input.db, onCredentialRevoked: () => {} }),
     directAuthority: input.identityAccess.directAuthority,
     policy: {
       resourceVisibility: resourceCatalog.authorization,

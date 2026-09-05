@@ -150,6 +150,7 @@
 > **W4-D7b 已落（digital-employee 运行时案件持久化）**：`runtimeStore.ts` 一份（14 处事务走统一原语、计量 / 成员替换先 `lockAggregateRoot`、搜索与 NULL 排序走能力矩阵），两个 provider 文件（~4000 行）删除、digital-employee dbTxSync 归零；`rfc359-w4-d7b-adapters.test.ts` 两引擎各跑。下一刀 D8：identity-access 两对大 PG 底。
 > **W4-D6c 补（启动期并发注册幂等）**：作者面存储改异步后两份装配同拍注册同一类型包撞主键、daemon 起不来（8f89a3ee4 / d03fc3694 CI 全红）；`ensureTypePackage` 改 ON CONFLICT DO NOTHING + 回读比 digest、`ensureExecutionPolicy` 先 advisory lock、service `ready()` 启动屏障；`rfc359-w4-d6c-bootstrap-idempotency.test.ts` 两引擎各跑。
 > **W4-D8 已落（identity-access 账户 / 授权持久化 + OIDC）**：`userAccessPersistence.ts` / `oidcIdentityCrossContext.ts` 各一份（读集 → 同步决策 → serializable 落库；围栏走能力矩阵新项 `readRowSync`，唯一冲突走 `uniqueViolationTarget`），五个 provider 文件 + 两个假 PG 测试删除，TransactionScope 认领桥与 `InitialUserAccessProvisioner` 退役，schema 补 `user_identities_provider_subject_unique` 并重采 PG 基线；`rfc359-w4-d8-adapters.test.ts` 两引擎各跑。下一刀 D9：auth persistence 对。
+> **W4-D9 已落（auth 认证持久化 + PAT 审计）**：`auth/infrastructure/authPersistence.ts` / `tokenCallAudit.ts` 各一份（读—改—写先锁聚合根，会话 / PAT 解析热路径不再开事务，唯一冲突走能力矩阵），四个 provider 文件 + 假 PG 测试删除，`createAuthRuntimeFor` / `createTokenCallAudit` 中立入口；`rfc359-w4-d9-adapters.test.ts` 两引擎各跑。下一刀 D10：development-automation 剩余 store 对与 resource-catalog legacy 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
