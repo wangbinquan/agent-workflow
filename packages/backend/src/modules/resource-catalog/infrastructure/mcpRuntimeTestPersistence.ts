@@ -1,12 +1,15 @@
+// RFC-359 W4-B2 —— MCP 运行时测试（playground）的会话 / 轮次 / 事件持久化：一份实现，两个 provider 共用。
+// 此前 sqlite / postgresql 两份约两千行只差同步 / 异步形态与客户端类型（对拍脚本归一后 0 处语义差异）。
+
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestEvents,
   mcpRuntimeTestSessions,
   mcpRuntimeTestTurns,
 } from '@/db/schema'
-import { runPostgresqlResourceCatalogTransaction } from './postgresql/repositorySupport'
+import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import type {
   McpRuntimeTestAcceptMessageInput,
   McpRuntimeTestAdmittedTurn,
@@ -46,14 +49,14 @@ function canResumeNativeSession(
   )
 }
 
-export function createPostgresqlMcpRuntimeTestPersistence(
-  db: PostgresqlDatabaseClient,
+export function createMcpRuntimeTestPersistence(
+  db: ProviderNeutralDatabase,
 ): McpRuntimeTestPersistence {
   const persistence: McpRuntimeTestPersistence = {
     identity: db,
 
     async appendEvent(input): Promise<McpRuntimeTestEventAppendResult> {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const turn = await tx
           .select({
             captureState: mcpRuntimeTestTurns.captureState,
@@ -178,7 +181,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async setRootSession(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const row = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -255,7 +258,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async markRootSessionResetPending(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const row = await tx
           .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
           .from(mcpRuntimeTestSessions)
@@ -285,7 +288,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async markCaptureTerminal(input) {
-      await runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      await runResourceCatalogTransaction(db, async (tx) => {
         const turn = await tx
           .select({ captureState: mcpRuntimeTestTurns.captureState })
           .from(mcpRuntimeTestTurns)
@@ -318,7 +321,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async shutdown(now, idleDeadlineAt) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const sessions = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -431,7 +434,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async create(input: McpRuntimeTestCreatePersistenceInput) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const replay = await tx
           .select()
           .from(mcpRuntimeTestCreateReceipts)
@@ -585,7 +588,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async acceptMessage(input: McpRuntimeTestAcceptMessageInput) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const replay = await tx
           .select()
           .from(mcpRuntimeTestTurns)
@@ -695,7 +698,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async cancel(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -773,7 +776,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async end(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -968,7 +971,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async invalidateMcp(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1000,7 +1003,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async invalidateOwner(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1029,7 +1032,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async markMcpConfigChanged(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1079,7 +1082,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async markRuntimeProfileChanged(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1129,7 +1132,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async invalidateRuntime(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1180,7 +1183,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async expireIdle(now) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1282,7 +1285,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async recoverQuarantined(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1320,7 +1323,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async expireTurns(now, idleDeadlineAt): Promise<McpRuntimeTestExpiredTurnResult> {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const turns = await tx
           .select()
           .from(mcpRuntimeTestTurns)
@@ -1410,7 +1413,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async settleQueuedDurableIntent(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1464,7 +1467,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async clearTerminalDurableIntent(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1493,7 +1496,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async recoverBootSession(input: McpRuntimeTestBootRecoveryInput) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1568,7 +1571,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async admitTurn(input): Promise<McpRuntimeTestAdmittedTurn | null> {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1635,7 +1638,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async isSpawnAllowed(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select({
             status: mcpRuntimeTestSessions.status,
@@ -1664,7 +1667,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async recordSpawn(input: McpRuntimeTestSpawnReceiptInput) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1709,7 +1712,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async failBeforeRun(input) {
-      await runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      await runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1746,7 +1749,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async settleTurn(input: McpRuntimeTestSettlementInput) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1858,7 +1861,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async invalidateSession(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1883,7 +1886,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async prepareCleanup(sessionId, now) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1924,7 +1927,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async finishCleanup(input) {
-      return runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)

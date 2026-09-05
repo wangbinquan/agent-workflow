@@ -21,7 +21,7 @@ import {
   repairMcpRuntimeTestSessionLeaseAfterReap,
   rotateMcpRuntimeTestSessionLease,
 } from '../src/services/mcpRuntimeTestLease'
-import { createSqliteMcpRuntimeTestLeaseOperations } from '../src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease'
+import { createMcpRuntimeTestLeaseOperations } from '../src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease'
 import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 import {
   claimNewRuntimeSession,
@@ -504,7 +504,7 @@ describe('natural runtime session leases', () => {
 
   test('MCP turns resume under the same single-writer lease and release after proven reap', async () => {
     const db = seedMcpTurn()
-    const leases = createSqliteMcpRuntimeTestLeaseOperations(db)
+    const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'opencode',
       runtimeSessionId: 'native-mcp-lease',
@@ -572,7 +572,7 @@ describe('natural runtime session leases', () => {
 
   test('MCP conversation reset atomically rotates its unique native lease', async () => {
     const db = seedMcpTurn('claude-code')
-    const leases = createSqliteMcpRuntimeTestLeaseOperations(db)
+    const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-lease',
@@ -609,7 +609,7 @@ describe('natural runtime session leases', () => {
 
   test('MCP lease claims must match the logical session runtime protocol', async () => {
     const db = seedMcpTurn('opencode')
-    const leases = createSqliteMcpRuntimeTestLeaseOperations(db)
+    const leases = createMcpRuntimeTestLeaseOperations(db)
     await expect(
       claimNewMcpRuntimeTestSessionLease(leases, {
         protocol: 'claude-code',
@@ -623,7 +623,7 @@ describe('natural runtime session leases', () => {
 
   test('MCP conversation reset requires a durable unusable fence before rotation', async () => {
     const db = seedMcpTurn('claude-code')
-    const leases = createSqliteMcpRuntimeTestLeaseOperations(db)
+    const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-lease',
@@ -645,7 +645,7 @@ describe('natural runtime session leases', () => {
 
   test('MCP conversation reset collision rolls back pointer, lease, and fence state', async () => {
     const db = seedMcpTurn('claude-code')
-    const leases = createSqliteMcpRuntimeTestLeaseOperations(db)
+    const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'claude-code',
       runtimeSessionId: 'native-mcp-lease',

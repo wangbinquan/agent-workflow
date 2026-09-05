@@ -1,11 +1,9 @@
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { McpRuntimeTestPersistence } from '../application/mcps/runtimeTestPersistence'
-import { createPostgresqlMcpRuntimeTestLeaseOperations } from '../infrastructure/postgresqlMcpRuntimeTestLease'
-import { createPostgresqlMcpRuntimeTestPersistence } from '../infrastructure/postgresqlMcpRuntimeTestPersistence'
+import { createMcpRuntimeTestPersistence } from '../infrastructure/mcpRuntimeTestPersistence'
 export { createPostgresqlMcpTransactionLifecycle } from '../infrastructure/postgresqlMcpTransactionLifecycle'
-import { createSqliteMcpRuntimeTestLeaseOperations } from '../infrastructure/sqliteMcpRuntimeTestLease'
-import { createSqliteMcpRuntimeTestPersistence } from '../infrastructure/sqliteMcpRuntimeTestPersistence'
+import { createMcpRuntimeTestLeaseOperations } from '../infrastructure/mcpRuntimeTestLease'
 import type { McpRuntimeTestLeaseOperations } from '../public/participants'
 
 export interface McpRuntimeTestProviderPersistence {
@@ -14,13 +12,13 @@ export interface McpRuntimeTestProviderPersistence {
 }
 
 export function composeSqliteMcpRuntimeTestPersistence(db: DbClient): McpRuntimeTestPersistence {
-  return createSqliteMcpRuntimeTestPersistence(db)
+  return createMcpRuntimeTestPersistence(db)
 }
 
 export function composePostgresqlMcpRuntimeTestPersistence(
   db: PostgresqlDatabaseClient,
 ): McpRuntimeTestPersistence {
-  return createPostgresqlMcpRuntimeTestPersistence(db)
+  return createMcpRuntimeTestPersistence(db)
 }
 
 export function composeSqliteMcpRuntimeTestProvider(
@@ -28,7 +26,7 @@ export function composeSqliteMcpRuntimeTestProvider(
 ): McpRuntimeTestProviderPersistence {
   return Object.freeze({
     persistence: composeSqliteMcpRuntimeTestPersistence(db),
-    leaseOperations: createSqliteMcpRuntimeTestLeaseOperations(db),
+    leaseOperations: createMcpRuntimeTestLeaseOperations(db),
   })
 }
 
@@ -37,6 +35,6 @@ export function composePostgresqlMcpRuntimeTestProvider(
 ): McpRuntimeTestProviderPersistence {
   return Object.freeze({
     persistence: composePostgresqlMcpRuntimeTestPersistence(db),
-    leaseOperations: createPostgresqlMcpRuntimeTestLeaseOperations(db),
+    leaseOperations: createMcpRuntimeTestLeaseOperations(db),
   })
 }

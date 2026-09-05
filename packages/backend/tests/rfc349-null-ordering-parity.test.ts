@@ -46,11 +46,6 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
   'modules/development-automation/infrastructure/postgresqlMissionReadModels.ts': {
     employeeId: '同一个 WHERE 里有 isNotNull(employeeId)',
   },
-  'modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts': {
-    idleDeadlineAt:
-      'DB CHECK mcp_runtime_test_sessions_status_shape 规定 status=active 且 ' +
-      'inFlightTurnId IS NULL 时 idleDeadlineAt 必非空，而 WHERE 正好只收这两条',
-  },
   'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts': {
     finishedAt: 'WHERE 是 lte(finishedAt, cutoff)；NULL 被比较排除',
   },

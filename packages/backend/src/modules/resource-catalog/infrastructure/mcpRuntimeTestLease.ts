@@ -1,4 +1,4 @@
-// PostgreSQL native-session single-writer leases for the MCP playground.
+// RFC-359 W4-B2 —— MCP playground 原生会话的单写者租约：一份实现，两个 provider 共用。
 
 import { and, eq, isNull } from 'drizzle-orm'
 import {
@@ -7,7 +7,7 @@ import {
   mcpRuntimeTestSessions,
   mcpRuntimeTestTurns,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   McpRuntimeTestLeaseError,
   type McpRuntimeTestLeaseOperations,
@@ -18,9 +18,9 @@ import type {
   McpRuntimeTestLeaseToken,
 } from '../public/types'
 import {
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
 function fail(reason: string): never {
   throw new McpRuntimeTestLeaseError(reason)
@@ -41,7 +41,7 @@ function validate(input: McpRuntimeTestLeaseInput): number {
 }
 
 async function assertLiveTurn(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   testSessionId: string,
   turnId: string,
   protocol: McpRuntimeProtocol,
@@ -77,11 +77,11 @@ async function assertLiveTurn(
 }
 
 async function claimNew(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   input: McpRuntimeTestLeaseInput,
 ): Promise<McpRuntimeTestLeaseToken> {
   const leasedAt = validate(input)
-  return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+  return runResourceCatalogTransaction(db, async (transaction) => {
     await assertLiveTurn(transaction, input.testSessionId, input.turnId, input.protocol)
     await transaction
       .insert(mcpRuntimeTestSessionLeases)
@@ -101,11 +101,11 @@ async function claimNew(
 }
 
 async function preclaim(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   input: McpRuntimeTestLeaseInput,
 ): Promise<McpRuntimeTestLeaseToken> {
   const leasedAt = validate(input)
-  return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+  return runResourceCatalogTransaction(db, async (transaction) => {
     await assertLiveTurn(transaction, input.testSessionId, input.turnId, input.protocol)
     const claimed = await transaction
       .update(mcpRuntimeTestSessionLeases)
@@ -133,14 +133,14 @@ async function preclaim(
 }
 
 async function rotate(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   token: McpRuntimeTestLeaseToken,
   nextRuntimeSessionId: string,
 ): Promise<McpRuntimeTestLeaseToken> {
   nonEmpty(nextRuntimeSessionId)
   if (nextRuntimeSessionId === token.runtimeSessionId) fail('invalid-input')
 
-  return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+  return runResourceCatalogTransaction(db, async (transaction) => {
     await assertLiveTurn(transaction, token.testSessionId, token.turnId, token.protocol)
     const session = await transaction
       .select({
@@ -208,10 +208,10 @@ async function rotate(
 }
 
 async function release(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   token: McpRuntimeTestLeaseToken,
 ): Promise<boolean> {
-  return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+  return runResourceCatalogTransaction(db, async (transaction) => {
     const released = await transaction
       .update(mcpRuntimeTestSessionLeases)
       .set({ leaseTurnId: null, leaseAcquiredAt: null, leaseNonceDigest: null })
@@ -231,7 +231,7 @@ async function release(
 }
 
 async function repairAfterReap(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   testSessionId: string,
   turnId: string,
   childReaped: true,
@@ -257,8 +257,8 @@ async function repairAfterReap(
   })
 }
 
-export function createPostgresqlMcpRuntimeTestLeaseOperations(
-  db: PostgresqlDatabaseClient,
+export function createMcpRuntimeTestLeaseOperations(
+  db: ProviderNeutralDatabase,
 ): McpRuntimeTestLeaseOperations {
   return Object.freeze({
     claimNew: (input: McpRuntimeTestLeaseInput) => claimNew(db, input),
