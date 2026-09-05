@@ -4043,3 +4043,36 @@ CI 是唯一权威门，但**改了几十个文件的迁移**推上去红三次�
 `scheduler*.test.ts` / `runner*.test.ts` / `rfc287-*` 这类端到端调度套件（逐文件跑，避免跨文件目录污染），
 只跑消费面文件与架构守卫抓不到时序缝。
 
+## 模块顶层常量捕获 `@/db/schema` 的列会绕过 provider 投影（RFC-359 W4-B4a 实撞）
+
+`@/db/schema` 导出的表是 `providerAwareSqliteTable` 造的 **Proxy 门面**：每次属性访问（`memories.createdAt`）
+都按**当时激活的 provider**（`selectDatabaseSchemaProvider`）解析到 SQLite 或 PG 的那份列对象。所以
+`const COLUMNS = { createdAt: memories.createdAt, … }` 这种**模块加载时**捕获的列，会永久钉在加载那一刻的
+provider 上。PG 进程里只要该文件在切投影之前被 import（测试进程里几乎必然：harness 缺省先激活 sqlite），
+bigint 列就丢掉 PG 侧 `bigint({ mode: 'number' })` 的 mapper——`createdAt` / `version` / `approvedAt`
+以**字符串**回到调用方，不报错。`rfc359-w4-b4a-adapters.test.ts` 在真 PG 上第一次跑就抓到了它；老的
+`postgresqlMemoryInjectionReadStore.ts` 同样用顶层常量捕获，同一缺陷（P1：结果错但不报错）此前无人可见。
+
+规矩：**列引用只在查询函数体内取**（写成 `function injectionColumns() { return { … } }` 每次调用再取），
+不要在模块作用域缓存表列 / 投影对象。这条准备进 W5 守卫（扫 PG 执行面上顶层 `const … = { …: 表.列 }`）。
+
+## 合一批次推之前，四条按「PG 执行面」扫的守卫也要跑（2026-09-05 主干实撞）
+
+B2 批 b/c 推上 main 后两个 OS 的 backend 分片 2 同一条红：`rfc349-dual-provider-predicate-drift` 的
+`ALLOWED_DIVERGENCE` 还登记着已合一的 `CatalogQuery.ts::catalogWhere`（配对没了，登记就成 stale）。它不在
+`docs/dev-gotchas.md` §「大迁移推之前的最小自查」列的守卫家族里，本地没跑到。合一批次的自查清单要加上：
+
+- `rfc349-dual-provider-predicate-drift`（配对漂移登记）
+- `rfc349-provider-search-case-parity` / `rfc349-null-ordering-parity` / `rfc349-postgresql-numeric-projection`
+  （三条陷阱守卫）+ `architecture/rfc349-postgresql-surface-guard`（语料下限）
+
+第二件事同批发现：这些守卫的语料判据（`tests/architecture/postgresqlSurface.ts`）原本只认 `postgresql*` 前缀与
+`PostgresqlDatabaseClient` / `BaseSQLiteDatabase<'sync' | 'async'` 的类型痕迹，RFC-359 的中立句柄
+（`ProviderNeutralDatabase` / `DatabaseTransaction` / `databaseSessionFor(`）不在其中——每合一一对，那份新的中立实现
+就**整体掉出**三条陷阱守卫的视野（前三批后执行面从 204 掉到 191）。判据已把中立句柄纳入（2026-09-05，执行面 265），
+放宽当场抓到 9 处可空列裸 `asc/desc` 与 1 处裸 `like`：其中 `services/task.ts` 的 node run 列表、
+`legacySqliteReview.ts` 的 item_index / decided_at 排序改走 `engineOf(db).ascNullsFirst / descNullsLast`
+（SQLite 语义在两个引擎上显式成立），`mcpRuntimeTestPersistence.ts` 的「最早空闲截止」补了 `isNotNull` 谓词
+（此前在 SQLite 上会把 NULL 读成最早截止）。**新写中立适配器时，这三类形状会直接被扫到**：可空列排序用
+`engineOf(db).ascNullsFirst / descNullsLast` 或同查询里 `isNotNull` 证明；面向用户输入的匹配用
+`engineOf(db).likeCaseInsensitive`；聚合投影带 `.mapWith(Number)` / drizzle `count()`。

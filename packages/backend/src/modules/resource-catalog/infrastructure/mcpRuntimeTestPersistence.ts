@@ -1966,6 +1966,9 @@ export function createMcpRuntimeTestPersistence(
             and(
               eq(mcpRuntimeTestSessions.status, 'active'),
               isNull(mcpRuntimeTestSessions.inFlightTurnId),
+              // 没有空闲截止的活跃会话不是候选：SQLite 把 NULL 排最前、PG 排最后，不显式排除
+              // 就会在 SQLite 上把「最早截止」读成 null（RFC-359 W4-B4a 放宽 PG 执行面后抓到）。
+              isNotNull(mcpRuntimeTestSessions.idleDeadlineAt),
             ),
           )
           .orderBy(asc(mcpRuntimeTestSessions.idleDeadlineAt))

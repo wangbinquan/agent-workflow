@@ -46,16 +46,14 @@ const TRAP_GUARDS = [
 describe('RFC-349 PostgreSQL 执行面语料', () => {
   test('语料下限：判据失效时先红在语料上，而不是安静地扫出空集合', () => {
     const surface = postgresqlExecutionSurface(SRC_ROOT)
-    // RFC-359 W4 逐批删除 provider 命名文件，执行面只降不升（2026-09-05：204 → 198）；下限先按 100 兜
-    // 「语料没塌」，中立文件纳入判据后再抬回。
+    // RFC-359 W4 把每对 provider 孪生合成一份中立实现（中立句柄已纳入判据，2026-09-05 实测 265）：语料
+    // 总数在 W4 期间「两份变一份」单调收敛到约 180，塌掉则只剩个位数——下限 100 守的是后者。
     expect(
       surface.length,
       'PG 执行面塌了 ⇒ 三条陷阱守卫会因为「没有语料」而全部假绿',
     ).toBeGreaterThanOrEqual(100)
-    // 两种来源都必须非空：只剩命名前缀就等于退回了旧判据，只剩类型可达说明前缀扫描断了。
-    expect(surface.filter((file) => file.reason === 'named-adapter').length).toBeGreaterThanOrEqual(
-      50,
-    )
+    // 类型可达这一路必须非空——它现在承载全部中立实现；命名前缀那一路随 W4 归零（W5-T17 棘轮到 0），
+    // 不再设下限。
     expect(surface.filter((file) => file.reason === 'typed-handle').length).toBeGreaterThanOrEqual(
       20,
     )

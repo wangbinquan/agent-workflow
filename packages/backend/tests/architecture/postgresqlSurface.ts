@@ -30,10 +30,14 @@ const BUILDS_SQL = /\.(from|insert|update|delete|selectDistinct)\(|\bsql\s*(<[^>
  * 拿得到 PostgreSQL 执行句柄的痕迹：
  * - `PostgresqlDatabaseClient` / `PostgresqlTransaction`：PG 专属客户端与事务；
  * - `BaseSQLiteDatabase<'sync' | 'async'`：drizzle 里同时覆盖 bun:sqlite（同步）与
- *   sqlite-proxy（异步，即本仓的 PG 客户端）的基类——双 provider 共用实现的标记。
+ *   sqlite-proxy（异步，即本仓的 PG 客户端）的基类——双 provider 共用实现的标记；
+ * - `ProviderNeutralDatabase` / `DatabaseTransaction` / `databaseSessionFor(`：RFC-359 的中立句柄与
+ *   统一事务原语——W4 起「一份实现、两个 provider 共用」的适配器只拿这些类型，不再出现
+ *   provider 名，但它们的每一句 SQL 都同样在 PostgreSQL 上执行（2026-09-05 实测：前三批合一
+ *   后按旧判据执行面从 204 掉到 191，掉出去的正是这些中立文件——陷阱守卫对它们全盲）。
  */
 const TOUCHES_POSTGRESQL =
-  /PostgresqlDatabaseClient|PostgresqlTransaction|BaseSQLiteDatabase<\s*'sync'\s*\|\s*'async'/u
+  /PostgresqlDatabaseClient|PostgresqlTransaction|BaseSQLiteDatabase<\s*'sync'\s*\|\s*'async'|ProviderNeutralDatabase|\bDatabaseTransaction\b|databaseSessionFor\(/u
 
 export interface PostgresqlSurfaceFile {
   /** 相对 `packages/backend/src` 的路径，永远用 `/` 分隔（Windows 上也一样）。 */

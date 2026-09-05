@@ -3319,7 +3319,7 @@ async function submitReviewDecisionUnlocked(
     .where(
       and(eq(docVersions.reviewNodeRunId, args.nodeRunId), eq(docVersions.decision, 'pending')),
     )
-    .orderBy(asc(docVersions.itemIndex))
+    .orderBy(engineOf(db).ascNullsFirst(docVersions.itemIndex))
   if (dvRows.length === 0) {
     throw new ConflictError(
       'review-doc-version-missing',
@@ -4460,7 +4460,7 @@ const REVIEW_PROMPT_CTX_BUILDERS: Record<DocVersionDecision, ReviewPromptCtxBuil
             ne(docVersions.decidedBy, SYSTEM_DECIDER),
           ),
         )
-        .orderBy(asc(docVersions.itemIndex))
+        .orderBy(engineOf(db).ascNullsFirst(docVersions.itemIndex))
       const sections = roundRows
         .map((r) => (r.decisionReason ?? '').trim())
         .filter((s) => s.length > 0)
@@ -4524,7 +4524,7 @@ export async function buildReviewPromptContext(
         ne(docVersions.decidedBy, SYSTEM_DECIDER),
       ),
     )
-    .orderBy(desc(docVersions.decidedAt))
+    .orderBy(engineOf(db).descNullsLast(docVersions.decidedAt))
     .limit(1)
   const dv = dvRows[0]
   if (dv === undefined) return undefined

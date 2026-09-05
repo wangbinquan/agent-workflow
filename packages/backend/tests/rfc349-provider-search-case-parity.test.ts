@@ -44,6 +44,10 @@ const read = (path: string): string => readFileSync(resolve(backendRoot, path), 
  * 由生成器决定），第三条按平台自己的常量前缀过滤消费者。改成 ilike 反而会误召回。
  */
 const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
+  'modules/task-execution/infrastructure/effectQuiescence.ts': {
+    'nodeRuns.errorMessage':
+      "按运行时写死的机器标记 '%child-unkillable%' 找无法回收子进程的证据；标记是常量，精确匹配才对",
+  },
   'modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts': {
     'agents.mcp': '按 `%"<mcpId>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
   },
@@ -130,8 +134,8 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
     // PG 执行面（语料判据见 `architecture/postgresqlSurface.ts`），每一处裸 like 都必须
     // 在下面写明「为什么大小写敏感才是对的」；写不出理由的就该改 ilike。
     const surface = postgresqlExecutionSurface(resolve(backendRoot, 'src'))
-    // RFC-359 W4 逐批删除 provider 命名文件，按当前判据算出的执行面只降不升（2026-09-05：204 → 198）；
-    // 下限先按 100 兜「语料没塌」，中立文件纳入判据后再抬回。
+    // RFC-359 W4 把每对 provider 孪生合成一份中立实现（中立句柄已纳入判据，2026-09-05 实测 265）：语料
+    // 总数在 W4 期间「两份变一份」单调收敛到约 180，塌掉则只剩个位数——下限 100 守的是后者。
     expect(surface.length, 'PG 执行面语料为空 ⇒ 判据失效（扫描根写错？）').toBeGreaterThanOrEqual(
       100,
     )

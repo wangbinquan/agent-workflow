@@ -1,6 +1,7 @@
 // Task service — start / list / get.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
 import type {
   ScriptLanguage,
@@ -6886,7 +6887,8 @@ export async function getTaskNodeRuns(
     })
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
-    .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id))
+    // 未启动的 run（started_at NULL）两个引擎都排最前：SQLite 的缺省，PG 须显式 nulls first。
+    .orderBy(engineOf(db).ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id))
 
   // RFC-078: group the task's doc_versions by review node_run so we can derive
   // each review row's content-anchored "this round started" timestamp instead

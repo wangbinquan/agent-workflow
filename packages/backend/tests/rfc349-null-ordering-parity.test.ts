@@ -37,6 +37,23 @@ const srcRoot = resolve(import.meta.dir, '..', 'src')
  * 每条都必须是能在同一个查询里读出来的判据，不是「一般不会为空」。
  */
 const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
+  // RFC-359 W4-B4a：中立文件纳入 PG 执行面后首次被扫到的四处「最新 gate revision」读法，形状相同。
+  'modules/collaboration/infrastructure/humanGateOperationJournal.ts': {
+    resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
+  },
+  'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts': {
+    resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
+  },
+  'modules/collaboration/infrastructure/legacySqliteReview.ts': {
+    resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
+  },
+  'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts': {
+    resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
+  },
+  'modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts': {
+    idleDeadlineAt:
+      '同一个 WHERE 里有 isNotNull(idleDeadlineAt)：没有空闲截止的会话不是「最早截止」的候选',
+  },
   'modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts': {
     nextRunAt: '同一个 WHERE 里有 isNotNull(nextRunAt)',
   },
