@@ -113,6 +113,8 @@
 > `rfc359-w4-b1-batch2d-adapters.test.ts` 两引擎各跑。剩 22 对。
 > **W4-B1 批 2e 已落**：TaskRecoveryOperations 两份约千行合成一份（四条状态迁移由 provider 装配面注入），
 > `rfc359-w4-b1-batch2e-adapters.test.ts` 两引擎各跑。剩 21 对。
+> **W4-B1 批 2f 已落**：node run 执行投影（最热写路径，聚合根行锁改由能力矩阵表达）/ 任务列表页绑定 / 目录源装配三对合一，
+> `rfc359-w4-b1-batch2f-adapters.test.ts` 两引擎各跑。剩 18 对，下一步合 lifecycle 内核四对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

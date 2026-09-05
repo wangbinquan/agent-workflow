@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1948,
+    "entries": 1947,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -31485,31 +31485,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#createPostgresqlTaskExecutionCatalogSourceFactory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#createPostgresqlTaskExecutionCatalogSourceFactory",
-      "symbol": "createPostgresqlTaskExecutionCatalogSourceFactory",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "effect",
         "authorization": false,
         "event": false,
@@ -32795,6 +32770,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts#createDatabaseTaskExecutionCatalogSourceFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts#createDatabaseTaskExecutionCatalogSourceFactory",
+      "symbol": "createDatabaseTaskExecutionCatalogSourceFactory",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -33197,6 +33197,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts#createDatabaseTaskListPage",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts#createDatabaseTaskListPage",
+      "symbol": "createDatabaseTaskListPage",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/page.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/page.ts#createTaskListPage",
@@ -33210,56 +33235,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/page.ts#createTaskListPage",
       "symbol": "createTaskListPage",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts#createPostgresqlTaskListPage",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts#createPostgresqlTaskListPage",
-      "symbol": "createPostgresqlTaskListPage",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#createSqliteTaskListPage",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#createSqliteTaskListPage",
-      "symbol": "createSqliteTaskListPage",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46429,7 +46404,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:099ef555e8d665e374dade2f54a19294342acfd5667fa6a1fc8402fa88b6e31d",
+  "sourceDigest": "sha256:b52a2452295d3cdc4f3a7df2b86d45d45a4bef8b2c99c93a35d04397ddaf06b7",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46539,7 +46514,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 276,
+      "durableWriterSites": 269,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -47381,6 +47356,118 @@
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
+        "consumer": "patch",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#139:nodeRuns",
+        "line": 139,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "upsertOutputs",
+        "controlSubtype": null,
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#161:nodeRunOutputs",
+        "line": 161,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "replaceOutputs",
+        "controlSubtype": null,
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#196:nodeRunOutputs",
+        "line": 196,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "replaceOutputs",
+        "controlSubtype": null,
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#198:nodeRunOutputs",
+        "line": 198,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "appendEvents",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#235:nodeRunEvents",
+        "line": 235,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "retagSessionEpochs",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#263:nodeRunEvents",
+        "line": 263,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "retagSessionEpochs",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#274:nodeRunEvents",
+        "line": 274,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeExecutionPersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
         "consumer": "transitionNodeRunStatusTx",
         "controlSubtype": null,
         "dataClass": "nodeRuns",
@@ -47663,118 +47750,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "cancelPostgresqlTask"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "patch",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#142:nodeRuns",
-        "line": 142,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "upsertOutputs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#164:nodeRunOutputs",
-        "line": 164,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "replaceOutputs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#199:nodeRunOutputs",
-        "line": 199,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "replaceOutputs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#201:nodeRunOutputs",
-        "line": 201,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "appendEvents",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#238:nodeRunEvents",
-        "line": 238,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "retagSessionEpochs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#266:nodeRunEvents",
-        "line": 266,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "retagSessionEpochs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#277:nodeRunEvents",
-        "line": 277,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts#PostgresqlNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeExecutionPersistence"
       },
       {
         "allowedTables": [
@@ -49039,118 +49014,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "GateContinuationEffectStep"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "patch",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#121:nodeRuns",
-        "line": 121,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "upsertOutputs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#149:nodeRunOutputs",
-        "line": 149,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "replaceOutputs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#188:nodeRunOutputs",
-        "line": 188,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "replaceOutputs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#190:nodeRunOutputs",
-        "line": 190,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "appendEvents",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#232:nodeRunEvents",
-        "line": 232,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "retagSessionEpochs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#265:nodeRunEvents",
-        "line": 265,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "retagSessionEpochs",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#275:nodeRunEvents",
-        "line": 275,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence.ts#SqliteNodeExecutionPersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteNodeExecutionPersistence"
       },
       {
         "allowedTables": [

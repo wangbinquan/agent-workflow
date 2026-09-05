@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 895,
+    "consumers": 893,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
@@ -44819,13 +44819,11 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:38ea85cdba0df2947257",
+        "import:2b00e36c99d5b6751c24",
         "import:3b49e4cc59dba49edde8",
-        "import:535987969e269a162412",
-        "import:69d7c865c512e5d3105c",
         "import:74230d814389db0a96d2",
         "import:9ec8d7cb92d07a0009d3",
-        "import:ad99295d8c9c6ae9a6b8"
+        "import:e8a4132e0a20bd59b8f0"
       ],
       "context": "identity-access",
       "dataClass": "metadata",
@@ -44871,27 +44869,15 @@
       "productionConsumers": [
         {
           "context": "task-execution",
-          "edgeId": "import:38ea85cdba0df2947257",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts#$file"
+          "edgeId": "import:2b00e36c99d5b6751c24",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts#$file"
         },
         {
           "context": "task-execution",
           "edgeId": "import:3b49e4cc59dba49edde8",
           "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts#$file"
-        },
-        {
-          "context": "task-execution",
-          "edgeId": "import:535987969e269a162412",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#$file"
-        },
-        {
-          "context": "task-execution",
-          "edgeId": "import:69d7c865c512e5d3105c",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#$file"
         },
         {
           "context": "task-execution",
@@ -44907,9 +44893,9 @@
         },
         {
           "context": "task-execution",
-          "edgeId": "import:ad99295d8c9c6ae9a6b8",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts#$file"
+          "edgeId": "import:e8a4132e0a20bd59b8f0",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -163783,7 +163769,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:099ef555e8d665e374dade2f54a19294342acfd5667fa6a1fc8402fa88b6e31d",
+  "sourceDigest": "sha256:b52a2452295d3cdc4f3a7df2b86d45d45a4bef8b2c99c93a35d04397ddaf06b7",
   "targetContexts": [
     "collaboration",
     "development-automation",
