@@ -25,8 +25,7 @@ const EXPECTED_WRITERS = {
     // single-node snapshot, never user-visible).
     'modules/task-execution/composition/actionExecutionRunners.ts': 1,
     'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 2,
-    'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts': 1,
-    'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts': 1,
+    'modules/knowledge-evolution/infrastructure/fusionRepository.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
@@ -35,8 +34,7 @@ const EXPECTED_WRITERS = {
     'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts': 1,
   },
   updateEditable: {
-    'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts': 1,
-    'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts': 1,
+    'modules/knowledge-evolution/infrastructure/fusionRepository.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
@@ -165,9 +163,7 @@ describe('RFC-199 workflow writer inventory', () => {
   test('every production insert stores a canonically serialized definition', () => {
     const canonicalMarkerByWriter: Record<string, string> = {
       'cli/postgresqlDaemonApplication.ts': 'serializeWorkflowDefinitionStorageV1(',
-      'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts':
-        'repairFusionWorkflowDefinition(',
-      'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts':
+      'modules/knowledge-evolution/infrastructure/fusionRepository.ts':
         'repairFusionWorkflowDefinition(',
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts':
         'serializeWorkflowDefinitionStorageV1(',
@@ -186,8 +182,9 @@ describe('RFC-199 workflow writer inventory', () => {
       'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts':
         'serializeWorkflowDefinitionStorageV1(',
     }
-    // RFC-359 W4-B2：演示种子的两份 provider 持久化合成一份（14 → 13）。
-    expect(inventory.insertValueArgs).toHaveLength(13)
+    // RFC-359 W4-B2：演示种子的两份 provider 持久化合成一份（14 → 13）；
+    // RFC-359 W4-D5：融合仓库的两份 provider 实现合成一份（13 → 12）。
+    expect(inventory.insertValueArgs).toHaveLength(12)
     expect(Object.keys(inventory.insert).sort()).toEqual(
       Object.keys(canonicalMarkerByWriter).sort(),
     )

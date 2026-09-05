@@ -146,7 +146,7 @@ describe('RFC-353 AC-4 写入面：融合适配器不再直写 resource-catalog 
     'knowledge-evolution',
     'infrastructure',
   )
-  const adapters: string[] = ['sqliteFusionRepository.ts', 'postgresqlFusionRepository.ts']
+  const adapters: string[] = ['fusionRepository.ts']
 
   test.each(adapters)('%s 里没有对 skills / skillVersions / memories 的写', (file: string) => {
     const source = readFileSync(join(root, file), 'utf-8')

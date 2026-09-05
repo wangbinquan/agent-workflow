@@ -344,6 +344,21 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   rfc294 capability 兼容债还清三条（29 → 26）。**下一条链**：knowledge-evolution 融合提交（`markFusedSync` /
   `unfuseAboveVersionSync` 的同步消费方：KE 的 `sqliteFusionRepository` 与 resource-catalog legacy `skillVersion.ts`）与
   `developmentAdapterStore`。
+  **D5 ✅（knowledge-evolution 融合链）**：`fusionRepository.ts`（以 PG 版为底：十处 dbTxSync 事务改走统一事务原语；
+  技能操作锁撞库经能力矩阵 `classifyError` 归类成同一个 `skill-operation-busy`；跨聚合的两半——memory 的成员关系、
+  resource-catalog 的版本提交——经 tx-bound participant 工厂注入，provenance 修复逐条各自开事务走同一个 participant）+
+  resource-catalog `skillVersionCommitParticipant.ts`（版本提交写入面一份：复合前置条件重验 + `skills` 推进 + `skill_versions`
+  落行，判据仍只在 `domain/skillVersionCommit`）+ KE `composition/fusion.ts` 单一路径（`composeFusionPersistenceFor` /
+  `composeFusionOperationsFor`，旧 provider 名保留为装配别名）。memory 的 SQLite 同步融合写入面（`markFusedSync` /
+  `reassignFusedSkillSync` / `composeSqliteFusionMemoryMembership`）与 resource-catalog 的 `sqliteSkillVersionCommitSync` /
+  `composeSqliteFusionSkillVersionCommit` 退役；server.ts / cli/start.ts / system-operations 三处 SQLite 根改交中立工厂
+  （与 PG daemon 同一份）。四个 provider 文件删除，knowledge-evolution 的 dbTxSync 调用点 10 → 0。留下的同步残余只有
+  legacy 技能回滚那一条（memory `unfuseAboveVersionSync` + resource-catalog `sqliteSkillVersionCommitParticipant.ts` 的两个
+  同步栅栏助手，都被 `legacy/skillVersion.ts` 的 dbTxSync 路径消费），随 resource-catalog 技能仓库对（B2 延后项）合一一起退。
+  `rfc359-w4-d5-adapters.test.ts` 两引擎各跑（apply 的版本 / 成员关系 / 发布 / 操作账本序列与失败回收、操作锁撞库归类、
+  CAS / 决策认领 / 取消认领的前置条件、provenance 修复与幂等、决策恢复三分支）；rfc353 / rfc199 / fusion-engine 锁改指
+  中立文件，`rfc349-fusion-provider-persistence` fake-PG 单测随之删除。**下一条链**：`developmentAdapterStore`（integration；
+  须先把 application 命令改异步）与 identity-access 的两对大 PG 底（`UserAccessRepository` / `OidcIdentityCrossContext`）。
 
 ## 5. W5 —— 防复辟
 

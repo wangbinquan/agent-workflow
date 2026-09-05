@@ -1,13 +1,12 @@
-// RFC-353 T6（RFC-294 W4-E3）—— PostgreSQL 侧的技能版本提交写入面。
-//
-// 与 SQLite 版同判据（`domain/skillVersionCommit`），差别只有「事务是 async 的」。
+// RFC-353 T6（RFC-294 W4-E3）—— 技能版本提交写入面。RFC-359 W4-D5 起一份实现，两个 provider 共用：
+// participant 绑定调用方交来的统一事务句柄；判据全在 `domain/skillVersionCommit`，这里只干「读 live 行 / 写这两条」。
 // 调用方把已经开好的事务交进来，版本行与它自己的状态推进原子可见。
 
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { skills, skillVersions } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { staleConflictError } from '@/util/errors'
 
 import { createSkillVersionCommitParticipantInTx } from '../application/skillVersionCommit'
@@ -24,19 +23,32 @@ import type {
 } from '../public/participants'
 import { skillVersionRelPath } from './legacy/skillIdentityPaths'
 
-type PostgresqlSkillTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
-
-export interface PostgresqlSkillVersionCommitParticipantFactory {
-  inTransaction(transaction: PostgresqlSkillTransaction): SkillVersionCommitParticipantInTx
+export interface SkillVersionCommitParticipantFactory {
+  inTransaction(transaction: DatabaseTransaction): SkillVersionCommitParticipantInTx
 }
 
-export function composePostgresqlSkillVersionCommitParticipantFactory(): PostgresqlSkillVersionCommitParticipantFactory {
+async function readSkillVersionCompositeLive(
+  transaction: DatabaseTransaction,
+  skillId: string,
+): Promise<SkillVersionCompositeLive | null> {
+  const rows = await transaction
+    .select({
+      id: skills.id,
+      contentVersion: skills.contentVersion,
+      metaRevision: skills.metaRevision,
+      ownerUserId: skills.ownerUserId,
+      aclRevision: skills.aclRevision,
+      visibility: skills.visibility,
+    })
+    .from(skills)
+    .where(eq(skills.id, skillId))
+    .limit(1)
+  return rows[0] ?? null
+}
+
+export function composeSkillVersionCommitParticipantFactory(): SkillVersionCommitParticipantFactory {
   return Object.freeze({
-    inTransaction(
-      transaction: Parameters<PostgresqlSkillVersionCommitParticipantFactory['inTransaction']>[0],
-    ) {
+    inTransaction(transaction: DatabaseTransaction) {
       return createSkillVersionCommitParticipantInTx({
         async commit(
           request: SkillVersionCommitRequest,
@@ -44,19 +56,7 @@ export function composePostgresqlSkillVersionCommitParticipantFactory(): Postgre
         ): Promise<number> {
           await hooks?.before?.()
           if (skillVersionCompositeFenceRequested(request)) {
-            const live =
-              ((await transaction
-                .select({
-                  id: skills.id,
-                  contentVersion: skills.contentVersion,
-                  metaRevision: skills.metaRevision,
-                  ownerUserId: skills.ownerUserId,
-                  aclRevision: skills.aclRevision,
-                  visibility: skills.visibility,
-                })
-                .from(skills)
-                .where(eq(skills.id, request.skillId))
-                .get()) as SkillVersionCompositeLive | undefined) ?? null
+            const live = await readSkillVersionCompositeLive(transaction, request.skillId)
             if (skillVersionCompositeDrifted(live, request)) {
               throw staleConflictError(
                 'skill',
@@ -82,8 +82,7 @@ export function composePostgresqlSkillVersionCommitParticipantFactory(): Postgre
             .update(skills)
             .set(plan.skillPatch)
             .where(eq(skills.id, request.skillId))
-            .run()
-          await transaction.insert(skillVersions).values(plan.versionRow).run()
+          await transaction.insert(skillVersions).values(plan.versionRow)
           await hooks?.after?.(request.versionIndex)
           return request.versionIndex
         },
@@ -91,3 +90,8 @@ export function composePostgresqlSkillVersionCommitParticipantFactory(): Postgre
     },
   })
 }
+
+/** 旧名保留为装配别名，PG 装配收敛后删除。 */
+export const composePostgresqlSkillVersionCommitParticipantFactory =
+  composeSkillVersionCommitParticipantFactory
+export type PostgresqlSkillVersionCommitParticipantFactory = SkillVersionCommitParticipantFactory

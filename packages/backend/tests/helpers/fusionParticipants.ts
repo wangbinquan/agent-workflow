@@ -6,22 +6,15 @@
 // 只剩「跨 context 的 provider 装配在根上完成」这一个自洽解。
 //
 // 测试给的就是生产同一份装配，不是 stub——否则这些用例会退化成「只验 fusion 表」。
+// RFC-359 W4-D5 起两个 provider 同一份 tx-bound 工厂；旧的 provider 命名常量留作别名。
 
-import {
-  composeSkillMemoryFusionParticipantFactory,
-  composeSqliteFusionMemoryMembership,
-} from '../../src/modules/memory/composition'
-import {
-  composePostgresqlSkillVersionCommitParticipantFactory,
-  composeSqliteFusionSkillVersionCommit,
-} from '../../src/modules/resource-catalog/composition/skillVersionCommit'
+import { composeSkillMemoryFusionParticipantFactory } from '../../src/modules/memory/composition'
+import { composeSkillVersionCommitParticipantFactory } from '../../src/modules/resource-catalog/composition/skillVersionCommit'
 
-export const TEST_SQLITE_FUSION_PARTICIPANTS = Object.freeze({
-  memoryMembership: composeSqliteFusionMemoryMembership(),
-  skillVersionCommit: composeSqliteFusionSkillVersionCommit(),
-})
-
-export const TEST_POSTGRESQL_FUSION_PARTICIPANTS = Object.freeze({
+export const TEST_FUSION_PARTICIPANTS = Object.freeze({
   memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-  skillVersionCommit: composePostgresqlSkillVersionCommitParticipantFactory(),
+  skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
 })
+
+export const TEST_SQLITE_FUSION_PARTICIPANTS = TEST_FUSION_PARTICIPANTS
+export const TEST_POSTGRESQL_FUSION_PARTICIPANTS = TEST_FUSION_PARTICIPANTS

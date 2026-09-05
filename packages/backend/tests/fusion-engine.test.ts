@@ -745,15 +745,15 @@ describe('RFC-170 T6 — fusion precondition token', () => {
         'modules',
         'knowledge-evolution',
         'infrastructure',
-        'sqliteFusionRepository.ts',
+        'fusionRepository.ts',
       ),
       'utf8',
     )
     expect(adapter).toMatch(
-      /function assertClaimSkill\(tx: DbTxSync, row: FusionRow, actor: Actor\)/,
+      /async function assertClaimSkill\(\s*tx: DatabaseTransaction,\s*row: FusionRow,\s*actor: Actor,?\s*\)/,
     )
     expect(adapter).toMatch(
-      /const access = resolveFusionSkillAccess\(actor, live, grantInTx\(tx, actor, live\.id\)\)/,
+      /const access = resolveFusionSkillAccess\(actor, live, await grantInTx\(tx, actor, live\.id\)\)/,
     )
     expect(adapter).toMatch(/if \(!canEditFusionSkill\(access\)\)/)
     expect(adapter).toMatch(/assertClaimSkill\(tx, row, command\.actor\)/)
@@ -1235,7 +1235,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
         'modules',
         'knowledge-evolution',
         'infrastructure',
-        'sqliteFusionRepository.ts',
+        'fusionRepository.ts',
       ),
       'utf8',
     )

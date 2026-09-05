@@ -1,4 +1,6 @@
 // RFC-353 T2（RFC-294 W4-E3）—— memory 提供给 knowledge-evolution 的成员关系 participant（SQLite 侧）。
+// RFC-359 W4-D5 起融合提交与 provenance 修复走中立的 `skillMemoryFusionParticipant.ts`（两个 provider 共用）；
+// 这里只剩 legacy 技能回滚（resource-catalog `legacy/skillVersion.ts` 的 dbTxSync 同步路径）还要的解融合核心。
 //
 // design §638 把 `MemoryMembershipParticipantInTx` 列为 memory offered、**KE-only** 的面：
 // 融合把记忆标记为 fused、技能回滚把它们退回 approved，这两件事都必须与技能版本写入**同一事务**
@@ -12,45 +14,12 @@
 // （SQLite 按插入顺序、PostgreSQL 排过序），而这个数组经
 // `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire。
 
-import { and, eq, gt, inArray } from 'drizzle-orm'
+import { and, eq, gt } from 'drizzle-orm'
 
 import { memories } from '@/db/schema'
-import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 
-import type { MemoryMembershipFuseCommand } from '../public/participants'
-import {
-  fusedProvenanceStamp,
-  memoriesToMarkFused,
-  memoriesToUnfuseAbove,
-} from '../domain/fusionMembership'
-
-/** 同步核心，理由同 `unfuseAboveVersionSync`：SQLite 侧的调用方跑在 `dbTxSync` 的同步回调里。 */
-export function markFusedSync(tx: DbTxSync, command: MemoryMembershipFuseCommand): string[] {
-  const candidates = tx
-    .select({
-      id: memories.id,
-      status: memories.status,
-      fusedIntoSkillId: memories.fusedIntoSkillId,
-      fusedIntoSkillVersion: memories.fusedIntoSkillVersion,
-    })
-    .from(memories)
-    .where(inArray(memories.id, [...command.memoryIds]))
-    .all()
-  const ids = memoriesToMarkFused(candidates, command.memoryIds)
-  const stamp = fusedProvenanceStamp({
-    skillId: command.skillId,
-    skillName: command.skillName,
-    skillVersion: command.skillVersion,
-    fusionId: command.fusionId,
-    actorUserId: command.actorUserId,
-    now: command.now,
-  })
-  for (const id of ids) {
-    tx.update(memories).set(stamp).where(eq(memories.id, id)).run()
-  }
-  return ids
-}
+import { fusedProvenanceStamp, memoriesToUnfuseAbove } from '../domain/fusionMembership'
 
 /**
  * 同步核心。participant 的合同是 Promise（provider 中性），但 bun:sqlite 本身是同步的，
@@ -84,24 +53,4 @@ export function unfuseAboveVersionSync(
     tx.update(memories).set(stamp).where(eq(memories.id, id)).run()
   }
   return ids
-}
-
-/**
- * RFC-353 T6 —— RFC-223 provenance 修复用的**非事务**写入面。
- *
- * 与上面两个不同：`repairProvenance` 是 daemon 启动期逐条修复，没有外层事务
- * （每条独立、可中断、下次启动继续），所以这里收 `DbClient` 而不是 `DbTxSync`。
- * 收进 memory 的理由不变——`memories.fused_into_skill_id` 是 memory 的列，
- * 只是「谁能写」这件事，不该由 knowledge-evolution 自己伸手。
- */
-export function reassignFusedSkillSync(
-  // 非事务（`repairProvenance` 逐条修复）与事务内（participant 的第三个方法）都会调它，
-  // 两种句柄的 `update` 形状相同。
-  db: DbClient | DbTxSync,
-  input: { readonly memoryId: string; readonly skillId: string },
-): void {
-  db.update(memories)
-    .set({ fusedIntoSkillId: input.skillId })
-    .where(eq(memories.id, input.memoryId))
-    .run()
 }

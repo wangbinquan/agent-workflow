@@ -33,10 +33,9 @@ import {
   memoriesToMarkFused,
   memoriesToUnfuseAbove,
 } from '../src/modules/memory/domain/fusionMembership'
-import {
-  markFusedSync,
-  unfuseAboveVersionSync,
-} from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
+import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
+import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SQLITE_ADAPTER = resolve(
@@ -293,22 +292,26 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
     expect(memoriesToMarkFused(candidates, ['m_z', 'm_a'])).toEqual(['m_a', 'm_z'])
   })
 
-  test('真库：标记之后 provenance 七列按同一份 stamp 写满', () => {
+  test('真库：标记之后 provenance 七列按同一份 stamp 写满', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seed(db, [
       { id: 'm_1', status: 'approved', skillId: null, version: null },
       { id: 'm_2', status: 'archived', skillId: null, version: null },
     ])
-    const marked = dbTxSync(db, (tx) =>
-      markFusedSync(tx, {
-        memoryIds: ['m_1', 'm_2'],
-        skillId: 'skl_9',
-        skillName: 'my-skill',
-        skillVersion: 4,
-        fusionId: 'fus_1',
-        actorUserId: 'u_1',
-        now: 1_700_000_000_777,
-      }),
+    // RFC-359 W4-D5：融合提交走中立 participant（两个 provider 同一份），SQLite 同步变体退役。
+    const marked = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await composeSkillMemoryFusionParticipantFactory()
+          .inTransaction(tx)
+          .markFused({
+            memoryIds: ['m_1', 'm_2'],
+            skillId: 'skl_9',
+            skillName: 'my-skill',
+            skillVersion: 4,
+            fusionId: 'fus_1',
+            actorUserId: 'u_1',
+            now: 1_700_000_000_777,
+          }),
     )
     expect(marked).toEqual(['m_1'])
     const rows = db.select().from(memories).all()
@@ -342,11 +345,11 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
 })
 
 describe('RFC-353 T6 — fusion 适配器不再直写 memories', () => {
-  test('两个 fusion 适配器里对 memories 的写入为 0', () => {
+  test('fusion 仓库里对 memories 的写入为 0', () => {
     // AC-4 的机器判据（写侧）。读仍然有——`repairProvenance` 要读 `skill_versions` 才能
     // 发现孤儿 fusion 行、`loadSkillAccess` 要读 `skills` 做授权——那部分按 owner 转交登记，
     // 不在本刀。写侧必须归零：跨聚合**写**才是 design §638 给 KE 的禁止清单第一条。
-    for (const name of ['sqliteFusionRepository.ts', 'postgresqlFusionRepository.ts']) {
+    for (const name of ['fusionRepository.ts']) {
       const source = readFileSync(
         resolve(
           import.meta.dir,

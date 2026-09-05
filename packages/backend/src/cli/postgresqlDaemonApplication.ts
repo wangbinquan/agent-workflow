@@ -56,7 +56,7 @@ import {
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import {
   composePostgresqlMemoryOperations,
-  composePostgresqlSkillMemoryFusionParticipantFactory,
+  composeSkillMemoryFusionParticipantFactory,
 } from '@/modules/memory/composition'
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
@@ -289,7 +289,7 @@ import { composePostgresqlPipelineEvidenceRunner } from '@/modules/integration/c
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import { composePostgresqlSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
-import { composePostgresqlSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import {
   mcpOperationCoordinator,
   pluginOperationCoordinator,
@@ -515,7 +515,7 @@ export async function composePostgresqlDaemonApplication(
     // RFC-353 T7：回滚该退回哪些记忆归 knowledge-evolution 裁定；它消费 memory 的
     // participant，resource-catalog 只收到一个「给事务、还 id」的窄端口。
     restoreMembership: createAsyncSkillRestoreMembership(
-      composePostgresqlSkillMemoryFusionParticipantFactory(),
+      composeSkillMemoryFusionParticipantFactory(),
     ),
     resourceCatalog,
   })
@@ -1053,8 +1053,8 @@ export async function composePostgresqlDaemonApplication(
   })
   const fusionOperations = composePostgresqlFusionOperations({
     // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。
-    memoryMembership: composePostgresqlSkillMemoryFusionParticipantFactory(),
-    skillVersionCommit: composePostgresqlSkillVersionCommitParticipantFactory(),
+    memoryMembership: composeSkillMemoryFusionParticipantFactory(),
+    skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
     db: input.db,
     appHome: input.appHome,
     memories: memoryCatalog,

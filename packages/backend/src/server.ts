@@ -441,10 +441,10 @@ import { composeScriptActionExecution } from '@/modules/task-execution/compositi
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import {
-  composeSqliteFusionMemoryMembership,
+  composeSkillMemoryFusionParticipantFactory,
   unfuseAboveVersionSync,
 } from '@/modules/memory/composition'
-import { composeSqliteFusionSkillVersionCommit } from '@/modules/resource-catalog/composition/skillVersionCommit'
+import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 /**
@@ -2724,8 +2724,8 @@ function composeSqliteApiRouteMounts(
   const fusionOperations = composeSqliteFusionOperations({
     // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
     // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
-    memoryMembership: composeSqliteFusionMemoryMembership(),
-    skillVersionCommit: composeSqliteFusionSkillVersionCommit(),
+    memoryMembership: composeSkillMemoryFusionParticipantFactory(),
+    skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
     db: deps.db,
     appHome,
     memories: memoryCatalog,

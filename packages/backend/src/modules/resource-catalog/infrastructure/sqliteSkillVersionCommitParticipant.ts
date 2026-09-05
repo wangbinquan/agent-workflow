@@ -1,25 +1,21 @@
-// RFC-353 T6（RFC-294 W4-E3）—— SQLite 侧的技能版本提交写入面。
+// RFC-353 T6（RFC-294 W4-E3）—— 技能版本复合前置条件的 SQLite **同步**栅栏。
 //
-// 只干「读 live 行 / 写这两条」，判据全在 `domain/skillVersionCommit`。
-// **同步**：调用方的 `dbTxSync` 回调是同步的，一旦这里返回 Promise，事务会在它兑现之前
-// 就提交掉——与 memory 那条 `markFusedSync` 同一个理由（见 KE 的窄端口注释）。
+// RFC-359 W4-D5 起融合提交的写入面只有一份（`skillVersionCommitParticipant.ts`，两个 provider 共用）；
+// 这里只剩 legacy `skillVersion.ts` 的同步路径还要的两个读 / 判助手——它跑在 `dbTxSync` 的同步回调里，
+// 拿不到 await。随 resource-catalog 的技能仓库对合一（legacy 版本写入路径退役）一起删除。
 
 import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 
-import { skills, skillVersions } from '@/db/schema'
+import { skills } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
 import { staleConflictError } from '@/util/errors'
 
 import {
-  planSkillVersionCommit,
   skillVersionCompositeDrifted,
   skillVersionCompositeFenceRequested,
   type SkillVersionCompositeExpectation,
   type SkillVersionCompositeLive,
 } from '../domain/skillVersionCommit'
-import type { SkillVersionCommitHooks, SkillVersionCommitRequest } from '../public/participants'
-import { skillVersionRelPath } from './legacy/skillIdentityPaths'
 
 export function readSkillVersionCompositeLiveSync(
   tx: DbTxSync,
@@ -58,30 +54,4 @@ export function assertSkillVersionCompositeFenceSync(
         `skill '${skillId}' changed since this operation started; reload and retry`,
     )
   }
-}
-
-export function sqliteSkillVersionCommitSync(
-  tx: DbTxSync,
-  request: SkillVersionCommitRequest,
-  hooks?: SkillVersionCommitHooks<void>,
-): number {
-  hooks?.before?.()
-  assertSkillVersionCompositeFenceSync(tx, request.skillId, request)
-  const plan = planSkillVersionCommit({
-    versionRowId: ulid(),
-    skillId: request.skillId,
-    versionIndex: request.versionIndex,
-    contentHash: request.contentHash,
-    filesPath: skillVersionRelPath(request.skillId, request.versionIndex),
-    source: request.source,
-    summary: request.summary,
-    fusionId: request.fusionId,
-    restoredFromVersion: request.restoredFromVersion,
-    authorUserId: request.authorUserId,
-    now: request.now,
-  })
-  tx.update(skills).set(plan.skillPatch).where(eq(skills.id, request.skillId)).run()
-  tx.insert(skillVersions).values(plan.versionRow).run()
-  hooks?.after?.(request.versionIndex)
-  return request.versionIndex
 }

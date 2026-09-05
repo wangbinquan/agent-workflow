@@ -29,10 +29,6 @@ import {
   type MemoryTransaction,
 } from './infrastructure/memoryCatalogOperations'
 import { createMemoryDistillSessionCapture } from './infrastructure/memoryDistillSessionCapture'
-import {
-  markFusedSync,
-  reassignFusedSkillSync,
-} from './infrastructure/sqliteMemoryMembershipParticipant'
 import { DrizzleMemoryDistillRuntimeResolver } from './infrastructure/memoryDistillRuntimeResolver'
 import type { MemoryOperations } from './public/operations'
 import type { MemoryInjectionQueries } from './public/queries'
@@ -55,23 +51,12 @@ export { composeMemoryCatalogOperations, type MemoryCatalogTestHooks, type Memor
 export const composeSqliteMemoryCatalogOperations = composeMemoryCatalogOperations
 export const composePostgresqlMemoryCatalogOperations = composeMemoryCatalogOperations
 
-// RFC-353 T6/T7：SQLite 侧的成员关系同步核心同样从 composition 出。
+// RFC-353 T6/T7：legacy 技能回滚要的 SQLite 同步解融合核心同样从 composition 出。
 // **不从 `public/participants` 出**——那会让 public 面直接点名一个 provider 适配器
 // （RFC-349 的 provider-cutover 账本明写「只能缩不能涨」）。跨 context 的 provider 装配
 // 一律在 bootstrap / system-operation 根上完成，模块之间只交换 provider 中性的端口。
-export {
-  markFusedSync,
-  reassignFusedSkillSync,
-  unfuseAboveVersionSync,
-} from './infrastructure/sqliteMemoryMembershipParticipant'
-
-/** SQLite 侧融合提交要的成员关系写入面——三处 bootstrap 根共用这一处装配，不各抄一遍。 */
-export function composeSqliteFusionMemoryMembership(): {
-  readonly markFused: typeof markFusedSync
-  readonly reassignFusedSkill: typeof reassignFusedSkillSync
-} {
-  return Object.freeze({ markFused: markFusedSync, reassignFusedSkill: reassignFusedSkillSync })
-}
+// RFC-359 W4-D5：融合提交的成员关系写入面只剩中立的 `composeSkillMemoryFusionParticipantFactory`。
+export { unfuseAboveVersionSync } from './infrastructure/sqliteMemoryMembershipParticipant'
 
 export function composeMemoryDistillQueries(db: ProviderNeutralDatabase) {
   return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
