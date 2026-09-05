@@ -6404,9 +6404,9 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts",
+      "file": "packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#UPLOAD_SESSION_SWEEP_LIMIT",
+      "id": "background:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#UPLOAD_SESSION_SWEEP_LIMIT",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6418,7 +6418,7 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#UPLOAD_SESSION_SWEEP_LIMIT",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#UPLOAD_SESSION_SWEEP_LIMIT",
       "phase": "unknown",
       "symbol": "UPLOAD_SESSION_SWEEP_LIMIT",
       "targetContext": "development-automation"
@@ -13497,5 +13497,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:546490d5828f2e117a4065b2269c3fca884e15265d0b6756fe01ffd78f5491e4"
+  "sourceDigest": "sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4"
 }

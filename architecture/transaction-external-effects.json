@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 41,
-    "transactionCallbacks": 346
+    "coLocatedCandidates": 40,
+    "transactionCallbacks": 344
   },
   "entries": [
     {
@@ -710,32 +710,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#transaction:154",
-      "line": 154,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#createPostgresqlUploadMaintenancePersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlUploadMaintenancePersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "upload"
-      ],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#transaction:68",
-      "line": 68,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#createPostgresqlMissionInputUploadPersistence",
-      "status": "co-located-risk",
-      "symbol": "createPostgresqlMissionInputUploadPersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:265",
@@ -764,8 +738,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:361",
-      "line": 361,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:324",
+      "line": 324,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
       "status": "clear",
       "symbol": "createMissionPersistence",
@@ -776,8 +750,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:389",
-      "line": 389,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:352",
+      "line": 352,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
       "status": "clear",
       "symbol": "createMissionPersistence",
@@ -788,8 +762,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:515",
-      "line": 515,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:478",
+      "line": 478,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
       "status": "clear",
       "symbol": "createMissionPersistence",
@@ -800,8 +774,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:858",
-      "line": 858,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:821",
+      "line": 821,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
       "status": "clear",
       "symbol": "createMissionPersistence",
@@ -810,25 +784,13 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/postgresqlPlaybookSagaStore.ts",
+      "file": "packages/backend/src/modules/development-automation/infrastructure/playbookSagaStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/postgresqlPlaybookSagaStore.ts#transaction:116",
-      "line": 116,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlPlaybookSagaStore.ts#createPostgresqlPlaybookSagaPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/playbookSagaStore.ts#transaction:123",
+      "line": 123,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/playbookSagaStore.ts#createPlaybookSagaPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlPlaybookSagaPersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/postgresqlPlaybookSagaStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/postgresqlPlaybookSagaStore.ts#transaction:370",
-      "line": 370,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlPlaybookSagaStore.ts#createPostgresqlPlaybookSagaPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlPlaybookSagaPersistence",
+      "symbol": "createPlaybookSagaPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -858,21 +820,6 @@
     },
     {
       "effectTokens": [
-        "push",
-        "upload"
-      ],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#dbTxSync:84",
-      "line": 84,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#createSqliteUploadSessionStore",
-      "status": "co-located-risk",
-      "symbol": "createSqliteUploadSessionStore",
-      "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
         "upload"
       ],
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts",
@@ -882,6 +829,32 @@
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#recordPostgresqlUploadPublicationReceipt",
       "status": "co-located-risk",
       "symbol": "recordPostgresqlUploadPublicationReceipt",
+      "targetContext": "development-automation",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "upload"
+      ],
+      "file": "packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#transaction:116",
+      "line": 116,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#createUploadSessionPersistence",
+      "status": "co-located-risk",
+      "symbol": "createUploadSessionPersistence",
+      "targetContext": "development-automation",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#transaction:177",
+      "line": 177,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#createUploadSessionPersistence",
+      "status": "clear",
+      "symbol": "createUploadSessionPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -4251,7 +4224,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:546490d5828f2e117a4065b2269c3fca884e15265d0b6756fe01ffd78f5491e4",
+  "sourceDigest": "sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
