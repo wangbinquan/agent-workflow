@@ -11,8 +11,7 @@ import { createInMemoryDb } from '@/db/client'
 import { codeHostConnections, repositoryTransportConnections, users } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { RepositoryTransportCredentials } from '@/modules/source-control/application/repositoryTransportCredentials'
-import { PostgresqlRepositoryTransportCredentialRepository } from '@/modules/source-control/infrastructure/postgresqlRepositoryTransportCredentialRepository'
-import { SQLiteRepositoryTransportCredentialRepository } from '@/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
+import { DrizzleRepositoryTransportCredentialRepository } from '@/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -75,7 +74,7 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    repository: new PostgresqlRepositoryTransportCredentialRepository(
+    repository: new DrizzleRepositoryTransportCredentialRepository(
       createPostgresqlDatabaseClient(runtime),
     ),
     executions,
@@ -90,7 +89,7 @@ describe('RFC-349 source-control provider adapters', () => {
   test('SQLite adapter preserves the sealed credential behavior behind Promise methods', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 49))
-    const repository = new SQLiteRepositoryTransportCredentialRepository(db)
+    const repository = new DrizzleRepositoryTransportCredentialRepository(db)
     const credentials = new RepositoryTransportCredentials(repository, secretBox)
     const user = { id: 'rfc349-source-control-user' }
     db.insert(users)
@@ -138,7 +137,7 @@ describe('RFC-349 source-control provider adapters', () => {
   test('administrator connection and publication projection commit atomically behind the participant', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 50))
-    const repository = new SQLiteRepositoryTransportCredentialRepository(db)
+    const repository = new DrizzleRepositoryTransportCredentialRepository(db)
     const credentials = new RepositoryTransportCredentials(repository, secretBox)
     const service = createCodeHostConnectionsService({
       secretBox,

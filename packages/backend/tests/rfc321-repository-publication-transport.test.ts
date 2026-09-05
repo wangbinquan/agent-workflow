@@ -34,7 +34,7 @@ import {
   createRepositoryPublicationTransport,
   type RepositoryPublicationSession,
 } from '../src/modules/source-control/composition'
-import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
+import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
 import { runGit as executeGit } from '../src/util/git'
 import { createUser } from '../src/services/users'
@@ -61,7 +61,7 @@ function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
 }
 
 function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
-  return new SQLiteRepositoryTransportCredentialRepository(db)
+  return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
 function git(cwd: string, ...args: string[]): string {

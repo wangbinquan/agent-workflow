@@ -25,7 +25,7 @@ import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
 } from '../src/modules/source-control/composition'
-import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
+import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { pushCandidate } from '../src/modules/source-control/application/deliverCandidate'
 import { createUser } from '../src/services/users'
 import { runGit } from '../src/util/git'
@@ -73,7 +73,7 @@ function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
 }
 
 function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
-  return new SQLiteRepositoryTransportCredentialRepository(db)
+  return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
 function commitProof(worktree: string, label: string): string {

@@ -1,6 +1,5 @@
-// RFC-349 — PostgreSQL persistence for source-control publication credentials.
-// The asynchronous provider client and transaction stay infrastructure-private;
-// application/public surfaces receive only Promise-based closed records.
+// RFC-359 W4-B6 —— 源码控制发布凭据持久化：一份实现，两个 provider 共用。
+// 多语句写走统一事务原语；application / public 面只拿到 Promise 形态的封闭记录。
 
 import { and, count, eq } from 'drizzle-orm'
 import { RepositoryTransportMappingV1Schema } from '@agent-workflow/shared'
@@ -11,7 +10,12 @@ import {
   repositoryTransportConnections,
   userRepositoryTransportCredentials,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  affectedRows,
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import type {
   RepositoryTransportConnectionProjectionInput,
   RepositoryTransportConnectionProjectionSource,
@@ -20,8 +24,6 @@ import type {
   StoredPersonalRepositoryTransportCredential,
   StoredRepositoryTransportConnection,
 } from '../ports/repositoryTransportCredentialRepository'
-
-type PostgresqlTransaction = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
 
 function configuredConnectionOf(
   row: typeof codeHostConnections.$inferSelect,
@@ -99,12 +101,8 @@ function personalOf(
   }
 }
 
-function mutationChanges(result: unknown): number {
-  return (result as { readonly changes?: number }).changes ?? 0
-}
-
 async function synchronizeProjection(
-  tx: PostgresqlTransaction,
+  tx: DatabaseTransaction,
   input: RepositoryTransportConnectionProjectionInput,
 ): Promise<void> {
   const currentRows = await tx
@@ -166,7 +164,7 @@ async function synchronizeProjection(
 }
 
 async function mutationFenceMatches(
-  tx: PostgresqlTransaction,
+  tx: DatabaseTransaction,
   provider: CodeHostProvider,
   expected: RepositoryTransportConnectionMutationFence,
 ): Promise<boolean> {
@@ -192,8 +190,8 @@ async function mutationFenceMatches(
   )
 }
 
-export class PostgresqlRepositoryTransportCredentialRepository implements RepositoryTransportCredentialRepository {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleRepositoryTransportCredentialRepository implements RepositoryTransportCredentialRepository {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async listConnections(): Promise<readonly StoredRepositoryTransportConnection[]> {
     return (await this.db.select().from(repositoryTransportConnections).all()).map(connectionOf)
@@ -250,7 +248,7 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
     readonly tokenHint: string
     readonly now: number
   }): Promise<StoredPersonalRepositoryTransportCredential> {
-    return await this.db.transaction(async (tx) => {
+    return await databaseSessionFor(this.db).transaction(async (tx) => {
       const existingRows = await tx
         .select()
         .from(userRepositoryTransportCredentials)
@@ -320,7 +318,7 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
         ),
       )
       .run()
-    return mutationChanges(result) === 1
+    return affectedRows(result) === 1
   }
 
   async personalCount(provider: CodeHostProvider): Promise<number> {
@@ -356,7 +354,7 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
     projection: RepositoryTransportConnectionProjectionInput,
     expected: RepositoryTransportConnectionMutationFence,
   ): Promise<boolean> {
-    return await this.db.transaction(async (tx) => {
+    return await databaseSessionFor(this.db).transaction(async (tx) => {
       if (!(await mutationFenceMatches(tx, connection.provider, expected))) return false
       await tx
         .insert(codeHostConnections)
@@ -372,7 +370,7 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
     provider: CodeHostProvider,
     expected: RepositoryTransportConnectionMutationFence,
   ): Promise<'removed' | 'missing' | 'stale'> {
-    return await this.db.transaction(async (tx) => {
+    return await databaseSessionFor(this.db).transaction(async (tx) => {
       if (!(await mutationFenceMatches(tx, provider, expected))) return 'stale'
       const result = await tx
         .delete(codeHostConnections)
@@ -382,7 +380,7 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
         .delete(repositoryTransportConnections)
         .where(eq(repositoryTransportConnections.provider, provider))
         .run()
-      return mutationChanges(result) === 1 ? 'removed' : 'missing'
+      return affectedRows(result) === 1 ? 'removed' : 'missing'
     })
   }
 
@@ -398,7 +396,9 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
   }
 
   async synchronizeConnection(input: RepositoryTransportConnectionProjectionInput): Promise<void> {
-    await this.db.transaction(async (tx) => await synchronizeProjection(tx, input))
+    await databaseSessionFor(this.db).transaction(
+      async (tx) => await synchronizeProjection(tx, input),
+    )
   }
 
   async removeConnection(provider: CodeHostProvider): Promise<boolean> {
@@ -406,6 +406,6 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
       .delete(repositoryTransportConnections)
       .where(eq(repositoryTransportConnections.provider, provider))
       .run()
-    return mutationChanges(result) === 1
+    return affectedRows(result) === 1
   }
 }

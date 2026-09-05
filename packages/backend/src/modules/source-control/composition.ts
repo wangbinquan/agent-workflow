@@ -64,8 +64,12 @@ export {
   composeRepositoryWorkspaceStore as composeSqliteRepositoryWorkspaceStore,
   composeRepositoryWorkspaceStore as composePostgresqlRepositoryWorkspaceStore,
 } from './infrastructure/repositoryWorkspaceStore'
-export { SQLiteRepositoryTransportCredentialRepository } from './infrastructure/sqliteRepositoryTransportCredentialRepository'
-export { PostgresqlRepositoryTransportCredentialRepository } from './infrastructure/postgresqlRepositoryTransportCredentialRepository'
+// RFC-359 W4-B6：凭据仓库只有一份；两个 bootstrap 与存量调用方仍经各自的具名绑定装配。
+export {
+  DrizzleRepositoryTransportCredentialRepository,
+  DrizzleRepositoryTransportCredentialRepository as SQLiteRepositoryTransportCredentialRepository,
+  DrizzleRepositoryTransportCredentialRepository as PostgresqlRepositoryTransportCredentialRepository,
+} from './infrastructure/repositoryTransportCredentialRepository'
 
 export type { RepositoryTransportCredentialRepository } from './ports/repositoryTransportCredentialRepository'
 export type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'

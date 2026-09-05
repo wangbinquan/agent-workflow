@@ -22,7 +22,7 @@ import { createApp } from '../src/server'
 import type { AppDeps } from '../src/server'
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
-import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
+import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createUser } from '../src/services/users'
 import { errorHandler } from '../src/util/errors'
 
@@ -69,7 +69,7 @@ async function fixture() {
     createSession({ db, userId: bob.id }),
   ])
   const repositoryTransport = composeRepositoryTransportCredentials(
-    new SQLiteRepositoryTransportCredentialRepository(db),
+    new DrizzleRepositoryTransportCredentialRepository(db),
     box,
   )
   const app = createApp({
@@ -257,7 +257,7 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     app.onError(errorHandler)
     mountAccountRepositoryTransportCredentialRoutes(app, { db: h.db, secretBox: box } as AppDeps, {
       credentials: composeRepositoryTransportCredentials(
-        new SQLiteRepositoryTransportCredentialRepository(h.db),
+        new DrizzleRepositoryTransportCredentialRepository(h.db),
         box,
       ).ownCredentials,
       currentSubjects: {

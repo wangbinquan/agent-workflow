@@ -31,13 +31,15 @@ describe('RFC-349 source-control Promise contract', () => {
       expect(source).not.toContain('PostgresqlDatabaseClient')
     }
 
-    const postgresql = read(
-      'packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryTransportCredentialRepository.ts',
+    // RFC-359 W4-B6：凭据仓库只有一份中立实现，两个 provider 共用；它只拿中立句柄，不得断言成任一 provider 的客户端。
+    const neutral = read(
+      'packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts',
     )
-    expect(postgresql).toContain('type { PostgresqlDatabaseClient }')
-    expect(postgresql).not.toMatch(/\bas\s+(?:unknown\s+as\s+)?DbClient\b/)
-    expect(postgresql).not.toContain('dbTxSync')
-    expect(postgresql).not.toContain('bun:sqlite')
+    expect(neutral).toContain('type { ProviderNeutralDatabase }')
+    expect(neutral).not.toContain('PostgresqlDatabaseClient')
+    expect(neutral).not.toMatch(/\bas\s+(?:unknown\s+as\s+)?DbClient\b/)
+    expect(neutral).not.toContain('dbTxSync')
+    expect(neutral).not.toContain('bun:sqlite')
   })
 
   test('public credential commands, queries, and selection return Promises', () => {

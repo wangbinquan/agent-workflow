@@ -13,7 +13,7 @@ import {
 } from '../src/db/schema'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { selectRepositoryTransportCredential } from '../src/modules/source-control/domain/repositoryTransportCredential'
-import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
+import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -26,7 +26,7 @@ function subject(user: Awaited<ReturnType<typeof createUser>>) {
 }
 
 function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
-  return new SQLiteRepositoryTransportCredentialRepository(db)
+  return new DrizzleRepositoryTransportCredentialRepository(db)
 }
 
 describe('RFC-321 credential selector truth table', () => {

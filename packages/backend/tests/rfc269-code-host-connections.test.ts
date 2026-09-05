@@ -25,7 +25,7 @@ import {
   probeCodeHostConnection,
 } from '../src/services/codeHost/connections'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
-import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
+import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
@@ -38,7 +38,7 @@ type FetchStub = (url: string, init?: RequestInit) => Promise<Response>
 
 function codeHostService(db: ReturnType<typeof createInMemoryDb>) {
   const repositoryTransport = composeRepositoryTransportCredentials(
-    new SQLiteRepositoryTransportCredentialRepository(db),
+    new DrizzleRepositoryTransportCredentialRepository(db),
     box,
   )
   return createCodeHostConnectionsService({
