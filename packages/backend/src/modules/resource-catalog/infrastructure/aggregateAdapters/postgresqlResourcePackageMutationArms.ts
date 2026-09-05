@@ -46,7 +46,7 @@ import {
 } from '@/modules/execution-contract/public/commands'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
-import type { PostgresqlMcpTransactionLifecycle } from '../postgresqlMcpRepository'
+import type { McpTransactionLifecycle } from '../mcpRepository'
 import {
   agentFromPersistenceRow,
   createAgentPersistenceValues,
@@ -813,7 +813,7 @@ function fullMcpRowWhere(row: typeof mcps.$inferSelect) {
 
 export async function commitPostgresqlMcpPackageMutation(
   input: MutationArmInput<McpPackageMutation> & {
-    readonly lifecycle: PostgresqlMcpTransactionLifecycle
+    readonly lifecycle: McpTransactionLifecycle
   },
 ): Promise<ResourcePackageMutationReceipt<'mcp'>> {
   const parsed = CreateMcpSchema.parse(input.mutation.payload)

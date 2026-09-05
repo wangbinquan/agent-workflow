@@ -8,9 +8,10 @@ import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import {
-  composeSqliteMcpRuntimeTestPersistence,
-  composeSqliteMcpRuntimeTestProvider,
+  composeMcpRuntimeTestPersistence,
+  composeMcpRuntimeTestProvider,
 } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import {
@@ -64,8 +65,11 @@ function mcpBinding(db: DbClient): McpServiceBinding {
       prepareDelete: async () => undefined,
       reconcileDurableIntents: async () => undefined,
     }),
-    transitionMutationInTx: () => undefined,
-    deletePreparedInTx: () => undefined,
+    lifecycle: Object.freeze({
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
+    }),
+    resourceCatalog: composeResourceCatalogFor({ db }),
   })
   const authority = new AuthorityClaimRegistry().mintDirectAuthority(
     { userId: actor.user.id, source: actor.source },
@@ -78,7 +82,7 @@ function runtimeTestDependencies(db: DbClient, root: string): McpRuntimeTestDepe
   const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
   const mcp = mcpBinding(db)
   return {
-    ...composeSqliteMcpRuntimeTestProvider(db),
+    ...composeMcpRuntimeTestProvider(db),
     loadMcp: (mcpId) => getMcpById(mcp, mcpId),
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
     configPath: join(root, 'config.json'),
@@ -671,7 +675,7 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(runs).toBe(1)
 
     const turnId = first.acceptedTurnId
-    const sink = new McpRuntimeTestEventSink(composeSqliteMcpRuntimeTestPersistence(db), {
+    const sink = new McpRuntimeTestEventSink(composeMcpRuntimeTestPersistence(db), {
       sessionId: first.sessionId,
       turnId,
     })

@@ -20,6 +20,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import {
   agents,
   mcps,
@@ -114,8 +115,11 @@ function mcpBinding(db: DbClient, principal: Actor): McpServiceBinding {
       prepareDelete: async () => undefined,
       reconcileDurableIntents: async () => undefined,
     }),
-    transitionMutationInTx: () => undefined,
-    deletePreparedInTx: () => undefined,
+    lifecycle: Object.freeze({
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
+    }),
+    resourceCatalog: composeResourceCatalogFor({ db }),
   })
   const authority = new AuthorityClaimRegistry().mintDirectAuthority(
     { userId: principal.user.id, source: principal.source },
@@ -354,7 +358,7 @@ describe('RFC-231 private create invariant', () => {
       // reserve-writer in skill.ts — same invisible-until-ready pipeline, same
       // initialPrivateResourceAcl stamp as createManagedSkillWithFiles.
       skills: { 'modules/resource-catalog/infrastructure/legacy/skill.ts': 2 },
-      mcps: { 'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts': 1 },
+      mcps: { 'modules/resource-catalog/infrastructure/mcpRepository.ts': 1 },
       plugins: { 'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts': 1 },
       workflows: {
         'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
@@ -368,7 +372,7 @@ describe('RFC-231 private create invariant', () => {
     const sourceFiles = [
       'modules/resource-catalog/infrastructure/legacy/agent.ts',
       'modules/resource-catalog/infrastructure/legacy/skill.ts',
-      'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts',
+      'modules/resource-catalog/infrastructure/mcpRepository.ts',
       'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',

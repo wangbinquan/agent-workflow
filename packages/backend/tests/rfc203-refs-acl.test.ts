@@ -17,6 +17,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import {
   agents as agentsTable,
   scheduledTasks,
@@ -64,8 +65,11 @@ function mcpBinding(db: DbClient, actor: Actor): McpServiceBinding {
       prepareDelete: async () => undefined,
       reconcileDurableIntents: async () => undefined,
     }),
-    transitionMutationInTx: () => undefined,
-    deletePreparedInTx: () => undefined,
+    lifecycle: Object.freeze({
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
+    }),
+    resourceCatalog: composeResourceCatalogFor({ db }),
   })
   const authority = new AuthorityClaimRegistry().mintDirectAuthority(
     { userId: actor.user.id, source: actor.source },

@@ -576,7 +576,32 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   现在语义层一条门两引擎同用（workflows.test.ts 红）。
   **留下的债**：`composeSqliteDynamicWorkflowValidationContext`（task engine 的动态工作流校验上下文）仍走 legacy 装载器，
   PG daemon 从目录查询拼上下文——两边拼法不同，随「动态工作流校验上下文」单独一刀合一；`legacy/workflow.ts` 同步服务仍被
-  services/workflow.ts 门面、task-execution 等消费。**下一刀 D16**：Skill 聚合（PG 内容生命周期 / zip 导入 / boot 成为唯一实现）。
+  services/workflow.ts 门面、task-execution 等消费。**下一刀 D16**：Mcp 聚合。
+
+  **D16 ✅（resource-catalog · Mcp 聚合：一份实现，运行时测试生命周期进仓库事务）**：`infrastructure/mcpRepository.ts`
+  （`createMcpRepository({db, lifecycle})`：创建 / update（OCC 按 configHash）/ 改名 / 删除只回 agent 引用，
+  `mcp-name-in-use` 经能力矩阵的唯一冲突映射）、`mcpRuntimeTestTransitions.ts`（`transitionMcpRuntimeTests`：配置变更→
+  空闲会话结束、忙碌会话阻塞到本回合后，停用 / 删除→立即结束；`transitionMcpAclRuntimeTests`：按账号权限 + 可见性快照判定，
+  失去可见性→access-revoked、保留→阻塞；`deletePreparedMcpRuntimeTests`：未安全停止的会话让删除抛
+  `mcp-test-cleanup-incomplete`）、`mcpTransactionLifecycle.ts`（把两条接进仓库事务）各一份——**ACL 变更转换此前只有
+  SQLite 有**，PG 版 ACL 写入不动测试会话，合一时补齐。装配层 `composeMcpCatalog` 一份 + `mcpAclRuntimeTestLifecycle()`
+  （资源目录 ACL 写入后的事务内钩子，两 provider 同一份）、`composeMcpProbeStore` / `composeMcpRuntimeTestPersistence` /
+  `composeMcpRuntimeTestProvider` 各一份；server.ts / start.ts / postgresqlDaemonApplication.ts 同一套装配。三个 provider
+  文件删除（`sqliteMcpRepository` / `postgresqlMcpRepository` / `postgresqlMcpTransactionLifecycle`），
+  `services/mcpRuntimeTestTransitions.ts` 零生产消费门面退役；rfc345（contracts / acl-facade-retirement /
+  mcp-plugin-neutral-facades）、rfc349（adapters / resource-package-bootstrap）、rfc231 写点清单、rfc294 canonical
+  manifests 改指中立文件；`tests/helpers/mcpServiceBinding.ts` 不再按 provider 分叉。`rfc359-w4-d16-adapters.test.ts`
+  两引擎各跑创建 / 同名冲突 / OCC / 改名撞名 / 引用保护删除 / 会话清理守卫 / 三类会话转换 + 源码锁。
+  **留下的债**：`legacy/mcpRuntimeTestTransitions.ts` 同步版仍被 runtime-registry 写点与 `mcpPersistence.ts` 消费，随那些
+  写点切异步后删。
+  **D14 / D15 的 CI 回归（94ce5351b 红，随 D16 一并修）**：①Agent 语义层的引用缺失先走 RFC-228 结构化预检
+  （`agent-resources-invalid` + issues）再走逐类围栏——合一时次序反了，`skill-not-found` 抢先（rfc223-pr1-impl-gate 红）；
+  ②provider 路径的 ACL 写入提交后要唤醒实时订阅（`resource-acl-changed`）——旧 SQLite 组合在 afterCommit 里触发、
+  provider 组合漏了，被升档的观众收不到刷新帧（e2e rfc324-graded-grants 红）；③RFC-310 架构清单里的
+  `postgresqlAgentPersistenceSemantics` 路径改指中立文件。前两条 `rfc359-w4-d14-d15-regressions.test.ts` 两引擎各锁一遍。
+  教训进 `docs/dev-gotchas.md`：provider 形状成为唯一实现时，SQLite 侧的 HTTP / e2e 锁会**第一次**照到它，每刀的本地批次
+  要把该聚合的 HTTP 层与 ACL / WS 用例（rfc223 / rfc228 / rfc324 / rfc099 / rfc212 家族）一并带上。
+  **下一刀 D17**：Plugin 聚合（`sqlitePluginRepository` / `postgresqlPluginRepository` 同法合一）。
 
 ## 5. W5 —— 防复辟
 

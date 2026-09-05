@@ -4,11 +4,8 @@ import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, mcpRuntimeTestSessions, resourceGrants, runtimes, users } from '../src/db/schema'
-import {
-  deletePreparedMcpRuntimeTestsInTx,
-  transitionMcpAclRuntimeTestsInTx,
-  transitionMcpRuntimeTestsInTx,
-} from '../src/services/mcpRuntimeTestTransitions'
+import { transitionMcpAclRuntimeTestsInTx } from '../src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions'
+import { createMcpTransactionLifecycle } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import {
   composeMcpServiceBindingForTest,
@@ -150,10 +147,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     `)
     const mcp = composeMcpServiceBindingForTest(db, {
       actor: admin,
-      lifecycle: Object.freeze({
-        transitionMutation: transitionMcpRuntimeTestsInTx,
-        deletePrepared: deletePreparedMcpRuntimeTestsInTx,
-      }),
+      lifecycle: createMcpTransactionLifecycle(),
     })
 
     await expect(updateMcp(mcp, 'mcp-1', { description: 'after' })).rejects.toThrow(
@@ -191,10 +185,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     `)
     const mcp = composeMcpServiceBindingForTest(db, {
       actor: admin,
-      lifecycle: Object.freeze({
-        transitionMutation: transitionMcpRuntimeTestsInTx,
-        deletePrepared: deletePreparedMcpRuntimeTestsInTx,
-      }),
+      lifecycle: createMcpTransactionLifecycle(),
     })
     const row = await getMcpById(mcp, 'mcp-1')
     if (row === null) throw new Error('MCP fixture missing')

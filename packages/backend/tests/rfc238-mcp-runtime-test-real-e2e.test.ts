@@ -15,7 +15,7 @@ import {
 } from '../src/db/schema'
 import { McpRuntimeTestService } from '../src/services/mcpRuntimeTest'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
-import { composeSqliteMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { composeMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import {
   composeMcpServiceBindingForTest,
@@ -202,7 +202,7 @@ describe('RFC-238 real process multi-turn fixture', () => {
         if (mcp === null) throw new Error('fixture MCP missing')
         const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
         const service = new McpRuntimeTestService({
-          ...composeSqliteMcpRuntimeTestProvider(db),
+          ...composeMcpRuntimeTestProvider(db),
           loadMcp: (mcpId) => getMcpById(mcpBinding, mcpId),
           loadRuntime: (name) => runtimeRegistry.getRuntime(name),
           configPath: join(root, 'config.json'),

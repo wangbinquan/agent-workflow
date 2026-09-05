@@ -59,12 +59,15 @@ import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resou
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composePostgresqlClassicCatalogs } from '@/modules/resource-catalog/composition/postgresqlClassicCatalogs'
 import { composePostgresqlResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
-import { composePostgresqlMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
+import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import {
-  composePostgresqlMcpRuntimeTestProvider,
-  createPostgresqlMcpTransactionLifecycle,
+  composeMcpRuntimeTestProvider,
+  createMcpTransactionLifecycle,
 } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { composePostgresqlMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
+import {
+  composeMcpCatalog,
+  mcpAclRuntimeTestLifecycle,
+} from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePostgresqlPluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composePostgresqlWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composePostgresqlWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
@@ -481,7 +484,10 @@ export async function composePostgresqlDaemonApplication(
   const systemIdentity = await admitDaemonIdentity(identityAccess)
   if (systemIdentity === null) throw new Error('postgresql-daemon-system-identity-not-admitted')
   const systemActor = actorOfDirectAuthority(systemIdentity)
-  const resourceCatalog = composePostgresqlResourceCatalog({ db: input.db })
+  const resourceCatalog = composePostgresqlResourceCatalog({
+    db: input.db,
+    lifecycle: mcpAclRuntimeTestLifecycle(),
+  })
   let collaborationContext: Parameters<typeof readCommittedReviewArtifactBody>[0] | null = null
   const memoryOperations = composePostgresqlMemoryOperations({
     db: input.db,
@@ -511,10 +517,10 @@ export async function composePostgresqlDaemonApplication(
     ),
     resourceCatalog,
   })
-  const mcpProbeStore = composePostgresqlMcpProbeStore(input.db)
-  let mcpCatalogRef: ReturnType<typeof composePostgresqlMcpCatalog> | null = null
+  const mcpProbeStore = composeMcpProbeStore(input.db)
+  let mcpCatalogRef: ReturnType<typeof composeMcpCatalog> | null = null
   const mcpRuntimeTests = getMcpRuntimeTestService({
-    ...composePostgresqlMcpRuntimeTestProvider(input.db),
+    ...composeMcpRuntimeTestProvider(input.db),
     async loadMcp(mcpId) {
       if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
       const identity = await admitDaemonIdentity(identityAccess)
@@ -525,9 +531,9 @@ export async function composePostgresqlDaemonApplication(
     configPath: input.configPath,
     appHome: input.appHome,
   })
-  const mcpCatalog = composePostgresqlMcpCatalog({
+  const mcpCatalog = composeMcpCatalog({
     db: input.db,
-    lifecycle: createPostgresqlMcpTransactionLifecycle(),
+    lifecycle: createMcpTransactionLifecycle(),
     resourceCatalog,
     coordinator: mcpOperationCoordinator,
     async nextMutationTimestamp(mcp) {
@@ -680,7 +686,7 @@ export async function composePostgresqlDaemonApplication(
         return actor
       },
     }),
-    mcpLifecycle: createPostgresqlMcpTransactionLifecycle(),
+    mcpLifecycle: createMcpTransactionLifecycle(),
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: input.db }),
     pluginInstaller: Object.freeze({
       plannedGenerationDirectory(
@@ -1675,7 +1681,7 @@ export async function composePostgresqlDaemonApplication(
     }),
     resources: composePostgresqlIntentApplyResourceBinding({
       db: input.db,
-      mcpLifecycle: createPostgresqlMcpTransactionLifecycle(),
+      mcpLifecycle: createMcpTransactionLifecycle(),
       pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({
         pluginsDir: join(input.appHome, 'plugins'),
       }),

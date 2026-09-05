@@ -53,7 +53,7 @@ import type {
 } from '../../public/types'
 import { mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginConfigHash, pluginFromPersistenceRow } from '../pluginPersistence'
-import type { PostgresqlMcpTransactionLifecycle } from '../postgresqlMcpRepository'
+import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import {
   assertPostgresqlCapabilityTemplatePackageOverwrite,
@@ -798,7 +798,7 @@ export interface PostgresqlResourcePackageMutationSessionFactory {
 
 export interface PostgresqlResourcePackageMutationSessionFactoryInput {
   readonly authorityResolver: ResourceCurrentAuthorityResolver
-  readonly mcpLifecycle: PostgresqlMcpTransactionLifecycle
+  readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlResourcePackagePluginArtifactOwner
   readonly skillArtifacts: PostgresqlResourcePackageSkillArtifactOwner
   readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
@@ -1057,7 +1057,7 @@ function transactionParticipants(input: {
   readonly pendingNames: ReadonlyMap<string, PostgresqlResourcePackagePendingName>
   readonly skillPublications: WeakMap<object, PostgresqlResourcePackageSkillPublication>
   readonly pluginPublications: WeakMap<object, PostgresqlResourcePackagePluginPublication>
-  readonly lifecycle: PostgresqlMcpTransactionLifecycle
+  readonly lifecycle: McpTransactionLifecycle
   readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
   readonly id: () => string
   readonly now: () => number

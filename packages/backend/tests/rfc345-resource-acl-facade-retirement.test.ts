@@ -347,20 +347,8 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'task Agent dependency closure',
     REMOVE_OWNERS.agentDependencies,
   ),
-  edge(
-    'services/mcpRuntimeTestTransitions.ts',
-    'cli/start.ts',
-    ['deletePreparedMcpRuntimeTestsInTx', 'transitionMcpRuntimeTestsInTx'],
-    'daemon MCP runtime-test lifecycle',
-    REMOVE_OWNERS.mcpRuntimePersistence,
-  ),
-  edge(
-    'services/mcpRuntimeTestTransitions.ts',
-    'server.ts',
-    ['deletePreparedMcpRuntimeTestsInTx', 'transitionMcpRuntimeTestsInTx'],
-    'bootstrap MCP runtime-test lifecycle',
-    REMOVE_OWNERS.mcpRuntimePersistence,
-  ),
+  // RFC-359 W4-D16：bootstrap 不再从 services 门面借 MCP 运行时测试的同步失效函数——生命周期已是
+  // resource-catalog 自己的中立实现（createMcpTransactionLifecycle），两条边随之销账。
   edge(
     'services/resourceAcl.ts',
     'modules/collaboration/infrastructure/legacySqliteReview.ts',

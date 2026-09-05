@@ -134,7 +134,7 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
       'composePostgresqlResourcePackageCatalog',
       'createPostgresqlResourcePackageAtomicApplyOperations',
       'createPostgresqlCapabilityTemplatePackageMutationOwner',
-      'createPostgresqlMcpTransactionLifecycle',
+      'createMcpTransactionLifecycle',
     ]) {
       expect(source).toContain(`${factory}(`)
     }

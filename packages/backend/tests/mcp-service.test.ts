@@ -10,7 +10,8 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
-import { createSqliteMcpRepository } from '../src/modules/resource-catalog/infrastructure/sqliteMcpRepository'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { createMcpRepository } from '../src/modules/resource-catalog/infrastructure/mcpRepository'
 import type { McpCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { McpOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { createAgent } from '../src/services/agent'
@@ -50,8 +51,11 @@ function composeTestMcpCatalog(db: DbClient): McpCatalogModule {
       prepareDelete: async () => undefined,
       reconcileDurableIntents: async () => undefined,
     }),
-    transitionMutationInTx: () => undefined,
-    deletePreparedInTx: () => undefined,
+    lifecycle: Object.freeze({
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
+    }),
+    resourceCatalog: composeResourceCatalogFor({ db }),
   })
 }
 
@@ -64,11 +68,11 @@ function serviceBinding(
 }
 
 function findAgentReferences(db: DbClient, mcpId: string) {
-  return createSqliteMcpRepository({
+  return createMcpRepository({
     db,
     lifecycle: Object.freeze({
-      transitionMutation: () => undefined,
-      deletePrepared: () => undefined,
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
     }),
   }).repository.findAgentReferences(mcpId)
 }

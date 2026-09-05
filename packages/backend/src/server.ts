@@ -84,8 +84,12 @@ import {
 } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
-import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
-import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
+import {
+  composeMcpRuntimeTestProvider,
+  createMcpTransactionLifecycle,
+} from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import {
@@ -158,10 +162,6 @@ import {
   mcpOperationCoordinator,
   pluginOperationCoordinator,
 } from '@/services/resourceOperationCoordinator'
-import {
-  deletePreparedMcpRuntimeTestsInTx,
-  transitionMcpRuntimeTestsInTx,
-} from '@/services/mcpRuntimeTestTransitions'
 import { mcpRouteNow, mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
@@ -1973,7 +1973,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
   const userRuntimeTests =
     effectiveDeps.mcpRuntimeTests ??
     getMcpRuntimeTestService({
-      ...composeSqliteMcpRuntimeTestProvider(effectiveDeps.db),
+      ...composeMcpRuntimeTestProvider(effectiveDeps.db),
       async loadMcp(mcpId) {
         if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
         const identity = await admitDaemonIdentity(identityAccess)
@@ -1993,7 +1993,10 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
         ? {}
         : { capacity: effectiveDeps.mcpRuntimeTestDependencies.capacity }),
     })
-  const providerResourceCatalog = composeSqliteResourceCatalog({ db: effectiveDeps.db })
+  const providerResourceCatalog = composeSqliteResourceCatalog({
+    db: effectiveDeps.db,
+    lifecycle: mcpAclRuntimeTestLifecycle(),
+  })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: effectiveDeps.db,
     authorization: providerResourceCatalog.authorization,
@@ -2009,9 +2012,11 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     resourceIntegrityQueries: agentResourceIntegrityQueries,
   })
   agentCatalogRef = agentCatalog
-  const mcpProbeStore = composeSqliteMcpProbeStore(effectiveDeps.db)
+  const mcpProbeStore = composeMcpProbeStore(effectiveDeps.db)
   const mcpCatalog = composeMcpCatalog({
     db: effectiveDeps.db,
+    lifecycle: createMcpTransactionLifecycle(),
+    resourceCatalog: providerResourceCatalog,
     coordinator: mcpOperationCoordinator,
     nextMutationTimestamp: async (mcp) => {
       const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
@@ -2025,8 +2030,6 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       prepareDelete: (mcpId: string) => userRuntimeTests.prepareMcpDelete(mcpId),
       reconcileDurableIntents: () => userRuntimeTests.reconcileDurableIntents(),
     }),
-    transitionMutationInTx: transitionMcpRuntimeTestsInTx,
-    deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
   })
   mcpCatalogRef = mcpCatalog
   const pluginCatalog = composePluginCatalog({
@@ -2306,7 +2309,7 @@ function composeSqliteApiRouteMounts(
   mcpRuntimeTests: McpRuntimeTestService,
   agentCatalog: AgentCatalogModule,
   mcpCatalog: McpCatalogModule,
-  mcpProbeStore: ReturnType<typeof composeSqliteMcpProbeStore>,
+  mcpProbeStore: ReturnType<typeof composeMcpProbeStore>,
   pluginCatalog: PluginCatalogModule,
   skillCatalog: SkillCatalogModule,
   workflowCatalog: WorkflowCatalogModule,

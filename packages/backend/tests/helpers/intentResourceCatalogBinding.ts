@@ -6,7 +6,7 @@ import type { DbClient } from '../../src/db/client'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '../../src/modules/identity-access/public/participants'
 import { createResourceCatalogQuery } from '../../src/modules/resource-catalog/infrastructure/catalogQuery'
-import { createSqliteMcpRepository } from '../../src/modules/resource-catalog/infrastructure/sqliteMcpRepository'
+import { createMcpRepository } from '../../src/modules/resource-catalog/infrastructure/mcpRepository'
 import { createSqlitePluginRepository } from '../../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
 import { getAgentById } from '../../src/services/agent'
 import { withMcpOperationConfigHash } from '../../src/services/mcpOperationRevision'
@@ -118,11 +118,11 @@ export function intentResourceCatalogBinding(
     { userId: actor.user.id, source: actor.source },
     'http',
   )
-  const mcps = createSqliteMcpRepository({
+  const mcps = createMcpRepository({
     db,
     lifecycle: Object.freeze({
-      transitionMutation: () => undefined,
-      deletePrepared: () => undefined,
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
     }),
   }).repository
   const plugins = createSqlitePluginRepository(db).repository

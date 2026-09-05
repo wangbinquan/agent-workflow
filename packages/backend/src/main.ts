@@ -48,7 +48,7 @@ import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
 } from './modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createPostgresqlMcpTransactionLifecycle } from './modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { createMcpTransactionLifecycle } from './modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from './modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
 import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
@@ -242,7 +242,7 @@ async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap
             db: provider.db,
             appHome: Paths.root,
             authorityResolver,
-            mcpLifecycle: createPostgresqlMcpTransactionLifecycle(),
+            mcpLifecycle: createMcpTransactionLifecycle(),
             capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
               db: provider.db,
             }),

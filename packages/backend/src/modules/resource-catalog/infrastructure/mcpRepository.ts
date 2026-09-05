@@ -1,7 +1,8 @@
 import type { Mcp } from '@agent-workflow/shared'
 import { and, eq, isNull, like, ne } from 'drizzle-orm'
 import { agents, mcps } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
 import {
@@ -11,26 +12,26 @@ import {
   mcpProjection,
 } from './mcpPersistence'
 import {
-  isPostgresqlUniqueViolation,
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
-export interface PostgresqlMcpRepositoryBundle {
+export interface McpRepositoryBundle {
   readonly repository: McpRepository
   readonly projection: McpProjection
 }
 
-export interface PostgresqlMcpTransactionLifecycle {
+/** 事务内的运行时测试生命周期（一份合同，两个 provider 共用）。 */
+export interface McpTransactionLifecycle {
   transitionMutation(
-    transaction: PostgresqlResourceCatalogTransaction,
+    transaction: ResourceCatalogTransaction,
     input: {
       readonly mcpId: string
       readonly reason: 'mcp-config-changed' | 'mcp-disabled'
       readonly now: number
     },
   ): Promise<void>
-  deletePrepared(transaction: PostgresqlResourceCatalogTransaction, mcpId: string): Promise<void>
+  deletePrepared(transaction: ResourceCatalogTransaction, mcpId: string): Promise<void>
 }
 
 const referenceSelect = {
@@ -55,15 +56,14 @@ function nameConflict(name: string, rename = false): ConflictError {
 }
 
 async function findAgentReferencesInTransaction(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   mcpId: string,
 ): Promise<McpAgentReference[]> {
   return collectMcpAgentReferences(
     await transaction
       .select(referenceSelect)
       .from(agents)
-      .where(like(agents.mcp, `%"${mcpId}"%`))
-      .all(),
+      .where(like(agents.mcp, `%"${mcpId}"%`)),
     mcpId,
   )
 }
@@ -77,23 +77,32 @@ function assertExpectedHash(mcp: Mcp, expectedConfigHash: string, action: string
   })
 }
 
-export function createPostgresqlMcpRepository(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly lifecycle: PostgresqlMcpTransactionLifecycle
-}): PostgresqlMcpRepositoryBundle {
+/**
+ * RFC-359 W4-D16 —— MCP 仓库：一份实现，两个 provider 共用。写路径全在统一 serializable 事务里，运行时测试会话的
+ * 失效意图在同一笔事务里写下；owner + name 唯一冲突经能力矩阵 `uniqueViolationTarget` 映射回 `mcp-name-in-use`。
+ */
+export function createMcpRepository(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly lifecycle: McpTransactionLifecycle
+}): McpRepositoryBundle {
+  const engine = databaseSessionFor(input.db).engine
+  const isOwnerNameConflict = (error: unknown): boolean => {
+    const target = engine.uniqueViolationTarget(error)
+    return target !== undefined && /mcps[._](?:owner|name)/i.test(target)
+  }
   async function get(id: string): Promise<Mcp | null> {
-    const row = await input.db.select().from(mcps).where(eq(mcps.id, id)).limit(1).get()
+    const row = (await input.db.select().from(mcps).where(eq(mcps.id, id)).limit(1))[0]
     return row === undefined ? null : mcpFromPersistenceRow(row)
   }
 
   const repository: McpRepository = {
     async list(): Promise<Mcp[]> {
-      return (await input.db.select().from(mcps).all()).map(mcpFromPersistenceRow)
+      return (await input.db.select().from(mcps)).map(mcpFromPersistenceRow)
     },
     get,
     async create(record): Promise<Mcp> {
       try {
-        return await runPostgresqlResourceCatalogTransaction(input.db, async (transaction) => {
+        return await runResourceCatalogTransaction(input.db, async (transaction) => {
           const created = await transaction
             .insert(mcps)
             .values({
@@ -110,20 +119,21 @@ export function createPostgresqlMcpRepository(input: {
               updatedAt: record.now,
             })
             .returning()
-            .all()
           if (created.length !== 1) throw new Error('mcp insert did not return one row')
           return mcpFromPersistenceRow(created[0]!)
         })
       } catch (error) {
-        if (isPostgresqlUniqueViolation(error, ['mcps_owner_name_unique'])) {
+        if (isOwnerNameConflict(error)) {
           throw nameConflict(record.input.name)
         }
         throw error
       }
     },
     async update(mutation): Promise<Mcp> {
-      return runPostgresqlResourceCatalogTransaction(input.db, async (transaction) => {
-        const row = await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).get()
+      return runResourceCatalogTransaction(input.db, async (transaction) => {
+        const row = (
+          await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
+        )[0]
         if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
         const current = mcpFromPersistenceRow(row)
         assertExpectedHash(current, mutation.expectedConfigHash, 'saving')
@@ -136,7 +146,6 @@ export function createPostgresqlMcpRepository(input: {
           .set(set)
           .where(eq(mcps.id, mutation.id))
           .returning()
-          .all()
         if (updated.length !== 1) {
           throw staleConflictError('mcp', 'the MCP changed while saving; reload and retry')
         }
@@ -153,23 +162,28 @@ export function createPostgresqlMcpRepository(input: {
     },
     async rename(mutation): Promise<Mcp> {
       try {
-        return await runPostgresqlResourceCatalogTransaction(input.db, async (transaction) => {
-          const row = await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).get()
+        return await runResourceCatalogTransaction(input.db, async (transaction) => {
+          const row = (
+            await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
+          )[0]
           if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
           const current = mcpFromPersistenceRow(row)
           assertExpectedHash(current, mutation.expectedConfigHash, 'modifying it')
-          const collision = await transaction
-            .select({ id: mcps.id })
-            .from(mcps)
-            .where(ownerScopedNameWhere(current.ownerUserId ?? null, mutation.newName, mutation.id))
-            .get()
+          const collision = (
+            await transaction
+              .select({ id: mcps.id })
+              .from(mcps)
+              .where(
+                ownerScopedNameWhere(current.ownerUserId ?? null, mutation.newName, mutation.id),
+              )
+              .limit(1)
+          )[0]
           if (collision !== undefined) throw nameConflict(mutation.newName, true)
           const updated = await transaction
             .update(mcps)
             .set({ name: mutation.newName, updatedAt: mutation.updatedAt })
             .where(eq(mcps.id, mutation.id))
             .returning()
-            .all()
           if (updated.length !== 1) {
             throw staleConflictError('mcp', 'the MCP changed while renaming; reload and retry')
           }
@@ -181,7 +195,7 @@ export function createPostgresqlMcpRepository(input: {
           return mcpFromPersistenceRow(updated[0]!)
         })
       } catch (error) {
-        if (isPostgresqlUniqueViolation(error, ['mcps_owner_name_unique'])) {
+        if (isOwnerNameConflict(error)) {
           throw nameConflict(mutation.newName, true)
         }
         throw error
@@ -192,20 +206,21 @@ export function createPostgresqlMcpRepository(input: {
         await input.db
           .select(referenceSelect)
           .from(agents)
-          .where(like(agents.mcp, `%"${id}"%`))
-          .all(),
+          .where(like(agents.mcp, `%"${id}"%`)),
         id,
       )
     },
     async delete(mutation): Promise<readonly McpAgentReference[]> {
-      return runPostgresqlResourceCatalogTransaction(input.db, async (transaction) => {
-        const row = await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).get()
+      return runResourceCatalogTransaction(input.db, async (transaction) => {
+        const row = (
+          await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
+        )[0]
         if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
         assertExpectedHash(mcpFromPersistenceRow(row), mutation.expectedConfigHash, 'deleting')
         const references = await findAgentReferencesInTransaction(transaction, mutation.id)
         if (references.length > 0) return references
         await input.lifecycle.deletePrepared(transaction, mutation.id)
-        await transaction.delete(mcps).where(eq(mcps.id, mutation.id)).run()
+        await transaction.delete(mcps).where(eq(mcps.id, mutation.id))
         return []
       })
     },

@@ -1,8 +1,6 @@
 import type { Mcp } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import { transitionMcpAclRuntimeTestsInTx } from '../infrastructure/legacy/mcpRuntimeTestTransitions'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createMcpApplication } from '../application/mcps/mcpApplication'
 import type {
   McpAccessPort,
@@ -12,38 +10,13 @@ import type {
   McpRuntimeLifecyclePort,
 } from '../application/mcps/ports'
 import { createMcpAclIdentityParticipant } from '../application/participants/mcpAclIdentity'
-import {
-  createSqliteMcpRepository,
-  type McpTransactionLifecycle,
-} from '../infrastructure/sqliteMcpRepository'
-import {
-  createPostgresqlMcpRepository,
-  type PostgresqlMcpTransactionLifecycle,
-} from '../infrastructure/postgresqlMcpRepository'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import {
-  canViewResource,
-  composeProviderResourceAclOperationApplication,
-  composeResourceAclOperationApplication,
-  discloseRefs,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from './resourceAcl'
+import { createMcpRepository, type McpTransactionLifecycle } from '../infrastructure/mcpRepository'
+import { transitionMcpAclRuntimeTests } from '../infrastructure/mcpRuntimeTestTransitions'
+import type { ResourceAclMutationLifecycle } from '../infrastructure/resourceAclRepository'
+import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { createMcpOperationDescriptors } from './catalogOperationDescriptors'
 import type { McpCatalogModule } from '../public/operations'
-
-export interface McpCatalogCompositionDependencies {
-  readonly db: DbClient
-  readonly coordinator: McpOperationCoordinatorPort
-  readonly nextMutationTimestamp: (mcp: Mcp) => Promise<number>
-  readonly runtime: McpRuntimeLifecyclePort
-  readonly transitionMutationInTx: McpTransactionLifecycle['transitionMutation']
-  readonly deletePreparedInTx: (tx: DbTxSync, mcpId: string) => void
-  readonly id?: () => string
-  readonly now?: () => number
-}
 
 type McpAclOperationApplication = Parameters<typeof createMcpOperationDescriptors>[2]
 
@@ -59,12 +32,12 @@ export interface McpCatalogAdapterCompositionDependencies {
   readonly now?: () => number
 }
 
-export interface PostgresqlMcpCatalogCompositionDependencies extends Omit<
+export interface McpCatalogCompositionDependencies extends Omit<
   McpCatalogAdapterCompositionDependencies,
   'repository' | 'projection' | 'access' | 'acl'
 > {
-  readonly db: PostgresqlDatabaseClient
-  readonly lifecycle: PostgresqlMcpTransactionLifecycle
+  readonly db: ProviderNeutralDatabase
+  readonly lifecycle: McpTransactionLifecycle
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }
 
@@ -98,10 +71,29 @@ export function composeMcpCatalogFromAdapters(
   })
 }
 
-export function composePostgresqlMcpCatalog(
-  input: PostgresqlMcpCatalogCompositionDependencies,
-): McpCatalogModule {
-  const { repository, projection } = createPostgresqlMcpRepository({
+/**
+ * 目录 ACL 写事务里的 MCP 运行时测试失效：装进 `composeResourceCatalogFor({ lifecycle })`，两个 provider 同一份
+ * （此前只有 SQLite 的 ACL 装配接了这条 afterWriteInTx，PG 上改 ACL 不会结束 / 阻塞已失去可见性的测试会话）。
+ */
+export function mcpAclRuntimeTestLifecycle(): ResourceAclMutationLifecycle {
+  const lifecycle: ResourceAclMutationLifecycle = {
+    async afterWriteInTransaction(transaction, change) {
+      if (change.type !== 'mcp') return
+      await transitionMcpAclRuntimeTests(transaction, {
+        mcpId: change.resourceId,
+        ownerUserId: change.ownerUserId,
+        visibility: change.visibility,
+        grantedUserIds: change.grantedUserIds,
+        now: change.now,
+      })
+    },
+  }
+  return Object.freeze(lifecycle)
+}
+
+/** 一份装配，两个 provider 共用（RFC-359 W4-D16）：仓库 / 生命周期 / ACL 应用都已是中立实现。 */
+export function composeMcpCatalog(input: McpCatalogCompositionDependencies): McpCatalogModule {
+  const { repository, projection } = createMcpRepository({
     db: input.db,
     lifecycle: input.lifecycle,
   })
@@ -130,58 +122,4 @@ export function composePostgresqlMcpCatalog(
     afterUpdated: () => input.runtime.reconcileDurableIntents(),
   })
   return composeMcpCatalogFromAdapters({ ...input, repository, projection, access, acl })
-}
-
-export function composeMcpCatalog(input: McpCatalogCompositionDependencies): McpCatalogModule {
-  const lifecycle: McpTransactionLifecycle = Object.freeze({
-    transitionMutation: input.transitionMutationInTx,
-    deletePrepared: input.deletePreparedInTx,
-  })
-  const { repository, projection } = createSqliteMcpRepository({
-    db: input.db,
-    lifecycle,
-  })
-  const access: McpAccessPort = {
-    filterVisible: (authority, rows) => filterVisibleRows<Mcp>(input.db, authority, 'mcp', rows),
-    canView: (authority, row) => canViewResource(input.db, authority, 'mcp', row),
-    requireResourceEdit: async (authority, row) => {
-      await requireResourceEdit(input.db, authority, 'mcp', row)
-    },
-    requireResourceGovern: (authority, row) =>
-      requireResourceGovern(input.db, authority, 'mcp', row),
-    discloseAgentReferences: (authority, references) =>
-      discloseRefs(input.db, authority, 'agent', references),
-  }
-  Object.freeze(access)
-  const clock = Object.freeze({ next: input.nextMutationTimestamp })
-  const acl = composeResourceAclOperationApplication({
-    db: input.db,
-    type: 'mcp',
-    load: (id) => repository.get(id),
-    linearizer: {
-      runExclusive: (resourceId, task) => input.coordinator.runExclusive(resourceId, task),
-      loadById: (resourceId) => repository.get(resourceId),
-      nextUpdatedAt: (row) => clock.next(row),
-    },
-    afterWriteInTx: (tx, change) =>
-      transitionMcpAclRuntimeTestsInTx(tx, {
-        mcpId: change.resourceId,
-        ownerUserId: change.ownerUserId,
-        visibility: change.visibility,
-        grantedUserIds: change.grantedUserIds,
-        now: change.now,
-      }),
-    afterUpdated: () => input.runtime.reconcileDurableIntents(),
-  })
-  return composeMcpCatalogFromAdapters({
-    repository,
-    projection,
-    access,
-    acl,
-    coordinator: input.coordinator,
-    nextMutationTimestamp: clock.next,
-    runtime: input.runtime,
-    id: input.id,
-    now: input.now,
-  })
 }

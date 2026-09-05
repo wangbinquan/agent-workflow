@@ -22,7 +22,6 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
       'services/mcpProbeStore.ts',
       'services/pluginClosure.ts',
       'services/pluginGenerationGc.ts',
-      'services/mcpRuntimeTestTransitions.ts',
     ]) {
       expect(source(relative), relative).not.toMatch(DATABASE_MECHANISM)
     }
@@ -33,9 +32,6 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     expect(source('routes/plugins.ts')).toContain('PluginQueries')
     expect(source('services/mcpClosure.ts')).toContain('query: McpClosureQuery')
     expect(source('services/pluginClosure.ts')).toContain('query: PluginClosureQuery')
-    expect(source('services/mcpRuntimeTestTransitions.ts')).toContain(
-      '@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions',
-    )
   })
 
   test('probe persistence has closed public DTOs and real SQLite/PostgreSQL adapters', () => {
@@ -56,8 +52,9 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     expect(probeContracts).not.toMatch(
       /\b(?:Omit|Pick|Partial|Record|unknown|object|DbClient|DbTxSync)\b/,
     )
-    expect(composition).toContain('composeSqliteMcpProbeStore')
-    expect(composition).toContain('composePostgresqlMcpProbeStore')
+    // RFC-359 W4-D16：探针 store 只有一份中立装配。
+    expect(composition).toContain('composeMcpProbeStore')
+    expect(composition).not.toMatch(/composeSqliteMcpProbeStore|composePostgresqlMcpProbeStore/)
     expect(shared).toContain('createMcpProbeStore')
     expect(shared).toContain('runResourceCatalogTransaction(db,')
     expect(shared).not.toMatch(/dbTxSync|PostgresqlDatabaseClient|DbClient/)

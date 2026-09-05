@@ -64,7 +64,7 @@ import {
 } from '../agentPersistence'
 import { mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginConfigHash, pluginFromPersistenceRow } from '../pluginPersistence'
-import type { PostgresqlMcpTransactionLifecycle } from '../postgresqlMcpRepository'
+import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import { workgroupFromPostgresqlRows } from '../postgresqlWorkgroupRepository'
@@ -149,7 +149,7 @@ export interface PostgresqlIntentResourceCommitEvent {
 
 export interface PostgresqlIntentApplyResourcePortFactoryDependencies {
   readonly db: PostgresqlDatabaseClient
-  readonly mcpLifecycle: PostgresqlMcpTransactionLifecycle
+  readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlIntentPluginArtifactLifecycle
   readonly skillArtifacts: PostgresqlIntentSkillArtifactLifecycle
   readonly id?: () => string
@@ -639,7 +639,7 @@ function mcpConfigWithPreservedOauth(
 
 function createMcpPort(
   options: PostgresqlIntentApplyResourceSessionOptions,
-  lifecycle: PostgresqlMcpTransactionLifecycle,
+  lifecycle: McpTransactionLifecycle,
   now: () => number,
 ): PostgresqlIntentApplyMutationPort<'mcp', PreparedMcp> {
   const actor = exactActor(options)

@@ -106,7 +106,10 @@ import { startBatchImportGc } from '@/services/repoBatchImport'
 import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { admitDaemonIdentity } from '@/auth/session'
-import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import {
+  composeMcpRuntimeTestProvider,
+  createMcpTransactionLifecycle,
+} from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composeDatabaseAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
@@ -117,16 +120,13 @@ import {
 } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
-import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
+import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
+import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
 import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import { mcpRouteNow } from '@/routes/mcps'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
-import {
-  deletePreparedMcpRuntimeTestsInTx,
-  transitionMcpRuntimeTestsInTx,
-} from '@/services/mcpRuntimeTestTransitions'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { setMemoryDistillLangProvider } from '@/modules/memory/composition'
 import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
@@ -1798,7 +1798,10 @@ async function composeSqliteProviderSession(
     endpointDiscovery: repositoryEndpointDiscovery,
   })
   const identityAccess = providerCore.identityAccess
-  const resourceCatalog = composeSqliteResourceCatalog({ db })
+  const resourceCatalog = composeSqliteResourceCatalog({
+    db,
+    lifecycle: mcpAclRuntimeTestLifecycle(),
+  })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db,
     authorization: resourceCatalog.authorization,
@@ -2275,7 +2278,7 @@ async function composeSqliteProviderSession(
   // The routes resolve the same DB-keyed daemon singleton.
   let mcpCatalogRef: McpCatalogModule | null = null
   const mcpRuntimeTests = getMcpRuntimeTestService({
-    ...composeSqliteMcpRuntimeTestProvider(db),
+    ...composeMcpRuntimeTestProvider(db),
     async loadMcp(mcpId) {
       if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
       const identity = await admitDaemonIdentity(identityAccess)
@@ -2286,9 +2289,11 @@ async function composeSqliteProviderSession(
     configPath: Paths.config,
     appHome: Paths.root,
   })
-  const mcpProbeStore = composeSqliteMcpProbeStore(db)
+  const mcpProbeStore = composeMcpProbeStore(db)
   const mcpCatalog = composeMcpCatalog({
     db,
+    lifecycle: createMcpTransactionLifecycle(),
+    resourceCatalog,
     coordinator: mcpOperationCoordinator,
     nextMutationTimestamp: async (mcp) => {
       const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
@@ -2302,8 +2307,6 @@ async function composeSqliteProviderSession(
       prepareDelete: (mcpId: string) => mcpRuntimeTests.prepareMcpDelete(mcpId),
       reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
     }),
-    transitionMutationInTx: transitionMcpRuntimeTestsInTx,
-    deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
   })
   mcpCatalogRef = mcpCatalog
   const agentCatalog = composeDatabaseAgentCatalog({

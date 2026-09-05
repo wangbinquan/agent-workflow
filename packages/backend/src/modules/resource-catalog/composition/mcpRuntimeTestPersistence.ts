@@ -1,8 +1,7 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { McpRuntimeTestPersistence } from '../application/mcps/runtimeTestPersistence'
 import { createMcpRuntimeTestPersistence } from '../infrastructure/mcpRuntimeTestPersistence'
-export { createPostgresqlMcpTransactionLifecycle } from '../infrastructure/postgresqlMcpTransactionLifecycle'
+export { createMcpTransactionLifecycle } from '../infrastructure/mcpTransactionLifecycle'
 import { createMcpRuntimeTestLeaseOperations } from '../infrastructure/mcpRuntimeTestLease'
 import type { McpRuntimeTestLeaseOperations } from '../public/participants'
 
@@ -11,30 +10,18 @@ export interface McpRuntimeTestProviderPersistence {
   readonly leaseOperations: McpRuntimeTestLeaseOperations
 }
 
-export function composeSqliteMcpRuntimeTestPersistence(db: DbClient): McpRuntimeTestPersistence {
-  return createMcpRuntimeTestPersistence(db)
-}
-
-export function composePostgresqlMcpRuntimeTestPersistence(
-  db: PostgresqlDatabaseClient,
+/** 一份装配，两个 provider 共用（RFC-359 W4-D16）。 */
+export function composeMcpRuntimeTestPersistence(
+  db: ProviderNeutralDatabase,
 ): McpRuntimeTestPersistence {
   return createMcpRuntimeTestPersistence(db)
 }
 
-export function composeSqliteMcpRuntimeTestProvider(
-  db: DbClient,
+export function composeMcpRuntimeTestProvider(
+  db: ProviderNeutralDatabase,
 ): McpRuntimeTestProviderPersistence {
   return Object.freeze({
-    persistence: composeSqliteMcpRuntimeTestPersistence(db),
-    leaseOperations: createMcpRuntimeTestLeaseOperations(db),
-  })
-}
-
-export function composePostgresqlMcpRuntimeTestProvider(
-  db: PostgresqlDatabaseClient,
-): McpRuntimeTestProviderPersistence {
-  return Object.freeze({
-    persistence: composePostgresqlMcpRuntimeTestPersistence(db),
+    persistence: composeMcpRuntimeTestPersistence(db),
     leaseOperations: createMcpRuntimeTestLeaseOperations(db),
   })
 }

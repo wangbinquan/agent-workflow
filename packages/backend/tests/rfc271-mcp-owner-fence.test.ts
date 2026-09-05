@@ -22,6 +22,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps } from '../src/db/schema'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import type { McpCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { McpOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
@@ -55,8 +56,11 @@ function composeTestMcpCatalog(db: DbClient): McpCatalogModule {
       prepareDelete: async () => undefined,
       reconcileDurableIntents: async () => undefined,
     }),
-    transitionMutationInTx: () => undefined,
-    deletePreparedInTx: () => undefined,
+    lifecycle: Object.freeze({
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
+    }),
+    resourceCatalog: composeResourceCatalogFor({ db }),
   })
 }
 

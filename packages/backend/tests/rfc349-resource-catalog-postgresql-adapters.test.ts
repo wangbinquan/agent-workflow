@@ -20,7 +20,22 @@ function typescriptFiles(root: string): string[] {
 }
 
 describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
-  const aggregates = ['Mcp', 'Plugin', 'Workgroup'] as const
+  // RFC-359 W4-D16：Mcp 聚合已是一份中立实现（见下面单独的断言）。
+  const aggregates = ['Plugin', 'Workgroup'] as const
+
+  test('mcp repository and composition are one provider-neutral implementation (RFC-359 W4-D16)', () => {
+    const repository = source('src/modules/resource-catalog/infrastructure/mcpRepository.ts')
+    const composition = source('src/modules/resource-catalog/composition/mcpOperations.ts')
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('runResourceCatalogTransaction')
+    expect(repository).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
+    )
+    expect(composition).toContain('composeMcpCatalogFromAdapters')
+    expect(composition).toContain('createMcpRepository({')
+    expect(composition).toContain('export function composeMcpCatalog(')
+    expect(composition).not.toMatch(/composePostgresqlMcpCatalog|createSqliteMcpRepository/)
+  })
 
   test('classic aggregate PostgreSQL repositories use the shared async transaction owner', () => {
     for (const aggregate of aggregates) {
@@ -37,7 +52,6 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
 
   test('composition exposes exact adapter injection and PostgreSQL factories without public DB leakage', () => {
     for (const [aggregate, file] of [
-      ['Mcp', 'mcpOperations'],
       ['Plugin', 'pluginOperations'],
       ['Workgroup', 'workgroupOperations'],
     ] as const) {

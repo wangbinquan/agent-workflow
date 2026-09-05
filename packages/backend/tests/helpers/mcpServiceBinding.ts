@@ -2,7 +2,7 @@
 
 import type { CreateMcp, Mcp, RenameMcp, UpdateMcp } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../../src/auth/actor'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'
 import type {
   McpAccessPort,
@@ -10,18 +10,12 @@ import type {
   McpRepository,
 } from '../../src/modules/resource-catalog/application/mcps/ports'
 import { composeMcpCatalogFromAdapters } from '../../src/modules/resource-catalog/composition/mcpOperations'
+import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeProviderResourceAclOperationApplication } from '../../src/modules/resource-catalog/composition/resourceAcl'
 import {
-  canViewResource,
-  composeResourceAclOperationApplication,
-  discloseRefs,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '../../src/modules/resource-catalog/composition/resourceAcl'
-import {
-  createSqliteMcpRepository,
+  createMcpRepository,
   type McpTransactionLifecycle,
-} from '../../src/modules/resource-catalog/infrastructure/sqliteMcpRepository'
+} from '../../src/modules/resource-catalog/infrastructure/mcpRepository'
 import type { McpCatalogModule } from '../../src/modules/resource-catalog/public/operations'
 import type { McpOperationContext } from '../../src/modules/resource-catalog/public/participants'
 import type { McpCatalogResource } from '../../src/modules/resource-catalog/public/types'
@@ -47,7 +41,7 @@ export async function createMcpForTest(
 }
 
 export async function createMcpFixture(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: CreateMcp,
   options: Readonly<{
     ownerUserId?: string
@@ -83,18 +77,18 @@ export async function getMcpByIdForTest(
 }
 
 export async function getMcpFixtureById(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
 ): Promise<McpCatalogResource | null> {
   return getMcpByIdForTest(composeMcpServiceBindingForTest(db), id)
 }
 
-export function composeMcpClosureQueryForTest(db: DbClient): McpClosureQuery {
-  const repository = createSqliteMcpRepository({
+export function composeMcpClosureQueryForTest(db: ProviderNeutralDatabase): McpClosureQuery {
+  const repository = createMcpRepository({
     db,
     lifecycle: Object.freeze({
-      transitionMutation: () => undefined,
-      deletePrepared: () => undefined,
+      transitionMutation: async () => undefined,
+      deletePrepared: async () => undefined,
     }),
   }).repository
   return Object.freeze({
@@ -141,7 +135,7 @@ export async function deleteMcpForTest(binding: McpCatalogTestBinding, id: strin
 }
 
 export function composeMcpServiceBindingForTest(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   options: Readonly<{
     actor?: Actor
     beforeDelete?: (captured: Mcp) => Promise<void>
@@ -165,16 +159,17 @@ export function composeMcpServiceBindingForTest(
     { ...actor, userId: actor.user.id },
   ).actor
   const coordinator = new ResourceOperationCoordinator()
-  const sqlite = createSqliteMcpRepository({
+  const resourceCatalog = composeResourceCatalogFor({ db })
+  const neutral = createMcpRepository({
     db,
     lifecycle:
       options.lifecycle ??
       Object.freeze({
-        transitionMutation: () => undefined,
-        deletePrepared: () => undefined,
+        transitionMutation: async () => undefined,
+        deletePrepared: async () => undefined,
       }),
   })
-  const baseRepository = sqlite.repository
+  const baseRepository = neutral.repository
   const repository: McpRepository = Object.freeze({
     ...baseRepository,
     async delete(input: Parameters<McpRepository['delete']>[0]) {
@@ -185,22 +180,22 @@ export function composeMcpServiceBindingForTest(
   })
   const access: McpAccessPort = Object.freeze({
     filterVisible: (candidate: McpOperationContext, rows: readonly Mcp[]) =>
-      filterVisibleRows(db, candidate, 'mcp', rows),
+      resourceCatalog.authorization.filterVisibleRows(candidate, 'mcp', rows),
     canView: (candidate: McpOperationContext, row: Mcp) =>
-      canViewResource(db, candidate, 'mcp', row),
+      resourceCatalog.authorization.canViewResource(candidate, 'mcp', row),
     async requireResourceEdit(candidate: McpOperationContext, row: Mcp) {
-      await requireResourceEdit(db, candidate, 'mcp', row)
+      await resourceCatalog.authorization.requireResourceEdit(candidate, 'mcp', row)
     },
     requireResourceGovern: (candidate: McpOperationContext, row: Mcp) =>
-      requireResourceGovern(db, candidate, 'mcp', row),
+      resourceCatalog.authorization.requireResourceGovern(candidate, 'mcp', row),
     discloseAgentReferences: (
       candidate: McpOperationContext,
       references: readonly McpAgentReference[],
-    ) => discloseRefs(db, candidate, 'agent', references),
+    ) => resourceCatalog.authorization.discloseRefs(candidate, 'agent', references),
   })
   const clock = Object.freeze({ next: async (mcp: Mcp) => monotonicNow(mcp.updatedAt) })
-  const acl = composeResourceAclOperationApplication<McpOperationContext, Mcp>({
-    db,
+  const acl = composeProviderResourceAclOperationApplication<McpOperationContext, 'mcp', Mcp>({
+    ...resourceCatalog,
     type: 'mcp',
     load: (id) => repository.get(id),
     linearizer: {
@@ -211,7 +206,7 @@ export function composeMcpServiceBindingForTest(
   })
   const catalog = composeMcpCatalogFromAdapters({
     repository,
-    projection: sqlite.projection,
+    projection: neutral.projection,
     access,
     acl,
     coordinator,

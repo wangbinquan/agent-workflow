@@ -1007,7 +1007,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/mcpRepository.ts'),
       'utf8',
     )
     const persistence = readFileSync(
@@ -1056,15 +1056,18 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('requireResourceGovern')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
-    expect(repository).toContain('dbTxSync')
-    expect(repository).toContain('findAgentReferencesInTx')
+    // RFC-359 W4-D16：MCP 仓库只有一份中立实现（统一 serializable 事务），不再有 dbTxSync 的 SQLite 兼容岛。
+    expect(repository).toContain('runResourceCatalogTransaction(')
+    expect(repository).toContain('findAgentReferencesInTransaction')
     expect(repository).toContain("from './mcpPersistence'")
     expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
     expect(repository).not.toContain("createHash('sha256')")
     expect(repository).not.toContain("from '@/services/")
-    expect(composition).toContain('createSqliteMcpRepository')
+    expect(repository).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync/)
+    expect(composition).toContain('createMcpRepository({')
     expect(composition).toContain('createMcpApplication')
-    expect(composition).toContain('composeResourceAclOperationApplication')
+    expect(composition).toContain('composeProviderResourceAclOperationApplication')
+    expect(composition).not.toContain('createSqliteMcpRepository')
     for (const operationId of [
       'mcp-catalog.list-mcps.v1',
       'mcp-catalog.get-mcp.v1',
@@ -2061,7 +2064,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/composition/workgroupOperations.ts'),
       'utf8',
     )
-    expect(mcpComposition).toContain('transitionMcpAclRuntimeTestsInTx')
+    // RFC-359 W4-D16：ACL 写事务里的运行时测试失效经目录 lifecycle 接入，两个 provider 同一份。
+    expect(mcpComposition).toContain('transitionMcpAclRuntimeTests(')
+    expect(mcpComposition).toContain('export function mcpAclRuntimeTestLifecycle(')
     expect(mcpComposition).toContain('runtime.reconcileDurableIntents()')
     expect(workflowComposition).toContain('workflowsBroadcaster.broadcast')
     expect(workflowComposition).toContain("type: 'workflow.acl.updated'")

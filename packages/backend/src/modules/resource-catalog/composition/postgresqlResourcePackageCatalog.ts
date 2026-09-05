@@ -7,7 +7,7 @@ import {
   type PostgresqlCapabilityTemplatePackageMutationOwner,
   type PostgresqlResourcePackageMutationSessionFactory,
 } from '../infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
-import type { PostgresqlMcpTransactionLifecycle } from '../infrastructure/postgresqlMcpRepository'
+import type { McpTransactionLifecycle } from '../infrastructure/mcpRepository'
 import {
   createPostgresqlResourcePackageOwnedResourceLookup,
   createPostgresqlResourcePackageReadPort,
@@ -33,7 +33,7 @@ export interface PostgresqlResourcePackageProviderDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
   readonly authorityResolver: ResourceCurrentAuthorityResolver
-  readonly mcpLifecycle: PostgresqlMcpTransactionLifecycle
+  readonly mcpLifecycle: McpTransactionLifecycle
   readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
   readonly pluginInstaller: PostgresqlResourcePackagePluginInstaller
   readonly pluginsDir?: string

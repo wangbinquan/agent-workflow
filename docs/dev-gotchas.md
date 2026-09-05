@@ -4140,3 +4140,14 @@ B2 批 b/c 推上 main 后两个 OS 的 backend 分片 2 同一条红：`rfc349-
 （此前在 SQLite 上会把 NULL 读成最早截止）。**新写中立适配器时，这三类形状会直接被扫到**：可空列排序用
 `engineOf(db).ascNullsFirst / descNullsLast` 或同查询里 `isNotNull` 证明；面向用户输入的匹配用
 `engineOf(db).likeCaseInsensitive`；聚合投影带 `.mapWith(Number)` / drizzle `count()`。
+
+### RFC-359 合一：provider 形状成为唯一实现时，SQLite 侧的 HTTP / e2e 锁会第一次照到它
+
+- **现象**（2026-09-05，94ce5351b 主干红）：D14 / D15 把 Agent / Workflow 聚合切成 PG 形状的一份实现，本地按聚合名跑的
+  批次全绿，CI 却红了 rfc223-pr1-impl-gate（RFC-228 预检次序）与 e2e rfc324-graded-grants（ACL 写入后没唤醒实时订阅）。
+  两条都是**PG daemon 一直缺、但从没被任何用例照到**的行为——PG 路径没有 e2e，HTTP 层锁也都跑在 SQLite 上；把 SQLite 装配
+  切到 provider 形状的那一刻，这些锁第一次照到 PG 形状的代码。
+- **规律**：合一时不能只对照两份 infrastructure 的差异，还要把**旧 SQLite 组合层在 afterCommit / prepare 阶段挂的副作用与
+  次序**（实时订阅唤醒、结构化预检先于围栏、广播受众）逐条搬进一份实现；本地批次要把该聚合的 HTTP 层与 ACL / WS 用例
+  （`rfc223-*` / `rfc228-*` / `rfc324-*` / `rfc099-*` / `rfc212-*` / `agent-*` / `workflows*`）一并带上，别只跑 `rfc3xx-<聚合名>-*`。
+- **锁**：`tests/rfc359-w4-d14-d15-regressions.test.ts` 两引擎各锁一遍这两条。

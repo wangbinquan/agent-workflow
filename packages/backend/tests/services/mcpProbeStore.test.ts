@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { mcps } from '../../src/db/schema'
-import { composeSqliteMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
+import { composeMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
 import type { McpProbeStore } from '../../src/modules/resource-catalog/public/participants'
 import type { ProbeResult } from '../../src/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
@@ -47,7 +47,7 @@ describe('mcpProbeStore', () => {
   let store: McpProbeStore
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
-    store = composeSqliteMcpProbeStore(db)
+    store = composeMcpProbeStore(db)
   })
 
   test('getProbeByMcpId returns null when never probed', async () => {
