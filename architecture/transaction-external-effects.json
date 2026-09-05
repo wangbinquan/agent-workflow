@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 40,
-    "transactionCallbacks": 343
+    "transactionCallbacks": 342
   },
   "entries": [
     {
@@ -676,23 +676,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#dbTxSync:129",
-      "line": 129,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createSqliteEmployeePlatformWorkItemPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:145",
+      "line": 145,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createEmployeePlatformWorkItemPersistence",
       "status": "clear",
-      "symbol": "createSqliteEmployeePlatformWorkItemPersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:197",
-      "line": 197,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlEmployeePlatformWorkItemPersistence",
+      "symbol": "createEmployeePlatformWorkItemPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -700,11 +688,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:277",
-      "line": 277,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:67",
+      "line": 67,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createEmployeePlatformWorkItemPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlEmployeePlatformWorkItemPersistence",
+      "symbol": "createEmployeePlatformWorkItemPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -4212,7 +4200,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c",
+  "sourceDigest": "sha256:6734da70bf911d3e0ed858dee31c234a3d62765236cd6fc9d8ca40bc2568c408",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1841,
+    "entries": 1837,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7825,7 +7825,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "id": "mutation:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
       "missingControls": [
         "audit",
         "authority",
@@ -7834,33 +7834,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader",
-      "symbol": "createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader",
-      "symbol": "createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "symbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -8069,38 +8044,15 @@
       },
       "file": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createPostgresqlLegacyMissionDrainPort",
+      "id": "mutation:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createLegacyMissionDrainPort",
       "missingControls": [
         "audit",
         "authorization",
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createPostgresqlLegacyMissionDrainPort",
-      "symbol": "createPostgresqlLegacyMissionDrainPort",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createSqliteLegacyMissionDrainPort",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createSqliteLegacyMissionDrainPort",
-      "symbol": "createSqliteLegacyMissionDrainPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createLegacyMissionDrainPort",
+      "symbol": "createLegacyMissionDrainPort",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -8713,7 +8665,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createPostgresqlDevelopmentDeliveryProvider",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createDevelopmentDeliveryProvider",
       "missingControls": [
         "audit",
         "authority",
@@ -8722,33 +8674,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createPostgresqlDevelopmentDeliveryProvider",
-      "symbol": "createPostgresqlDevelopmentDeliveryProvider",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createSqliteDevelopmentDeliveryProvider",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createSqliteDevelopmentDeliveryProvider",
-      "symbol": "createSqliteDevelopmentDeliveryProvider",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createDevelopmentDeliveryProvider",
+      "symbol": "createDevelopmentDeliveryProvider",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -8763,34 +8690,13 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createEmployeePlatformWorkItemPersistence",
       "missingControls": [
         "audit",
         "authority"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
-      "symbol": "createPostgresqlEmployeePlatformWorkItemPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createSqliteEmployeePlatformWorkItemPersistence",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createSqliteEmployeePlatformWorkItemPersistence",
-      "symbol": "createSqliteEmployeePlatformWorkItemPersistence",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createEmployeePlatformWorkItemPersistence",
+      "symbol": "createEmployeePlatformWorkItemPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -43935,7 +43841,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c",
+  "sourceDigest": "sha256:6734da70bf911d3e0ed858dee31c234a3d62765236cd6fc9d8ca40bc2568c408",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

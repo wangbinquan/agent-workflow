@@ -6,7 +6,7 @@
     "moduleFiles": 1257,
     "productionFiles": 2646,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25641
+    "symbolsIncludingFileRoots": 25634
   },
   "entries": [
     {
@@ -35603,36 +35603,24 @@
     {
       "currentContext": "development-automation",
       "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts#composeDevelopmentEmployeePlatformWorkItems",
+      "removeAfterWave": "W4-E8",
+      "status": "current-module",
+      "symbol": "composeDevelopmentEmployeePlatformWorkItems",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts",
       "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts#composeDevelopmentEmployeePlatformWorkItemsFromPersistence",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
       "symbol": "composeDevelopmentEmployeePlatformWorkItemsFromPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts#composePostgresqlDevelopmentEmployeePlatformWorkItems",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentEmployeePlatformWorkItems",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts#composeSqliteDevelopmentEmployeePlatformWorkItems",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composeSqliteDevelopmentEmployeePlatformWorkItems",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -36275,36 +36263,24 @@
     {
       "currentContext": "development-automation",
       "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#composeDevelopmentEmployeeWorkspace",
+      "removeAfterWave": "W4-E8",
+      "status": "current-module",
+      "symbol": "composeDevelopmentEmployeeWorkspace",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
       "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#composeDevelopmentEmployeeWorkspaceFromPersistence",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
       "symbol": "composeDevelopmentEmployeeWorkspaceFromPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#composePostgresqlDevelopmentEmployeeWorkspace",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentEmployeeWorkspace",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#composeSqliteDevelopmentEmployeeWorkspace",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composeSqliteDevelopmentEmployeeWorkspace",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -36349,22 +36325,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
-      "symbol": "createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "symbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -37969,22 +37933,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createPostgresqlLegacyMissionDrainPort",
+      "id": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createLegacyMissionDrainPort",
       "removeAfterWave": "W4-E8",
       "status": "current-module",
-      "symbol": "createPostgresqlLegacyMissionDrainPort",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#createSqliteLegacyMissionDrainPort",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "createSqliteLegacyMissionDrainPort",
+      "symbol": "createLegacyMissionDrainPort",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -44629,22 +44581,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createPostgresqlDevelopmentDeliveryProvider",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createDevelopmentDeliveryProvider",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createPostgresqlDevelopmentDeliveryProvider",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#createSqliteDevelopmentDeliveryProvider",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteDevelopmentDeliveryProvider",
+      "symbol": "createDevelopmentDeliveryProvider",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -44665,10 +44605,10 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#postgresqlDirectory",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#directoryOf",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "postgresqlDirectory",
+      "symbol": "directoryOf",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -44693,18 +44633,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "RepositoryRecord",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#sqliteDirectory",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "sqliteDirectory",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -44749,22 +44677,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createEmployeePlatformWorkItemPersistence",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createPostgresqlEmployeePlatformWorkItemPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createSqliteEmployeePlatformWorkItemPersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteEmployeePlatformWorkItemPersistence",
+      "symbol": "createEmployeePlatformWorkItemPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -308393,5 +308309,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c"
+  "sourceDigest": "sha256:6734da70bf911d3e0ed858dee31c234a3d62765236cd6fc9d8ca40bc2568c408"
 }
