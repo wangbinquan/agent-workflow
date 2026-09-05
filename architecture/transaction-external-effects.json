@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 43,
-    "transactionCallbacks": 365
+    "coLocatedCandidates": 42,
+    "transactionCallbacks": 359
   },
   "entries": [
     {
@@ -10,8 +10,8 @@
       ],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:118",
-      "line": 118,
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:113",
+      "line": 113,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#updateAuthLoginPolicy",
       "status": "co-located-risk",
       "symbol": "updateAuthLoginPolicy",
@@ -22,20 +22,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:197",
-      "line": 197,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#completeBootstrapWithAdmin",
-      "status": "clear",
-      "symbol": "completeBootstrapWithAdmin",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:299",
-      "line": 299,
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:204",
+      "line": 204,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#createPasswordLoginSession",
       "status": "clear",
       "symbol": "createPasswordLoginSession",
@@ -46,8 +34,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:62",
-      "line": 62,
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:57",
+      "line": 57,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#getAuthMethodDiscovery",
       "status": "clear",
       "symbol": "getAuthMethodDiscovery",
@@ -1377,77 +1365,15 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#transaction:557",
-      "line": 557,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#serializable",
+      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts#transaction:565",
+      "line": 565,
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts#composeOidcIdentityOperations",
       "status": "clear",
-      "symbol": "serializable",
+      "symbol": "composeOidcIdentityOperations",
       "targetContext": "identity-access",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts#transaction:474",
-      "line": 474,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts#PostgresqlUserAccessTransactionRunner",
-      "status": "clear",
-      "symbol": "PostgresqlUserAccessTransactionRunner",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#dbTxSync:187",
-      "line": 187,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#composeSqliteOidcIdentityOperations",
-      "status": "clear",
-      "symbol": "composeSqliteOidcIdentityOperations",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#dbTxSync:197",
-      "line": 197,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#composeSqliteOidcIdentityOperations",
-      "status": "co-located-risk",
-      "symbol": "composeSqliteOidcIdentityOperations",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#dbTxSync:256",
-      "line": 256,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#composeSqliteOidcIdentityOperations",
-      "status": "clear",
-      "symbol": "composeSqliteOidcIdentityOperations",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#dbTxSync:241",
-      "line": 241,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#SQLiteUserAccessTransactionRunner",
-      "status": "clear",
-      "symbol": "SQLiteUserAccessTransactionRunner",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
@@ -4483,7 +4409,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:173387b1ab586db9c5eb50f093e9894e4c5f5ccbdd61d81d8397778c99746ba2",
+  "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

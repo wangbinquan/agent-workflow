@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1852,
+    "entries": 1851,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -11433,7 +11433,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/identity-access/composition.ts",
@@ -11443,31 +11443,11 @@
         "audit",
         "authority",
         "event",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#createPostgresqlIdentityAccessRuntime",
       "symbol": "createPostgresqlIdentityAccessRuntime",
-      "targetContext": "identity-access",
-      "targetLayer": "composition"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/identity-access/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/composition.ts#CreatePostgresqlIdentityAccessRuntimeInput",
-      "missingControls": [
-        "audit",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#CreatePostgresqlIdentityAccessRuntimeInput",
-      "symbol": "CreatePostgresqlIdentityAccessRuntimeInput",
       "targetContext": "identity-access",
       "targetLayer": "composition"
     },
@@ -11712,22 +11692,45 @@
     {
       "controls": {
         "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#createUserAccessRepository",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#createUserAccessRepository",
+      "symbol": "createUserAccessRepository",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#claim",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#createUserAccessTransactionRunner",
       "missingControls": [
         "audit",
-        "authorization",
+        "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#claim",
-      "symbol": "claim",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#createUserAccessTransactionRunner",
+      "symbol": "createUserAccessTransactionRunner",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
@@ -11740,59 +11743,41 @@
         "fenceOrOcc": true,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#createPostgresqlIdentityAccessCrossContextBindings",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#stageInitialUserAccess",
       "missingControls": [
         "authority",
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#createPostgresqlIdentityAccessCrossContextBindings",
-      "symbol": "createPostgresqlIdentityAccessCrossContextBindings",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#stageInitialUserAccess",
+      "symbol": "stageInitialUserAccess",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
     {
       "controls": {
         "audit": false,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#syncInsertedProfile",
-      "missingControls": [
-        "audit",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcIdentityCrossContext.ts#syncInsertedProfile",
-      "symbol": "syncInsertedProfile",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": true
+        "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#syncOidcProfileInTransaction",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#SynchronousDecision",
       "missingControls": [
+        "audit",
         "authority",
+        "authorization",
         "event",
-        "fenceOrOcc"
+        "fenceOrOcc",
+        "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#syncOidcProfileInTransaction",
-      "symbol": "syncOidcProfileInTransaction",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts#SynchronousDecision",
+      "symbol": "SynchronousDecision",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
@@ -44180,7 +44165,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:173387b1ab586db9c5eb50f093e9894e4c5f5ccbdd61d81d8397778c99746ba2",
+  "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

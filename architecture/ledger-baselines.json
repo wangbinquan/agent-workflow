@@ -461,7 +461,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 982,
+      "baseline": 981,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -487,7 +487,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:de2070f96249c916b10f959fe3065ac34d7f2ed6d8fba9c951c852d390c80d85",
+    "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "55c8610099df31e6bef6bd4c06b858b1cdfff0a0",
-    "contentDigest": "sha256:37b54c1d21fb447d5560babc2a953c2885d1c18ac0533e273eaeaf42b5d35944",
+    "currentSnapshotSha": "14045a5b06a180c75c0203442af523cf2ebfdd34",
+    "contentDigest": "sha256:efb2876da01e434c844d47c98d2a7cb27a690631ea32f6319eac3a21357685a2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

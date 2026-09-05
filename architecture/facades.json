@@ -2624,8 +2624,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:29d35ace8e2abba5acf3",
-        "import:cfcdc421a6de5e2e06f3"
+        "import:29d35ace8e2abba5acf3"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
@@ -2998,7 +2997,7 @@
       "boundaryEdgeIds": [
         "import:010539ee66681de4d814",
         "import:9ec8d7cb92d07a0009d3",
-        "import:c346249ec890d889559d"
+        "import:eb382d01386877f9cd93"
       ],
       "exportedSymbols": [
         "loadOwnerIdentities"
@@ -6277,7 +6276,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:1d1f199ae579ea7d495d",
+        "import:4726c6967558d355a6ad",
         "import:5e73b4516a77bbff5e78",
         "import:7874e055a3ef739faf9b"
       ],
@@ -6846,5 +6845,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:173387b1ab586db9c5eb50f093e9894e4c5f5ccbdd61d81d8397778c99746ba2"
+  "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df"
 }
