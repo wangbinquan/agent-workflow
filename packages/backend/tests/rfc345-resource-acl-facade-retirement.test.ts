@@ -377,21 +377,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
-    'modules/integration/composition/developmentAdapterConfigOperations.ts',
-    [
-      'assertNameUnchangedForEditor',
-      'canEditResource',
-      'canViewResource',
-      'filterVisibleRows',
-      'listGrantedResourceIds',
-      'requireResourceEdit',
-      'requireResourceGovern',
-    ],
-    'development-adapter ACL projection and gates',
-    REMOVE_OWNERS.integrationConfig,
-  ),
-  edge(
-    'services/resourceAcl.ts',
     'modules/integration/composition/digitalEmployeeToolConnections.ts',
     ['isVisibleToAudienceSnapshot'],
     'digital-employee tool visibility',

@@ -9,18 +9,13 @@
 // 透传）；真实内网 adapter 只读取已发布定义点名的 connectionRef 与
 // daemon-boot secretProjection。
 
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createPipelineEvidenceAdapter,
   type PipelineEvidenceExecution,
 } from '../infrastructure/developmentPipelineAdapter'
-import {
-  createAsyncDbAdapterBindingResolver,
-  createDbAdapterBindingResolver,
-} from '../infrastructure/developmentRequirementSourceAdapter'
-import { createPostgresqlDevelopmentAdapterRevisionStore } from '../infrastructure/postgresqlDevelopmentAdapterRevisionStore'
-import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
+import { createAsyncDbAdapterBindingResolver } from '../infrastructure/developmentRequirementSourceAdapter'
+import { createDevelopmentAdapterStore } from '../infrastructure/developmentAdapterStore'
 
 function runner(input: {
   readonly resolveBinding: Parameters<typeof createPipelineEvidenceAdapter>[0]['resolveBinding']
@@ -34,22 +29,18 @@ function runner(input: {
   })
 }
 
-export function composeSqlitePipelineEvidenceRunner(db: DbClient): PipelineEvidenceExecution {
-  const store = createSqliteDevelopmentAdapterStore(db)
-  return runner({
-    resolveBinding: createDbAdapterBindingResolver((id, revision) =>
-      store.getRevision(id, revision),
-    ),
-  })
-}
-
-export function composePostgresqlPipelineEvidenceRunner(
-  db: PostgresqlDatabaseClient,
+/** RFC-359 W4-D6：一份装配，两个 provider 共用（绑定解析经中立 store 的 Promise 读）。 */
+export function composePipelineEvidenceRunnerFor(
+  db: ProviderNeutralDatabase,
 ): PipelineEvidenceExecution {
-  const store = createPostgresqlDevelopmentAdapterRevisionStore(db)
+  const store = createDevelopmentAdapterStore(db)
   return runner({
     resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
     ),
   })
 }
+
+/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
+export const composeSqlitePipelineEvidenceRunner = composePipelineEvidenceRunnerFor
+export const composePostgresqlPipelineEvidenceRunner = composePipelineEvidenceRunnerFor

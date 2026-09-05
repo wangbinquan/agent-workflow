@@ -168,7 +168,8 @@ import {
 import { composePostgresqlMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
 import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
 import { composePostgresqlDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import { composePostgresqlDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/postgresqlDevelopmentAdapterConfigOperations'
+import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
+import { composeForeignResourceAclFor } from '@/modules/resource-catalog/composition/resourceAcl'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -1428,10 +1429,6 @@ export async function composePostgresqlDaemonApplication(
   developmentActivity.bind(digitalEmployee.runtime.worker)
 
   const developmentAdmissionLookup = composePostgresqlDevelopmentAdmissionLookup(input.db)
-  const developmentAdapter = composePostgresqlDevelopmentAdapterConfigOperations({
-    db: input.db,
-    access: resourceCatalog.authorization,
-  })
   const developmentConfigAccess: DevelopmentConfigResourceAccess = {
     filterVisible: (actor, type, rows) =>
       resourceCatalog.authorization.filterVisibleRows(actor, type, rows),
@@ -1442,6 +1439,16 @@ export async function composePostgresqlDaemonApplication(
       resourceCatalog.authorization.requireResourceGovern(actor, type, row),
     assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
   }
+  // RFC-359 W4-D6：development-adapter 配置与 SQLite 根同一份装配；它的 ACL 也改走目录的中立 foreign-owner 路径。
+  const developmentAdapter = composeDevelopmentAdapterConfigOperationsFor({
+    db: input.db,
+    access: developmentConfigAccess,
+    grants: resourceCatalog.persistence.grants,
+  })
+  const developmentAdapterAcl = composeForeignResourceAclFor({
+    db: input.db,
+    identity: developmentAdapter.resourceAclIdentity,
+  })
   const developmentConfig = composePostgresqlDevelopmentConfigOperations({
     db: input.db,
     developmentAdapter,
@@ -1559,15 +1566,21 @@ export async function composePostgresqlDaemonApplication(
               ? resourceCatalog.authorization.canViewResource(actor, request.type, row)
               : resourceCatalog.authorization.canViewResource(actor, request.type, row),
           read: (actor, row) =>
-            isForeignAclType(request.type)
-              ? foreignAcl.read(actor, request.type, row)
-              : resourceCatalog.acl.getResourceAcl(actor, request.type, row),
+            request.type === 'development_adapter'
+              ? developmentAdapterAcl.getResourceAcl(actor, request.type, row)
+              : isForeignAclType(request.type)
+                ? foreignAcl.read(actor, request.type, row)
+                : resourceCatalog.acl.getResourceAcl(actor, request.type, row),
           update: (actor, row, body, updatedAt) =>
-            isForeignAclType(request.type)
-              ? foreignAcl.update(actor, request.type, row, body, updatedAt)
-              : resourceCatalog.acl.updateResourceAcl(actor, request.type, row, body, {
+            request.type === 'development_adapter'
+              ? developmentAdapterAcl.updateResourceAcl(actor, request.type, row, body, {
                   ...(updatedAt === undefined ? {} : { updatedAt }),
-                }),
+                })
+              : isForeignAclType(request.type)
+                ? foreignAcl.update(actor, request.type, row, body, updatedAt)
+                : resourceCatalog.acl.updateResourceAcl(actor, request.type, row, body, {
+                    ...(updatedAt === undefined ? {} : { updatedAt }),
+                  }),
           notFoundCode: request.notFoundCode,
         })
       },

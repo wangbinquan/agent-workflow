@@ -359,6 +359,23 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   CAS / 决策认领 / 取消认领的前置条件、provenance 修复与幂等、决策恢复三分支）；rfc353 / rfc199 / fusion-engine 锁改指
   中立文件，`rfc349-fusion-provider-persistence` fake-PG 单测随之删除。**下一条链**：`developmentAdapterStore`（integration；
   须先把 application 命令改异步）与 identity-access 的两对大 PG 底（`UserAccessRepository` / `OidcIdentityCrossContext`）。
+  **D6a ✅（foreign-owner ACL 家族第一刀：development adapter 链）**：resource-catalog 的 ACL identity persistence 端口改成
+  异步、绑定目录写事务句柄（`ResourceAclIdentityPersistence.loadForMutation(tx, id)` 交出 identity 行、撞名判定与带 aclRevision
+  CAS 的写回；同步形态改名 `Sync*`，只剩 digital-employee 的 employee_* owner 在用，随 D6b/c 退）；中立的 ACL 读 / 写端口
+  （D3）多一条 foreign-owner 分支，目录自有类型与 owner 交来的 identity 共用同一份决策与 grants 替换；
+  `composeForeignResourceAclFor({db, identity})` 给两个 bootstrap 同一条 foreign ACL 路径（看不见即 not-found，提交后唤醒实时
+  订阅）。integration：`developmentAdapterStore.ts` 一份（identity + immutable revisions，publish 走统一事务原语，撞名经能力矩阵
+  归类；ACL identity 面即上面的端口）、`developmentAdapterCommands.ts` 改异步（owner 改名进 store，editor 改名栅栏在装配层）、
+  `developmentAdapterConfigOperations.ts` 单一路径 `composeDevelopmentAdapterConfigOperationsFor({db, access, grants})`（PG 侧
+  279 行的内联实现退役；显式授权事实经目录的 grant 读端口）、approvalGateway / pipelineEvidence / requirementSource 三处运行器
+  装配各一份（旧 provider 名留别名）。PG daemon 的 development_adapter ACL 路由改走中立 foreign 路径，employee_* 仍走
+  `postgresqlForeignResourceAcl.ts` 直到 D6b/c。三个 provider 文件删除，integration 的 dbTxSync 归零；D4 留的
+  `postgresqlRepositoryScopeExistenceReads` 别名随本刀删除并销账。`rfc359-w4-d6a-adapters.test.ts` 两引擎各跑（store 的
+  identity / revisions / 撞名 / purpose 不可变 / 归档门；配置装配的可见性、技术细节读面、editor 改名栅栏、publish / archive 各自
+  的门；foreign ACL 的 CAS、grants 替换、换 owner 撞名与旧 owner 降为 read）；rfc310 的 adapter 用例与夹具改异步，rfc323 /
+  rfc317 表归属锁改指中立文件。**下一刀 D6b / D6c**：development-automation `ConfigResourceStore`（employee_job_template）与
+  digital-employee `AuthoringStore`（employee_definition / employee_tool）接同一个异步 identity 端口，之后删
+  `postgresqlForeignResourceAcl.ts` 与 Sync* 形态。
 
 ## 5. W5 —— 防复辟
 

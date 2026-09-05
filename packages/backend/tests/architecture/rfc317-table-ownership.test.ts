@@ -75,10 +75,8 @@ interface OwnershipDebt {
  */
 const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
   ...[
-    'integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts',
+    'integration/infrastructure/developmentAdapterStore.ts',
     'integration/infrastructure/developmentToolConnectionStore.ts',
-    'integration/infrastructure/postgresqlDevelopmentAdapterRevisionStore.ts',
-    'integration/infrastructure/sqliteDevelopmentAdapterStore.ts',
   ].map((file) => ({
     table: 'developmentAdapterDefinitionRevisions',
     owner: 'development-automation',
@@ -89,9 +87,8 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
       'RFC-294 W4-E8 将定义修订持久化收回 Development Automation，并让 Integration 只消费 owner-owned public port。',
   })),
   ...[
-    'integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts',
+    'integration/infrastructure/developmentAdapterStore.ts',
     'integration/infrastructure/developmentToolConnectionStore.ts',
-    'integration/infrastructure/sqliteDevelopmentAdapterStore.ts',
   ].map((file) => ({
     table: 'developmentAdapterDefinitions',
     owner: 'development-automation',

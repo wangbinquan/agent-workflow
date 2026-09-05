@@ -9,8 +9,8 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import { resourceGrants, users } from '@/db/schema'
 import type {
-  ResourceAclIdentityMutation,
-  ResourceAclIdentityPersistence,
+  SyncResourceAclIdentityMutation,
+  SyncResourceAclIdentityPersistence,
 } from '../application/ports/resourceAclPersistence'
 import type {
   ResourceCatalogAclMutationChange,
@@ -57,7 +57,7 @@ export async function getSqliteResourceAclRevision(
   db: DbClient,
   type: AclResourceType,
   resourceId: string,
-  identityPersistence?: ResourceAclIdentityPersistence,
+  identityPersistence?: SyncResourceAclIdentityPersistence,
 ): Promise<number> {
   if (identityPersistence !== undefined) {
     if (identityPersistence.type !== type) {
@@ -83,7 +83,7 @@ function runResourceAclMutation<T>(
   tx: DbTxSync,
   type: AclResourceType,
   resourceId: string,
-  identity: ResourceAclIdentityMutation,
+  identity: SyncResourceAclIdentityMutation,
   run: (context: SqliteResourceAclMutationContext) => NotPromise<T>,
 ): T {
   return run({
@@ -151,7 +151,7 @@ export function withSqliteResourceAclMutation<T>(
   db: DbClient,
   type: AclResourceType,
   resourceId: string,
-  identityPersistence: ResourceAclIdentityPersistence | undefined,
+  identityPersistence: SyncResourceAclIdentityPersistence | undefined,
   run: (context: SqliteResourceAclMutationContext) => NotPromise<T>,
 ): T | undefined {
   if (identityPersistence !== undefined) {
@@ -243,7 +243,7 @@ export function isSqliteOwnerNameConstraintError(error: unknown): boolean {
 
 export function createSqliteResourceAclReadPort(
   db: DbClient,
-  identityPersistence?: ResourceAclIdentityPersistence,
+  identityPersistence?: SyncResourceAclIdentityPersistence,
 ): ResourceCatalogAclReadPort<AclResourceType> {
   const port: ResourceCatalogAclReadPort<AclResourceType> = {
     async readSnapshot(type, resourceId, fallbackIdentity) {
@@ -329,7 +329,7 @@ export interface SqliteResourceAclMutationLifecycle {
 export function createSqliteResourceAclMutationPort(
   db: DbClient,
   lifecycle: SqliteResourceAclMutationLifecycle = {},
-  identityPersistence?: ResourceAclIdentityPersistence,
+  identityPersistence?: SyncResourceAclIdentityPersistence,
 ): ResourceCatalogAclMutationPort<AclResourceType> {
   const port: ResourceCatalogAclMutationPort<AclResourceType> = {
     async mutate(request, decide) {

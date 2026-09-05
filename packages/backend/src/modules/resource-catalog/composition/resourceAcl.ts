@@ -7,6 +7,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -16,7 +17,10 @@ import {
   type ResourceAclApplication,
   type ResourceAclOperationLinearizer,
 } from '../application/resourceAcl'
-import type { ResourceAclIdentityPersistence } from '../application/ports/resourceAclPersistence'
+import type {
+  ResourceAclIdentityPersistence,
+  SyncResourceAclIdentityPersistence,
+} from '../application/ports/resourceAclPersistence'
 import type { ResourceCatalogOwnedAclType } from '../application/ports/providerResourceCatalogPersistence'
 import { createResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
@@ -31,6 +35,7 @@ import {
   type DisclosedRefs,
 } from '../domain/resourceAccess'
 import { createResourceAclReadPort } from '../infrastructure/aclReadRepository'
+import { createResourceGrantReadPort } from '../infrastructure/resourceVisibility'
 import { createResourceAclMutationPort } from '../infrastructure/resourceAclRepository'
 import {
   createSqliteResourceAclMutationPort,
@@ -44,7 +49,7 @@ import {
 
 function buildSqliteAclApplications(input: {
   readonly db: DbClient
-  readonly identityPersistence?: ResourceAclIdentityPersistence
+  readonly identityPersistence?: SyncResourceAclIdentityPersistence
   readonly lifecycle?: SqliteResourceAclMutationLifecycle
 }) {
   const authorization = createResourceAuthorizationApplication(
@@ -73,7 +78,7 @@ const sqliteAclApplications = new WeakMap<DbClient, SqliteAclApplications>()
 function applicationsFor(
   db: DbClient,
   input: {
-    readonly identityPersistence?: ResourceAclIdentityPersistence
+    readonly identityPersistence?: SyncResourceAclIdentityPersistence
     readonly lifecycle?: SqliteResourceAclMutationLifecycle
   } = {},
 ): SqliteAclApplications {
@@ -212,13 +217,13 @@ export function getResourceAcl(
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
-  identityPersistence?: ResourceAclIdentityPersistence,
+  identityPersistence?: SyncResourceAclIdentityPersistence,
 ): Promise<ResourceAcl> {
   return applicationsFor(db, { identityPersistence }).acl.getResourceAcl(actor, type, row)
 }
 
 export interface ResourceAclWriteEffects {
-  readonly identityPersistence?: ResourceAclIdentityPersistence
+  readonly identityPersistence?: SyncResourceAclIdentityPersistence
   readonly afterWriteInTx?: (
     tx: DbTxSync,
     change: {
@@ -333,5 +338,45 @@ export function composeResourceAclOperationApplication<Context extends Actor, Ro
       }),
     linearizer: input.linearizer,
     afterUpdated: input.afterUpdated,
+  })
+}
+
+/**
+ * RFC-359 W4-D6 —— owner 在别的 context 的 ACL 行（development_adapter / employee_*）：目录只出决策、grants 与
+ * users，identity 行经 owner 交来的 `ResourceAclIdentityPersistence` 在同一个目录写事务里读 / 写。两个 provider 同一份；
+ * 每次写完在提交后唤醒实时订阅（与目录自有类型的 `updateResourceAcl` 同一处）。
+ */
+export function composeForeignResourceAclFor(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly identity: ResourceAclIdentityPersistence
+}) {
+  const authorization = createResourceAuthorizationApplication(
+    createResourceGrantReadPort(input.db),
+  )
+  const acl = createResourceAclApplication<AclResourceType>({
+    authorization,
+    mutation: createResourceAclMutationPort(input.db, {}, input.identity),
+    read: createResourceAclReadPort(input.db, input.identity),
+  })
+  return Object.freeze({
+    authorization,
+    // 看不见即不存在：与此前 PG foreign 路径的 read 同语义（路由层的 canView 门之外再守一次，无 UI 差异）。
+    getResourceAcl: async (actor: Actor, type: AclResourceType, row: AclRow) => {
+      await authorization.requireResourceView(actor, type, row)
+      return await acl.getResourceAcl(actor, type, row)
+    },
+    updateResourceAcl: (
+      actor: Actor,
+      type: AclResourceType,
+      row: AclRow,
+      body: UpdateResourceAclBody,
+      options: { readonly updatedAt?: number } = {},
+    ) =>
+      acl.updateResourceAcl(actor, type, row, body, {
+        ...(options.updatedAt === undefined ? {} : { updatedAt: options.updatedAt }),
+        afterCommit: async () => {
+          triggerRevalidation('resource-acl-changed')
+        },
+      }),
   })
 }

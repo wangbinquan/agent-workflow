@@ -6,4 +6,6 @@ export type {
   ResourceAclIdentityMutation,
   ResourceAclIdentityMutationRow,
   ResourceAclIdentityPersistence,
+  SyncResourceAclIdentityMutation,
+  SyncResourceAclIdentityPersistence,
 } from '../application/ports/resourceAclPersistence'

@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composePostgresqlDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import { createPostgresqlDevelopmentAdapterRevisionStore } from '@/modules/integration/infrastructure/postgresqlDevelopmentAdapterRevisionStore'
+import { createDevelopmentAdapterStore } from '@/modules/integration/infrastructure/developmentAdapterStore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -82,7 +82,8 @@ afterEach(() => {
 describe('RFC-349 Development and Integration provider composition', () => {
   test('PostgreSQL revision and connection catalogs execute through the async provider', async () => {
     const fake = fixture()
-    const revisions = createPostgresqlDevelopmentAdapterRevisionStore(fake.db)
+    // RFC-359 W4-D6：修订读面归中立 store（两个 provider 同一份），这里只验它在 PG 客户端上按 async provider 执行。
+    const revisions = createDevelopmentAdapterStore(fake.db)
     await expect(revisions.getRevision('adapter-1', 1)).resolves.toEqual({
       contentJson: expect.any(String),
       contentDigest: 'digest-1',

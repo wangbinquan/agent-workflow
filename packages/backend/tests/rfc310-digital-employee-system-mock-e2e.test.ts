@@ -54,10 +54,10 @@ import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/compos
 import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
 import { createPipelineEvidenceAdapter } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { AdapterFailureReceipt } from '@/modules/integration/infrastructure/developmentAdapterRunner'
-import { createDbAdapterBindingResolver } from '@/modules/integration/infrastructure/developmentRequirementSourceAdapter'
+import { createAsyncDbAdapterBindingResolver } from '@/modules/integration/infrastructure/developmentRequirementSourceAdapter'
 import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
 import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
-import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { createDevelopmentAdapterStore } from '@/modules/integration/infrastructure/developmentAdapterStore'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeSqliteWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
@@ -329,8 +329,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       webhookDispatcher,
       digitalEmployeeEventCenter: eventCenter,
     })
-    const adapterStore = createSqliteDevelopmentAdapterStore(db)
-    const adapterIdentity = createDevelopmentAdapter(
+    const adapterStore = createDevelopmentAdapterStore(db)
+    const adapterIdentity = await createDevelopmentAdapter(
       adapterStore,
       { userId: 'system-mock-author', actorHasScriptsAuthor: true },
       {
@@ -354,7 +354,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         now: 1,
       },
     )
-    const approvalAdapterRevision = publishDevelopmentAdapter(
+    const approvalAdapterRevision = await publishDevelopmentAdapter(
       adapterStore,
       { userId: 'system-mock-author', actorHasScriptsAuthor: true },
       { id: adapterIdentity.id, now: 2 },
@@ -363,7 +363,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       id: adapterIdentity.id,
       revision: approvalAdapterRevision.revision,
     }
-    const pipelineAdapterIdentity = createDevelopmentAdapter(
+    const pipelineAdapterIdentity = await createDevelopmentAdapter(
       adapterStore,
       { userId: 'system-mock-author', actorHasScriptsAuthor: true },
       {
@@ -387,7 +387,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         now: 3,
       },
     )
-    const pipelineAdapterRevision = publishDevelopmentAdapter(
+    const pipelineAdapterRevision = await publishDevelopmentAdapter(
       adapterStore,
       { userId: 'system-mock-author', actorHasScriptsAuthor: true },
       { id: pipelineAdapterIdentity.id, now: 4 },
@@ -404,7 +404,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       approvalMockUrl: suite.endpoints.developmentApprovalBaseUrl,
     })
     const pipelineRunner = createPipelineEvidenceAdapter({
-      resolveBinding: createDbAdapterBindingResolver((id, revision) =>
+      resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
         adapterStore.getRevision(id, revision),
       ),
       extraEnv: { AW_PIPELINE_MOCK_URL: suite.endpoints.developmentPipelineBaseUrl },

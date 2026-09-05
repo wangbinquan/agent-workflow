@@ -5,6 +5,7 @@
 // projection（adapter 本质上必含）时，create/revise/publish 都要求
 // `actorHasScriptsAuthor=true`——权限点判定在路由层完成，这里只收布尔，
 // 保持 application 可在无 HTTP 语境下测试（RFC-247 形态）。
+// RFC-359 W4-D6：store 是 Promise 端口（两个 provider 同一份实现），命令随之异步。
 
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import {
@@ -14,6 +15,7 @@ import {
   validateAdapterContract,
   type DevelopmentAdapterContent,
 } from '@/modules/integration/domain/developmentAdapterDefinition'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 
 export interface DevelopmentAdapterIdentityRow {
   readonly id: string
@@ -28,6 +30,11 @@ export interface DevelopmentAdapterIdentityRow {
   readonly archivedAt: number | null
 }
 
+/**
+ * RFC-359 W4-D6 —— resource-catalog 在目录写事务里向 owner 要的 identity 行：撞名判定与写回都绑定同一个统一事务句柄，
+ * `update` 以 aclRevision 为 CAS（false = 有人先写了）。与 resource-catalog 的 `ResourceAclIdentityPersistence` 结构相同——
+ * 两个 context 各自声明、bootstrap 结构装配（RFC-317 R2：跨 context 不 import 对方内部）。
+ */
 export interface DevelopmentAdapterAclIdentityMutation {
   readonly current: {
     readonly id: string
@@ -36,25 +43,27 @@ export interface DevelopmentAdapterAclIdentityMutation {
     readonly visibility: 'private' | 'public'
     readonly aclRevision: number
   }
-  readonly ownerNameIsUnique: true
-  hasOwnerNameCollision(nextOwnerUserId: string): boolean
+  readonly ownerNameIsUnique: boolean
+  hasOwnerNameCollision(nextOwnerUserId: string): Promise<boolean>
   update(input: {
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly aclRevision: number
     readonly updatedAt: number
-  }): void
+  }): Promise<boolean>
 }
 
 export interface DevelopmentAdapterAclIdentityPersistence {
-  getRevision(resourceId: string): number
-  withMutation<T>(
+  readonly type: 'development_adapter'
+  getRevision(resourceId: string): Promise<number>
+  loadForMutation(
+    transaction: DatabaseTransaction,
     resourceId: string,
-    run: (mutation: DevelopmentAdapterAclIdentityMutation) => T,
-  ): T | undefined
+  ): Promise<DevelopmentAdapterAclIdentityMutation | undefined>
 }
 
 export interface DevelopmentAdapterStore {
+  /** resource-catalog 的 ACL 写事务经它读 / 写本 owner 的 identity 行（两个 provider 同一份）。 */
   readonly resourceAclIdentity: DevelopmentAdapterAclIdentityPersistence
   create(input: {
     readonly name: string
@@ -62,14 +71,16 @@ export interface DevelopmentAdapterStore {
     readonly draftJson: string
     readonly ownerUserId: string | null
     readonly now: number
-  }): DevelopmentAdapterIdentityRow
-  getById(id: string): DevelopmentAdapterIdentityRow | null
-  list(): DevelopmentAdapterIdentityRow[]
+  }): Promise<DevelopmentAdapterIdentityRow>
+  getById(id: string): Promise<DevelopmentAdapterIdentityRow | null>
+  list(): Promise<DevelopmentAdapterIdentityRow[]>
   updateDraft(input: {
     readonly id: string
     readonly draftJson: string
+    /** owner 改名（editor 不许改名的判定在调用方）；省略保持原名。 */
+    readonly name?: string
     readonly now: number
-  }): void
+  }): Promise<void>
   publish(input: {
     readonly id: string
     readonly revision: number
@@ -77,12 +88,12 @@ export interface DevelopmentAdapterStore {
     readonly contentDigest: string
     readonly publishedBy: string | null
     readonly now: number
-  }): void
-  archive(input: { readonly id: string; readonly now: number }): void
+  }): Promise<void>
+  archive(input: { readonly id: string; readonly now: number }): Promise<void>
   getRevision(
     id: string,
     revision: number,
-  ): { readonly contentJson: string; readonly contentDigest: string } | null
+  ): Promise<{ readonly contentJson: string; readonly contentDigest: string } | null>
 }
 
 export interface AdapterActorContext {
@@ -117,14 +128,14 @@ function assertScriptsAuthor(content: DevelopmentAdapterContent, actor: AdapterA
   }
 }
 
-export function createDevelopmentAdapter(
+export async function createDevelopmentAdapter(
   store: DevelopmentAdapterStore,
   actor: AdapterActorContext,
   input: { readonly name: string; readonly content: unknown; readonly now: number },
-): DevelopmentAdapterIdentityRow {
+): Promise<DevelopmentAdapterIdentityRow> {
   const content = parseContent(input.content)
   assertScriptsAuthor(content, actor)
-  return store.create({
+  return await store.create({
     name: input.name,
     purpose: content.purpose,
     draftJson: JSON.stringify(content),
@@ -133,12 +144,17 @@ export function createDevelopmentAdapter(
   })
 }
 
-export function reviseDevelopmentAdapterDraft(
+export async function reviseDevelopmentAdapterDraft(
   store: DevelopmentAdapterStore,
   actor: AdapterActorContext,
-  input: { readonly id: string; readonly content: unknown; readonly now: number },
-): void {
-  const identity = store.getById(input.id)
+  input: {
+    readonly id: string
+    readonly content: unknown
+    readonly name?: string
+    readonly now: number
+  },
+): Promise<void> {
+  const identity = await store.getById(input.id)
   if (identity === null || identity.archivedAt !== null) {
     throw new ValidationError('development-adapter-not-found', `no active adapter ${input.id}`)
   }
@@ -150,15 +166,20 @@ export function reviseDevelopmentAdapterDraft(
     )
   }
   assertScriptsAuthor(content, actor)
-  store.updateDraft({ id: input.id, draftJson: JSON.stringify(content), now: input.now })
+  await store.updateDraft({
+    id: input.id,
+    draftJson: JSON.stringify(content),
+    ...(input.name === undefined || input.name === identity.name ? {} : { name: input.name }),
+    now: input.now,
+  })
 }
 
-export function publishDevelopmentAdapter(
+export async function publishDevelopmentAdapter(
   store: DevelopmentAdapterStore,
   actor: AdapterActorContext,
   input: { readonly id: string; readonly now: number },
-): { readonly revision: number; readonly contentDigest: string } {
-  const identity = store.getById(input.id)
+): Promise<{ readonly revision: number; readonly contentDigest: string }> {
+  const identity = await store.getById(input.id)
   if (identity === null || identity.archivedAt !== null) {
     throw new ValidationError('development-adapter-not-found', `no active adapter ${input.id}`)
   }
@@ -167,7 +188,7 @@ export function publishDevelopmentAdapter(
   const revision = (identity.publishedRevision ?? 0) + 1
   const contentJson = JSON.stringify(content)
   const contentDigest = adapterContentDigest(content)
-  store.publish({
+  await store.publish({
     id: input.id,
     revision,
     contentJson,
@@ -178,13 +199,13 @@ export function publishDevelopmentAdapter(
   return { revision, contentDigest }
 }
 
-export function archiveDevelopmentAdapter(
+export async function archiveDevelopmentAdapter(
   store: DevelopmentAdapterStore,
   input: { readonly id: string; readonly now: number },
-): void {
-  const identity = store.getById(input.id)
+): Promise<void> {
+  const identity = await store.getById(input.id)
   if (identity === null) {
     throw new ValidationError('development-adapter-not-found', `no adapter ${input.id}`)
   }
-  store.archive({ id: input.id, now: input.now })
+  await store.archive({ id: input.id, now: input.now })
 }

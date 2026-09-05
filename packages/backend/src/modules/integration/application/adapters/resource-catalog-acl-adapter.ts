@@ -1,32 +1,19 @@
 import type {
-  DevelopmentAdapterAclIdentityMutation,
+  DevelopmentAdapterAclIdentityPersistence,
   DevelopmentAdapterStore,
 } from '../developmentAdapterCommands'
 
-export interface DevelopmentAdapterResourceAclIdentityProvider {
-  readonly type: 'development_adapter'
-  getRevision(resourceId: string): number
-  withMutation<T>(
-    resourceId: string,
-    run: (mutation: DevelopmentAdapterAclIdentityMutation) => T,
-  ): T | undefined
-}
+/** integration 交给 resource-catalog 的 development_adapter identity 面（两个 provider 同一份）。 */
+export type DevelopmentAdapterResourceAclIdentityProvider = DevelopmentAdapterAclIdentityPersistence
 
 export function createDevelopmentAdapterResourceCatalogAclAdapter(
   store: Pick<DevelopmentAdapterStore, 'resourceAclIdentity'>,
 ): DevelopmentAdapterResourceAclIdentityProvider {
-  return {
+  const provider: DevelopmentAdapterResourceAclIdentityProvider = {
     type: 'development_adapter',
     getRevision: (resourceId) => store.resourceAclIdentity.getRevision(resourceId),
-    withMutation: (resourceId, run) =>
-      store.resourceAclIdentity.withMutation(resourceId, (mutation) =>
-        run({
-          current: mutation.current,
-          ownerNameIsUnique: mutation.ownerNameIsUnique,
-          hasOwnerNameCollision: (nextOwnerUserId) =>
-            mutation.hasOwnerNameCollision(nextOwnerUserId),
-          update: (input) => mutation.update(input),
-        }),
-      ),
+    loadForMutation: (transaction, resourceId) =>
+      store.resourceAclIdentity.loadForMutation(transaction, resourceId),
   }
+  return Object.freeze(provider)
 }

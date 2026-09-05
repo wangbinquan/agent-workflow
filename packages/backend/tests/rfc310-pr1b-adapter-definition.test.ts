@@ -24,7 +24,7 @@ import {
   validateAdapterContract,
   type DevelopmentAdapterContent,
 } from '../src/modules/integration/domain/developmentAdapterDefinition'
-import { createSqliteDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { createDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/developmentAdapterStore'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -49,9 +49,9 @@ const NO_AUTHOR = { userId: 'user-1', actorHasScriptsAuthor: false }
 
 /** 本仓 DomainError 家族把错误码放 `.code`，message 是散文——断言必须读 code
  *（docs/dev-gotchas.md：`not.toMatch(/code/)` 对 message 是空断言的镜像坑）。 */
-function codeOf(fn: () => unknown): string {
+async function codeOf(fn: () => unknown): Promise<string> {
   try {
-    fn()
+    await fn()
   } catch (err) {
     return (err as { code?: string }).code ?? (err as Error).message
   }
@@ -59,7 +59,7 @@ function codeOf(fn: () => unknown): string {
 }
 
 describe('rfc310 adapter content contract', () => {
-  test('valid contents pass; strict schema rejects unknown keys', () => {
+  test('valid contents pass; strict schema rejects unknown keys', async () => {
     expect(validateAdapterContract(content())).toEqual([])
     expect(
       validateAdapterContract(
@@ -131,7 +131,7 @@ describe('rfc310 adapter content contract', () => {
     expect(validateAdapterContract(bad).map((v) => v.code as string)).toContain(expectedCode)
   })
 
-  test('digest is canonical (key order independent) and content-sensitive', () => {
+  test('digest is canonical (key order independent) and content-sensitive', async () => {
     const a = content()
     const digest = adapterContentDigest(a)
     expect(adapterContentDigest(JSON.parse(JSON.stringify(a)))).toBe(digest)
@@ -145,11 +145,11 @@ describe('rfc310 adapter store + commands', () => {
 
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
-    store = createSqliteDevelopmentAdapterStore(db)
+    store = createDevelopmentAdapterStore(db)
   })
 
-  test('create → revise → publish twice: revisions immutable, digest frozen, identity advances', () => {
-    const row = createDevelopmentAdapter(store, AUTHOR, {
+  test('create → revise → publish twice: revisions immutable, digest frozen, identity advances', async () => {
+    const row = await createDevelopmentAdapter(store, AUTHOR, {
       name: 'req-sys',
       content: content(),
       now: 1000,
@@ -157,91 +157,104 @@ describe('rfc310 adapter store + commands', () => {
     expect(row.publishedRevision).toBeNull()
     expect(row.visibility).toBe('private')
 
-    const first = publishDevelopmentAdapter(store, AUTHOR, { id: row.id, now: 2000 })
+    const first = await publishDevelopmentAdapter(store, AUTHOR, { id: row.id, now: 2000 })
     expect(first.revision).toBe(1)
 
-    reviseDevelopmentAdapterDraft(store, AUTHOR, {
+    await reviseDevelopmentAdapterDraft(store, AUTHOR, {
       id: row.id,
       content: content({ timeoutMs: 120_000 }),
       now: 3000,
     })
-    const second = publishDevelopmentAdapter(store, AUTHOR, { id: row.id, now: 4000 })
+    const second = await publishDevelopmentAdapter(store, AUTHOR, { id: row.id, now: 4000 })
     expect(second.revision).toBe(2)
     expect(second.contentDigest).not.toBe(first.contentDigest)
 
-    const rev1 = store.getRevision(row.id, 1)
+    const rev1 = await store.getRevision(row.id, 1)
     expect(rev1?.contentDigest).toBe(first.contentDigest)
     expect(JSON.parse(rev1!.contentJson).timeoutMs).toBe(60_000)
-    expect(store.getById(row.id)?.publishedRevision).toBe(2)
+    expect((await store.getById(row.id))?.publishedRevision).toBe(2)
   })
 
-  test('scripts:author gate: create/revise/publish all reject without the capability', () => {
+  test('scripts:author gate: create/revise/publish all reject without the capability', async () => {
     expect(
-      codeOf(() =>
-        createDevelopmentAdapter(store, NO_AUTHOR, { name: 'x', content: content(), now: 1 }),
+      await codeOf(
+        async () =>
+          await createDevelopmentAdapter(store, NO_AUTHOR, {
+            name: 'x',
+            content: content(),
+            now: 1,
+          }),
       ),
     ).toBe('scripts-author-required')
 
-    const row = createDevelopmentAdapter(store, AUTHOR, {
+    const row = await createDevelopmentAdapter(store, AUTHOR, {
       name: 'x',
       content: content(),
       now: 1,
     })
     expect(
-      codeOf(() =>
-        reviseDevelopmentAdapterDraft(store, NO_AUTHOR, {
-          id: row.id,
-          content: content({ timeoutMs: 90_000 }),
-          now: 2,
-        }),
+      await codeOf(
+        async () =>
+          await reviseDevelopmentAdapterDraft(store, NO_AUTHOR, {
+            id: row.id,
+            content: content({ timeoutMs: 90_000 }),
+            now: 2,
+          }),
       ),
     ).toBe('scripts-author-required')
-    expect(codeOf(() => publishDevelopmentAdapter(store, NO_AUTHOR, { id: row.id, now: 3 }))).toBe(
-      'scripts-author-required',
-    )
+    expect(
+      await codeOf(async () => publishDevelopmentAdapter(store, NO_AUTHOR, { id: row.id, now: 3 })),
+    ).toBe('scripts-author-required')
   })
 
-  test('purpose is immutable across revisions; archive blocks further writes', () => {
-    const row = createDevelopmentAdapter(store, AUTHOR, {
+  test('purpose is immutable across revisions; archive blocks further writes', async () => {
+    const row = await createDevelopmentAdapter(store, AUTHOR, {
       name: 'gate',
       content: content({ purpose: 'pipeline-gate', operations: ['collect'] }),
       now: 1,
     })
     expect(
-      codeOf(() =>
-        reviseDevelopmentAdapterDraft(store, AUTHOR, {
-          id: row.id,
-          content: content(),
-          now: 2,
-        }),
+      await codeOf(
+        async () =>
+          await reviseDevelopmentAdapterDraft(store, AUTHOR, {
+            id: row.id,
+            content: content(),
+            now: 2,
+          }),
       ),
     ).toBe('development-adapter-purpose-immutable')
 
-    archiveDevelopmentAdapter(store, { id: row.id, now: 3 })
-    expect(codeOf(() => publishDevelopmentAdapter(store, AUTHOR, { id: row.id, now: 4 }))).toBe(
-      'development-adapter-not-found',
-    )
+    await archiveDevelopmentAdapter(store, { id: row.id, now: 3 })
+    expect(
+      await codeOf(async () => publishDevelopmentAdapter(store, AUTHOR, { id: row.id, now: 4 })),
+    ).toBe('development-adapter-not-found')
   })
 
-  test('owner+name collision is a typed 409', () => {
-    createDevelopmentAdapter(store, AUTHOR, { name: 'dup', content: content(), now: 1 })
+  test('owner+name collision is a typed 409', async () => {
+    await createDevelopmentAdapter(store, AUTHOR, { name: 'dup', content: content(), now: 1 })
     expect(
-      codeOf(() =>
-        createDevelopmentAdapter(store, AUTHOR, { name: 'dup', content: content(), now: 2 }),
+      await codeOf(
+        async () =>
+          await createDevelopmentAdapter(store, AUTHOR, {
+            name: 'dup',
+            content: content(),
+            now: 2,
+          }),
       ),
     ).toBe('development-adapter-name-taken')
   })
 
-  test('invalid content is a typed validation error before any write', () => {
+  test('invalid content is a typed validation error before any write', async () => {
     expect(
-      codeOf(() =>
-        createDevelopmentAdapter(store, AUTHOR, {
-          name: 'bad',
-          content: content({ operations: ['acquire', 'questions.writeback'] }),
-          now: 1,
-        }),
+      await codeOf(
+        async () =>
+          await createDevelopmentAdapter(store, AUTHOR, {
+            name: 'bad',
+            content: content({ operations: ['acquire', 'questions.writeback'] }),
+            now: 1,
+          }),
       ),
     ).toBe('development-adapter-contract-violation')
-    expect(store.getById('nonexistent')).toBeNull()
+    expect(await store.getById('nonexistent')).toBeNull()
   })
 })

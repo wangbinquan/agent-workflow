@@ -67,7 +67,7 @@ describe('RFC-323 employee Adapter ownership boundary', () => {
     const providerOwnedSymbols = [
       'developmentAdapterDefinitions',
       'developmentAdapterRevisions',
-      'createSqliteDevelopmentAdapterStore',
+      'createDevelopmentAdapterStore',
       'executableRef',
       'secretProjection',
     ]
@@ -113,7 +113,7 @@ describe('RFC-323 employee Adapter ownership boundary', () => {
     const source = readFileSync(platformParticipant, 'utf8')
     expect(importsOf(source).filter((specifier) => specifier.includes('/integration/'))).toEqual([])
     expect(codeWithoutCommentLines(source)).not.toMatch(
-      /developmentAdapterDefinitions|developmentAdapterRevisions|createSqliteDevelopmentAdapterStore|secretProjection|executableRef/,
+      /developmentAdapterDefinitions|developmentAdapterRevisions|createDevelopmentAdapterStore|secretProjection|executableRef/,
     )
     expect(source).toContain('readonly pipelineEvidence?: PipelineEvidencePort')
     expect(source).toContain('readonly approvalGateway?: ApprovalGatewayPort')

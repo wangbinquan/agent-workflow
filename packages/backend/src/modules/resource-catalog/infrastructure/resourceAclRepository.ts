@@ -14,6 +14,10 @@ import type {
   ResourceCatalogAclMutationChange,
   ResourceCatalogAclMutationPort,
 } from '../application/ports/providerResourceCatalogPersistence'
+import type {
+  ResourceAclIdentityMutation,
+  ResourceAclIdentityPersistence,
+} from '../application/ports/resourceAclPersistence'
 import { OWNER_NAME_UNIQUE_CONSTRAINTS, OWNER_NAME_UNIQUE_TYPES } from './aclRegistry'
 import { ownedAclTable } from './aclReadRepository'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
@@ -38,28 +42,79 @@ export function isOwnerNameConstraintError(db: ProviderNeutralDatabase, error: u
   )
 }
 
+/** 目录自有类型：identity 行就在 ACL_TABLES 里，撞名判定与 CAS 写回都由本文件做。 */
+async function ownedIdentityForMutation(
+  transaction: DatabaseTransaction,
+  type: AclResourceType,
+  resourceId: string,
+): Promise<ResourceAclIdentityMutation | undefined> {
+  const table = ownedAclTable(type)
+  const current = (
+    await transaction
+      .select({
+        id: table.id,
+        name: table.name,
+        ownerUserId: table.ownerUserId,
+        visibility: table.visibility,
+        aclRevision: table.aclRevision,
+      })
+      .from(table)
+      .where(eq(table.id, resourceId))
+      .limit(1)
+  )[0]
+  if (current === undefined) return undefined
+  return {
+    current,
+    ownerNameIsUnique: (OWNER_NAME_UNIQUE_TYPES as ReadonlySet<AclResourceType>).has(type),
+    async hasOwnerNameCollision(nextOwnerUserId) {
+      const rows = await transaction
+        .select({ id: table.id })
+        .from(table)
+        .where(
+          and(
+            eq(table.ownerUserId, nextOwnerUserId),
+            eq(table.name, current.name),
+            ne(table.id, resourceId),
+          ),
+        )
+        .limit(1)
+      return rows[0] !== undefined
+    },
+    async update(input) {
+      // identity 行的 CAS：aclRevision 变了就是有人先写了，整个事务回滚。
+      const updated = await transaction
+        .update(table)
+        .set(input)
+        .where(and(eq(table.id, resourceId), eq(table.aclRevision, current.aclRevision)))
+        .returning({ id: table.id })
+      return updated.length === 1
+    },
+  }
+}
+
+/**
+ * RFC-359 W4-D6：非目录自有的类型（development_adapter / employee_*）由 owner 交来的 identity persistence
+ * 在同一个目录写事务里读 / 写自己那张表；grants / users 仍归目录。两条路径共用同一份决策与 grants 替换。
+ */
 export function createResourceAclMutationPort(
   db: ProviderNeutralDatabase,
   lifecycle: ResourceAclMutationLifecycle = {},
+  identityPersistence?: ResourceAclIdentityPersistence,
 ): ResourceCatalogAclMutationPort<AclResourceType> {
   const port: ResourceCatalogAclMutationPort<AclResourceType> = {
     async mutate(request, decide) {
-      const table = ownedAclTable(request.type)
+      if (identityPersistence !== undefined && identityPersistence.type !== request.type) {
+        throw new Error(
+          `ACL identity persistence type ${identityPersistence.type} cannot serve ${request.type}`,
+        )
+      }
       return runResourceCatalogTransaction(db, async (transaction) => {
-        const current = (
-          await transaction
-            .select({
-              id: table.id,
-              name: table.name,
-              ownerUserId: table.ownerUserId,
-              visibility: table.visibility,
-              aclRevision: table.aclRevision,
-            })
-            .from(table)
-            .where(eq(table.id, request.resourceId))
-            .limit(1)
-        )[0]
-        if (current === undefined) return undefined
+        const identity =
+          identityPersistence === undefined
+            ? await ownedIdentityForMutation(transaction, request.type, request.resourceId)
+            : await identityPersistence.loadForMutation(transaction, request.resourceId)
+        if (identity === undefined) return undefined
+        const current = identity.current
 
         const grantRows = await transaction
           .select({ userId: resourceGrants.userId, level: resourceGrants.level })
@@ -87,41 +142,20 @@ export function createResourceAclMutationPort(
                   ),
                 )
         const candidateOwner = request.candidateOwnerUserId
-        const ownerNameIsUnique = (OWNER_NAME_UNIQUE_TYPES as ReadonlySet<AclResourceType>).has(
-          request.type,
-        )
-        const collision =
-          typeof candidateOwner === 'string' && ownerNameIsUnique
-            ? (
-                await transaction
-                  .select({ id: table.id })
-                  .from(table)
-                  .where(
-                    and(
-                      eq(table.ownerUserId, candidateOwner),
-                      eq(table.name, current.name),
-                      ne(table.id, request.resourceId),
-                    ),
-                  )
-                  .limit(1)
-              )[0]
-            : undefined
+        const ownerNameCollision =
+          typeof candidateOwner === 'string' && identity.ownerNameIsUnique
+            ? await identity.hasOwnerNameCollision(candidateOwner)
+            : false
         const decision = decide({
           current,
-          ownerNameIsUnique,
-          ownerNameCollision: collision !== undefined,
+          ownerNameIsUnique: identity.ownerNameIsUnique,
+          ownerNameCollision,
           activeUserIds: new Set(activeRows.map((row) => row.id)),
           currentGrants,
           actorGrantLevel: currentGrants.get(request.actorUserId) ?? null,
         })
 
-        // identity 行的 CAS：aclRevision 变了就是有人先写了，整个事务回滚。
-        const updated = await transaction
-          .update(table)
-          .set(decision.update)
-          .where(and(eq(table.id, request.resourceId), eq(table.aclRevision, current.aclRevision)))
-          .returning({ id: table.id })
-        if (updated.length === 0) {
+        if (!(await identity.update(decision.update))) {
           throw new ConflictError(
             'acl-revision-conflict',
             'resource ACL changed while saving; reload and retry',

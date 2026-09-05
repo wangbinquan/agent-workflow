@@ -103,6 +103,7 @@ import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resourc
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
   canViewResource,
+  composeForeignResourceAclFor,
   filterVisibleRows,
   getResourceAcl,
   requireResourceEdit,
@@ -390,7 +391,7 @@ import {
 import { composeSqliteWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
 import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
-import { composeDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/developmentAdapterConfigOperations'
+import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
 import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
@@ -930,7 +931,7 @@ type SqliteComposedAppDeps = RuntimeComposedAppDeps &
     readonly developmentActivityOperations: DevelopmentActivityOperations
     readonly developmentActivityWorker: DevelopmentActivityWorkerBinding
     readonly developmentAdapterAclIdentity: ReturnType<
-      typeof composeDevelopmentAdapterConfigOperations
+      typeof composeDevelopmentAdapterConfigOperationsFor
     >['resourceAclIdentity']
     readonly developmentConfigOperations: DevelopmentConfigOperations
     readonly developmentMissionOperations: DevelopmentMissionOperations
@@ -1483,8 +1484,15 @@ function composeSqliteDevelopmentConfigAclRoutes(
   db: DbClient,
   developmentAdapterAclIdentity: SqliteComposedAppDeps['developmentAdapterAclIdentity'],
 ): DevelopmentConfigAclRouteBinding {
+  // RFC-359 W4-D6：development_adapter 的 ACL 走目录的中立 foreign-owner 路径（identity 行由 integration 在同一事务里交出）；
+  // 目录自有的配置资源仍走 SQLite 的目录 ACL 门面。
+  const developmentAdapterAcl = composeForeignResourceAclFor({
+    db,
+    identity: developmentAdapterAclIdentity,
+  })
   return Object.freeze({
     mount(input: Parameters<DevelopmentConfigAclRouteBinding['mount']>[0]) {
+      const foreign = input.type === developmentAdapterAclIdentity.type
       mountAclEndpoints(input.app, {
         type: input.type,
         base: input.base,
@@ -1492,22 +1500,17 @@ function composeSqliteDevelopmentConfigAclRoutes(
         load: input.load,
         canView: (actor, row) => canViewResource(db, actor, input.type, row),
         read: (actor, row) =>
-          getResourceAcl(
-            db,
-            actor,
-            input.type,
-            row,
-            input.type === developmentAdapterAclIdentity.type
-              ? developmentAdapterAclIdentity
-              : undefined,
-          ),
+          foreign
+            ? developmentAdapterAcl.getResourceAcl(actor, input.type, row)
+            : getResourceAcl(db, actor, input.type, row),
         update: (actor, row, body, updatedAt) =>
-          updateResourceAcl(db, actor, input.type, row, body, {
-            ...(input.type === developmentAdapterAclIdentity.type
-              ? { identityPersistence: developmentAdapterAclIdentity }
-              : {}),
-            ...(updatedAt === undefined ? {} : { updatedAt }),
-          }),
+          foreign
+            ? developmentAdapterAcl.updateResourceAcl(actor, input.type, row, body, {
+                ...(updatedAt === undefined ? {} : { updatedAt }),
+              })
+            : updateResourceAcl(db, actor, input.type, row, body, {
+                ...(updatedAt === undefined ? {} : { updatedAt }),
+              }),
         notFoundCode: input.notFoundCode,
       })
     },
@@ -1918,9 +1921,12 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     memoryOperations,
     collaborationContext,
   }
-  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperations(
-    runtimeDeps.db,
-  )
+  // RFC-359 W4-D6：development-adapter 配置一份装配，两个 provider 共用；授权面与 grant 读端口由 resource-catalog 交来。
+  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperationsFor({
+    db: runtimeDeps.db,
+    access: composeSqliteDevelopmentConfigResourceAccess(runtimeDeps.db),
+    grants: composeSqliteResourceCatalog({ db: runtimeDeps.db }).persistence.grants,
+  })
   const developmentConfigOperations = composeDevelopmentConfigOperations(
     runtimeDeps.db,
     developmentAdapterConfigOperations,

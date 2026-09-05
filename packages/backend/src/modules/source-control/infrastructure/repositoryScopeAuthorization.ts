@@ -29,6 +29,3 @@ const reads: RepositoryScopeExistenceReads<DatabaseTransaction> = {
 // 装配方拿它去调 `createRepositoryScopeAuthorizationInTx` 铸能力。
 export const repositoryScopeExistenceReads: RepositoryScopeExistenceReads<DatabaseTransaction> =
   reads
-
-/** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export const postgresqlRepositoryScopeExistenceReads = repositoryScopeExistenceReads

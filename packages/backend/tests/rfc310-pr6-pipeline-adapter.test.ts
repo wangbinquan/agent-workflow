@@ -28,8 +28,8 @@ import {
   publishDevelopmentAdapter,
 } from '../src/modules/integration/application/developmentAdapterCommands'
 import { createPipelineEvidenceAdapter } from '../src/modules/integration/infrastructure/developmentPipelineAdapter'
-import { createDbAdapterBindingResolver } from '../src/modules/integration/infrastructure/developmentRequirementSourceAdapter'
-import { createSqliteDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { createAsyncDbAdapterBindingResolver } from '../src/modules/integration/infrastructure/developmentRequirementSourceAdapter'
+import { createDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/developmentAdapterStore'
 import type { DevelopmentAdapterOperation } from '../src/modules/integration/domain/developmentAdapterDefinition'
 
 setDefaultTimeout(120_000)
@@ -46,13 +46,13 @@ const TARGET = 'b2'.repeat(20)
 let provider: StartedPipelineProviderMock
 let db: DbClient
 
-function publishAdapter(input: {
+async function publishAdapter(input: {
   readonly name: string
   readonly purpose: 'pipeline-gate' | 'requirement-source'
   readonly operations: readonly DevelopmentAdapterOperation[]
-}): string {
-  const store = createSqliteDevelopmentAdapterStore(db)
-  const created = createDevelopmentAdapter(
+}): Promise<string> {
+  const store = createDevelopmentAdapterStore(db)
+  const created = await createDevelopmentAdapter(
     store,
     { userId: 'admin', actorHasScriptsAuthor: true },
     {
@@ -76,7 +76,7 @@ function publishAdapter(input: {
       },
     },
   )
-  const published = publishDevelopmentAdapter(
+  const published = await publishDevelopmentAdapter(
     store,
     { userId: 'admin', actorHasScriptsAuthor: true },
     { id: created.id, now: Date.now() },
@@ -85,9 +85,9 @@ function publishAdapter(input: {
 }
 
 function runner(): ReturnType<typeof createPipelineEvidenceAdapter> {
-  const store = createSqliteDevelopmentAdapterStore(db)
+  const store = createDevelopmentAdapterStore(db)
   return createPipelineEvidenceAdapter({
-    resolveBinding: createDbAdapterBindingResolver((id, revision) =>
+    resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
     ),
     extraEnv: { AW_PIPELINE_MOCK_URL: provider.url },
@@ -122,7 +122,7 @@ describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
         },
       ],
     })
-    const binding = publishAdapter({
+    const binding = await publishAdapter({
       name: 'pg-full',
       purpose: 'pipeline-gate',
       operations: ['collect', 'trigger', 'rerun'],
@@ -206,7 +206,7 @@ describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
       ],
       partial: true,
     })
-    const binding = publishAdapter({
+    const binding = await publishAdapter({
       name: 'pg-partial',
       purpose: 'pipeline-gate',
       operations: ['collect'],
@@ -225,7 +225,7 @@ describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
   })
 
   test('paired-constraint runtime half: undeclared operation and wrong purpose are refused', async () => {
-    const collectOnly = publishAdapter({
+    const collectOnly = await publishAdapter({
       name: 'pg-collect-only',
       purpose: 'pipeline-gate',
       operations: ['collect'],
@@ -241,7 +241,7 @@ describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
     if (trigger.ok) return
     expect(trigger.failure.code).toBe('operation-not-declared')
 
-    const wrongPurpose = publishAdapter({
+    const wrongPurpose = await publishAdapter({
       name: 'req-as-pipeline',
       purpose: 'requirement-source',
       operations: ['acquire'],
@@ -293,14 +293,14 @@ describe('rfc310 pr6 T63 — pipeline adapter execution chain', () => {
         logFiles: { 'logs/unit/fx.log': 'hello logs\n' },
       }),
     )
-    const store = createSqliteDevelopmentAdapterStore(db)
+    const store = createDevelopmentAdapterStore(db)
     const adapter = createPipelineEvidenceAdapter({
-      resolveBinding: createDbAdapterBindingResolver((id, revision) =>
+      resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
         store.getRevision(id, revision),
       ),
       extraEnv: { AW_PIPELINE_FIXTURE_JSON: fixturePath },
     })
-    const binding = publishAdapter({
+    const binding = await publishAdapter({
       name: 'pg-fixture',
       purpose: 'pipeline-gate',
       operations: ['collect'],

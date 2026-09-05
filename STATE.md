@@ -143,6 +143,7 @@
 > **W4-D3 已落（resource-catalog ACL 内核）**：目录自有 ACL 类型的读 / 写 / owner-name 预检端口合一（PG 三个文件删除），两条装配路径装同一份；默认 ACL 路径改走统一事务原语，带同步参与者的调用仍走 SQLite 路径直到各 owner 归零。`rfc359-w4-d3-adapters.test.ts` 两引擎各跑。
 > **W4-D4 已落（memory 目录链）**：memory 目录 / 融合 participant / 蒸馏运行时解析、resource-catalog 的 scope 访问 participant、source-control 的仓库 scope 读取器合一；SQLite 专属目录 `sqliteMemoryCatalog.ts` 与 legacy facade `services/memory.ts` 退役，十四个测试改经 `MemoryCatalogOperations` 合同；九个文件删除，`rfc359-w4-d4-adapters.test.ts` 两引擎各跑。有意偏离一处：搜索词里的 `%` / `_` 改按字面匹配。memory 的 dbTxSync 只剩 KE 同步融合提交那一处。
 > **W4-D5 已落（knowledge-evolution 融合链）**：融合仓库与技能版本提交 participant 各一份实现（跨聚合两半经 tx-bound participant 工厂注入，操作锁撞库经能力矩阵归类），memory / resource-catalog 的 SQLite 同步融合写入面退役，四个 provider 文件删除，KE 的 dbTxSync 归零；`rfc359-w4-d5-adapters.test.ts` 两引擎各跑。同步残余只剩 legacy 技能回滚一条，随技能仓库对合一退。
+> **W4-D6a 已落（development adapter 链 + foreign-owner ACL 端口）**：resource-catalog 的 ACL identity persistence 改成绑定目录写事务的异步端口，中立 ACL 读 / 写端口多一条 foreign-owner 分支，`composeForeignResourceAclFor` 给两个 bootstrap 同一条路径；integration 的 adapter store / 命令 / 配置装配 / 三处运行器装配各一份，PG 内联配置实现退役，三个 provider 文件删除，integration dbTxSync 归零；`rfc359-w4-d6a-adapters.test.ts` 两引擎各跑。employee_* owner 仍用同步形态与 PG foreign ACL，随 D6b/c 退。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

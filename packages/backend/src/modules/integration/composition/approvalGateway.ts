@@ -1,13 +1,8 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { sha256Hex } from '@/util/hash'
 import { createApprovalExecutionAdapter } from '../infrastructure/developmentApprovalAdapter'
-import {
-  createAsyncDbAdapterBindingResolver,
-  createDbAdapterBindingResolver,
-} from '../infrastructure/developmentRequirementSourceAdapter'
-import { createPostgresqlDevelopmentAdapterRevisionStore } from '../infrastructure/postgresqlDevelopmentAdapterRevisionStore'
-import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
+import { createAsyncDbAdapterBindingResolver } from '../infrastructure/developmentRequirementSourceAdapter'
+import { createDevelopmentAdapterStore } from '../infrastructure/developmentAdapterStore'
 
 function gateway(input: {
   readonly resolveBinding: Parameters<typeof createApprovalExecutionAdapter>[0]['resolveBinding']
@@ -88,24 +83,12 @@ function gateway(input: {
   }
 }
 
-export function composeSqliteApprovalGatewayRunner(
-  db: DbClient,
+/** RFC-359 W4-D6：一份装配，两个 provider 共用（绑定解析经中立 store 的 Promise 读）。 */
+export function composeApprovalGatewayRunnerFor(
+  db: ProviderNeutralDatabase,
   options: { readonly approvalMockUrl?: string } = {},
 ) {
-  const store = createSqliteDevelopmentAdapterStore(db)
-  return gateway({
-    resolveBinding: createDbAdapterBindingResolver((id, revision) =>
-      store.getRevision(id, revision),
-    ),
-    ...options,
-  })
-}
-
-export function composePostgresqlApprovalGatewayRunner(
-  db: PostgresqlDatabaseClient,
-  options: { readonly approvalMockUrl?: string } = {},
-) {
-  const store = createPostgresqlDevelopmentAdapterRevisionStore(db)
+  const store = createDevelopmentAdapterStore(db)
   return gateway({
     resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
@@ -113,3 +96,7 @@ export function composePostgresqlApprovalGatewayRunner(
     ...options,
   })
 }
+
+/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
+export const composeSqliteApprovalGatewayRunner = composeApprovalGatewayRunnerFor
+export const composePostgresqlApprovalGatewayRunner = composeApprovalGatewayRunnerFor

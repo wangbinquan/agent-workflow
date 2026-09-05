@@ -33,7 +33,7 @@ import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
 } from '../src/modules/integration/application/developmentAdapterCommands'
-import { createSqliteDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { createDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/developmentAdapterStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import { canonicalStringify } from '../src/modules/development-automation/domain/canonicalJson'
 import {
@@ -80,7 +80,7 @@ describe('rfc310 pr1b employee journey', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = () => Date.now()
     const templates = createSqliteActionTemplatePersistence(db)
-    const adapters = createSqliteDevelopmentAdapterStore(db)
+    const adapters = createDevelopmentAdapterStore(db)
 
     // 1) 三份 change.implement 模板（java/cpp/polyglot）各 publish 一版。
     const templateIds: Record<string, string> = {}
@@ -115,7 +115,7 @@ describe('rfc310 pr1b employee journey', () => {
     expect(policyReceipt.revision).toBe(1)
 
     // 3) requirement-source adapter publish（acquire + 问答成对）。
-    const adapter = createDevelopmentAdapter(
+    const adapter = await createDevelopmentAdapter(
       adapters,
       { userId: 'u-admin', actorHasScriptsAuthor: true },
       {
@@ -135,7 +135,7 @@ describe('rfc310 pr1b employee journey', () => {
         now: now(),
       },
     )
-    const adapterReceipt = publishDevelopmentAdapter(
+    const adapterReceipt = await publishDevelopmentAdapter(
       adapters,
       { userId: 'u-admin', actorHasScriptsAuthor: true },
       { id: adapter.id, now: now() },

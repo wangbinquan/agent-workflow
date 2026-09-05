@@ -132,7 +132,7 @@
       "id": "table-ownership-debt",
       "file": "packages/backend/tests/architecture/rfc317-table-ownership.test.ts",
       "symbol": "OWNERSHIP_DEBT",
-      "baseline": 17,
+      "baseline": 14,
       "why": "一张表被两个 bounded context 直查的存量。R5 的目标终值是 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {

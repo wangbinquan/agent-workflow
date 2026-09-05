@@ -107,10 +107,7 @@ export interface RepositoryCommitPublicationParticipant {
 // RFC-317 R2 当场入账。这里补齐 public 出口，把那 4 条边变回正常的 offered 消费。
 export { createRepositoryScopeAuthorizationInTx } from '../application/repositoryScopeAuthorization'
 export type { RepositoryScopeExistenceReads } from '../application/repositoryScopeAuthorization'
-export {
-  postgresqlRepositoryScopeExistenceReads,
-  repositoryScopeExistenceReads,
-} from '../infrastructure/repositoryScopeAuthorization'
+export { repositoryScopeExistenceReads } from '../infrastructure/repositoryScopeAuthorization'
 
 /** 一个仓库 scope 或仓库组 scope 的目标。 */
 export interface RepositoryScopeTarget {

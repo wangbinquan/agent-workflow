@@ -11,6 +11,7 @@ import type {
   ResourceCatalogAclReadPort,
   ResourceCatalogOwnedAclType,
 } from '../application/ports/providerResourceCatalogPersistence'
+import type { ResourceAclIdentityPersistence } from '../application/ports/resourceAclPersistence'
 import type { AclRow } from '../domain/resourceAccess'
 import { ACL_TABLES } from './aclRegistry'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
@@ -141,25 +142,41 @@ export async function listAclResourceIdentityRowsByNames(
     .where(inArray(table.name, [...names]))) as AclResourceIdentitySnapshot[]
 }
 
+/**
+ * RFC-359 W4-D6：非目录自有的类型由 owner 的 identity persistence 给 aclRevision，identity 行取调用方交来的
+ * fallback（路由已经加载并授权过的那一行）；目录自有类型直接读 ACL_TABLES。grants / users 两条路径同一份。
+ */
 export function createResourceAclReadPort(
   db: ProviderNeutralDatabase,
+  identityPersistence?: ResourceAclIdentityPersistence,
 ): ResourceCatalogAclReadPort<AclResourceType> {
   const port: ResourceCatalogAclReadPort<AclResourceType> = {
-    async readSnapshot(type, resourceId) {
-      const table = ownedAclTable(type)
+    async readSnapshot(type, resourceId, fallbackIdentity) {
+      if (identityPersistence !== undefined && identityPersistence.type !== type) {
+        throw new Error(
+          `ACL identity persistence type ${identityPersistence.type} cannot serve ${type}`,
+        )
+      }
+      const table = identityPersistence === undefined ? ownedAclTable(type) : null
       return runResourceCatalogTransaction(db, async (transaction) => {
-        const identity = (
-          await transaction
-            .select({
-              id: table.id,
-              ownerUserId: table.ownerUserId,
-              visibility: table.visibility,
-              aclRevision: table.aclRevision,
-            })
-            .from(table)
-            .where(eq(table.id, resourceId))
-            .limit(1)
-        )[0]
+        const identity =
+          table === null
+            ? {
+                ...fallbackIdentity,
+                aclRevision: await identityPersistence!.getRevision(resourceId),
+              }
+            : (
+                await transaction
+                  .select({
+                    id: table.id,
+                    ownerUserId: table.ownerUserId,
+                    visibility: table.visibility,
+                    aclRevision: table.aclRevision,
+                  })
+                  .from(table)
+                  .where(eq(table.id, resourceId))
+                  .limit(1)
+              )[0]
         if (identity === undefined) return null
         const grants = await transaction
           .select({ userId: resourceGrants.userId, level: resourceGrants.level })
@@ -169,7 +186,7 @@ export function createResourceAclReadPort(
           )
         const userIds = [
           ...new Set([
-            ...(identity.ownerUserId === null ? [] : [identity.ownerUserId]),
+            ...(typeof identity.ownerUserId === 'string' ? [identity.ownerUserId] : []),
             ...grants.map((grant) => grant.userId),
           ]),
         ]
@@ -189,8 +206,8 @@ export function createResourceAclReadPort(
         return {
           identity: {
             id: identity.id,
-            ownerUserId: identity.ownerUserId,
-            visibility: identity.visibility,
+            ownerUserId: identity.ownerUserId ?? null,
+            visibility: identity.visibility ?? 'public',
           },
           aclRevision: identity.aclRevision,
           grants,

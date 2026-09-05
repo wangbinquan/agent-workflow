@@ -52,9 +52,9 @@ import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
 } from '../../src/modules/integration/application/developmentAdapterCommands'
-import { createSqliteDevelopmentAdapterStore } from '../../src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { createDevelopmentAdapterStore } from '../../src/modules/integration/infrastructure/developmentAdapterStore'
 import {
-  createDbAdapterBindingResolver,
+  createAsyncDbAdapterBindingResolver,
   createRequirementSourceAdapter,
 } from '../../src/modules/integration/infrastructure/developmentRequirementSourceAdapter'
 
@@ -318,9 +318,9 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
   // 外部源：真实发布一个 requirement-source adapter（executableRef = mock CLI）。
   let adapterId: string | null = null
   let adapterRevision: number | null = null
-  const adapterStore = createSqliteDevelopmentAdapterStore(db)
+  const adapterStore = createDevelopmentAdapterStore(db)
   if (options.external !== undefined) {
-    const created = createDevelopmentAdapter(
+    const created = await createDevelopmentAdapter(
       adapterStore,
       { userId: 'admin', actorHasScriptsAuthor: true },
       {
@@ -350,7 +350,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
         },
       },
     )
-    const published = publishDevelopmentAdapter(
+    const published = await publishDevelopmentAdapter(
       adapterStore,
       { userId: 'admin', actorHasScriptsAuthor: true },
       { id: created.id, now: now() },
@@ -435,7 +435,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
     options.external === undefined
       ? undefined
       : createRequirementSourceAdapter({
-          resolveBinding: createDbAdapterBindingResolver((id, revision) =>
+          resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
             adapterStore.getRevision(id, revision),
           ),
           extraEnv: {

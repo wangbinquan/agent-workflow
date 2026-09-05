@@ -45,7 +45,7 @@ import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
 } from '../src/modules/integration/application/developmentAdapterCommands'
-import { createSqliteDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
+import { createDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/developmentAdapterStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import type { AdmissionLookup } from '../src/modules/development-automation/application/ports/admissionLookup'
 import {
@@ -101,7 +101,7 @@ async function buildFixture(): Promise<Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
   const templates = createSqliteActionTemplatePersistence(db)
-  const adapters = createSqliteDevelopmentAdapterStore(db)
+  const adapters = createDevelopmentAdapterStore(db)
 
   const template = await createActionTemplate(
     { store: templates, now },
@@ -139,8 +139,8 @@ async function buildFixture(): Promise<Fixture> {
   await publishAutomationPolicy(db, { id: policy.id, publishedBy: 'admin' })
 
   const adapterActor = { userId: 'admin', actorHasScriptsAuthor: true }
-  const mkAdapter = (name: string) => {
-    const a = createDevelopmentAdapter(adapters, adapterActor, {
+  const mkAdapter = async (name: string) => {
+    const a = await createDevelopmentAdapter(adapters, adapterActor, {
       name,
       content: {
         schemaVersion: 1,
@@ -156,11 +156,11 @@ async function buildFixture(): Promise<Fixture> {
       },
       now: now(),
     })
-    publishDevelopmentAdapter(adapters, adapterActor, { id: a.id, now: now() })
+    await publishDevelopmentAdapter(adapters, adapterActor, { id: a.id, now: now() })
     return a.id
   }
-  const adapterA = mkAdapter('sys-a')
-  const adapterB = mkAdapter('sys-b')
+  const adapterA = await mkAdapter('sys-a')
+  const adapterB = await mkAdapter('sys-b')
 
   const lookup = createEmployeePublishLookup(db)
   const mkEmployee = async (

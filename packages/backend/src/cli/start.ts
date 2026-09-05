@@ -271,7 +271,7 @@ import {
   composeDevelopmentConfigOperations,
   type DevelopmentConfigResourceAccess,
 } from '@/modules/development-automation/composition/configOperations'
-import { composeDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/developmentAdapterConfigOperations'
+import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
@@ -2337,7 +2337,6 @@ async function composeSqliteProviderSession(
     db,
     access: capabilityTemplateAccess,
   })
-  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperations(db)
   const developmentConfigAccess: DevelopmentConfigResourceAccess = {
     filterVisible(actor, type, rows) {
       return resourceCatalog.authorization.filterVisibleRows(actor, type, rows)
@@ -2353,6 +2352,12 @@ async function composeSqliteProviderSession(
     },
     assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
   }
+  // RFC-359 W4-D6：development-adapter 配置一份装配，两个 provider 共用。
+  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperationsFor({
+    db,
+    access: developmentConfigAccess,
+    grants: resourceCatalog.persistence.grants,
+  })
   const developmentConfigOperations = composeDevelopmentConfigOperations(
     db,
     developmentAdapterConfigOperations,
