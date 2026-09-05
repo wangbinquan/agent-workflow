@@ -722,14 +722,28 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   （confirm 恢复失败从 410 变 200），根因是「daemon 是否与 API 同进程」的部署形态差异。
   **做法建议**：逐对先出「形态勘察 + 覆盖对比 + 行为差异清单」，呈用户裁定后再动手；不要按文件数排优先级。
 
-  ### 乙类：同步宿主对——SQLite 侧的调用方仍跑在 `dbTxSync` 回调里
+  ### 乙类：同一判据的两种写法——端口已是异步，卡在**逐对的语义判断**上
 
-  典型：Intent 上下文授权（D20 已把异步那半合掉、同步那半留着）、
-  `TaskExecutionResourceSnapshots`（SQLite 走 `freezeTaskExecutionCallClosureSync`、PG 走 `...Async`）、
-  `HumanGateTaskLifecyclePersistence` / `RuntimeSessionLeaseOperations` / `SourceTerminationParticipant`
-  / `TaskExecutionRuntimeParticipants`（归一化 diff 43%–77%，同一判据的同步 / 异步两种写法）。
-  **这一类不需要产品决策，需要的是把宿主从 `dbTxSync` 迁到统一事务原语**——迁完之后合并是机械的。
-  建议单独立一波「同步宿主迁移」，一次迁一个宿主，迁一个合一批。
+  （初稿把这一类记成「同步宿主对」，逐对量过之后更正：`RuntimeSessionLeaseOperations`（9 个方法全
+  `Promise`）、`HumanGateTaskLifecyclePersistence`（3 个全 `Promise`）等的**端口契约本来就是全异步**，
+  SQLite 只是内部用 `dbTxSync` 实现——调用方能 await，所以它们和 D14–D18 一样**没有宿主阻塞**。）
+
+  真正卡住的是**逐对的语义判断**，各不相同，必须一对一看清再动：
+
+  - **事务隔离级别**：PG 侧的 `withPostgresqlSerializableTaskExecution`（SERIALIZABLE + 40001 重试）
+    与中立的 `withTaskExecutionWrite`（`databaseSessionFor(db).transaction`，PG 上是 READ COMMITTED）
+    不是同一条路。中立模块的注释论证过「owner 围栏本身是 owner 行上的条件 UPDATE，行锁已把同一任务的
+    写手串起来」，但**每一对都要单独确认它没有跨行不变量**才能降级；`RuntimeSessionLeaseOperations`
+    的合一就卡在这一条上。
+  - **同步 / 异步的闭包冻结**：`TaskExecutionResourceSnapshots` 的 SQLite 侧走
+    `freezeTaskExecutionCallClosureSync`、PG 侧走 `...Async`，application 层同时留着两份冻结器；
+    合一要先确认异步那份能覆盖同步那份的所有调用点。
+  - **真同步宿主**：只有 Intent 上下文授权那半是货真价实的——Intent 宿主在 SQLite 上确实跑在
+    `dbTxSync` 回调里（D20 已把异步半合掉、同步半按债保留）。
+
+  **共同的机会**：`assertPostgresqlTaskOwnerTx` 与中立的 `assertTaskOwnerTx` 又是一对**逐字重复**
+  （D19a 已经这样去重掉 `assertPostgresqlTaskOwnerlessTx`），四个消费方改指中立模块即可，
+  这一条不需要任何语义判断，可以随下一刀顺手清掉。
 
 ## 5. W5 —— 防复辟
 
