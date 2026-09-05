@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5225,
-    "backgroundJobs": 367,
-    "crossContextImports": 6018,
-    "facades": 326,
+    "architectureExceptions": 5202,
+    "backgroundJobs": 365,
+    "crossContextImports": 5977,
+    "facades": 325,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25895,
-    "mutationEntrypoints": 1892,
+    "moduleSymbolOwners": 25839,
+    "mutationEntrypoints": 1878,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 985,
-    "transactionExternalEffects": 414
+    "publicSurfaces": 984,
+    "transactionExternalEffects": 408
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1891,
+    "backendProductionFiles": 1888,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 367,
+    "backgroundEntries": 365,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -50,7 +50,7 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 287,
+    "inboundBoundaryEdges": 286,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -95,7 +95,7 @@
       },
       {
         "context": "memory",
-        "files": 35
+        "files": 33
       },
       {
         "context": "resource-catalog",
@@ -122,7 +122,7 @@
         "files": 327
       }
     ],
-    "moduleFiles": 1275,
+    "moduleFiles": 1273,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -163,10 +163,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 326,
+    "serviceFiles": 325,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b"
+  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad"
 }

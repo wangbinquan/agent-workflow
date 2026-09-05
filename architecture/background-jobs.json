@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3042",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3044",
       "kind": "register-call",
-      "line": 3042,
+      "line": 3044,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1309",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1308",
       "kind": "register-call",
-      "line": 1309,
+      "line": 1308,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2836",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2838",
       "kind": "register-call",
-      "line": 2836,
+      "line": 2838,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3102",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3104",
       "kind": "register-call",
-      "line": 3102,
+      "line": 3104,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createComposedApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createComposedApp",
@@ -5454,8 +5454,8 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 367,
-    "executionLocal": 53,
+    "entries": 365,
+    "executionLocal": 51,
     "longRunning": 83,
     "managed": 11,
     "periodic": 220
@@ -7328,33 +7328,12 @@
       "targetContext": "memory"
     },
     {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#BaseMemoryDistillRuntimeResolver",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#BaseMemoryDistillRuntimeResolver",
-      "phase": "execution",
-      "symbol": "BaseMemoryDistillRuntimeResolver",
-      "targetContext": "memory"
-    },
-    {
       "dependencies": [
         "db"
       ],
       "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts",
       "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#PostgresqlMemoryDistillRuntimeResolver",
+      "id": "background:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#DrizzleMemoryDistillRuntimeResolver",
       "kind": "execution-local",
       "lifecycle": {
         "health": false,
@@ -7366,32 +7345,9 @@
       },
       "lifetime": "execution-local",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#PostgresqlMemoryDistillRuntimeResolver",
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#DrizzleMemoryDistillRuntimeResolver",
       "phase": "execution",
-      "symbol": "PostgresqlMemoryDistillRuntimeResolver",
-      "targetContext": "memory"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#SqliteMemoryDistillRuntimeResolver",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#SqliteMemoryDistillRuntimeResolver",
-      "phase": "execution",
-      "symbol": "SqliteMemoryDistillRuntimeResolver",
+      "symbol": "DrizzleMemoryDistillRuntimeResolver",
       "targetContext": "memory"
     },
     {
@@ -13562,5 +13518,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b"
+  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad"
 }

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 888,
+    "consumers": 872,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1055,
+    "methods": 1054,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20491,
-    "symbols": 985
+    "recursiveFields": 20486,
+    "symbols": 984
   },
   "entries": [
     {
@@ -46607,8 +46607,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:13c6940edabaea2cae63",
-        "import:4072dc67116310cf043b"
+        "import:6a1fbc4f44b492c8c51c"
       ],
       "context": "identity-access",
       "dataClass": "metadata",
@@ -46642,8 +46641,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:13c6940edabaea2cae63",
-            "import:4072dc67116310cf043b"
+            "import:6a1fbc4f44b492c8c51c"
           ],
           "fieldPath": "userId",
           "type": "string"
@@ -46660,15 +46658,9 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:13c6940edabaea2cae63",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:4072dc67116310cf043b",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+          "edgeId": "import:6a1fbc4f44b492c8c51c",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -46770,7 +46762,6 @@
         "import:a4243b48d259b4c1978a",
         "import:a750ab47e77a5a32d43d",
         "import:b5ec18523b1b018fbbee",
-        "import:bbf9305518394fbfc948",
         "import:c2bd0d5c8b04d27f37c8",
         "import:f007f990567d35e591b4"
       ],
@@ -46780,23 +46771,18 @@
       "entrypoint": "participants",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:bbf9305518394fbfc948"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "causationId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:bbf9305518394fbfc948"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "correlationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
             "import:967d7b9ae971e1fb5af9",
-            "import:bbf9305518394fbfc948",
             "import:c2bd0d5c8b04d27f37c8"
           ],
           "fieldPath": "now",
@@ -46805,8 +46791,7 @@
         {
           "consumerEdgeIds": [
             "import:66a41196cbedf3bacae5",
-            "import:8d9be4e554758ee06853",
-            "import:bbf9305518394fbfc948"
+            "import:8d9be4e554758ee06853"
           ],
           "fieldPath": "operationId",
           "type": "string"
@@ -46883,12 +46868,6 @@
           "edgeId": "import:b5ec18523b1b018fbbee",
           "file": "packages/backend/src/modules/memory/public/catalog.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/memory/public/catalog.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:bbf9305518394fbfc948",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
         },
         {
           "context": "legacy",
@@ -49437,9 +49416,7 @@
       "consumerEdgeIds": [
         "import:2efc316031038dd306b9",
         "import:3b722697b01747cc40a3",
-        "import:454df842c991965e6bc4",
-        "import:4925523973d9ab89fad8",
-        "import:64079266a02c58727cda",
+        "import:6c640c8afd346daec52b",
         "import:84ffa5b55da99d88632e",
         "import:b561ebaf191d28fd47f2",
         "import:be1820f1c53226b61281",
@@ -49473,16 +49450,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:fromAuthority.$return.causationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:fromAuthority.$return.correlationId",
           "type": "string"
@@ -49490,16 +49465,14 @@
         {
           "consumerEdgeIds": [
             "import:2efc316031038dd306b9",
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:fromAuthority.$return.now",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda",
+            "import:6c640c8afd346daec52b",
             "import:b561ebaf191d28fd47f2"
           ],
           "fieldPath": "$method:fromAuthority.$return.operationId",
@@ -49527,16 +49500,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:fromAuthorityWithIdempotency.$return.causationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:fromAuthorityWithIdempotency.$return.correlationId",
           "type": "string"
@@ -49549,16 +49520,14 @@
         {
           "consumerEdgeIds": [
             "import:2efc316031038dd306b9",
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:fromAuthorityWithIdempotency.$return.now",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda",
+            "import:6c640c8afd346daec52b",
             "import:b561ebaf191d28fd47f2"
           ],
           "fieldPath": "$method:fromAuthorityWithIdempotency.$return.operationId",
@@ -49566,16 +49535,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:resolveCommandContext.$parameter:context.causationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:resolveCommandContext.$parameter:context.correlationId",
           "type": "string"
@@ -49583,16 +49550,14 @@
         {
           "consumerEdgeIds": [
             "import:2efc316031038dd306b9",
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:resolveCommandContext.$parameter:context.now",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda",
+            "import:6c640c8afd346daec52b",
             "import:b561ebaf191d28fd47f2"
           ],
           "fieldPath": "$method:resolveCommandContext.$parameter:context.operationId",
@@ -49627,8 +49592,7 @@
           "consumerEdgeIds": [
             "import:2efc316031038dd306b9",
             "import:3b722697b01747cc40a3",
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "fieldPath": "$method:resolveCommandContext.$return.userId",
           "type": "string"
@@ -49661,8 +49625,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:454df842c991965e6bc4",
-            "import:64079266a02c58727cda"
+            "import:6c640c8afd346daec52b"
           ],
           "name": "resolveCommandContext",
           "signatureDigest": "sha256:f2d38eb7fcee0d4aba08575fb8d869c2691479cc354d6c71daf4e9b7ae97be97"
@@ -49684,21 +49647,9 @@
         },
         {
           "context": "memory",
-          "edgeId": "import:454df842c991965e6bc4",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:4925523973d9ab89fad8",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:64079266a02c58727cda",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+          "edgeId": "import:6c640c8afd346daec52b",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         },
         {
           "context": "legacy",
@@ -50816,8 +50767,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:86cd5c030c2455d92866",
-        "import:d566baf624d851c68909"
+        "import:235490439d547e813192"
       ],
       "context": "identity-access",
       "dataClass": "metadata",
@@ -50858,15 +50808,9 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:86cd5c030c2455d92866",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:d566baf624d851c68909",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+          "edgeId": "import:235490439d547e813192",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -51047,8 +50991,7 @@
       },
       "consumerEdgeIds": [
         "import:1b2384502fc5997ff0a1",
-        "import:2c85fa92ca39a21c59ed",
-        "import:403d302e94f4420ed7cb",
+        "import:2349fc62277071dcf4a7",
         "import:5cb81a2768a79730ff00",
         "import:ae9218baef05fc626909",
         "import:de5c415b39b10df6f013",
@@ -51074,16 +51017,10 @@
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file"
         },
         {
-          "context": "memory",
-          "edgeId": "import:2c85fa92ca39a21c59ed",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
-          "edgeId": "import:403d302e94f4420ed7cb",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourceScopeAuthorization.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourceScopeAuthorization.ts#$file"
+          "context": "legacy",
+          "edgeId": "import:2349fc62277071dcf4a7",
+          "file": "packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts#$file"
         },
         {
           "context": "memory",
@@ -51141,7 +51078,6 @@
         "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
         "public:resource-catalog:participants:ResourceRequestContext",
-        "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
         "public:resource-catalog:queries:ResourceCatalogOverviewQuery",
         "public:resource-catalog:queries:ResourceCatalogQuery",
@@ -103054,7 +102990,6 @@
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
         "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
         "public:resource-catalog:queries:ResourceCatalogOverviewQuery",
         "public:task-execution:commands:TaskExecutionResourceAuthority"
@@ -103066,92 +103001,6 @@
       "symbol": "ResourceRequestContext",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:bcff019cf32ed2647d36"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [
-            "import:bcff019cf32ed2647d36"
-          ],
-          "fieldPath": "$method:accessOf.$parameter:scope.$variant:0.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:bcff019cf32ed2647d36"
-          ],
-          "fieldPath": "$method:accessOf.$parameter:scope.$variant:0.kind",
-          "type": "'agent'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:bcff019cf32ed2647d36"
-          ],
-          "fieldPath": "$method:accessOf.$parameter:scope.$variant:1.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:bcff019cf32ed2647d36"
-          ],
-          "fieldPath": "$method:accessOf.$parameter:scope.$variant:1.kind",
-          "type": "'workflow'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:accessOf.$return",
-          "type": "z.infer<typeof ResourceAccessSchema>"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
-      "members": [
-        "[resourceScopeAuthorizationInTxBrand]",
-        "accessOf"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:bcff019cf32ed2647d36"
-          ],
-          "name": "accessOf",
-          "signatureDigest": "sha256:77f523cb57ad79968979539b373d42020ef65e0624c1e5e190533c2478e4395d"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceScopeAuthorizationInTx",
-      "productionConsumers": [
-        {
-          "context": "memory",
-          "edgeId": "import:bcff019cf32ed2647d36",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:5c817b8a5750c1b91f431e34164eecb93dde94fa8aad340e55c783485f39de82",
-      "status": "target-context-current-surface",
-      "symbol": "ResourceScopeAuthorizationInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "z.infer"
-      ],
       "version": 1
     },
     {
@@ -113451,9 +113300,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:154ce719aa99e6033abd",
+        "import:64c35eff52b63f44a2e5",
         "import:7b27e5d280ef1a61330d",
-        "import:c83208e594e80466e61f",
         "import:fec25ffb4b33b15c7e87"
       ],
       "context": "resource-catalog",
@@ -113468,9 +113316,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:154ce719aa99e6033abd",
+            "import:64c35eff52b63f44a2e5",
             "import:7b27e5d280ef1a61330d",
-            "import:c83208e594e80466e61f",
             "import:fec25ffb4b33b15c7e87"
           ],
           "fieldPath": "$call.$parameter:actor.user.id",
@@ -113496,21 +113343,15 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:154ce719aa99e6033abd",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+          "edgeId": "import:64c35eff52b63f44a2e5",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         },
         {
           "context": "legacy",
           "edgeId": "import:7b27e5d280ef1a61330d",
           "file": "packages/backend/src/routes/memories.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:c83208e594e80466e61f",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
         },
         {
           "context": "knowledge-evolution",
@@ -116103,9 +115944,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:45707fe38ad8700998b8",
-        "import:6185b393c293ef29720f",
-        "import:9dbf2c161afff52e7877"
+        "import:9dbf2c161afff52e7877",
+        "import:da093e9b2ebc13d23409"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -116114,32 +115954,28 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:45707fe38ad8700998b8",
-            "import:6185b393c293ef29720f"
+            "import:da093e9b2ebc13d23409"
           ],
           "fieldPath": "$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:45707fe38ad8700998b8",
-            "import:6185b393c293ef29720f"
+            "import:da093e9b2ebc13d23409"
           ],
           "fieldPath": "$variant:0.kind",
           "type": "'agent'"
         },
         {
           "consumerEdgeIds": [
-            "import:45707fe38ad8700998b8",
-            "import:6185b393c293ef29720f"
+            "import:da093e9b2ebc13d23409"
           ],
           "fieldPath": "$variant:1.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:45707fe38ad8700998b8",
-            "import:6185b393c293ef29720f"
+            "import:da093e9b2ebc13d23409"
           ],
           "fieldPath": "$variant:1.kind",
           "type": "'workflow'"
@@ -116153,26 +115989,18 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:45707fe38ad8700998b8",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:6185b393c293ef29720f",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
-        },
-        {
-          "context": "memory",
           "edgeId": "import:9dbf2c161afff52e7877",
           "file": "packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts#$file"
+        },
+        {
+          "context": "memory",
+          "edgeId": "import:da093e9b2ebc13d23409",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourceScopeAuthorizationInTx"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:9055988308d5321aae668609c16bafda5ec01fc70a42556d0309e715f2745c4d",
@@ -116417,7 +116245,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:b6b4ed71e7365aa4d83b",
         "import:f0be57ad45ef7bd37a65"
       ],
       "context": "resource-catalog",
@@ -116439,20 +116266,12 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:b6b4ed71e7365aa4d83b",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
-        },
-        {
-          "context": "memory",
           "edgeId": "import:f0be57ad45ef7bd37a65",
           "file": "packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:ResourceScopeAuthorizationInTx"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:8554e0329e34db07a3fa0bef101269e80fa1102cdc96fa3e385f7640ffa42409",
@@ -125506,8 +125325,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:105f7f16cf975a6cdbbf",
-        "import:2f8013f06fb7a7d85380"
+        "import:f4556aa76507539512d6"
       ],
       "context": "source-control",
       "dataClass": "confidential",
@@ -125516,8 +125334,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:105f7f16cf975a6cdbbf",
-            "import:2f8013f06fb7a7d85380"
+            "import:f4556aa76507539512d6"
           ],
           "fieldPath": "$call.$parameter:reads.$method:exists.$parameter:target.id",
           "type": "string"
@@ -125549,15 +125366,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2f8013f06fb7a7d85380"
+            "import:f4556aa76507539512d6"
           ],
           "fieldPath": "$call.$return.$method:canManage.$parameter:subject.hasResourceAclBypass",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [
-            "import:105f7f16cf975a6cdbbf",
-            "import:2f8013f06fb7a7d85380"
+            "import:f4556aa76507539512d6"
           ],
           "fieldPath": "$call.$return.$method:canManage.$parameter:target.id",
           "type": "string"
@@ -125589,8 +125405,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:105f7f16cf975a6cdbbf",
-            "import:2f8013f06fb7a7d85380"
+            "import:f4556aa76507539512d6"
           ],
           "fieldPath": "$call.$return.$method:exists.$parameter:target.id",
           "type": "string"
@@ -125632,15 +125447,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:105f7f16cf975a6cdbbf",
-            "import:2f8013f06fb7a7d85380"
+            "import:f4556aa76507539512d6"
           ],
           "name": "canManage",
           "signatureDigest": "sha256:e43b01ac88e81f71a9f4feeac6abc32e833cef524da3ef654e946a0deac07ee4"
         },
         {
           "consumerEdgeIds": [
-            "import:2f8013f06fb7a7d85380"
+            "import:f4556aa76507539512d6"
           ],
           "name": "exists",
           "signatureDigest": "sha256:2614e819b86f2ecf5c76767443fa1c0d1dbb7f35adf63fd726576363388fd306"
@@ -125650,15 +125464,9 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:105f7f16cf975a6cdbbf",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:2f8013f06fb7a7d85380",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
+          "edgeId": "import:f4556aa76507539512d6",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -125679,9 +125487,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:30b9f97c9cc45ce6d3ed"
-      ],
+      "consumerEdgeIds": [],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -125692,14 +125498,7 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "memory",
-          "edgeId": "import:30b9f97c9cc45ce6d3ed",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -126446,10 +126245,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:1928db22c1ea2a2432db",
-        "import:43e51dd3222ecd92b371",
-        "import:83dccf34a3aff9c504e4",
-        "import:c17655333c60c03f0d28"
+        "import:dd53fab62cccf27588f6"
       ],
       "context": "source-control",
       "dataClass": "confidential",
@@ -126458,17 +126254,14 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:83dccf34a3aff9c504e4",
-            "import:c17655333c60c03f0d28"
+            "import:dd53fab62cccf27588f6"
           ],
           "fieldPath": "$method:canManage.$parameter:subject.hasResourceAclBypass",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [
-            "import:43e51dd3222ecd92b371",
-            "import:83dccf34a3aff9c504e4",
-            "import:c17655333c60c03f0d28"
+            "import:dd53fab62cccf27588f6"
           ],
           "fieldPath": "$method:canManage.$parameter:target.id",
           "type": "string"
@@ -126500,9 +126293,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:43e51dd3222ecd92b371",
-            "import:83dccf34a3aff9c504e4",
-            "import:c17655333c60c03f0d28"
+            "import:dd53fab62cccf27588f6"
           ],
           "fieldPath": "$method:exists.$parameter:target.id",
           "type": "string"
@@ -126543,17 +126334,14 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:43e51dd3222ecd92b371",
-            "import:83dccf34a3aff9c504e4",
-            "import:c17655333c60c03f0d28"
+            "import:dd53fab62cccf27588f6"
           ],
           "name": "canManage",
           "signatureDigest": "sha256:e43b01ac88e81f71a9f4feeac6abc32e833cef524da3ef654e946a0deac07ee4"
         },
         {
           "consumerEdgeIds": [
-            "import:83dccf34a3aff9c504e4",
-            "import:c17655333c60c03f0d28"
+            "import:dd53fab62cccf27588f6"
           ],
           "name": "exists",
           "signatureDigest": "sha256:2614e819b86f2ecf5c76767443fa1c0d1dbb7f35adf63fd726576363388fd306"
@@ -126563,27 +126351,9 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:1928db22c1ea2a2432db",
-          "file": "packages/backend/src/modules/memory/composition.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:43e51dd3222ecd92b371",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:83dccf34a3aff9c504e4",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:c17655333c60c03f0d28",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
+          "edgeId": "import:dd53fab62cccf27588f6",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -126594,6 +126364,45 @@
       "signatureDigest": "sha256:69553c3cbb4d584b87cd00c1ddb7bcffb97651d369df00717bdfd125cfaa4202",
       "status": "target-context-current-surface",
       "symbol": "RepositoryScopeAuthorizationInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:db1400a72b95f550593b"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:repositoryScopeExistenceReads",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "memory",
+          "edgeId": "import:db1400a72b95f550593b",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:bf69aa8adae3aca66ebc4bad910f7538ddd95a8a5bdbaee9976d7543d52622c8",
+      "status": "target-context-current-surface",
+      "symbol": "repositoryScopeExistenceReads",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -126762,8 +126571,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:76cd9fb3f4a274bcd1ea",
-        "import:b950969040b7124bfc49"
+        "import:3d24225fa7a47acb403b"
       ],
       "context": "source-control",
       "dataClass": "confidential",
@@ -126772,8 +126580,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:76cd9fb3f4a274bcd1ea",
-            "import:b950969040b7124bfc49"
+            "import:3d24225fa7a47acb403b"
           ],
           "fieldPath": "id",
           "type": "string"
@@ -126800,15 +126607,9 @@
       "productionConsumers": [
         {
           "context": "memory",
-          "edgeId": "import:76cd9fb3f4a274bcd1ea",
-          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:b950969040b7124bfc49",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+          "edgeId": "import:3d24225fa7a47acb403b",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -126934,45 +126735,6 @@
       "unresolvedTypeRefs": [
         "z.infer"
       ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:53bd97d32063d6d121db"
-      ],
-      "context": "source-control",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/source-control/public/participants.ts",
-      "id": "public:source-control:participants:sqliteRepositoryScopeExistenceReads",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "memory",
-          "edgeId": "import:53bd97d32063d6d121db",
-          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:5f71413e152d2326f579d451cc865245e54462627a06aaf4e1088e51d205617c",
-      "status": "target-context-current-surface",
-      "symbol": "sqliteRepositoryScopeExistenceReads",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -162516,7 +162278,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b",
+  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad",
   "targetContexts": [
     "collaboration",
     "development-automation",

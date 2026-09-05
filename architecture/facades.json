@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 326,
-    "thinFacades": 75
+    "serviceFiles": 325,
+    "thinFacades": 74
   },
   "entries": [
     {
@@ -2649,19 +2649,6 @@
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "inbound"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:f96f7f0fa899e75bef0b"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/memory.ts",
-      "id": "facade:packages/backend/src/services/memory.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "thin-facade",
-      "targetContext": "memory",
-      "targetLayer": "application"
     },
     {
       "boundaryEdgeIds": [
@@ -6867,5 +6854,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b"
+  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad"
 }

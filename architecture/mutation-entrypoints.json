@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1892,
+    "entries": 1878,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -15882,6 +15882,30 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#publish",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#publish",
+      "symbol": "publish",
+      "targetContext": "memory",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -15924,284 +15948,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createMemoryDistillSessionCapture",
       "symbol": "createMemoryDistillSessionCapture",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#publish",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#publish",
-      "symbol": "publish",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#archiveMemory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#archiveMemory",
-      "symbol": "archiveMemory",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#createManualCandidate",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#createManualCandidate",
-      "symbol": "createManualCandidate",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#deleteMemory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#deleteMemory",
-      "symbol": "deleteMemory",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#moveMemory",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#moveMemory",
-      "symbol": "moveMemory",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#MoveMemoryResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#MoveMemoryResult",
-      "symbol": "MoveMemoryResult",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#patchMemory",
-      "missingControls": [
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#patchMemory",
-      "symbol": "patchMemory",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#PatchMemoryResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#PatchMemoryResult",
-      "symbol": "PatchMemoryResult",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#promoteCandidate",
-      "missingControls": [
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#promoteCandidate",
-      "symbol": "promoteCandidate",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#publish",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#publish",
-      "symbol": "publish",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#transitionStatus",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#transitionStatus",
-      "symbol": "transitionStatus",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#unarchiveMemory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#unarchiveMemory",
-      "symbol": "unarchiveMemory",
       "targetContext": "memory",
       "targetLayer": "infrastructure"
     },
@@ -16651,20 +16397,19 @@
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": false
+        "transaction": true
       },
       "file": "packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts#createResourceScopeAuthorization",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts#createResourceScopeAccessParticipant",
       "missingControls": [
         "audit",
         "authority",
         "event",
-        "fenceOrOcc",
-        "transaction"
+        "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts#createResourceScopeAuthorization",
-      "symbol": "createResourceScopeAuthorization",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts#createResourceScopeAccessParticipant",
+      "symbol": "createResourceScopeAccessParticipant",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -18806,30 +18551,6 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#createResourceScopeAuthorizationInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#createResourceScopeAuthorizationInTx",
-      "symbol": "createResourceScopeAuthorizationInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#updateResourceAcl",
       "missingControls": [
         "audit",
@@ -19671,29 +19392,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts#createPostgresqlResourcePackageMutationSessionFactory",
       "symbol": "createPostgresqlResourcePackageMutationSessionFactory",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourceScopeAuthorization.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourceScopeAuthorization.ts#createPostgresqlResourceScopeAccessParticipant",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourceScopeAuthorization.ts#createPostgresqlResourceScopeAccessParticipant",
-      "symbol": "createPostgresqlResourceScopeAccessParticipant",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -22627,29 +22325,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#createSqliteResourceCatalogAclIdentityReadPort",
       "symbol": "createSqliteResourceCatalogAclIdentityReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#createSqliteResourceCatalogAclSnapshotReadPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#createSqliteResourceCatalogAclSnapshotReadPort",
-      "symbol": "createSqliteResourceCatalogAclSnapshotReadPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -45105,7 +44780,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b",
+  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

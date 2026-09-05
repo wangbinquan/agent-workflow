@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1892,
+      "baseline": 1878,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -405,14 +405,14 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 414,
+      "baseline": 408,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 367,
+      "baseline": 365,
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -426,11 +426,8 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6018,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D3：ACL 内核合一后跨 context 例外改指中立文件"
-      }
+      "baseline": 5977,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -450,24 +447,21 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5225,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D3：ACL 内核合一后跨 context 例外改指中立文件"
-      }
+      "baseline": 5202,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 326,
+      "baseline": 325,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 985,
+      "baseline": 984,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -488,15 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25895,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D3：ACL 内核合一后跨 context 例外改指中立文件"
-      }
+      "baseline": 25839,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b",
+    "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -509,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bf3808254c356aac5f72858b5cb40f9e4a988d2c",
-    "contentDigest": "sha256:7fc6084bedd1f1ab4f743fb11980c797278c13c40aa0ceb7c396fed826d007cf",
+    "currentSnapshotSha": "7e473fddaae2ecba7ee6d70f1ff69dcb23fae9e3",
+    "contentDigest": "sha256:f3f2dd80aaf5e6d6bfe6a05feafe5387c7cc115df76ae27b88fb65cb8c30cb49",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

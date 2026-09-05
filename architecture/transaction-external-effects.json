@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 46,
-    "transactionCallbacks": 414
+    "coLocatedCandidates": 44,
+    "transactionCallbacks": 408
   },
   "entries": [
     {
@@ -2805,49 +2805,49 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#transaction:325",
-      "line": 325,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#composePostgresqlMemoryCatalogOperations",
+      "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:351",
+      "line": 351,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#composeMemoryCatalogOperations",
       "status": "clear",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
+      "symbol": "composeMemoryCatalogOperations",
       "targetContext": "memory",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#transaction:502",
-      "line": 502,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#composePostgresqlMemoryCatalogOperations",
+      "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:545",
+      "line": 545,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#composeMemoryCatalogOperations",
       "status": "clear",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
+      "symbol": "composeMemoryCatalogOperations",
       "targetContext": "memory",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#transaction:530",
-      "line": 530,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#composePostgresqlMemoryCatalogOperations",
+      "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:573",
+      "line": 573,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#composeMemoryCatalogOperations",
       "status": "clear",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
+      "symbol": "composeMemoryCatalogOperations",
       "targetContext": "memory",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#transaction:616",
-      "line": 616,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#composePostgresqlMemoryCatalogOperations",
+      "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:659",
+      "line": 659,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#composeMemoryCatalogOperations",
       "status": "clear",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
+      "symbol": "composeMemoryCatalogOperations",
       "targetContext": "memory",
       "transactionCallee": "transaction"
     },
@@ -2855,104 +2855,27 @@
       "effectTokens": [
         "push"
       ],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#transaction:714",
-      "line": 714,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#composePostgresqlMemoryCatalogOperations",
+      "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:760",
+      "line": 760,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#composeMemoryCatalogOperations",
       "status": "co-located-risk",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
+      "symbol": "composeMemoryCatalogOperations",
       "targetContext": "memory",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#transaction:767",
-      "line": 767,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#composePostgresqlMemoryCatalogOperations",
+      "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:825",
+      "line": 825,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#composeMemoryCatalogOperations",
       "status": "clear",
-      "symbol": "composePostgresqlMemoryCatalogOperations",
+      "symbol": "composeMemoryCatalogOperations",
       "targetContext": "memory",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#dbTxSync:1216",
-      "line": 1216,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#readScopeAuthorizationFacts",
-      "status": "clear",
-      "symbol": "readScopeAuthorizationFacts",
-      "targetContext": "memory",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#dbTxSync:1231",
-      "line": 1231,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#filterMemoriesByScopeVisibility",
-      "status": "clear",
-      "symbol": "filterMemoriesByScopeVisibility",
-      "targetContext": "memory",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#dbTxSync:1263",
-      "line": 1263,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#annotateMemoryManageRights",
-      "status": "clear",
-      "symbol": "annotateMemoryManageRights",
-      "targetContext": "memory",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "publish"
-      ],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#dbTxSync:453",
-      "line": 453,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#promoteCandidate",
-      "status": "co-located-risk",
-      "symbol": "promoteCandidate",
-      "targetContext": "memory",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "publish",
-        "push"
-      ],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#dbTxSync:607",
-      "line": 607,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#patchMemory",
-      "status": "co-located-risk",
-      "symbol": "patchMemory",
-      "targetContext": "memory",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#dbTxSync:758",
-      "line": 758,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#moveMemory",
-      "status": "clear",
-      "symbol": "moveMemory",
-      "targetContext": "memory",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
@@ -5078,7 +5001,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b490035c09a209adb72b73bd4fa289c5da7539d07f68c63934901baa6a9157b",
+  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
