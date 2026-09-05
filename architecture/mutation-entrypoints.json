@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1957,
+    "entries": 1955,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30386,6 +30386,29 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts#createFrameBackfillStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts#createFrameBackfillStore",
+      "symbol": "createFrameBackfillStore",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -30935,29 +30958,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#ResumeTask",
       "symbol": "ResumeTask",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#createPostgresqlFrameBackfillStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#createPostgresqlFrameBackfillStore",
-      "symbol": "createPostgresqlFrameBackfillStore",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -31742,31 +31742,6 @@
     },
     {
       "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts#createPostgresqlTaskOverviewQuery",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts#createPostgresqlTaskOverviewQuery",
-      "symbol": "createPostgresqlTaskOverviewQuery",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": true,
         "authority": "system",
         "authorization": true,
@@ -32458,29 +32433,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#createSqliteFrameBackfillStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#createSqliteFrameBackfillStore",
-      "symbol": "createSqliteFrameBackfillStore",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": false,
@@ -32958,31 +32910,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts#createSqliteTaskLifecycleWsProjector",
       "symbol": "createSqliteTaskLifecycleWsProjector",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts#createSqliteTaskOverviewQuery",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts#createSqliteTaskOverviewQuery",
-      "symbol": "createSqliteTaskOverviewQuery",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -33546,6 +33473,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#createSqliteTaskListPage",
       "symbol": "createSqliteTaskListPage",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createTaskOverviewQuery",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createTaskOverviewQuery",
+      "symbol": "createTaskOverviewQuery",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46646,7 +46598,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589",
+  "sourceDigest": "sha256:97ea34bf19d7c3184dd538e2c9e44eeec2120e6c57841ba12659532f7d6222c5",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46756,7 +46708,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 283,
+      "durableWriterSites": 282,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -47531,6 +47483,22 @@
       },
       {
         "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "recovery-proof",
+        "consumer": "applyRunFrames",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts#58:nodeRuns",
+        "line": 58,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts#createFrameBackfillStore",
+        "requiredBrandedProof": "ExclusiveDaemonLockProof(boot-before-scheduler)",
+        "revisionPredicate": "boot-once-maintenance-marker-and-unset-frame-only",
+        "symbol": "createFrameBackfillStore"
+      },
+      {
+        "allowedTables": [
           "tasks"
         ],
         "authorityKind": "worker-epoch",
@@ -47720,22 +47688,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "cancelCascade"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "recovery-proof",
-        "consumer": "applyRunFrames",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#58:nodeRuns",
-        "line": 58,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#createPostgresqlFrameBackfillStore",
-        "requiredBrandedProof": "ExclusiveDaemonLockProof(boot-before-scheduler)",
-        "revisionPredicate": "boot-once-maintenance-marker-and-unset-frame-only",
-        "symbol": "createPostgresqlFrameBackfillStore"
       },
       {
         "allowedTables": [
@@ -48002,8 +47954,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#345:tasks",
-        "line": 345,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#347:tasks",
+        "line": 347,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#recordPreparationFailure",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -48018,8 +47970,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#384:tasks",
-        "line": 384,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#386:tasks",
+        "line": 386,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#recordPreparationFailure",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -48034,8 +47986,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#453:tasks",
-        "line": 453,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#455:tasks",
+        "line": 455,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#commitPreparedWorkspace",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -49042,8 +48994,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1427:tasks",
-        "line": 1427,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1429:tasks",
+        "line": 1429,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -49058,8 +49010,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1556:tasks",
-        "line": 1556,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1559:tasks",
+        "line": 1559,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -49074,8 +49026,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1904:tasks",
-        "line": 1904,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1907:tasks",
+        "line": 1907,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -49288,22 +49240,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "PostgresqlWrapperRunPersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "recovery-proof",
-        "consumer": "applyRunFrames",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#57:nodeRuns",
-        "line": 57,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#createSqliteFrameBackfillStore",
-        "requiredBrandedProof": "ExclusiveDaemonLockProof(boot-before-scheduler)",
-        "revisionPredicate": "boot-once-maintenance-marker-and-unset-frame-only",
-        "symbol": "createSqliteFrameBackfillStore"
       },
       {
         "allowedTables": [
@@ -51170,8 +51106,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3479:tasks",
-        "line": 3479,
+        "id": "task-authority:packages/backend/src/services/task.ts#3480:tasks",
+        "line": 3480,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -51186,8 +51122,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3604:taskExecutionIntents",
-        "line": 3604,
+        "id": "task-authority:packages/backend/src/services/task.ts#3605:taskExecutionIntents",
+        "line": 3605,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -51202,8 +51138,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3661:tasks",
-        "line": 3661,
+        "id": "task-authority:packages/backend/src/services/task.ts#3662:tasks",
+        "line": 3662,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -51218,8 +51154,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4290:tasks",
-        "line": 4290,
+        "id": "task-authority:packages/backend/src/services/task.ts#4291:tasks",
+        "line": 4291,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -51234,8 +51170,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5916:tasks",
-        "line": 5916,
+        "id": "task-authority:packages/backend/src/services/task.ts#5921:tasks",
+        "line": 5921,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

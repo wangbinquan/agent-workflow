@@ -163609,16 +163609,10 @@
           "symbol": "$file"
         },
         {
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts#createSqliteTaskOverviewQuery",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createTaskOverviewQuery",
           "sourceToken": "eq(tasks.catalogVisibility, 'public')",
-          "symbol": "createSqliteTaskOverviewQuery"
-        },
-        {
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts#createPostgresqlTaskOverviewQuery",
-          "sourceToken": "eq(tasks.catalogVisibility, 'public')",
-          "symbol": "createPostgresqlTaskOverviewQuery"
+          "symbol": "createTaskOverviewQuery"
         }
       ],
       "dataClass": "metadata",
@@ -163789,7 +163783,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589",
+  "sourceDigest": "sha256:97ea34bf19d7c3184dd538e2c9e44eeec2120e6c57841ba12659532f7d6222c5",
   "targetContexts": [
     "collaboration",
     "development-automation",

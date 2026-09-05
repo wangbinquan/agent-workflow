@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 62,
-    "transactionCallbacks": 483
+    "transactionCallbacks": 482
   },
   "entries": [
     {
@@ -4952,13 +4952,13 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts",
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#transaction:56",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts#transaction:56",
       "line": 56,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#createPostgresqlFrameBackfillStore",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/frameBackfillStore.ts#createFrameBackfillStore",
       "status": "clear",
-      "symbol": "createPostgresqlFrameBackfillStore",
+      "symbol": "createFrameBackfillStore",
       "targetContext": "task-execution",
       "transactionCallee": "transaction"
     },
@@ -5117,18 +5117,6 @@
       "symbol": "serializable",
       "targetContext": "task-execution",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#dbTxSync:55",
-      "line": 55,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#createSqliteFrameBackfillStore",
-      "status": "clear",
-      "symbol": "createSqliteFrameBackfillStore",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
@@ -5890,8 +5878,8 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:3315",
-      "line": 3315,
+      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:3316",
+      "line": 3316,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
       "status": "co-located-risk",
       "symbol": "startTaskImpl",
@@ -5902,8 +5890,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:5971",
-      "line": 5971,
+      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:5976",
+      "line": 5976,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
       "status": "clear",
       "symbol": "runDeferredRepoPreparation",
@@ -5938,7 +5926,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589",
+  "sourceDigest": "sha256:97ea34bf19d7c3184dd538e2c9e44eeec2120e6c57841ba12659532f7d6222c5",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -7069,9 +7057,9 @@
         "effectKind": "workspace-prepare",
         "file": "packages/backend/src/services/task.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/task.ts#5592:workspace-prepare",
+        "id": "task-effect:packages/backend/src/services/task.ts#5597:workspace-prepare",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 5592,
+        "line": 5597,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "recoveryClass": "local-probe-or-actor",
