@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 872,
+    "consumers": 870,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1054,
@@ -74804,7 +74804,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:0c408b55ed6873136130",
+        "import:a6495dac6c75131c590d",
         "import:d82b43f3e5bf44c2cdf3",
         "import:f1e6b941772112a3577d"
       ],
@@ -74815,14 +74815,14 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.actorUserId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130",
+            "import:a6495dac6c75131c590d",
             "import:f1e6b941772112a3577d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.fusionId",
@@ -74830,14 +74830,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.memoryIds",
           "type": "readonly string[]"
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130",
+            "import:a6495dac6c75131c590d",
             "import:f1e6b941772112a3577d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.now",
@@ -74845,7 +74845,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130",
+            "import:a6495dac6c75131c590d",
             "import:d82b43f3e5bf44c2cdf3",
             "import:f1e6b941772112a3577d"
           ],
@@ -74854,14 +74854,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.skillName",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.skillVersion",
           "type": "number"
@@ -74873,14 +74873,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:reassignFusedSkill.$parameter:input.memoryId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130",
+            "import:a6495dac6c75131c590d",
             "import:d82b43f3e5bf44c2cdf3",
             "import:f1e6b941772112a3577d"
           ],
@@ -74901,7 +74901,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130",
+            "import:a6495dac6c75131c590d",
             "import:d82b43f3e5bf44c2cdf3",
             "import:f1e6b941772112a3577d"
           ],
@@ -74925,7 +74925,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:0c408b55ed6873136130"
+            "import:a6495dac6c75131c590d"
           ],
           "name": "markFused",
           "signatureDigest": "sha256:818e2c1ce80ea5ef21e6a671bc35fa18d138890ae07d7a51a2bc855c3ca9e2af"
@@ -74947,9 +74947,9 @@
       "productionConsumers": [
         {
           "context": "knowledge-evolution",
-          "edgeId": "import:0c408b55ed6873136130",
-          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#$file"
+          "edgeId": "import:a6495dac6c75131c590d",
+          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file"
         },
         {
           "context": "knowledge-evolution",
@@ -103677,9 +103677,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:5ba16fbd2fa9e0009f91"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
@@ -103709,14 +103707,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillVersionCommitHooks",
-      "productionConsumers": [
-        {
-          "context": "knowledge-evolution",
-          "edgeId": "import:5ba16fbd2fa9e0009f91",
-          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:SkillVersionCommitParticipantInTx"
       ],
@@ -103738,7 +103729,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:97e96221989bd5a55196"
+        "import:a3ef1910a1916465531e"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -103772,7 +103763,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.contentHash",
           "type": "string"
@@ -103784,7 +103775,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.expectedMetaRevision",
           "type": "number"
@@ -103801,14 +103792,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.expectedSkillId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.expectedVersion",
           "type": "number"
@@ -103830,7 +103821,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.now",
           "type": "number"
@@ -103847,21 +103838,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.skillId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.source",
           "type": "z.infer<typeof SkillVersionSourceSchema>"
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.staleMessage",
           "type": "string"
@@ -103878,7 +103869,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "fieldPath": "$method:commit.$parameter:request.versionIndex",
           "type": "number"
@@ -103898,7 +103889,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:97e96221989bd5a55196"
+            "import:a3ef1910a1916465531e"
           ],
           "name": "commit",
           "signatureDigest": "sha256:2cbe33641b46c26e450e5ddc66de6ba8899609e90c7bc69a0d0689378f27d320"
@@ -103908,9 +103899,9 @@
       "productionConsumers": [
         {
           "context": "knowledge-evolution",
-          "edgeId": "import:97e96221989bd5a55196",
-          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#$file"
+          "edgeId": "import:a3ef1910a1916465531e",
+          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -103933,9 +103924,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:181bd729e16f95b71295"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
@@ -103952,9 +103941,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "contentHash",
           "type": "string"
         },
@@ -103964,9 +103951,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "expectedMetaRevision",
           "type": "number"
         },
@@ -103981,16 +103966,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "expectedSkillId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "expectedVersion",
           "type": "number"
         },
@@ -104010,9 +103991,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "now",
           "type": "number"
         },
@@ -104027,23 +104006,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "skillId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "source",
           "type": "z.infer<typeof SkillVersionSourceSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "staleMessage",
           "type": "string"
         },
@@ -104058,9 +104031,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:181bd729e16f95b71295"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "versionIndex",
           "type": "number"
         }
@@ -104080,14 +104051,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillVersionCommitRequest",
-      "productionConsumers": [
-        {
-          "context": "knowledge-evolution",
-          "edgeId": "import:181bd729e16f95b71295",
-          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:SkillVersionCommitParticipantInTx"
       ],
@@ -162278,7 +162242,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad",
+  "sourceDigest": "sha256:741e52515c5f3910c5de1a6c837f2cc5b38d3cc56db97f3c021ab1775270f7c4",
   "targetContexts": [
     "collaboration",
     "development-automation",

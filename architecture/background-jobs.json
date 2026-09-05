@@ -5454,9 +5454,9 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 365,
+    "entries": 364,
     "executionLocal": 51,
-    "longRunning": 83,
+    "longRunning": 82,
     "managed": 11,
     "periodic": 220
   },
@@ -7243,9 +7243,9 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#recoverPublishedPlan",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#recoverPublishedPlan",
       "kind": "long-running",
       "lifecycle": {
         "health": false,
@@ -7257,28 +7257,7 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#recoverPublishedPlan",
-      "phase": "unknown",
-      "symbol": "recoverPublishedPlan",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#recoverPublishedPlan",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#recoverPublishedPlan",
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#recoverPublishedPlan",
       "phase": "unknown",
       "symbol": "recoverPublishedPlan",
       "targetContext": "knowledge-evolution"
@@ -13518,5 +13497,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cb491517f037e5b12e4757bb76c5963c6d9b31db0d973e2e19b24009317251ad"
+  "sourceDigest": "sha256:741e52515c5f3910c5de1a6c837f2cc5b38d3cc56db97f3c021ab1775270f7c4"
 }
