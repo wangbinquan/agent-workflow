@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 893,
+    "consumers": 892,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
@@ -52056,14 +52056,13 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:2b897791e6e8b9ca5b14",
         "import:39ac2f7136d851da4ee5",
         "import:43ab65887c4fa5dc8e30",
         "import:577ba0bd1eb0a54d230a",
         "import:5888540890308cf7bbb7",
         "import:7809a0a3d6525f1a5a55",
-        "import:836bc256bc2620881783",
         "import:9055a24dab4915c4cd67",
+        "import:a8397691b5ae6ee5ea64",
         "import:aa621841be330c7b28e2",
         "import:b06cca08556f642c6aa4",
         "import:c0a354557a22516fb392",
@@ -52102,12 +52101,6 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:2b897791e6e8b9ca5b14",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
           "edgeId": "import:39ac2f7136d851da4ee5",
           "file": "packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts#$file"
@@ -52137,16 +52130,16 @@
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#$file"
         },
         {
-          "context": "resource-catalog",
-          "edgeId": "import:836bc256bc2620881783",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#$file"
-        },
-        {
           "context": "legacy",
           "edgeId": "import:9055a24dab4915c4cd67",
           "file": "packages/backend/src/cli/user.ts",
           "ownerEntryId": "owner:packages/backend/src/cli/user.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:a8397691b5ae6ee5ea64",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/catalogQuery.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/catalogQuery.ts#$file"
         },
         {
           "context": "resource-catalog",
@@ -163769,7 +163762,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2d34003ea4e0361450a7eb0c85fd7b4ae0431c4208ea67aa6e064571163a0afe",
+  "sourceDigest": "sha256:1ef58eeadfbd6ea182b449c62b249e6f96efd7eafca0e41892667f120c513821",
   "targetContexts": [
     "collaboration",
     "development-automation",

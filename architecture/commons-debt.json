@@ -4727,14 +4727,13 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#grantsOfResourceWhere",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#$file",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listGrantedResourceIds",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listGrantedResourceIdsInTx",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listResourceGrantUserIdsInTx",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listResourceGrants",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listWritableGrantedResourceIds",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#loadGrantLevel",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#visibleRowsCondition"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#loadGrantLevel"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -4757,7 +4756,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#AclColumnRef"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -8816,15 +8815,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2d34003ea4e0361450a7eb0c85fd7b4ae0431c4208ea67aa6e064571163a0afe",
+    "sourceDigest": "sha256:1ef58eeadfbd6ea182b449c62b249e6f96efd7eafca0e41892667f120c513821",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "45f5dff21d963bceccf0873309bd276c41f7eedd",
-    "contentDigest": "sha256:f981499ffc0a3f7ad4eda63d7a5cdd172a05ac8abfbda957f2e6c415f471fdc9",
+    "currentSnapshotSha": "3520ab82a5a930281239daa7490c63036a14ceff",
+    "contentDigest": "sha256:570db9e65702507f672a611c27502e687abbb5ec7cd8d30c02f0edb864bdcfc5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
