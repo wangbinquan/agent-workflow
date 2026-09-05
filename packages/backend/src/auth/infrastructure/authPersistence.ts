@@ -42,7 +42,6 @@ import type {
   AuthUserRecord,
   BootstrapAdminRecord,
   LocalPasswordWrite,
-  PasswordLoginSessionRecord,
 } from '../application/authPersistence'
 
 const GLOBAL_POLICY_ID = 'global'

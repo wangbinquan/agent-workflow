@@ -47,14 +47,22 @@ function relativeToRepo(file: string): string {
   return relative(REPO_ROOT, file).replaceAll('\\', '/')
 }
 
+// 每条锁都要扫整棵 src 树，而 TypeScript 解析是这里的大头；源码在一次运行里不会变，按路径缓存解析结果，
+// 否则十几条锁各自重解析全树，CI 分片负载一高就撞 20s 超时（2026-09-05 shard 3 实撞）。
+const parsedSources = new Map<string, ts.SourceFile>()
+
 function parse(file: string): ts.SourceFile {
-  return ts.createSourceFile(
+  const cached = parsedSources.get(file)
+  if (cached !== undefined) return cached
+  const source = ts.createSourceFile(
     file,
     readFileSync(file, 'utf8'),
     ts.ScriptTarget.Latest,
     true,
     file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   )
+  parsedSources.set(file, source)
+  return source
 }
 
 function stringLiterals(file: string): ReadonlyArray<string> {

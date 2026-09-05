@@ -1,21 +1,14 @@
 // RFC-349 — token-call audit is a closed AUTH participant. Transports receive
-// one Promise surface; provider SQL stays in SQLite/PostgreSQL infrastructure.
+// one Promise surface; the persistence is one provider-neutral implementation
+// (RFC-359 W4-D9), exercised on both engines by rfc359-w4-d9-adapters.test.ts.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
 import { createTokenCallAudit } from '@/auth/composition'
 import { createInMemoryDb } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -37,94 +30,6 @@ function patActor() {
     },
   })
 }
-
-function rows(values: readonly (readonly unknown[])[] = []): SqlRows {
-  return Object.assign(Promise.resolve([]), {
-    async values() {
-      return values
-    },
-  })
-}
-
-function postgresqlFixture() {
-  const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-  let releases = 0
-  const execute = (query: string, parameters?: readonly unknown[]): SqlRows => {
-    executions.push({ sql: query, parameters })
-    const compact = query.replace(/\s+/g, ' ').toLowerCase()
-    if (compact.includes('database_generations')) {
-      return Object.assign(Promise.resolve([{ generation_id: 'dbg_token_audit_pg' }]), {
-        async values() {
-          return []
-        },
-      })
-    }
-    if (compact.startsWith('select') && compact.includes('token_audit')) {
-      if (compact.includes('"pat_id"')) {
-        return rows([
-          [
-            'audit-pg-row',
-            'pat-rfc349-audit',
-            'audit-user',
-            'mcp',
-            'describe_capabilities',
-            null,
-            null,
-            null,
-            null,
-            200,
-            false,
-            50,
-          ],
-        ])
-      }
-      return rows([['audit-pg-row']])
-    }
-    if (compact.startsWith('delete') && compact.includes('returning')) {
-      return rows([['audit-pg-row']])
-    }
-    return rows()
-  }
-  const connection: PostgresqlReservedConnection = {
-    unsafe: execute,
-    release() {
-      releases += 1
-    },
-  }
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: execute,
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_token_audit_pg',
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    providerPool: () => pool,
-    async close() {},
-  }
-  return {
-    db: createPostgresqlDatabaseClient(runtime),
-    executions,
-    get releases() {
-      return releases
-    },
-  }
-}
-
-afterEach(() => {
-  selectDatabaseSchemaProvider('sqlite')
-})
 
 describe('RFC-349 token-call audit provider participant', () => {
   test('legacy service is a facade and application contract has no provider handle', () => {
