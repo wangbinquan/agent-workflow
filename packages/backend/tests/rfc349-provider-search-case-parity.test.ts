@@ -130,8 +130,10 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
     // PG 执行面（语料判据见 `architecture/postgresqlSurface.ts`），每一处裸 like 都必须
     // 在下面写明「为什么大小写敏感才是对的」；写不出理由的就该改 ilike。
     const surface = postgresqlExecutionSurface(resolve(backendRoot, 'src'))
+    // RFC-359 W4 逐批删除 provider 命名文件，按当前判据算出的执行面只降不升（2026-09-05：204 → 198）；
+    // 下限先按 100 兜「语料没塌」，中立文件纳入判据后再抬回。
     expect(surface.length, 'PG 执行面语料为空 ⇒ 判据失效（扫描根写错？）').toBeGreaterThanOrEqual(
-      200,
+      100,
     )
 
     const unexplained: string[] = []

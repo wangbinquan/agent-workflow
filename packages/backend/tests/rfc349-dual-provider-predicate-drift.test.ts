@@ -41,7 +41,6 @@ const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   'modules/resource-catalog/infrastructure/McpRepository.ts::ownerScopedNameWhere': '方言 SQL',
   'modules/resource-catalog/infrastructure/WorkgroupRepository.ts::ownerScopedNameWhere':
     '方言 SQL',
-  'modules/resource-catalog/infrastructure/CatalogQuery.ts::catalogWhere': '方言 SQL',
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance.ts::parseArtifacts':
     '行命名与取值转换',
   'modules/task-execution/infrastructure/RuntimeSessionLeaseOperations.ts::constraintViolation':
@@ -115,7 +114,12 @@ describe('RFC-349 AC-12 — provider adapters must not fork a business predicate
       }
     }
 
-    expect(pairs, 'provider adapter 配对全没了 ⇒ 这条守卫已经什么都没扫').toBeGreaterThan(100)
+    // RFC-359 W4 逐批把 provider 孪生对合成一份中立实现，配对数只降不升（W5-T17 棘轮到 0 时
+    // 本守卫随之退役）；这里只守「还有配对可扫」，不再钉一个会被每一批合一撞红的下限。
+    expect(
+      pairs,
+      'provider adapter 配对全没了 ⇒ 这条守卫已经什么都没扫，该随 W5-T17 退役',
+    ).toBeGreaterThan(0)
     expect(
       divergent.sort(),
       '两个 provider 的同名函数实现不同。业务判据必须收成一份（见 memory 的 canManage 事故）；' +

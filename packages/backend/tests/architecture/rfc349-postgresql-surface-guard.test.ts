@@ -26,10 +26,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import {
-  classifyPostgresqlSurfaceFile,
-  postgresqlExecutionSurface,
-} from './postgresqlSurface'
+import { classifyPostgresqlSurfaceFile, postgresqlExecutionSurface } from './postgresqlSurface'
 
 const SRC_ROOT = resolve(import.meta.dir, '..', '..', 'src')
 const TESTS_ROOT = resolve(import.meta.dir, '..')
@@ -49,13 +46,15 @@ const TRAP_GUARDS = [
 describe('RFC-349 PostgreSQL 执行面语料', () => {
   test('语料下限：判据失效时先红在语料上，而不是安静地扫出空集合', () => {
     const surface = postgresqlExecutionSurface(SRC_ROOT)
+    // RFC-359 W4 逐批删除 provider 命名文件，执行面只降不升（2026-09-05：204 → 198）；下限先按 100 兜
+    // 「语料没塌」，中立文件纳入判据后再抬回。
     expect(
       surface.length,
       'PG 执行面塌了 ⇒ 三条陷阱守卫会因为「没有语料」而全部假绿',
-    ).toBeGreaterThanOrEqual(200)
+    ).toBeGreaterThanOrEqual(100)
     // 两种来源都必须非空：只剩命名前缀就等于退回了旧判据，只剩类型可达说明前缀扫描断了。
     expect(surface.filter((file) => file.reason === 'named-adapter').length).toBeGreaterThanOrEqual(
-      150,
+      50,
     )
     expect(surface.filter((file) => file.reason === 'typed-handle').length).toBeGreaterThanOrEqual(
       20,
