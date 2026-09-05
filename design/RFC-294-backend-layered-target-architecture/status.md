@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e72acbd4d49c63d1e8bb96e5140ee4cb5089efa9c153f328dba8a94ea69e8b93`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1921 |
+| backend production TS 文件 | 1917 |
 | `services/` 文件 | 326 |
-| `modules/**` 文件 / 非空 context | 1305 / 17 |
+| `modules/**` 文件 / 非空 context | 1301 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5257 |
+| `architectureExceptions` | 5251 |
 | `backgroundJobs` | 368 |
-| `crossContextImports` | 6157 |
+| `crossContextImports` | 6134 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26008 |
-| `mutationEntrypoints` | 1920 |
+| `moduleSymbolOwners` | 25989 |
+| `mutationEntrypoints` | 1917 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 986 |
-| `transactionExternalEffects` | 438 |
+| `transactionExternalEffects` | 432 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -74,18 +74,17 @@
 | digital-employee / application | 13 |
 | digital-employee / infrastructure | 13 |
 | intent / infrastructure | 12 |
-| source-control / infrastructure | 12 |
 | code-capability / domain | 11 |
 | identity-access / infrastructure | 11 |
 | system-operations / application | 11 |
 | memory / application | 10 |
 | memory / infrastructure | 10 |
 | source-control / application | 10 |
+| source-control / infrastructure | 10 |
 | collaboration / composition | 9 |
 | knowledge-evolution / domain | 8 |
 | memory / domain | 8 |
 | development-automation / engine | 7 |
-| event-center / infrastructure | 7 |
 | intent / composition | 7 |
 | resource-catalog / domain | 7 |
 | task-execution / public | 7 |
@@ -97,6 +96,7 @@
 | collaboration / public | 5 |
 | digital-employee / composition | 5 |
 | digital-employee / public | 5 |
+| event-center / infrastructure | 5 |
 | event-center / public | 5 |
 | identity-access / composition | 5 |
 | integration / public | 5 |
@@ -200,10 +200,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3613 |
+| legacy-outbound | 3607 |
 | legacy-inbound | 1446 |
-| infrastructure-external | 367 |
-| provider-mirror | 263 |
+| infrastructure-external | 362 |
+| provider-mirror | 251 |
 | offered-consumption | 185 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 92 |
@@ -215,7 +215,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3613 |
+| legacy-outbound | 3607 |
 | legacy-inbound | 1446 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 92 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2798 |
+| W9 | 2792 |
 | W4-E1 | 865 |
 | W4-C | 409 |
 | W4-E0 | 239 |

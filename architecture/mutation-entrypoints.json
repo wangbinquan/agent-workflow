@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1920,
+    "entries": 1917,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -11685,15 +11685,15 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts",
+      "file": "packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts#createPostgresqlCustomEventSourceStore",
+      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#createCustomEventSourceStore",
       "missingControls": [
         "audit",
         "authority"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts#createPostgresqlCustomEventSourceStore",
-      "symbol": "createPostgresqlCustomEventSourceStore",
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#createCustomEventSourceStore",
+      "symbol": "createCustomEventSourceStore",
       "targetContext": "event-center",
       "targetLayer": "infrastructure"
     },
@@ -11706,17 +11706,17 @@
         "fenceOrOcc": true,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/event-center/infrastructure/postgresqlEventResponseRuleStore.ts",
+      "file": "packages/backend/src/modules/event-center/infrastructure/eventResponseRuleStore.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/postgresqlEventResponseRuleStore.ts#createPostgresqlEventResponseRuleStore",
+      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/eventResponseRuleStore.ts#createEventResponseRuleStore",
       "missingControls": [
         "audit",
         "authority",
         "authorization",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/postgresqlEventResponseRuleStore.ts#createPostgresqlEventResponseRuleStore",
-      "symbol": "createPostgresqlEventResponseRuleStore",
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventResponseRuleStore.ts#createEventResponseRuleStore",
+      "symbol": "createEventResponseRuleStore",
       "targetContext": "event-center",
       "targetLayer": "infrastructure"
     },
@@ -11735,51 +11735,6 @@
       "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/postgresqlEventStore.ts#createPostgresqlEventStore",
       "symbol": "createPostgresqlEventStore",
-      "targetContext": "event-center",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#createSqliteCustomEventSourceStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#createSqliteCustomEventSourceStore",
-      "symbol": "createSqliteCustomEventSourceStore",
-      "targetContext": "event-center",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/event-center/infrastructure/sqliteEventResponseRuleStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/sqliteEventResponseRuleStore.ts#createSqliteEventResponseRuleStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteEventResponseRuleStore.ts#createSqliteEventResponseRuleStore",
-      "symbol": "createSqliteEventResponseRuleStore",
       "targetContext": "event-center",
       "targetLayer": "infrastructure"
     },
@@ -25314,30 +25269,6 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#applySealingMutation",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#applySealingMutation",
-      "symbol": "applySealingMutation",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
@@ -25360,6 +25291,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#applySealingMutation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#applySealingMutation",
+      "symbol": "applySealingMutation",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -25375,30 +25330,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository.ts#synchronizeProjection",
       "symbol": "synchronizeProjection",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#applySealingMutation",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#applySealingMutation",
-      "symbol": "applySealingMutation",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -45763,7 +45694,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d",
+  "sourceDigest": "sha256:e72acbd4d49c63d1e8bb96e5140ee4cb5089efa9c153f328dba8a94ea69e8b93",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -45873,7 +45804,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 266,
+      "durableWriterSites": 265,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -46366,26 +46297,10 @@
         "consumer": "applySealingMutation",
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
-        "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
-        "id": "task-authority:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#88:tasks",
-        "line": 88,
-        "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#applySealingMutation",
-        "requiredBrandedProof": "RepositoryWorkspaceMutationAuthority",
-        "revisionPredicate": "workspace-sealing-generation-and-task-revision",
-        "symbol": "applySealingMutation"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applySealingMutation",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-        "id": "task-authority:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#80:tasks",
-        "line": 80,
-        "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#applySealingMutation",
+        "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
+        "id": "task-authority:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#95:tasks",
+        "line": 95,
+        "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#applySealingMutation",
         "requiredBrandedProof": "RepositoryWorkspaceMutationAuthority",
         "revisionPredicate": "workspace-sealing-generation-and-task-revision",
         "symbol": "applySealingMutation"

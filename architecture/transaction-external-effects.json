@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 53,
-    "transactionCallbacks": 438
+    "coLocatedCandidates": 52,
+    "transactionCallbacks": 432
   },
   "entries": [
     {
@@ -1699,13 +1699,13 @@
       "effectTokens": [
         "publish"
       ],
-      "file": "packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts",
+      "file": "packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts#transaction:125",
-      "line": 125,
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts#createPostgresqlCustomEventSourceStore",
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#transaction:128",
+      "line": 128,
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#createCustomEventSourceStore",
       "status": "co-located-risk",
-      "symbol": "createPostgresqlCustomEventSourceStore",
+      "symbol": "createCustomEventSourceStore",
       "targetContext": "event-center",
       "transactionCallee": "transaction"
     },
@@ -1760,20 +1760,6 @@
       "symbol": "createPostgresqlEventStore",
       "targetContext": "event-center",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "publish"
-      ],
-      "file": "packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#dbTxSync:126",
-      "line": 126,
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#createSqliteCustomEventSourceStore",
-      "status": "co-located-risk",
-      "symbol": "createSqliteCustomEventSourceStore",
-      "targetContext": "event-center",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -4220,61 +4206,61 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#transaction:111",
-      "line": 111,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#PostgresqlRepositoryWorkspaceStore",
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#transaction:117",
+      "line": 117,
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#DrizzleRepositoryWorkspaceStore",
       "status": "clear",
-      "symbol": "PostgresqlRepositoryWorkspaceStore",
+      "symbol": "DrizzleRepositoryWorkspaceStore",
       "targetContext": "source-control",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#transaction:132",
-      "line": 132,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#PostgresqlRepositoryWorkspaceStore",
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#transaction:137",
+      "line": 137,
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#DrizzleRepositoryWorkspaceStore",
       "status": "clear",
-      "symbol": "PostgresqlRepositoryWorkspaceStore",
+      "symbol": "DrizzleRepositoryWorkspaceStore",
       "targetContext": "source-control",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#transaction:145",
-      "line": 145,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#PostgresqlRepositoryWorkspaceStore",
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#transaction:150",
+      "line": 150,
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#DrizzleRepositoryWorkspaceStore",
       "status": "clear",
-      "symbol": "PostgresqlRepositoryWorkspaceStore",
+      "symbol": "DrizzleRepositoryWorkspaceStore",
       "targetContext": "source-control",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#transaction:172",
-      "line": 172,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#PostgresqlRepositoryWorkspaceStore",
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#transaction:176",
+      "line": 176,
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#DrizzleRepositoryWorkspaceStore",
       "status": "clear",
-      "symbol": "PostgresqlRepositoryWorkspaceStore",
+      "symbol": "DrizzleRepositoryWorkspaceStore",
       "targetContext": "source-control",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#transaction:226",
-      "line": 226,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts#PostgresqlRepositoryWorkspaceStore",
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#transaction:227",
+      "line": 227,
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#DrizzleRepositoryWorkspaceStore",
       "status": "clear",
-      "symbol": "PostgresqlRepositoryWorkspaceStore",
+      "symbol": "DrizzleRepositoryWorkspaceStore",
       "targetContext": "source-control",
       "transactionCallee": "transaction"
     },
@@ -4329,66 +4315,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository.ts#SQLiteRepositoryTransportCredentialRepository",
       "status": "clear",
       "symbol": "SQLiteRepositoryTransportCredentialRepository",
-      "targetContext": "source-control",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#dbTxSync:102",
-      "line": 102,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#SQLiteRepositoryWorkspaceStore",
-      "status": "clear",
-      "symbol": "SQLiteRepositoryWorkspaceStore",
-      "targetContext": "source-control",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#dbTxSync:122",
-      "line": 122,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#SQLiteRepositoryWorkspaceStore",
-      "status": "clear",
-      "symbol": "SQLiteRepositoryWorkspaceStore",
-      "targetContext": "source-control",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#dbTxSync:135",
-      "line": 135,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#SQLiteRepositoryWorkspaceStore",
-      "status": "clear",
-      "symbol": "SQLiteRepositoryWorkspaceStore",
-      "targetContext": "source-control",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#dbTxSync:161",
-      "line": 161,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#SQLiteRepositoryWorkspaceStore",
-      "status": "clear",
-      "symbol": "SQLiteRepositoryWorkspaceStore",
-      "targetContext": "source-control",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#dbTxSync:211",
-      "line": 211,
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts#SQLiteRepositoryWorkspaceStore",
-      "status": "clear",
-      "symbol": "SQLiteRepositoryWorkspaceStore",
       "targetContext": "source-control",
       "transactionCallee": "dbTxSync"
     },
@@ -5380,7 +5306,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d",
+  "sourceDigest": "sha256:e72acbd4d49c63d1e8bb96e5140ee4cb5089efa9c153f328dba8a94ea69e8b93",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
