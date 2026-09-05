@@ -305,17 +305,15 @@ describeEachProvider(
         })),
       ).toBeNull()
 
-      await db
-        .insert(capabilityTemplates)
-        .values([
-          template('tpl-upstream', { description: 'upstream v2', paramsJson: '{"x":2}' }),
-          template('tpl-local', {
-            upstreamId: 'tpl-upstream',
-            upstreamVersion: 1,
-            baseDigest: 'base-1',
-          }),
-          template('tpl-orphan'),
-        ])
+      await db.insert(capabilityTemplates).values([
+        template('tpl-upstream', { description: 'upstream v2', paramsJson: '{"x":2}' }),
+        template('tpl-local', {
+          upstreamId: 'tpl-upstream',
+          upstreamVersion: 1,
+          baseDigest: 'base-1',
+        }),
+        template('tpl-orphan'),
+      ])
       expect(await persistence.load('tpl-local')).toMatchObject({
         id: 'tpl-local',
         upstreamId: 'tpl-upstream',

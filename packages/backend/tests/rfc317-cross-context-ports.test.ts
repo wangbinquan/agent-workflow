@@ -280,7 +280,7 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
       .run()
   }
 
-  test('frozenPlan 按 roundRef 取回 caseId 与冻结计划；查无返回 null', () => {
+  test('frozenPlan 按 roundRef 取回 caseId 与冻结计划；查无返回 null', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedRound(db, {
       id: 'round-1',
@@ -290,14 +290,14 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
       settledAt: null,
     })
     const queries = createEmployeeReactionRoundQueries(db)
-    expect(queries.frozenPlan('round-1')).toEqual({
+    expect(await queries.frozenPlan('round-1')).toEqual({
       caseId: 'case-1',
       planJson: JSON.stringify({ roundRef: 'round-1' }),
     })
-    expect(queries.frozenPlan('missing')).toBeNull()
+    expect(await queries.frozenPlan('missing')).toBeNull()
   })
 
-  test('lastSettledRound 只认已结算的轮次，并取 settledAt 最晚的那条', () => {
+  test('lastSettledRound 只认已结算的轮次，并取 settledAt 最晚的那条', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedRound(db, {
       id: 'repair-early',
@@ -322,12 +322,14 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
       settledAt: 300,
     })
     const queries = createEmployeeReactionRoundQueries(db)
-    expect(queries.lastSettledRound({ caseId: 'case-1', workItemRef: 'repair-conflict' })).toEqual({
+    expect(
+      await queries.lastSettledRound({ caseId: 'case-1', workItemRef: 'repair-conflict' }),
+    ).toEqual({
       roundRef: 'repair-late',
     })
   })
 
-  test('caseId / workItemRef 都参与过滤（串台会把别的 case 的修复结果当成自己的）', () => {
+  test('caseId / workItemRef 都参与过滤（串台会把别的 case 的修复结果当成自己的）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedRound(db, {
       id: 'other-case',
@@ -344,7 +346,7 @@ describe('RFC-317 T41 · DE-02 —— 反应轮次只读查询面', () => {
       settledAt: 100,
     })
     expect(
-      createEmployeeReactionRoundQueries(db).lastSettledRound({
+      await createEmployeeReactionRoundQueries(db).lastSettledRound({
         caseId: 'case-1',
         workItemRef: 'repair-conflict',
       }),
