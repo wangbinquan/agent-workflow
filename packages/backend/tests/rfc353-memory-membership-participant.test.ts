@@ -55,7 +55,7 @@ const POSTGRESQL_ADAPTER = resolve(
   'modules',
   'memory',
   'infrastructure',
-  'postgresqlSkillMemoryFusionParticipant.ts',
+  'skillMemoryFusionParticipant.ts',
 )
 
 interface SeedRow {

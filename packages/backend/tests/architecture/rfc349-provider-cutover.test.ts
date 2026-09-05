@@ -47,7 +47,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/execution/taskExecutionResources.ts -> @/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots :: export:createSqliteTaskExecutionResourceBinding',
   'packages/backend/src/services/humanGateComposition.ts -> @/modules/collaboration/composition :: SqliteHumanGateOperationStore',
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
-  'packages/backend/src/services/memory.ts -> @/modules/memory/infrastructure/sqliteMemoryCatalog :: export:*',
   'packages/backend/src/services/nodeRollback.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRollback :: LegacySqliteRollbackDatabase,createLegacySqliteRollbackEffectObserver,loadLegacySqliteRollbackTarget',
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,LegacySqliteNodeRunTransaction,createLegacySqliteNodeRunOperations,mintLegacySqliteNodeRunInTx',
   'packages/backend/src/services/ownerIdentity.ts -> @/modules/identity-access/composition/providerOperations :: composeSqliteOwnerIdentityQueries',

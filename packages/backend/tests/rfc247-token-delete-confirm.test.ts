@@ -23,7 +23,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents } from '../src/db/schema'
 import { assertTokenDeleteConfirm } from '../src/services/deleteConfirm'
-import { createManualCandidate } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 
@@ -112,7 +112,7 @@ async function del(app: Hono, token: string, path: string, body?: unknown): Prom
 describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
   test('without the title it is refused, and the row survives', async () => {
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'agent',
       scopeId: h.ownedAgentId,
       title: 'never delete me blindly',
@@ -139,7 +139,7 @@ describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
 
   test('with the exact title it goes through', async () => {
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'agent',
       scopeId: h.ownedAgentId,
       title: 'delete me deliberately',
@@ -155,7 +155,7 @@ describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
   test('a SESSION delete still needs only the existing query flag', async () => {
     // Locks the non-regression: the web flow did not gain a typing step.
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'a long title a human should not have to retype',
@@ -169,7 +169,7 @@ describe('RFC-247 T20 — DELETE /api/memories/:id over a token', () => {
   test('the pre-existing ?confirm=true gate still applies to sessions', async () => {
     // RFC-247 added a rule; it did not remove one.
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'guarded either way',

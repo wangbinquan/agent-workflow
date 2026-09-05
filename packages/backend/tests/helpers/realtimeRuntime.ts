@@ -10,10 +10,9 @@ import type {
   RealtimeRuntime,
 } from '../../src/modules/runtime-management/public/participants'
 import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { canViewMemory } from '../../src/services/memory'
 import { batchOwnerUserId } from '../../src/services/repoBatchImport'
 import { redactEventPayload } from '../../src/services/tokenRedaction'
-import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
+import { memoryCatalogOf } from './memoryCatalog'
 
 export const STUB_REALTIME_CHANNELS: RealtimeChannelAccess = Object.freeze({
   canViewTask: async () => false,
@@ -56,11 +55,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
       resourceVisibility: resourceCatalog.authorization,
       memoryVisibility: {
         async canViewMemory(authority, actor, scope) {
-          return await canViewMemory(
-            input.db,
-            { authority, actor, authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION },
-            scope,
-          )
+          return await memoryCatalogOf(input.db).queries.canView({ authority, actor }, scope)
         },
       },
       repoImportOwnerUserId: input.repoImportOwnerUserId ?? batchOwnerUserId,

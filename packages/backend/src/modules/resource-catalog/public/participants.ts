@@ -34,10 +34,8 @@ import type {
   PreparedSkillPackageMutation,
   PreparedWorkflowPackageMutation,
   PreparedWorkgroupPackageMutation,
-  ResourceMemoryScopeRef,
   ResourcePackageApplyScenarioPlan,
   ResourcePackageMutationReceipt,
-  ResourceScopeAccess,
   SkillPackageMutation,
   ParseSkillZipCatalogInput,
   ParseSkillZipCatalogReceipt,
@@ -153,7 +151,6 @@ export interface DemoResourceCatalogSeedParticipant {
 
 declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
 declare const intentApplyResourceParticipantInTxBrand: unique symbol
-declare const resourceScopeAuthorizationInTxBrand: unique symbol
 declare const agentPackageMutationParticipantInTxBrand: unique symbol
 declare const skillPackageMutationParticipantInTxBrand: unique symbol
 declare const mcpPackageMutationParticipantInTxBrand: unique symbol
@@ -255,10 +252,9 @@ export interface IntentApplyResourceParticipantInTx {
   ): IntentResourceChangesetReceipt
 }
 
-export interface ResourceScopeAuthorizationInTx {
-  readonly [resourceScopeAuthorizationInTxBrand]: 'resource-scope-authorization'
-  accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef): ResourceScopeAccess
-}
+// memory 的资源 scope（agent / workflow）访问判定参与者**不在这里**：那是 memory 自己声明的端口
+// （`modules/memory/application/ports/resourceScopeAccess.ts`），resource-catalog 只在装配根上交出一份
+// 结构兼容的实现（`composition/resourceScopeAuthorization.ts`）。public 面不引 Actor，也不点名事务句柄。
 
 export interface AgentPackageMutationParticipant {
   prepare(mutation: AgentPackageMutation): Promise<PreparedAgentPackageMutation>

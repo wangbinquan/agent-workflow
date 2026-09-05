@@ -78,8 +78,8 @@ const REMOVE_OWNERS = {
   ),
   knowledgeEvolution: owner(
     'RFC-294 W4-E3',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'ResourceScopeAuthorizationInTx',
+    'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
+    'MemoryResourceScopeAccessParticipant',
   ),
   mcpCatalog: owner(
     'RFC-345 T9',
@@ -102,8 +102,8 @@ const REMOVE_OWNERS = {
   // owner 定义保留：它记录的是「W4-E2 该往哪个 public 合同收」这条裁决，还有后续边会用到。
   memory: owner(
     'RFC-294 W4-E2',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'ResourceScopeAuthorizationInTx',
+    'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
+    'MemoryResourceScopeAccessParticipant',
   ),
   overview: owner(
     'RFC-349 provider cutover',
@@ -147,8 +147,8 @@ const REMOVE_OWNERS = {
   ),
   scheduledTask: owner(
     'RFC-294 W4-B',
-    'packages/backend/src/modules/resource-catalog/public/participants.ts',
-    'ResourceScopeAuthorizationInTx',
+    'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
+    'MemoryResourceScopeAccessParticipant',
   ),
   taskExecution: owner(
     'RFC-294 W4-E1',

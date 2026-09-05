@@ -16,13 +16,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories } from '../src/db/schema'
-import {
-  createManualCandidate,
-  getMemoryById,
-  patchMemory,
-  promoteCandidate,
-  archiveMemory,
-} from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { MemoryPatchRequest, MemoryWsMessage } from '@agent-workflow/shared'
 
@@ -46,7 +40,7 @@ async function seedCandidate(
     tags: string[]
   }> = {},
 ) {
-  return createManualCandidate(db, {
+  return memoryCatalogOf(db).commands.createManual({
     scopeType: overrides.scopeType ?? 'agent',
     scopeId: overrides.scopeId !== undefined ? overrides.scopeId : 'agent-a',
     title: overrides.title ?? 'initial title',
@@ -65,7 +59,11 @@ describe('patchMemory — RFC-045', () => {
   test('candidate row: title-only patch → version 1→2 + WS', async () => {
     const seed = await seedCandidate(db)
     const cap = captureBroadcasts()
-    const result = await patchMemory(db, seed.id, { title: 'renamed' }, 'admin-u1')
+    const result = await memoryCatalogOf(db).commands.patch(
+      seed.id,
+      { title: 'renamed' },
+      'admin-u1',
+    )
     cap.stop()
     expect(result.memory.title).toBe('renamed')
     expect(result.memory.version).toBe(2)
@@ -81,12 +79,20 @@ describe('patchMemory — RFC-045', () => {
 
   test('approved row: bodyMd patch bumps version + approved_* frozen', async () => {
     const seed = await seedCandidate(db, { bodyMd: 'v1 body' })
-    const approved = await promoteCandidate(db, seed.id, { action: 'approve' }, 'admin-u1')
+    const approved = await memoryCatalogOf(db).commands.promote(
+      seed.id,
+      { action: 'approve' },
+      'admin-u1',
+    )
     expect(approved.status).toBe('approved')
     const approvedAtBefore = approved.approvedAt
     const approverBefore = approved.approvedByUserId
     expect(approvedAtBefore).not.toBeNull()
-    const result = await patchMemory(db, seed.id, { bodyMd: 'v2 body' }, 'admin-other')
+    const result = await memoryCatalogOf(db).commands.patch(
+      seed.id,
+      { bodyMd: 'v2 body' },
+      'admin-other',
+    )
     expect(result.memory.bodyMd).toBe('v2 body')
     expect(result.memory.status).toBe('approved')
     expect(result.memory.version).toBeGreaterThanOrEqual(2)
@@ -96,9 +102,11 @@ describe('patchMemory — RFC-045', () => {
 
   test('archived row is editable; status preserved', async () => {
     const seed = await seedCandidate(db)
-    await promoteCandidate(db, seed.id, { action: 'approve' }, 'admin')
-    await archiveMemory(db, seed.id)
-    const result = await patchMemory(db, seed.id, { title: 'edited while archived' })
+    await memoryCatalogOf(db).commands.promote(seed.id, { action: 'approve' }, 'admin')
+    await memoryCatalogOf(db).commands.archive(seed.id)
+    const result = await memoryCatalogOf(db).commands.patch(seed.id, {
+      title: 'edited while archived',
+    })
     expect(result.memory.status).toBe('archived')
     expect(result.memory.title).toBe('edited while archived')
   })
@@ -106,7 +114,10 @@ describe('patchMemory — RFC-045', () => {
   test('idempotent: re-save unchanged fields → version unchanged + no WS event', async () => {
     const seed = await seedCandidate(db, { title: 'same', bodyMd: 'same body' })
     const cap = captureBroadcasts()
-    const result = await patchMemory(db, seed.id, { title: 'same', bodyMd: 'same body' })
+    const result = await memoryCatalogOf(db).commands.patch(seed.id, {
+      title: 'same',
+      bodyMd: 'same body',
+    })
     cap.stop()
     expect(result.memory.version).toBe(seed.version)
     expect(result.changedFields).toEqual([])
@@ -115,7 +126,7 @@ describe('patchMemory — RFC-045', () => {
 
   test('tag reorder alone is NOT a change (tags are a set)', async () => {
     const seed = await seedCandidate(db, { tags: ['a', 'b', 'c'] })
-    const result = await patchMemory(db, seed.id, { tags: ['c', 'b', 'a'] })
+    const result = await memoryCatalogOf(db).commands.patch(seed.id, { tags: ['c', 'b', 'a'] })
     expect(result.changedFields).toEqual([])
     expect(result.memory.version).toBe(seed.version)
   })
@@ -123,30 +134,35 @@ describe('patchMemory — RFC-045', () => {
   test('superseded row → 409 memory-terminal-status', async () => {
     // Build a supersede chain: approve A, promote B with action=supersede A.
     const a = await seedCandidate(db, { title: 'A' })
-    await promoteCandidate(db, a.id, { action: 'approve' }, 'admin')
+    await memoryCatalogOf(db).commands.promote(a.id, { action: 'approve' }, 'admin')
     const b = await seedCandidate(db, { title: 'B' })
-    await promoteCandidate(
-      db,
+    await memoryCatalogOf(db).commands.promote(
       b.id,
       { action: 'approve_and_supersede', supersedeIds: [a.id] },
       'admin',
     )
     // A is now superseded.
-    await expect(patchMemory(db, a.id, { title: 'cannot' })).rejects.toMatchObject({
+    await expect(
+      memoryCatalogOf(db).commands.patch(a.id, { title: 'cannot' }),
+    ).rejects.toMatchObject({
       code: 'memory-terminal-status',
     })
   })
 
   test('rejected row → 409 memory-terminal-status', async () => {
     const seed = await seedCandidate(db, { title: 'doomed' })
-    await promoteCandidate(db, seed.id, { action: 'reject' }, 'admin')
-    await expect(patchMemory(db, seed.id, { title: 'cannot' })).rejects.toMatchObject({
+    await memoryCatalogOf(db).commands.promote(seed.id, { action: 'reject' }, 'admin')
+    await expect(
+      memoryCatalogOf(db).commands.patch(seed.id, { title: 'cannot' }),
+    ).rejects.toMatchObject({
       code: 'memory-terminal-status',
     })
   })
 
   test('unknown id → 404 memory-not-found', async () => {
-    await expect(patchMemory(db, '01HXX-nonexistent', { title: 'x' })).rejects.toMatchObject({
+    await expect(
+      memoryCatalogOf(db).commands.patch('01HXX-nonexistent', { title: 'x' }),
+    ).rejects.toMatchObject({
       code: 'memory-not-found',
     })
   })
@@ -154,13 +170,13 @@ describe('patchMemory — RFC-045', () => {
   test('service rejects scopeType even when a caller bypasses the wire schema', async () => {
     const seed = await seedCandidate(db, { scopeType: 'agent', scopeId: 'agent-a' })
     await expect(
-      patchMemory(db, seed.id, {
+      memoryCatalogOf(db).commands.patch(seed.id, {
         scopeType: 'global',
         scopeId: null,
         title: 'smuggled',
       } as unknown as MemoryPatchRequest),
     ).rejects.toMatchObject({ code: 'memory-scope-move-required' })
-    const after = await getMemoryById(db, seed.id)
+    const after = await memoryCatalogOf(db).queries.getById(seed.id)
     expect(after?.memory).toMatchObject({
       scopeType: 'agent',
       scopeId: 'agent-a',
@@ -182,7 +198,7 @@ describe('patchMemory — RFC-045', () => {
     }>
     expect(beforeRows.length).toBe(1)
     const before = beforeRows[0]!
-    await patchMemory(db, seed.id, { title: 'new', bodyMd: 'new body' })
+    await memoryCatalogOf(db).commands.patch(seed.id, { title: 'new', bodyMd: 'new body' })
     const afterRows = (await db.select().from(memories).where(eq(memories.id, seed.id))) as Array<{
       sourceKind: string
       sourceEventId: string | null
@@ -210,7 +226,7 @@ describe('patchMemory — RFC-045', () => {
       bodyMd: 'b1',
       tags: ['x'],
     })
-    const result = await patchMemory(db, seed.id, {
+    const result = await memoryCatalogOf(db).commands.patch(seed.id, {
       title: 't2',
       bodyMd: 'b2',
       tags: ['y'],
@@ -223,14 +239,14 @@ describe('patchMemory — RFC-045', () => {
     const seed = await seedCandidate(db)
     const cap = captureBroadcasts()
     await expect(
-      patchMemory(db, seed.id, { title: 'must roll back' }, 'admin', {
-        afterWriteInTx: () => {
+      memoryCatalogOf(db, {
+        afterWriteInTransaction: () => {
           throw new Error('rollback-patch')
         },
-      }),
+      }).commands.patch(seed.id, { title: 'must roll back' }, 'admin'),
     ).rejects.toThrow('rollback-patch')
     cap.stop()
-    expect((await getMemoryById(db, seed.id))?.memory).toMatchObject({
+    expect((await memoryCatalogOf(db).queries.getById(seed.id))?.memory).toMatchObject({
       title: seed.title,
       version: seed.version,
     })

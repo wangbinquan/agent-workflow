@@ -32,7 +32,7 @@ import {
   operationHandlesForInvoker,
   type RecordedOperationCall,
 } from './helpers/mcpOperationRecording'
-import { createManualCandidate, promoteCandidate } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from '../src/services/users'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
@@ -95,14 +95,14 @@ async function seedApproved(
   h: Harness,
   input: { scopeType: 'agent' | 'global'; scopeId: string | null; title: string; tags: string[] },
 ): Promise<string> {
-  const row = await createManualCandidate(h.db, {
+  const row = await memoryCatalogOf(h.db).commands.createManual({
     scopeType: input.scopeType,
     scopeId: input.scopeId,
     title: input.title,
     bodyMd: `body of ${input.title}`,
     tags: input.tags,
   })
-  await promoteCandidate(h.db, row.id, { action: 'approve' }, h.adminId)
+  await memoryCatalogOf(h.db).commands.promote(row.id, { action: 'approve' }, h.adminId)
   return row.id
 }
 
@@ -191,7 +191,7 @@ describe('RFC-327 —— GET /api/memories/facets', () => {
     await seedApproved(h, { scopeType: 'global', scopeId: null, title: 'a', tags: ['api', 'db'] })
     await seedApproved(h, { scopeType: 'global', scopeId: null, title: 'b', tags: ['api'] })
     // 未审的候选不进缺省统计面。
-    await createManualCandidate(h.db, {
+    await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'candidate',

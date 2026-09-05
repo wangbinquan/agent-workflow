@@ -1,8 +1,7 @@
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { runtimes } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { RUNTIME_KINDS } from '@/services/runtime'
 import type {
   MemoryDistillRuntimeResolver,
@@ -29,8 +28,9 @@ function fallback(protocol: 'opencode' | 'claude-code' = 'opencode') {
   } satisfies ResolvedMemoryDistillRuntime
 }
 
-abstract class BaseMemoryDistillRuntimeResolver implements MemoryDistillRuntimeResolver {
-  protected abstract find(name: string): Promise<RuntimeProfileRow | null>
+/** RFC-359 W4-D4：一份实现，两个 provider 共用——按名字取运行时档案，缺省回落到内建 kind。 */
+export class DrizzleMemoryDistillRuntimeResolver implements MemoryDistillRuntimeResolver {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async resolve(
     input: Parameters<MemoryDistillRuntimeResolver['resolve']>[0],
@@ -49,36 +49,8 @@ abstract class BaseMemoryDistillRuntimeResolver implements MemoryDistillRuntimeR
       ? fallback(name as 'opencode' | 'claude-code')
       : fallback()
   }
-}
 
-export class SqliteMemoryDistillRuntimeResolver extends BaseMemoryDistillRuntimeResolver {
-  constructor(private readonly db: DbClient) {
-    super()
-  }
-
-  protected async find(name: string): Promise<RuntimeProfileRow | null> {
-    return (
-      this.db
-        .select({
-          protocol: runtimes.protocol,
-          binaryPath: runtimes.binaryPath,
-          model: runtimes.model,
-          isSandbox: runtimes.isSandbox,
-        })
-        .from(runtimes)
-        .where(eq(runtimes.name, name))
-        .limit(1)
-        .get() ?? null
-    )
-  }
-}
-
-export class PostgresqlMemoryDistillRuntimeResolver extends BaseMemoryDistillRuntimeResolver {
-  constructor(private readonly db: PostgresqlDatabaseClient) {
-    super()
-  }
-
-  protected async find(name: string): Promise<RuntimeProfileRow | null> {
+  private async find(name: string): Promise<RuntimeProfileRow | null> {
     const rows = await this.db
       .select({
         protocol: runtimes.protocol,
@@ -91,4 +63,10 @@ export class PostgresqlMemoryDistillRuntimeResolver extends BaseMemoryDistillRun
       .limit(1)
     return rows[0] ?? null
   }
+}
+
+/** 旧名保留为装配别名，PG 装配收敛后删除。 */
+export {
+  DrizzleMemoryDistillRuntimeResolver as PostgresqlMemoryDistillRuntimeResolver,
+  DrizzleMemoryDistillRuntimeResolver as SqliteMemoryDistillRuntimeResolver,
 }

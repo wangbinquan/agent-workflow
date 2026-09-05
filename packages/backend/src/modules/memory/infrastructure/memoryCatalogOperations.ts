@@ -1,4 +1,10 @@
-import { and, desc, eq, getTableColumns, ilike, inArray, lt, or } from 'drizzle-orm'
+// RFC-359 W4-D4 —— memory 目录（列表 / 分页 / 详情 / 可见性与管理权 / 候选晋升 / 编辑 / 迁移 scope / 归档 / 删除）：
+// 一份实现，两个 provider 共用。以 PG 版为底：多语句写走统一事务原语；scope 的资源访问由 resource-catalog 的中立
+// participant 在同一事务里回答；repo / repo_group scope 的存在性与管理权由 source-control 的中立 participant 回答；
+// 大小写不敏感搜索经引擎能力矩阵表达。判据本身在 domain/scopeAuthorization.ts，两个 provider 只有这一份。
+// 测试用的故障注入缝（`MemoryCatalogTestHooks`）只在装配时给，与旧 SQLite 实现的 `MemoryMutationTestHooks` 同义。
+
+import { and, desc, eq, getTableColumns, inArray, lt, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -22,7 +28,7 @@ import { listMemoryPage, type MemoryPageRow } from '../application/listPage'
 import type { MemoryPageAnchor } from '../domain/listPagination'
 import {
   createRepositoryScopeAuthorizationInTx,
-  postgresqlRepositoryScopeExistenceReads,
+  repositoryScopeExistenceReads,
 } from '@/modules/source-control/public/participants'
 import type {
   RepositoryScopeAuthorizationInTx,
@@ -50,8 +56,13 @@ import {
   type MemoryScopeKind,
 } from '../domain/scopeAuthorization'
 import type { ResourceMemoryScopeRef } from '@/modules/resource-catalog/public/types'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { listFusedIntoSkillAsync } from './postgresqlSkillMemoryFusionParticipant'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  engineOf,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
+import { listFusedIntoSkill } from './skillMemoryFusionParticipant'
 import {
   ConflictError,
   ForbiddenError,
@@ -73,15 +84,28 @@ import type {
   PatchMemoryResult,
 } from '../../memory/public/catalog'
 
-export type PostgresqlMemoryTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
-type PostgresqlTransaction = PostgresqlMemoryTransaction
+/** RFC-359 W4-D4：一份实现，两个 provider 共用——事务句柄是统一事务原语的句柄。 */
+export type MemoryTransaction = DatabaseTransaction
+/** 旧名保留为别名，PG 装配收敛后删除。 */
+export type PostgresqlMemoryTransaction = MemoryTransaction
 type MemoryRow = typeof memories.$inferSelect
 
-const SUMMARY_COLUMNS = Object.fromEntries(
-  Object.entries(getTableColumns(memories)).filter(([key]) => key !== 'bodyMd'),
-) as Omit<ReturnType<typeof getTableColumns<typeof memories>>, 'bodyMd'>
+/** 测试专用故障注入缝：SQL 写入之后、事务提交之前；以及 Move 授权判定之后、写入之前。 */
+export interface MemoryCatalogTestHooks {
+  readonly afterWriteInTransaction?: (tx: MemoryTransaction) => void | Promise<void>
+  readonly afterMoveAuthorizationInTransaction?: (tx: MemoryTransaction) => void | Promise<void>
+}
+
+/** 摘要路径不读正文（RFC-311）。列映射在函数里取：schema 表是按 provider 投影的代理，模块级常量会钉死一个 provider。 */
+function summaryColumns() {
+  return Object.fromEntries(
+    Object.entries(getTableColumns(memories)).filter(([key]) => key !== 'bodyMd'),
+  ) as Omit<ReturnType<typeof getTableColumns<typeof memories>>, 'bodyMd'>
+}
+
+function scopeKey(scope: MemoryScopeRef): string {
+  return `${scope.scopeType}:${scope.scopeId ?? '__global__'}`
+}
 
 function parseTags(raw: string): string[] {
   try {
@@ -177,7 +201,7 @@ function actorSourceOf(source: PrincipalSource): ActorSource {
 }
 
 async function currentActor(
-  tx: PostgresqlTransaction,
+  tx: MemoryTransaction,
   principal: AuthenticatedPrincipal,
 ): Promise<Actor> {
   const accountRows = await tx
@@ -228,8 +252,8 @@ function resourceScope(scope: MemoryScopeRef): ResourceMemoryScopeRef | null {
 }
 
 async function accessOf(
-  participant: MemoryResourceScopeAccessParticipant<PostgresqlTransaction>,
-  tx: PostgresqlTransaction,
+  participant: MemoryResourceScopeAccessParticipant<MemoryTransaction>,
+  tx: MemoryTransaction,
   authority: MemoryScopeAuthority,
   scope: MemoryScopeRef,
 ) {
@@ -238,9 +262,9 @@ async function accessOf(
 }
 
 async function assertManageable(input: {
-  readonly participant: MemoryResourceScopeAccessParticipant<PostgresqlTransaction>
-  readonly repositories: RepositoryScopeAuthorizationInTx<PostgresqlTransaction>
-  readonly tx: PostgresqlTransaction
+  readonly participant: MemoryResourceScopeAccessParticipant<MemoryTransaction>
+  readonly repositories: RepositoryScopeAuthorizationInTx<MemoryTransaction>
+  readonly tx: MemoryTransaction
   readonly authority: MemoryScopeAuthority
   readonly scope: MemoryScopeRef
   readonly side: 'current' | 'destination'
@@ -299,19 +323,21 @@ async function assertManageable(input: {
   }
 }
 
-export function composePostgresqlMemoryCatalogOperations(input: {
-  readonly db: PostgresqlDatabaseClient
+export function composeMemoryCatalogOperations(input: {
+  readonly db: ProviderNeutralDatabase
   readonly contexts: DirectCommandContextFactory
-  readonly authorization: MemoryResourceScopeAccessParticipant<PostgresqlTransaction>
+  readonly authorization: MemoryResourceScopeAccessParticipant<MemoryTransaction>
+  readonly testHooks?: MemoryCatalogTestHooks
 }): MemoryCatalogOperations {
+  const session = databaseSessionFor(input.db)
+  const engine = engineOf(input.db)
+  const hooks = input.testHooks ?? {}
   /**
    * 取一条 scope 的授权事实。平台 scope 不查资源访问档（查了也用不上），
    * 与 SQLite 侧保持相同的查询次数。判定本身在 `domain/scopeAuthorization.ts`。
    */
   // RFC-352 T4：source-control 的 repository/group scope 授权 participant，装配一次。
-  const repositoryScopes = createRepositoryScopeAuthorizationInTx(
-    postgresqlRepositoryScopeExistenceReads,
-  )
+  const repositoryScopes = createRepositoryScopeAuthorizationInTx(repositoryScopeExistenceReads)
 
   const readScopeAuthorizationFacts = async (
     authority: MemoryScopeAuthority,
@@ -322,7 +348,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     if (hasAclBypass || !memoryScopeNeedsResourceAccess(scopeType)) {
       return { hasAclBypass, scopeType, resourceAccess: null }
     }
-    const resourceAccess = await input.db.transaction(
+    const resourceAccess = await session.transaction(
       async (tx) => await accessOf(input.authorization, tx, authority, scope),
     )
     return { hasAclBypass, scopeType, resourceAccess }
@@ -351,14 +377,20 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
     if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
     if (filter.search !== undefined) {
-      const term = `%${filter.search}%`
-      conditions.push(or(ilike(memories.title, term), ilike(memories.bodyMd, term))!)
+      // 大小写不敏感的用户搜索经能力矩阵表达，LIKE 通配符按能力矩阵转义。
+      const { pattern, escape } = engine.likeEscape(filter.search)
+      conditions.push(
+        or(
+          engine.likeCaseInsensitive(memories.title, pattern, escape),
+          engine.likeCaseInsensitive(memories.bodyMd, pattern, escape),
+        )!,
+      )
     }
     const where = conditions.length === 0 ? undefined : and(...conditions)
     const rows = await (where === undefined
-      ? input.db.select(SUMMARY_COLUMNS).from(memories).orderBy(desc(memories.createdAt)).all()
+      ? input.db.select(summaryColumns()).from(memories).orderBy(desc(memories.createdAt)).all()
       : input.db
-          .select(SUMMARY_COLUMNS)
+          .select(summaryColumns())
           .from(memories)
           .where(where)
           .orderBy(desc(memories.createdAt))
@@ -388,8 +420,14 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
     if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
     if (filter.search !== undefined) {
-      const term = `%${filter.search}%`
-      conditions.push(or(ilike(memories.title, term), ilike(memories.bodyMd, term))!)
+      // 大小写不敏感的用户搜索经能力矩阵表达，LIKE 通配符按能力矩阵转义。
+      const { pattern, escape } = engine.likeEscape(filter.search)
+      conditions.push(
+        or(
+          engine.likeCaseInsensitive(memories.title, pattern, escape),
+          engine.likeCaseInsensitive(memories.bodyMd, pattern, escape),
+        )!,
+      )
     }
     if (after !== null) {
       conditions.push(
@@ -401,7 +439,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     }
     const where = conditions.length === 0 ? undefined : and(...conditions)
     const base = input.db
-      .select({ ...SUMMARY_COLUMNS, createdAt: memories.createdAt })
+      .select({ ...summaryColumns(), createdAt: memories.createdAt })
       .from(memories)
     const rows = await (where === undefined
       ? base.orderBy(desc(memories.createdAt), desc(memories.id)).limit(size).all()
@@ -468,15 +506,20 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       }
     },
     // RFC-353 T9：只读投影，选中与定序在 memory domain（`fusedIntoSkill`），与 SQLite 同源。
-    listFusedInto: (skillId: string) => listFusedIntoSkillAsync(input.db, skillId),
+    listFusedInto: (skillId: string) => listFusedIntoSkill(input.db, skillId),
     async listWithBody(filter = {}) {
       const conditions = []
       if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))
       if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
       if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
       if (filter.search !== undefined) {
-        const term = `%${filter.search}%`
-        conditions.push(or(ilike(memories.title, term), ilike(memories.bodyMd, term))!)
+        const { pattern, escape } = engine.likeEscape(filter.search)
+        conditions.push(
+          or(
+            engine.likeCaseInsensitive(memories.title, pattern, escape),
+            engine.likeCaseInsensitive(memories.bodyMd, pattern, escape),
+          )!,
+        )
       }
       const where = conditions.length === 0 ? undefined : and(...conditions)
       const rows = await (where === undefined
@@ -499,7 +542,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       rows: readonly T[],
     ) {
       if (hasResourceAclBypass(authority.actor)) return [...rows]
-      return await input.db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const access = new Map<string, string>()
         for (const row of rows) {
           const ref = resourceScope(row)
@@ -527,7 +570,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     ) {
       if (hasResourceAclBypass(authority.actor))
         return rows.map((row) => ({ ...row, canManage: true }))
-      return await input.db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const access = new Map<string, string>()
         for (const row of rows) {
           const ref = resourceScope(row)
@@ -613,7 +656,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       return memory
     },
     async promote(id, command, administratorUserId) {
-      const committed = await input.db.transaction(async (tx) => {
+      const committed = await session.transaction(async (tx) => {
         const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
         const candidate = rows[0]
         if (candidate === undefined)
@@ -659,7 +702,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
           if (target.scopeType !== candidate.scopeType || target.scopeId !== candidate.scopeId) {
             throw new ConflictError(
               'supersede-scope-mismatch',
-              `cannot supersede memory ${target.id} — scope mismatch`,
+              `cannot supersede memory ${target.id} — scope mismatch (cand=${candidate.scopeType}/${candidate.scopeId ?? 'null'}, target=${target.scopeType}/${target.scopeId ?? 'null'})`,
             )
           }
         }
@@ -702,7 +745,10 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     },
     async patch(id, command, editorUserId) {
       const raw = command as Record<string, unknown>
-      if ('scopeType' in raw || 'scopeId' in raw) {
+      if (
+        Object.prototype.hasOwnProperty.call(raw, 'scopeType') ||
+        Object.prototype.hasOwnProperty.call(raw, 'scopeId')
+      ) {
         throw new ValidationError(
           'memory-scope-move-required',
           'scopeType and scopeId cannot be changed by generic PATCH; use the move command',
@@ -711,7 +757,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       const parsed = MemoryPatchRequestSchema.safeParse(command)
       if (!parsed.success)
         throw new ValidationError('invalid-body', 'invalid patch request', parsed.error.format())
-      const committed = await input.db.transaction(async (tx): Promise<PatchMemoryResult> => {
+      const committed = await session.transaction(async (tx): Promise<PatchMemoryResult> => {
         const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
         const row = rows[0]
         if (row === undefined) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
@@ -721,29 +767,41 @@ export function composePostgresqlMemoryCatalogOperations(input: {
             `memory ${id} is in terminal status '${row.status}'; cannot edit`,
           )
         }
-        const title = parsed.data.title ?? row.title
-        const bodyMd = parsed.data.bodyMd ?? row.bodyMd
-        const tags = parsed.data.tags ?? parseTags(row.tags)
-        const validated = MemorySchema.safeParse({ ...rowToMemory(row), title, bodyMd, tags })
+        // 合成内容再过一遍完整的 MemorySchema：title / body / tags 的规范化与 create / read 同一份合同。
+        // scope 原样带过去——改 scope 只有 move 这一条路。
+        const validated = MemorySchema.safeParse({
+          ...rowToMemory(row),
+          title: parsed.data.title ?? row.title,
+          bodyMd: parsed.data.bodyMd ?? row.bodyMd,
+          tags: parsed.data.tags ?? parseTags(row.tags),
+        })
         if (!validated.success)
           throw new ValidationError(
             'invalid-body',
             'patch would put the row in an invalid state',
             validated.error.format(),
           )
+        const synth = validated.data
         const changedFields: MemoryPatchField[] = []
-        if (title !== row.title) changedFields.push('title')
-        if (bodyMd !== row.bodyMd) changedFields.push('bodyMd')
-        if (!sameTags(tags, parseTags(row.tags))) changedFields.push('tags')
+        if (synth.title !== row.title) changedFields.push('title')
+        if (synth.bodyMd !== row.bodyMd) changedFields.push('bodyMd')
+        if (!sameTags(synth.tags, parseTags(row.tags))) changedFields.push('tags')
+        // 幂等重存：不升版本、不发 WS。
         if (changedFields.length === 0) return { memory: rowToMemory(row), changedFields }
         const updated = await tx
           .update(memories)
-          .set({ title, bodyMd, tags: JSON.stringify(tags), version: row.version + 1 })
+          .set({
+            title: synth.title,
+            bodyMd: synth.bodyMd,
+            tags: JSON.stringify(synth.tags),
+            version: row.version + 1,
+          })
           .where(and(eq(memories.id, id), eq(memories.version, row.version)))
           .returning()
           .all()
         if (updated[0] === undefined)
           throw staleConflictError('memory', `memory ${id} changed; reload and retry`)
+        await hooks.afterWriteInTransaction?.(tx)
         return { memory: rowToMemory(updated[0]), changedFields }
       })
       if (committed.changedFields.length > 0) {
@@ -764,7 +822,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       if (!parsed.success)
         throw new ValidationError('invalid-body', 'invalid move request', parsed.error.format())
       const principal = input.contexts.resolveCommandContext(context)
-      const committed = await input.db.transaction(async (tx) => {
+      const committed = await session.transaction(async (tx) => {
         const actor = await currentActor(tx, principal)
         const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
         const row = rows[0]
@@ -803,16 +861,42 @@ export function composePostgresqlMemoryCatalogOperations(input: {
           scope: nextScope,
           side: 'destination',
         })
-        if (
-          previousScope.scopeType === nextScope.scopeType &&
-          previousScope.scopeId === nextScope.scopeId
-        ) {
+        const scopeTypeChanged = previousScope.scopeType !== nextScope.scopeType
+        const scopeIdChanged = previousScope.scopeId !== nextScope.scopeId
+        const changedFields: Array<'scopeType' | 'scopeId'> = [
+          ...(scopeTypeChanged ? (['scopeType'] as const) : []),
+          ...(scopeIdChanged ? (['scopeId'] as const) : []),
+        ]
+        if (changedFields.length === 0) {
           return {
             memory: rowToMemory(row),
             moved: false,
             previousScope,
             actorUserId: principal.userId,
+            changedFields,
           }
+        }
+        await hooks.afterMoveAuthorizationInTransaction?.(tx)
+        // 写事务本身已经排除了外部写者；这里的二次读把命令锁在同事务的后续参与者之外，
+        // 也让「目标被删 / 授权漂移」的变异测试成为真实分支。
+        const refreshedRows = await tx
+          .select()
+          .from(memories)
+          .where(eq(memories.id, id))
+          .limit(1)
+          .all()
+        const refreshed = refreshedRows[0]
+        if (
+          refreshed === undefined ||
+          refreshed.version !== row.version ||
+          refreshed.status !== row.status ||
+          refreshed.scopeType !== row.scopeType ||
+          refreshed.scopeId !== row.scopeId
+        ) {
+          throw staleConflictError('memory', `memory ${id} changed; reload and retry`, {
+            expectedVersion: row.version,
+            currentVersion: refreshed?.version,
+          })
         }
         const refreshedActor = await currentActor(tx, principal)
         const refreshedAuthority = { authority: context.authority, actor: refreshedActor }
@@ -864,22 +948,24 @@ export function composePostgresqlMemoryCatalogOperations(input: {
             occurredAt: context.now,
           })
           .run()
+        await hooks.afterWriteInTransaction?.(tx)
         return {
           memory: rowToMemory(updated[0]),
           moved: true,
           previousScope,
           actorUserId: principal.userId,
+          changedFields,
         }
       })
       if (committed.moved) {
         publish({
           type: 'memory.updated',
           memoryId: id,
-          changedFields: ['scopeType', 'scopeId'],
+          changedFields: committed.changedFields,
           version: committed.memory.version,
         })
         console.log(
-          `[memory-moved] id=${id} movedBy=${committed.actorUserId} version=${committed.memory.version} operationId=${context.operationId}`,
+          `[memory-moved] id=${id} movedBy=${committed.actorUserId} from=${scopeKey(committed.previousScope)} to=${scopeKey(committed.memory)} version=${committed.memory.version} operationId=${context.operationId}`,
         )
       }
       return { memory: committed.memory, moved: committed.moved }

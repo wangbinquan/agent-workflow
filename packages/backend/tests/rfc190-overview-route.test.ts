@@ -37,6 +37,7 @@ import {
 } from '../src/modules/source-control/composition'
 import { buildOverview as buildOverviewWithAuthority } from '../src/services/overview'
 import { createUser } from '../src/services/users'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -47,7 +48,13 @@ function buildOverview(db: DbClient, actor: Actor, now?: () => number) {
     composeSqliteRepositoryWorkspaceStore(db),
     undefined,
   ).overviewQueries
-  return buildOverviewWithAuthority(db, resourceScopeAuthority(db, actor), repositories, now)
+  return buildOverviewWithAuthority(
+    db,
+    resourceScopeAuthority(db, actor),
+    repositories,
+    memoryCatalogOf(db),
+    now,
+  )
 }
 
 interface Harness {

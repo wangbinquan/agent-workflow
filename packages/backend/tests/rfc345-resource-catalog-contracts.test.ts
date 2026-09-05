@@ -72,10 +72,10 @@ import type {
   ResourcePackageApplyScenarioProvider,
   ResourcePackageApplyTx,
   ResourcePackageMutationParticipants,
-  ResourceScopeAuthorizationInTx,
   SkillZipImportParticipant,
   TaskExecutionResourceSnapshotInTx,
 } from '../src/modules/resource-catalog/public/participants'
+import type { MemoryResourceScopeAccessParticipant } from '../src/modules/memory/application/ports/resourceScopeAccess'
 import type {
   AgentCatalogModule,
   AgentOperationDescriptors,
@@ -193,7 +193,9 @@ assertType<Equal<Extract<keyof TaskExecutionResourceSnapshotInTx, string>, 'load
 assertType<Equal<Extract<keyof IntentApplyResourceParticipantInTx, string>, 'authorizeAndCommit'>>(
   true,
 )
-assertType<Equal<Extract<keyof ResourceScopeAuthorizationInTx, string>, 'accessOf'>>(true)
+assertType<Equal<Extract<keyof MemoryResourceScopeAccessParticipant<unknown>, string>, 'accessOf'>>(
+  true,
+)
 assertType<Equal<Extract<keyof AgentQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof AgentReferenceQueries, string>, 'labels'>>(true)
 assertType<
@@ -591,7 +593,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
   test('T4d memory scope authorization consumes the named participant through exact pairs', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const memory = readFileSync(
-      resolve(sourceRoot, 'modules/memory/infrastructure/sqliteMemoryCatalog.ts'),
+      resolve(sourceRoot, 'modules/memory/infrastructure/memoryCatalogOperations.ts'),
       'utf8',
     )
     const memoryRoute = readFileSync(resolve(sourceRoot, 'routes/memories.ts'), 'utf8')
@@ -606,11 +608,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const composition = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/composition/resourceAcl.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/composition/resourceScopeAuthorization.ts'),
       'utf8',
     )
-    expect(memory).toContain('ResourceScopeAuthorizationInTx')
-    expect(memory).toContain('.accessOf(authority.authority, ref)')
+    // RFC-359 W4-D4：memory 经 resource-catalog 的中立 participant 拿 scope 访问档——事务句柄 + exact pair 一起交过去。
+    expect(memory).toContain('MemoryResourceScopeAccessParticipant')
+    expect(memory).toContain('participant.accessOf(tx, authority, ref)')
     expect(memory).toContain("scope.scopeType === 'repo'")
     expect(memory).toContain("scope.scopeType === 'repo_group'")
     expect(memory).toContain("scope.scopeType === 'global'")
@@ -625,9 +628,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(memory).not.toContain(forbidden)
     }
 
-    expect(composition).toContain('composeResourceScopeAuthorizationBinding')
-    expect(composition).toContain('authority !== pair.authority')
-    expect(composition).toContain("throw new Error('foreign-resource-scope-authority')")
+    expect(composition).toContain('composeResourceScopeAccessParticipant')
+    expect(composition).toContain('createResourceScopeAccessParticipant(resourceScopeAccessReads)')
     expect(wsRegistry).not.toContain('modules/resource-catalog/composition/resourceAcl')
     expect(wsRegistry).toContain('channels: RealtimeChannelAccess')
     expect(wsRegistry).toContain('channelAccessOf(ctx).canViewMemory(')
@@ -645,21 +647,23 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     // 因此改用「函数名 + 该次调用绑定的 authority 变量」这对锚点来定位。
     // 本断言锁的语义没变：**第二道 scope gate 必须排在 actor 刷新之后**——
     // 刷新前后各验一次，才挡得住「读完权限到写入之间权限被改」的窗口。
+    // RFC-359 W4-D4：目录合一后 gate 是 `assertManageable({ …, authority, side: 'current' })`，
+    // actor 刷新是 `currentActor(tx, principal)`；锚点随之改名，语义不变。
     const gateWith = (authorityVar: string, from: number): number => {
-      let cursor = memory.indexOf('assertMemoryScopeManageableInTx(', from)
+      let cursor = memory.indexOf('assertManageable({', from)
       while (cursor >= 0) {
-        const call = memory.slice(cursor, cursor + 220)
-        if (call.includes(authorityVar) && call.includes("'current'")) return cursor
-        cursor = memory.indexOf('assertMemoryScopeManageableInTx(', cursor + 1)
+        const call = memory.slice(cursor, cursor + 240)
+        if (call.includes(authorityVar) && call.includes("side: 'current'")) return cursor
+        cursor = memory.indexOf('assertManageable({', cursor + 1)
       }
       return -1
     }
-    const firstScopeGate = gateWith('scopeAuthority', resolveContext)
+    const firstScopeGate = gateWith('\n          authority,\n', resolveContext)
     const refreshActor = memory.indexOf(
-      'const refreshedActor = currentMoveActorInTx(tx, authority)',
+      'const refreshedActor = await currentActor(tx, principal)',
       firstScopeGate + 1,
     )
-    const secondScopeGate = gateWith('refreshedScopeAuthority', refreshActor)
+    const secondScopeGate = gateWith('authority: refreshedAuthority,', refreshActor)
     expect(resolveContext).toBeGreaterThanOrEqual(0)
     expect(firstScopeGate).toBeGreaterThan(resolveContext)
     expect(refreshActor).toBeGreaterThan(firstScopeGate)
@@ -2217,7 +2221,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(participants).not.toContain(`export interface ${internalLeaf}`)
     }
-    expect(authorization).toContain('interface ResourceAccessEvaluator')
+    // RFC-359 W4-D4：scope 访问 participant 的唯一 owner 工厂与它要的两件事实读取器留在 application。
+    expect(authorization).toContain('export function createResourceScopeAccessParticipant')
+    expect(authorization).toContain('interface ResourceScopeAccessReads')
     expect(authorization).not.toContain('trustedResourceAuthorizations')
     expect(catalogQuery).toContain('interface ResourceCatalogQueryDependencies')
     expect(catalogQuery).toContain("from '../public/queries'")

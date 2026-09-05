@@ -1,5 +1,5 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createMemoryDistillQueries } from './application/distillQueries'
 import type { MemoryDistillReadStore } from './application/ports/distillReadStore'
 import type { MemoryInjectionReadStore } from './application/ports/injectionReadStore'
@@ -24,33 +24,37 @@ import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillRea
 import { DrizzleMemoryDistillWorkStore } from './infrastructure/memoryDistillWorkStore'
 import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'
 import {
-  composePostgresqlMemoryCatalogOperations,
-  type PostgresqlMemoryTransaction,
-} from './infrastructure/postgresqlMemoryCatalogOperations'
-import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
-import type { DbTxSync } from '@/db/txSync'
-import { composeSqliteMemoryCatalogOperations } from './infrastructure/sqliteMemoryCatalogOperations'
+  composeMemoryCatalogOperations,
+  type MemoryCatalogTestHooks,
+  type MemoryTransaction,
+} from './infrastructure/memoryCatalogOperations'
 import { createMemoryDistillSessionCapture } from './infrastructure/memoryDistillSessionCapture'
 import {
   markFusedSync,
   reassignFusedSkillSync,
 } from './infrastructure/sqliteMemoryMembershipParticipant'
-import {
-  PostgresqlMemoryDistillRuntimeResolver,
-  SqliteMemoryDistillRuntimeResolver,
-} from './infrastructure/memoryDistillRuntimeResolver'
+import { DrizzleMemoryDistillRuntimeResolver } from './infrastructure/memoryDistillRuntimeResolver'
 import type { MemoryOperations } from './public/operations'
 import type { MemoryInjectionQueries } from './public/queries'
 import type { MemoryCatalogOperations } from './public/catalog'
 import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
-import type { MemoryResourceScopeAuthorization } from './infrastructure/sqliteMemoryCatalog'
 import type { EnqueueMemoryDistillJobInput, MemoryDistillWorkerOptions } from './public/commands'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
 } from './application/injection/injectMemory'
 
-export { composePostgresqlSkillMemoryFusionParticipantFactory } from './infrastructure/postgresqlSkillMemoryFusionParticipant'
+// RFC-359 W4-D4：memory 的目录 / 融合 participant / 蒸馏运行时解析都只有一份实现，两个 provider 共用；
+// provider 只在 bootstrap 交来的数据库客户端上体现。旧的 provider 命名入口保留为装配别名。
+export {
+  composePostgresqlSkillMemoryFusionParticipantFactory,
+  composeSkillMemoryFusionParticipantFactory,
+} from './infrastructure/skillMemoryFusionParticipant'
+export { composeMemoryCatalogOperations, type MemoryCatalogTestHooks, type MemoryTransaction }
+/** 旧名保留为装配别名，PG 装配收敛后删除。 */
+export const composeSqliteMemoryCatalogOperations = composeMemoryCatalogOperations
+export const composePostgresqlMemoryCatalogOperations = composeMemoryCatalogOperations
+
 // RFC-353 T6/T7：SQLite 侧的成员关系同步核心同样从 composition 出。
 // **不从 `public/participants` 出**——那会让 public 面直接点名一个 provider 适配器
 // （RFC-349 的 provider-cutover 账本明写「只能缩不能涨」）。跨 context 的 provider 装配
@@ -69,14 +73,12 @@ export function composeSqliteFusionMemoryMembership(): {
   return Object.freeze({ markFused: markFusedSync, reassignFusedSkill: reassignFusedSkillSync })
 }
 
-export { composeSqliteMemoryCatalogOperations }
-
-export function composeSqliteMemoryDistillQueries(db: DbClient) {
+export function composeMemoryDistillQueries(db: ProviderNeutralDatabase) {
   return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
 }
-
-export function composePostgresqlMemoryDistillQueries(db: PostgresqlDatabaseClient) {
-  return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
+export {
+  composeMemoryDistillQueries as composePostgresqlMemoryDistillQueries,
+  composeMemoryDistillQueries as composeSqliteMemoryDistillQueries,
 }
 
 function composeMemoryOperations(input: {
@@ -129,29 +131,28 @@ function composeMemoryInjectionQueries(store: MemoryInjectionReadStore): MemoryI
   })
 }
 
-export function composeSqliteMemoryInjectionQueries(db: DbClient): MemoryInjectionQueries {
-  return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
-}
-
-export function composePostgresqlMemoryInjectionQueries(
-  db: PostgresqlDatabaseClient,
+export function composeMemoryInjectionQueriesFor(
+  db: ProviderNeutralDatabase,
 ): MemoryInjectionQueries {
   return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
 }
+export {
+  composeMemoryInjectionQueriesFor as composePostgresqlMemoryInjectionQueries,
+  composeMemoryInjectionQueriesFor as composeSqliteMemoryInjectionQueries,
+}
 
-export function composeSqliteMemoryOperations(input: {
-  readonly db: DbClient
+/** 目录绑定：identity-access 的命令上下文工厂 + resource-catalog 的 scope 访问 participant（两个 provider 同一份）。 */
+export interface MemoryCatalogBinding {
+  readonly contexts: DirectCommandContextFactory
+  readonly authorization: MemoryResourceScopeAccessParticipant<DatabaseTransaction>
+  readonly testHooks?: MemoryCatalogTestHooks
+}
+
+export function composeMemoryOperationsFor(input: {
+  readonly db: ProviderNeutralDatabase
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly injectionQueries?: MemoryInjectionQueries
-  readonly catalogBinding?: {
-    readonly contexts: DirectCommandContextFactory
-    readonly authorization: MemoryResourceScopeAuthorization
-    /**
-     * RFC-352 T4：repository / repository-group scope 的授权 participant 由 source-control 提供。
-     * 不传就用 source-control 的 SQLite 实现——bootstrap 之外的调用方（测试夹具）不必自己装。
-     */
-    readonly repositoryScopes?: RepositoryScopeAuthorizationInTx<DbTxSync>
-  }
+  readonly catalogBinding?: MemoryCatalogBinding
 }): MemoryOperations {
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db),
@@ -159,45 +160,20 @@ export function composeSqliteMemoryOperations(input: {
       input.db,
       createMemoryDistillSessionCapture(input.db),
     ),
-    runtimeResolver: new SqliteMemoryDistillRuntimeResolver(input.db),
+    runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(input.db),
     reviewedArtifacts: input.reviewedArtifacts,
-    injectionQueries: input.injectionQueries ?? composeSqliteMemoryInjectionQueries(input.db),
+    injectionQueries: input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db),
     ...(input.catalogBinding === undefined
       ? {}
       : {
-          catalog: composeSqliteMemoryCatalogOperations({
+          catalog: composeMemoryCatalogOperations({
             db: input.db,
             ...input.catalogBinding,
           }),
         }),
   })
 }
-
-export function composePostgresqlMemoryOperations(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
-  readonly injectionQueries?: MemoryInjectionQueries
-  readonly catalogBinding?: {
-    readonly contexts: DirectCommandContextFactory
-    readonly authorization: MemoryResourceScopeAccessParticipant<PostgresqlMemoryTransaction>
-  }
-}): MemoryOperations {
-  return composeMemoryOperations({
-    readStore: new DrizzleMemoryDistillReadStore(input.db),
-    workStore: new DrizzleMemoryDistillWorkStore(
-      input.db,
-      createMemoryDistillSessionCapture(input.db),
-    ),
-    runtimeResolver: new PostgresqlMemoryDistillRuntimeResolver(input.db),
-    reviewedArtifacts: input.reviewedArtifacts,
-    injectionQueries: input.injectionQueries ?? composePostgresqlMemoryInjectionQueries(input.db),
-    ...(input.catalogBinding === undefined
-      ? {}
-      : {
-          catalog: composePostgresqlMemoryCatalogOperations({
-            db: input.db,
-            ...input.catalogBinding,
-          }),
-        }),
-  })
+export {
+  composeMemoryOperationsFor as composePostgresqlMemoryOperations,
+  composeMemoryOperationsFor as composeSqliteMemoryOperations,
 }

@@ -1,6 +1,6 @@
 // RFC-101 PR-B — memory `fused` terminal status + provenance + restore un-fuse.
 //
-// Locks: fuseMemoriesTx only transitions `approved` rows (drifted rows
+// Locks: the fusion participant's markFused only transitions `approved` rows (drifted rows
 // skipped), the DB CHECK enforces fused⟺provenance, a fused memory is terminal
 // (cannot be edited), and restoring a skill below a fusion version un-fuses the
 // affected memories in the SAME transaction (invariant: fused ⟺ knowledge is
@@ -16,7 +16,9 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
-import { fuseMemoriesTx, patchMemory } from '../src/services/memory'
+import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 import {
   createManagedSkill,
@@ -60,6 +62,35 @@ function insertApprovedGlobalMemory(db: DbClient, title: string): string {
   return id
 }
 
+// RFC-359 W4-D4：融合写入经 memory 提供给 knowledge-evolution 的中立 participant（生产同一份），
+// 不再有 SQLite 专属的 `the fusion participant`。
+const FUSION = composeSkillMemoryFusionParticipantFactory()
+async function fuse(
+  db: DbClient,
+  args: {
+    memoryIds: readonly string[]
+    skillId: string
+    skillName: string
+    skillVersion: number
+    fusionId: string
+    userId: string
+    now: number
+  },
+): Promise<readonly string[]> {
+  return await databaseSessionFor(db).transaction(
+    async (tx) =>
+      await FUSION.inTransaction(tx).markFused({
+        memoryIds: args.memoryIds,
+        skillId: args.skillId,
+        skillName: args.skillName,
+        skillVersion: args.skillVersion,
+        fusionId: args.fusionId,
+        actorUserId: args.userId,
+        now: args.now,
+      }),
+  )
+}
+
 function statusOf(db: DbClient, id: string): string {
   const rows = db.select().from(memories).where(eqId(id)).all() as Array<{ status: string }>
   return rows[0]!.status
@@ -68,28 +99,26 @@ function eqId(id: string) {
   return eq(memories.id, id)
 }
 
-describe('fuseMemoriesTx', () => {
+describe('fusion participant markFused', () => {
   let h: H
   beforeEach(() => (h = build()))
   afterEach(() => h.cleanup())
 
-  test('only approved memories transition to fused (+ provenance); others skipped', () => {
+  test('only approved memories transition to fused (+ provenance); others skipped', async () => {
     const a = insertApprovedGlobalMemory(h.db, 'a')
     const b = insertApprovedGlobalMemory(h.db, 'b')
     // archive b so it is no longer 'approved'
     h.db.update(memories).set({ status: 'archived' }).where(eqId(b)).run()
 
-    const fused = dbTxSync(h.db, (tx) =>
-      fuseMemoriesTx(tx, {
-        memoryIds: [a, b],
-        skillId: 'skill-lint',
-        skillName: 'lint',
-        skillVersion: 4,
-        fusionId: 'fus_1',
-        userId: 'u1',
-        now: Date.now(),
-      }),
-    )
+    const fused = await fuse(h.db, {
+      memoryIds: [a, b],
+      skillId: 'skill-lint',
+      skillName: 'lint',
+      skillVersion: 4,
+      fusionId: 'fus_1',
+      userId: 'u1',
+      now: Date.now(),
+    })
     expect(fused).toEqual([a])
     expect(statusOf(h.db, a)).toBe('fused')
     expect(statusOf(h.db, b)).toBe('archived') // untouched
@@ -109,7 +138,7 @@ describe('fused⟺provenance DB CHECK', () => {
   beforeEach(() => (h = build()))
   afterEach(() => h.cleanup())
 
-  test('status=fused without provenance is rejected', () => {
+  test('status=fused without provenance is rejected', async () => {
     expect(() =>
       h.db
         .insert(memories)
@@ -129,7 +158,7 @@ describe('fused⟺provenance DB CHECK', () => {
     ).toThrow()
   })
 
-  test('non-fused status with provenance set is rejected', () => {
+  test('non-fused status with provenance set is rejected', async () => {
     expect(() =>
       h.db
         .insert(memories)
@@ -158,20 +187,18 @@ describe('fused is terminal', () => {
 
   test('patchMemory refuses to edit a fused memory', async () => {
     const a = insertApprovedGlobalMemory(h.db, 'a')
-    dbTxSync(h.db, (tx) =>
-      fuseMemoriesTx(tx, {
-        memoryIds: [a],
-        skillId: 'skill-lint',
-        skillName: 'lint',
-        skillVersion: 2,
-        fusionId: 'f',
-        userId: null,
-        now: Date.now(),
-      }),
-    )
+    await fuse(h.db, {
+      memoryIds: [a],
+      skillId: 'skill-lint',
+      skillName: 'lint',
+      skillVersion: 2,
+      fusionId: 'f',
+      userId: 'u',
+      now: Date.now(),
+    })
     let code: string | undefined
     try {
-      await patchMemory(h.db, a, { title: 'new title' })
+      await memoryCatalogOf(h.db).commands.patch(a, { title: 'new title' })
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -195,26 +222,23 @@ describe('restore un-fuses memories fused after the target version', () => {
 
     const fusedAtV1 = insertApprovedGlobalMemory(h.db, 'old')
     const fusedAtV2 = insertApprovedGlobalMemory(h.db, 'new')
-    dbTxSync(h.db, (tx) => {
-      fuseMemoriesTx(tx, {
-        memoryIds: [fusedAtV1],
-        skillId: skill.id,
-        skillName: 'lint',
-        skillVersion: 1,
-        fusionId: 'f1',
-        userId: 'u',
-        now: Date.now(),
-      })
-      fuseMemoriesTx(tx, {
-        memoryIds: [fusedAtV2],
-        skillId: skill.id,
-        skillName: 'lint',
-        skillVersion: 2,
-        fusionId: 'f2',
-        userId: 'u',
-        now: Date.now(),
-      })
-      return null
+    await fuse(h.db, {
+      memoryIds: [fusedAtV1],
+      skillId: skill.id,
+      skillName: 'lint',
+      skillVersion: 1,
+      fusionId: 'f1',
+      userId: 'u',
+      now: Date.now(),
+    })
+    await fuse(h.db, {
+      memoryIds: [fusedAtV2],
+      skillId: skill.id,
+      skillName: 'lint',
+      skillVersion: 2,
+      fusionId: 'f2',
+      userId: 'u',
+      now: Date.now(),
     })
 
     const res = restoreSkillVersion(
@@ -231,19 +255,17 @@ describe('restore un-fuses memories fused after the target version', () => {
     expect(statusOf(h.db, fusedAtV1)).toBe('fused') // still in v1 content
   })
 
-  test('unfuseAboveVersionSync clears provenance', () => {
+  test('unfuseAboveVersionSync clears provenance', async () => {
     const m = insertApprovedGlobalMemory(h.db, 'm')
-    dbTxSync(h.db, (tx) =>
-      fuseMemoriesTx(tx, {
-        memoryIds: [m],
-        skillId: 'skill-lint',
-        skillName: 'lint',
-        skillVersion: 9,
-        fusionId: 'f',
-        userId: 'u',
-        now: Date.now(),
-      }),
-    )
+    await fuse(h.db, {
+      memoryIds: [m],
+      skillId: 'skill-lint',
+      skillName: 'lint',
+      skillVersion: 9,
+      fusionId: 'f',
+      userId: 'u',
+      now: Date.now(),
+    })
     const unfused = dbTxSync(h.db, (tx) =>
       unfuseAboveVersionSync(tx, { skillId: 'skill-lint', aboveVersion: 0 }),
     )

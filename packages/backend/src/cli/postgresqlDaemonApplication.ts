@@ -58,7 +58,7 @@ import {
   composePostgresqlMemoryOperations,
   composePostgresqlSkillMemoryFusionParticipantFactory,
 } from '@/modules/memory/composition'
-import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/postgresqlResourceScopeAuthorization'
+import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composePostgresqlClassicCatalogs } from '@/modules/resource-catalog/composition/postgresqlClassicCatalogs'
 import { composePostgresqlResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'

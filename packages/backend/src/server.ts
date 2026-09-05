@@ -103,14 +103,13 @@ import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resourc
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
   canViewResource,
-  composeResourceScopeAuthorizationBinding,
   filterVisibleRows,
   getResourceAcl,
   requireResourceEdit,
   requireResourceGovern,
   updateResourceAcl,
-  type ResourceScopeAuthorizationBinding,
 } from '@/modules/resource-catalog/composition/resourceAcl'
+import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 import { resourceAclAudienceAuthority } from '@/modules/resource-catalog/domain/resourceAccess'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
@@ -161,7 +160,7 @@ import { mcpRouteNow, mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import {
-  composeSqliteMemoryCatalogOperations,
+  composeMemoryCatalogOperations,
   composeSqliteMemoryInjectionQueries,
   composeSqliteMemoryOperations,
 } from '@/modules/memory/composition'
@@ -1854,6 +1853,19 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
           return await readCommittedReviewArtifactBody(collaborationContext, finalPath)
         },
       },
+      // RFC-359 W4-D4：目录一份实现、两个 provider 共用；scope 访问 participant 由 resource-catalog 装配。
+      catalogBinding: {
+        contexts: identityAccess.contexts,
+        authorization: composeResourceScopeAccessParticipant(),
+      },
+    })
+  // 注入进来的 memoryOperations 可能不带目录（旧夹具）：overview 与路由都要它，这里补一份同样的装配。
+  const memoryCatalog =
+    memoryOperations.catalog ??
+    composeMemoryCatalogOperations({
+      db: deps.db,
+      contexts: identityAccess.contexts,
+      authorization: composeResourceScopeAccessParticipant(),
     })
   collaborationContext ??= createCollaborationCommandContext({
     db: deps.db,
@@ -2036,17 +2048,13 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
             resources: provider.resources,
           })
         })()
-  const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
   const overviewQuery: OverviewRouteQuery = Object.freeze({
     execute: (input: Parameters<OverviewRouteQuery['execute']>[0]) =>
       buildOverview(
         effectiveDeps.db,
-        {
-          actor: input.actor,
-          authority: input.authority,
-          authorization: resourceScopeAuthorization,
-        },
+        { actor: input.actor, authority: input.authority },
         repositoryBootstrap.repositoryWorkspaceOperations.overviewQueries,
+        memoryCatalog,
       ),
   })
   const intentApply = composeSqliteIntentApplyOperations({
@@ -2088,7 +2096,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     workgroupCatalog,
     resourcePackageCatalog,
     providerResourceCatalog,
-    resourceScopeAuthorization,
+    memoryCatalog,
     agentResourceIntegrity,
     overviewQuery,
     intentApply,
@@ -2288,7 +2296,7 @@ function composeSqliteApiRouteMounts(
   workgroupCatalog: WorkgroupCatalogModule,
   resourcePackageCatalog: ComposedResourcePackageCatalog | null,
   providerResourceCatalog: ReturnType<typeof composeSqliteResourceCatalog>,
-  resourceScopeAuthorization: ResourceScopeAuthorizationBinding,
+  composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
   agentResourceIntegrity: ReturnType<typeof composeSqliteAgentResourceIntegrity>,
   overviewQuery: OverviewRouteQuery,
   intentApply: IntentApplyOperations,
@@ -2497,13 +2505,7 @@ function composeSqliteApiRouteMounts(
     db: deps.db,
     identityAccess,
   })
-  const memoryCatalog =
-    deps.memoryOperations.catalog ??
-    composeSqliteMemoryCatalogOperations({
-      db: deps.db,
-      contexts: identityAccess.contexts,
-      authorization: resourceScopeAuthorization,
-    })
+  const memoryCatalog = deps.memoryOperations.catalog ?? composedMemoryCatalog
   const agentLaunchResources = Object.freeze({
     resources: composeSqliteAgentLaunchResourceOperations(deps.db),
     integrity: agentResourceIntegrity.launch,

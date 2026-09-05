@@ -22,6 +22,7 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type {
   AclResourceType,
   OverviewResponse,
+  MemorySummary,
   OverviewTasks,
   Permission,
 } from '@agent-workflow/shared'
@@ -39,11 +40,7 @@ import {
   workflows as workflowsTable,
   workgroups as workgroupsTable,
 } from '@/db/schema'
-import {
-  filterMemoriesByScopeVisibility,
-  listMemories,
-  type MemoryResourceScopeAuthority,
-} from '@/services/memory'
+import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import { visibleRowsCondition, type AclColumnRef } from '@/services/resourceAcl'
 import { taskVisibilityCondition } from '@/services/task'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
@@ -141,10 +138,28 @@ async function buildTaskStats(
  * Pure read; `now` is injectable so the 7d cutoff and generatedAt come from
  * one clock capture and boundary tests are deterministic (D10).
  */
+/** 记忆计数要的最小面：与 memory 目录合同同形（exact pair + 列表 / 可见性过滤），这里不引 memory 的内部模块。 */
+export interface OverviewMemoryScopeAuthority {
+  readonly authority: RequestAuthority
+  readonly actor: Actor
+}
+export interface OverviewMemoryCatalog {
+  readonly queries: {
+    list(filter: { readonly status: 'approved' }): Promise<readonly MemorySummary[]>
+    filterVisible<
+      T extends { readonly scopeType: MemorySummary['scopeType']; readonly scopeId: string | null },
+    >(
+      authority: OverviewMemoryScopeAuthority,
+      rows: readonly T[],
+    ): Promise<T[]>
+  }
+}
+
 async function buildOverviewFresh(
   db: DbClient,
-  authority: MemoryResourceScopeAuthority,
+  authority: OverviewMemoryScopeAuthority,
   repositories: RepositoryOverviewQueries,
+  memoryCatalog: OverviewMemoryCatalog,
   now: () => number = Date.now,
 ): Promise<OverviewResponse> {
   const actor = authority.actor
@@ -223,8 +238,9 @@ async function buildOverviewFresh(
       return rows[0]?.n ?? 0
     }),
     gatedCount(actor, 'memory:read', async () => {
-      const approved = await listMemories(db, { status: 'approved' })
-      return (await filterMemoriesByScopeVisibility(db, authority, approved)).length
+      // RFC-359 W4-D4：记忆计数走 memory 的目录合同（与列表路由同一条可见性管线），不再经 legacy facade。
+      const approved = await memoryCatalog.queries.list({ status: 'approved' })
+      return (await memoryCatalog.queries.filterVisible(authority, approved)).length
     }),
     buildTaskStats(db, actor, t - WINDOW_7D_MS),
   ])
@@ -237,16 +253,17 @@ async function buildOverviewFresh(
 
 export function buildOverview(
   db: DbClient,
-  authority: MemoryResourceScopeAuthority,
+  authority: OverviewMemoryScopeAuthority,
   repositories: RepositoryOverviewQueries,
+  memoryCatalog: OverviewMemoryCatalog,
   now: () => number = Date.now,
 ): Promise<OverviewResponse> {
   const actor = authority.actor
   // An injected clock defines an independent observation and is used by
   // boundary tests; never merge it with another caller's clock. Production
   // requests use Date.now and can safely share only their overlapping read.
-  if (now !== Date.now) return buildOverviewFresh(db, authority, repositories, now)
+  if (now !== Date.now) return buildOverviewFresh(db, authority, repositories, memoryCatalog, now)
   return overviewFlight(db)(overviewFlightKey(actor), () =>
-    buildOverviewFresh(db, authority, repositories, now),
+    buildOverviewFresh(db, authority, repositories, memoryCatalog, now),
   )
 }

@@ -92,20 +92,19 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
     }
   })
 
-  test('the memory search uses ilike on PostgreSQL and like on SQLite', () => {
-    const postgresql = read(
-      'src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts',
-    )
-    const sqlite = read('src/modules/memory/infrastructure/sqliteMemoryCatalog.ts')
+  test('the memory search goes through the engine capability on both providers', () => {
+    // RFC-359 W4-D4：目录只有一份实现——大小写不敏感由能力矩阵表达（SQLite `like` / PostgreSQL `ilike`），
+    // 通配符按能力矩阵转义；源码里不许再出现裸 like / ilike。
+    const catalog = read('src/modules/memory/infrastructure/memoryCatalogOperations.ts')
 
-    expect(postgresql).toContain('ilike(memories.title, term)')
-    expect(postgresql).toContain('ilike(memories.bodyMd, term)')
+    expect(catalog).toContain('engine.likeCaseInsensitive(memories.title, pattern, escape)')
+    expect(catalog).toContain('engine.likeCaseInsensitive(memories.bodyMd, pattern, escape)')
+    expect(catalog).toContain('engine.likeEscape(filter.search)')
     expect(
-      postgresql.match(PLAIN_LIKE),
-      '记忆搜索回到 like ⇒ 切 PostgreSQL 后大小写不同的搜索词静默少召回',
+      catalog.match(PLAIN_LIKE),
+      '记忆搜索回到裸 like ⇒ PostgreSQL 上大小写不同的搜索词静默少召回',
     ).toBeNull()
-    // SQLite 侧保持 like：它本来就不敏感，换 ilike 反而是 PostgreSQL-only 语法。
-    expect(sqlite).toContain('like(memories.title, term)')
+    expect(catalog).not.toContain('ilike(')
   })
 
   test('the digital-employee case search uses ilike on PostgreSQL and like on SQLite', () => {

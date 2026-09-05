@@ -34,7 +34,7 @@ import {
   type DistillerSpawnFn,
 } from '../src/modules/memory/application/distill/memoryDistiller'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
-import { promoteCandidate } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { injectMemoryForRun } from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
@@ -699,7 +699,11 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     })
     expect(beforeApproval).toEqual({ block: null, snapshot: null })
 
-    await promoteCandidate(db, candidate.id, { action: 'approve' }, 'closed-loop-admin')
+    await memoryCatalogOf(db).commands.promote(
+      candidate.id,
+      { action: 'approve' },
+      'closed-loop-admin',
+    )
     const afterApproval = await injectMemoryForRun({
       store: sqliteMemoryInjectionStore(db),
       taskId: nextTaskId,

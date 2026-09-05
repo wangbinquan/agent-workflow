@@ -70,6 +70,7 @@ import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { buildOverview } from '../src/services/overview'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
@@ -260,6 +261,7 @@ const GUARDED: GuardedPath[] = [
         db,
         resourceScopeAuthority(db, actor),
         composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
+        memoryCatalogOf(db),
       )
     },
   },

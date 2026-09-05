@@ -14,7 +14,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories, memoryDistillJobs } from '../src/db/schema'
-import { listMemories } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -81,7 +81,7 @@ describe('RFC-050 listMemories — populates outputLang on candidate summaries',
   test('candidate joined to zh-CN job → summary.outputLang === "zh-CN"', async () => {
     const job = seedJob(db, 'zh-CN')
     const memId = seedMemory(db, { status: 'candidate', distillJobId: job })
-    const rows = await listMemories(db, { status: 'candidate' })
+    const rows = await memoryCatalogOf(db).queries.list({ status: 'candidate' })
     const row = rows.find((r) => r.id === memId)
     expect(row?.outputLang).toBe('zh-CN')
   })
@@ -89,27 +89,27 @@ describe('RFC-050 listMemories — populates outputLang on candidate summaries',
   test('candidate joined to en-US job → summary.outputLang === "en-US"', async () => {
     const job = seedJob(db, 'en-US')
     const memId = seedMemory(db, { status: 'candidate', distillJobId: job })
-    const rows = await listMemories(db, { status: 'candidate' })
+    const rows = await memoryCatalogOf(db).queries.list({ status: 'candidate' })
     expect(rows.find((r) => r.id === memId)?.outputLang).toBe('en-US')
   })
 
   test('candidate with NULL distill_job_id (manual create) → outputLang null', async () => {
     const memId = seedMemory(db, { status: 'candidate', distillJobId: null })
-    const rows = await listMemories(db, { status: 'candidate' })
+    const rows = await memoryCatalogOf(db).queries.list({ status: 'candidate' })
     expect(rows.find((r) => r.id === memId)?.outputLang).toBeNull()
   })
 
   test('candidate pointing at legacy job (output_lang NULL) → outputLang null', async () => {
     const job = seedJob(db, null)
     const memId = seedMemory(db, { status: 'candidate', distillJobId: job })
-    const rows = await listMemories(db, { status: 'candidate' })
+    const rows = await memoryCatalogOf(db).queries.list({ status: 'candidate' })
     expect(rows.find((r) => r.id === memId)?.outputLang).toBeNull()
   })
 
   test('approved row inherits no chip even when source job had a language', async () => {
     const job = seedJob(db, 'zh-CN')
     const memId = seedMemory(db, { status: 'approved', distillJobId: job })
-    const rows = await listMemories(db)
+    const rows = await memoryCatalogOf(db).queries.list()
     // toSummary discards outputLang for any non-candidate status.
     expect(rows.find((r) => r.id === memId)?.outputLang).toBeNull()
   })
@@ -121,7 +121,7 @@ describe('RFC-050 listMemories — populates outputLang on candidate summaries',
     const zhId = seedMemory(db, { status: 'candidate', distillJobId: jobZh })
     const enId = seedMemory(db, { status: 'candidate', distillJobId: jobEn })
     const nullId = seedMemory(db, { status: 'candidate', distillJobId: jobNull })
-    const rows = await listMemories(db, { status: 'candidate' })
+    const rows = await memoryCatalogOf(db).queries.list({ status: 'candidate' })
     const byId = new Map(rows.map((r) => [r.id, r]))
     expect(byId.get(zhId)?.outputLang).toBe('zh-CN')
     expect(byId.get(enId)?.outputLang).toBe('en-US')

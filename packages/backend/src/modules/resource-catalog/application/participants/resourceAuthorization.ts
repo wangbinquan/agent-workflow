@@ -1,101 +1,61 @@
-import type { ResourceVisibility } from '@agent-workflow/shared'
+import type { ResourceGrantLevel, ResourceVisibility } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { ForbiddenError, NotFoundError } from '@/util/errors'
-import {
-  canEditAccess,
-  canGovernAccess,
-  canViewAccess,
-  resolveAccessFrom,
-  resourceAclAudienceAuthority,
-} from '../../domain/resourceAccess'
-import type {
-  ResourceRequestContext,
-  ResourceScopeAuthorizationInTx,
-} from '../../public/participants'
+import { resolveAccessFrom, resourceAclAudienceAuthority } from '../../domain/resourceAccess'
+import type { ResourceRequestContext } from '../../public/participants'
 import type { ResourceMemoryScopeRef, ResourceScopeAccess } from '../../public/types'
-import type { ResourceCatalogAclSnapshotReadPort } from '../ports/providerResourceCatalogPersistence'
 
 export interface ResourceCurrentAuthorityResolver {
   resolve(authority: ResourceRequestContext): Actor
 }
 
-interface ResourceAclTarget {
-  readonly ref: ResourceMemoryScopeRef
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
+/**
+ * RFC-359 W4-D4 —— memory 的资源 scope（agent / workflow）访问判定参与者：与 memory 自己声明的端口
+ * （`modules/memory/application/ports/resourceScopeAccess.ts`）结构相同；memory 持有外层原子事务并在其中
+ * 刷新已 admit 的 actor，resource-catalog 只贡献 ACL 判定。不进 public——public 面不引 Actor、不点名事务句柄。
+ */
+export interface ResourceScopeAccessParticipant<Transaction> {
+  accessOf(
+    transaction: Transaction,
+    pair: Readonly<{ readonly authority: ResourceRequestContext; readonly actor: Actor }>,
+    scope: ResourceMemoryScopeRef,
+  ): Promise<ResourceScopeAccess>
 }
 
-interface ResourceAccessEvaluator {
-  accessOf(authority: ResourceRequestContext, target: ResourceAclTarget): ResourceScopeAccess
-  assertView(authority: ResourceRequestContext, target: ResourceAclTarget): void
-  assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget): void
-  assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget): void
+/**
+ * RFC-359 W4-D4 —— memory 的资源 scope 访问判定只需要两件事实：scope 资源行（owner / visibility）
+ * 与当前用户在该资源上的授权档。两件事实都在调用方交来的同一个事务句柄上读；provider 差异
+ * 只剩「怎么读」，判定本身（`resolveAccessFrom`）只有这一处。
+ */
+export interface ResourceScopeAccessReads<Transaction> {
+  scopeRow(
+    transaction: Transaction,
+    scope: ResourceMemoryScopeRef,
+  ): Promise<Readonly<{ ownerUserId: string | null; visibility: ResourceVisibility }> | null>
+  grantLevel(
+    transaction: Transaction,
+    scope: ResourceMemoryScopeRef,
+    userId: string,
+  ): Promise<ResourceGrantLevel | null>
 }
 
-function resourceAuthorizationForSnapshot(
-  authorityResolver: ResourceCurrentAuthorityResolver,
-  snapshots: ResourceCatalogAclSnapshotReadPort,
-): ResourceAccessEvaluator {
-  const accessOf = (authority: ResourceRequestContext, target: ResourceAclTarget) => {
-    const actor = authorityResolver.resolve(authority)
-    const audience = resourceAclAudienceAuthority(actor)
-    const grant =
-      audience.bypass || !audience.private
-        ? null
-        : snapshots.getGrantLevel(target.ref.kind, target.ref.id, actor.user.id)
-    return resolveAccessFrom(audience, actor.user.id, target, grant)
-  }
-
-  const participant = Object.freeze({
-    accessOf,
-    assertView(authority: ResourceRequestContext, target: ResourceAclTarget) {
-      if (canViewAccess(accessOf(authority, target))) return
-      throw new NotFoundError('not-found', `${target.ref.kind} not found`)
-    },
-    assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget) {
-      const access = accessOf(authority, target)
-      if (!canViewAccess(access)) {
-        throw new NotFoundError('not-found', `${target.ref.kind} not found`)
-      }
-      if (canEditAccess(access)) return
-      throw new ForbiddenError(
-        'resource-read-only',
-        `you have read-only access to this ${target.ref.kind}; ask its owner for an edit grant or make your own copy`,
-      )
-    },
-    assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget) {
-      const access = accessOf(authority, target)
-      if (!canViewAccess(access)) {
-        throw new NotFoundError('not-found', `${target.ref.kind} not found`)
-      }
-      if (canGovernAccess(access)) return
-      throw new ForbiddenError(
-        'resource-govern-owner-only',
-        `deleting, renaming, transferring or re-granting a ${target.ref.kind} is reserved for its owner`,
-      )
-    },
-  })
-  return participant satisfies ResourceAccessEvaluator
-}
-
-const trustedResourceScopeAuthorizations = new WeakSet<ResourceScopeAuthorizationInTx>()
-
-export function createResourceScopeAuthorization(
-  authorityResolver: ResourceCurrentAuthorityResolver,
-  snapshots: ResourceCatalogAclSnapshotReadPort,
-): ResourceScopeAuthorizationInTx {
-  const authorization = resourceAuthorizationForSnapshot(authorityResolver, snapshots)
-  const participant = Object.freeze({
-    accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef) {
-      const row = snapshots.getAccessRow(scope.kind, scope.id)
+/**
+ * 唯一 owner 工厂。memory 持有外层原子事务并在其中刷新已 admit 的 actor；resource-catalog 只贡献
+ * agent / workflow 的 ACL 判定。bypass 与非 private 受众不查授权表——与目录其余入口的判据同源。
+ */
+export function createResourceScopeAccessParticipant<Transaction>(
+  reads: ResourceScopeAccessReads<Transaction>,
+): ResourceScopeAccessParticipant<Transaction> {
+  const participant: ResourceScopeAccessParticipant<Transaction> = {
+    async accessOf(transaction, pair, scope) {
+      const row = await reads.scopeRow(transaction, scope)
       if (row === null) return 'none'
-      return authorization.accessOf(authority, {
-        ref: { kind: scope.kind, id: scope.id },
-        ownerUserId: row.ownerUserId ?? null,
-        visibility: row.visibility ?? 'public',
-      })
+      const audience = resourceAclAudienceAuthority(pair.actor)
+      const grant =
+        audience.bypass || !audience.private
+          ? null
+          : await reads.grantLevel(transaction, scope, pair.actor.user.id)
+      return resolveAccessFrom(audience, pair.actor.user.id, row, grant)
     },
-  }) as unknown as ResourceScopeAuthorizationInTx
-  trustedResourceScopeAuthorizations.add(participant)
-  return participant
+  }
+  return Object.freeze(participant)
 }

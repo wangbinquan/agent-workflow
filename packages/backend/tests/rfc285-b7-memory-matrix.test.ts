@@ -7,7 +7,7 @@
 // 已另行落地：distill 详情门（B6④，先行会话已修，rfc285 逐锚复核确认）与
 // candidate 读面收紧（Q4，routes/memories.ts，本批）。
 //
-// 语义单源：packages/backend/src/services/memory.ts canViewMemory / canManageMemory。
+// 语义单源：memory domain `scopeAuthorization.ts`（判据）+ `infrastructure/memoryCatalogOperations.ts`（取事实；RFC-359 W4-D4 起两个 provider 同一份）。
 //
 // RFC-352（RFC-294 W4-E2）把这份矩阵**升格为迁移 oracle**：memory 的授权谓词要从
 // `modules/memory/infrastructure/sqliteMemoryCatalog.ts` 提到 application 层，并让
@@ -22,7 +22,7 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, users, workflows } from '../src/db/schema'
-import { annotateMemoryManageRights, canManageMemory, canViewMemory } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -92,7 +92,7 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
       for (const role of ['admin', 'manager', 'user'] as const) {
         const actor = actorOfRole(role)
         expect(
-          await canViewMemory(db, resourceScopeAuthority(db, actor), {
+          await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, actor), {
             scopeType,
             scopeId: 's1',
           }),
@@ -107,12 +107,20 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
-    expect(await canViewMemory(db, resourceScopeAuthority(db, owner), scope)).toBe(true)
-    expect(await canViewMemory(db, resourceScopeAuthority(db, stranger), scope)).toBe(false)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, owner), scope),
+    ).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, stranger), scope),
+    ).toBe(false)
     const admin = actorOfRole('admin')
     const manager = actorOfRole('manager')
-    expect(await canViewMemory(db, resourceScopeAuthority(db, admin), scope)).toBe(true)
-    expect(await canViewMemory(db, resourceScopeAuthority(db, manager), scope)).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, admin), scope),
+    ).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, manager), scope),
+    ).toBe(true)
   })
 
   test('资源 scope 资源行消失：非管理员 fail-closed、管理员保留（清理面）', async () => {
@@ -120,8 +128,12 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
     const scope = { scopeType: 'agent' as const, scopeId: 'agt_vanished' }
     const user = actorOfRole('user')
     const admin = actorOfRole('admin')
-    expect(await canViewMemory(db, resourceScopeAuthority(db, user), scope)).toBe(false)
-    expect(await canViewMemory(db, resourceScopeAuthority(db, admin), scope)).toBe(true)
+    expect(await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, user), scope)).toBe(
+      false,
+    )
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, admin), scope),
+    ).toBe(true)
   })
 })
 
@@ -133,9 +145,15 @@ describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
       const admin = actorOfRole('admin')
       const manager = actorOfRole('manager')
       const user = actorOfRole('user')
-      expect(await canManageMemory(db, resourceScopeAuthority(db, admin), scope)).toBe(true)
-      expect(await canManageMemory(db, resourceScopeAuthority(db, manager), scope)).toBe(true)
-      expect(await canManageMemory(db, resourceScopeAuthority(db, user), scope)).toBe(false)
+      expect(
+        await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, admin), scope),
+      ).toBe(true)
+      expect(
+        await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, manager), scope),
+      ).toBe(true)
+      expect(
+        await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, user), scope),
+      ).toBe(false)
     }
   })
 
@@ -145,10 +163,16 @@ describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
-    expect(await canManageMemory(db, resourceScopeAuthority(db, owner), scope)).toBe(true)
-    expect(await canManageMemory(db, resourceScopeAuthority(db, stranger), scope)).toBe(false)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, owner), scope),
+    ).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, stranger), scope),
+    ).toBe(false)
     const manager = actorOfRole('manager')
-    expect(await canManageMemory(db, resourceScopeAuthority(db, manager), scope)).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, manager), scope),
+    ).toBe(true)
   })
 })
 
@@ -163,14 +187,26 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
     const stranger = actorOfRole('user', 'u_stranger')
     const workflowId = await seedWorkflow(db, owner.user.id)
     const scope = { scopeType: 'workflow' as const, scopeId: workflowId }
-    expect(await canViewMemory(db, resourceScopeAuthority(db, owner), scope)).toBe(true)
-    expect(await canViewMemory(db, resourceScopeAuthority(db, stranger), scope)).toBe(false)
-    expect(await canManageMemory(db, resourceScopeAuthority(db, owner), scope)).toBe(true)
-    expect(await canManageMemory(db, resourceScopeAuthority(db, stranger), scope)).toBe(false)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, owner), scope),
+    ).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, stranger), scope),
+    ).toBe(false)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, owner), scope),
+    ).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, stranger), scope),
+    ).toBe(false)
     for (const role of ['admin', 'manager'] as const) {
       const bypass = actorOfRole(role)
-      expect(await canViewMemory(db, resourceScopeAuthority(db, bypass), scope)).toBe(true)
-      expect(await canManageMemory(db, resourceScopeAuthority(db, bypass), scope)).toBe(true)
+      expect(
+        await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, bypass), scope),
+      ).toBe(true)
+      expect(
+        await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, bypass), scope),
+      ).toBe(true)
     }
   })
 
@@ -181,8 +217,12 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
     const agentId = await seedAgent(db, owner.user.id)
     await seedWriteGrant(db, 'agent', agentId, writer.user.id, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
-    expect(await canViewMemory(db, resourceScopeAuthority(db, writer), scope)).toBe(true)
-    expect(await canManageMemory(db, resourceScopeAuthority(db, writer), scope)).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canView(resourceScopeAuthority(db, writer), scope),
+    ).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(resourceScopeAuthority(db, writer), scope),
+    ).toBe(true)
   })
 
   // RFC-352 修掉的一处 provider 漂移（用户 2026-09-03 裁定按 `write|own` 对齐）。
@@ -203,8 +243,8 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
     await seedWriteGrant(db, 'agent', agentId, writer.user.id, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
     const authority = resourceScopeAuthority(db, writer)
-    expect(await canManageMemory(db, authority, scope)).toBe(true)
-    const [stamped] = await annotateMemoryManageRights(db, authority, [scope])
+    expect(await memoryCatalogOf(db).queries.canManage(authority, scope)).toBe(true)
+    const [stamped] = await memoryCatalogOf(db).queries.annotateManageRights(authority, [scope])
     expect(stamped?.canManage).toBe(true)
   })
 
@@ -216,14 +256,12 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
       scopeType,
       scopeId: 's1',
     }))
-    const stampedForUser = await annotateMemoryManageRights(
-      db,
+    const stampedForUser = await memoryCatalogOf(db).queries.annotateManageRights(
       resourceScopeAuthority(db, user),
       rows,
     )
     expect(stampedForUser.map((r) => r.canManage)).toEqual([false, false, false])
-    const stampedForAdmin = await annotateMemoryManageRights(
-      db,
+    const stampedForAdmin = await memoryCatalogOf(db).queries.annotateManageRights(
       resourceScopeAuthority(db, admin),
       rows,
     )
@@ -237,9 +275,9 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
     const agentId = await seedAgent(db, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
     const authority = resourceScopeAuthority(db, stranger)
-    expect(await canViewMemory(db, authority, scope)).toBe(false)
-    expect(await canManageMemory(db, authority, scope)).toBe(false)
-    const [stamped] = await annotateMemoryManageRights(db, authority, [scope])
+    expect(await memoryCatalogOf(db).queries.canView(authority, scope)).toBe(false)
+    expect(await memoryCatalogOf(db).queries.canManage(authority, scope)).toBe(false)
+    const [stamped] = await memoryCatalogOf(db).queries.annotateManageRights(authority, [scope])
     expect(stamped?.canManage).toBe(false)
   })
 })

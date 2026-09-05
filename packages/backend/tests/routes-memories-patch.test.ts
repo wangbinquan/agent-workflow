@@ -15,7 +15,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, memoryScopeMoveEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
-import { createManualCandidate, promoteCandidate, archiveMemory } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Memory } from '@agent-workflow/shared'
 
@@ -81,7 +81,7 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('regular user → 403 permission-denied', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 't',
@@ -98,7 +98,7 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('admin happy path → 200 + version bump + changedFields', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'orig',
@@ -120,7 +120,7 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('empty patch body → 422 invalid-body', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 't',
@@ -152,13 +152,13 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('rejected row → 409 memory-terminal-status', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'doomed',
       bodyMd: 'b',
     })
-    await promoteCandidate(h.db, seed.id, { action: 'reject' }, 'admin')
+    await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'reject' }, 'admin')
     const res = await h.app.fetch(
       authed(h.adminUserToken, {
         url: `/api/memories/${encodeURIComponent(seed.id)}`,
@@ -172,14 +172,14 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('archived row PATCH succeeds (status preserved)', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'agent',
       scopeId: 'agent-a',
       title: 'orig',
       bodyMd: 'b',
     })
-    await promoteCandidate(h.db, seed.id, { action: 'approve' }, 'admin')
-    await archiveMemory(h.db, seed.id)
+    await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'approve' }, 'admin')
+    await memoryCatalogOf(h.db).commands.archive(seed.id)
     const res = await h.app.fetch(
       authed(h.adminUserToken, {
         url: `/api/memories/${encodeURIComponent(seed.id)}`,
@@ -194,7 +194,7 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('generic PATCH rejects a complete scope move payload and leaves scope/version unchanged', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'agent',
       scopeId: 'agent-a',
       title: 't',
@@ -224,7 +224,7 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('idempotent re-save → 200 + changedFields=[] + version unchanged', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'same',
@@ -244,13 +244,13 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
   })
 
   test('RFC-046 invariant: PATCH does NOT touch node_runs.injected_memories_json', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'orig',
       bodyMd: 'b',
     })
-    await promoteCandidate(h.db, seed.id, { action: 'approve' }, 'admin')
+    await memoryCatalogOf(h.db).commands.promote(seed.id, { action: 'approve' }, 'admin')
 
     // Seed a fake node_runs row carrying an injected_memories_json snapshot
     // that includes a record of the memory at its v1 state. PATCHing the
@@ -345,7 +345,7 @@ describe('POST /api/memories/:id/move — RFC-342', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'move me',
@@ -384,7 +384,7 @@ describe('POST /api/memories/:id/move — RFC-342', () => {
   })
 
   test('wire schema rejects injected Actor/permission snapshots', async () => {
-    const seed = await createManualCandidate(h.db, {
+    const seed = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'global',
       scopeId: null,
       title: 'do not trust payload identity',

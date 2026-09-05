@@ -311,8 +311,7 @@ describe('RFC-347 exact production source locks', () => {
     // 判据与复现见 `rfc349-postgresql-daemon-system-identity.test.ts`。
     expect(callPaths('buildActor(')).toEqual([
       'src/auth/actor.ts',
-      'src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts',
-      'src/modules/memory/infrastructure/sqliteMemoryCatalog.ts',
+      'src/modules/memory/infrastructure/memoryCatalogOperations.ts',
       'src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts',
     ])
   })

@@ -8,7 +8,7 @@
 // 测试给的就是生产同一份装配，不是 stub——否则这些用例会退化成「只验 fusion 表」。
 
 import {
-  composePostgresqlSkillMemoryFusionParticipantFactory,
+  composeSkillMemoryFusionParticipantFactory,
   composeSqliteFusionMemoryMembership,
 } from '../../src/modules/memory/composition'
 import {
@@ -22,6 +22,6 @@ export const TEST_SQLITE_FUSION_PARTICIPANTS = Object.freeze({
 })
 
 export const TEST_POSTGRESQL_FUSION_PARTICIPANTS = Object.freeze({
-  memoryMembership: composePostgresqlSkillMemoryFusionParticipantFactory(),
+  memoryMembership: composeSkillMemoryFusionParticipantFactory(),
   skillVersionCommit: composePostgresqlSkillVersionCommitParticipantFactory(),
 })

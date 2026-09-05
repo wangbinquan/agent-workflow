@@ -152,16 +152,3 @@ export interface ResourceCatalogAclPersistence {
   readonly mutations: ResourceCatalogAclMutationPort
   readonly identities: ResourceCatalogAclIdentityReadPort
 }
-
-/**
- * Transaction-bound synchronous snapshot used only by the legacy in-tx
- * participant.  The application sees no provider transaction or query API.
- */
-export interface ResourceCatalogAclSnapshotReadPort {
-  getAccessRow(type: CatalogSelectorKind, resourceId: string): AclRow | null
-  getGrantLevel(
-    type: CatalogSelectorKind,
-    resourceId: string,
-    userId: string,
-  ): ResourceGrantLevel | null
-}

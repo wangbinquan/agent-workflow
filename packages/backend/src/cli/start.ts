@@ -144,7 +144,7 @@ import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
+import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
@@ -1823,7 +1823,7 @@ async function composeSqliteProviderSession(
     },
     catalogBinding: {
       contexts: identityAccess.contexts,
-      authorization: composeResourceScopeAuthorizationBinding(),
+      authorization: composeResourceScopeAccessParticipant(),
     },
   })
   const memoryCatalog = memoryOperations.catalog

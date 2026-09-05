@@ -31,7 +31,7 @@ import {
   recordTokenCall,
   redactSnapshot,
 } from '../src/services/tokenAudit'
-import { createManualCandidate } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -563,7 +563,7 @@ describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in 
     // In production the audit hook runs after the response — by then the row is
     // gone — so no real delete had ever produced one.
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'agent',
       scopeId: h.ownedAgentId,
       title: 'about to be deleted',
@@ -602,7 +602,7 @@ describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in 
 
   test('a SESSION delete writes no snapshot — this table is token attribution', async () => {
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       scopeType: 'agent',
       scopeId: h.ownedAgentId,
       title: 'session deletes leave no audit',
@@ -620,7 +620,7 @@ describe('RFC-247 AC-20 — the snapshot is captured in PRODUCTION, not just in 
 
   test('a REFUSED delete leaves no snapshot — nothing was destroyed', async () => {
     const h = await harness()
-    const memory = await createManualCandidate(h.db, {
+    const memory = await memoryCatalogOf(h.db).commands.createManual({
       // PATs never carry resource-acl:bypass. Anchor this confirmation test to
       // a resource the token's account owns so only the type-to-confirm gate is
       // under test.

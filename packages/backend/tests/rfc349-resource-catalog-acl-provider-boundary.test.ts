@@ -82,7 +82,6 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
   test('SQLite compatibility remains composition-owned over the same application ports', () => {
     const composition = source('src/modules/resource-catalog/composition/resourceAcl.ts')
     expect(composition).toContain('createResourceAclApplication<AclResourceType>({')
-    expect(composition).toContain('createSqliteResourceCatalogAclSnapshotReadPort')
     expect(composition).toContain('canViewResourceInTx')
     expect(composition).toContain('updateResourceAcl')
 

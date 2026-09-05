@@ -7,7 +7,7 @@
 //
 // 本文件锁 AC-11 的三侧：write 档可管、read 档不可管、repo/global 分支逐字不变。
 //
-// 红→绿对：把 `services/memory.ts` 的 `canEditResource` 换回 `canGovernResource`，
+// 红→绿对：把 memory domain `scopeAuthorization.ts` 的管理判据从 `write | own` 收回 `own`，
 // 「write 档可管」立刻红。
 
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -16,7 +16,7 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, workflows } from '../src/db/schema'
-import { canManageMemory, canViewMemory } from '../src/services/memory'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from '../src/services/users'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
@@ -111,22 +111,28 @@ describe('RFC-324 D9 —— 记忆管理权随资源写权分档', () => {
     resourceScopeAuthority(db, actorFor(id, role))
 
   test('前提复核：两档被授权者都看得见这个 agent 的记忆（否则下面测的不是写权）', async () => {
-    expect(await canViewMemory(db, authorityFor(reader), agentScope)).toBe(true)
-    expect(await canViewMemory(db, authorityFor(editor), agentScope)).toBe(true)
+    expect(await memoryCatalogOf(db).queries.canView(authorityFor(reader), agentScope)).toBe(true)
+    expect(await memoryCatalogOf(db).queries.canView(authorityFor(editor), agentScope)).toBe(true)
   })
 
   test('write 档：可管 agent / workflow scope 的记忆（D9）', async () => {
-    expect(await canManageMemory(db, authorityFor(editor), agentScope)).toBe(true)
-    expect(await canManageMemory(db, authorityFor(editor), workflowScope)).toBe(true)
+    expect(await memoryCatalogOf(db).queries.canManage(authorityFor(editor), agentScope)).toBe(true)
+    expect(await memoryCatalogOf(db).queries.canManage(authorityFor(editor), workflowScope)).toBe(
+      true,
+    )
   })
 
   test('read 档：看得见但管不了', async () => {
-    expect(await canManageMemory(db, authorityFor(reader), agentScope)).toBe(false)
+    expect(await memoryCatalogOf(db).queries.canManage(authorityFor(reader), agentScope)).toBe(
+      false,
+    )
   })
 
   test('owner 与 ACL bypass 照旧可管（分档不得动摇既有两条入口）', async () => {
-    expect(await canManageMemory(db, authorityFor(owner), agentScope)).toBe(true)
-    expect(await canManageMemory(db, authorityFor(manager, 'manager'), agentScope)).toBe(true)
+    expect(await memoryCatalogOf(db).queries.canManage(authorityFor(owner), agentScope)).toBe(true)
+    expect(
+      await memoryCatalogOf(db).queries.canManage(authorityFor(manager, 'manager'), agentScope),
+    ).toBe(true)
   })
 
   test('repo / repo_group / global scope 逐字不变：仍只有 ACL bypass 可管', async () => {
@@ -136,15 +142,15 @@ describe('RFC-324 D9 —— 记忆管理权随资源写权分档', () => {
       { scopeType: 'global' as const, scopeId: null },
     ]) {
       expect(
-        await canManageMemory(db, authorityFor(editor), scope),
+        await memoryCatalogOf(db).queries.canManage(authorityFor(editor), scope),
         `${scope.scopeType}：write 档不越界`,
       ).toBe(false)
       expect(
-        await canManageMemory(db, authorityFor(owner), scope),
+        await memoryCatalogOf(db).queries.canManage(authorityFor(owner), scope),
         `${scope.scopeType}：owner 也不例外`,
       ).toBe(false)
       expect(
-        await canManageMemory(db, authorityFor(manager, 'manager'), scope),
+        await memoryCatalogOf(db).queries.canManage(authorityFor(manager, 'manager'), scope),
         `${scope.scopeType}：bypass 仍是唯一入口`,
       ).toBe(true)
     }

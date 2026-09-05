@@ -1,6 +1,6 @@
 import type { DbClient } from '@/db/client'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { SqliteMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
+import { DrizzleMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { createMemoryDistillSessionCapture } from '@/modules/memory/infrastructure/memoryDistillSessionCapture'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
@@ -11,7 +11,7 @@ export function createSqliteMemoryDistillTestContext(db: DbClient, root = appHom
   const reviewedArtifacts = new DatabaseCommittedReviewArtifactReader(db, root)
   return Object.freeze({
     store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
-    runtimeResolver: new SqliteMemoryDistillRuntimeResolver(db),
+    runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     reviewedArtifacts,
   })
 }

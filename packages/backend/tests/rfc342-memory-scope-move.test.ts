@@ -3,10 +3,6 @@
 // These tests lock the command boundary, old+new scope authorization, durable
 // event atomicity, mutation races, and the eventual prompt-injection audience.
 
-import {
-  createRepositoryScopeAuthorizationInTx,
-  sqliteRepositoryScopeExistenceReads,
-} from '../src/modules/source-control/public/participants'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -28,11 +24,11 @@ import type {
   PrincipalSource,
 } from '../src/modules/identity-access/public/participants'
 import {
-  createManualCandidate,
-  getMemoryById,
-  moveMemory as moveMemoryWithAuthorization,
-  promoteCandidate,
-} from '../src/services/memory'
+  composeMemoryCatalogOperations,
+  type MemoryCatalogTestHooks,
+} from '../src/modules/memory/composition'
+import type { MemoryCatalogOperations } from '../src/modules/memory/public/catalog'
+import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 import { createUser } from '../src/services/users'
@@ -43,27 +39,21 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_789_747_212_066
 
 function moveMemory(
-  db: Parameters<typeof moveMemoryWithAuthorization>[0],
-  contexts: Parameters<typeof moveMemoryWithAuthorization>[1],
-  context: Parameters<typeof moveMemoryWithAuthorization>[2],
-  id: Parameters<typeof moveMemoryWithAuthorization>[4],
-  input: Parameters<typeof moveMemoryWithAuthorization>[5],
-  hooks?: Parameters<typeof moveMemoryWithAuthorization>[6],
+  db: DbClient,
+  contexts: ReturnType<typeof composeIdentityAccess>['contexts'],
+  context: CommandContext,
+  id: string,
+  input: Parameters<MemoryCatalogOperations['commands']['move']>[2],
+  hooks?: MemoryCatalogTestHooks,
 ) {
-  return moveMemoryWithAuthorization(
+  // RFC-359 W4-D4：目录只有一份实现；scope 的资源访问由 resource-catalog 的中立 participant 回答，
+  // repo / repo_group 的存在性与管理权由 source-control 的中立 participant 回答（判据与迁移前逐字相同）。
+  return composeMemoryCatalogOperations({
     db,
     contexts,
-    context,
-    {
-      resources: TEST_RESOURCE_SCOPE_AUTHORIZATION,
-      // RFC-352 T4：repo / repo_group 的存在性与管理权改经 source-control 的 offered
-      // participant，判据（仅 resource-acl:bypass 可管）与迁移前逐字相同。
-      repositories: createRepositoryScopeAuthorizationInTx(sqliteRepositoryScopeExistenceReads),
-    },
-    id,
-    input,
-    hooks,
-  )
+    authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+    ...(hooks === undefined ? {} : { testHooks: hooks }),
+  }).commands.move(context, id, input)
 }
 
 function captureBroadcasts(): { messages: MemoryWsMessage[]; stop: () => void } {
@@ -210,7 +200,7 @@ describe('RFC-342 memory scope move correctness', () => {
     scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global',
     scopeId: string | null,
   ) {
-    return createManualCandidate(db, {
+    return memoryCatalogOf(db).commands.createManual({
       scopeType,
       scopeId,
       title: `move-${scopeType}`,
@@ -223,7 +213,7 @@ describe('RFC-342 memory scope move correctness', () => {
     const context = contextFor(ownerId)
     const capture = captureBroadcasts()
 
-    const result = moveMemory(db, contexts, context, memory.id, {
+    const result = await moveMemory(db, contexts, context, memory.id, {
       expectedVersion: memory.version,
       scopeType: 'workflow',
       scopeId: workflowId,
@@ -266,25 +256,25 @@ describe('RFC-342 memory scope move correctness', () => {
 
   test('old and destination scopes both require current write authority', async () => {
     const foreignDestination = await candidateAt('agent', agentId)
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(ownerId), foreignDestination.id, {
         expectedVersion: foreignDestination.version,
         scopeType: 'workflow',
         scopeId: foreignWorkflowId,
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
 
     const readOnlyCurrent = await candidateAt('agent', agentId)
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(readerId), readOnlyCurrent.id, {
         expectedVersion: readOnlyCurrent.version,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
 
     for (const memory of [foreignDestination, readOnlyCurrent]) {
-      expect((await getMemoryById(db, memory.id))?.memory).toMatchObject({
+      expect((await memoryCatalogOf(db).queries.getById(memory.id))?.memory).toMatchObject({
         scopeType: 'agent',
         scopeId: agentId,
         version: memory.version,
@@ -295,7 +285,7 @@ describe('RFC-342 memory scope move correctness', () => {
 
   test('write grants permit agent→workflow, but ordinary users cannot cross to global', async () => {
     const granted = await candidateAt('agent', agentId)
-    const moved = moveMemory(db, contexts, contextFor(editorId), granted.id, {
+    const moved = await moveMemory(db, contexts, contextFor(editorId), granted.id, {
       expectedVersion: granted.version,
       scopeType: 'workflow',
       scopeId: workflowId,
@@ -303,33 +293,33 @@ describe('RFC-342 memory scope move correctness', () => {
     expect(moved.memory).toMatchObject({ scopeType: 'workflow', scopeId: workflowId })
 
     const globalAttempt = await candidateAt('agent', agentId)
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(ownerId), globalAttempt.id, {
         expectedVersion: globalAttempt.version,
         scopeType: 'global',
         scopeId: null,
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
   })
 
   test('session bypass can move global→repo→repo_group, while the same account PAT cannot borrow bypass', async () => {
     const memory = await candidateAt('global', null)
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(managerId, 'pat'), memory.id, {
         expectedVersion: memory.version,
         scopeType: 'repo',
         scopeId: repoId,
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-forbidden' }))
 
-    const result = moveMemory(db, contexts, contextFor(managerId), memory.id, {
+    const result = await moveMemory(db, contexts, contextFor(managerId), memory.id, {
       expectedVersion: memory.version,
       scopeType: 'repo',
       scopeId: repoId,
     })
     expect(result.memory).toMatchObject({ scopeType: 'repo', scopeId: repoId, version: 2 })
 
-    const grouped = moveMemory(db, contexts, contextFor(managerId), memory.id, {
+    const grouped = await moveMemory(db, contexts, contextFor(managerId), memory.id, {
       expectedVersion: result.memory.version,
       scopeType: 'repo_group',
       scopeId: repoGroupId,
@@ -343,49 +333,49 @@ describe('RFC-342 memory scope move correctness', () => {
 
   test('destination target must exist, including bypass-managed repo scope', async () => {
     const memory = await candidateAt('global', null)
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(managerId), memory.id, {
         expectedVersion: memory.version,
         scopeType: 'repo',
         scopeId: 'missing-repo',
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
   })
 
   test('stale memory revision and approved/archived states cannot move', async () => {
     const stale = await candidateAt('agent', agentId)
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(ownerId), stale.id, {
         expectedVersion: stale.version + 1,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),
-    ).toThrow(expect.objectContaining({ code: 'resource-operation-stale' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'resource-operation-stale' }))
 
     const approved = await candidateAt('agent', agentId)
-    await promoteCandidate(db, approved.id, { action: 'approve' }, ownerId)
-    expect(() =>
+    await memoryCatalogOf(db).commands.promote(approved.id, { action: 'approve' }, ownerId)
+    await expect(
       moveMemory(db, contexts, contextFor(ownerId), approved.id, {
         expectedVersion: approved.version,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-move-status-forbidden' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-move-status-forbidden' }))
 
     await db.update(memories).set({ status: 'archived' }).where(eq(memories.id, approved.id))
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, contextFor(ownerId), approved.id, {
         expectedVersion: approved.version,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),
-    ).toThrow(expect.objectContaining({ code: 'memory-move-status-forbidden' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-move-status-forbidden' }))
   })
 
   test('same-scope no-op does not bump version, append event, or emit WS', async () => {
     const memory = await candidateAt('agent', agentId)
     const capture = captureBroadcasts()
-    const result = moveMemory(db, contexts, contextFor(ownerId), memory.id, {
+    const result = await moveMemory(db, contexts, contextFor(ownerId), memory.id, {
       expectedVersion: memory.version,
       scopeType: 'agent',
       scopeId: agentId,
@@ -399,7 +389,7 @@ describe('RFC-342 memory scope move correctness', () => {
   test('target deletion between authorization and CAS rolls back target mutation with no ghost event', async () => {
     const memory = await candidateAt('agent', agentId)
     const capture = captureBroadcasts()
-    expect(() =>
+    await expect(
       moveMemory(
         db,
         contexts,
@@ -411,16 +401,16 @@ describe('RFC-342 memory scope move correctness', () => {
           scopeId: workflowId,
         },
         {
-          afterMoveAuthorizationInTx: (tx) => {
-            tx.delete(workflows).where(eq(workflows.id, workflowId)).run()
+          afterMoveAuthorizationInTransaction: async (tx) => {
+            await tx.delete(workflows).where(eq(workflows.id, workflowId))
           },
         },
       ),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
     capture.stop()
 
     expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(1)
-    expect((await getMemoryById(db, memory.id))?.memory).toMatchObject({
+    expect((await memoryCatalogOf(db).queries.getById(memory.id))?.memory).toMatchObject({
       scopeType: 'agent',
       scopeId: agentId,
       version: memory.version,
@@ -431,7 +421,7 @@ describe('RFC-342 memory scope move correctness', () => {
 
   test('authority drift is re-read in-tx and the simulated grant removal rolls back', async () => {
     const memory = await candidateAt('agent', agentId)
-    expect(() =>
+    await expect(
       moveMemory(
         db,
         contexts,
@@ -443,8 +433,9 @@ describe('RFC-342 memory scope move correctness', () => {
           scopeId: workflowId,
         },
         {
-          afterMoveAuthorizationInTx: (tx) => {
-            tx.delete(resourceGrants)
+          afterMoveAuthorizationInTransaction: async (tx) => {
+            await tx
+              .delete(resourceGrants)
               .where(
                 and(
                   eq(resourceGrants.resourceType, 'workflow'),
@@ -452,11 +443,10 @@ describe('RFC-342 memory scope move correctness', () => {
                   eq(resourceGrants.userId, editorId),
                 ),
               )
-              .run()
           },
         },
       ),
-    ).toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
 
     const grants = await db
       .select()
@@ -474,7 +464,7 @@ describe('RFC-342 memory scope move correctness', () => {
 
   test('memory mutation race and post-write fault roll back scope, receipt, and WS', async () => {
     const raced = await candidateAt('agent', agentId)
-    expect(() =>
+    await expect(
       moveMemory(
         db,
         contexts,
@@ -486,17 +476,19 @@ describe('RFC-342 memory scope move correctness', () => {
           scopeId: workflowId,
         },
         {
-          afterMoveAuthorizationInTx: (tx) => {
-            tx.update(memories).set({ version: 99 }).where(eq(memories.id, raced.id)).run()
+          afterMoveAuthorizationInTransaction: async (tx) => {
+            await tx.update(memories).set({ version: 99 }).where(eq(memories.id, raced.id))
           },
         },
       ),
-    ).toThrow(expect.objectContaining({ code: 'resource-operation-stale' }))
-    expect((await getMemoryById(db, raced.id))?.memory.version).toBe(raced.version)
+    ).rejects.toThrow(expect.objectContaining({ code: 'resource-operation-stale' }))
+    expect((await memoryCatalogOf(db).queries.getById(raced.id))?.memory.version).toBe(
+      raced.version,
+    )
 
     const faulted = await candidateAt('agent', agentId)
     const capture = captureBroadcasts()
-    expect(() =>
+    await expect(
       moveMemory(
         db,
         contexts,
@@ -508,14 +500,14 @@ describe('RFC-342 memory scope move correctness', () => {
           scopeId: workflowId,
         },
         {
-          afterWriteInTx: () => {
+          afterWriteInTransaction: () => {
             throw new Error('rollback-after-move-write')
           },
         },
       ),
-    ).toThrow('rollback-after-move-write')
+    ).rejects.toThrow('rollback-after-move-write')
     capture.stop()
-    expect((await getMemoryById(db, faulted.id))?.memory).toMatchObject({
+    expect((await memoryCatalogOf(db).queries.getById(faulted.id))?.memory).toMatchObject({
       scopeType: 'agent',
       scopeId: agentId,
       version: faulted.version,
@@ -532,24 +524,24 @@ describe('RFC-342 memory scope move correctness', () => {
       correlationId: 'forged-correlation',
       now: NOW,
     } as unknown as CommandContext
-    expect(() =>
+    await expect(
       moveMemory(db, contexts, forged, memory.id, {
         expectedVersion: memory.version,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),
-    ).toThrow('untrusted-operation-context')
+    ).rejects.toThrow('untrusted-operation-context')
     expect(await db.select().from(memoryScopeMoveEvents)).toEqual([])
   })
 
   test('after move+approval, prompt injection sees only the new scope audience', async () => {
     const memory = await candidateAt('agent', agentId)
-    const moved = moveMemory(db, contexts, contextFor(ownerId), memory.id, {
+    const moved = await moveMemory(db, contexts, contextFor(ownerId), memory.id, {
       expectedVersion: memory.version,
       scopeType: 'workflow',
       scopeId: workflowId,
     })
-    await promoteCandidate(db, moved.memory.id, { action: 'approve' }, ownerId)
+    await memoryCatalogOf(db).commands.promote(moved.memory.id, { action: 'approve' }, ownerId)
 
     const oldAudience = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [agentId],

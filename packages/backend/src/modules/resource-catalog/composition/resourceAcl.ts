@@ -16,10 +16,6 @@ import {
   type ResourceAclApplication,
   type ResourceAclOperationLinearizer,
 } from '../application/resourceAcl'
-import {
-  createResourceScopeAuthorization as createResourceScopeAuthorizationParticipant,
-  type ResourceCurrentAuthorityResolver,
-} from '../application/participants/resourceAuthorization'
 import type { ResourceAclIdentityPersistence } from '../application/ports/resourceAclPersistence'
 import type { ResourceCatalogOwnedAclType } from '../application/ports/providerResourceCatalogPersistence'
 import { createResourceAuthorizationApplication } from '../application/resourceAuthorization'
@@ -34,7 +30,6 @@ import {
   type AclRow,
   type DisclosedRefs,
 } from '../domain/resourceAccess'
-import { createSqliteResourceCatalogAclSnapshotReadPort } from '../infrastructure/sqliteAclReadRepository'
 import { createResourceAclReadPort } from '../infrastructure/aclReadRepository'
 import { createResourceAclMutationPort } from '../infrastructure/resourceAclRepository'
 import {
@@ -46,7 +41,6 @@ import {
   createSqliteResourceGrantReadPort,
   loadGrantLevelInTx,
 } from '../infrastructure/sqliteResourceGrantRepository'
-import type { ResourceRequestContext, ResourceScopeAuthorizationInTx } from '../public/participants'
 
 function buildSqliteAclApplications(input: {
   readonly db: DbClient
@@ -339,44 +333,5 @@ export function composeResourceAclOperationApplication<Context extends Actor, Ro
       }),
     linearizer: input.linearizer,
     afterUpdated: input.afterUpdated,
-  })
-}
-
-export interface ResourceScopeAuthorityPair {
-  readonly authority: ResourceRequestContext
-  readonly actor: Actor
-}
-
-export interface ResourceScopeAuthorizationBinding {
-  inTransaction(tx: DbTxSync, pair: ResourceScopeAuthorityPair): ResourceScopeAuthorizationInTx
-}
-
-export function createResourceScopeAuthorizationInTx(
-  tx: DbTxSync,
-  authorityResolver: ResourceCurrentAuthorityResolver,
-): ResourceScopeAuthorizationInTx {
-  return createResourceScopeAuthorizationParticipant(
-    authorityResolver,
-    createSqliteResourceCatalogAclSnapshotReadPort(tx),
-  )
-}
-
-/**
- * Bootstrap-owned adapter for the memory consumer.  The participant accepts
- * only the exact opaque handle paired with the current actor; it never falls
- * back to a structurally compatible Actor bag.
- */
-export function composeResourceScopeAuthorizationBinding(): ResourceScopeAuthorizationBinding {
-  return Object.freeze({
-    inTransaction(tx: DbTxSync, pair: ResourceScopeAuthorityPair) {
-      return createResourceScopeAuthorizationInTx(tx, {
-        resolve(authority) {
-          if (authority !== pair.authority) {
-            throw new Error('foreign-resource-scope-authority')
-          }
-          return pair.actor
-        },
-      })
-    },
   })
 }

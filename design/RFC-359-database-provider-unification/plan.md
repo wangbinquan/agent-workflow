@@ -319,8 +319,31 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   after-write 钩子）改走中立端口，带同步参与者的调用（development_adapter / employee_* 的 identity persistence、mcp 装配的
   同步钩子）仍走 SQLite 同步路径，随各 owner 的 dbTxSync 归零一起退。`rfc359-w4-d3-adapters.test.ts` 两引擎各跑。
   剩余 SQLite 专属：`sqliteResourceAclRepository.ts`（identityPersistence 分支 + 同步 withMutation）、
-  `sqliteAclReadRepository.ts`（`*InTx` 同步读 + 同步快照读端口，memory / workgroup / legacy 快照消费）、
+  `sqliteAclReadRepository.ts`（`*InTx` 同步读，workgroup / legacy 快照消费；memory 用的同步快照读端口已随 D4 退役）、
   `sqliteResourceGrantRepository.ts`（`*InTx`）——它们是「同步参与者」的最后一层，随 D 系列逐链退役。
+  **D4 ✅（memory 目录链）**：`memoryCatalogOperations.ts`（以 PG 版为底、逐命令按 SQLite 正典语义对账：晋升 / 编辑 / 迁移
+  scope 的多语句写走统一事务原语并在事务提交后才发 WS；编辑与迁移经版本 CAS；迁移在授权判定后二次读行（带 `currentVersion`
+  的 stale 详情）并刷新 actor 再判一次，`changedFields` 逐字段；scope 的资源访问由 resource-catalog 的中立 participant 在
+  同一事务里回答，repo / repo_group 的存在性与管理权由 source-control 的中立读取器回答；搜索经能力矩阵
+  `likeCaseInsensitive` + `likeEscape`。**一处有意偏离**：用户搜索词里的 `%` / `_` 此前在两个 provider 上都按 LIKE 通配符
+  解释——「100%」会命中「100」开头的任何正文——现在按字面匹配，且不再有裸 LIKE 模式）+ `skillMemoryFusionParticipant.ts`
+  （PG 融合 participant 转中立；`listFusedIntoSkill` 一份）+ `memoryDistillRuntimeResolver.ts`（一份类，旧类名留别名）+
+  `composition.ts` 单一路径（`composeMemoryOperationsFor` / `composeMemoryCatalogOperations`，旧 provider 名保留为装配
+  别名；测试用故障注入缝 `MemoryCatalogTestHooks` 只在装配时给）。resource-catalog：scope 访问 participant 的唯一 owner 工厂
+  进 application（`createResourceScopeAccessParticipant(reads)`），中立读取器 `aggregateAdapters/resourceScopeAuthorization.ts`，
+  装配 `composition/resourceScopeAuthorization.ts`；端口归 memory（`application/ports/resourceScopeAccess.ts`），resource-catalog
+  的 public 面不引 Actor、不点名事务句柄；同步的 `ResourceScopeAuthorizationInTx`（public brand）/
+  `composeResourceScopeAuthorizationBinding` / `createSqliteResourceCatalogAclSnapshotReadPort` / `ResourceCatalogAclSnapshotReadPort`
+  退役。source-control：`repositoryScopeExistenceReads` 一份（SQLite 同步读取器退役，PG 名留别名）。platform 的 SQLite overview
+  读模型改经 memory 目录合同取记忆计数。legacy facade `services/memory.ts` 与 SQLite 专属 `sqliteMemoryCatalog.ts`（1282 行的
+  函数式面）退役，十四个测试文件改经 `MemoryCatalogOperations` 合同（`tests/helpers/memoryCatalog.ts`）。九个文件删除，memory
+  的 dbTxSync 调用点只剩 `sqliteMemoryMembershipParticipant.ts`（knowledge-evolution 同步融合提交要的，随 KE 归零一起退）。
+  `rfc359-w4-d4-adapters.test.ts` 两引擎各跑（目录 CRUD / 搜索大小写与字面通配 / 替代链 / 编辑 OCC / WS / 分页等价 /
+  可见性与管理权矩阵 / scope 迁移含测试缝下的回滚 / 融合 participant / 仓库 scope 读取器）+ rfc345 / rfc347 / rfc305 / rfc349 /
+  rfc353 锁改指中立文件，两个 fake-PG 单测（memory catalog / fusion）随之删除；rfc349 cutover 账本还清一条（54 → 53），
+  rfc294 capability 兼容债还清三条（29 → 26）。**下一条链**：knowledge-evolution 融合提交（`markFusedSync` /
+  `unfuseAboveVersionSync` 的同步消费方：KE 的 `sqliteFusionRepository` 与 resource-catalog legacy `skillVersion.ts`）与
+  `developmentAdapterStore`。
 
 ## 5. W5 —— 防复辟
 
