@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:22c3de0d982ab0c90d39f4bc0c07e4d9bbcbad6fac4cd4eb8c8f0966bced8435`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:50373023906c81e367372e51528a110ee35db7c39e06120fc4058ec63579ea2b`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1867 |
+| backend production TS 文件 | 1866 |
 | `services/` 文件 | 325 |
-| `modules/**` 文件 / 非空 context | 1255 / 17 |
+| `modules/**` 文件 / 非空 context | 1254 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5108 |
+| `architectureExceptions` | 5107 |
 | `backgroundJobs` | 363 |
-| `crossContextImports` | 5780 |
+| `crossContextImports` | 5779 |
 | `facades` | 325 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25619 |
-| `mutationEntrypoints` | 1833 |
+| `moduleSymbolOwners` | 25620 |
+| `mutationEntrypoints` | 1831 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 981 |
 | `transactionExternalEffects` | 341 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| resource-catalog / infrastructure | 128 |
+| resource-catalog / infrastructure | 127 |
 | task-execution / infrastructure | 125 |
 | task-execution / application | 87 |
 | collaboration / infrastructure | 58 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3472 |
-| legacy-inbound | 1440 |
+| legacy-outbound | 3469 |
+| legacy-inbound | 1442 |
 | infrastructure-external | 319 |
 | offered-consumption | 170 |
 | provider-mirror | 106 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3472 |
-| legacy-inbound | 1440 |
+| legacy-outbound | 3469 |
+| legacy-inbound | 1442 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 91 |
 | no-circular | 6 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2674 |
+| W9 | 2673 |
 | W4-E1 | 859 |
 | W4-C | 409 |
 | W4-E0 | 227 |
