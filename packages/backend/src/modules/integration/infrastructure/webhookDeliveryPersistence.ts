@@ -1,13 +1,17 @@
+// RFC-359 W4-D2 —— webhook 投递持久化：一份实现，两个 provider 共用。多语句写走统一事务原语；
+// GC 的「先选 id 再改 / 删」两步在同一个事务里，两个引擎同形（SQLite 此前用 rowid 子查询的方言写法）。
+
 import { and, eq, inArray, isNotNull, lt, notExists, notInArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   webhookDeliveries,
   webhookEndpoints,
   webhookMrControlEffects,
   webhookMrLaunchGuards,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   WebhookDeliveryGcCursorV1,
   WebhookDeliveryPersistencePort,
@@ -39,9 +43,10 @@ function gcCursor(
   return value
 }
 
-export function createPostgresqlWebhookDeliveryPersistence(
-  db: PostgresqlDatabaseClient,
+export function createWebhookDeliveryPersistence(
+  db: ProviderNeutralDatabase,
 ): WebhookDeliveryPersistencePort {
+  const session = databaseSessionFor(db)
   return {
     async insert(input) {
       const id = ulid()
@@ -66,21 +71,23 @@ export function createPostgresqlWebhookDeliveryPersistence(
         return { kind: 'inserted', deliveryId: id }
       } catch (error) {
         if (!isUniqueConstraintViolation(error) || input.eventUuid === null) throw error
-        const existing = await db
-          .update(webhookDeliveries)
-          .set({ attemptCount: sql`${webhookDeliveries.attemptCount} + 1` })
-          .where(
-            and(
-              eq(webhookDeliveries.endpointId, input.endpointId),
-              eq(webhookDeliveries.eventUuid, input.eventUuid),
-              notInArray(webhookDeliveries.status, ['rejected', 'failed']),
-            ),
-          )
-          .returning({
-            id: webhookDeliveries.id,
-            attemptCount: webhookDeliveries.attemptCount,
-          })
-          .get()
+        // 撞 uuid 唯一键 = 同一事件重投：原子地把原行的 attempt_count +1 并回读，两个引擎都支持 RETURNING。
+        const existing = (
+          await db
+            .update(webhookDeliveries)
+            .set({ attemptCount: sql`${webhookDeliveries.attemptCount} + 1` })
+            .where(
+              and(
+                eq(webhookDeliveries.endpointId, input.endpointId),
+                eq(webhookDeliveries.eventUuid, input.eventUuid),
+                notInArray(webhookDeliveries.status, ['rejected', 'failed']),
+              ),
+            )
+            .returning({
+              id: webhookDeliveries.id,
+              attemptCount: webhookDeliveries.attemptCount,
+            })
+        )[0]
         if (existing === undefined) throw error
         return {
           kind: 'duplicate',
@@ -98,7 +105,7 @@ export function createPostgresqlWebhookDeliveryPersistence(
     },
 
     async recoverInterrupted() {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const controlledIds = (
           await tx.select({ id: webhookMrControlEffects.deliveryId }).from(webhookMrControlEffects)
         ).map((row) => row.id)
@@ -135,7 +142,7 @@ export function createPostgresqlWebhookDeliveryPersistence(
       }
       const cursor = gcCursor(input.cursor, input.now, input.retention)
       if (cursor.phase === 'bodies') {
-        const count = await db.transaction(async (tx) => {
+        const count = await session.transaction(async (tx) => {
           const ids = (
             await tx
               .select({ id: webhookDeliveries.id })
@@ -165,7 +172,7 @@ export function createPostgresqlWebhookDeliveryPersistence(
         }
       }
 
-      const count = await db.transaction(async (tx) => {
+      const count = await session.transaction(async (tx) => {
         const ids = (
           await tx
             .select({ id: webhookDeliveries.id })

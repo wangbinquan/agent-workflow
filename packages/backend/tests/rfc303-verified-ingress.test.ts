@@ -9,7 +9,8 @@ import { resolve } from 'node:path'
 import type { CodeHostEvent } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import { SqliteVerifiedWebhookDeliveryStore } from '@/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore'
+import type { VerifiedWebhookDeliveryPersistencePort } from '@/modules/integration/application/ports/verifiedWebhookDeliveryPersistence'
+import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
 
 const MIGRATION = readFileSync(
   resolve(import.meta.dir, '..', 'db', 'migrations', '0157_rfc303_mr_terminal_control.sql'),
@@ -78,7 +79,7 @@ function event(overrides: Partial<CodeHostEvent> = {}): CodeHostEvent {
 }
 
 function accept(
-  store: SqliteVerifiedWebhookDeliveryStore,
+  store: VerifiedWebhookDeliveryPersistencePort,
   evt: CodeHostEvent,
   body: string,
   replay?: { rootDeliveryId: string; terminalRootRevision: number | null },
@@ -95,10 +96,10 @@ function accept(
 }
 
 describe('RFC-303 verified ingress', () => {
-  test('close atomically creates delivery + revision + effect; exact retry only bumps attempt', () => {
+  test('close atomically creates delivery + revision + effect; exact retry only bumps attempt', async () => {
     const { raw, db } = fixture()
-    const store = new SqliteVerifiedWebhookDeliveryStore(db)
-    const first = accept(store, event(), '{"object_kind":"merge_request","state":"closed"}')
+    const store = createVerifiedWebhookDeliveryPersistence(db)
+    const first = await accept(store, event(), '{"object_kind":"merge_request","state":"closed"}')
     expect(first.kind).toBe('inserted')
     if (first.kind !== 'inserted') throw new Error('expected insert')
     expect(first.controlAccepted).toBe(true)
@@ -118,7 +119,11 @@ describe('RFC-303 verified ingress', () => {
       revision: 1,
     })
 
-    const duplicate = accept(store, event(), '{"object_kind":"merge_request","state":"closed"}')
+    const duplicate = await accept(
+      store,
+      event(),
+      '{"object_kind":"merge_request","state":"closed"}',
+    )
     expect(duplicate).toEqual({
       kind: 'duplicate',
       deliveryId: first.deliveryId,
@@ -131,11 +136,11 @@ describe('RFC-303 verified ingress', () => {
     })
   })
 
-  test('body-byte mutation is a distinct fact; reopen clears closed and merge becomes absorbing', () => {
+  test('body-byte mutation is a distinct fact; reopen clears closed and merge becomes absorbing', async () => {
     const { raw, db } = fixture()
-    const store = new SqliteVerifiedWebhookDeliveryStore(db)
-    accept(store, event(), '{"state":"closed"}')
-    const reopened = accept(store, event({ eventType: 'mr_opened' }), '{"state":"opened"}')
+    const store = createVerifiedWebhookDeliveryPersistence(db)
+    await accept(store, event(), '{"state":"closed"}')
+    const reopened = await accept(store, event({ eventType: 'mr_opened' }), '{"state":"opened"}')
     expect(reopened).toEqual(expect.objectContaining({ kind: 'inserted', streamRevision: 2 }))
     expect(raw.query('SELECT state,revision FROM webhook_mr_stream_states').get()).toEqual({
       state: 'open',
@@ -148,21 +153,21 @@ describe('RFC-303 verified ingress', () => {
         .map((row) => (row as { kind: string }).kind),
     ).toEqual(['fence-closed', 'clear-closed'])
 
-    accept(store, event({ eventType: 'mr_merged' }), '{"state":"merged"}')
-    accept(store, event({ eventType: 'mr_opened' }), '{"state":"opened","late":true}')
+    await accept(store, event({ eventType: 'mr_merged' }), '{"state":"merged"}')
+    await accept(store, event({ eventType: 'mr_opened' }), '{"state":"opened","late":true}')
     expect(raw.query('SELECT state,revision FROM webhook_mr_stream_states').get()).toEqual({
       state: 'merged',
       revision: 4,
     })
   })
 
-  test('terminal replay reuses the root revision/effect while nonterminal replay advances', () => {
+  test('terminal replay reuses the root revision/effect while nonterminal replay advances', async () => {
     const { raw, db } = fixture()
-    const store = new SqliteVerifiedWebhookDeliveryStore(db)
-    const root = accept(store, event(), '{"state":"closed"}')
+    const store = createVerifiedWebhookDeliveryPersistence(db)
+    const root = await accept(store, event(), '{"state":"closed"}')
     if (root.kind !== 'inserted') throw new Error('expected insert')
 
-    const replay = accept(store, event(), '{"state":"closed"}', {
+    const replay = await accept(store, event(), '{"state":"closed"}', {
       rootDeliveryId: root.deliveryId,
       terminalRootRevision: 1,
     })
@@ -180,7 +185,7 @@ describe('RFC-303 verified ingress', () => {
       n: 1,
     })
 
-    const nonterminalReplay = accept(
+    const nonterminalReplay = await accept(
       store,
       event({ eventType: 'mr_updated' }),
       '{"state":"updated"}',
@@ -191,17 +196,17 @@ describe('RFC-303 verified ingress', () => {
     )
   })
 
-  test('non-MR no-UUID deliveries retain legacy non-deduped behavior', () => {
+  test('non-MR no-UUID deliveries retain legacy non-deduped behavior', async () => {
     const { raw, db } = fixture()
-    const store = new SqliteVerifiedWebhookDeliveryStore(db)
+    const store = createVerifiedWebhookDeliveryPersistence(db)
     const push = event({
       eventType: 'push',
       projectId: '77',
       mrIid: undefined,
       branch: 'main',
     })
-    expect(accept(store, push, '{"push":true}').kind).toBe('inserted')
-    expect(accept(store, push, '{"push":true}').kind).toBe('inserted')
+    expect((await accept(store, push, '{"push":true}')).kind).toBe('inserted')
+    expect((await accept(store, push, '{"push":true}')).kind).toBe('inserted')
     expect(raw.query('SELECT count(*) AS n FROM webhook_deliveries').get()).toEqual({ n: 2 })
     expect(raw.query('SELECT count(*) AS n FROM webhook_mr_stream_states').get()).toEqual({ n: 0 })
   })

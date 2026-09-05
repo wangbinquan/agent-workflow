@@ -1419,6 +1419,16 @@ export const webhookDeliveries = sqliteTable(
     // WHERE body_json IS NOT NULL）在迁移手写；这里只声明普通查询索引。
     // RFC-261 索引策略（10 万投递/天基准）：每个过滤维度 × received_at 组合，
     // 过滤前缀 + 时间序游走 + LIMIT 早停；单列 status 索引已被组合索引取代。
+    // RFC-359 W4-D2：这两条部分唯一索引此前只在 SQLite 迁移（0157）里存在、没进 drizzle 声明，PG 投影因此没有它们——
+    // 同 uuid 重投与 MR 同事实重投在 PG 上不撞唯一键，去重分支永远走不到。声明与迁移逐字同形。
+    dedupeUq: uniqueIndex('idx_webhook_deliveries_dedupe')
+      .on(t.endpointId, t.eventUuid)
+      .where(sql`${t.eventUuid} IS NOT NULL AND ${t.status} NOT IN ('rejected','failed')`),
+    mrFactUq: uniqueIndex('idx_webhook_deliveries_mr_fact')
+      .on(t.endpointId, t.mrFactKey)
+      .where(
+        sql`${t.mrFactKey} IS NOT NULL AND ${t.replayedFromDeliveryId} IS NULL AND ${t.status} NOT IN ('rejected','failed')`,
+      ),
     endpointTimeIdx: index('idx_webhook_deliveries_endpoint_time').on(t.endpointId, t.receivedAt),
     receivedAtIdx: index('idx_webhook_deliveries_received_at').on(t.receivedAt),
     statusTimeIdx: index('idx_webhook_deliveries_status_time').on(t.status, t.receivedAt),

@@ -14,7 +14,7 @@ import type {
   WebhookDispatcher,
 } from '../src/services/webhook/dispatcherTypes'
 import type { EventCenterModule } from '../src/modules/event-center/composition'
-import { createSqliteWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence'
+import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeSqliteWebhookIngressPersistence } from '../src/modules/integration/composition/webhookIngress'
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import {
@@ -461,7 +461,7 @@ describe('RFC-257 T5 · daemon 重启恢复（D23）', () => {
       'x-gitlab-token': 'wrong',
       'x-gitlab-event-uuid': 'uuid-X',
     }) // rejected（终态）
-    const n = await recoverInterruptedDeliveries(createSqliteWebhookDeliveryPersistence(db))
+    const n = await recoverInterruptedDeliveries(createWebhookDeliveryPersistence(db))
     expect(n).toBe(1)
     const rows = await deliveryRows(db)
     const byStatus = rows.map((r) => [r.status, r.statusReason]).sort()

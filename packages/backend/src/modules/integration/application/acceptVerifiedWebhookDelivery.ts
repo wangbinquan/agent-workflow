@@ -32,16 +32,6 @@ export type AcceptedVerifiedDelivery =
       effectId: string | null
     }>
 
-export interface VerifiedWebhookDeliveryStore {
-  accept(input: VerifiedWebhookDeliveryInput): AcceptedVerifiedDelivery
-}
-
-export function createAcceptVerifiedWebhookDelivery(deps: {
-  store: VerifiedWebhookDeliveryStore
-}): (input: VerifiedWebhookDeliveryInput) => AcceptedVerifiedDelivery {
-  return (input) => deps.store.accept(input)
-}
-
 export function createAcceptVerifiedWebhookDeliveryAsync(deps: {
   persistence: VerifiedWebhookDeliveryPersistencePort
 }): (input: VerifiedWebhookDeliveryInput) => Promise<AcceptedVerifiedDelivery> {

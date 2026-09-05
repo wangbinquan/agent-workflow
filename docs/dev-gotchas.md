@@ -1161,6 +1161,16 @@ gh api "repos/<owner>/<repo>/actions/runs?head_sha=$SHA" \
 它的绿是**独立且有分量的证据**（真 Windows 内核跑过），只是不能冒充 CI 门。按「windows-platform
 run」单独记即可。
 
+## PG 的表 / 索引 / 约束来自 drizzle 声明，不是 SQLite 迁移 SQL：迁移里手写的索引 PG 没有（2026-09-05 实撞）
+
+`buildLogicalSchemaContract()`（`platform/persistence/schemaContract.ts`）只读 `db/schema.ts` 的 drizzle 声明，PG 基线由它投影。
+迁移 SQL 里手写、没同步进 drizzle 声明的东西——部分唯一索引、CHECK、触发器——PG 上一律不存在：`webhook_deliveries` 的
+`idx_webhook_deliveries_dedupe` / `idx_webhook_deliveries_mr_fact` 只在迁移 0157 里，PG 上同 uuid 重投不撞唯一键，去重分支
+永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时进 `schema.ts`**（`uniqueIndex(...).on(...).where(sql\`…\`)`
+逐字同形），然后 `cd packages/backend && bun run db:rfc349-postgresql-schema` 重采 PG 基线与 journal（否则
+`rfc349-postgresql-schema` 守卫红、PG harness 直接 `postgresql-migration-history-drift`）。契约 digest 变了，已部署的 PG 目标要重做
+RFC-349 cutover（PG 侧暂无增量迁移）。
+
 ## prettier 只认仓库根的配置：在 `packages/backend` 下跑出来的排版会被 CI 的 format 门打回（2026-09-05 实撞）
 
 CI 的 `format:check` 是在仓库根跑 `prettier --check "packages/**/*.{ts,tsx,json,md}"`。同一个文件在

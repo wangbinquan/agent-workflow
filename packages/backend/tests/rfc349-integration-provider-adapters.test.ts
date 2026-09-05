@@ -17,8 +17,8 @@ import { createPostgresqlCapabilities } from '@/platform/persistence/capabilitie
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { createScheduledTaskPersistence } from '@/modules/integration/infrastructure/scheduledTaskPersistence'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
-import { createPostgresqlVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence'
-import { createPostgresqlWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence'
+import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
+import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -297,7 +297,7 @@ describe('RFC-349 Integration provider adapters', () => {
       { count: 1 },
       {},
     ])
-    const persistence = createPostgresqlVerifiedWebhookDeliveryPersistence(fake.db)
+    const persistence = createVerifiedWebhookDeliveryPersistence(fake.db)
 
     await expect(
       persistence.accept({
@@ -332,16 +332,16 @@ describe('RFC-349 Integration provider adapters', () => {
   })
 
   test('terminal ingress and launch reservation share one transaction lock key', () => {
-    // RFC-359 W4-B4：启动预留只有一份中立实现，PG 侧的事务级 advisory lock 经引擎能力矩阵表达；
-    // 锁语句本身钉在能力矩阵上，两侧仍共用同一把 `${endpointId}:${streamKey}` 键。
+    // RFC-359 W4-B4 / D2：启动预留与已验证投递接收都只有一份中立实现，PG 侧的事务级 advisory lock 经引擎
+    // 能力矩阵表达；锁语句本身钉在能力矩阵上，两侧共用同一把 `${endpointId}:${streamKey}` 键。
     const reserveSource = createMrLaunchGuardPersistence.toString()
-    const ingressSource = createPostgresqlVerifiedWebhookDeliveryPersistence.toString()
+    const ingressSource = createVerifiedWebhookDeliveryPersistence.toString()
     expect(reserveSource).toContain('advisoryLock(tx, `${input.endpointId}:${input.streamKey}`)')
     expect(createPostgresqlCapabilities().advisoryLock.toString()).toContain(
       'pg_advisory_xact_lock',
     )
-    expect(ingressSource).toContain('pg_advisory_xact_lock')
-    expect(ingressSource).toContain('input.endpointId}:${identity.streamKey')
+    expect(ingressSource).toContain('advisoryLock(tx, `${input.endpointId}:${identity.streamKey}`)')
+    expect(ingressSource).not.toContain('pg_advisory_xact_lock')
   })
 
   test('PostgreSQL webhook ingress normalizes a live-event uniqueness collision into dedupe', async () => {
@@ -349,7 +349,7 @@ describe('RFC-349 Integration provider adapters', () => {
       code: '23505',
     })
     const fake = fixture([{}, collision, {}, {}, { values: [['delivery-existing', 2]] }, {}])
-    const persistence = createPostgresqlWebhookDeliveryPersistence(fake.db)
+    const persistence = createWebhookDeliveryPersistence(fake.db)
 
     const receipt = await persistence.insert({
       endpointId: 'endpoint-1',

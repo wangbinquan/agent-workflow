@@ -24,7 +24,7 @@ import {
 import { createEmployeeInputUploadStore } from '@/modules/digital-employee/infrastructure/inputUploadStore'
 import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
 import { createSqliteActionTemplateStore } from '@/modules/development-automation/infrastructure/sqliteConfigResourceStore'
-import { createSqliteWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence'
+import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -69,7 +69,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
     command: { run: async () => ({ removedGenerationPaths: [] }) },
     executionFence: async () => 'clear' as const,
   },
-  integration: composeIntegrationMaintenanceCommands(createSqliteWebhookDeliveryPersistence(db)),
+  integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
   taskRecovery: createSqliteTaskExecutionPersistence(db).recoveryAdministration,
   taskArchive: createSqliteTaskArchiveMaintenanceCommand(db),
   tokenAudit: createSqliteTokenCallAudit(db),
@@ -334,7 +334,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       })),
     )
     const retention = { bodyRetentionMs: 10, rowRetentionMs: 20 }
-    const persistence = createSqliteWebhookDeliveryPersistence(db)
+    const persistence = createWebhookDeliveryPersistence(db)
     const first = await gcDeliveriesSlice(persistence, 100, retention, null, 2)
     expect(first).toMatchObject({
       done: false,

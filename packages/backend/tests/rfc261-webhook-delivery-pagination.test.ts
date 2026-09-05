@@ -17,7 +17,7 @@ import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { webhookDeliveries } from '../src/db/schema'
-import { createSqliteWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence'
+import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { gcDeliveries } from '../src/services/webhook/deliveryStore'
 import { retentionFromConfig, runDeliveryGcSweep } from '../src/services/webhook/webhookGc'
@@ -267,7 +267,7 @@ describe("RFC-261 · D9' 保留天数可配", () => {
     const dead = await seed(db, { receivedAt: now - 25 * DAY, bodyJson: '{"a":1}' })
     const pruned = await seed(db, { receivedAt: now - 15 * DAY, bodyJson: '{"b":2}' })
     const fresh = await seed(db, { receivedAt: now - 5 * DAY, bodyJson: '{"c":3}' })
-    const res = await gcDeliveries(createSqliteWebhookDeliveryPersistence(db), now, {
+    const res = await gcDeliveries(createWebhookDeliveryPersistence(db), now, {
       bodyRetentionMs: 10 * DAY,
       rowRetentionMs: 20 * DAY,
     })
@@ -288,7 +288,7 @@ describe("RFC-261 · D9' 保留天数可配", () => {
     }
     await seed(db, { receivedAt: now - 1 * DAY, bodyJson: '{"keep":1}' })
     const res = await gcDeliveries(
-      createSqliteWebhookDeliveryPersistence(db),
+      createWebhookDeliveryPersistence(db),
       now,
       { bodyRetentionMs: 10 * DAY, rowRetentionMs: 20 * DAY },
       10, // 25 行 → 3 批（10/10/5），锁跨批推进与终止条件
@@ -304,7 +304,7 @@ describe("RFC-261 · D9' 保留天数可配", () => {
     const now = Date.now()
     await seed(db, { receivedAt: now - 50 * DAY, bodyJson: '{"old":1}' })
     let days = { webhookDeliveryBodyRetentionDays: 3650, webhookDeliveryRowRetentionDays: 3650 }
-    const persistence = createSqliteWebhookDeliveryPersistence(db)
+    const persistence = createWebhookDeliveryPersistence(db)
     expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
       bodiesCleared: 0,
       rowsDeleted: 0,

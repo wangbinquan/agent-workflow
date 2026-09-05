@@ -6,7 +6,7 @@ import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
 import type { ScheduledTaskOperations } from '@/services/scheduledTasks'
 import type { WebhookDispatchPersistencePort } from '../application/ports/webhookDispatchPersistence'
 import type { WebhookTriggerAdministrationPort } from '../application/ports/webhookTriggerAdministration'
-import { createSqliteWebhookDeliveryPersistence } from '../infrastructure/sqliteWebhookDeliveryPersistence'
+import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 import { createWebhookDispatchPersistence } from '../infrastructure/webhookDispatchPersistence'
 import { createWebhookTriggerAdministration } from '../infrastructure/webhookTriggerAdministration'
 import { createSqliteWebhookTriggerValidation } from '../infrastructure/sqliteWebhookTriggerValidation'
@@ -93,7 +93,7 @@ export function composeSqliteWebhookDispatchCore(
 > {
   return {
     persistence: createWebhookDispatchPersistence(db),
-    deliveryPersistence: createSqliteWebhookDeliveryPersistence(db),
+    deliveryPersistence: createWebhookDeliveryPersistence(db),
     resolveRepo: createSqliteWebhookRepositoryResolver(db, secretBox),
     admitLaunch: createWebhookLaunchAdmission(scheduledTasks),
   }
