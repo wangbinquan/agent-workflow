@@ -5,7 +5,7 @@ import type { DbClient } from '../../src/db/client'
 import { nodeRuns, runtimeSessionLeases, tasks } from '../../src/db/schema'
 import { dbTxSync } from '../../src/db/txSync'
 import type { TaskRecoveryOperations } from '../../src/modules/task-execution/application/ports/taskRecoveryOperations'
-import { createSqliteTaskRecoveryOperations } from '../../src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations'
+import { createTaskRecoveryOperations } from '../../src/modules/task-execution/infrastructure/taskRecoveryOperations'
 import { terminalizeTaskExecutionIntentsTx } from '../../src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent'
 
 const TERMINAL_RUN_STATUSES = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
@@ -13,7 +13,7 @@ const TERMINAL_RUN_STATUSES = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 /** Test composition mirrors daemon provider selection explicitly; recovery
  * services never accept a DbClient compatibility shape. */
 export function taskRecoveryOperations(db: DbClient): TaskRecoveryOperations {
-  return createSqliteTaskRecoveryOperations(db, {
+  return createTaskRecoveryOperations(db, {
     async interruptBootOrphanTask(input) {
       return dbTxSync(db, (tx) => {
         const interrupted = tx

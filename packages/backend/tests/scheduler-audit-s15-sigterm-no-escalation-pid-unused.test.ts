@@ -36,19 +36,13 @@ const RUNNER = resolve(BACKEND_SRC, 'services', 'runner.ts')
 const MANAGED_PROCESS = resolve(BACKEND_SRC, 'services', 'execution', 'managedProcess.ts')
 const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
 const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
-const SQLITE_RECOVERY = resolve(
+// RFC-359 W4-B1 批 2e：恢复读 / 写只有一份 provider 中立实现。
+const RECOVERY = resolve(
   BACKEND_SRC,
   'modules',
   'task-execution',
   'infrastructure',
-  'sqliteTaskRecoveryOperations.ts',
-)
-const POSTGRESQL_RECOVERY = resolve(
-  BACKEND_SRC,
-  'modules',
-  'task-execution',
-  'infrastructure',
-  'postgresqlTaskRecoveryOperations.ts',
+  'taskRecoveryOperations.ts',
 )
 const TASK = resolve(BACKEND_SRC, 'services', 'task.ts')
 const PROCESS_UTIL = resolve(BACKEND_SRC, 'util', 'process.ts')
@@ -172,7 +166,7 @@ describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
     expect(countNonCommentMatches(stuckSrc, /'S5'/g)).toBeGreaterThanOrEqual(2)
     expect(countNonCommentMatches(stuckSrc, /\bpid\b/g)).toBeGreaterThan(0)
     expect(stuckSrc).toContain('operations.loadStuckTaskSnapshots(')
-    for (const adapter of [SQLITE_RECOVERY, POSTGRESQL_RECOVERY]) {
+    for (const adapter of [RECOVERY]) {
       const source = readFileSync(adapter, 'utf8')
       expect(source).toContain('latestEventTsForRun')
       expect(source).toContain('lastEventTs')

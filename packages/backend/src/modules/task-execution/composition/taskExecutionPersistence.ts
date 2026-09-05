@@ -39,8 +39,11 @@ import { PostgresqlNodeExecutionPersistence } from '../infrastructure/postgresql
 import { DrizzleNodeActivationSnapshotReader } from '../infrastructure/nodeActivationSnapshotReader'
 import { DrizzleMergeStateLifecyclePersistence } from '../infrastructure/mergeStateLifecyclePersistence'
 import { DrizzleTaskArtifactPathQueries } from '../infrastructure/taskArtifactPathQueries'
-import { createSqliteTaskRecoveryOperations } from '../infrastructure/sqliteTaskRecoveryOperations'
-import { createPostgresqlTaskRecoveryOperations } from '../infrastructure/postgresqlTaskRecoveryOperations'
+import {
+  createTaskRecoveryOperations,
+  repairRuntimeSessionLeaseAfterOrphanReapTx,
+} from '../infrastructure/taskRecoveryOperations'
+import { terminalizePostgresqlTaskExecutionIntentsTx } from '../infrastructure/postgresqlTaskExecutionIntentTerminalPersistence'
 import { createSqliteRuntimeSessionLeaseOperations } from '../infrastructure/sqliteRuntimeSessionLeaseOperations'
 import { createPostgresqlRuntimeSessionLeaseOperations } from '../infrastructure/postgresqlRuntimeSessionLeaseOperations'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
@@ -48,11 +51,70 @@ import { terminalizeTaskExecutionIntentsTx } from '../infrastructure/sqliteTermi
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 
+/** RFC-359 W4-B1 批 2e：恢复读 / 写只有一份实现；这里只注入 PostgreSQL 的四条状态迁移。 */
+function createPostgresqlRecoveryAdministration(db: PostgresqlDatabaseClient) {
+  const nodeLifecycle = new PostgresqlNodeRunLifecyclePersistence(db)
+  const taskLifecycle = new PostgresqlTaskRuntimeLifecyclePersistence(db)
+  return createTaskRecoveryOperations(db, {
+    async interruptBootOrphanTask(input) {
+      return await taskLifecycle.trySetWithGuard(
+        {
+          taskId: input.taskId,
+          to: 'interrupted',
+          allowedFrom: [input.from],
+          extra: {
+            finishedAt: input.now,
+            errorSummary: input.failureCode,
+            errorMessage: input.errorMessage,
+          },
+          now: input.now,
+          reason: 'reapOrphanRuns',
+        },
+        (tx) =>
+          terminalizePostgresqlTaskExecutionIntentsTx(tx, {
+            taskId: input.taskId,
+            state: 'failed',
+            failureCode: input.failureCode,
+            now: input.now,
+          }),
+      )
+    },
+    async interruptNodeRun(input) {
+      try {
+        await nodeLifecycle.transition({
+          nodeRunId: input.nodeRunId,
+          event: { kind: 'mark-interrupted' },
+          extra: {
+            finishedAt: input.now,
+            ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
+          },
+        })
+        return true
+      } catch {
+        return false
+      }
+    },
+    async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
+      return repairRuntimeSessionLeaseAfterOrphanReapTx(db, nodeRunId)
+    },
+    async interruptPeriodicTaskIfIdle(input) {
+      return taskLifecycle.trySet({
+        taskId: input.taskId,
+        to: 'interrupted',
+        allowedFrom: ['running'],
+        extra: { finishedAt: input.now, errorSummary: input.failureCode },
+        now: input.now,
+        reason: 'reconcileDeadRunningRuns',
+      })
+    },
+  })
+}
+
 function createSqliteRecoveryAdministration(db: DbClient) {
   const nodeLifecycle = new SqliteNodeRunLifecyclePersistence(db)
   const taskLifecycle = new SqliteTaskRuntimeLifecyclePersistence(db)
   const runtimeLeaseOperations = createSqliteRuntimeSessionLeaseOperations(db)
-  return createSqliteTaskRecoveryOperations(db, {
+  return createTaskRecoveryOperations(db, {
     async interruptBootOrphanTask(input) {
       return await trySetTaskStatus({
         db,
@@ -164,7 +226,7 @@ export function createPostgresqlTaskExecutionPersistence(
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new PostgresqlHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
-    recoveryAdministration: createPostgresqlTaskRecoveryOperations(db),
+    recoveryAdministration: createPostgresqlRecoveryAdministration(db),
     shutdown: new PostgresqlTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })

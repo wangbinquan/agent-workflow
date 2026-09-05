@@ -1,3 +1,10 @@
+// RFC-359 W4-B1 批 2e —— 任务恢复读 / 写：一份实现，两个 provider 共用。
+//
+// 此前 sqlite / postgresql 两份约千行只差客户端类型、同步 / 异步形态，以及「四条状态迁移」的来源：
+// SQLite 由装配面注入、PG 内联自己的 lifecycle 内核。这里取 SQLite 的形状——迁移由各 provider 装配面注入
+// （`composition/taskExecutionPersistence.ts`），其余读 / 写共用；`recordAutoRecoveryAttempt` 取 PG 的
+// 事务形态（读 + 写同一事务，SQLite 侧此前是两条自动提交语句）。
+
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -17,7 +24,8 @@ import {
   users,
 } from '@/db/schema'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   CANCELABLE_TASK_STATUSES,
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -42,9 +50,6 @@ import type {
 } from '../application/ports/taskRecoveryOperations'
 import { hasUndispatchedDesignerRecoveryEvidence } from '../application/ports/taskRecoveryOperations'
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
-import { PostgresqlNodeRunLifecyclePersistence } from './postgresqlNodeRunLifecyclePersistence'
-import { PostgresqlTaskRuntimeLifecyclePersistence } from './postgresqlTaskRuntimeLifecyclePersistence'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
 
 const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
 const TERMINAL_NODE_RUN_SET: ReadonlySet<string> = new Set(TERMINAL_NODE_RUN_STATUSES)
@@ -86,7 +91,7 @@ function runProjection(row: {
 }
 
 async function latestEventTsForRun(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
 ): Promise<number | null> {
   const row = await db
@@ -100,7 +105,7 @@ async function latestEventTsForRun(
 }
 
 async function latestEventTsForTask(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<number | null> {
   const runs = await db
@@ -116,7 +121,7 @@ async function latestEventTsForTask(
 }
 
 async function hasUndispatchedDesignerQuestions(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<boolean> {
   const projection = {
@@ -196,7 +201,7 @@ async function hasUndispatchedDesignerQuestions(
 }
 
 async function loadLifecycleInvariantSnapshots(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   scope: TaskLifecycleInvariantScope,
 ): Promise<readonly TaskLifecycleInvariantSnapshot[]> {
   const taskRows =
@@ -385,7 +390,7 @@ async function loadLifecycleInvariantSnapshots(
 }
 
 async function hasNoActiveHumanMember(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   ownerUserId: string | null,
 ): Promise<boolean> {
@@ -412,7 +417,7 @@ async function hasNoActiveHumanMember(
 }
 
 async function loadStuckTaskSnapshots(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   taskIdFilter?: readonly string[],
 ): Promise<readonly TaskRecoveryStuckTaskSnapshot[]> {
   const base = and(isNull(tasks.deletedAt), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]))
@@ -526,11 +531,94 @@ async function loadStuckTaskSnapshots(
   return Object.freeze(snapshots)
 }
 
-export function createPostgresqlTaskRecoveryOperations(
-  db: PostgresqlDatabaseClient,
+/** 四条状态迁移由 provider 装配面注入（各自的 lifecycle 内核），其余读 / 写共用一份。 */
+export type TaskRecoveryMutationOperations = Pick<
+  TaskRecoveryOperations,
+  | 'interruptBootOrphanTask'
+  | 'interruptNodeRun'
+  | 'repairRuntimeSessionLeaseAfterOrphanReap'
+  | 'interruptPeriodicTaskIfIdle'
+>
+
+/**
+ * 孤儿收割后的运行时会话租约修复：终态 run 仍握着的租约——会话身份完好则释放回可复用，
+ * 否则连 run 上的会话 id 一起作废。统一事务原语上跑，两个 provider 的装配面都可直接注入。
+ */
+export function repairRuntimeSessionLeaseAfterOrphanReapTx(
+  db: ProviderNeutralDatabase,
+  nodeRunId: string,
+): Promise<number> {
+  return databaseSessionFor(db).transaction(async (tx) => {
+    const leases = await tx
+      .select()
+      .from(runtimeSessionLeases)
+      .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
+    let repaired = 0
+    for (const lease of leases) {
+      if (lease.leaseNodeRunId === null || lease.leaseNonceDigest === null) continue
+      const run = await tx
+        .select({
+          status: nodeRuns.status,
+          sessionId: nodeRuns.opencodeSessionId,
+          failureCode: nodeRuns.failureCode,
+        })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, lease.leaseNodeRunId))
+        .limit(1)
+        .get()
+      if (run === undefined || !TERMINAL_NODE_RUN_SET.has(run.status)) continue
+      const reusable =
+        run.failureCode !== 'runtime-session-identity-invalid' &&
+        !lease.resetPending &&
+        run.sessionId === lease.sessionId
+      if (reusable) {
+        const released = await tx
+          .update(runtimeSessionLeases)
+          .set({ leaseNodeRunId: null, leaseNonceDigest: null, leasedAt: null })
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, lease.protocol),
+              eq(runtimeSessionLeases.sessionId, lease.sessionId),
+              eq(runtimeSessionLeases.leaseNodeRunId, lease.leaseNodeRunId),
+              eq(runtimeSessionLeases.leaseNonceDigest, lease.leaseNonceDigest),
+              eq(runtimeSessionLeases.resetPending, false),
+            ),
+          )
+          .returning({ sessionId: runtimeSessionLeases.sessionId })
+        if (released[0] !== undefined) repaired += 1
+        continue
+      }
+      await tx
+        .update(nodeRuns)
+        .set({ opencodeSessionId: null })
+        .where(
+          and(
+            eq(nodeRuns.id, lease.leaseNodeRunId),
+            eq(nodeRuns.opencodeSessionId, lease.sessionId),
+          ),
+        )
+        .run()
+      const discarded = await tx
+        .delete(runtimeSessionLeases)
+        .where(
+          and(
+            eq(runtimeSessionLeases.protocol, lease.protocol),
+            eq(runtimeSessionLeases.sessionId, lease.sessionId),
+            eq(runtimeSessionLeases.leaseNodeRunId, lease.leaseNodeRunId),
+            eq(runtimeSessionLeases.leaseNonceDigest, lease.leaseNonceDigest),
+          ),
+        )
+        .returning({ sessionId: runtimeSessionLeases.sessionId })
+      if (discarded[0] !== undefined) repaired += 1
+    }
+    return repaired
+  })
+}
+
+export function createTaskRecoveryOperations(
+  db: ProviderNeutralDatabase,
+  mutations: TaskRecoveryMutationOperations,
 ): TaskRecoveryOperations {
-  const nodeLifecycle = new PostgresqlNodeRunLifecyclePersistence(db)
-  const taskLifecycle = new PostgresqlTaskRuntimeLifecyclePersistence(db)
   const operations: TaskRecoveryOperations = {
     async recordEvent(input: RecordTaskRecoveryEventInput): Promise<void> {
       await db.insert(recoveryEvents).values(input).run()
@@ -560,7 +648,7 @@ export function createPostgresqlTaskRecoveryOperations(
     },
 
     async recordAutoRecoveryAttempt(input) {
-      return db.transaction(async (tx) => {
+      return databaseSessionFor(db).transaction(async (tx) => {
         const row = await tx
           .select({
             attempts: tasks.autoRecoveryAttempts,
@@ -786,43 +874,11 @@ export function createPostgresqlTaskRecoveryOperations(
     },
 
     async interruptBootOrphanTask(input): Promise<boolean> {
-      return await taskLifecycle.trySetWithGuard(
-        {
-          taskId: input.taskId,
-          to: 'interrupted',
-          allowedFrom: [input.from],
-          extra: {
-            finishedAt: input.now,
-            errorSummary: input.failureCode,
-            errorMessage: input.errorMessage,
-          },
-          now: input.now,
-          reason: 'reapOrphanRuns',
-        },
-        (tx) =>
-          terminalizePostgresqlTaskExecutionIntentsTx(tx, {
-            taskId: input.taskId,
-            state: 'failed',
-            failureCode: input.failureCode,
-            now: input.now,
-          }),
-      )
+      return mutations.interruptBootOrphanTask(input)
     },
 
     async interruptNodeRun(input): Promise<boolean> {
-      try {
-        await nodeLifecycle.transition({
-          nodeRunId: input.nodeRunId,
-          event: { kind: 'mark-interrupted' },
-          extra: {
-            finishedAt: input.now,
-            ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
-          },
-        })
-        return true
-      } catch {
-        return false
-      }
+      return mutations.interruptNodeRun(input)
     },
 
     async listPeriodicReconcileCandidates(startedBefore: number) {
@@ -901,71 +957,7 @@ export function createPostgresqlTaskRecoveryOperations(
     },
 
     async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId: string): Promise<number> {
-      return await db.transaction(async (tx) => {
-        const leases = await tx
-          .select()
-          .from(runtimeSessionLeases)
-          .where(eq(runtimeSessionLeases.leaseNodeRunId, nodeRunId))
-        let repaired = 0
-        for (const lease of leases) {
-          if (lease.leaseNodeRunId === null || lease.leaseNonceDigest === null) continue
-          const run = await tx
-            .select({
-              status: nodeRuns.status,
-              sessionId: nodeRuns.opencodeSessionId,
-              failureCode: nodeRuns.failureCode,
-            })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, lease.leaseNodeRunId))
-            .limit(1)
-            .get()
-          if (run === undefined || !TERMINAL_NODE_RUN_SET.has(run.status)) continue
-          const reusable =
-            run.failureCode !== 'runtime-session-identity-invalid' &&
-            !lease.resetPending &&
-            run.sessionId === lease.sessionId
-          if (reusable) {
-            const released = await tx
-              .update(runtimeSessionLeases)
-              .set({ leaseNodeRunId: null, leaseNonceDigest: null, leasedAt: null })
-              .where(
-                and(
-                  eq(runtimeSessionLeases.protocol, lease.protocol),
-                  eq(runtimeSessionLeases.sessionId, lease.sessionId),
-                  eq(runtimeSessionLeases.leaseNodeRunId, lease.leaseNodeRunId),
-                  eq(runtimeSessionLeases.leaseNonceDigest, lease.leaseNonceDigest),
-                  eq(runtimeSessionLeases.resetPending, false),
-                ),
-              )
-              .returning({ sessionId: runtimeSessionLeases.sessionId })
-            if (released[0] !== undefined) repaired += 1
-            continue
-          }
-          await tx
-            .update(nodeRuns)
-            .set({ opencodeSessionId: null })
-            .where(
-              and(
-                eq(nodeRuns.id, lease.leaseNodeRunId),
-                eq(nodeRuns.opencodeSessionId, lease.sessionId),
-              ),
-            )
-            .run()
-          const discarded = await tx
-            .delete(runtimeSessionLeases)
-            .where(
-              and(
-                eq(runtimeSessionLeases.protocol, lease.protocol),
-                eq(runtimeSessionLeases.sessionId, lease.sessionId),
-                eq(runtimeSessionLeases.leaseNodeRunId, lease.leaseNodeRunId),
-                eq(runtimeSessionLeases.leaseNonceDigest, lease.leaseNonceDigest),
-              ),
-            )
-            .returning({ sessionId: runtimeSessionLeases.sessionId })
-          if (discarded[0] !== undefined) repaired += 1
-        }
-        return repaired
-      })
+      return mutations.repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId)
     },
 
     async interruptPeriodicTaskIfIdle(input): Promise<boolean> {
@@ -978,14 +970,7 @@ export function createPostgresqlTaskRecoveryOperations(
         .limit(1)
         .get()
       if (active !== undefined) return false
-      return await taskLifecycle.trySet({
-        taskId: input.taskId,
-        to: 'interrupted',
-        allowedFrom: ['running'],
-        extra: { finishedAt: input.now, errorSummary: input.failureCode },
-        now: input.now,
-        reason: 'reconcileDeadRunningRuns',
-      })
+      return mutations.interruptPeriodicTaskIfIdle(input)
     },
 
     loadStuckTaskSnapshots: (taskIdFilter) => loadStuckTaskSnapshots(db, taskIdFilter),

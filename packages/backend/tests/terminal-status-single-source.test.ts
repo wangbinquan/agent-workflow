@@ -48,8 +48,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
     expect(DAEMON_RESTART_ERROR_SUMMARY).toBe('daemon-restart')
     for (const rel of [
       'services/orphans.ts',
-      'modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts',
-      'modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts',
+      'modules/task-execution/infrastructure/taskRecoveryOperations.ts',
       'modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts',
       'modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts',
     ]) {
