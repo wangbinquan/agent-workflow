@@ -86,15 +86,14 @@ import {
   type RequirementMaterializer,
   type RequirementSourceRunnerDep,
 } from './infrastructure/requirementMaterializer'
-import { createSqliteAdmissionLookup } from './infrastructure/sqliteAdmissionLookup'
-import { createPostgresqlAdmissionLookup } from './infrastructure/postgresqlAdmissionLookup'
+import { createAdmissionLookup } from './infrastructure/admissionLookup'
 import {
-  createSqliteFactSnapshotReader,
+  createFactSnapshotReader,
   listFencedMissionIds,
   listPreparedEffectRows,
   listUnconsumedWakeHintMissionIds,
   missionEpochsOf,
-} from './infrastructure/sqliteReconcilerReaders'
+} from './infrastructure/reconcilerReaders'
 import { createSqliteMissionPersistence } from './infrastructure/sqliteMissionStore'
 import { createPostgresqlMissionPersistence } from './infrastructure/postgresqlMissionStore'
 import { createSqliteRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
@@ -129,8 +128,7 @@ import {
   runVerificationProfile,
 } from './infrastructure/verificationRunner'
 import { verificationProfileContentSchema } from './domain/verificationProfile'
-import { readUploadPlan } from './infrastructure/sqliteUploadPlanStore'
-import { readPostgresqlUploadPlan } from './infrastructure/postgresqlUploadPlanStore'
+import { readUploadPlan } from './infrastructure/uploadPlanStore'
 import {
   createPostgresqlUploadMaintenancePersistence,
   createSqliteUploadMaintenancePersistence,
@@ -145,13 +143,6 @@ export {
   createPostgresqlMissionCodeHostEventContinuation,
   createSqliteMissionCodeHostEventContinuation,
 } from './infrastructure/missionCodeHostEventContinuation'
-import {
-  createPostgresqlFactSnapshotReader,
-  listPostgresqlFencedMissionIds,
-  listPostgresqlPreparedEffectRows,
-  listPostgresqlUnconsumedWakeHintMissionIds,
-  postgresqlMissionEpochsOf,
-} from './infrastructure/postgresqlReconcilerReaders'
 
 export {
   createPostgresqlDevelopmentMissionExecutionTerminalObserver,
@@ -169,13 +160,13 @@ const PIPELINE_IMPORT_BUDGET = {
 export type DevelopmentAdmissionLookup = AdmissionLookup
 
 export function composeSqliteDevelopmentAdmissionLookup(db: DbClient): AdmissionLookup {
-  return createSqliteAdmissionLookup(db)
+  return createAdmissionLookup(db)
 }
 
 export function composePostgresqlDevelopmentAdmissionLookup(
   db: PostgresqlDatabaseClient,
 ): AdmissionLookup {
-  return createPostgresqlAdmissionLookup(db)
+  return createAdmissionLookup(db)
 }
 
 export const composeSqlitePlaybookSaga = createSqlitePlaybookSagaPersistence
@@ -467,8 +458,8 @@ export function composeDevelopmentAutomation(
   const repositories = createSqliteRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
     store: createSqliteMissionPersistence(deps.db),
-    admissionLookup: createSqliteAdmissionLookup(deps.db),
-    snapshots: createSqliteFactSnapshotReader(deps.db),
+    admissionLookup: createAdmissionLookup(deps.db),
+    snapshots: createFactSnapshotReader(deps.db),
     bundleRefs: createSqliteRequirementBundleRefPersistence(deps.db),
     uploadPlacement: createSqliteUploadPlacementPersistence(deps.db),
     uploadPlanReader: { read: async (planId) => readUploadPlan(deps.db, planId) },
@@ -507,11 +498,11 @@ export function composePostgresqlDevelopmentAutomation(
   const repositories = createPostgresqlRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
     store: createPostgresqlMissionPersistence(deps.db),
-    admissionLookup: createPostgresqlAdmissionLookup(deps.db),
-    snapshots: createPostgresqlFactSnapshotReader(deps.db),
+    admissionLookup: createAdmissionLookup(deps.db),
+    snapshots: createFactSnapshotReader(deps.db),
     bundleRefs: createPostgresqlRequirementBundleRefPersistence(deps.db),
     uploadPlacement: createPostgresqlUploadPlacementPersistence(deps.db),
-    uploadPlanReader: { read: (planId) => readPostgresqlUploadPlan(deps.db, planId) },
+    uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
     actionTemplates: createPostgresqlActionTemplatePersistence(deps.db),
     verificationProfiles: createPostgresqlVerificationProfilePersistence(deps.db),
     playbookSaga: createPostgresqlPlaybookSagaPersistence(deps.db),
@@ -522,12 +513,12 @@ export function composePostgresqlDevelopmentAutomation(
     },
     uploads: createPostgresqlUploadMaintenancePersistence(deps.db),
     wakeReaders: {
-      listUnconsumedWakeHintMissionIds: () => listPostgresqlUnconsumedWakeHintMissionIds(deps.db),
+      listUnconsumedWakeHintMissionIds: () => listUnconsumedWakeHintMissionIds(deps.db),
     },
     recoveryReaders: {
-      listFencedMissionIds: () => listPostgresqlFencedMissionIds(deps.db),
-      listPreparedEffectRows: () => listPostgresqlPreparedEffectRows(deps.db),
-      missionEpochsOf: (ids) => postgresqlMissionEpochsOf(deps.db, ids),
+      listFencedMissionIds: () => listFencedMissionIds(deps.db),
+      listPreparedEffectRows: () => listPreparedEffectRows(deps.db),
+      missionEpochsOf: (ids) => missionEpochsOf(deps.db, ids),
     },
     sweepRetention: (lookup, now) =>
       sweepPostgresqlDevelopmentRetention(

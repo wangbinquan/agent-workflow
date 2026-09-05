@@ -32,7 +32,7 @@ import {
   createSqliteMissionPersistence,
   createSqliteMissionStore,
 } from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
-import { createSqliteFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/sqliteReconcilerReaders'
+import { createFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { createSqliteRequirementBundleRefPersistence } from '../../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { EvidenceStore } from '../../src/modules/development-automation/infrastructure/evidenceStore'
 import {
@@ -425,7 +425,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
 
   const store = createSqliteMissionStore(db)
   const persistence = createSqliteMissionPersistence(db)
-  const snapshots = createSqliteFactSnapshotReader(db)
+  const snapshots = createFactSnapshotReader(db)
   const admissionLookup = lookupOf(db)
 
   const evidenceRoot = mkdtempSync(join(tmpdir(), 'rfc310-pr3-evidence-'))

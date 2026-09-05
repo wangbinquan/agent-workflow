@@ -4,8 +4,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { MissionPersistence } from '../application/ports/missionStore'
-import { postgresqlMissionIdOfExecutionRef } from '../infrastructure/postgresqlReconcilerReaders'
-import { missionIdOfExecutionRef } from '../infrastructure/sqliteReconcilerReaders'
+import { missionIdOfExecutionRef } from '../infrastructure/reconcilerReaders'
 import { createPostgresqlMissionPersistence } from '../infrastructure/postgresqlMissionStore'
 import { createSqliteMissionPersistence } from '../infrastructure/sqliteMissionStore'
 
@@ -59,8 +58,7 @@ export function createPostgresqlDevelopmentMissionExecutionTerminalObserver(deps
 }): DevelopmentMissionExecutionTerminalObserver {
   return observer({
     store: createPostgresqlMissionPersistence(deps.db),
-    missionIdOfExecutionRef: (executionRef) =>
-      postgresqlMissionIdOfExecutionRef(deps.db, executionRef),
+    missionIdOfExecutionRef: (executionRef) => missionIdOfExecutionRef(deps.db, executionRef),
     drive: deps.drive,
   })
 }

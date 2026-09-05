@@ -21,7 +21,7 @@ import {
   createSqliteUploadSessionStore,
   UPLOAD_SESSION_TTL_MS,
 } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
+import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
 import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 
 const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
@@ -168,7 +168,7 @@ describe('rfc310 pr3 upload session store', () => {
     expect(store.getUpload(claimedStale.id)!.state).toBe('claimed')
   })
 
-  test('insertUploadPlan persists plan + ordered entries with expectedTarget projection', () => {
+  test('insertUploadPlan persists plan + ordered entries with expectedTarget projection', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     // plans 表带 mission FK：先立 mission 行。
     db.insert(developmentMissions)
@@ -183,7 +183,7 @@ describe('rfc310 pr3 upload session store', () => {
         updatedAt: T0,
       })
       .run()
-    insertUploadPlan(db, {
+    await insertUploadPlan(db, {
       planId: 'plan-1',
       missionId: 'm-plan',
       missionRevision: 0,

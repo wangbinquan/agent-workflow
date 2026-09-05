@@ -3,6 +3,7 @@
 
 import { and, asc, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
+import { insertUploadPlan } from './uploadPlanStore'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   developmentActionRuns,
@@ -15,8 +16,6 @@ import {
   developmentMissions,
   developmentMissionSources,
   developmentMrClaims,
-  developmentRepositoryUploadPlanEntries,
-  developmentRepositoryUploadPlans,
   developmentWakeHints,
   missionInputUploads,
 } from '@/db/schema'
@@ -263,42 +262,7 @@ export function createPostgresqlMissionPersistence(
               `upload expired or unusable: ${uploadRef}`,
             )
           }
-          const plan = input.upload.plan
-          await tx
-            .insert(developmentRepositoryUploadPlans)
-            .values({
-              id: plan.planId,
-              missionId: plan.missionId,
-              missionRevision: plan.missionRevision,
-              repositoryId: plan.repositoryId,
-              baselineSnapshotRef: plan.baselineSnapshotRef,
-              baselineSha: plan.baselineSha,
-              planDigest: plan.planDigest,
-              createdAt: plan.createdAt,
-            })
-            .run()
-          if (plan.entries.length > 0) {
-            await tx
-              .insert(developmentRepositoryUploadPlanEntries)
-              .values(
-                plan.entries.map((entry) => ({
-                  planId: plan.planId,
-                  ordinal: entry.ordinal,
-                  fileId: entry.fileId,
-                  uploadBlobRef: entry.uploadBlobRef,
-                  uploadSha256: entry.uploadSha256,
-                  repositoryTargetPath: entry.repositoryTargetPath,
-                  contentPolicy: entry.contentPolicy,
-                  targetFileMode: entry.targetFileMode,
-                  expectedTargetKind: entry.expectedTarget.kind,
-                  expectedTargetSha256:
-                    entry.expectedTarget.kind === 'absent' ? null : entry.expectedTarget.sha256,
-                  expectedTargetFileMode:
-                    entry.expectedTarget.kind === 'absent' ? null : entry.expectedTarget.fileMode,
-                })),
-              )
-              .run()
-          }
+          await insertUploadPlan(tx, input.upload.plan)
         }
 
         await tx.insert(developmentMissionSources).values(input.source).run()

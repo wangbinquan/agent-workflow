@@ -20,6 +20,8 @@ import {
   developmentMissions,
   developmentMissionSources,
   developmentMrClaims,
+  developmentRepositoryUploadPlanEntries,
+  developmentRepositoryUploadPlans,
   developmentWakeHints,
 } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
@@ -34,7 +36,7 @@ import type {
   MissionStore,
   OccResult,
 } from '../application/ports/missionStore'
-import { insertUploadPlan } from './sqliteUploadPlanStore'
+import type { PersistUploadPlanInput } from '../application/uploadPlan'
 import { createSqliteUploadSessionStore } from './sqliteUploadSessionStore'
 
 function isUniqueViolation(error: unknown): boolean {
@@ -698,6 +700,44 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
 
 /** Async provider adapter that preserves the established synchronous SQLite
  * store as the behavior oracle while exposing only Promise operations. */
+/**
+ * RFC-359 W4-B5c：上传计划的中立实现（`uploadPlanStore.ts`）是异步的；这里的 launch 事务还是 dbTxSync 的同步形状，
+ * 只能同步落——本副本随 MissionStore 合一（dbTxSync 归零）一起删除，勿在别处复用。
+ */
+function insertUploadPlanSync(db: DbClient, input: PersistUploadPlanInput): void {
+  db.insert(developmentRepositoryUploadPlans)
+    .values({
+      id: input.planId,
+      missionId: input.missionId,
+      missionRevision: input.missionRevision,
+      repositoryId: input.repositoryId,
+      baselineSnapshotRef: input.baselineSnapshotRef,
+      baselineSha: input.baselineSha,
+      planDigest: input.planDigest,
+      createdAt: input.createdAt,
+    })
+    .run()
+  for (const entry of input.entries) {
+    db.insert(developmentRepositoryUploadPlanEntries)
+      .values({
+        planId: input.planId,
+        ordinal: entry.ordinal,
+        fileId: entry.fileId,
+        uploadBlobRef: entry.uploadBlobRef,
+        uploadSha256: entry.uploadSha256,
+        repositoryTargetPath: entry.repositoryTargetPath,
+        contentPolicy: entry.contentPolicy,
+        targetFileMode: entry.targetFileMode,
+        expectedTargetKind: entry.expectedTarget.kind,
+        expectedTargetSha256:
+          entry.expectedTarget.kind === 'absent' ? null : entry.expectedTarget.sha256,
+        expectedTargetFileMode:
+          entry.expectedTarget.kind === 'absent' ? null : entry.expectedTarget.fileMode,
+      })
+      .run()
+  }
+}
+
 export function createSqliteMissionPersistence(db: DbClient): MissionPersistence {
   const store = createSqliteMissionStore(db)
   const uploads = createSqliteUploadSessionStore(db)
@@ -713,7 +753,7 @@ export function createSqliteMissionPersistence(db: DbClient): MissionPersistence
             uploadRefs: input.upload.uploadRefs,
             now: input.upload.now,
           })
-          insertUploadPlan(db, input.upload.plan)
+          insertUploadPlanSync(db, input.upload.plan)
         }
         store.insertMissionSource(input.source)
         return created

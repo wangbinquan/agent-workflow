@@ -8,7 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
-import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
+import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
 import {
   hasUploadPublicationReceipt,
   recordUploadPublicationReceipt,
@@ -17,7 +17,7 @@ import { developmentMissions } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function seededPlan(): { db: ReturnType<typeof createInMemoryDb>; planId: string } {
+async function seededPlan(): Promise<{ db: ReturnType<typeof createInMemoryDb>; planId: string }> {
   const db = createInMemoryDb(MIGRATIONS)
   const now = Date.now()
   db.insert(developmentMissions)
@@ -37,7 +37,7 @@ function seededPlan(): { db: ReturnType<typeof createInMemoryDb>; planId: string
       updatedAt: now,
     })
     .run()
-  insertUploadPlan(db, {
+  await insertUploadPlan(db, {
     planId: 'plan-1',
     missionId: 'm-1',
     missionRevision: 0,
@@ -63,8 +63,8 @@ function seededPlan(): { db: ReturnType<typeof createInMemoryDb>; planId: string
 }
 
 describe('rfc310 pr5 — upload publication receipt', () => {
-  test('first publish records once; same-baseline replay is idempotent; new baseline records separately', () => {
-    const { db, planId } = seededPlan()
+  test('first publish records once; same-baseline replay is idempotent; new baseline records separately', async () => {
+    const { db, planId } = await seededPlan()
     expect(hasUploadPublicationReceipt(db, planId)).toBe(false)
 
     const first = recordUploadPublicationReceipt(db, {

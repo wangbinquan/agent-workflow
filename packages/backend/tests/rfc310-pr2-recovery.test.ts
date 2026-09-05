@@ -23,7 +23,7 @@ import {
   listFencedMissionIds,
   listPreparedEffectRows,
   missionEpochsOf,
-} from '../src/modules/development-automation/infrastructure/sqliteReconcilerReaders'
+} from '../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr2Fixture, type Pr2Fixture } from './helpers/rfc310Pr2Fixture'
 

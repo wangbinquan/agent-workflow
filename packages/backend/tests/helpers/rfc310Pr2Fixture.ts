@@ -30,7 +30,7 @@ import {
   createSqliteMissionPersistence,
   createSqliteMissionStore,
 } from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
-import { createSqliteFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/sqliteReconcilerReaders'
+import { createFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { defaultAutomationPolicyContent } from '../../src/modules/development-automation/domain/automationPolicy'
 import type { AdmissionLookup } from '../../src/modules/development-automation/application/ports/admissionLookup'
 import type { MissionStore } from '../../src/modules/development-automation/application/ports/missionStore'
@@ -168,7 +168,7 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
 
   const store = createSqliteMissionStore(db)
   const persistence = createSqliteMissionPersistence(db)
-  const snapshots = createSqliteFactSnapshotReader(db)
+  const snapshots = createFactSnapshotReader(db)
   const admissionLookup = lookupOf(db)
 
   return {

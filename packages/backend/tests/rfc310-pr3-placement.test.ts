@@ -24,7 +24,7 @@ import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { developmentMissions, developmentRepositoryUploadReceipts } from '../src/db/schema'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
-import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
+import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
 import { createSqliteUploadPlacementPersistence } from '../src/modules/development-automation/infrastructure/uploadPlacementPersistence'
 import {
   createUploadPlacementProvider,
@@ -80,8 +80,8 @@ function rig(): Rig {
       const { sha256 } = await evidence.putBlobFromFile(tmp)
       return sha256
     },
-    plant(planId: string, entries: ResolvedPlanEntry[]) {
-      insertUploadPlan(db, {
+    async plant(planId: string, entries: ResolvedPlanEntry[]) {
+      await insertUploadPlan(db, {
         planId,
         missionId: 'm-1',
         missionRevision: 0,
@@ -128,7 +128,7 @@ describe('rfc310 pr3 upload placement', () => {
     const shaNew = await r.putBlob('new file body\n')
     const shaReplace = await r.putBlob('replacement body\n')
     const shaSame = await r.putBlob('unchanged\n')
-    r.plant('p1', [
+    await r.plant('p1', [
       entryOf(0, 'u1', shaNew, 'docs/new.md', { kind: 'absent' }),
       entryOf(1, 'u2', shaReplace, 'src/app.ts', {
         kind: 'exact-file',
@@ -168,7 +168,7 @@ describe('rfc310 pr3 upload placement', () => {
   test('replay reuses the existing seed; corrupted residue is rebuilt byte-identical', async () => {
     const r = rig()
     const sha = await r.putBlob('stable content\n')
-    r.plant('p2', [entryOf(0, 'u1', sha, 'a.md', { kind: 'absent' })])
+    await r.plant('p2', [entryOf(0, 'u1', sha, 'a.md', { kind: 'absent' })])
     const first = await placeUploadSeed(r.deps, { planId: 'p2' })
     const seedFile = join(r.seedsRoot, 'digest-p2', 'a.md')
 
@@ -187,7 +187,9 @@ describe('rfc310 pr3 upload placement', () => {
   test('executable mode is materialized and participates in the immutable seed digest', async () => {
     const r = rig()
     const sha = await r.putBlob('executable body\n')
-    r.plant('p-mode', [entryOf(0, 'u-exec', sha, 'verify.sh', { kind: 'absent' }, 'executable')])
+    await r.plant('p-mode', [
+      entryOf(0, 'u-exec', sha, 'verify.sh', { kind: 'absent' }, 'executable'),
+    ])
     const first = await placeUploadSeed(r.deps, { planId: 'p-mode' })
     const seedFile = join(r.seedsRoot, 'digest-p-mode', 'verify.sh')
     if (process.platform !== 'win32') {
@@ -203,7 +205,7 @@ describe('rfc310 pr3 upload placement', () => {
   test('all already-present ⇒ null seed + baseline-observed fulfillment at the baseline sha', async () => {
     const r = rig()
     const sha = await r.putBlob('already there\n')
-    r.plant('p3', [
+    await r.plant('p3', [
       entryOf(0, 'u1', sha, 'docs/x.md', {
         kind: 'already-present',
         sha256: sha,
@@ -228,7 +230,7 @@ describe('rfc310 pr3 upload placement', () => {
 
   test('missing blob fails loudly and leaves no seed root behind', async () => {
     const r = rig()
-    r.plant('p4', [entryOf(0, 'u1', '9'.repeat(64), 'a.md', { kind: 'absent' })])
+    await r.plant('p4', [entryOf(0, 'u1', '9'.repeat(64), 'a.md', { kind: 'absent' })])
     try {
       await placeUploadSeed(r.deps, { planId: 'p4' })
       throw new Error('should have thrown')
@@ -248,7 +250,7 @@ describe('rfc310 pr3 upload placement', () => {
       expect(missingPlan.failure.code).toBe('upload-placement-failed')
     }
     const sha = await r.putBlob('ok\n')
-    r.plant('p5', [entryOf(0, 'u1', sha, 'a.md', { kind: 'absent' })])
+    await r.plant('p5', [entryOf(0, 'u1', sha, 'a.md', { kind: 'absent' })])
     const ok = await provider.place({ missionId: 'm-1', uploadPlanRef: 'p5' })
     expect(ok.ok).toBe(true)
     rmSync(r.root, { recursive: true, force: true })

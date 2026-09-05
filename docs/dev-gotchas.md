@@ -1161,6 +1161,14 @@ gh api "repos/<owner>/<repo>/actions/runs?head_sha=$SHA" \
 它的绿是**独立且有分量的证据**（真 Windows 内核跑过），只是不能冒充 CI 门。按「windows-platform
 run」单独记即可。
 
+## prettier 只认仓库根的配置：在 `packages/backend` 下跑出来的排版会被 CI 的 format 门打回（2026-09-05 实撞）
+
+CI 的 `format:check` 是在仓库根跑 `prettier --check "packages/**/*.{ts,tsx,json,md}"`。同一个文件在
+`packages/backend` 目录下 `bunx prettier --write` 与在根目录下跑，链式调用的折行结果不一样（`7c014397b` 因此红了
+Lint 一格：`rfc359-w4-b5b-adapters.test.ts` 在子目录下排过版，根配置认为它没排）。规矩：**格式化一律从仓库根跑**
+（`cd <repo> && bunx prettier --write packages/backend/...`），推之前顺手 `bun run format:check` 一遍——它带缓存，
+几秒钟，比推红后再补一提便宜得多。
+
 ## 被 supersede 取消的 CI run 不是绿：main 可以红一整天而 watcher 一直「在跟」（2026-09-05 实撞）
 
 连续推送时 GitHub 会取消被后一笔 supersede 的 run。RFC-359 2026-09-04 一天推了二十多笔，每笔的 watcher 都

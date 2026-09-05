@@ -29,7 +29,7 @@ import {
 import { createSqliteDevelopmentMigrationPersistence } from '../infrastructure/migrationAssets'
 import { createPostgresqlDevelopmentMigrationPersistence } from '../infrastructure/postgresqlMigrationAssets'
 import { createSqliteMissionReadModelQueries } from '../infrastructure/missionReadModels'
-import { createSqliteFactSnapshotReader } from '../infrastructure/sqliteReconcilerReaders'
+import { createFactSnapshotReader } from '../infrastructure/reconcilerReaders'
 import { createCutoverStore } from '../infrastructure/cutoverStore'
 import {
   createPostgresqlMissionInputUploadPersistence,
@@ -37,7 +37,6 @@ import {
 } from '../infrastructure/missionInputUploadPersistence'
 import { createSqliteMissionPersistence } from '../infrastructure/sqliteMissionStore'
 import { createPostgresqlMissionPersistence } from '../infrastructure/postgresqlMissionStore'
-import { createPostgresqlFactSnapshotReader } from '../infrastructure/postgresqlReconcilerReaders'
 import { createPostgresqlMissionReadModelQueries } from '../infrastructure/postgresqlMissionReadModels'
 import type { MissionInputUploadPersistence } from '../application/missionInputUploadOperations'
 import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
@@ -709,7 +708,7 @@ export function composeDevelopmentMissionOperations(
 ): DevelopmentMissionOperations {
   return composeDevelopmentMissionOperationsFromPersistence(deps, {
     uploads: createSqliteMissionInputUploadPersistence(deps.db),
-    snapshots: createSqliteFactSnapshotReader(deps.db),
+    snapshots: createFactSnapshotReader(deps.db),
     missions: createSqliteMissionPersistence(deps.db),
     repositories: createSqliteRepositoryLocationRead(deps.db),
     readModels: createSqliteMissionReadModelQueries(deps.db),
@@ -725,7 +724,7 @@ export function composePostgresqlDevelopmentMissionOperations(
 ): DevelopmentMissionOperations {
   return composeDevelopmentMissionOperationsFromPersistence(deps, {
     uploads: createPostgresqlMissionInputUploadPersistence(deps.db),
-    snapshots: createPostgresqlFactSnapshotReader(deps.db),
+    snapshots: createFactSnapshotReader(deps.db),
     missions: createPostgresqlMissionPersistence(deps.db),
     repositories: createPostgresqlRepositoryLocationRead(deps.db),
     readModels: createPostgresqlMissionReadModelQueries(deps.db),

@@ -136,6 +136,7 @@
 > **W4-B6 批 c 已落**：source-control 仓库传输凭据仓库合一，`rfc359-w4-b6c-adapters.test.ts` 两引擎各跑。B6 剩 1 对（fusionRepository，随 dbTxSync 归零）。
 > **W4-B5 批 a 已落**：code-capability 七对 + development-automation 两对机械合一（十八个 provider 文件删除），`rfc359-w4-b5a-adapters.test.ts` 两引擎各跑；rfc349 cutover 账本 55 → 54、rfc317 表归属账本 19 → 17。B5 剩 14 对（按 hunk 数从小到大逐批，先对账再合）。
 > **W4-B5 批 b 已落**：code-capability 四对（评审人解析 / 工作项投影 / 投递链 / 模板上游持久化——锁定读走能力矩阵 `lockAggregateRoot`）+ digital-employee 反应轮次查询合一，十个 provider 文件删除，`rfc359-w4-b5b-adapters.test.ts` 两引擎各跑。B5 剩 9 对（1 对随 dbTxSync 归零，8 对深差异按 hunk 数逐批）。
+> **W4-B5 批 c 已落**：development-automation reconciler 读侧 / admission 查找 / 上传计划存储三对合一（上传计划落库改为调用方事务句柄上的异步写，PG mission store 内联落库改用它），六个 provider 文件删除，`rfc359-w4-b5c-adapters.test.ts` 两引擎各跑。B5 剩 6 对，全部随各 context 的 dbTxSync 归零一起合。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

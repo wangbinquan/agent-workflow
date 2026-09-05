@@ -237,7 +237,7 @@ export interface BuiltUploadPlan {
   readonly entries: readonly ResolvedPlanEntry[]
 }
 
-/** launch 事务内落库的 immutable plan（infrastructure/sqliteUploadPlanStore 消费）。 */
+/** launch 事务内落库的 immutable plan（infrastructure/uploadPlanStore 消费）。 */
 export interface PersistUploadPlanInput {
   readonly planId: string
   readonly missionId: string

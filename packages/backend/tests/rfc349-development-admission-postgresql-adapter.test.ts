@@ -91,11 +91,11 @@ describe('RFC-349 PostgreSQL development admission lookup', () => {
     expect(composition).toContain(
       'const lookup = deps.admissionLookup ?? persistence.admissionLookup',
     )
-    expect(composition).toContain('admissionLookup: createSqliteAdmissionLookup(deps.db)')
-    expect(composition).toContain('admissionLookup: createPostgresqlAdmissionLookup(deps.db)')
+    // RFC-359 W4-B5c：admission 查找一份实现两个 provider 共用，两条装配路径装的是同一个工厂。
+    expect(composition).toContain('admissionLookup: createAdmissionLookup(deps.db)')
     expect(missionOperations).toContain('readonly admissionLookup: AdmissionLookup')
     expect(missionOperations).toContain('lookup: deps.admissionLookup')
-    expect(missionOperations).not.toContain('createSqliteAdmissionLookup')
+    expect(missionOperations).not.toContain('createAdmissionLookup')
     expect(server).toContain('readonly developmentAdmissionLookup: DevelopmentAdmissionLookup')
     expect(server).toContain('admissionLookup: runtimeDeps.developmentAdmissionLookup')
   })
