@@ -34,8 +34,7 @@ import { PostgresqlTaskRuntimeLifecyclePersistence } from '../infrastructure/pos
 import { createRuntimeSessionCapturePersistence } from '../infrastructure/runtimeSessionCapturePersistence'
 import { SqliteTaskExecutionShutdownOperations } from '../infrastructure/sqliteTaskExecutionShutdownOperations'
 import { PostgresqlTaskExecutionShutdownOperations } from '../infrastructure/postgresqlTaskExecutionShutdownOperations'
-import { SqliteNodeExecutionPersistence } from '../infrastructure/sqliteNodeExecutionPersistence'
-import { PostgresqlNodeExecutionPersistence } from '../infrastructure/postgresqlNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeActivationSnapshotReader } from '../infrastructure/nodeActivationSnapshotReader'
 import { DrizzleMergeStateLifecyclePersistence } from '../infrastructure/mergeStateLifecyclePersistence'
 import { DrizzleTaskArtifactPathQueries } from '../infrastructure/taskArtifactPathQueries'
@@ -182,7 +181,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new DrizzleNodeRunRuntimePersistence(db),
-    nodeExecution: new SqliteNodeExecutionPersistence(db),
+    nodeExecution: new DrizzleNodeExecutionPersistence(db),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
@@ -215,7 +214,7 @@ export function createPostgresqlTaskExecutionPersistence(
     childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new PostgresqlNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new DrizzleNodeRunRuntimePersistence(db),
-    nodeExecution: new PostgresqlNodeExecutionPersistence(db),
+    nodeExecution: new DrizzleNodeExecutionPersistence(db),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),

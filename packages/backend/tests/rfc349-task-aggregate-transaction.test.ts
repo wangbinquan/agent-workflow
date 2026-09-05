@@ -192,29 +192,25 @@ describe('RFC-349 single-aggregate node run transaction', () => {
   })
 
   test('every node-run writer uses it, and the fence takes the lock after the owner check', () => {
+    // RFC-359 W4-B1 批 2f：两份 provider 投影合成一份（nodeExecutionPersistence.ts），写事务走统一原语
+    // （PG 上 READ COMMITTED），聚合根行锁经能力矩阵 `lockAggregateRoot` 表达。
     const source = readFileSync(
-      resolve(
-        backendRoot,
-        'src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts',
-      ),
+      resolve(backendRoot, 'src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts'),
       'utf8',
     )
     expect(
       source,
       'node run 的写手回到 SERIALIZABLE ⇒ 小部署上 agent 输出会边写边丢',
-    ).not.toContain('withPostgresqlSerializableTaskExecution')
+    ).not.toContain('serializable(')
     // patch / upsertOutputs / replaceOutputs / appendEvents / retagSessionEpochs
-    expect(source.split('withPostgresqlNodeRunAggregateTransaction(this.db').length - 1).toBe(5)
+    expect(source.split('withTaskExecutionWrite(this.db').length - 1).toBe(5)
 
     const fence = source.slice(
       source.indexOf('async function fencedTaskId'),
-      source.indexOf('export class PostgresqlNodeExecutionPersistence'),
+      source.indexOf('export class DrizzleNodeExecutionPersistence'),
     )
-    const owner = Math.max(
-      fence.indexOf('assertPostgresqlTaskOwnerlessTx'),
-      fence.indexOf('assertPostgresqlTaskOwnerTx'),
-    )
-    const lock = fence.indexOf('lockPostgresqlNodeRunAggregateRoot')
+    const owner = fence.indexOf('fenceTaskWrite(')
+    const lock = fence.indexOf('lockAggregateRoot(')
     expect(owner, 'fence 不见了').toBeGreaterThan(-1)
     expect(
       lock,

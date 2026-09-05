@@ -99,23 +99,15 @@ describe('RFC-313 源码层锁', () => {
     expect(nodeMechanics).toContain(
       'persistence.countAgentTextEvents(nodeRunId, FRAMEWORK_AUDIT_EVENT_PREFIX)',
     )
-    const sqlitePersistence = read(
+    // RFC-359 W4-B1 批 2f：两份 provider 投影合成一份。
+    const persistence = read(
       BACKEND_SRC,
       'modules',
       'task-execution',
       'infrastructure',
-      'sqliteNodeExecutionPersistence.ts',
+      'nodeExecutionPersistence.ts',
     )
-    const postgresqlPersistence = read(
-      BACKEND_SRC,
-      'modules',
-      'task-execution',
-      'infrastructure',
-      'postgresqlNodeExecutionPersistence.ts',
-    )
-    for (const persistence of [sqlitePersistence, postgresqlPersistence]) {
-      expect(persistence).toContain('notLike(nodeRunEvents.payload, `${frameworkPrefix}%`)')
-    }
+    expect(persistence).toContain('notLike(nodeRunEvents.payload, `${frameworkPrefix}%`)')
     // 同样数**真实代码用点**而不是文本命中——doc 里的 {@link} 提及是正常的。
     expect(occurrences(nodeMechanics, 'export const FRAMEWORK_AUDIT_EVENT_PREFIX')).toBe(1)
     expect(occurrences(nodeMechanics, 'FRAMEWORK_AUDIT_EVENT_PREFIX)')).toBe(1)

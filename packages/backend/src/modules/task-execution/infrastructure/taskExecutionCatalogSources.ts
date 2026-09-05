@@ -5,8 +5,8 @@
 // 分叉的代价不是理论上的——facets 数在 view 之后、origin 按 `scheduled_task_id` 猜致
 // 「事件」/「API」筛选 400、层级与排序写死，三处都是先在一侧修好、另一侧照旧。
 //
-// 现在只剩一份：provider 差异全部收进传进来的 `TaskListPage`（`taskListPage/sqlite.ts` 与
-// `taskListPage/postgresql.ts` 两个装配），这里连数据库客户端都拿不到。
+// 现在只剩一份：provider 差异全部收进传进来的 `TaskListPage`（`taskListPage/database.ts`
+// 一份中立装配，RFC-359 起两个 provider 共用），这里连数据库客户端都拿不到。
 
 import type { TaskCatalogListItem, TaskOperationsListItem } from '@agent-workflow/shared'
 

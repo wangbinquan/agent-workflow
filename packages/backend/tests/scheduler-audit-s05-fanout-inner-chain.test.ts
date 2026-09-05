@@ -30,7 +30,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
-import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 import { createLogger } from '../src/util/log'
@@ -43,7 +43,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('test-s05-fanout-chain')
 
-const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
+const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
 
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())

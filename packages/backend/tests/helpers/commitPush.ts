@@ -1,5 +1,5 @@
 import type { DbClient } from '../../src/db/client'
-import { SqliteNodeExecutionPersistence } from '../../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { SqliteNodeRunLifecyclePersistence } from '../../src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence'
 import { SqliteTaskExecutionEffectPersistence } from '../../src/modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence'
 import type { CommitPushDeps } from '../../src/services/commitPushRunner'
@@ -16,7 +16,7 @@ export function composeSqliteCommitPushDeps(
 ): CommitPushDeps {
   return {
     nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
-    nodeExecution: new SqliteNodeExecutionPersistence(db),
+    nodeExecution: new DrizzleNodeExecutionPersistence(db),
     effects: new SqliteTaskExecutionEffectPersistence(db),
     publicationTransport:
       overrides.publicationTransport ?? createTestRepositoryPublicationTransport(overrides.runGit),

@@ -12,7 +12,6 @@ export type {
   TaskOperationsRawQuery,
 } from './filters'
 export { canUseFilteredFastPath, isDefaultView } from './query'
-export { createSqliteTaskListPage } from './sqlite'
-export { createPostgresqlTaskListPage } from './postgresql'
+export { createDatabaseTaskListPage } from './database'
 export { taskListViewerOf, type TaskListViewer } from './authorization'
 export type { TaskListPageDb } from './db'

@@ -79,4 +79,7 @@ export {
   createTaskExecutionReadModels as composeSqliteTaskExecutionReadModels,
   createTaskExecutionReadModels as composePostgresqlTaskExecutionReadModels,
 } from '../infrastructure/taskExecutionReadModels'
-export { createPostgresqlTaskExecutionCatalogSourceFactory } from '../infrastructure/postgresqlTaskCatalogSources'
+export {
+  createDatabaseTaskExecutionCatalogSourceFactory,
+  createDatabaseTaskExecutionCatalogSourceFactory as createPostgresqlTaskExecutionCatalogSourceFactory,
+} from '../infrastructure/taskCatalogSources'

@@ -30,7 +30,7 @@ import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
 import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
-import { createSqliteTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
+import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { ValidationError } from '@/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -67,7 +67,7 @@ async function catalogSource(): Promise<TaskCatalogSource> {
   const db = createInMemoryDb(MIGRATIONS)
   await seed(db)
   return createTaskExecutionCatalogSourceFactory(
-    createSqliteTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
+    createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
   ).create('workflow')
 }
 

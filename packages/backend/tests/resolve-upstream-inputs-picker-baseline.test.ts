@@ -22,14 +22,14 @@ import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
-import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { createLogger } from '../src/util/log'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test-picker-baseline')
 
-const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
+const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
 
 async function seedTask(db: DbClient): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`

@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
-import { createSqliteTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
+import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 
 import { seedRfc357Page } from './helpers/rfc357PageSeed'
 import { expectRfc357PageScenario, RFC357_ADMIN } from './helpers/rfc357PageScenario'
@@ -21,7 +21,7 @@ describe('RFC-357 shared page scenario — SQLite', () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedRfc357Page(db)
     await expectRfc357PageScenario(
-      createSqliteTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
+      createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
     )
   })
 
@@ -29,7 +29,7 @@ describe('RFC-357 shared page scenario — SQLite', () => {
   // 就成了摆设。这条用空库把场景钉成会红的。
   test('the scenario has teeth — it fails against an unseeded database', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const page = createSqliteTaskListPage(db, composeSqliteOwnerIdentityQueries(db))
+    const page = createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db))
     let threw = false
     try {
       await expectRfc357PageScenario(page)

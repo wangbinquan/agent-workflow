@@ -26,7 +26,7 @@ import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
 } from '../src/modules/task-execution/composition/nodeMechanics'
-import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,
   ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE,
@@ -37,7 +37,7 @@ import {
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const seedUlid = monotonicFactory()
 
-const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
+const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
 
 async function seedTask(db: DbClient): Promise<string> {
   const taskId = `task_${seedUlid()}`

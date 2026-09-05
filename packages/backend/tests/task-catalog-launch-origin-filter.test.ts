@@ -34,7 +34,7 @@ import { createInMemoryDb } from '@/db/client'
 import { tasks, users, workflows } from '@/db/schema'
 import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
-import { createSqliteTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
+import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { listTaskItems } from '@/services/task'
 import { ValidationError } from '@/util/errors'
 
@@ -190,7 +190,7 @@ function actor(): Actor {
 /** 目录源（用户真正打到的那一层）建在同一个真库上，不再假造 provider。 */
 async function catalogSource(db: Db) {
   return createTaskExecutionCatalogSourceFactory(
-    createSqliteTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
+    createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
   ).create('workflow')
 }
 

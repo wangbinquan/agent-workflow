@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { countAgentTextEvents } from '../src/modules/task-execution/composition/nodeMechanics'
-import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
@@ -32,7 +32,7 @@ const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const RESTART_NOTICE_MARK = 'Note on an earlier attempt'
 const PROMPT_TEMPLATE = 'RFC313-TEMPLATE-MARKER: do the work'
 
-const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
+const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
 
 interface Harness {
   db: DbClient

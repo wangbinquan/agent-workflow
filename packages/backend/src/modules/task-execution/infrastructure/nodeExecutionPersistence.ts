@@ -1,8 +1,11 @@
+// RFC-359 W4-B1 批 2f —— node run 执行投影（快照 / 输出 / 事件）：一份实现，两个 provider 共用。
+// 写路径是产品里最热的（agent 每吐一行就 appendEvents 一次）：统一写事务 + owner 围栏 + 聚合根行锁。
+
 import { and, asc, count, eq, inArray, isNotNull, isNull, notLike } from 'drizzle-orm'
 
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
 import type {
   NodeExecutionPersistence,
@@ -11,12 +14,10 @@ import type {
 } from '../application/ports/nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import {
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  type PostgresqlTaskExecutionTransaction,
-  lockPostgresqlNodeRunAggregateRoot,
-  withPostgresqlNodeRunAggregateTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+  fenceTaskWrite,
+  type TaskExecutionTransaction,
+  withTaskExecutionWrite,
+} from './ownedTaskExecution'
 
 function whereQuery(input: NodeExecutionQuery) {
   const conditions = [eq(nodeRuns.taskId, input.taskId)]
@@ -58,7 +59,7 @@ function snapshotOf(row: NodeRunRow): NodeExecutionSnapshot {
 }
 
 async function fencedTaskId(
-  tx: PostgresqlTaskExecutionTransaction,
+  tx: TaskExecutionTransaction,
   nodeRunId: string,
   context: TaskExecutionContextRef | undefined,
   now: number,
@@ -70,22 +71,18 @@ async function fencedTaskId(
     .limit(1)
   const taskId = rows[0]?.taskId
   if (taskId === undefined) return null
-  // RFC-359 W1-T7（P0-1）：与 SQLite 的 withTaskExecutionMutation 同一规则——显式上下文缺席时读环境
-  // 上下文（drive 在 runWithTaskExecutionContext 里跑，runner 不逐处传 executionContext），真无主才走
-  // 无主围栏。此前把 undefined 当无主，节点的第一次写就被自己 claimed 的 owner 拒掉。
-  const effective = context ?? currentTaskExecutionContext(taskId)
-  if (effective === undefined) await assertPostgresqlTaskOwnerlessTx(tx, taskId)
-  else await assertPostgresqlTaskOwnerTx(tx, effective.token, now)
-  // 聚合根行锁。这几个写事务跑在 READ COMMITTED 上（见
-  // `withPostgresqlNodeRunAggregateTransaction` 的实测数据），同一个 node run 的并发写手
-  // 靠这把锁串起来。**必须在 owner fence 之后**：其余 owned 写手都是先 fence 再动
+  // 围栏规则两引擎同一（ownedTaskExecution）：显式上下文 > 环境上下文 > 无主围栏。
+  await fenceTaskWrite(tx, { taskId, context, now })
+  // 聚合根行锁（能力矩阵：PG 渲染 `select … for update`，SQLite 已独占、no-op）。这几个写事务在 PG 上
+  // 跑 READ COMMITTED（实测见 `postgresqlTaskLifecycleTransaction.ts` 的 aggregate 说明），同一个
+  // node run 的并发写手靠这把锁串起来。**必须在 owner fence 之后**：其余 owned 写手都是先 fence 再动
   // `node_runs`，反序取锁会和它们死锁。
-  await lockPostgresqlNodeRunAggregateRoot(tx, nodeRunId)
+  await engineOf(tx).lockAggregateRoot(tx, nodeRuns, nodeRuns.id, nodeRunId)
   return taskId
 }
 
-export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async read(nodeRunId: string): Promise<NodeExecutionSnapshot | null> {
     const rows = await this.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
@@ -131,7 +128,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
   }
 
   async patch(input: Parameters<NodeExecutionPersistence['patch']>[0]): Promise<boolean> {
-    return await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
+    return await withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -152,7 +149,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
     input: Parameters<NodeExecutionPersistence['upsertOutputs']>[0],
   ): Promise<void> {
     if (input.outputs.length === 0) return
-    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
+    await withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -188,7 +185,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
   async replaceOutputs(
     input: Parameters<NodeExecutionPersistence['replaceOutputs']>[0],
   ): Promise<void> {
-    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
+    await withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -227,7 +224,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
     input: Parameters<NodeExecutionPersistence['appendEvents']>[0],
   ): Promise<void> {
     if (input.events.length === 0) return
-    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
+    await withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -255,7 +252,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
     input: Parameters<NodeExecutionPersistence['retagSessionEpochs']>[0],
   ): Promise<void> {
     if (input.supersededSessionIds.length === 0) return
-    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
+    await withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,

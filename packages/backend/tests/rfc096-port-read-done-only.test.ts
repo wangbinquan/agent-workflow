@@ -26,7 +26,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { readPortRowAtFrame } from '../src/modules/task-execution/composition/nodeMechanics'
-import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
+import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOP_FRAME = { containerRunId: null, iteration: 0 }
@@ -94,7 +94,7 @@ describe('RFC-096 §3.3 — readPortRowAtFrame reads the newest DONE row only', 
     const { doneId } = await seedDonePlusYoungerPending(db, taskId, 'src', 'signal', 'real-content')
 
     const read = await readPortRowAtFrame(
-      new SqliteNodeExecutionPersistence(db),
+      new DrizzleNodeExecutionPersistence(db),
       taskId,
       'src',
       'signal',
@@ -118,7 +118,7 @@ describe('RFC-096 §3.3 — readPortRowAtFrame reads the newest DONE row only', 
     })
 
     const read = await readPortRowAtFrame(
-      new SqliteNodeExecutionPersistence(db),
+      new DrizzleNodeExecutionPersistence(db),
       taskId,
       'src',
       'signal',
@@ -160,7 +160,7 @@ describe('RFC-096 §3.3 — readPortRowAtFrame reads the newest DONE row only', 
       content: 'round-1',
     })
 
-    const persistence = new SqliteNodeExecutionPersistence(db)
+    const persistence = new DrizzleNodeExecutionPersistence(db)
     expect((await readPortRowAtFrame(persistence, taskId, 'src', 'signal', TOP_FRAME)).runId).toBe(
       null,
     )

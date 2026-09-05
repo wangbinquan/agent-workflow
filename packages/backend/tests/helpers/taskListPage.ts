@@ -9,7 +9,7 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
-  createSqliteTaskListPage,
+  createDatabaseTaskListPage,
   taskListViewerOf,
   type TaskOperationsPageOptions,
   type TaskOperationsRawQuery,
@@ -22,7 +22,7 @@ export async function listTaskOperationsPage(
   rawQuery: TaskOperationsRawQuery,
   options: TaskOperationsPageOptions = {},
 ): Promise<TaskOperationsPage> {
-  return await createSqliteTaskListPage(db, composeSqliteOwnerIdentityQueries(db)).list(
+  return await createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)).list(
     taskListViewerOf(actor),
     rawQuery,
     options,
