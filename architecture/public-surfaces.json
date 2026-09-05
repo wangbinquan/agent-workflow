@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 868,
+    "consumers": 867,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1051,
@@ -33868,8 +33868,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:0c4dd917611e3857802b",
         "import:31124937b30ddd91bdec",
-        "import:3808fa35a548fd6e66d3",
         "import:6840f91173f082c370a0",
         "import:9df918d463654c42d45d"
       ],
@@ -33903,15 +33903,15 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:31124937b30ddd91bdec",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#$file"
+          "edgeId": "import:0c4dd917611e3857802b",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file"
         },
         {
           "context": "resource-catalog",
-          "edgeId": "import:3808fa35a548fd6e66d3",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts#$file"
+          "edgeId": "import:31124937b30ddd91bdec",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#$file"
         },
         {
           "context": "resource-catalog",
@@ -33948,9 +33948,9 @@
       },
       "consumerEdgeIds": [
         "import:063ee42eb84f1e2fcb07",
-        "import:08a522fee5a43fa39f09",
         "import:6b5bf6276ddd5dab3cb5",
-        "import:97d7f63fd22058ec39c4"
+        "import:97d7f63fd22058ec39c4",
+        "import:fd4445c4f065a8e7f45e"
       ],
       "context": "execution-contract",
       "dataClass": "metadata",
@@ -33993,12 +33993,6 @@
         },
         {
           "context": "resource-catalog",
-          "edgeId": "import:08a522fee5a43fa39f09",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
           "edgeId": "import:6b5bf6276ddd5dab3cb5",
           "file": "packages/backend/src/modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts#$file"
@@ -34008,6 +34002,12 @@
           "edgeId": "import:97d7f63fd22058ec39c4",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:fd4445c4f065a8e7f45e",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -47752,14 +47752,13 @@
         "import:50852e2935736cc3abfc",
         "import:570be319a11e6d5d6c15",
         "import:5e235bf49d40017d0720",
-        "import:6476d6477fc95ce2f8b5",
         "import:6ebf85e57f22809a3d37",
         "import:71521a150e7c0f378adb",
         "import:73f94018dc22a2dd8ad7",
-        "import:9aa715f304dcc1c4e366",
         "import:9ee6effafe6c4d1cff39",
         "import:b45d3c7ac9ba7c8496c5",
         "import:ba1e3dfa291d7b7deafb",
+        "import:d0e837f4f6a50c96ddeb",
         "import:f8d52dff892baba29ede",
         "import:ffeb63bdfdb7de4e4c02"
       ],
@@ -47824,14 +47823,13 @@
             "import:32db6e8314969ba5f0fe",
             "import:50852e2935736cc3abfc",
             "import:5e235bf49d40017d0720",
-            "import:6476d6477fc95ce2f8b5",
             "import:6ebf85e57f22809a3d37",
             "import:71521a150e7c0f378adb",
             "import:73f94018dc22a2dd8ad7",
-            "import:9aa715f304dcc1c4e366",
             "import:9ee6effafe6c4d1cff39",
             "import:b45d3c7ac9ba7c8496c5",
             "import:ba1e3dfa291d7b7deafb",
+            "import:d0e837f4f6a50c96ddeb",
             "import:f8d52dff892baba29ede",
             "import:ffeb63bdfdb7de4e4c02"
           ],
@@ -47875,9 +47873,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:6476d6477fc95ce2f8b5",
             "import:73f94018dc22a2dd8ad7",
-            "import:9aa715f304dcc1c4e366"
+            "import:d0e837f4f6a50c96ddeb"
           ],
           "fieldPath": "user.username",
           "type": "string"
@@ -47886,11 +47883,10 @@
           "consumerEdgeIds": [
             "import:32db6e8314969ba5f0fe",
             "import:50852e2935736cc3abfc",
-            "import:6476d6477fc95ce2f8b5",
             "import:71521a150e7c0f378adb",
             "import:73f94018dc22a2dd8ad7",
-            "import:9aa715f304dcc1c4e366",
-            "import:ba1e3dfa291d7b7deafb"
+            "import:ba1e3dfa291d7b7deafb",
+            "import:d0e837f4f6a50c96ddeb"
           ],
           "fieldPath": "userId",
           "type": "string"
@@ -47971,12 +47967,6 @@
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file"
         },
         {
-          "context": "resource-catalog",
-          "edgeId": "import:6476d6477fc95ce2f8b5",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentImportQueries.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentImportQueries.ts#$file"
-        },
-        {
           "context": "digital-employee",
           "edgeId": "import:6ebf85e57f22809a3d37",
           "file": "packages/backend/src/modules/digital-employee/public/participants.ts",
@@ -47996,12 +47986,6 @@
         },
         {
           "context": "resource-catalog",
-          "edgeId": "import:9aa715f304dcc1c4e366",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentImportQueries.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentImportQueries.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
           "edgeId": "import:9ee6effafe6c4d1cff39",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentImportSnapshot.ts#$file"
@@ -48017,6 +48001,12 @@
           "edgeId": "import:ba1e3dfa291d7b7deafb",
           "file": "packages/backend/src/modules/digital-employee/composition.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:d0e837f4f6a50c96ddeb",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts#$file"
         },
         {
           "context": "intent",
@@ -161486,7 +161476,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6734da70bf911d3e0ed858dee31c234a3d62765236cd6fc9d8ca40bc2568c408",
+  "sourceDigest": "sha256:22c3de0d982ab0c90d39f4bc0c07e4d9bbcbad6fac4cd4eb8c8f0966bced8435",
   "targetContexts": [
     "collaboration",
     "development-automation",
