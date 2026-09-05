@@ -21,7 +21,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
-import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 
@@ -139,7 +139,7 @@ describe('RFC-314 D2 —— 窗口成员', () => {
     await seedRun(db, 'nr_b', monotonic(200, 20, 'B'), 1)
 
     const { tree } = await getSessionTree(
-      createSqliteTaskExecutionReadModels(db).sessions,
+      createTaskExecutionReadModels(db).sessions,
       't1',
       'nr_a',
       { rootPrefix: 2, tail: 3 },
@@ -172,7 +172,7 @@ describe('RFC-314 D2 —— 窗口成员', () => {
     ])
 
     const { tree } = await getSessionTree(
-      createSqliteTaskExecutionReadModels(db).sessions,
+      createTaskExecutionReadModels(db).sessions,
       't1',
       'nr_a',
       { rootPrefix: 1, tail: 2 },
@@ -196,7 +196,7 @@ describe('RFC-314 D2 —— 结构判据', () => {
     const raw = (db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client
     const rec = recordStatements(raw)
     try {
-      await getSessionTree(createSqliteTaskExecutionReadModels(db).sessions, 't1', 'nr_a', {
+      await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr_a', {
         rootPrefix: 3,
         tail: 5,
       })

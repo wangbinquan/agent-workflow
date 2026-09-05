@@ -1,14 +1,17 @@
+// RFC-359 W4-B1 —— 子任务预算查询：一份实现，两个 provider 共用。
+
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
+
 import type { TaskStatus } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
 import type { ChildTaskBudgetQueries } from '../application/ports/childTaskBudgetQueries'
 
 const COUNTED_STATUSES: readonly TaskStatus[] = ['pending', 'running']
 
-export class SqliteChildTaskBudgetQueries implements ChildTaskBudgetQueries {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleChildTaskBudgetQueries implements ChildTaskBudgetQueries {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async listCountedChildTaskIds(): Promise<readonly string[]> {
     const rows = await this.db
@@ -30,12 +33,11 @@ export class SqliteChildTaskBudgetQueries implements ChildTaskBudgetQueries {
   }
 
   async parentTaskId(taskId: string): Promise<string | null> {
-    return (
-      this.db
-        .select({ parentTaskId: tasks.parentTaskId })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get()?.parentTaskId ?? null
-    )
+    const rows = await this.db
+      .select({ parentTaskId: tasks.parentTaskId })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+    return rows[0]?.parentTaskId ?? null
   }
 }

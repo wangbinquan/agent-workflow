@@ -14,7 +14,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
-import { createSqliteTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection'
+import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -251,7 +251,7 @@ describe('WebSocket channels', () => {
     ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
     await waitUntil(() => hasType(received, 'hello'))
 
-    await createSqliteTaskLifecycleWsProjector(h.db).handle({
+    await createDatabaseTaskLifecycleWsProjector(h.db).handle({
       eventId: `task-lifecycle:${taskId}:2`,
       eventGroupId: `task-lifecycle:${taskId}:2`,
       eventGroupOrdinal: 0,

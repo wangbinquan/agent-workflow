@@ -9,18 +9,16 @@ import {
   type StartupVerificationResponse,
 } from '@agent-workflow/shared'
 import type { TaskStartupVerificationReadModel } from '@/modules/task-execution/public/types'
-import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
 
 export async function getStartupVerification(
-  source:
-    | TaskStartupVerificationReadModel
-    | Parameters<typeof createSqliteTaskExecutionReadModels>[0],
+  source: TaskStartupVerificationReadModel | Parameters<typeof createTaskExecutionReadModels>[0],
   taskId: string,
   nodeRunId: string,
 ): Promise<StartupVerificationResponse> {
   const reader =
-    'find' in source ? source : createSqliteTaskExecutionReadModels(source).startupVerification
+    'find' in source ? source : createTaskExecutionReadModels(source).startupVerification
   const snapshot = await reader.find(taskId, nodeRunId)
   if (!snapshot.taskExists) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)

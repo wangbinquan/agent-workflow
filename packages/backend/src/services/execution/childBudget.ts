@@ -21,7 +21,7 @@
 // pre-insert holds around the launch window. Boot/lazy init rebuilds the counted
 // set from the DB so restarts cannot leak or double-count units.
 import type { ChildTaskBudgetQueries } from '@/modules/task-execution/application/ports/childTaskBudgetQueries'
-import { SqliteChildTaskBudgetQueries } from '@/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries'
+import { DrizzleChildTaskBudgetQueries } from '@/modules/task-execution/infrastructure/childTaskBudgetQueries'
 import { createLogger } from '@/util/log'
 import type { TaskStatus } from '@agent-workflow/shared'
 
@@ -47,7 +47,7 @@ type Waiter = {
   onAbort?: () => void
 }
 
-type LegacySqliteChildBudgetSource = ConstructorParameters<typeof SqliteChildTaskBudgetQueries>[0]
+type LegacySqliteChildBudgetSource = ConstructorParameters<typeof DrizzleChildTaskBudgetQueries>[0]
 
 function childBudgetQueries(
   source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
@@ -65,7 +65,7 @@ function childBudgetQueries(
       },
     }
   }
-  return 'listCountedChildTaskIds' in source ? source : new SqliteChildTaskBudgetQueries(source)
+  return 'listCountedChildTaskIds' in source ? source : new DrizzleChildTaskBudgetQueries(source)
 }
 
 export class ChildTaskBudget {

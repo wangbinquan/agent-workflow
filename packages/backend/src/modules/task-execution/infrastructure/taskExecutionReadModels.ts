@@ -1,6 +1,10 @@
+// RFC-359 W4-B1 —— task-execution 读模型：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
+
 import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
+
 import {
   docVersions,
   nodeRunEvents,
@@ -19,12 +23,14 @@ import type {
   TaskReviewNodeCatalogReadModel,
   TaskSessionEventSource,
   TaskStatusProjectionReadModel,
-} from '../public/types'
+} from '@/modules/task-execution/public/types'
 
-export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecutionReadModels {
+export function createTaskExecutionReadModels(
+  db: ProviderNeutralDatabase,
+): TaskExecutionReadModels {
   const statusProjection: TaskStatusProjectionReadModel = {
     async find(taskId) {
-      const row = await db
+      const rows = await db
         .select({
           taskId: tasks.id,
           status: tasks.status,
@@ -33,7 +39,7 @@ export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecution
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .limit(1)
-      return row[0] ?? null
+      return rows[0] ?? null
     },
   }
 
@@ -59,8 +65,6 @@ export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecution
       return {
         taskId: task.taskId,
         worktreePath: task.worktreePath,
-        // Byte-compatible with getTask's legacy fallback for rows predating
-        // task_repos: one root-mounted repository backed by tasks.worktree_path.
         repos:
           repoRows.length > 0
             ? repoRows

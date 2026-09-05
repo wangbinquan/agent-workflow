@@ -21,7 +21,7 @@
 // `projectExecutionOutcome` is a pure function over pre-fetched rows (unit
 // tested directly); `getExecutionOutcome` is the thin DB assembler.
 import type { TaskExecutionOutcomeReadModel } from '@/modules/task-execution/public/types'
-import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
 import { pickLatestSettledRun } from '@/services/freshness'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
@@ -291,11 +291,10 @@ export function projectExecutionOutcome(args: {
 
 /** Provider-neutral assembler for the pure projection above. */
 export async function getExecutionOutcome(
-  source: TaskExecutionOutcomeReadModel | Parameters<typeof createSqliteTaskExecutionReadModels>[0],
+  source: TaskExecutionOutcomeReadModel | Parameters<typeof createTaskExecutionReadModels>[0],
   taskId: string,
 ): Promise<ExecutionOutcome> {
-  const reader =
-    'find' in source ? source : createSqliteTaskExecutionReadModels(source).executionOutcome
+  const reader = 'find' in source ? source : createTaskExecutionReadModels(source).executionOutcome
   const snapshot = await reader.find(taskId)
   if (snapshot === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   return projectExecutionOutcome(snapshot)

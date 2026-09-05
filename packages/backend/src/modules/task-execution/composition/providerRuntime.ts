@@ -40,8 +40,7 @@ import { createPostgresqlTaskArchiveMaintenanceCommand } from '../infrastructure
 import { createSqliteTaskArchiveMaintenanceCommand } from '../infrastructure/sqliteTaskArchiveMaintenanceCommand'
 import { createPostgresqlTaskLifecycleAutoRepairCommand } from '../infrastructure/postgresqlTaskLifecycleAutoRepairCommand'
 import { createSqliteTaskLifecycleAutoRepairCommand } from '../infrastructure/sqliteTaskLifecycleAutoRepairCommand'
-import { createPostgresqlTaskLifecycleWsProjector } from '../infrastructure/postgresqlTaskLifecycleWsProjection'
-import { createSqliteTaskLifecycleWsProjector } from '../infrastructure/sqliteTaskLifecycleWsProjection'
+import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
 import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
 import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
 import { createSqliteFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
@@ -265,7 +264,7 @@ export function composeSqliteTaskExecutionProviderRuntime(
     autoResume,
     repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
     lifecycleRepair,
-    lifecycleProjector: createSqliteTaskLifecycleWsProjector(db),
+    lifecycleProjector: createDatabaseTaskLifecycleWsProjector(db),
     overview: createTaskOverviewQuery(db),
     fusion: createSqliteFusionEngineTaskOperations({
       db,
@@ -421,7 +420,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     autoResume,
     repositoryPreparationRetry,
     lifecycleRepair,
-    lifecycleProjector: createPostgresqlTaskLifecycleWsProjector(db),
+    lifecycleProjector: createDatabaseTaskLifecycleWsProjector(db),
     overview: createTaskOverviewQuery(db),
     fusion: createPostgresqlFusionEngineTaskOperations({
       db,

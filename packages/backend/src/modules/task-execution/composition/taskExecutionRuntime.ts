@@ -73,6 +73,10 @@ export {
   type TaskExecutionProviderRouteContext,
 } from './providerRuntime'
 
-export { createSqliteTaskExecutionReadModels as composeSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
-export { createPostgresqlTaskExecutionReadModels as composePostgresqlTaskExecutionReadModels } from '../infrastructure/postgresqlTaskExecutionReadModels'
+// RFC-359 W4-B1：读模型只有一份实现；两个具名工厂只做绑定（bootstrap 收敛后一并删）。
+export {
+  createTaskExecutionReadModels as composeTaskExecutionReadModels,
+  createTaskExecutionReadModels as composeSqliteTaskExecutionReadModels,
+  createTaskExecutionReadModels as composePostgresqlTaskExecutionReadModels,
+} from '../infrastructure/taskExecutionReadModels'
 export { createPostgresqlTaskExecutionCatalogSourceFactory } from '../infrastructure/postgresqlTaskCatalogSources'

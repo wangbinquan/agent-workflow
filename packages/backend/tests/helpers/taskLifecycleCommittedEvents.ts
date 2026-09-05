@@ -11,7 +11,7 @@ import {
   decodeTaskLifecycleCommittedEvent,
   TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,
 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
-import { createSqliteTaskLifecycleWsProjector } from '@/modules/task-execution/composition/committedEvents'
+import { createDatabaseTaskLifecycleWsProjector } from '@/modules/task-execution/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
@@ -40,7 +40,7 @@ export function installTaskLifecycleAfterCommitTestPump(
       collaborationCommittedEventCodec,
     ),
     projectors: [
-      createSqliteTaskLifecycleWsProjector(db),
+      createDatabaseTaskLifecycleWsProjector(db),
       createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
       {
         id: 'task-lifecycle-test-effect-projector',

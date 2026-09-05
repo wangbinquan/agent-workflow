@@ -9,8 +9,7 @@ import { PostgresqlTaskExecutionIntentPersistence } from '../infrastructure/post
 import { PostgresqlTaskOwnershipPersistence } from '../infrastructure/postgresqlTaskOwnershipPersistence'
 import { SqliteTaskExecutionIntentPersistence } from '../infrastructure/sqliteTaskExecutionIntentPersistence'
 import { SqliteTaskOwnershipPersistence } from '../infrastructure/sqliteTaskOwnershipPersistence'
-import { createPostgresqlTaskExecutionReadModels } from '../infrastructure/postgresqlTaskExecutionReadModels'
-import { createSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { SqliteTaskExecutionEffectPersistence } from '../infrastructure/sqliteTaskExecutionEffectPersistence'
 import { PostgresqlTaskExecutionEffectPersistence } from '../infrastructure/postgresqlTaskExecutionEffectPersistence'
 import { PostgresqlTerminalMaintenancePersistence } from '../infrastructure/postgresqlTerminalMaintenancePersistence'
@@ -28,8 +27,7 @@ import { SqliteGateContinuationPreDrivePersistence } from '../infrastructure/sql
 import { PostgresqlGateContinuationPreDrivePersistence } from '../infrastructure/postgresqlGateContinuationPreDrivePersistence'
 import { SqliteSchedulerCompletionPersistence } from '../infrastructure/sqliteSchedulerCompletionPersistence'
 import { PostgresqlSchedulerCompletionPersistence } from '../infrastructure/postgresqlSchedulerCompletionPersistence'
-import { SqliteChildTaskBudgetQueries } from '../infrastructure/sqliteChildTaskBudgetQueries'
-import { PostgresqlChildTaskBudgetQueries } from '../infrastructure/postgresqlChildTaskBudgetQueries'
+import { DrizzleChildTaskBudgetQueries } from '../infrastructure/childTaskBudgetQueries'
 import { SqliteNodeRunLifecyclePersistence } from '../infrastructure/sqliteNodeRunLifecyclePersistence'
 import { PostgresqlNodeRunLifecyclePersistence } from '../infrastructure/postgresqlNodeRunLifecyclePersistence'
 import { SqliteNodeRunRuntimePersistence } from '../infrastructure/sqliteNodeRunRuntimePersistence'
@@ -126,7 +124,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
     gateContinuationPreDrive: new SqliteGateContinuationPreDrivePersistence(db),
     scheduler: new SqliteSchedulerCompletionPersistence(db),
-    childBudget: new SqliteChildTaskBudgetQueries(db),
+    childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new SqliteNodeRunRuntimePersistence(db),
     nodeExecution: new SqliteNodeExecutionPersistence(db),
@@ -139,7 +137,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     recovery: new SqliteTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new SqliteHumanGateTaskLifecyclePersistence(db),
-    reads: createSqliteTaskExecutionReadModels(db),
+    reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createSqliteRecoveryAdministration(db),
     shutdown: new SqliteTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createSqliteRuntimeSessionCapturePersistence(db),
@@ -159,7 +157,7 @@ export function createPostgresqlTaskExecutionPersistence(
     gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
     gateContinuationPreDrive: new PostgresqlGateContinuationPreDrivePersistence(db),
     scheduler: new PostgresqlSchedulerCompletionPersistence(db),
-    childBudget: new PostgresqlChildTaskBudgetQueries(db),
+    childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new PostgresqlNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new PostgresqlNodeRunRuntimePersistence(db),
     nodeExecution: new PostgresqlNodeExecutionPersistence(db),
@@ -172,7 +170,7 @@ export function createPostgresqlTaskExecutionPersistence(
     recovery: new PostgresqlTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new PostgresqlHumanGateTaskLifecyclePersistence(db),
-    reads: createPostgresqlTaskExecutionReadModels(db),
+    reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createPostgresqlTaskRecoveryOperations(db),
     shutdown: new PostgresqlTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createPostgresqlRuntimeSessionCapturePersistence(db),

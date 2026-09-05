@@ -9,7 +9,7 @@ import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
 import { DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID } from '../domain/digitalEmployeeHost'
-import { createSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import type {
   PostgresqlRootTaskLaunchKernel,
   PostgresqlTaskRoutePreparedWorkspace,
@@ -76,7 +76,7 @@ export interface SqliteActionExecutionEnvironmentDependencies {
 export function createSqliteActionExecutionEnvironment(
   deps: SqliteActionExecutionEnvironmentDependencies,
 ): ActionExecutionEnvironment {
-  const readModels = createSqliteTaskExecutionReadModels(deps.db)
+  const readModels = createTaskExecutionReadModels(deps.db)
   return Object.freeze({
     db: deps.db,
     agents: deps.agents,

@@ -17,7 +17,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
-import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -109,12 +109,10 @@ describe('RFC-311 T13 — 会话树 DB 读有界且根不退化', () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, 120)
     // 压到远小于事件总数：前缀 5 条、尾巴 10 条，中间那段必然被舍弃。
-    const { tree } = await getSessionTree(
-      createSqliteTaskExecutionReadModels(db).sessions,
-      't1',
-      'nr1',
-      { rootPrefix: 5, tail: 10 },
-    )
+    const { tree } = await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr1', {
+      rootPrefix: 5,
+      tail: 10,
+    })
 
     const serialized = JSON.stringify(tree)
     expect(serialized).toContain('LAST-EVENT')
@@ -125,7 +123,7 @@ describe('RFC-311 T13 — 会话树 DB 读有界且根不退化', () => {
   test('未超限时行为不变（有界不改变正常情况）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, 5)
-    const sessions = createSqliteTaskExecutionReadModels(db).sessions
+    const sessions = createTaskExecutionReadModels(db).sessions
     const bounded = await getSessionTree(sessions, 't1', 'nr1', {
       rootPrefix: 500,
       tail: 20_000,

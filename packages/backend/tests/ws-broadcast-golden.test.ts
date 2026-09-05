@@ -32,7 +32,7 @@ import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { createSqliteTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection'
+import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import {
   resetBroadcastersForTests,
   TASK_CHANNEL,
@@ -206,7 +206,7 @@ async function projectStatus(
     canceledNodeRuns?: readonly { id: string; nodeId: string }[]
   },
 ): Promise<void> {
-  await createSqliteTaskLifecycleWsProjector(db).handle({
+  await createDatabaseTaskLifecycleWsProjector(db).handle({
     eventId: `task-lifecycle:${input.taskId}:${input.revision}`,
     eventGroupId: `task-lifecycle:${input.taskId}:${input.revision}`,
     eventGroupOrdinal: 0,

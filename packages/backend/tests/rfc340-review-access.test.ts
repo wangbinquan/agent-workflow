@@ -23,7 +23,7 @@ import {
   resolveReviewAccess,
 } from '../src/modules/collaboration/public/queries'
 import { deriveReviewAccess } from '../src/modules/collaboration/domain/reviewAccess'
-import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createApp } from '../src/server'
 import { countPendingReviews } from '../src/services/review'
 
@@ -129,7 +129,7 @@ async function fixture(appHome?: string) {
       decidedAt: now,
     },
   ])
-  const taskExecutionReadModels = createSqliteTaskExecutionReadModels(db)
+  const taskExecutionReadModels = createTaskExecutionReadModels(db)
   const context = createCollaborationCommandContext({
     db,
     ...(appHome === undefined ? {} : { appHome }),

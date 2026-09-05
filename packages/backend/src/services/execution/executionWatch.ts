@@ -15,7 +15,7 @@
 // shared only.
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { TaskStatusProjectionReadModel } from '@/modules/task-execution/public/types'
-import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 
 export type TerminalWatchResult =
   | { kind: 'terminal'; status: TaskStatus }
@@ -49,12 +49,12 @@ export function resetTaskTerminalWatchersForTests(): void {
   watchers.clear()
 }
 
-type LegacySqliteTaskStatusSource = Parameters<typeof createSqliteTaskExecutionReadModels>[0]
+type LegacySqliteTaskStatusSource = Parameters<typeof createTaskExecutionReadModels>[0]
 
 function statusReader(
   source: TaskStatusProjectionReadModel | LegacySqliteTaskStatusSource,
 ): TaskStatusProjectionReadModel {
-  return 'find' in source ? source : createSqliteTaskExecutionReadModels(source).statusProjection
+  return 'find' in source ? source : createTaskExecutionReadModels(source).statusProjection
 }
 
 async function readTerminal(

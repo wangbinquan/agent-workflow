@@ -10,7 +10,7 @@ import {
 } from '@/modules/collaboration/composition/committedEvents'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
-  createSqliteTaskLifecycleWsProjector,
+  createDatabaseTaskLifecycleWsProjector,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
@@ -49,7 +49,7 @@ export function installCommittedEventProjectionHarness(db: DbClient): () => void
       persistence: createSqliteCommittedEventDeliveryPersistence(db),
       codecs,
       projectors: [
-        createSqliteTaskLifecycleWsProjector(db),
+        createDatabaseTaskLifecycleWsProjector(db),
         createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
       ],
       nudgeDispatcher() {},
@@ -127,7 +127,7 @@ export function installCommittedEventDeliveryHarness(
     collaborationCommittedEventCodec,
   )
   const projectors = [
-    createSqliteTaskLifecycleWsProjector(db),
+    createDatabaseTaskLifecycleWsProjector(db),
     createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
   ]
   const projectionLedger = createCommittedEventProjectionLedger()

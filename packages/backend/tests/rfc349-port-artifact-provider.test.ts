@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -54,7 +54,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    reads: createPostgresqlTaskExecutionReadModels(createPostgresqlDatabaseClient(runtime)),
+    reads: createTaskExecutionReadModels(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }

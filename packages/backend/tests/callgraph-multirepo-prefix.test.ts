@@ -32,7 +32,7 @@ import {
   splitRepoRef,
   invalidateCallGraphIndex,
 } from '../src/services/structuralDiff/callGraph/expandService'
-import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -156,7 +156,7 @@ describe('getCallTargets — multi-repo external ownerClass re-prefix (RFC-089 P
     invalidateCallGraphIndex(wtA)
 
     const out = await getCallTargets(
-      createSqliteTaskExecutionReadModels(h.db).callGraphWorkspace,
+      createTaskExecutionReadModels(h.db).callGraphWorkspace,
       task.id,
       `${dirA}/src/A.java#A.run`,
     )

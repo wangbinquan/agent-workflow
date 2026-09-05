@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { SchedulerDriverPort } from '../src/modules/task-execution/public/commands'
 import { getCallTargets } from '../src/services/structuralDiff/callGraph/expandService'
 import { backendUnits, importEdges, sourceUnit, type SourceUnit } from './architecture/census'
@@ -226,7 +226,7 @@ describe('RFC-331 purpose-specific read models', () => {
       startedAt: Date.now(),
     })
 
-    const reads = createSqliteTaskExecutionReadModels(db)
+    const reads = createTaskExecutionReadModels(db)
     expect(await reads.statusProjection.find('task-rfc331')).toEqual({
       taskId: 'task-rfc331',
       status: 'failed',
@@ -298,7 +298,7 @@ describe('RFC-331 architecture cuts', () => {
       ),
       sourceUnit(
         'packages/backend/src/services/startTaskDeps.ts',
-        "import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'\n",
+        "import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'\n",
       ),
       sourceUnit(
         'packages/backend/src/services/task.ts',
@@ -310,7 +310,7 @@ describe('RFC-331 architecture cuts', () => {
       ['scheduler-to-task:dynamic-import'],
       ['callgraph-to-task:static-import'],
       [
-        'legacy-deep-import:packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels',
+        'legacy-deep-import:packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
       ],
       ['production-test-topology:packages/backend/src/services/task.ts'],
     ])

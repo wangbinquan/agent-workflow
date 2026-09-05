@@ -3161,8 +3161,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/execution/childBudget.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/childTaskBudgetQueries",
+      "specifier": "@/modules/task-execution/infrastructure/childTaskBudgetQueries",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -3175,7 +3175,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries.ts#SqliteChildTaskBudgetQueries"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskBudgetQueries.ts#DrizzleChildTaskBudgetQueries"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/execution/childBudget.ts"
@@ -3207,8 +3207,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/execution/executionWatch.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels",
+      "specifier": "@/modules/task-execution/infrastructure/taskExecutionReadModels",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -3221,7 +3221,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/executionWatch.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#createSqliteTaskExecutionReadModels"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/execution/executionWatch.ts"
@@ -3460,8 +3460,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/execution/outcome.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels",
+      "specifier": "@/modules/task-execution/infrastructure/taskExecutionReadModels",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -3474,7 +3474,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/outcome.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#createSqliteTaskExecutionReadModels"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/execution/outcome.ts"
@@ -3506,8 +3506,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/execution/startupVerificationRead.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels",
+      "specifier": "@/modules/task-execution/infrastructure/taskExecutionReadModels",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -3520,7 +3520,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/startupVerificationRead.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#createSqliteTaskExecutionReadModels"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/execution/startupVerificationRead.ts"
