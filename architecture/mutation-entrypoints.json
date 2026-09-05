@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1932,
+    "entries": 1927,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -14262,30 +14262,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlTerminalWorkspaceAttribution.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlTerminalWorkspaceAttribution.ts#createPostgresqlWebhookTerminalWorkspaceAttributionQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlTerminalWorkspaceAttribution.ts#createPostgresqlWebhookTerminalWorkspaceAttributionQueries",
-      "symbol": "createPostgresqlWebhookTerminalWorkspaceAttributionQueries",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -14368,102 +14344,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchPersistence.ts#createPostgresqlWebhookDispatchPersistence",
       "symbol": "createPostgresqlWebhookDispatchPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime.ts#createPostgresqlWebhookExecutionRuntime",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime.ts#createPostgresqlWebhookExecutionRuntime",
-      "symbol": "createPostgresqlWebhookExecutionRuntime",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime.ts#createPostgresqlWebhookOrchestrationRuntime",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime.ts#createPostgresqlWebhookOrchestrationRuntime",
-      "symbol": "createPostgresqlWebhookOrchestrationRuntime",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookEndpointAdministration.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookEndpointAdministration.ts#createPostgresqlWebhookEndpointAdministration",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookEndpointAdministration.ts#createPostgresqlWebhookEndpointAdministration",
-      "symbol": "createPostgresqlWebhookEndpointAdministration",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookTriggerAdministration.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookTriggerAdministration.ts#createPostgresqlWebhookTriggerAdministration",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookTriggerAdministration.ts#createPostgresqlWebhookTriggerAdministration",
-      "symbol": "createPostgresqlWebhookTriggerAdministration",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -14654,30 +14534,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteTerminalWorkspaceAttribution.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteTerminalWorkspaceAttribution.ts#createSqliteWebhookTerminalWorkspaceAttributionQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteTerminalWorkspaceAttribution.ts#createSqliteWebhookTerminalWorkspaceAttributionQueries",
-      "symbol": "createSqliteWebhookTerminalWorkspaceAttributionQueries",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -14771,127 +14627,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts#createSqliteWebhookExecutionRuntime",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts#createSqliteWebhookExecutionRuntime",
-      "symbol": "createSqliteWebhookExecutionRuntime",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts#createSqliteWebhookLaunchAdmission",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts#createSqliteWebhookLaunchAdmission",
-      "symbol": "createSqliteWebhookLaunchAdmission",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts#createSqliteWebhookOrchestrationRuntime",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts#createSqliteWebhookOrchestrationRuntime",
-      "symbol": "createSqliteWebhookOrchestrationRuntime",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookEndpointAdministration.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookEndpointAdministration.ts#createSqliteWebhookEndpointAdministration",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookEndpointAdministration.ts#createSqliteWebhookEndpointAdministration",
-      "symbol": "createSqliteWebhookEndpointAdministration",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerAdministration.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerAdministration.ts#createSqliteWebhookTriggerAdministration",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerAdministration.ts#createSqliteWebhookTriggerAdministration",
-      "symbol": "createSqliteWebhookTriggerAdministration",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -14910,6 +14645,128 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts#createSqliteWebhookTriggerValidation",
       "symbol": "createSqliteWebhookTriggerValidation",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/terminalWorkspaceAttribution.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/terminalWorkspaceAttribution.ts#createWebhookTerminalWorkspaceAttributionQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/terminalWorkspaceAttribution.ts#createWebhookTerminalWorkspaceAttributionQueries",
+      "symbol": "createWebhookTerminalWorkspaceAttributionQueries",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts#createWebhookDispatchExecutionRuntime",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts#createWebhookDispatchExecutionRuntime",
+      "symbol": "createWebhookDispatchExecutionRuntime",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts#createWebhookDispatchOrchestrationRuntime",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts#createWebhookDispatchOrchestrationRuntime",
+      "symbol": "createWebhookDispatchOrchestrationRuntime",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts#createWebhookLaunchAdmission",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts#createWebhookLaunchAdmission",
+      "symbol": "createWebhookLaunchAdmission",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts#createWebhookEndpointAdministration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts#createWebhookEndpointAdministration",
+      "symbol": "createWebhookEndpointAdministration",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -14981,6 +14838,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createSqliteWebhookRepositoryResolver",
       "symbol": "createSqliteWebhookRepositoryResolver",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookTriggerAdministration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookTriggerAdministration.ts#createWebhookTriggerAdministration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookTriggerAdministration.ts#createWebhookTriggerAdministration",
+      "symbol": "createWebhookTriggerAdministration",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -46046,7 +45926,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a",
+  "sourceDigest": "sha256:1adb03afe1f437c792b0f27811f545b277cbf87170e693b18036eca90a90eb40",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -50298,8 +50178,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3480:tasks",
-        "line": 3480,
+        "id": "task-authority:packages/backend/src/services/task.ts#3481:tasks",
+        "line": 3481,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50314,8 +50194,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3605:taskExecutionIntents",
-        "line": 3605,
+        "id": "task-authority:packages/backend/src/services/task.ts#3606:taskExecutionIntents",
+        "line": 3606,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50330,8 +50210,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3662:tasks",
-        "line": 3662,
+        "id": "task-authority:packages/backend/src/services/task.ts#3663:tasks",
+        "line": 3663,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50346,8 +50226,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4291:tasks",
-        "line": 4291,
+        "id": "task-authority:packages/backend/src/services/task.ts#4292:tasks",
+        "line": 4292,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -50362,8 +50242,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5921:tasks",
-        "line": 5921,
+        "id": "task-authority:packages/backend/src/services/task.ts#5922:tasks",
+        "line": 5922,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

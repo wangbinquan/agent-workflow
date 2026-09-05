@@ -1676,11 +1676,12 @@
       "runner": "bun",
       "mechanism": "source-text",
       "corpusScanner": true,
-      "minCorpusFiles": 200,
+      "minCorpusFiles": 100,
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 115
+      "lines": 115,
+      "note": "RFC-359 W4（2026-09-05）：中立句柄纳入判据后执行面 265，W4 期间「两份变一份」收敛到约 180；下限 200 → 100 只守「语料没塌」。"
     },
     {
       "id": "rfc349-provider-cutover",
@@ -2128,14 +2129,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a",
+    "sourceDigest": "sha256:1adb03afe1f437c792b0f27811f545b277cbf87170e693b18036eca90a90eb40",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "046f5bb8a1196f08d8489b1306055fb846f5a5f0",
-    "contentDigest": "sha256:caadb153375e848c72b1952cbf8d23890bf57512f4f180fd0a26ecbc152905f7",
+    "currentSnapshotSha": "5980477ce92d3573cc7c778eb85ab413728c4d10",
+    "contentDigest": "sha256:f9515e8e287db91790a0892035595a23a3258a43d45a0f98fba87fac1466b1a4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
