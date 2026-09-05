@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1833,
+    "entries": 1832,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20452,6 +20452,27 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts#createPluginRepository",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts#createPluginRepository",
+      "symbol": "createPluginRepository",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -20564,27 +20585,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPackageResourceRows.ts#createPostgresqlResourcePackageReadPort",
       "symbol": "createPostgresqlResourcePackageReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts#createPostgresqlPluginRepository",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts#createPostgresqlPluginRepository",
-      "symbol": "createPostgresqlPluginRepository",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -21536,27 +21536,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts#createSqliteResourcePackageReadPort",
       "symbol": "createSqliteResourcePackageReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#createSqlitePluginRepository",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#createSqlitePluginRepository",
-      "symbol": "createSqlitePluginRepository",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -43747,7 +43726,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1b43821ff14348b3f665aceab7229a77886fe906b845f65f5589f2ada0223c9c",
+  "sourceDigest": "sha256:97048d983f89ed1893613adbbeb5b3a918ac26148033d523dfef0769d2169e4d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

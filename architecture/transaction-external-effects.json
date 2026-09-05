@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 40,
-    "transactionCallbacks": 337
+    "coLocatedCandidates": 39,
+    "transactionCallbacks": 333
   },
   "entries": [
     {
@@ -2870,56 +2870,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#dbTxSync:155",
-      "line": 155,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#createSqlitePluginRepository",
-      "status": "clear",
-      "symbol": "createSqlitePluginRepository",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#dbTxSync:183",
-      "line": 183,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#createSqlitePluginRepository",
-      "status": "clear",
-      "symbol": "createSqlitePluginRepository",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "rename"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#dbTxSync:212",
-      "line": 212,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#createSqlitePluginRepository",
-      "status": "co-located-risk",
-      "symbol": "createSqlitePluginRepository",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#dbTxSync:257",
-      "line": 257,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#createSqlitePluginRepository",
-      "status": "clear",
-      "symbol": "createSqlitePluginRepository",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts#dbTxSync:161",
@@ -4140,7 +4090,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1b43821ff14348b3f665aceab7229a77886fe906b845f65f5589f2ada0223c9c",
+  "sourceDigest": "sha256:97048d983f89ed1893613adbbeb5b3a918ac26148033d523dfef0769d2169e4d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
