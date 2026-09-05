@@ -67,7 +67,7 @@ import { pluginConfigHash, pluginFromPersistenceRow } from '../pluginPersistence
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
-import { workgroupFromPostgresqlRows } from '../postgresqlWorkgroupRepository'
+import { workgroupFromRows } from '../workgroupRepository'
 import type {
   PostgresqlIntentApplyArtifact,
   PostgresqlIntentApplyMutationPort,
@@ -1301,7 +1301,7 @@ function workgroupSnapshotFromRows(
   row: typeof workgroups.$inferSelect,
   members: readonly (typeof workgroupMembers.$inferSelect)[],
 ): WorkgroupDraftSnapshot {
-  const group = workgroupFromPostgresqlRows(row, members)
+  const group = workgroupFromRows(row, members)
   const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
   const leader = ordered.find((member) => member.id === group.leaderMemberId)
   return WorkgroupDraftSnapshotSchema.parse({

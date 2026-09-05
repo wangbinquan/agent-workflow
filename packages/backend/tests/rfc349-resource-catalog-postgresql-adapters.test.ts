@@ -20,8 +20,7 @@ function typescriptFiles(root: string): string[] {
 }
 
 describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
-  // RFC-359 W4-D16 / D17：Mcp / Plugin 聚合已是一份中立实现（见下面单独的断言）。
-  const aggregates = ['Workgroup'] as const
+  // RFC-359 W4-D16 / D17 / D18：Mcp / Plugin / Workgroup 聚合都已是一份中立实现（见下面逐个的断言）。
 
   test('mcp repository and composition are one provider-neutral implementation (RFC-359 W4-D16)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/mcpRepository.ts')
@@ -51,26 +50,21 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(composition).not.toMatch(/composePostgresqlPluginCatalog|createSqlitePluginRepository/)
   })
 
-  test('classic aggregate PostgreSQL repositories use the shared async transaction owner', () => {
-    for (const aggregate of aggregates) {
-      const text = source(
-        `src/modules/resource-catalog/infrastructure/postgresql${aggregate}Repository.ts`,
-      )
-      expect(text).toContain('PostgresqlDatabaseClient')
-      expect(text).toContain('runPostgresqlResourceCatalogTransaction')
-      expect(text).toContain('await ')
-      expect(text).not.toMatch(/\bDbClient\b|\bdbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core/)
-      expect(text).not.toMatch(/createSqlite|as PostgresqlDatabaseClient|as DbClient/)
-    }
+  test('workgroup repository and composition are one provider-neutral implementation (RFC-359 W4-D18)', () => {
+    const repository = source('src/modules/resource-catalog/infrastructure/workgroupRepository.ts')
+    const composition = source('src/modules/resource-catalog/composition/workgroupOperations.ts')
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('runResourceCatalogTransaction')
+    expect(repository).not.toMatch(
+      /PostgresqlDatabaseClient|DbClient|dbTxSync|createSqlite/,
+    )
+    expect(composition).toContain('composeWorkgroupCatalogFromAdapters')
+    expect(composition).toContain('createWorkgroupRepository(')
+    expect(composition).toContain('export function composeWorkgroupCatalog(')
+    expect(composition).not.toMatch(/composePostgresqlWorkgroupCatalog|createSqliteWorkgroupRepository/)
   })
 
-  test('composition exposes exact adapter injection and PostgreSQL factories without public DB leakage', () => {
-    for (const [aggregate, file] of [['Workgroup', 'workgroupOperations']] as const) {
-      const text = source(`src/modules/resource-catalog/composition/${file}.ts`)
-      expect(text).toContain(`compose${aggregate}CatalogFromAdapters`)
-      expect(text).toContain(`composePostgresql${aggregate}Catalog`)
-      expect(text).toContain(`createPostgresql${aggregate}Repository`)
-    }
+  test('composition exposes exact adapter injection without public DB leakage', () => {
     const publicFiles = typescriptFiles('src/modules/resource-catalog/public')
     for (const file of publicFiles) {
       const text = readFileSync(file, 'utf8')
@@ -85,11 +79,11 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     )
     expect(offenders.map((file) => file.slice(backendRoot.length + 1))).toEqual([])
 
-    const sqliteReferences = source(
-      'src/modules/resource-catalog/infrastructure/sqliteReferenceUsability.ts',
-    )
-    expect(sqliteReferences).toContain('resolveResourceIdsUsableById')
-    expect(sqliteReferences).toContain('assertResourceIdsUsableInTx')
+    // RFC-359 W4-D18：引用可用性只剩一份中立实现，预检与同事务终检都在这里。
+    const references = source('src/modules/resource-catalog/infrastructure/referenceUsability.ts')
+    expect(references).toContain('resolveAgentIdsUsable')
+    expect(references).toContain('assertAgentIdsUsableInTransaction')
+    expect(references).not.toMatch(/PostgresqlDatabaseClient|DbClient|DbTxSync/)
   })
 
   test('workflow validation inventory and D15 admission have native PostgreSQL adapters', () => {

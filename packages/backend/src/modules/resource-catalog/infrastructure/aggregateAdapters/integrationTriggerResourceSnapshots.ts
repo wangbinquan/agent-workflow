@@ -29,7 +29,7 @@ import type {
 } from '../../public/types'
 import { agentFromPersistenceRow } from '../agentPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
-import { workgroupFromPostgresqlRows } from '../postgresqlWorkgroupRepository'
+import { workgroupFromRows } from '../workgroupRepository'
 
 export interface IntegrationTriggerResourceDependencies {
   readonly assertNotBuiltin: (
@@ -191,7 +191,7 @@ export function createIntegrationTriggerResourceSnapshotReader(
         .where(eq(workgroupMembers.workgroupId, row.id))
       return Object.freeze({
         kind: request.kind,
-        workgroup: workgroupSnapshot(workgroupFromPostgresqlRows(row, members)),
+        workgroup: workgroupSnapshot(workgroupFromRows(row, members)),
       })
     }
 

@@ -2050,7 +2050,10 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     resourceCatalog: providerResourceCatalog,
     skillContent: composeSkillContentAvailability({ appHome: Paths.root }),
   })
-  const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
+  const workgroupCatalog = composeWorkgroupCatalog({
+    db: effectiveDeps.db,
+    resourceCatalog: providerResourceCatalog,
+  })
   const resourcePackageCatalog =
     effectiveDeps.secretBox === undefined
       ? null

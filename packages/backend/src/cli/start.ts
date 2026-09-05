@@ -2336,7 +2336,7 @@ async function composeSqliteProviderSession(
     resourceCatalog,
     skillContent: composeSkillContentAvailability({ appHome: Paths.root }),
   })
-  const workgroupCatalog = composeWorkgroupCatalog({ db })
+  const workgroupCatalog = composeWorkgroupCatalog({ db, resourceCatalog })
   const capabilityTemplateAccess: Parameters<
     typeof composeSqliteCapabilityTemplateOperations
   >[0]['access'] = {

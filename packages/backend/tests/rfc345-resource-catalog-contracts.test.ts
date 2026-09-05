@@ -1188,7 +1188,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/workgroupRepository.ts'),
       'utf8',
     )
     const composition = readFileSync(
@@ -1237,14 +1237,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('const queries: WorkgroupQueries = Object.freeze')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
-    expect(repository).toContain('dbTxSync')
-    expect(repository).toContain('assertAgentIdsUsableInTx')
+    expect(repository).toContain('runResourceCatalogTransaction')
+    expect(repository).toContain('assertAgentIdsUsableInTransaction')
     expect(repository).toContain('scheduledReferences')
     expect(repository).toContain("import { sha256Hex } from '@/util/hash'")
     expect(repository).not.toContain("from '@/services/")
-    expect(composition).toContain('createSqliteWorkgroupRepository')
+    expect(composition).toContain('createWorkgroupRepository')
     expect(composition).toContain('createWorkgroupApplication')
-    expect(composition).toContain('composeResourceAclOperationApplication')
+    expect(composition).toContain('composeProviderResourceAclOperationApplication')
     expect(operations).toContain('inputSchema: deleteWorkgroupInputSchema')
     expect(operations).toContain('deletion: jsonBodySubmissionSchema')
 

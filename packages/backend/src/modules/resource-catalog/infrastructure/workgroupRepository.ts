@@ -1,3 +1,6 @@
+// RFC-359 W4-D18 —— Workgroup 聚合的唯一仓库实现（此前 `sqliteWorkgroupRepository` / `postgresqlWorkgroupRepository`
+// 各一份、逐字同形）。写路径全在统一的 serializable 事务里；owner + name 唯一冲突经能力矩阵 `uniqueViolationTarget`
+// 映射回 `workgroup-name-in-use` / `workgroup-copy-name-conflict`。
 import {
   QUARANTINED_SNAPSHOT_AGENT_ID,
   resolveWorkgroupOutputContract,
@@ -17,11 +20,10 @@ import {
   type WorkgroupRevision,
   type WorkgroupSnapshotHash,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, isNull, ne, notInArray, type SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
-import type { DbClient } from '@/db/client'
+import { and, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm'
 import { agents, scheduledTasks, tasks, users, workgroupMembers, workgroups } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   ConflictError,
   ForbiddenError,
@@ -37,7 +39,6 @@ import {
   discloseScheduleRefs,
 } from '../domain/resourceAccess'
 import type { UpdateWorkgroupCatalogInput } from '../public/types'
-import { listResourceGrantUserIdsInTx } from './sqliteResourceGrantRepository'
 import type { WorkgroupOperationContext } from '../public/participants'
 import type {
   ValidatedWorkgroupDeleteInput,
@@ -46,12 +47,21 @@ import type {
   WorkgroupRepository,
   WorkgroupSaveResult,
 } from '../application/workgroups/ports'
+import {
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
 type WorkgroupRow = typeof workgroups.$inferSelect
 type MemberRow = typeof workgroupMembers.$inferSelect
-type WorkgroupAccessRow = Pick<WorkgroupRow, 'id' | 'ownerUserId' | 'visibility'>
 
-interface ScheduledReferenceRow {
+export interface WorkgroupAclIdentityRow {
+  readonly id: string
+  readonly ownerUserId: string | null
+  readonly visibility: 'public' | 'private'
+}
+
+export interface WorkgroupScheduledReferenceRow {
   readonly id: string
   readonly name: string
   readonly launchKind: string
@@ -59,31 +69,35 @@ interface ScheduledReferenceRow {
   readonly ownerUserId: string
 }
 
-export interface SqliteWorkgroupRepositoryDependencies {
-  readonly canViewInTx: (
-    tx: DbTxSync,
+export interface WorkgroupRepositoryDependencies {
+  readonly canViewInTransaction: (
+    transaction: ResourceCatalogTransaction,
     authority: WorkgroupOperationContext,
-    row: WorkgroupAccessRow,
-  ) => boolean
-  readonly resolveAccessInTx: (
-    tx: DbTxSync,
+    row: WorkgroupAclIdentityRow,
+  ) => Promise<boolean>
+  readonly resolveAccessInTransaction: (
+    transaction: ResourceCatalogTransaction,
     authority: WorkgroupOperationContext,
     row: WorkgroupRow,
-  ) => ResourceAccess
+  ) => Promise<ResourceAccess>
   readonly assertAgentIdsUsable: (
     authority: WorkgroupOperationContext,
     ids: readonly string[],
     grandfatheredIds: ReadonlySet<string>,
   ) => Promise<void>
-  readonly assertAgentIdsUsableInTx: (
-    tx: DbTxSync,
+  readonly assertAgentIdsUsableInTransaction: (
+    transaction: ResourceCatalogTransaction,
     authority: WorkgroupOperationContext,
     ids: readonly string[],
-  ) => void
-  readonly scheduledReferences: (
-    rows: readonly ScheduledReferenceRow[],
+  ) => Promise<void>
+  readonly listGrantedUserIdsInTransaction: (
+    transaction: ResourceCatalogTransaction,
     workgroupId: string,
-  ) => readonly ScheduledReferenceRow[]
+  ) => Promise<readonly string[]>
+  readonly scheduledReferences: (
+    rows: readonly WorkgroupScheduledReferenceRow[],
+    workgroupId: string,
+  ) => readonly WorkgroupScheduledReferenceRow[]
   readonly nextCopyName: (sourceName: string, occupiedNames: readonly string[]) => string
   readonly assertNameUnchangedForEditor: (
     access: ResourceAccess,
@@ -94,29 +108,9 @@ export interface SqliteWorkgroupRepositoryDependencies {
   readonly now: () => number
 }
 
-export interface SqliteWorkgroupRepositoryBundle {
+export interface WorkgroupRepositoryBundle {
   readonly repository: WorkgroupRepository
   readonly projection: WorkgroupProjection
-}
-
-function ownerScopedNameWhere(
-  ownerColumn: AnySQLiteColumn,
-  nameColumn: AnySQLiteColumn,
-  ownerUserId: string | null,
-  name: string,
-  excludeId?: { readonly column: AnySQLiteColumn; readonly id: string },
-): SQL {
-  const owner = ownerUserId === null ? isNull(ownerColumn) : eq(ownerColumn, ownerUserId)
-  const identity = and(owner, eq(nameColumn, name))
-  return excludeId === undefined ? identity! : and(identity, ne(excludeId.column, excludeId.id))!
-}
-
-function isOwnerNameUniqueViolation(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  if (!/UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE|constraint failed/i.test(message)) {
-    return false
-  }
-  return message.includes('workgroups_owner_name_unique') || message.includes('workgroups.name')
 }
 
 function notFound(id: string): never {
@@ -226,7 +220,10 @@ function detailOf(group: Workgroup): WorkgroupDetail {
   return { ...group, snapshotHash: snapshotHashOf(snapshotOf(group)) }
 }
 
-function rowToWorkgroup(row: WorkgroupRow, memberRows: readonly MemberRow[]): Workgroup {
+export function workgroupFromRows(
+  row: WorkgroupRow,
+  memberRows: readonly MemberRow[],
+): Workgroup {
   const members: WorkgroupMember[] = [...memberRows]
     .sort(
       (left, right) =>
@@ -313,35 +310,15 @@ function activeHumanIds(
 }
 
 async function assertHumansActive(
-  db: DbClient,
+  database: ProviderNeutralDatabase | ResourceCatalogTransaction,
   members: ReadonlyArray<{ readonly memberType: string; readonly userId?: string }>,
 ): Promise<void> {
   const ids = activeHumanIds(members)
   if (ids.length === 0) return
-  const rows = await db
+  const rows = await database
     .select({ id: users.id, status: users.status })
     .from(users)
     .where(inArray(users.id, ids))
-  const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
-  const invalid = ids.filter((id) => !active.has(id))
-  if (invalid.length > 0) {
-    throw new ValidationError('workgroup-member-user-invalid', 'human member user(s) not active', {
-      userIds: invalid,
-    })
-  }
-}
-
-function assertHumansActiveInTx(
-  tx: DbTxSync,
-  members: ReadonlyArray<{ readonly memberType: string; readonly userId?: string }>,
-): void {
-  const ids = activeHumanIds(members)
-  if (ids.length === 0) return
-  const rows = tx
-    .select({ id: users.id, status: users.status })
-    .from(users)
-    .where(inArray(users.id, ids))
-    .all()
   const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
   const invalid = ids.filter((id) => !active.has(id))
   if (invalid.length > 0) {
@@ -352,35 +329,16 @@ function assertHumansActiveInTx(
 }
 
 async function agentNames(
-  db: DbClient,
+  database: ProviderNeutralDatabase | ResourceCatalogTransaction,
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, string>> {
   const rows =
     ids.length === 0
       ? []
-      : await db
+      : await database
           .select({ id: agents.id, name: agents.name })
           .from(agents)
           .where(inArray(agents.id, ids))
-  const names = new Map(rows.map((row) => [row.id, row.name]))
-  const missing = ids.filter((id) => !names.has(id))
-  if (missing.length > 0) {
-    throw new ValidationError('workgroup-member-agent-invalid', 'agent member id(s) do not exist', {
-      agentIds: missing,
-    })
-  }
-  return names
-}
-
-function agentNamesInTx(tx: DbTxSync, ids: readonly string[]): ReadonlyMap<string, string> {
-  const rows =
-    ids.length === 0
-      ? []
-      : tx
-          .select({ id: agents.id, name: agents.name })
-          .from(agents)
-          .where(inArray(agents.id, ids))
-          .all()
   const names = new Map(rows.map((row) => [row.id, row.name]))
   const missing = ids.filter((id) => !names.has(id))
   if (missing.length > 0) {
@@ -428,15 +386,17 @@ function leaderMemberId(
   return leader.id
 }
 
-function insertMembers(
-  tx: DbTxSync,
+async function insertMembers(
+  transaction: ResourceCatalogTransaction,
   members: readonly (typeof workgroupMembers.$inferInsert)[],
-): void {
-  for (const member of members) tx.insert(workgroupMembers).values(member).run()
+): Promise<void> {
+  for (const member of members) {
+    await transaction.insert(workgroupMembers).values(member)
+  }
 }
 
-function insertWorkgroup(
-  tx: DbTxSync,
+async function insertWorkgroup(
+  transaction: ResourceCatalogTransaction,
   input: {
     readonly id: string
     readonly document: CreateWorkgroup | WorkgroupDraftSnapshot
@@ -448,8 +408,8 @@ function insertWorkgroup(
     }
     readonly now: number
   },
-): WorkgroupRow {
-  const row = tx
+): Promise<WorkgroupRow> {
+  const row = (await transaction
     .insert(workgroups)
     .values({
       id: input.id,
@@ -471,8 +431,7 @@ function insertWorkgroup(
       createdAt: input.now,
       updatedAt: input.now,
     })
-    .returning()
-    .get()
+    .returning())[0]
   if (row === undefined) throw new Error('workgroup insert returned no row')
   return row
 }
@@ -492,21 +451,23 @@ function assertGovernAccess(access: ResourceAccess, id: string): void {
   }
 }
 
-function assertNameAvailableInTx(tx: DbTxSync, current: Workgroup, nextName: string): void {
+function ownerScopedNameWhere(ownerUserId: string | null, name: string, excludeId?: string) {
+  const owner =
+    ownerUserId === null ? isNull(workgroups.ownerUserId) : eq(workgroups.ownerUserId, ownerUserId)
+  const identity = and(owner, eq(workgroups.name, name))
+  return excludeId === undefined ? identity : and(identity, ne(workgroups.id, excludeId))
+}
+
+async function assertNameAvailableInTransaction(
+  transaction: ResourceCatalogTransaction,
+  current: Workgroup,
+  nextName: string,
+): Promise<void> {
   if (current.name === nextName) return
-  const collision = tx
+  const collision = (await transaction
     .select({ id: workgroups.id })
     .from(workgroups)
-    .where(
-      ownerScopedNameWhere(
-        workgroups.ownerUserId,
-        workgroups.name,
-        current.ownerUserId ?? null,
-        nextName,
-        { column: workgroups.id, id: current.id },
-      ),
-    )
-    .get()
+    .where(ownerScopedNameWhere(current.ownerUserId ?? null, nextName, current.id)).limit(1))[0]
   if (collision !== undefined) {
     throw new ConflictError(
       'workgroup-name-in-use',
@@ -515,46 +476,58 @@ function assertNameAvailableInTx(tx: DbTxSync, current: Workgroup, nextName: str
   }
 }
 
-export function createSqliteWorkgroupRepository(
-  db: DbClient,
-  deps: SqliteWorkgroupRepositoryDependencies,
-): SqliteWorkgroupRepositoryBundle {
+export function createWorkgroupRepository(
+  db: ProviderNeutralDatabase,
+  deps: WorkgroupRepositoryDependencies,
+): WorkgroupRepositoryBundle {
+  const engine = databaseSessionFor(db).engine
+  const isOwnerNameConflict = (error: unknown): boolean => {
+    const target = engine.uniqueViolationTarget(error)
+    return target !== undefined && /workgroups[._](?:owner|name)/i.test(target)
+  }
   async function get(id: string): Promise<WorkgroupDetail | null> {
-    const rows = await db.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
-    if (rows[0] === undefined) return null
-    const members = await db
-      .select()
-      .from(workgroupMembers)
-      .where(eq(workgroupMembers.workgroupId, id))
-    return detailOf(rowToWorkgroup(rows[0], members))
-  }
-
-  const projectionValue: WorkgroupProjection = {
-    resourceOf: (workgroup) => Object.freeze({ ...workgroup }),
-    snapshotOf,
-  }
-  const projection = Object.freeze(projectionValue)
-
-  const repositoryValue: WorkgroupRepository = {
-    async list(): Promise<readonly Workgroup[]> {
-      const rows = await db.select().from(workgroups)
-      if (rows.length === 0) return []
-      const members = await db
+    return runResourceCatalogTransaction(db, async (transaction) => {
+      const row = (await transaction
+        .select()
+        .from(workgroups)
+        .where(eq(workgroups.id, id))
+        .limit(1))[0]
+      if (row === undefined) return null
+      const members = await transaction
         .select()
         .from(workgroupMembers)
-        .where(
-          inArray(
-            workgroupMembers.workgroupId,
-            rows.map((row) => row.id),
-          ),
-        )
-      const byGroup = new Map<string, MemberRow[]>()
-      for (const member of members) {
-        const bucket = byGroup.get(member.workgroupId)
-        if (bucket === undefined) byGroup.set(member.workgroupId, [member])
-        else bucket.push(member)
-      }
-      return rows.map((row) => rowToWorkgroup(row, byGroup.get(row.id) ?? []))
+        .where(eq(workgroupMembers.workgroupId, id))
+      return detailOf(workgroupFromRows(row, members))
+    })
+  }
+
+  const projection: WorkgroupProjection = Object.freeze({
+    resourceOf: (workgroup: Workgroup) => Object.freeze({ ...workgroup }),
+    snapshotOf,
+  })
+
+  const repository: WorkgroupRepository = {
+    async list(): Promise<readonly Workgroup[]> {
+      return runResourceCatalogTransaction(db, async (transaction) => {
+        const rows = await transaction.select().from(workgroups)
+        if (rows.length === 0) return []
+        const members = await transaction
+          .select()
+          .from(workgroupMembers)
+          .where(
+            inArray(
+              workgroupMembers.workgroupId,
+              rows.map((row) => row.id),
+            ),
+          )
+        const byGroup = new Map<string, MemberRow[]>()
+        for (const member of members) {
+          const bucket = byGroup.get(member.workgroupId)
+          if (bucket === undefined) byGroup.set(member.workgroupId, [member])
+          else bucket.push(member)
+        }
+        return rows.map((row) => workgroupFromRows(row, byGroup.get(row.id) ?? []))
+      })
     },
     get,
     async create(input): Promise<WorkgroupDetail> {
@@ -563,22 +536,14 @@ export function createSqliteWorkgroupRepository(
       await deps.assertAgentIdsUsable(input.authority, ids, new Set())
       await agentNames(db, ids)
       try {
-        return dbTxSync(db, (tx) => {
-          assertHumansActiveInTx(tx, input.document.members)
-          deps.assertAgentIdsUsableInTx(tx, input.authority, ids)
-          const names = agentNamesInTx(tx, ids)
-          const collision = tx
+        return await runResourceCatalogTransaction(db, async (transaction) => {
+          await assertHumansActive(transaction, input.document.members)
+          await deps.assertAgentIdsUsableInTransaction(transaction, input.authority, ids)
+          const names = await agentNames(transaction, ids)
+          const collision = (await transaction
             .select({ id: workgroups.id })
             .from(workgroups)
-            .where(
-              ownerScopedNameWhere(
-                workgroups.ownerUserId,
-                workgroups.name,
-                input.initialAcl.ownerUserId,
-                input.document.name,
-              ),
-            )
-            .get()
+            .where(ownerScopedNameWhere(input.initialAcl.ownerUserId, input.document.name)).limit(1))[0]
           if (collision !== undefined) {
             throw new ConflictError(
               'workgroup-name-in-use',
@@ -592,23 +557,22 @@ export function createSqliteWorkgroupRepository(
             names,
             deps.memberId,
           )
-          const row = insertWorkgroup(tx, {
+          const row = await insertWorkgroup(transaction, {
             id: input.id,
             document: input.document,
             leaderMemberId: leaderMemberId(input.document, values),
             initialAcl: input.initialAcl,
             now: input.now,
           })
-          insertMembers(tx, values)
-          const persistedMembers = tx
+          await insertMembers(transaction, values)
+          const persistedMembers = await transaction
             .select()
             .from(workgroupMembers)
             .where(eq(workgroupMembers.workgroupId, input.id))
-            .all()
-          return detailOf(rowToWorkgroup(row, persistedMembers))
+          return detailOf(workgroupFromRows(row, persistedMembers))
         })
       } catch (error) {
-        if (isOwnerNameUniqueViolation(error)) {
+        if (isOwnerNameConflict(error)) {
           throw new ConflictError(
             'workgroup-name-in-use',
             `workgroup '${input.document.name}' already exists`,
@@ -619,27 +583,31 @@ export function createSqliteWorkgroupRepository(
     },
     async copy(input): Promise<WorkgroupDetail> {
       try {
-        return dbTxSync(db, (tx) => {
-          const aclRow = tx
+        return await runResourceCatalogTransaction(db, async (transaction) => {
+          const aclRow = (await transaction
             .select({
               id: workgroups.id,
               ownerUserId: workgroups.ownerUserId,
               visibility: workgroups.visibility,
             })
             .from(workgroups)
-            .where(eq(workgroups.id, input.request.id))
-            .get()
-          if (aclRow === undefined || !deps.canViewInTx(tx, input.authority, aclRow)) {
+            .where(eq(workgroups.id, input.request.id)).limit(1))[0]
+          if (
+            aclRow === undefined ||
+            !(await deps.canViewInTransaction(transaction, input.authority, aclRow))
+          ) {
             notFound(input.request.id)
           }
-          const row = tx.select().from(workgroups).where(eq(workgroups.id, input.request.id)).get()
+          const row = (await transaction
+            .select()
+            .from(workgroups)
+            .where(eq(workgroups.id, input.request.id)).limit(1))[0]
           if (row === undefined) notFound(input.request.id)
-          const currentMembers = tx
+          const currentMembers = await transaction
             .select()
             .from(workgroupMembers)
             .where(eq(workgroupMembers.workgroupId, row.id))
-            .all()
-          const source = rowToWorkgroup(row, currentMembers)
+          const source = workgroupFromRows(row, currentMembers)
           const revision = revisionOf(source)
           if (
             input.request.copy.expectedVersion !== revision.version ||
@@ -652,38 +620,37 @@ export function createSqliteWorkgroupRepository(
             )
           }
           const sourceSnapshot = snapshotOf(source)
-          assertHumansActiveInTx(tx, sourceSnapshot.members)
+          await assertHumansActive(transaction, sourceSnapshot.members)
           const ids = agentIds(sourceSnapshot.members)
-          deps.assertAgentIdsUsableInTx(tx, input.authority, ids)
-          const names = agentNamesInTx(tx, ids)
-          const occupiedNames = tx
-            .select({ name: workgroups.name })
-            .from(workgroups)
-            .where(eq(workgroups.ownerUserId, input.authority.user.id))
-            .all()
-            .map((candidate) => candidate.name)
+          await deps.assertAgentIdsUsableInTransaction(transaction, input.authority, ids)
+          const names = await agentNames(transaction, ids)
+          const occupiedNames = (
+            await transaction
+              .select({ name: workgroups.name })
+              .from(workgroups)
+              .where(eq(workgroups.ownerUserId, input.authority.user.id))
+          ).map((candidate) => candidate.name)
           const name = WorkgroupNameSchema.parse(
             deps.nextCopyName(sourceSnapshot.name, occupiedNames),
           )
           const document = { ...sourceSnapshot, name }
           const values = memberValues(input.id, document.members, input.now, names, deps.memberId)
-          const inserted = insertWorkgroup(tx, {
+          const inserted = await insertWorkgroup(transaction, {
             id: input.id,
             document,
             leaderMemberId: leaderMemberId(document, values),
             initialAcl: input.initialAcl,
             now: input.now,
           })
-          insertMembers(tx, values)
-          const persistedMembers = tx
+          await insertMembers(transaction, values)
+          const persistedMembers = await transaction
             .select()
             .from(workgroupMembers)
             .where(eq(workgroupMembers.workgroupId, input.id))
-            .all()
-          return detailOf(rowToWorkgroup(inserted, persistedMembers))
+          return detailOf(workgroupFromRows(inserted, persistedMembers))
         })
       } catch (error) {
-        if (isOwnerNameUniqueViolation(error)) {
+        if (isOwnerNameConflict(error)) {
           throw new ConflictError(
             'workgroup-copy-name-conflict',
             'the next copy name was claimed; try copying again',
@@ -696,13 +663,13 @@ export function createSqliteWorkgroupRepository(
       authority: WorkgroupOperationContext,
       input: UpdateWorkgroupCatalogInput,
     ): Promise<WorkgroupSaveResult> {
-      const preflight = await db
+      const preflight = (await db
         .select()
         .from(workgroups)
         .where(eq(workgroups.id, input.id))
-        .limit(1)
-      if (preflight[0] === undefined) notFound(input.id)
-      const snapshot = normalizeSnapshot(input.update.snapshot, preflight[0].outputContract)
+        .limit(1))[0]
+      if (preflight === undefined) notFound(input.id)
+      const snapshot = normalizeSnapshot(input.update.snapshot, preflight.outputContract)
       const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
       const currentMembers = await db
         .select()
@@ -715,21 +682,26 @@ export function createSqliteWorkgroupRepository(
         ids,
         new Set(currentMembers.flatMap((member) => (member.agentId ? [member.agentId] : []))),
       )
-      const preparedNames = await agentNames(db, ids)
-
-      return dbTxSync(db, (tx) => {
-        const row = tx.select().from(workgroups).where(eq(workgroups.id, input.id)).get()
+      return runResourceCatalogTransaction(db, async (transaction) => {
+        const row = (await transaction
+          .select()
+          .from(workgroups)
+          .where(eq(workgroups.id, input.id)).limit(1))[0]
         if (row === undefined) notFound(input.id)
-        const access = deps.resolveAccessInTx(tx, authority, row)
+        const access = await deps.resolveAccessInTransaction(transaction, authority, row)
         assertEditAccess(access, input.id)
-        assertHumansActiveInTx(tx, snapshot.members)
-        const memberRows = tx
+        await assertHumansActive(transaction, snapshot.members)
+        const memberRows = await transaction
           .select()
           .from(workgroupMembers)
           .where(eq(workgroupMembers.workgroupId, input.id))
-          .all()
-        const current = rowToWorkgroup(row, memberRows)
-        deps.assertAgentIdsUsableInTx(tx, authority, newAgentIds(current, snapshot.members))
+        const current = workgroupFromRows(row, memberRows)
+        await deps.assertAgentIdsUsableInTransaction(
+          transaction,
+          authority,
+          newAgentIds(current, snapshot.members),
+        )
+        const preparedNames = await agentNames(transaction, ids)
         const currentSnapshot = snapshotOf(current)
         const currentBytes = serializeWorkgroupEditableSnapshotV1(currentSnapshot)
         const currentRevision = revisionOf(current)
@@ -768,7 +740,7 @@ export function createSqliteWorkgroupRepository(
           }
         }
         deps.assertNameUnchangedForEditor(access, current.name, snapshot.name)
-        assertNameAvailableInTx(tx, current, snapshot.name)
+        await assertNameAvailableInTransaction(transaction, current, snapshot.name)
         const rosterChanged = rosterBytes(currentSnapshot) !== rosterBytes(snapshot)
         const now = deps.now()
         const replacement = rosterChanged
@@ -776,7 +748,7 @@ export function createSqliteWorkgroupRepository(
           : null
         const nextLeaderId =
           replacement === null ? row.leaderMemberId : leaderMemberId(snapshot, replacement)
-        const updated = tx
+        const updated = (await transaction
           .update(workgroups)
           .set({
             name: snapshot.name,
@@ -798,23 +770,23 @@ export function createSqliteWorkgroupRepository(
           .where(
             and(eq(workgroups.id, input.id), eq(workgroups.version, input.update.expectedVersion)),
           )
-          .returning()
-          .get()
+          .returning())[0]
         if (updated === undefined) {
           throw staleConflictError('workgroup', `workgroup '${input.id}' changed; reload`, {
             current: currentRevision,
           })
         }
         if (replacement !== null) {
-          tx.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, input.id)).run()
-          insertMembers(tx, replacement)
+          await transaction
+            .delete(workgroupMembers)
+            .where(eq(workgroupMembers.workgroupId, input.id))
+          await insertMembers(transaction, replacement)
         }
-        const returnedMembers = tx
+        const returnedMembers = await transaction
           .select()
           .from(workgroupMembers)
           .where(eq(workgroupMembers.workgroupId, input.id))
-          .all()
-        const detail = detailOf(rowToWorkgroup(updated, returnedMembers))
+        const detail = detailOf(workgroupFromRows(updated, returnedMembers))
         const committedSnapshot = snapshotOf(detail)
         const receipt: SaveWorkgroupReceipt = {
           clientMutationId: input.update.clientMutationId,
@@ -831,23 +803,28 @@ export function createSqliteWorkgroupRepository(
       authority: WorkgroupOperationContext,
       input: ValidatedWorkgroupDeleteInput,
     ): Promise<WorkgroupDeleteResult> {
-      return dbTxSync(db, (tx) => {
-        const row = tx.select().from(workgroups).where(eq(workgroups.id, input.id)).get()
+      return runResourceCatalogTransaction(db, async (transaction) => {
+        const row = (await transaction
+          .select()
+          .from(workgroups)
+          .where(eq(workgroups.id, input.id)).limit(1))[0]
         if (row === undefined) notFound(input.id)
-        assertGovernAccess(deps.resolveAccessInTx(tx, authority, row), input.id)
+        assertGovernAccess(
+          await deps.resolveAccessInTransaction(transaction, authority, row),
+          input.id,
+        )
         if (row.version !== input.deletion.expectedVersion) {
-          const members = tx
+          const members = await transaction
             .select()
             .from(workgroupMembers)
             .where(eq(workgroupMembers.workgroupId, input.id))
-            .all()
           throw staleConflictError(
             'workgroup',
             `workgroup '${input.id}' is at version ${row.version}, expected ${input.deletion.expectedVersion}`,
-            { current: revisionOf(rowToWorkgroup(row, members)) },
+            { current: revisionOf(workgroupFromRows(row, members)) },
           )
         }
-        const scheduledRows = tx
+        const scheduledRows = await transaction
           .select({
             id: scheduledTasks.id,
             name: scheduledTasks.name,
@@ -856,7 +833,6 @@ export function createSqliteWorkgroupRepository(
             ownerUserId: scheduledTasks.ownerUserId,
           })
           .from(scheduledTasks)
-          .all()
         const scheduledRefs = deps.scheduledReferences(scheduledRows, input.id)
         if (scheduledRefs.length > 0) {
           throw new ConflictError(
@@ -865,16 +841,17 @@ export function createSqliteWorkgroupRepository(
             discloseScheduleRefs(authority, scheduledRefs),
           )
         }
-        const nonTerminalRefs = tx
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(
-            and(
-              eq(tasks.workgroupId, input.id),
-              notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-            ),
-          )
-          .all().length
+        const nonTerminalRefs = (
+          await transaction
+            .select({ id: tasks.id })
+            .from(tasks)
+            .where(
+              and(
+                eq(tasks.workgroupId, input.id),
+                notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+              ),
+            )
+        ).length
         if (nonTerminalRefs > 0) {
           throw new ConflictError(
             'workgroup-in-use',
@@ -887,9 +864,11 @@ export function createSqliteWorkgroupRepository(
           workgroupId: input.id,
           visibility: row.visibility,
           ownerUserId: row.ownerUserId,
-          grantedUserIds: new Set(listResourceGrantUserIdsInTx(tx, 'workgroup', input.id)),
+          grantedUserIds: new Set(
+            await deps.listGrantedUserIdsInTransaction(transaction, input.id),
+          ),
         }
-        const deleted = tx
+        const deleted = (await transaction
           .delete(workgroups)
           .where(
             and(
@@ -897,8 +876,7 @@ export function createSqliteWorkgroupRepository(
               eq(workgroups.version, input.deletion.expectedVersion),
             ),
           )
-          .returning({ id: workgroups.id })
-          .get()
+          .returning({ id: workgroups.id }))[0]
         if (deleted === undefined) {
           throw staleConflictError('workgroup', `workgroup '${input.id}' changed; reload`)
         }
@@ -913,7 +891,6 @@ export function createSqliteWorkgroupRepository(
       })
     },
   }
-  const repository = Object.freeze(repositoryValue)
 
-  return Object.freeze({ repository, projection })
+  return Object.freeze({ repository: Object.freeze(repository), projection })
 }

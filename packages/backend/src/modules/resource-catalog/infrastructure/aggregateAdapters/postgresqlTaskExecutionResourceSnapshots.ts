@@ -31,7 +31,7 @@ import { agentFromPersistenceRow } from '../agentPersistence'
 import { mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginFromPersistenceRow } from '../pluginPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
-import { workgroupFromPostgresqlRows } from '../postgresqlWorkgroupRepository'
+import { workgroupFromRows } from '../workgroupRepository'
 import type { ResourceRequestContext } from '../../public/participants'
 import type {
   FrozenTaskExecutionResourceSnapshot,
@@ -322,7 +322,7 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
       .where(eq(workgroupMembers.workgroupId, row.id))
       .all()
     try {
-      return workgroupSnapshot(workgroupFromPostgresqlRows(row, members))
+      return workgroupSnapshot(workgroupFromRows(row, members))
     } catch {
       return requestFailure(
         'workflow-call-ref-missing',

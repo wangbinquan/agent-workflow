@@ -612,8 +612,23 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   两个 provider 文件删除；rfc345 contracts、rfc349（adapters / contributions / search-case-parity）、rfc284 dedup、rfc231
   写点清单改指中立文件；`tests/helpers/pluginServiceBinding.ts` / `intentResourceCatalogBinding.ts` 不再按 provider 分叉。
   `rfc359-w4-d17-adapters.test.ts` 两引擎各跑创建 / owner 级同名冲突 / assertNameAvailable / publish OCC / 改名撞名 /
-  引用保护删除 + 源码锁。**下一刀 D18**：Workgroup 聚合（`sqliteWorkgroupRepository` / `postgresqlWorkgroupRepository`，
-  919 / 914 行，含 legacy workgroup engine 的依赖面）。
+  引用保护删除 + 源码锁。**下一刀 D18**：Workgroup 聚合。
+
+  **D18 ✅（resource-catalog · Workgroup 聚合：一份仓库、一份引用可用性判定、一份目录装配）**：
+  `infrastructure/workgroupRepository.ts`（`createWorkgroupRepository(db, deps)`：创建 / 复制（版本 + 快照哈希 OCC）/
+  save 三态 / 删除（定时任务与非终态任务引用守卫、受众随回执）全在统一 serializable 事务里；`workgroup-name-in-use` /
+  `workgroup-copy-name-conflict` 经能力矩阵的唯一冲突映射；两份 provider 文件此前逐字同形，PG 版直接成为唯一实现）、
+  `infrastructure/referenceUsability.ts`（`resolveAgentIdsUsable` 预检 / `assertAgentIdsUsableInTransaction` 同事务终检 /
+  `resolveAccessInTransaction` / `listGrantedUserIdsInTransaction`，缺失与不可见一律 `acl-missing-refs`）各一份；
+  `composition/workgroupOperations.ts` 只剩 `composeWorkgroupCatalog` + `composeWorkgroupCatalogFromAdapters`，仓库依赖
+  由 `workgroupRepositoryDependencies({db})` 一处装配（测试也从这里拿）。server.ts / start.ts / postgresqlDaemonApplication.ts
+  同一套装配；四个 PG-only 聚合适配器改读中立的 `workgroupFromRows`。四个 provider 文件删除；rfc225 写点清单、rfc231、
+  rfc345（contracts / classic-facade-neutralization）、rfc349 adapters 改指中立文件。`rfc359-w4-d18-adapters.test.ts`
+  两引擎各跑创建 / 同名冲突 / 不可见与不存在成员 / 复制 OCC / save 三态 / 删除 OCC 与受众 + 源码锁。
+  **留下的债**：Workgroup 的任务房与回合（`sqliteWorkgroupTaskRoom.ts` 71 行薄驱动 vs PG 的
+  `postgresqlWorkgroupTaskRoom*` 1457 行、`sqliteWorkgroupTurnsOperations.ts` 34 行 vs `postgresqlWorkgroupTurnsOperations.ts`
+  567 行）是「SQLite 走 legacy engine、PG 全量实现」的不对称对，随 legacy workgroup engine 退役单独一刀（D19）。
+  **下一刀 D19**：Workgroup 任务房 / 回合合一（PG 实现成为唯一实现，legacy workgroup engine 的对应面退役）。
 
 ## 5. W5 —— 防复辟
 

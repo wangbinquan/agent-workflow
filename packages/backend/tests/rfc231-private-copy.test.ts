@@ -365,7 +365,7 @@ describe('RFC-231 private create invariant', () => {
         'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
       },
       workgroups: {
-        'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
+        'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
         'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
       },
     }
@@ -378,7 +378,7 @@ describe('RFC-231 private create invariant', () => {
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts',
-      'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts',
+      'modules/resource-catalog/infrastructure/workgroupRepository.ts',
     ]
     const sources = new Map(
       await Promise.all(
@@ -414,7 +414,7 @@ describe('RFC-231 private create invariant', () => {
       )
     }
     expect(
-      sources.get('modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts'),
+      sources.get('modules/resource-catalog/infrastructure/workgroupRepository.ts'),
     ).toContain('...input.initialAcl')
     for (const file of ['modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts']) {
       expect(sources.get(file)).toContain('initialBuiltinResourceAcl')

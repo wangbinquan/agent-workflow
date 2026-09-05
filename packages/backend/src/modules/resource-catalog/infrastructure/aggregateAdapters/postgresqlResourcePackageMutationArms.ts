@@ -61,7 +61,7 @@ import {
   workflowDraftSnapshotOf,
   workflowFromPersistenceRow,
 } from '../workflowPersistence'
-import { workgroupFromPostgresqlRows } from '../postgresqlWorkgroupRepository'
+import { workgroupFromRows } from '../workgroupRepository'
 import type {
   AgentPackageMutation,
   CapabilityTemplatePackageMutation,
@@ -1419,7 +1419,7 @@ function currentWorkgroupSnapshot(
   row: typeof workgroups.$inferSelect,
   memberRows: readonly (typeof workgroupMembers.$inferSelect)[],
 ): WorkgroupDraftSnapshot {
-  const current = workgroupFromPostgresqlRows(row, memberRows)
+  const current = workgroupFromRows(row, memberRows)
   const ordered = [...current.members].sort(
     (left, right) =>
       left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),

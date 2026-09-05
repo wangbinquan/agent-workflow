@@ -60,17 +60,17 @@ describe('RFC-345 classic facade provider neutralization', () => {
     const adapter = source(
       'src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts',
     )
-    // RFC-359 W4-D1：合一后读的是 Resource Catalog 自己的中立行映射器（workgroup 的那份仍在 PG 命名的仓库文件里，随 B2 合一挪名）。
+    // RFC-359 W4-D1 / D18：合一后读的是 Resource Catalog 自己的中立行映射器（workgroup 的那份随 D18 挪进 workgroupRepository.ts）。
     expect(adapter).toContain("from '../agentPersistence'")
     expect(adapter).toContain("from '../workflowPersistence'")
-    expect(adapter).toContain("from '../postgresqlWorkgroupRepository'")
+    expect(adapter).toContain("from '../workgroupRepository'")
     for (const mapper of [
       'rowToAgent',
       'rowToWorkflowDetail',
       'rowToWorkgroup',
       'agentFromPersistenceRow',
       'workflowFromPersistenceRow',
-      'workgroupFromPostgresqlRows',
+      'workgroupFromRows',
     ]) {
       expect(adapter, mapper).not.toContain(`dependencies.${mapper}`)
       expect(adapter, `${mapper} declared as an injected dependency`).not.toMatch(
@@ -113,7 +113,6 @@ describe('RFC-345 classic facade provider neutralization', () => {
   test('classic PostgreSQL compositions remain native and provider-selected', () => {
     for (const [aggregate, operationFile] of [
       ['Skill', 'skillOperations'],
-      ['Workgroup', 'workgroupOperations'],
     ] as const) {
       const composition = source(`src/modules/resource-catalog/composition/${operationFile}.ts`)
       const repository = source(
