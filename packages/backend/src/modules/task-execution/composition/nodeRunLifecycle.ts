@@ -1,15 +1,15 @@
 import type { NodeRunLifecycleParticipantInTx } from '../public/commands'
-import { createPostgresqlNodeRunLifecycleParticipantInTx } from '../infrastructure/postgresqlNodeRunLifecyclePersistence'
-import type { PostgresqlTaskExecutionTransaction } from '../infrastructure/postgresqlTaskLifecycleTransaction'
+import { createNodeRunLifecycleParticipantInTx } from '../infrastructure/nodeRunLifecyclePersistence'
+import type { TaskExecutionTransaction } from '../infrastructure/ownedTaskExecution'
 
 export interface PostgresqlNodeRunLifecycleParticipantFactory {
-  inTransaction(transaction: PostgresqlTaskExecutionTransaction): NodeRunLifecycleParticipantInTx
+  inTransaction(transaction: TaskExecutionTransaction): NodeRunLifecycleParticipantInTx
 }
 
 /** TaskExecution composition seam for Collaboration-owned serializable atoms. */
 export function composePostgresqlNodeRunLifecycleParticipantFactory(): PostgresqlNodeRunLifecycleParticipantFactory {
   return Object.freeze({
-    inTransaction: (transaction: PostgresqlTaskExecutionTransaction) =>
-      createPostgresqlNodeRunLifecycleParticipantInTx(transaction),
+    inTransaction: (transaction: TaskExecutionTransaction) =>
+      createNodeRunLifecycleParticipantInTx(transaction),
   })
 }

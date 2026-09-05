@@ -175,7 +175,7 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // general-purpose write escape hatch.
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
   // RFC-359 W1-T2c：事务内 CAS 已委托给两引擎共用的 nodeRunLifecycleTransition.ts（2 → 1，剩 transition 自己的 CAS）。
-  'modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts': 1,
   // RFC-359 W1-T2c：node_run 状态 CAS 的一份中立事务内内核（setNodeRunStatusTx / transitionNodeRunStatusTx）。
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts': 2,
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts': 1,
@@ -185,7 +185,7 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
 const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
   'platform/persistence/sqlite/taskLifecycle.ts',
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
-  'modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts',
+  'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
   'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts',

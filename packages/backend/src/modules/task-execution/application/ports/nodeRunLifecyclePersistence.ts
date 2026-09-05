@@ -1,5 +1,6 @@
 import type { NodeRunStatus, NodeRunTransitionEvent, RerunCause } from '@agent-workflow/shared'
 
+import type { NodeExecutionOutputWrite } from './nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
 export interface NodeRunStatusMutation {
@@ -74,6 +75,12 @@ export interface NodeRunMintInput {
   readonly iteration?: number
   readonly inheritFrom?: NodeRunMintInheritance | null
   readonly overrides?: NodeRunMintOverrides
+  /**
+   * RFC-359 W4-B1 批 2g：与行同一事务落库的初始输出。io-virtual 行（input / output 节点）是
+   * 「born done」的——若行先可见、输出后到，另一条调度扫描会在两笔之间看见一个没有输出的 done
+   * 行并据此派发下游（合一前 SQLite 两笔同步写恰好挤在同一个 tick 里，掩盖了这个缝）。
+   */
+  readonly outputs?: readonly NodeExecutionOutputWrite[]
   readonly executionContext?: TaskExecutionContextRef
 }
 

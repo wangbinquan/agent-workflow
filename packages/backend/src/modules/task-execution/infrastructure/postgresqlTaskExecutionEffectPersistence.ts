@@ -38,7 +38,7 @@ import {
   readUnresolvedEffectIds,
   resolveQuiescedManagedProcesses,
 } from './effectQuiescence'
-import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
+import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
@@ -897,7 +897,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
           )
           .run()
       }
-      await createPostgresqlNodeRunLifecycleParticipantInTx(tx).set({
+      await createNodeRunLifecycleParticipantInTx(tx).set({
         nodeRunId: input.projection.prepNodeRunId,
         to: 'done',
         allowedFrom: ['running'],

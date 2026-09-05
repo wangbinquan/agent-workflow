@@ -3502,6 +3502,7 @@ export async function runOutputNode(
     if (row.runId !== null) consumed[resolved.source.nodeId] = row.runId
     projected.push({ binding: b, row })
   }
+  // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
   const nrId = await mintRun(state, {
     taskId,
     nodeId: node.id,
@@ -3510,9 +3511,6 @@ export async function runOutputNode(
     containerRunId: args.containerRunId,
     iteration,
     overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
-  })
-  await state.opts.persistence.nodeExecution.upsertOutputs({
-    nodeRunId: nrId,
     outputs: projected.map(({ binding, row }) => ({
       portName: binding.name,
       content: row.content,
@@ -3521,7 +3519,6 @@ export async function runOutputNode(
       // RFC-306: the virtual projection preserves branch activation.
       active: row.active,
     })),
-    ...executionContextInput(state),
   })
   broadcastNodeStatus(taskId, nrId, node.id, 'done')
   return { kind: 'ok', summary: '', message: '' }
@@ -3542,6 +3539,9 @@ export async function runInputNode(
     }
   }
   const value = inputsMap[inputKey] ?? ''
+  // RFC-004: an input node's single output port is named after its inputKey,
+  // so edges authored on the canvas resolve to the visible handle label.
+  // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
   const nrId = await mintRun(state, {
     taskId,
     nodeId: node.id,
@@ -3549,13 +3549,7 @@ export async function runInputNode(
     cause: 'io-virtual',
     containerRunId: args.containerRunId,
     iteration,
-  })
-  // RFC-004: an input node's single output port is named after its inputKey,
-  // so edges authored on the canvas resolve to the visible handle label.
-  await state.opts.persistence.nodeExecution.upsertOutputs({
-    nodeRunId: nrId,
     outputs: [{ portName: inputKey, content: value }],
-    ...executionContextInput(state),
   })
   broadcastNodeStatus(taskId, nrId, node.id, 'done')
   return { kind: 'ok', summary: '', message: '' }

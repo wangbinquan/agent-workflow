@@ -373,8 +373,19 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
         gitBaselineSyncWindowMs: 0,
       } as never,
     )
-    const runs = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
-    const prep = runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)
+    // G7：startTask 立刻返回，准备在后台推进——合成的 `__repo_prep__` 行是后台第一步铸的。
+    // RFC-359 起 node run 的铸造走统一写事务（在新的事件循环任务里开始），这一行比 startTask
+    // 的返回晚一个宏任务落库；这里等它出现，而不是把「返回时已存在」当成契约。
+    const prep = await (async () => {
+      const t0 = Date.now()
+      for (;;) {
+        const runs = await db2.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+        const row = runs.find((r) => r.nodeId === REPO_PREP_NODE_ID)
+        if (row !== undefined) return row
+        if (Date.now() - t0 > 10_000) return undefined
+        await new Promise((r) => setTimeout(r, 25))
+      }
+    })()
     expect(prep).toBeDefined()
 
     // 前置门必须放行：任务已 failed（非 pending/running）、调度器已解绑

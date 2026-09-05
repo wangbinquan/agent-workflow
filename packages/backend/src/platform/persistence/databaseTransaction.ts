@@ -167,23 +167,16 @@ function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promis
  * `busy_timeout`（RFC-351 记录了它在 HTTP 边界被兜成 500 的实测）。
  */
 /**
- * `BEGIN IMMEDIATE` 的跨进程写锁重试。进程内单写者由租约保证，但另一个进程（备份 / vacuum /
- * CLI）仍可能正持有写锁：`busy_timeout` 到期或 `SQLITE_BUSY_SNAPSHOT` 之类的扩展码会绕过等待直接
- * 失败。直接复用 RFC-111 PR-D 的 `retrySqliteWrite`（只重试写者并发码，其余 fail-fast），且只包住
- * BEGIN 本身——它失败时事务尚未开始、没有任何语句执行过，重跑不会重复副作用。
+ * SQLite 写事务的跨进程写锁重试。进程内单写者由租约保证，但另一个进程（备份 / vacuum / CLI）
+ * 仍可能正持有写锁：`busy_timeout` 到期或 `SQLITE_BUSY_*` / `SQLITE_LOCKED*` 扩展码会绕过等待直接
+ * 失败。判据直接复用 RFC-111 PR-D 的 `retrySqliteWrite`（只重试写者并发码，其余 fail-fast）。
+ *
+ * 重试的单位是**整笔事务**（BEGIN → 体 → COMMIT）：撞锁最常见在 BEGIN IMMEDIATE，但 COMMIT 与
+ * 体内语句在极端情形（checkpoint / 恢复期）同样可能回 BUSY；失败的一笔已经 ROLLBACK、没有留下
+ * 任何效果，事务体又只允许 await 数据库操作，整笔重跑不会重复副作用。这也是此前 SQLite 适配器
+ * 用 `retrySqliteWrite` 包住整个 `dbTxSync` 的语义，合一后不能丢。
  */
-function beginImmediateWithRetry(db: DbClient): Promise<void> {
-  return retrySqliteWrite(
-    () => {
-      db.run(sql.raw('BEGIN IMMEDIATE'))
-    },
-    {
-      maxAttempts: 3,
-      onRetry: (info) =>
-        log.warn('sqlite transaction BEGIN retried after writer contention', { ...info }),
-    },
-  )
-}
+const SQLITE_TRANSACTION_MAX_ATTEMPTS = 3
 
 export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   const client: object = db
@@ -192,33 +185,47 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
     if (reused !== undefined) return await body(reused)
     const release = await acquireWriterLease(client)
     const tx = db as unknown as DatabaseTransaction
-    // 计时从 BEGIN 起：租约、让出与 BEGIN 重试的等待都不占写锁，RFC-311 的事务时长守卫看的是持锁时间。
+    // 计时从 BEGIN 起：租约、让出与重试退避的等待都不占写锁，RFC-311 的事务时长守卫看的是持锁时间。
     let startedAt = performance.now()
+    let lockHeldMs = 0
     try {
       // 旁观者隔离（头注释）：让出本任务，被本轮唤醒的同步写者先跑完，事务在干净的任务里开始。
       await yieldEventLoopTask()
-      await beginImmediateWithRetry(db)
-      startedAt = performance.now()
-      const yieldWatch = watchEventLoopYield()
-      try {
-        let result: T
-        try {
-          result = await withFrame(client, tx, async () => await body(tx))
-        } catch (error) {
-          // ROLLBACK 自身失败意味着连接状态不可知——不吞，让它盖过原错误往上抛，
-          // 由调用方按「连接不可用」处置。静默继续会把后续语句留在一个开着的事务里。
-          db.run(sql.raw('ROLLBACK'))
-          throw error
-        }
-        db.run(sql.raw('COMMIT'))
-        return result
-      } finally {
-        yieldWatch.stop()
-      }
+      return await retrySqliteWrite(
+        async () => {
+          startedAt = performance.now()
+          try {
+            db.run(sql.raw('BEGIN IMMEDIATE'))
+            const yieldWatch = watchEventLoopYield()
+            try {
+              let result: T
+              try {
+                result = await withFrame(client, tx, async () => await body(tx))
+              } catch (error) {
+                // ROLLBACK 自身失败意味着连接状态不可知——不吞，让它盖过原错误往上抛，
+                // 由调用方按「连接不可用」处置。静默继续会把后续语句留在一个开着的事务里。
+                db.run(sql.raw('ROLLBACK'))
+                throw error
+              }
+              db.run(sql.raw('COMMIT'))
+              return result
+            } finally {
+              yieldWatch.stop()
+            }
+          } finally {
+            lockHeldMs += performance.now() - startedAt
+          }
+        },
+        {
+          maxAttempts: SQLITE_TRANSACTION_MAX_ATTEMPTS,
+          onRetry: (info) =>
+            log.warn('sqlite transaction retried after writer contention', { ...info }),
+        },
+      )
     } finally {
       release()
       // 与 dbTxSync 同一个观测点（RFC-311 的事务时长守卫读它），迁过来的事务不能从指标里消失。
-      observeDbTransaction(db, performance.now() - startedAt)
+      observeDbTransaction(db, lockHeldMs)
     }
   }
   // BEGIN IMMEDIATE 下整个库独占，已是最强隔离；serializable 与 transaction 是同一条路。

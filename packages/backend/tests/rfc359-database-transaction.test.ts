@@ -367,7 +367,7 @@ describe('RFC-359 —— serializable() opt-in（SQLite 侧等于 transaction）
   })
 })
 
-describe('RFC-359 W4-B1 —— BEGIN IMMEDIATE 的跨进程写锁重试（沿用 RFC-111 PR-D 判据）', () => {
+describe('RFC-359 W4-B1 —— 写事务的跨进程写锁重试（整笔重跑，沿用 RFC-111 PR-D 判据）', () => {
   function sqliteError(code: string): Error {
     const error = new Error('database is locked') as Error & { code: string }
     error.name = 'SQLiteError'
@@ -419,6 +419,24 @@ describe('RFC-359 W4-B1 —— BEGIN IMMEDIATE 的跨进程写锁重试（沿用
       createSqliteDatabaseSession(constraint.proxied).transaction(async () => undefined),
     ).rejects.toMatchObject({ code: 'SQLITE_CONSTRAINT' })
     expect(constraint.attempts()).toBe(1)
+  })
+
+  test('体内语句撞 BUSY：整笔回滚后重跑，最终只提交一次', async () => {
+    const db = scratchDb()
+    let bodyRuns = 0
+    let failNextInsert = true
+    const session = createSqliteDatabaseSession(db)
+    await session.transaction(async () => {
+      bodyRuns += 1
+      insert(db, `attempt-${bodyRuns}`)
+      if (failNextInsert) {
+        failNextInsert = false
+        throw sqliteError('SQLITE_BUSY')
+      }
+    })
+    expect(bodyRuns).toBe(2)
+    // 第一笔已回滚：只剩第二笔的行。
+    expect(values(db)).toEqual(['attempt-2'])
   })
 
   test('连续三次 BUSY：放弃并抛出最后一次的错误，租约随之释放', async () => {

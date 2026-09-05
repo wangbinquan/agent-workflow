@@ -18,11 +18,12 @@ import {
   assertPostgresqlTaskOwnerlessTx,
   assertPostgresqlTaskOwnerTx,
   withPostgresqlSerializableTaskExecution,
+  type PostgresqlTaskExecutionTransaction,
 } from './postgresqlTaskLifecycleTransaction'
 import { transitionHumanGateTask } from './humanGateTaskTransition'
-import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
+import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
-import { PostgresqlTaskRuntimeLifecyclePersistence } from './postgresqlTaskRuntimeLifecyclePersistence'
+import { DrizzleTaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
 
 class ManualQuestionPending extends Error {}
 
@@ -49,7 +50,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       const consumed = await new PostgresqlHumanGateOpenParticipantInTx(
         tx,
         createNodeRunMintParticipantInTx(tx),
-        createPostgresqlNodeRunLifecycleParticipantInTx(tx),
+        createNodeRunLifecycleParticipantInTx(tx),
       ).consumePreparedGateTx({
         prepared: input.prepared,
         taskRevision: input.prepared.expectedTaskRevision,
@@ -110,7 +111,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       const gates = new PostgresqlHumanGateOpenParticipantInTx(
         tx,
         createNodeRunMintParticipantInTx(tx),
-        createPostgresqlNodeRunLifecycleParticipantInTx(tx),
+        createNodeRunLifecycleParticipantInTx(tx),
       )
       const operationIds = await gates.listPreparedManualQuestionParksTx(input.taskId)
       if (operationIds.length === 0) {
@@ -159,13 +160,15 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
     input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],
   ): ReturnType<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']> {
     try {
-      const won = await new PostgresqlTaskRuntimeLifecyclePersistence(this.db).trySetWithGuard(
+      const won = await new DrizzleTaskRuntimeLifecyclePersistence(this.db).trySetWithGuard(
         input,
-        async (tx) => {
+        async (neutralTx) => {
+          // 守卫回调拿到的是中立事务句柄；本文件仍是 PG 专属原子，按 PG 事务类型收窄。
+          const tx = neutralTx as PostgresqlTaskExecutionTransaction
           const pending = await new PostgresqlHumanGateOpenParticipantInTx(
             tx,
             createNodeRunMintParticipantInTx(tx),
-            createPostgresqlNodeRunLifecycleParticipantInTx(tx),
+            createNodeRunLifecycleParticipantInTx(tx),
           ).listPreparedManualQuestionParksTx(input.taskId)
           if (pending.length > 0) throw new ManualQuestionPending()
         },

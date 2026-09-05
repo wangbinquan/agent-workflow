@@ -18,9 +18,9 @@ import type {
   WorkgroupTaskRoomTaskSnapshot,
 } from '../public/commands'
 import { createTaskAuthorizationParticipantInTx } from './taskAuthorization'
-import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
+import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { submitTaskContinuation } from './taskContinuationAdmission'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import {
   assertPostgresqlTaskOwnerlessTx,
   type PostgresqlTaskExecutionTransaction,
@@ -202,7 +202,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
             .limit(1)
         )[0]
         if (parked?.status === 'awaiting_human') {
-          await createPostgresqlNodeRunLifecycleParticipantInTx(tx).set({
+          await createNodeRunLifecycleParticipantInTx(tx).set({
             nodeRunId: park.nodeRunId,
             to: 'canceled',
             allowedFrom: ['awaiting_human'],
@@ -318,7 +318,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
         )
         .returning({ id: tasks.id })
       if (changed[0] === undefined) return null
-      await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
+      await terminalizeTaskExecutionIntentsInTx(tx, {
         taskId: input.taskId,
         state: 'failed',
         failureCode: input.errorSummary,

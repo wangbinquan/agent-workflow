@@ -33,7 +33,7 @@ import type { TaskExecutionModule } from '../composition'
 import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import {
   appendTaskCreatedCommittedEvent,
@@ -257,7 +257,7 @@ async function cancelPostgresqlTask(
         and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, CANCELABLE_NODE_RUN_STATUSES)),
       )
       .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-    await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
+    await terminalizeTaskExecutionIntentsInTx(tx, {
       taskId,
       state: 'canceled',
       failureCode: 'canceled-by-user',

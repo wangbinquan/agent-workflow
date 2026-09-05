@@ -1,48 +1,33 @@
-// RFC-349 — PostgreSQL intent terminalization and replay-authorization release.
+// RFC-359 W4-B1 批 2g —— 执行 intent 终态化 + replay 授权释放：一份实现，两个 provider 共用。
+// 同步的 `sqliteTerminalizeExecutionIntent.ts`（dbTxSync 形态）暂留给尚未迁移的 legacy 同步调用方。
 
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 import { taskExecutionIntents, taskExecutionLineageOperationRecords } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import type { TaskExecutionIntentTerminalPersistence } from '../application/terminalizeExecutionIntent'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
-type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
-
-async function serializable<T>(
-  db: PostgresqlDatabaseClient,
-  body: (tx: PgTx) => Promise<T>,
-): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await db.transaction(async (tx) => {
-        await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
-        return await body(tx)
-      })
-    } catch (error) {
-      if (await retryPostgresqlSerialization(attempt, error)) continue
-      throw error
-    }
-  }
-}
-
-export class PostgresqlTaskExecutionIntentTerminalPersistence implements TaskExecutionIntentTerminalPersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleTaskExecutionIntentTerminalPersistence implements TaskExecutionIntentTerminalPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async terminalize(
     input: Parameters<TaskExecutionIntentTerminalPersistence['terminalize']>[0],
   ): Promise<void> {
-    await serializable(this.db, async (tx) => {
-      await terminalizePostgresqlTaskExecutionIntentsTx(tx, input)
+    // intents 有跨行不变量（每任务至多一个 pending / claimed 的部分唯一索引 + replay 决定的释放），沿用 SERIALIZABLE。
+    await databaseSessionFor(this.db).serializable(async (tx) => {
+      await terminalizeTaskExecutionIntentsInTx(tx, input)
     })
   }
 }
 
-/** Provider-private participant for larger PostgreSQL atoms (recovery,
- * source termination and human-gate decisions). */
-export async function terminalizePostgresqlTaskExecutionIntentsTx(
-  tx: PgTx,
+/** 事务内参与者，供更大的原子（恢复、源终止、人工门决定）在自己的事务里调用。 */
+export async function terminalizeTaskExecutionIntentsInTx(
+  tx: DatabaseTransaction,
   input: Parameters<TaskExecutionIntentTerminalPersistence['terminalize']>[0],
 ): Promise<void> {
   const active = await tx

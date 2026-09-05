@@ -47,7 +47,7 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   'modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts': 1,
   // RFC-359 W1-T1：human-gate 任务跃迁的一份中立实现（SQLite/PG 共用），CAS on lifecycleEventRevision。
   'modules/task-execution/infrastructure/humanGateTaskTransition.ts': 1,
@@ -70,7 +70,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 2,
   'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 1,
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts': 4,
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts': 1,

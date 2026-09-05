@@ -1,10 +1,13 @@
+// RFC-359 W4-B1 批 2g —— 任务运行时状态迁移（tasks.status 的 CAS + lifecycle committed event）：一份实现，两个 provider 共用。
+// 此前 SQLite 侧只是 `platform/persistence/sqlite/taskLifecycle.ts` 同步内核的薄壳，PG 侧是整份实现；现在端口两侧都走
+// 统一写事务 + owner 围栏（PG READ COMMITTED：CAS 与围栏都是行级条件 UPDATE）。同步内核暂留给尚未迁移的 legacy 直接调用方。
+
 import type { TaskStatus } from '@agent-workflow/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 
 import { tasks } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import {
   ConcurrentTaskTransition,
@@ -14,11 +17,10 @@ import {
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
 import {
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  withPostgresqlSerializableTaskExecution,
-  type PostgresqlTaskExecutionTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+  fenceTaskWrite,
+  type TaskExecutionTransaction,
+  withTaskExecutionWrite,
+} from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 type LifecycleRow = Readonly<{
@@ -32,8 +34,8 @@ type LifecycleRow = Readonly<{
   errorSummary: string | null
 }>
 
-export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecyclePersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecyclePersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async trySet(input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0]): Promise<boolean> {
     try {
@@ -49,7 +51,7 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
    * application port never receives this transaction callback. */
   async trySetWithGuard(
     input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
-    guard: (tx: PostgresqlTaskExecutionTransaction) => Promise<void>,
+    guard: (tx: TaskExecutionTransaction) => Promise<void>,
   ): Promise<boolean> {
     try {
       await this.set(input, guard)
@@ -62,7 +64,7 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
 
   private async set(
     input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
-    guard?: (tx: PostgresqlTaskExecutionTransaction) => Promise<void>,
+    guard?: (tx: TaskExecutionTransaction) => Promise<void>,
   ): Promise<void> {
     const snapshot = await this.load(input.taskId)
     const from = snapshot.status
@@ -103,7 +105,7 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
         )
       }
       if (snapshot.worktreePath !== '' && !existsSync(snapshot.worktreePath)) {
-        await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+        await withTaskExecutionWrite(this.db, async (tx) => {
           await this.fence(tx, input)
           await tx
             .update(tasks)
@@ -134,7 +136,7 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
       },
       input.to,
     )
-    const result = await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    const result = await withTaskExecutionWrite(this.db, async (tx) => {
       await this.fence(tx, input)
       await guard?.(tx)
       const updated = await tx
@@ -216,21 +218,14 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
   }
 
   private async fence(
-    tx: Parameters<Parameters<typeof withPostgresqlSerializableTaskExecution>[1]>[0],
+    tx: TaskExecutionTransaction,
     input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
   ): Promise<void> {
-    // RFC-359 W1-T7（P0-1）：与 SQLite 的 taskLifecycle 写点同规则——显式上下文缺席时读环境上下文。
-    const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
-    if (executionContext === undefined) {
-      await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
-      return
-    }
-    if (executionContext.token.taskId !== input.taskId) {
-      throw new ConflictError(
-        'task-execution-context-mismatch',
-        `execution context for '${executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
-      )
-    }
-    await assertPostgresqlTaskOwnerTx(tx, executionContext.token, input.now)
+    // 围栏规则两引擎同一（ownedTaskExecution）：显式上下文 > 环境上下文 > 无主围栏。
+    await fenceTaskWrite(tx, {
+      taskId: input.taskId,
+      context: input.executionContext,
+      now: input.now,
+    })
   }
 }

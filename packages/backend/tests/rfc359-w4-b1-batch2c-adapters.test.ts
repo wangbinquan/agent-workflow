@@ -122,7 +122,7 @@ async function seedRun(
     iteration: 0,
     ...over,
   })
-  return id
+  return over.id ?? id
 }
 
 describeEachProvider('RFC-359 W4-B1 批 2c —— 统一写事务 + owner 围栏', (harness) => {
@@ -280,8 +280,10 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— wrapper run 持久化', (harne
   test('findResumable 按 frame 取最新未终态 run；readStatus；clearReuseDisabled 受围栏', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    await seedRun(db, taskId, { nodeId: 'w', status: 'done' })
+    // findResumable 按 id 倒序取最新一行：显式给 id 排序（同一毫秒内 ulid 的随机尾巴不保证单调）。
+    await seedRun(db, taskId, { id: `${taskId}_run_a`, nodeId: 'w', status: 'done' })
     const running = await seedRun(db, taskId, {
+      id: `${taskId}_run_b`,
       nodeId: 'w',
       status: 'running',
       wrapperProgressJson: JSON.stringify({

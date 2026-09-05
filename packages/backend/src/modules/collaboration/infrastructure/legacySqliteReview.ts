@@ -174,7 +174,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/util/errors'
-import { SqliteNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence'
+import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
@@ -1184,7 +1184,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // reject / iterate). Mint a fresh awaiting_review row carrying the prior
     // reviewIteration — same review round, re-evaluated on the new content.
     reviewIteration = reuse?.reviewIteration ?? 0
-    reviewNodeRunId = await new SqliteNodeRunLifecyclePersistence(db).mint({
+    reviewNodeRunId = await new DrizzleNodeRunLifecyclePersistence(db).mint({
       taskId,
       nodeId: node.id,
       status: 'awaiting_review',

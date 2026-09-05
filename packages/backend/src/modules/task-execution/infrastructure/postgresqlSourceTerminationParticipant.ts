@@ -30,7 +30,7 @@ import {
 } from '../domain/sourceTermination'
 import type { OwnershipToken } from '../domain/ownership'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import {
   withPostgresqlSerializableTaskExecution,
   type PostgresqlTaskExecutionTransaction,
@@ -387,7 +387,7 @@ async function applyOne(
           now,
           statusChanged ? 'terminal-control-source' : 'terminal-control-source-terminal',
         )
-        await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
+        await terminalizeTaskExecutionIntentsInTx(tx, {
           taskId,
           state: 'canceled',
           failureCode: projection.code,

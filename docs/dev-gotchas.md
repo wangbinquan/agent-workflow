@@ -4029,3 +4029,17 @@ CI 是唯一权威门，但**改了几十个文件的迁移**推上去红三次�
   `auth_login_policy`、框架内置资源……）生产上是随 RFC-349 逻辑复制从 SQLite 带过去的。一个「只迁移过」的
   PostgreSQL 库上 `appendCommittedEvent` 会直接 `cutover is missing`。harness 因此在迁移后把一个刚迁移完的
   SQLite 内存库整表按外键拓扑复制进去，两个引擎的「起点」才是同一个；自己手写真库用例时同样要先种这些行。
+
+## 合一「两笔同步写」成「两笔异步事务」时，先找可见性缝（RFC-359 批 2f 事故）
+
+批 2f 把 SQLite 的 node 执行投影合到统一事务原语上，本地只跑了消费面文件与守卫，推上 main 后 backend
+八个分片 + e2e 全红。根因不是 SQL 写错，而是**时序**：合一前 SQLite 的两笔写（铸 born-done 的 io-virtual 行 /
+写它的输出）都是 dbTxSync 同步落库，挤在同一个 tick 里；统一事务在新的事件循环任务里开始（T11d 旁观者隔离），
+两笔之间多出一个宏任务，另一条调度扫描就在缝里看见「done 但没有输出」的行并派发下游。修法是把不变量做回原子
+（`NodeRunMintInput.outputs`：行与初始输出同一事务），不是把事务改回同步。
+
+同一批还撞了第二类：测试把「合一前恰好同步」当成契约（`rfc287-t13` 断言准备行在 `startTask` 返回时已存在；
+`runner.test.ts` 把 BUSY 注入在 insert 语句上、依赖包住整笔 dbTxSync 的重试）。合一批次的本地自查**必须**包含
+`scheduler*.test.ts` / `runner*.test.ts` / `rfc287-*` 这类端到端调度套件（逐文件跑，避免跨文件目录污染），
+只跑消费面文件与架构守卫抓不到时序缝。
+

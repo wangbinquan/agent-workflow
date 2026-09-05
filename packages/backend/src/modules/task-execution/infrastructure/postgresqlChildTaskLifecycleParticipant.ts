@@ -50,7 +50,7 @@ import { taskStopProjection } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import {
   assertPostgresqlTaskOwnerlessTx,
   withPostgresqlSerializableTaskExecution,
@@ -615,7 +615,7 @@ async function cancelCascade(
       })
       .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, NODE_CANCELABLE_STATUSES)))
       .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-    await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
+    await terminalizeTaskExecutionIntentsInTx(tx, {
       taskId,
       state: 'canceled',
       failureCode: projection.code,

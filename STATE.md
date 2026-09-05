@@ -115,6 +115,11 @@
 > `rfc359-w4-b1-batch2e-adapters.test.ts` 两引擎各跑。剩 21 对。
 > **W4-B1 批 2f 已落**：node run 执行投影（最热写路径，聚合根行锁改由能力矩阵表达）/ 任务列表页绑定 / 目录源装配三对合一，
 > `rfc359-w4-b1-batch2f-adapters.test.ts` 两引擎各跑。剩 18 对，下一步合 lifecycle 内核四对。
+> **W4-B1 批 2g 已落**：lifecycle 内核四对（task runtime lifecycle / node run lifecycle / intent / intent terminal）合一，八个
+> provider 文件删除；`rfc359-w4-b1-batch2g-adapters.test.ts` 两引擎各跑。剩 14 对。**批 2f 推上 main 后 CI 全红（教训）**：
+> 两笔同步写合成两笔异步事务后暴露 born-done 行「先可见、后有输出」的缝（scheduler 多边并入丢输入）+ 只包 BEGIN 的 SQLite
+> 写锁重试兜不住 insert 上的 BUSY；修法：`NodeRunMintInput.outputs`（行与初始输出同一事务）+ SQLite 统一事务整笔重跑。
+> 合一批次**必须**把 `scheduler*.test.ts` / `runner*.test.ts` 大套件跑进本地自查，不能只跑消费面文件。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

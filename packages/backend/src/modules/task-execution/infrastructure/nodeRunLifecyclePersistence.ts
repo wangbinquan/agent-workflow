@@ -1,3 +1,6 @@
+// RFC-359 W4-B1 批 2g —— node run 生命周期（mint / transition / set + 事务内参与者）：一份实现，两个 provider 共用。
+// 此前 SQLite 侧薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 的同步内核；现在端口两侧都走统一写事务 + owner 围栏。
+
 import {
   allowedFromStatusesForEvent,
   nextNodeRunStatus,
@@ -5,9 +8,8 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
-import { nodeRuns, tasks } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
+import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   NodeRunLifecyclePersistence,
@@ -15,11 +17,10 @@ import type {
 } from '../application/ports/nodeRunLifecyclePersistence'
 import type { NodeRunLifecycleParticipantInTx } from '../public/commands'
 import {
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+  fenceTaskWrite,
+  type TaskExecutionTransaction,
+  withTaskExecutionWrite,
+} from './ownedTaskExecution'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
@@ -29,28 +30,17 @@ const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
 )
 
 async function fence(
-  tx: PostgresqlTaskExecutionTransaction,
+  tx: TaskExecutionTransaction,
   taskId: string,
   explicitContext: NodeRunMintInput['executionContext'],
   now: number,
 ): Promise<void> {
-  // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则），真无主才走无主围栏。
-  const executionContext = explicitContext ?? currentTaskExecutionContext(taskId)
-  if (executionContext === undefined) {
-    await assertPostgresqlTaskOwnerlessTx(tx, taskId)
-    return
-  }
-  if (executionContext.token.taskId !== taskId) {
-    throw new ConflictError(
-      'task-execution-context-mismatch',
-      `execution context for '${executionContext.token.taskId}' cannot mutate task '${taskId}'`,
-    )
-  }
-  await assertPostgresqlTaskOwnerTx(tx, executionContext.token, now)
+  // 围栏规则两引擎同一（ownedTaskExecution）：显式上下文 > 环境上下文 > 无主围栏。
+  await fenceTaskWrite(tx, { taskId, context: explicitContext, now })
 }
 
 async function rowForUpdate(
-  tx: PostgresqlTaskExecutionTransaction,
+  tx: TaskExecutionTransaction,
   nodeRunId: string,
 ): Promise<
   Readonly<{
@@ -92,11 +82,11 @@ function assertSourceTerminationAdmission(input: {
 
 /**
  * Bind TaskExecution's exact node-state CAS to an already-reserved
- * PostgreSQL transaction.  The caller owns transaction admission; this
+ * database transaction.  The caller owns transaction admission; this
  * participant owns status legality, source-terminal fencing and the CAS.
  */
-export function createPostgresqlNodeRunLifecycleParticipantInTx(
-  tx: PostgresqlTaskExecutionTransaction,
+export function createNodeRunLifecycleParticipantInTx(
+  tx: TaskExecutionTransaction,
 ): NodeRunLifecycleParticipantInTx {
   return Object.freeze({
     async set(input: Parameters<NodeRunLifecycleParticipantInTx['set']>[0]) {
@@ -126,7 +116,7 @@ export function createPostgresqlNodeRunLifecycleParticipantInTx(
           `node_run ${input.nodeRunId} does not belong to node ${input.nodeId}`,
         )
       }
-      await createPostgresqlNodeRunLifecycleParticipantInTx(tx).set({
+      await createNodeRunLifecycleParticipantInTx(tx).set({
         nodeRunId: input.nodeRunId,
         to: input.status,
         allowedFrom: [input.expectedStatus],
@@ -151,21 +141,38 @@ export function createPostgresqlNodeRunLifecycleParticipantInTx(
   })
 }
 
-export class PostgresqlNodeRunLifecyclePersistence implements NodeRunLifecyclePersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async mint(input: NodeRunMintInput): Promise<string> {
-    const { executionContext } = input
-    return await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    const { executionContext, outputs, ...request } = input
+    return await withTaskExecutionWrite(this.db, async (tx) => {
       await fence(tx, input.taskId, executionContext, Date.now())
-      return await createNodeRunMintParticipantInTx(tx).mint(input)
+      const nodeRunId = await createNodeRunMintParticipantInTx(tx).mint(request)
+      // 初始输出与行同一事务：见端口注释（io-virtual 行不得在没有输出的状态下被看见）。
+      if (outputs !== undefined && outputs.length > 0) {
+        await tx
+          .insert(nodeRunOutputs)
+          .values(
+            outputs.map((output) => ({
+              nodeRunId,
+              portName: output.portName,
+              content: output.content,
+              kind: output.kind ?? null,
+              archiveJson: output.archiveJson ?? null,
+              active: output.active ?? true,
+            })),
+          )
+          .run()
+      }
+      return nodeRunId
     })
   }
 
   async transition(
     input: Parameters<NodeRunLifecyclePersistence['transition']>[0],
   ): ReturnType<NodeRunLifecyclePersistence['transition']> {
-    return await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    return await withTaskExecutionWrite(this.db, async (tx) => {
       const row = await rowForUpdate(tx, input.nodeRunId)
       await fence(tx, row.taskId, input.executionContext, Date.now())
       const to = nextNodeRunStatus(row.status, input.event)
@@ -192,10 +199,10 @@ export class PostgresqlNodeRunLifecyclePersistence implements NodeRunLifecyclePe
   async set(
     input: Parameters<NodeRunLifecyclePersistence['set']>[0],
   ): ReturnType<NodeRunLifecyclePersistence['set']> {
-    return await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    return await withTaskExecutionWrite(this.db, async (tx) => {
       const row = await rowForUpdate(tx, input.nodeRunId)
       await fence(tx, row.taskId, input.executionContext, Date.now())
-      return await createPostgresqlNodeRunLifecycleParticipantInTx(tx).set(input)
+      return await createNodeRunLifecycleParticipantInTx(tx).set(input)
     })
   }
 

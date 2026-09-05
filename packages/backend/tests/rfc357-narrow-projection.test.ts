@@ -79,14 +79,13 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
     expect(shared).toContain('function normalizeItem(')
     expect(shared).toContain('createTaskExecutionCatalogSourceFactory')
 
-    for (const provider of ['sqlite', 'postgresql'] as const) {
-      const entry = `${provider}TaskCatalogSources.ts`
-      const source = codeOf(read('modules', 'task-execution', 'infrastructure', entry))
-      // 两个 provider 的文件只许装配：不许自己归一、不许自己数 facets、不许自己分页。
-      expect(source).toContain('createTaskExecutionCatalogSourceFactory')
-      for (const forbidden of ['normalizeItem', 'facets:', 'nextCursor', '.filter(', '.sort(']) {
-        expect(source, `${entry} must not re-implement ${forbidden}`).not.toContain(forbidden)
-      }
+    // RFC-359 W4-B1 批 2f：两个 provider 的装配薄壳合成一份 `taskCatalogSources.ts`，仍只许装配：
+    // 不许自己归一、不许自己数 facets、不许自己分页。
+    const entry = 'taskCatalogSources.ts'
+    const source = codeOf(read('modules', 'task-execution', 'infrastructure', entry))
+    expect(source).toContain('createTaskExecutionCatalogSourceFactory')
+    for (const forbidden of ['normalizeItem', 'facets:', 'nextCursor', '.filter(', '.sort(']) {
+      expect(source, `${entry} must not re-implement ${forbidden}`).not.toContain(forbidden)
     }
   })
 

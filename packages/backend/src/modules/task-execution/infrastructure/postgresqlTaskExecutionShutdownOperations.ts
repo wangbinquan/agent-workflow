@@ -4,7 +4,7 @@ import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import { taskExecutionOwners, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionShutdownOperations } from '../application/ports/taskExecutionShutdownOperations'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
@@ -49,7 +49,7 @@ export class PostgresqlTaskExecutionShutdownOperations implements TaskExecutionS
         )
         .returning({ id: tasks.id })
       if (updated[0] === undefined) return null
-      await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
+      await terminalizeTaskExecutionIntentsInTx(tx, {
         taskId: input.taskId,
         state: 'failed',
         failureCode: 'daemon-shutdown-survivor',
