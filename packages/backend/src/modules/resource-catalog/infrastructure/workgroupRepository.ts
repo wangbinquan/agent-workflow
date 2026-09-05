@@ -220,10 +220,7 @@ function detailOf(group: Workgroup): WorkgroupDetail {
   return { ...group, snapshotHash: snapshotHashOf(snapshotOf(group)) }
 }
 
-export function workgroupFromRows(
-  row: WorkgroupRow,
-  memberRows: readonly MemberRow[],
-): Workgroup {
+export function workgroupFromRows(row: WorkgroupRow, memberRows: readonly MemberRow[]): Workgroup {
   const members: WorkgroupMember[] = [...memberRows]
     .sort(
       (left, right) =>
@@ -409,29 +406,31 @@ async function insertWorkgroup(
     readonly now: number
   },
 ): Promise<WorkgroupRow> {
-  const row = (await transaction
-    .insert(workgroups)
-    .values({
-      id: input.id,
-      name: input.document.name,
-      description: input.document.description,
-      instructions: input.document.instructions,
-      mode: input.document.mode,
-      outputContract: resolveWorkgroupOutputContract(input.document.outputContract),
-      leaderMemberId: input.leaderMemberId,
-      shareOutputs: input.document.switches.shareOutputs,
-      directMessages: input.document.switches.directMessages,
-      blackboard: input.document.switches.blackboard,
-      maxRounds: input.document.maxRounds,
-      completionGate: input.document.completionGate,
-      clarifyBudget: input.document.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-      fanOut: input.document.fanOut ?? false,
-      version: 1,
-      ...input.initialAcl,
-      createdAt: input.now,
-      updatedAt: input.now,
-    })
-    .returning())[0]
+  const row = (
+    await transaction
+      .insert(workgroups)
+      .values({
+        id: input.id,
+        name: input.document.name,
+        description: input.document.description,
+        instructions: input.document.instructions,
+        mode: input.document.mode,
+        outputContract: resolveWorkgroupOutputContract(input.document.outputContract),
+        leaderMemberId: input.leaderMemberId,
+        shareOutputs: input.document.switches.shareOutputs,
+        directMessages: input.document.switches.directMessages,
+        blackboard: input.document.switches.blackboard,
+        maxRounds: input.document.maxRounds,
+        completionGate: input.document.completionGate,
+        clarifyBudget: input.document.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
+        fanOut: input.document.fanOut ?? false,
+        version: 1,
+        ...input.initialAcl,
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .returning()
+  )[0]
   if (row === undefined) throw new Error('workgroup insert returned no row')
   return row
 }
@@ -464,10 +463,13 @@ async function assertNameAvailableInTransaction(
   nextName: string,
 ): Promise<void> {
   if (current.name === nextName) return
-  const collision = (await transaction
-    .select({ id: workgroups.id })
-    .from(workgroups)
-    .where(ownerScopedNameWhere(current.ownerUserId ?? null, nextName, current.id)).limit(1))[0]
+  const collision = (
+    await transaction
+      .select({ id: workgroups.id })
+      .from(workgroups)
+      .where(ownerScopedNameWhere(current.ownerUserId ?? null, nextName, current.id))
+      .limit(1)
+  )[0]
   if (collision !== undefined) {
     throw new ConflictError(
       'workgroup-name-in-use',
@@ -487,11 +489,9 @@ export function createWorkgroupRepository(
   }
   async function get(id: string): Promise<WorkgroupDetail | null> {
     return runResourceCatalogTransaction(db, async (transaction) => {
-      const row = (await transaction
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.id, id))
-        .limit(1))[0]
+      const row = (
+        await transaction.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
+      )[0]
       if (row === undefined) return null
       const members = await transaction
         .select()
@@ -540,10 +540,13 @@ export function createWorkgroupRepository(
           await assertHumansActive(transaction, input.document.members)
           await deps.assertAgentIdsUsableInTransaction(transaction, input.authority, ids)
           const names = await agentNames(transaction, ids)
-          const collision = (await transaction
-            .select({ id: workgroups.id })
-            .from(workgroups)
-            .where(ownerScopedNameWhere(input.initialAcl.ownerUserId, input.document.name)).limit(1))[0]
+          const collision = (
+            await transaction
+              .select({ id: workgroups.id })
+              .from(workgroups)
+              .where(ownerScopedNameWhere(input.initialAcl.ownerUserId, input.document.name))
+              .limit(1)
+          )[0]
           if (collision !== undefined) {
             throw new ConflictError(
               'workgroup-name-in-use',
@@ -584,24 +587,30 @@ export function createWorkgroupRepository(
     async copy(input): Promise<WorkgroupDetail> {
       try {
         return await runResourceCatalogTransaction(db, async (transaction) => {
-          const aclRow = (await transaction
-            .select({
-              id: workgroups.id,
-              ownerUserId: workgroups.ownerUserId,
-              visibility: workgroups.visibility,
-            })
-            .from(workgroups)
-            .where(eq(workgroups.id, input.request.id)).limit(1))[0]
+          const aclRow = (
+            await transaction
+              .select({
+                id: workgroups.id,
+                ownerUserId: workgroups.ownerUserId,
+                visibility: workgroups.visibility,
+              })
+              .from(workgroups)
+              .where(eq(workgroups.id, input.request.id))
+              .limit(1)
+          )[0]
           if (
             aclRow === undefined ||
             !(await deps.canViewInTransaction(transaction, input.authority, aclRow))
           ) {
             notFound(input.request.id)
           }
-          const row = (await transaction
-            .select()
-            .from(workgroups)
-            .where(eq(workgroups.id, input.request.id)).limit(1))[0]
+          const row = (
+            await transaction
+              .select()
+              .from(workgroups)
+              .where(eq(workgroups.id, input.request.id))
+              .limit(1)
+          )[0]
           if (row === undefined) notFound(input.request.id)
           const currentMembers = await transaction
             .select()
@@ -663,11 +672,9 @@ export function createWorkgroupRepository(
       authority: WorkgroupOperationContext,
       input: UpdateWorkgroupCatalogInput,
     ): Promise<WorkgroupSaveResult> {
-      const preflight = (await db
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.id, input.id))
-        .limit(1))[0]
+      const preflight = (
+        await db.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
+      )[0]
       if (preflight === undefined) notFound(input.id)
       const snapshot = normalizeSnapshot(input.update.snapshot, preflight.outputContract)
       const submittedBytes = serializeWorkgroupEditableSnapshotV1(snapshot)
@@ -683,10 +690,9 @@ export function createWorkgroupRepository(
         new Set(currentMembers.flatMap((member) => (member.agentId ? [member.agentId] : []))),
       )
       return runResourceCatalogTransaction(db, async (transaction) => {
-        const row = (await transaction
-          .select()
-          .from(workgroups)
-          .where(eq(workgroups.id, input.id)).limit(1))[0]
+        const row = (
+          await transaction.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
+        )[0]
         if (row === undefined) notFound(input.id)
         const access = await deps.resolveAccessInTransaction(transaction, authority, row)
         assertEditAccess(access, input.id)
@@ -748,29 +754,34 @@ export function createWorkgroupRepository(
           : null
         const nextLeaderId =
           replacement === null ? row.leaderMemberId : leaderMemberId(snapshot, replacement)
-        const updated = (await transaction
-          .update(workgroups)
-          .set({
-            name: snapshot.name,
-            description: snapshot.description,
-            instructions: snapshot.instructions,
-            mode: snapshot.mode,
-            outputContract: resolveWorkgroupOutputContract(snapshot.outputContract),
-            leaderMemberId: nextLeaderId,
-            shareOutputs: snapshot.switches.shareOutputs,
-            directMessages: snapshot.switches.directMessages,
-            blackboard: snapshot.switches.blackboard,
-            maxRounds: snapshot.maxRounds,
-            completionGate: snapshot.completionGate,
-            clarifyBudget: snapshot.clarifyBudget,
-            fanOut: snapshot.fanOut,
-            version: row.version + 1,
-            updatedAt: now,
-          })
-          .where(
-            and(eq(workgroups.id, input.id), eq(workgroups.version, input.update.expectedVersion)),
-          )
-          .returning())[0]
+        const updated = (
+          await transaction
+            .update(workgroups)
+            .set({
+              name: snapshot.name,
+              description: snapshot.description,
+              instructions: snapshot.instructions,
+              mode: snapshot.mode,
+              outputContract: resolveWorkgroupOutputContract(snapshot.outputContract),
+              leaderMemberId: nextLeaderId,
+              shareOutputs: snapshot.switches.shareOutputs,
+              directMessages: snapshot.switches.directMessages,
+              blackboard: snapshot.switches.blackboard,
+              maxRounds: snapshot.maxRounds,
+              completionGate: snapshot.completionGate,
+              clarifyBudget: snapshot.clarifyBudget,
+              fanOut: snapshot.fanOut,
+              version: row.version + 1,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(workgroups.id, input.id),
+                eq(workgroups.version, input.update.expectedVersion),
+              ),
+            )
+            .returning()
+        )[0]
         if (updated === undefined) {
           throw staleConflictError('workgroup', `workgroup '${input.id}' changed; reload`, {
             current: currentRevision,
@@ -804,10 +815,9 @@ export function createWorkgroupRepository(
       input: ValidatedWorkgroupDeleteInput,
     ): Promise<WorkgroupDeleteResult> {
       return runResourceCatalogTransaction(db, async (transaction) => {
-        const row = (await transaction
-          .select()
-          .from(workgroups)
-          .where(eq(workgroups.id, input.id)).limit(1))[0]
+        const row = (
+          await transaction.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
+        )[0]
         if (row === undefined) notFound(input.id)
         assertGovernAccess(
           await deps.resolveAccessInTransaction(transaction, authority, row),
@@ -868,15 +878,17 @@ export function createWorkgroupRepository(
             await deps.listGrantedUserIdsInTransaction(transaction, input.id),
           ),
         }
-        const deleted = (await transaction
-          .delete(workgroups)
-          .where(
-            and(
-              eq(workgroups.id, input.id),
-              eq(workgroups.version, input.deletion.expectedVersion),
-            ),
-          )
-          .returning({ id: workgroups.id }))[0]
+        const deleted = (
+          await transaction
+            .delete(workgroups)
+            .where(
+              and(
+                eq(workgroups.id, input.id),
+                eq(workgroups.version, input.deletion.expectedVersion),
+              ),
+            )
+            .returning({ id: workgroups.id })
+        )[0]
         if (deleted === undefined) {
           throw staleConflictError('workgroup', `workgroup '${input.id}' changed; reload`)
         }

@@ -41,6 +41,10 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 
 /** 该文件里是否**调用**了这个名字（AST，不是文本——注释里提到不算）。 */
 function callsFunction(rel: string, text: string, name: string): boolean {
+  // 名字连字面量都不出现的文件不可能调用它——先做一次 substring 过滤再进 AST。
+  // 全量源码逐个 createSourceFile 在满载的 macOS runner 上要 5s+（2026-09-05 CI 单点红是超时，
+  // 不是断言失败）；预过滤把解析量从「整棵 src」降到「真提到这个名字的那几个文件」，判据仍是 AST。
+  if (!text.includes(name)) return false
   const source = ts.createSourceFile(rel, text, ts.ScriptTarget.ES2022, true)
   let found = false
   const visit = (node: ts.Node): void => {

@@ -111,9 +111,7 @@ describe('RFC-345 classic facade provider neutralization', () => {
   })
 
   test('classic PostgreSQL compositions remain native and provider-selected', () => {
-    for (const [aggregate, operationFile] of [
-      ['Skill', 'skillOperations'],
-    ] as const) {
+    for (const [aggregate, operationFile] of [['Skill', 'skillOperations']] as const) {
       const composition = source(`src/modules/resource-catalog/composition/${operationFile}.ts`)
       const repository = source(
         `src/modules/resource-catalog/infrastructure/postgresql${aggregate}Repository.ts`,

@@ -413,9 +413,9 @@ describe('RFC-231 private create invariant', () => {
         'initialPrivateResourceAcl(authority.user.id)',
       )
     }
-    expect(
-      sources.get('modules/resource-catalog/infrastructure/workgroupRepository.ts'),
-    ).toContain('...input.initialAcl')
+    expect(sources.get('modules/resource-catalog/infrastructure/workgroupRepository.ts')).toContain(
+      '...input.initialAcl',
+    )
     for (const file of ['modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts']) {
       expect(sources.get(file)).toContain('initialBuiltinResourceAcl')
     }

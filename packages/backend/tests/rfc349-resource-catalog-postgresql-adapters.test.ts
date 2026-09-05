@@ -55,13 +55,13 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     const composition = source('src/modules/resource-catalog/composition/workgroupOperations.ts')
     expect(repository).toContain('ProviderNeutralDatabase')
     expect(repository).toContain('runResourceCatalogTransaction')
-    expect(repository).not.toMatch(
-      /PostgresqlDatabaseClient|DbClient|dbTxSync|createSqlite/,
-    )
+    expect(repository).not.toMatch(/PostgresqlDatabaseClient|DbClient|dbTxSync|createSqlite/)
     expect(composition).toContain('composeWorkgroupCatalogFromAdapters')
     expect(composition).toContain('createWorkgroupRepository(')
     expect(composition).toContain('export function composeWorkgroupCatalog(')
-    expect(composition).not.toMatch(/composePostgresqlWorkgroupCatalog|createSqliteWorkgroupRepository/)
+    expect(composition).not.toMatch(
+      /composePostgresqlWorkgroupCatalog|createSqliteWorkgroupRepository/,
+    )
   })
 
   test('composition exposes exact adapter injection without public DB leakage', () => {

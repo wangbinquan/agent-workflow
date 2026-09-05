@@ -97,9 +97,18 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       initialAcl: initialAcl(owner.id),
       now: T0,
     })
-    expect(created).toMatchObject({ name, version: 1, ownerUserId: owner.id, visibility: 'private' })
+    expect(created).toMatchObject({
+      name,
+      version: 1,
+      ownerUserId: owner.id,
+      visibility: 'private',
+    })
     expect(created.members).toHaveLength(1)
-    expect(created.members[0]).toMatchObject({ memberType: 'agent', agentId, displayName: 'worker' })
+    expect(created.members[0]).toMatchObject({
+      memberType: 'agent',
+      agentId,
+      displayName: 'worker',
+    })
     expect(created.members[0]?.agentName).toMatch(/^agent-/)
     expect(created.snapshotHash).toHaveLength(64)
     expect((await repository.get(created.id))?.id).toBe(created.id)
@@ -139,7 +148,12 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
     ).toBe('workgroup-member-agent-invalid')
     // 引用可用性判定自身：不可见的 agent 被列出，grandfathered 的不再重审。
     expect(
-      await resolveAgentIdsUsable(harness.db, owner.authority, [agentId, privateAgentOfStranger], new Set()),
+      await resolveAgentIdsUsable(
+        harness.db,
+        owner.authority,
+        [agentId, privateAgentOfStranger],
+        new Set(),
+      ),
     ).toEqual([privateAgentOfStranger])
     expect(
       await resolveAgentIdsUsable(
@@ -167,7 +181,10 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       await codeOf(() =>
         repository.copy({
           authority: owner.authority,
-          request: { id: created.id, copy: { expectedVersion: 1, expectedSnapshotHash: 'f'.repeat(64) } },
+          request: {
+            id: created.id,
+            copy: { expectedVersion: 1, expectedSnapshotHash: 'f'.repeat(64) },
+          },
           id: ulid(),
           now: T0 + 1,
           initialAcl: initialAcl(owner.id),
@@ -176,7 +193,10 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
     ).toBe(staleConflictError('workgroup', 'x').code)
     const copy = await repository.copy({
       authority: owner.authority,
-      request: { id: created.id, copy: { expectedVersion: 1, expectedSnapshotHash: created.snapshotHash } },
+      request: {
+        id: created.id,
+        copy: { expectedVersion: 1, expectedSnapshotHash: created.snapshotHash },
+      },
       id: ulid(),
       now: T0 + 1,
       initialAcl: initialAcl(owner.id),
@@ -280,12 +300,22 @@ test('源码锁：Workgroup 聚合没有 provider 命名的仓库 / 引用可用
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
-    expect(source, neutral).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|DbTxSync/)
-    expect(source, neutral).not.toMatch(/composeSqlite|composePostgresql|createSqlite|createPostgresql/)
+    expect(source, neutral).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|DbTxSync/,
+    )
+    expect(source, neutral).not.toMatch(
+      /composeSqlite|composePostgresql|createSqlite|createPostgresql/,
+    )
   }
-  for (const file of ['src/server.ts', 'src/cli/start.ts', 'src/cli/postgresqlDaemonApplication.ts']) {
+  for (const file of [
+    'src/server.ts',
+    'src/cli/start.ts',
+    'src/cli/postgresqlDaemonApplication.ts',
+  ]) {
     const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(source, file).toContain('composeWorkgroupCatalog({')
-    expect(source, file).not.toMatch(/composePostgresqlWorkgroupCatalog|composeSqliteWorkgroupCatalog/)
+    expect(source, file).not.toMatch(
+      /composePostgresqlWorkgroupCatalog|composeSqliteWorkgroupCatalog/,
+    )
   }
 })
