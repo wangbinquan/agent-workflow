@@ -1,13 +1,15 @@
+// RFC-359 W4-B3 —— 评审侧的任务关系解析：一份实现，两个 provider 共用（取 SQLite 的单次成员查询形态）。
+
 import { and, eq, inArray, or } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks } from '@/db/schema'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
 import type { ReviewTaskAccessPort } from '../application/ports/reviewTaskAccess'
 import type { ReviewActor } from '../public/types'
 
-export function createSqliteReviewTaskAccessPort(db: DbClient): ReviewTaskAccessPort {
+export function createReviewTaskAccessPort(db: ProviderNeutralDatabase): ReviewTaskAccessPort {
   return {
     canManageReviewers(actor, taskOwnerUserId) {
       return hasResourceAclBypass(actor) || taskOwnerUserId === actor.user.id

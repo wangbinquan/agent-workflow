@@ -1,12 +1,14 @@
+// RFC-359 W4-B3 —— 人工门 continuation 的恢复查询：一份实现，两个 provider 共用。
+
 import { and, asc, eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import { taskExecutionIntents } from '@/db/schema'
 import { isLegacyTaskGateContinuationPayload } from '@/modules/task-execution/public/participants'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { HumanGateContinuationRecoveryQueries } from '../application/ports/humanGateContinuationRecovery'
 
-export function createSqliteHumanGateContinuationRecoveryQueries(
-  db: DbClient,
+export function createHumanGateContinuationRecoveryQueries(
+  db: ProviderNeutralDatabase,
 ): HumanGateContinuationRecoveryQueries {
   return {
     async listPending() {
@@ -24,6 +26,7 @@ export function createSqliteHumanGateContinuationRecoveryQueries(
           ),
         )
         .orderBy(asc(taskExecutionIntents.createdAt), asc(taskExecutionIntents.id))
+
       return rows
         .filter((row) => !isLegacyTaskGateContinuationPayload(row.payloadJson))
         .map(({ taskId, continuationRef }) => ({ taskId, continuationRef }))

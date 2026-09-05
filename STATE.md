@@ -127,6 +127,7 @@
 > **W4-B2 批 b 已落**：ACL 表注册 + 可见性谓词 + grant 读端口一份（`resourceVisibility.ts`），目录概览 / 目录摘要查询合一
 > （搜索谓词两方言同一句 `instr(lower(…))`），`rfc359-w4-b2b-adapters.test.ts` 两引擎各跑。B2 剩 21 对。
 > **W4-B2 批 c 已落**：MCP playground 持久化（约两千行）+ 原生会话租约两对合一，`rfc359-w4-b2c-adapters.test.ts` 两引擎各跑。B2 剩 19 对。
+> **W4-B3 批 a 已落**：collaboration 六对（反馈存储 / 评审人存储 / 任务可见性 ×2 / continuation 恢复 / 终态清扫）合一，`rfc359-w4-b3a-adapters.test.ts` 两引擎各跑；PG daemon 直连 collaboration infrastructure 的一条 R1 债还清。B3 剩 13 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

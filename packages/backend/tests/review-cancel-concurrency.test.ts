@@ -39,7 +39,7 @@ import {
   cancelTask,
 } from '../src/services/task'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
-import { createSqliteHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep'
+import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
   TASK_CHANNEL,
   TASKS_LIST_CHANNEL,
@@ -187,7 +187,7 @@ async function seedHarness(options: { multiDoc?: boolean } = {}): Promise<Harnes
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onTerminalTask(hookDb, hookTaskId, to) {
       void sealOpenHumanGatesForTask(
-        createSqliteHumanGateTerminalSweepCommand(hookDb),
+        createHumanGateTerminalSweepCommand(hookDb),
         hookTaskId,
         `task-${to}`,
       )

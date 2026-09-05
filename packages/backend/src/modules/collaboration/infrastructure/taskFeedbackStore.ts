@@ -1,7 +1,9 @@
+// RFC-359 W4-B3 —— 任务反馈存储：一份实现，两个 provider 共用。
+
 import { asc, desc, eq } from 'drizzle-orm'
 import type { TaskFeedback } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import { taskFeedback, tasks } from '@/db/schema'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   NewTaskFeedbackRecord,
   TaskFeedbackStore,
@@ -29,8 +31,8 @@ function rowToFeedback(row: TaskFeedbackRow): TaskFeedback {
   }
 }
 
-export class SqliteTaskFeedbackStore implements TaskFeedbackStore {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async loadTaskIdentity(taskId: string) {
     const row = (

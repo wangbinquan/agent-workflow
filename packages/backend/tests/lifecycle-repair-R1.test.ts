@@ -17,7 +17,7 @@ import { R1_OPTIONS } from '../src/services/lifecycleRepair/options-R1'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { cancelTask } from '../src/services/task'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
-import { createSqliteHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep'
+import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
   buildHarness,
   insertAlert,
@@ -481,7 +481,7 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
           void sealOpenHumanGatesForTask(
-            createSqliteHumanGateTerminalSweepCommand(db),
+            createHumanGateTerminalSweepCommand(db),
             taskId,
             `task-${to}`,
           )
@@ -526,7 +526,7 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
           void sealOpenHumanGatesForTask(
-            createSqliteHumanGateTerminalSweepCommand(db),
+            createHumanGateTerminalSweepCommand(db),
             taskId,
             `task-${to}`,
           )

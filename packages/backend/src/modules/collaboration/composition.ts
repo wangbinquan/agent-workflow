@@ -2,7 +2,12 @@
 // temporary service bridge until their constructors receive these dependencies.
 
 export { composeTaskExecutionHumanGateAdapter } from './composition/taskExecutionHumanGateAdapter'
-export { createSqliteCollaborationTaskAccessPort } from './infrastructure/sqliteCollaborationTaskAccess'
+// RFC-359 W4-B3：实现只有一份；provider 具名导出只做绑定（bootstrap 收敛后一并删）。
+export {
+  createCollaborationTaskAccessPort,
+  createCollaborationTaskAccessPort as createSqliteCollaborationTaskAccessPort,
+  createCollaborationTaskAccessPort as createPostgresqlCollaborationTaskAccessPort,
+} from './infrastructure/collaborationTaskAccess'
 export { planMembersReplacement } from './infrastructure/legacySqliteTaskCollab'
 export { createSqliteClarifyRepairParticipant } from './infrastructure/sqliteClarifyRepairParticipant'
 export { createPostgresqlClarifyRepairParticipant } from './infrastructure/postgresqlClarifyRepairParticipant'
@@ -18,10 +23,16 @@ export {
   createSqliteCollaborationCommittedEventProjection,
 } from './infrastructure/collaborationCommittedEventWsProjector'
 export { createPostgresqlCollaborationCommittedEventProjection } from './infrastructure/postgresqlCollaborationCommittedEventProjection'
-export { createSqliteHumanGateContinuationRecoveryQueries } from './infrastructure/sqliteHumanGateContinuationRecovery'
-export { createPostgresqlHumanGateContinuationRecoveryQueries } from './infrastructure/postgresqlHumanGateContinuationRecovery'
-export { createSqliteHumanGateTerminalSweepCommand } from './infrastructure/sqliteHumanGateTerminalSweep'
-export { createPostgresqlHumanGateTerminalSweepCommand } from './infrastructure/postgresqlHumanGateTerminalSweep'
+export {
+  createHumanGateContinuationRecoveryQueries,
+  createHumanGateContinuationRecoveryQueries as createSqliteHumanGateContinuationRecoveryQueries,
+  createHumanGateContinuationRecoveryQueries as createPostgresqlHumanGateContinuationRecoveryQueries,
+} from './infrastructure/humanGateContinuationRecovery'
+export {
+  createHumanGateTerminalSweepCommand,
+  createHumanGateTerminalSweepCommand as createSqliteHumanGateTerminalSweepCommand,
+  createHumanGateTerminalSweepCommand as createPostgresqlHumanGateTerminalSweepCommand,
+} from './infrastructure/humanGateTerminalSweep'
 export { createCollaborationClarifyDraftEventPublisher } from './infrastructure/collaborationClarifyDraftEventPublisher'
 export {
   createPostgresqlCollaborationRouteOperations,

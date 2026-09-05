@@ -1,7 +1,9 @@
+// RFC-359 W4-B3 —— 评审节点评审人存储：一份实现，两个 provider 共用（替换走统一事务原语）。
+
 import { and, eq, inArray } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import { reviewNodeReviewers, users } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   ReviewNodeReviewerAssignmentInput,
   ReviewNodeReviewerRow,
@@ -9,7 +11,7 @@ import type {
 } from '../application/ports/reviewNodeReviewerStore'
 import type { UserPublic } from '@agent-workflow/shared'
 
-function toUserPublic(row: typeof users.$inferSelect): UserPublic {
+function publicUser(row: typeof users.$inferSelect): UserPublic {
   return {
     id: row.id,
     username: row.username,
@@ -19,11 +21,11 @@ function toUserPublic(row: typeof users.$inferSelect): UserPublic {
   }
 }
 
-export class SqliteReviewNodeReviewerStore implements ReviewNodeReviewerStore {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleReviewNodeReviewerStore implements ReviewNodeReviewerStore {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async isAssigned(taskId: string, reviewNodeId: string, userId: string): Promise<boolean> {
-    const row = await this.db
+    const rows = await this.db
       .select({ reviewerUserId: reviewNodeReviewers.reviewerUserId })
       .from(reviewNodeReviewers)
       .where(
@@ -34,7 +36,7 @@ export class SqliteReviewNodeReviewerStore implements ReviewNodeReviewerStore {
         ),
       )
       .limit(1)
-    return row.length > 0
+    return rows.length > 0
   }
 
   async listAssignedKeys(
@@ -63,7 +65,7 @@ export class SqliteReviewNodeReviewerStore implements ReviewNodeReviewerStore {
       .from(reviewNodeReviewers)
       .innerJoin(users, eq(users.id, reviewNodeReviewers.reviewerUserId))
       .where(eq(reviewNodeReviewers.taskId, taskId))
-    return rows.map((row) => ({ reviewNodeId: row.reviewNodeId, user: toUserPublic(row.user) }))
+    return rows.map((row) => ({ reviewNodeId: row.reviewNodeId, user: publicUser(row.user) }))
   }
 
   async activeUserIds(userIds: readonly string[]): Promise<ReadonlySet<string>> {
@@ -81,10 +83,11 @@ export class SqliteReviewNodeReviewerStore implements ReviewNodeReviewerStore {
     assignedByUserId: string,
     assignedAt: number,
   ): Promise<void> {
-    dbTxSync(this.db, (tx) => {
-      tx.delete(reviewNodeReviewers).where(eq(reviewNodeReviewers.taskId, taskId)).run()
+    await databaseSessionFor(this.db).transaction(async (tx) => {
+      await tx.delete(reviewNodeReviewers).where(eq(reviewNodeReviewers.taskId, taskId)).run()
       if (assignments.length === 0) return
-      tx.insert(reviewNodeReviewers)
+      await tx
+        .insert(reviewNodeReviewers)
         .values(
           assignments.map((assignment) => ({
             taskId,

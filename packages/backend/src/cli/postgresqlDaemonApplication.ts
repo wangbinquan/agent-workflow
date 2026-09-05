@@ -114,7 +114,7 @@ import {
   readCommittedReviewArtifactBody,
   resolveCollaborationTaskAccess,
 } from '@/modules/collaboration/public/queries'
-import { createPostgresqlCollaborationTaskAccessPort } from '@/modules/collaboration/infrastructure/postgresqlCollaborationTaskAccess'
+import { createPostgresqlCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composePostgresqlWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import {

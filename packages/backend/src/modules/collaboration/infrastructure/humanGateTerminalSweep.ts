@@ -1,18 +1,20 @@
+// RFC-359 W4-B3 —— 任务终态时的人工门清扫（澄清轮次封存 / 作废 + 挂起 run 取消 + node-statuses committed event）：
+// 一份实现，两个 provider 共用。SQLite 此前经 dbTxSync + 同步 committed-event 参与者，PG 经 SERIALIZABLE；现在同走统一写事务。
+
 import { and, eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRuns } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
-import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   HumanGateTerminalSweepCommand,
   HumanGateTerminalSweepResult,
 } from '../application/ports/humanGateTerminalSweep'
 
-export function createSqliteHumanGateTerminalSweepCommand(
-  db: DbClient,
+export function createHumanGateTerminalSweepCommand(
+  db: ProviderNeutralDatabase,
 ): HumanGateTerminalSweepCommand {
   return {
     async run(input) {
@@ -22,9 +24,8 @@ export function createSqliteHumanGateTerminalSweepCommand(
         canceledRuns: { nodeRunId: string; nodeId: string }[]
       } = { sealedSelfRounds: 0, abandonedCrossRounds: 0, canceledRuns: [] }
       const now = input.now ?? Date.now()
-      let eventRef: CommittedEventRef | null = null
-      dbTxSync(db, (tx) => {
-        const openRounds = tx
+      const eventRef = await databaseSessionFor(db).transaction(async (tx) => {
+        const openRounds = await tx
           .select({
             id: clarifyRounds.id,
             kind: clarifyRounds.kind,
@@ -35,27 +36,26 @@ export function createSqliteHumanGateTerminalSweepCommand(
           .where(
             and(eq(clarifyRounds.taskId, input.taskId), eq(clarifyRounds.status, 'awaiting_human')),
           )
-          .all()
         for (const round of openRounds) {
           if (round.kind === 'cross') {
-            tx.update(clarifyRounds)
+            await tx
+              .update(clarifyRounds)
               .set({ status: 'abandoned', abandonedAt: now })
               .where(
                 and(eq(clarifyRounds.id, round.id), eq(clarifyRounds.status, 'awaiting_human')),
               )
-              .run()
             result.abandonedCrossRounds += 1
           } else {
-            tx.update(clarifyRounds)
+            await tx
+              .update(clarifyRounds)
               .set({ status: 'canceled' })
               .where(
                 and(eq(clarifyRounds.id, round.id), eq(clarifyRounds.status, 'awaiting_human')),
               )
-              .run()
             result.sealedSelfRounds += 1
           }
           // rfc053-allow-direct-status-write -- provider terminal-sweep CAS
-          const parked = tx
+          const parked = await tx
             .update(nodeRuns)
             .set({ status: 'canceled', finishedAt: now, errorMessage: input.cause })
             .where(
@@ -65,49 +65,45 @@ export function createSqliteHumanGateTerminalSweepCommand(
               ),
             )
             .returning({ id: nodeRuns.id })
-            .all()
           if (parked.length > 0) {
             result.canceledRuns.push({
               nodeRunId: round.intermediaryNodeRunId,
               nodeId: round.intermediaryNodeId,
             })
           } else {
-            tx.update(nodeRuns)
+            await tx
+              .update(nodeRuns)
               .set({ errorMessage: input.cause })
               .where(
                 and(eq(nodeRuns.id, round.intermediaryNodeRunId), eq(nodeRuns.status, 'canceled')),
               )
-              .run()
           }
         }
         for (const status of ['awaiting_human', 'awaiting_review'] as const) {
           // rfc053-allow-direct-status-write -- provider terminal-sweep CAS
-          const rows = tx
+          const rows = await tx
             .update(nodeRuns)
             .set({ status: 'canceled', finishedAt: now, errorMessage: input.cause })
             .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.status, status)))
             .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-            .all()
           for (const row of rows) {
             result.canceledRuns.push({ nodeRunId: row.id, nodeId: row.nodeId })
           }
         }
-        if (result.canceledRuns.length > 0) {
-          eventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
-            taskId: input.taskId,
-            reason: 'terminal-reconcile',
-            nodeChanges: result.canceledRuns.map((run) => ({
-              nodeRunId: run.nodeRunId,
-              nodeId: run.nodeId,
-              status: 'canceled',
-              cause: input.cause,
-            })),
-            occurredAt: now,
-            identity: {
-              operationRef: `terminal-sweep:${input.taskId}:${input.cause}`,
-            },
-          })
-        }
+        if (result.canceledRuns.length === 0) return null
+        return await appendTaskNodeStatusesCommittedEvent(tx, {
+          taskId: input.taskId,
+          nodeChanges: result.canceledRuns.map((run) => ({
+            nodeRunId: run.nodeRunId,
+            nodeId: run.nodeId,
+            status: 'canceled',
+            cause: input.cause,
+          })),
+          occurredAt: now,
+          identity: {
+            operationRef: `terminal-sweep:${input.taskId}:${input.cause}`,
+          },
+        })
       })
       await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
       return result satisfies HumanGateTerminalSweepResult

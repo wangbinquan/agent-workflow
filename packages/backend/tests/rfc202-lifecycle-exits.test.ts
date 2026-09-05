@@ -22,7 +22,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
-import { createSqliteHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep'
+import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { cancelTask } from '../src/services/task'
@@ -137,7 +137,7 @@ describe('RFC-202 T2 — terminal sweep', () => {
     await seedClarifyRound(db, taskId, 'self', selfRun)
     await seedClarifyRound(db, taskId, 'cross', crossRun)
 
-    const sweep = createSqliteHumanGateTerminalSweepCommand(db)
+    const sweep = createHumanGateTerminalSweepCommand(db)
     const result = await sealOpenHumanGatesForTask(sweep, taskId, 'task-canceled')
     expect(result.sealedSelfRounds).toBe(1)
     expect(result.abandonedCrossRounds).toBe(1)
@@ -211,14 +211,20 @@ describe('RFC-202 T2 — terminal sweep', () => {
 describe('RFC-202 T3 — cancel from awaiting_*', () => {
   let db: DbClient
   let uninstallAfterCommitPump: (() => void) | null = null
+  // RFC-359 W4-B3：终态清扫只有一份异步实现（统一事务原语），提交后钩子里是 fire-and-forget；
+  // 用例要断言清扫结果就得等它落定，而不是假设 SQLite 侧仍是同步完成。
+  let terminalSweeps: Promise<unknown>[] = []
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    terminalSweeps = []
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onTerminalTask(hookDb, taskId) {
-        void sealOpenHumanGatesForTask(
-          createSqliteHumanGateTerminalSweepCommand(hookDb),
-          taskId,
-          'task-canceled',
+        terminalSweeps.push(
+          sealOpenHumanGatesForTask(
+            createHumanGateTerminalSweepCommand(hookDb),
+            taskId,
+            'task-canceled',
+          ),
         )
       },
     })
@@ -233,6 +239,7 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
     await seedClarifyRound(db, taskId, 'self', run)
     const out = await cancelTask(db, taskId)
     expect(out.status).toBe('canceled')
+    await Promise.all(terminalSweeps)
     const round = db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all()[0]!
     expect(round.status).toBe('canceled')
     const runRow = db.select().from(nodeRuns).where(eq(nodeRuns.id, run)).all()[0]!

@@ -1,9 +1,11 @@
+// RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
+
 import { and, desc, eq, inArray, or } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { clarifyRounds, nodeRuns, taskCollaborators, taskQuestions, tasks } from '@/db/schema'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   CollaborationTaskAccessDecision,
   CollaborationTaskAccessPort,
@@ -20,7 +22,7 @@ function snapshot(row: typeof tasks.$inferSelect): CollaborationTaskSnapshot {
 }
 
 async function resolve(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   actor: ReviewActor,
   row: typeof tasks.$inferSelect | undefined,
 ): Promise<CollaborationTaskAccessDecision> {
@@ -29,7 +31,7 @@ async function resolve(
     .select({ role: taskCollaborators.role })
     .from(taskCollaborators)
     .where(and(eq(taskCollaborators.taskId, row.id), eq(taskCollaborators.userId, actor.user.id)))
-    .all()
+
   const visible =
     actor.permissions.has('tasks:read:all') ||
     row.ownerUserId === actor.user.id ||
@@ -45,8 +47,8 @@ async function resolve(
   }
 }
 
-export function createPostgresqlCollaborationTaskAccessPort(
-  db: PostgresqlDatabaseClient,
+export function createCollaborationTaskAccessPort(
+  db: ProviderNeutralDatabase,
 ): CollaborationTaskAccessPort {
   return {
     async resolveTask(actor, taskId) {
@@ -118,7 +120,7 @@ export function createPostgresqlCollaborationTaskAccessPort(
                   ),
                 ),
           )
-          .all()
+
         for (const row of rows) result.add(row.id)
       }
       return result

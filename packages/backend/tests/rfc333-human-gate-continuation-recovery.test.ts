@@ -7,7 +7,7 @@ import {
   recoverPendingHumanGateContinuations,
   type PendingHumanGateContinuation,
 } from '@/services/humanGateContinuationRecovery'
-import { createSqliteHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery'
+import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
 import { reapOrphanRuns } from '@/services/orphans'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { MIGRATIONS } from './migration-freeze'
@@ -223,7 +223,7 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
     const calls: PendingHumanGateContinuation[] = []
 
     const result = await recoverPendingHumanGateContinuations({
-      queries: createSqliteHumanGateContinuationRecoveryQueries(db),
+      queries: createHumanGateContinuationRecoveryQueries(db),
       wake: async (continuation) => {
         calls.push(continuation)
         if (continuation.continuationRef === 'intent-gate-b') {

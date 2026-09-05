@@ -2586,11 +2586,7 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'GateDecisionTransaction+NodeRunLifecycleParticipantInTx',
     }
   }
-  if (
-    /modules\/collaboration\/infrastructure\/(?:postgresql|sqlite)HumanGateTerminalSweep/.test(
-      value,
-    )
-  ) {
+  if (/modules\/collaboration\/infrastructure\/humanGateTerminalSweep/.test(value)) {
     return {
       authorityKind: 'terminal-maintenance',
       controlSubtype: null,

@@ -97,6 +97,7 @@ describe('RFC-202 source locks', () => {
       'packages/backend/src/modules/task-execution/application/taskLifecycleConsumers.ts',
     )
     expect(start).toContain('createTaskLifecycleDurableConsumerDefinitions')
+    // RFC-359 W4-B3：清扫命令只有一份实现，两个 bootstrap 仍经各自的具名绑定装配。
     expect(start).toContain('createSqliteHumanGateTerminalSweepCommand')
     expect(start).toContain('createPostgresqlHumanGateTerminalSweepCommand')
     expect(start).toContain('closeTerminalGates(taskId, status)')

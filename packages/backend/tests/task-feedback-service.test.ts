@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memoryDistillJobs, taskFeedback, tasks, workflows } from '../src/db/schema'
 import { TaskFeedbackService } from '../src/modules/collaboration/application/taskFeedback'
-import { SqliteTaskFeedbackStore } from '../src/modules/collaboration/infrastructure/sqliteTaskFeedbackStore'
+import { DrizzleTaskFeedbackStore } from '../src/modules/collaboration/infrastructure/taskFeedbackStore'
 import type { ReviewActor } from '../src/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '../src/modules/memory/public/participants'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -82,7 +82,7 @@ describe('createTaskFeedback', () => {
   let service: TaskFeedbackService
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
-    service = new TaskFeedbackService(new SqliteTaskFeedbackStore(db), {
+    service = new TaskFeedbackService(new DrizzleTaskFeedbackStore(db), {
       canManageReviewers: () => true,
       resolveRelationship: async () => ({
         taskVisible: true,

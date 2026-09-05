@@ -26,16 +26,12 @@ import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGa
 import { SqliteHumanGateOperationStore } from '../infrastructure/sqliteHumanGateOperationStore'
 import { SqliteManualQuestionOpenWriter } from '../infrastructure/sqliteManualQuestionOpenWriter'
 import { DatabaseCommittedReviewArtifactReader } from '../infrastructure/committedReviewArtifactReader'
-import { SqliteReviewNodeReviewerStore } from '../infrastructure/sqliteReviewNodeReviewerStore'
-import { createSqliteReviewTaskAccessPort } from '../infrastructure/sqliteReviewTaskAccess'
-import { SqliteTaskFeedbackStore } from '../infrastructure/sqliteTaskFeedbackStore'
+import { DrizzleReviewNodeReviewerStore } from '../infrastructure/reviewNodeReviewerStore'
+import { createReviewTaskAccessPort } from '../infrastructure/reviewTaskAccess'
+import { DrizzleTaskFeedbackStore } from '../infrastructure/taskFeedbackStore'
 import { PostgresqlClarifyQuestionSnapshotReader } from '../infrastructure/postgresqlClarifyQuestionSnapshotReader'
 import { PostgresqlManualQuestionOpenWriter } from '../infrastructure/postgresqlManualQuestionOpenWriter'
-import { PostgresqlReviewNodeReviewerStore } from '../infrastructure/postgresqlReviewNodeReviewerStore'
-import { createPostgresqlReviewTaskAccessPort } from '../infrastructure/postgresqlReviewTaskAccess'
-import { PostgresqlTaskFeedbackStore } from '../infrastructure/postgresqlTaskFeedbackStore'
-import { createSqliteCollaborationTaskAccessPort } from '../infrastructure/sqliteCollaborationTaskAccess'
-import { createPostgresqlCollaborationTaskAccessPort } from '../infrastructure/postgresqlCollaborationTaskAccess'
+import { createCollaborationTaskAccessPort } from '../infrastructure/collaborationTaskAccess'
 import { createSqliteClarifyDirectiveStore } from '../infrastructure/sqliteClarifyDirectiveStore'
 import { createPostgresqlClarifyDirectiveStore } from '../infrastructure/postgresqlClarifyDirectiveStore'
 
@@ -71,14 +67,14 @@ export function createCollaborationCommandContext(
   const operationTransactions = new SqliteHumanGateOperationStore()
   return createCollaborationCommandContextFromPersistence({
     ...input,
-    taskAccess: createSqliteCollaborationTaskAccessPort(input.db),
-    reviewTaskAccess: input.reviewTaskAccess ?? createSqliteReviewTaskAccessPort(input.db),
+    taskAccess: createCollaborationTaskAccessPort(input.db),
+    reviewTaskAccess: input.reviewTaskAccess ?? createReviewTaskAccessPort(input.db),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
       clarifyQuestions: new SqliteClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new SqliteManualQuestionOpenWriter(input.db, operationTransactions),
-      reviewers: new SqliteReviewNodeReviewerStore(input.db),
-      feedback: new SqliteTaskFeedbackStore(input.db),
+      reviewers: new DrizzleReviewNodeReviewerStore(input.db),
+      feedback: new DrizzleTaskFeedbackStore(input.db),
       clarifyDirectives: createSqliteClarifyDirectiveStore(input.db),
       ...(input.appHome === undefined
         ? {}
@@ -100,14 +96,14 @@ export function createPostgresqlCollaborationCommandContext(
 ): CollaborationCommandContext {
   return createCollaborationCommandContextFromPersistence({
     ...input,
-    taskAccess: createPostgresqlCollaborationTaskAccessPort(input.db),
-    reviewTaskAccess: input.reviewTaskAccess ?? createPostgresqlReviewTaskAccessPort(input.db),
+    taskAccess: createCollaborationTaskAccessPort(input.db),
+    reviewTaskAccess: input.reviewTaskAccess ?? createReviewTaskAccessPort(input.db),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
       clarifyQuestions: new PostgresqlClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new PostgresqlManualQuestionOpenWriter(input.db),
-      reviewers: new PostgresqlReviewNodeReviewerStore(input.db),
-      feedback: new PostgresqlTaskFeedbackStore(input.db),
+      reviewers: new DrizzleReviewNodeReviewerStore(input.db),
+      feedback: new DrizzleTaskFeedbackStore(input.db),
       clarifyDirectives: createPostgresqlClarifyDirectiveStore(input.db),
       ...(input.appHome === undefined
         ? {}
