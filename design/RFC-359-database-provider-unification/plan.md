@@ -733,8 +733,17 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   - **事务隔离级别**：PG 侧的 `withPostgresqlSerializableTaskExecution`（SERIALIZABLE + 40001 重试）
     与中立的 `withTaskExecutionWrite`（`databaseSessionFor(db).transaction`，PG 上是 READ COMMITTED）
     不是同一条路。中立模块的注释论证过「owner 围栏本身是 owner 行上的条件 UPDATE，行锁已把同一任务的
-    写手串起来」，但**每一对都要单独确认它没有跨行不变量**才能降级；`RuntimeSessionLeaseOperations`
-    的合一就卡在这一条上。
+    写手串起来」，但**每一对都要单独确认它没有跨行不变量**才能降级。
+
+    **`RuntimeSessionLeaseOperations` 的答案已经取证（结论：可以降级）**：
+    - 七个操作只碰 `runtime_session_leases` 与 `node_runs` 两张表；
+    - 每一处写入要么是主键作用域的 insert，要么带身份 + 状态谓词的 CAS
+      （`protocol` / `sessionId` / `leaseNodeRunId` / `leaseNonceDigest` / `resetPending` / `status`）；
+    - 唯一的「先查后写」竞态在 `claimNew`：租约表主键是 `(protocol, sessionId)`，而代码里**本来就有**
+      `if (constraintViolation(error)) fail('owner-conflict')` —— 也就是说它防重复认领靠的是主键 +
+      显式冲突映射，**不是靠 SERIALIZABLE**。
+    - 因此这一对可以按 D14–D18 同法合并（PG 异步实现改名成中立实现、SQLite 装配切过去），
+      **唯一要补的验收**：两引擎各跑一条并发 `claimNew`，断言恰好一个成功、另一个是 `owner-conflict`。
   - **同步 / 异步的闭包冻结**：`TaskExecutionResourceSnapshots` 的 SQLite 侧走
     `freezeTaskExecutionCallClosureSync`、PG 侧走 `...Async`，application 层同时留着两份冻结器；
     合一要先确认异步那份能覆盖同步那份的所有调用点。
