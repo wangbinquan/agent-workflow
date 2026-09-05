@@ -2076,8 +2076,8 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       }),
       writers: [
         anchor({
-          file: 'packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts',
-          symbol: 'createSqliteRuntimeStore',
+          file: 'packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts',
+          symbol: 'createRuntimePersistence',
           sourceToken: 'name: input.caseRecord.name',
         }),
       ],

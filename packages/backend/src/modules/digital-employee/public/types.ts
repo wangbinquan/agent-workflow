@@ -253,7 +253,7 @@ export {
  * RFC-317 T41（findings DE-02）—— 反应轮次的**只读**查询面。
  *
  * 为什么需要它：`employeeReactionRounds` 是 Digital Employee OS 的私表
- * （`infrastructure/sqliteRuntimeStore.ts` 是唯一写者：createRound / retryRound /
+ * （`infrastructure/runtimeStore.ts` 是唯一写者：createRound / retryRound /
  * settleRound）。development-automation 此前从 `@/db/schema` 直接把这张表拿过去查，
  * 一处读它冻结的 `planJson`，另一处按 `state === 'completed'` 过滤——**把 OS 的
  * 内部状态机枚举变成了一条没有声明、没有 schema、没有主人的事实合同**。

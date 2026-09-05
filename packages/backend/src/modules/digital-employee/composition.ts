@@ -32,8 +32,7 @@ import type {
 import { createDigitalEmployeeAuthoringPersistence } from './infrastructure/authoringStore'
 import type { DigitalEmployeeAuthoringPersistence } from './application/ports/authoringStore'
 import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
-import { createSqliteRuntimePersistence } from './infrastructure/sqliteRuntimeStore'
-import { createPostgresqlRuntimePersistence } from './infrastructure/postgresqlRuntimeStore'
+import { createRuntimePersistence } from './infrastructure/runtimeStore'
 import type { RuntimeCasePersistence } from './application/ports/runtimeStore'
 import {
   createDigitalEmployeeWriterCutoverOperations,
@@ -1076,7 +1075,7 @@ export function composeDigitalEmployee(
       options.typePackageDriftPolicy === 'draft-overlay'
         ? withTypePackageDraftOverlay(persisted)
         : persisted,
-    runtime: createSqliteRuntimePersistence(options.db),
+    runtime: createRuntimePersistence(options.db),
     inputUploads: createEmployeeInputUploadPersistence(options.db),
     migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
   })
@@ -1092,7 +1091,7 @@ export function composePostgresqlDigitalEmployee(
       options.typePackageDriftPolicy === 'draft-overlay'
         ? withTypePackageDraftOverlay(persisted)
         : persisted,
-    runtime: createPostgresqlRuntimePersistence(options.db),
+    runtime: createRuntimePersistence(options.db),
     inputUploads: createEmployeeInputUploadPersistence(options.db),
     migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
   })

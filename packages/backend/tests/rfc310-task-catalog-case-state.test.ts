@@ -3,14 +3,14 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { employeeCases, employeeContextRecords } from '@/db/schema'
-import { createSqliteRuntimeStore } from '@/modules/digital-employee/infrastructure/sqliteRuntimeStore'
+import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('RFC-310 digital-employee task catalog Case-state semantics', () => {
-  test('waiting Cases stay active while only blocked Cases require operator attention', () => {
+  test('waiting Cases stay active while only blocked Cases require operator attention', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = createSqliteRuntimeStore(db)
+    const store = createRuntimePersistence(db)
 
     seedCase(db, { id: 'active', state: 'active', updatedAt: 10 })
     seedCase(db, { id: 'waiting', state: 'waiting', updatedAt: 20 })
@@ -23,16 +23,16 @@ describe('RFC-310 digital-employee task catalog Case-state semantics', () => {
       updatedAt: 50,
     })
 
-    const all = store.listCasesPage({ view: 'all', cursor: null, limit: 100 })
+    const all = await store.listCasesPage({ view: 'all', cursor: null, limit: 100 })
     expect(all.facets).toEqual({ all: 5, active: 2, attention: 1, finished: 2 })
 
-    const attention = store.listCasesPage({ view: 'attention', cursor: null, limit: 100 })
+    const attention = await store.listCasesPage({ view: 'attention', cursor: null, limit: 100 })
     expect(attention.cases.map((item) => item.id)).toEqual(['blocked'])
   })
 
-  test('empty and terminal TaskStatus filters are exact without copying terminal vocabulary', () => {
+  test('empty and terminal TaskStatus filters are exact without copying terminal vocabulary', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = createSqliteRuntimeStore(db)
+    const store = createRuntimePersistence(db)
 
     seedCase(db, { id: 'waiting', state: 'waiting', updatedAt: 10 })
     seedCase(db, { id: 'done', state: 'terminal', terminalKind: 'merged', updatedAt: 20 })
@@ -44,29 +44,29 @@ describe('RFC-310 digital-employee task catalog Case-state semantics', () => {
     })
 
     expect(
-      store.listCasesPage({ states: [], view: 'all', cursor: null, limit: 100 }).cases,
+      (await store.listCasesPage({ states: [], view: 'all', cursor: null, limit: 100 })).cases,
     ).toEqual([])
     expect(
-      store
-        .listCasesPage({
+      (
+        await store.listCasesPage({
           states: ['terminal'],
           terminalCatalogStatuses: ['done'],
           view: 'all',
           cursor: null,
           limit: 100,
         })
-        .cases.map((item) => item.id),
+      ).cases.map((item) => item.id),
     ).toEqual(['done'])
     expect(
-      store
-        .listCasesPage({
+      (
+        await store.listCasesPage({
           states: ['waiting', 'terminal'],
           terminalCatalogStatuses: ['canceled'],
           view: 'all',
           cursor: null,
           limit: 100,
         })
-        .cases.map((item) => item.id),
+      ).cases.map((item) => item.id),
     ).toEqual(['legacy-canceled', 'waiting'])
   })
 })

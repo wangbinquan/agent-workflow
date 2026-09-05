@@ -305,7 +305,10 @@ export interface RuntimeCaseStorePort {
   }): EmployeeCaseRecord | null
 }
 
-/** Live provider contract; all application-visible persistence is awaitable. */
+/**
+ * Live provider contract; all application-visible persistence is awaitable. RFC-359 W4-D7b 起只有一份
+ * provider-中立实现（`infrastructure/runtimeStore.ts`），上面的同步形状只作为这份异步合同的类型来源。
+ */
 export type RuntimeCasePersistence = {
   readonly [K in keyof RuntimeCaseStorePort]: RuntimeCaseStorePort[K] extends (
     ...args: infer Args

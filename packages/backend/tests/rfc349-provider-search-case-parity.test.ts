@@ -107,9 +107,9 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
     expect(catalog).not.toContain('ilike(')
   })
 
-  test('the digital-employee case search uses ilike on PostgreSQL and like on SQLite', () => {
-    const postgresql = read('src/modules/digital-employee/infrastructure/postgresqlRuntimeStore.ts')
-    const sqlite = read('src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts')
+  test('the digital-employee case search goes through the engine capability on both providers', () => {
+    // RFC-359 W4-D7b：运行时案件存储只有一份实现——大小写不敏感与通配符转义都走能力矩阵。
+    const runtime = read('src/modules/digital-employee/infrastructure/runtimeStore.ts')
 
     for (const column of [
       'employeeCases.name',
@@ -118,13 +118,16 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
       'employeeCases.blockReason',
       'employeeContextRecords.stateJson',
     ]) {
-      expect(postgresql, `${column} 的案件搜索回到 like`).toContain(`ilike(${column}, term)`)
-      expect(sqlite).toContain(`like(${column}, term)`)
+      expect(runtime, `${column} 的案件搜索回到裸 like`).toContain(
+        `engine.likeCaseInsensitive(${column}, pattern, escape)`,
+      )
     }
+    expect(runtime).toContain('engine.likeEscape(input.q)')
     expect(
-      postgresql.match(PLAIN_LIKE),
-      '案件搜索回到 like ⇒ 切 PostgreSQL 后大小写不同的搜索词静默少召回',
+      runtime.match(PLAIN_LIKE),
+      '案件搜索回到裸 like ⇒ PostgreSQL 上大小写不同的搜索词静默少召回',
     ).toBeNull()
+    expect(runtime).not.toContain('ilike(')
   })
 
   test('every plain `like` on the PostgreSQL execution surface is deliberate', () => {

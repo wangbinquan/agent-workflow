@@ -23,7 +23,7 @@ import {
 import { createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
-import { createSqliteRuntimeStore } from '@/modules/digital-employee/infrastructure/sqliteRuntimeStore'
+import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 import {
   DigitalEmployeeRuntimeService,
   projectFrozenExecutionOptions,
@@ -50,7 +50,7 @@ afterEach(() => {
 })
 
 describe('RFC-310 stateful employee Case runtime', () => {
-  test('Case metering receipts increment usage exactly once', () => {
+  test('Case metering receipts increment usage exactly once', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     db.insert(employeeCases)
       .values({
@@ -68,7 +68,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         updatedAt: 1,
       })
       .run()
-    const store = createSqliteRuntimeStore(db)
+    const store = createRuntimePersistence(db)
     const receipt = {
       sourceRef: 'task:execution-metering',
       caseId: 'case-metering',
@@ -77,11 +77,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       totalTokens: 654,
       now: 2,
     }
-    expect(store.recordMetering(receipt)).toMatchObject({
+    expect(await store.recordMetering(receipt)).toMatchObject({
       applied: true,
       caseRecord: { consumedDurationMs: 321, consumedTotalTokens: 654, revision: 2 },
     })
-    expect(store.recordMetering({ ...receipt, now: 3 })).toMatchObject({
+    expect(await store.recordMetering({ ...receipt, now: 3 })).toMatchObject({
       applied: false,
       caseRecord: { consumedDurationMs: 321, consumedTotalTokens: 654, revision: 2 },
     })

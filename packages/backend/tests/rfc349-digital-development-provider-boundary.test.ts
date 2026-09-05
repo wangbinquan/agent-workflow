@@ -97,8 +97,7 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     expect(
       [
         'authoringStore.ts',
-        'sqliteRuntimeStore.ts',
-        'postgresqlRuntimeStore.ts',
+        'runtimeStore.ts',
         'inputUploadStore.ts',
         'reactionRoundQueries.ts',
         'integrationTriggerParticipant.ts',

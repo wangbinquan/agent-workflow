@@ -420,6 +420,17 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   daemon 三处 bootstrap 同一入口。一个 provider 文件删除。`rfc359-w4-d7a-adapters.test.ts` 两引擎各跑（上传的幂等 / 解析校验
   / 删除 / 有界清扫；writer 的第 0 代升第 1 代、refresh、快照投影、重复 activate 幂等），末尾源码锁。**下一刀 D7b**：
   digital-employee `RuntimeStore` 对（1955 / 2003 行，15 处 dbTxSync）；之后 identity-access 的两对大 PG 底。
+  **D7b ✅（digital-employee 运行时案件持久化）**：`runtimeStore.ts` 一份（以 PG 版为底：14 处 `db.transaction` 改走统一
+  事务原语；计量与成员替换两处读—改—写先 `lockAggregateRoot` 锁案件行；受影响行数经 `affectedRows`；案件搜索的大小写不敏感与
+  通配符转义走能力矩阵 `likeEscape` / `likeCaseInsensitive`（顺带修掉用户输入里 `%` / `_` 当通配符的旧行为）；nullable 列的
+  ORDER BY 走能力矩阵 `ascNullsFirst`，SQLite 的 NULL 最小语义在 PG 显式 nulls first）；同步 `RuntimeCaseStorePort` 不再有
+  实现、只作为异步合同的类型来源，`asAsyncRuntimeCasePersistence` 桥退役；两个 bootstrap 的装配同一份。两个 provider 文件
+  （1955 + 2003 行）删除，digital-employee 的 dbTxSync 归零。`rfc359-w4-d7b-adapters.test.ts` 两引擎各跑（createCase 的一笔
+  事务落案件 / 上下文 / 外部主体 / 生命周期 outbox 与上传认领冲突；计量 CAS 与成员替换；分页的 facets / 成员制 mine-shared /
+  终态目录状态 / 大小写不敏感搜索与通配符字面匹配 / 游标；反应轮次的投递去重与合并、建轮次 CAS、跑、重试、结算、block /
+  resume / upgradePolicy / terminate 级联与终态后投递直接 obsolete），末尾源码锁；rfc349 案件搜索 parity 锁改成「两个引擎都
+  走能力矩阵」。**下一刀 D8**：identity-access 的两对大 PG 底（`UserAccessRepository` 554 / 760 行、`OidcIdentityCrossContext`
+  318 / 781 行）。
 
 ## 5. W5 —— 防复辟
 

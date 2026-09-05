@@ -1,10 +1,17 @@
+// RFC-359 W4-D7b —— Digital Employee OS 运行时案件持久化（案件 / 上下文 / 关注绑定 / 收件箱 / 反应轮次 / 调用与
+// 通道 / outbox）：一份实现，两个 provider 共用。
+//
+// 语义沿 RFC-310 的 SQLite store：多表写走统一事务原语；CAS 判据全在 WHERE 里（revision / activeRoundId /
+// attemptCount），受影响行数经 `affectedRows` 判；计量与成员替换这两处读—改—写先 `lockAggregateRoot` 锁案件行（PG 渲染
+// FOR UPDATE，SQLite 独占事务下 no-op）；案件搜索的大小写不敏感与通配符转义走能力矩阵；nullable 列的 ORDER BY 走能力
+// 矩阵的 NULL 排序（SQLite 的 NULL 最小语义，PG 显式 nulls first）。
+
 import {
   and,
   asc,
   count,
   desc,
   eq,
-  ilike,
   inArray,
   isNull,
   lt,
@@ -18,8 +25,12 @@ import {
 } from 'drizzle-orm'
 import { EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS } from '@agent-workflow/shared'
 
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  affectedRows,
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import {
   employeeAttentionBindings,
   employeeCaseEventOrigins,
@@ -55,16 +66,8 @@ import type {
 } from '../domain/runtimeModel'
 import { employeeCaseLifecycleObservation } from '../public/events'
 
-function changes(result: unknown): number {
-  return (result as { changes?: number }).changes ?? 0
-}
-
-type PostgresqlRuntimeTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
-
 async function enqueueCaseLifecycleEventTx(
-  tx: PostgresqlRuntimeTransaction,
+  tx: DatabaseTransaction,
   input: {
     readonly caseId: string
     readonly employeeId: string
@@ -266,13 +269,13 @@ function channelResultRecord(
   }
 }
 
-export function createPostgresqlRuntimePersistence(
-  db: PostgresqlDatabaseClient,
-): RuntimeCasePersistence {
+export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCasePersistence {
+  const session = databaseSessionFor(db)
+  const engine = session.engine
   const maxEmployeeOutcomeGroups = 50_000
   return {
     async createCase(input) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         for (const claim of input.uploadClaims) {
           const upload = await tx
             .select()
@@ -306,7 +309,7 @@ export function createPostgresqlRuntimePersistence(
               ),
             )
             .run()
-          if (changes(claimed) !== 1) {
+          if (affectedRows(claimed) !== 1) {
             throw new ConflictError(
               'employee-upload-claim-conflict',
               `input upload was claimed concurrently: ${claim.uploadRef}`,
@@ -447,7 +450,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async recordMetering(input) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         if (
           !Number.isSafeInteger(input.durationMs) ||
           input.durationMs < 0 ||
@@ -459,9 +462,7 @@ export function createPostgresqlRuntimePersistence(
             'employee case metering must contain nonnegative safe integers',
           )
         }
-        await tx.run(
-          sql`select ${employeeCases.id} from ${employeeCases} where ${employeeCases.id} = ${input.caseId} for update`,
-        )
+        await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, input.caseId)
         const current = await tx
           .select()
           .from(employeeCases)
@@ -485,7 +486,7 @@ export function createPostgresqlRuntimePersistence(
           })
           .onConflictDoNothing({ target: employeeCaseMeteringReceipts.sourceRef })
           .run()
-        const applied = changes(inserted) === 1
+        const applied = affectedRows(inserted) === 1
         if (applied) {
           const consumedDurationMs = current.consumedDurationMs + input.durationMs
           const consumedTotalTokens = current.consumedTotalTokens + input.totalTokens
@@ -520,10 +521,8 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async replaceCaseMembers(input) {
-      return await db.transaction(async (tx) => {
-        await tx.run(
-          sql`select ${employeeCases.id} from ${employeeCases} where ${employeeCases.id} = ${input.caseId} for update`,
-        )
+      return await session.transaction(async (tx) => {
+        await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, input.caseId)
         const current = await tx
           .select({ id: employeeCases.id, ownerUserId: employeeCases.ownerUserId })
           .from(employeeCases)
@@ -611,7 +610,7 @@ export function createPostgresqlRuntimePersistence(
         .from(employeeCases)
         .where(eq(employeeCases.state, 'terminal'))
         .groupBy(employeeCases.employeeId, employeeCases.terminalKind)
-        .orderBy(asc(employeeCases.employeeId), ascNullsFirst(employeeCases.terminalKind))
+        .orderBy(asc(employeeCases.employeeId), engine.ascNullsFirst(employeeCases.terminalKind))
         .limit(maxEmployeeOutcomeGroups + 1)
         .all()
       if (rows.length > maxEmployeeOutcomeGroups) {
@@ -697,14 +696,14 @@ export function createPostgresqlRuntimePersistence(
         conditions.push(eq(employeeCases.state, 'terminal'))
       }
       if (input.q !== undefined) {
-        const term = `%${input.q}%`
+        const { pattern, escape } = engine.likeEscape(input.q)
         conditions.push(
           or(
-            ilike(employeeCases.name, term),
-            ilike(employeeCases.id, term),
-            ilike(employeeCases.employeeId, term),
-            ilike(employeeCases.blockReason, term),
-            ilike(employeeContextRecords.stateJson, term),
+            engine.likeCaseInsensitive(employeeCases.name, pattern, escape),
+            engine.likeCaseInsensitive(employeeCases.id, pattern, escape),
+            engine.likeCaseInsensitive(employeeCases.employeeId, pattern, escape),
+            engine.likeCaseInsensitive(employeeCases.blockReason, pattern, escape),
+            engine.likeCaseInsensitive(employeeContextRecords.stateJson, pattern, escape),
           )!,
         )
       }
@@ -861,7 +860,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async createInvocation(record) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const existing = await tx
           .select()
           .from(employeeInvocations)
@@ -906,7 +905,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async acceptInvocation(input) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const invocation = await tx
           .select()
           .from(employeeInvocations)
@@ -1006,7 +1005,7 @@ export function createPostgresqlRuntimePersistence(
               ),
             ),
           )
-          .orderBy(ascNullsFirst(employeeCases.terminalAt), asc(employeeChannels.id))
+          .orderBy(engine.ascNullsFirst(employeeCases.terminalAt), asc(employeeChannels.id))
           .limit(limit)
           .all()
       ).map((row) => ({ channel: channelRecord(row.channel), childCase: caseRecord(row.child) }))
@@ -1035,7 +1034,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async settleChannelResult(input) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         await tx
           .insert(employeeChannelResults)
           .values({
@@ -1074,7 +1073,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async detachOpenChannelsForRound(roundId, now) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         const invocations = await tx
           .select({ id: employeeInvocations.id })
           .from(employeeInvocations)
@@ -1127,7 +1126,7 @@ export function createPostgresqlRuntimePersistence(
         .orderBy(asc(employeeOsOutbox.createdAt), asc(employeeOsOutbox.id))
         .get()
       if (candidate === undefined) return null
-      const claimed = changes(
+      const claimed = affectedRows(
         await db
           .update(employeeOsOutbox)
           .set({
@@ -1175,7 +1174,7 @@ export function createPostgresqlRuntimePersistence(
           ),
         )
         .run()
-      if (changes(result) !== 1) throw new Error(`lost outbox claim: ${id}`)
+      if (affectedRows(result) !== 1) throw new Error(`lost outbox claim: ${id}`)
     },
 
     async retryOutbox(input) {
@@ -1197,7 +1196,7 @@ export function createPostgresqlRuntimePersistence(
           ),
         )
         .run()
-      if (changes(result) !== 1) throw new Error(`lost outbox claim: ${input.id}`)
+      if (affectedRows(result) !== 1) throw new Error(`lost outbox claim: ${input.id}`)
     },
 
     async activateAttention(bindingId, subscriptionId, now) {
@@ -1211,7 +1210,7 @@ export function createPostgresqlRuntimePersistence(
           ),
         )
         .run()
-      if (changes(result) !== 1) {
+      if (affectedRows(result) !== 1) {
         throw new NotFoundError('employee-attention-not-found', `attention not found: ${bindingId}`)
       }
     },
@@ -1230,7 +1229,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async acceptDelivery(caseId, id, delivery, priority, now) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const existing = await tx
           .select({ id: employeeCaseInbox.id })
           .from(employeeCaseInbox)
@@ -1297,7 +1296,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async createRound(input) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const current = await tx
           .select()
           .from(employeeCases)
@@ -1405,7 +1404,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async retryRound(input) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         const round = await tx
           .select()
           .from(employeeReactionRounds)
@@ -1457,7 +1456,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async settleRound(input) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         const round = await tx
           .select()
           .from(employeeReactionRounds)
@@ -1760,7 +1759,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async blockCase(caseId, reason, now) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         const current = await tx
           .select()
           .from(employeeCases)
@@ -1793,7 +1792,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async resumeCase(caseId, now) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const current = await tx
           .select()
           .from(employeeCases)
@@ -1851,7 +1850,7 @@ export function createPostgresqlRuntimePersistence(
     },
 
     async terminateCase(caseId, terminalKind, now) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const current = await tx
           .select()
           .from(employeeCases)
@@ -1991,7 +1990,7 @@ export function createPostgresqlRuntimePersistence(
           ),
         )
         .run()
-      if (changes(result) !== 1) return null
+      if (affectedRows(result) !== 1) return null
       const updated = await db
         .select()
         .from(employeeCases)
