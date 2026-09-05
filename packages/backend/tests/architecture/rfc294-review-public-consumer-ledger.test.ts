@@ -179,6 +179,11 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:source-control:commands:WorkspaceClaimFinalizationCommand', removeAfterWave: 'W5' },
   { id: 'public:source-control:commands:OwnRepositoryTransportCredentialCommands', removeAfterWave: 'W5' },
   { id: 'public:source-control:participants:RepositoryEndpointDiscoveryParticipant', removeAfterWave: 'W5' },
+  // RFC-359 W4-D4 留下的装配别名（PG 内存目录改用中立读取器后零 consumer）；W4-D6 随 development-adapter 链一并删除。
+  {
+    id: 'public:source-control:participants:postgresqlRepositoryScopeExistenceReads',
+    removeAfterWave: 'W4-D6',
+  },
   { id: 'public:source-control:participants:RepositoryTransportCredentialSelectionParticipant', removeAfterWave: 'W5' },
   { id: 'public:source-control:participants:WorkspaceExcludeParticipant', removeAfterWave: 'W5' },
   { id: 'public:source-control:queries:OwnRepositoryTransportCredentialQueries', removeAfterWave: 'W5' },
