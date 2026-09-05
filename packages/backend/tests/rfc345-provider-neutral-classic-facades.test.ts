@@ -125,8 +125,11 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
     expect(application).toContain('dependencies.admission.assertUsable(')
     expect(application).toContain("resourceType: 'workflow' as const")
     expect(application).not.toMatch(/@\/db|drizzle-orm|DbClient|DbTxSync/)
-    expect(composition).toContain('createSqliteWorkflowValidationPort')
-    expect(composition).toContain('createPostgresqlWorkflowValidationPort')
+    // RFC-359 W4-D15：校验端口只有一份中立实现。
+    expect(composition).toContain('createWorkflowValidationPort')
+    expect(composition).not.toMatch(
+      /createSqliteWorkflowValidationPort|createPostgresqlWorkflowValidationPort/,
+    )
   })
 
   test('Skill ZIP route consumes one provider-bound whole-tree participant', () => {

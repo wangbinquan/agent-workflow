@@ -10,10 +10,7 @@ function source(path: string): string {
 
 describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
   // RFC-359 W4-D14：Agent 聚合已是一份中立实现（见下面单独的断言），不再有 postgresql* 孪生。
-  const aggregates = [
-    ['Skill', 'skillOperations'],
-    ['Workflow', 'workflowOperations'],
-  ] as const
+  const aggregates = [['Skill', 'skillOperations']] as const
 
   test('agent repository and composition are one provider-neutral implementation (RFC-359 W4-D14)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/agentRepository.ts')
@@ -73,7 +70,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     const bundle = source('src/modules/resource-catalog/composition/postgresqlClassicCatalogs.ts')
     const agent = source('src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts')
     const workflow = source(
-      'src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts',
+      'src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts',
     )
     const skill = source(
       'src/modules/resource-catalog/infrastructure/postgresqlSkillContentLifecycle.ts',
@@ -81,14 +78,13 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
 
     expect(bundle).toContain('export function composePostgresqlClassicCatalogs(')
     expect(bundle).toContain('createAgentPersistenceSemantics({')
-    expect(bundle).toContain('createPostgresqlWorkflowPersistenceSemantics({')
     expect(bundle).toContain('createPostgresqlSkillContentLifecycle({')
     // RFC-353 T7：回滚成员关系由 knowledge-evolution 裁定、bootstrap 注入，
     // 这里断言的是「bundle 把它原样传给内容生命周期」这条装配事实（名字随之改了）。
     expect(bundle).toContain('restoreMembership: input.restoreMembership')
     expect(bundle).toContain('runtimeProfiles: input.runtimeProfiles')
     expect(bundle).toContain('composeAgentCatalog({')
-    expect(bundle).toContain('composePostgresqlWorkflowCatalog({')
+    expect(bundle).toContain('composeDatabaseWorkflowCatalog({')
     expect(bundle).toContain('composePostgresqlSkillCatalog({')
     expect(bundle).not.toMatch(/createSqlite|as DbClient|as PostgresqlDatabaseClient/)
 
@@ -97,7 +93,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(agent).toContain('assertDependencyGraph(')
     expect(agent).toContain('readonly runtimeProfiles: AgentRuntimeProfileLookup')
     expect(agent).not.toMatch(/\bruntimes\b/)
-    expect(workflow).toContain('export function createPostgresqlWorkflowPersistenceSemantics(')
+    expect(workflow).toContain('export function createWorkflowPersistenceSemantics(')
     expect(workflow).toContain('assertDefinitionReferences({')
     expect(skill).toContain('export function createPostgresqlSkillContentLifecycle(')
     expect(skill).toContain("kind: input.reserve === undefined ? 'version-write' : 'reserve'")

@@ -30,7 +30,7 @@ const EXPECTED_WRITERS = {
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
-    'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 2,
+    'modules/resource-catalog/infrastructure/workflowRepository.ts': 2,
     'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts': 1,
   },
   updateEditable: {
@@ -38,12 +38,12 @@ const EXPECTED_WRITERS = {
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
-    'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 1,
+    'modules/resource-catalog/infrastructure/workflowRepository.ts': 1,
   },
   updateMetadata: {},
   delete: {
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
-    'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 1,
+    'modules/resource-catalog/infrastructure/workflowRepository.ts': 1,
   },
 } as const
 
@@ -173,7 +173,7 @@ describe('RFC-199 workflow writer inventory', () => {
         'serializeWorkflowDefinitionStorageV1(',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts':
         'serializeWorkflowDefinitionStorageV1(',
-      'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts':
+      'modules/resource-catalog/infrastructure/workflowRepository.ts':
         'createWorkflowPersistenceValues(',
       'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts':
         'createWorkflowPersistenceValues(',

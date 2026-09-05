@@ -69,12 +69,11 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
 
   test('workflow validation inventory and D15 admission have native PostgreSQL adapters', () => {
     const composition = source('src/modules/resource-catalog/composition/workflowOperations.ts')
-    const adapter = source(
-      'src/modules/resource-catalog/infrastructure/postgresqlWorkflowValidation.ts',
-    )
+    // RFC-359 W4-D15：校验与 D15 准入只有一份中立实现，两个 provider 共用。
+    const adapter = source('src/modules/resource-catalog/infrastructure/workflowValidation.ts')
 
-    expect(composition).toContain('createPostgresqlWorkflowValidationPort')
-    expect(composition).toContain('createPostgresqlWorkflowReferenceAdmissionPort')
+    expect(composition).toContain('createWorkflowValidationPort')
+    expect(composition).toContain('createWorkflowReferenceAdmissionPort')
     expect(adapter).toContain('workflowClosure(')
     expect(adapter).toContain('input.skillContent.isAvailable(skill)')
     expect(adapter).toContain('input.authorization.canViewResource(')

@@ -111,7 +111,10 @@ import { composeDatabaseAgentCatalog } from '@/modules/resource-catalog/composit
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
-import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
+import {
+  composeDatabaseWorkflowCatalog,
+  composeSkillContentAvailability,
+} from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
 import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
@@ -2321,7 +2324,11 @@ async function composeSqliteProviderSession(
     ),
   })
   const pluginCatalog = composePluginCatalog({ db, coordinator: pluginOperationCoordinator })
-  const workflowCatalog = composeWorkflowCatalog({ db })
+  const workflowCatalog = composeDatabaseWorkflowCatalog({
+    db,
+    resourceCatalog,
+    skillContent: composeSkillContentAvailability({ appHome: Paths.root }),
+  })
   const workgroupCatalog = composeWorkgroupCatalog({ db })
   const capabilityTemplateAccess: Parameters<
     typeof composeSqliteCapabilityTemplateOperations

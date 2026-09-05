@@ -557,6 +557,26 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   **留下的债**：`legacy/agent.ts` 同步服务仍被 services/agent.ts 门面、task-execution、code-capability 等消费，它不是
   provider 对而是「只有 SQLite 能走」的旧路径，随各消费方切到 `AgentCatalogModule` 后再删。**下一刀 D15**：
   resource-catalog 的 Skill / Workflow 聚合按同一办法合一（PG 异步实现成为唯一实现）。
+  **D15 ✅（resource-catalog · Workflow 聚合：一份实现，SQLite 装配切过去）**：`infrastructure/workflowRepository.ts`
+  （`createWorkflowRepository`：创建 / 复制 / update 的 already-current 与 committed / 删除只用原始行的 ACL 身份与版本，全在
+  统一 serializable 事务里）、`workflowPersistenceSemantics.ts`（`createWorkflowPersistenceSemantics`：定义引用可见性、
+  复制命名、非终态任务 / 定时任务 / 被 call 的删除守卫，事件钩子）、`workflowValidation.ts`
+  （`createWorkflowValidationPort` 装载两引擎同形的库存跑共享校验器；`createWorkflowReferenceAdmissionPort` 的 D15 准入）
+  各一份。**managed skill 可用性判据只有一份**：`skillContentAvailability.ts`（reservation ready + 本次启动已复核 + 权威
+  版本目录在盘上），SQLite bootstrap 与 PG 内容生命周期都用它。装配层 `composeWorkflowCatalog` 一份（PG 形状）+
+  `composeDatabaseWorkflowCatalog({db, resourceCatalog, skillContent})`（语义层与 `/ws/workflows` 广播事件在这里接，
+  两个 provider 同一份），server.ts / start.ts 切过去；`postgresqlClassicCatalogs.ts` 的 Workflow 分支改接。五个 provider
+  文件删除；rfc345（contracts / classic-facades / neutralization）与 rfc349 两把 adapters 锁改指中立文件；
+  `tests/helpers/workflowCatalog.ts` 不再按 provider 分叉。`rfc359-w4-d15-adapters.test.ts` 两引擎各跑创建 / 复制命名 /
+  update 三态 / 删除受 call 引用保护 / 校验与准入 / skill 可用性 + 源码锁。
+  **合一时补齐的两处 PG 缺口**（双引擎批次抓到）：①删除广播的受众——旧 SQLite 路径在删除事务里取出可见性 / owner /
+  授权用户随帧旁路带给 WS 注册表，冷缓存的私有观众才能收到 delete 帧，PG 版此前漏了（rfc099-ws-acl-filter 红）；
+  现在 `createWorkflowRepository` 在事务里取受众交给 `deleted` 钩子，`composeDatabaseWorkflowCatalog` 带着广播。
+  ②RFC-264 改名门——只有改名才受统一命名规则约束、历史名字原样回存可保存，PG 版此前不校验改名（`_reserved` 也能存）；
+  现在语义层一条门两引擎同用（workflows.test.ts 红）。
+  **留下的债**：`composeSqliteDynamicWorkflowValidationContext`（task engine 的动态工作流校验上下文）仍走 legacy 装载器，
+  PG daemon 从目录查询拼上下文——两边拼法不同，随「动态工作流校验上下文」单独一刀合一；`legacy/workflow.ts` 同步服务仍被
+  services/workflow.ts 门面、task-execution 等消费。**下一刀 D16**：Skill 聚合（PG 内容生命周期 / zip 导入 / boot 成为唯一实现）。
 
 ## 5. W5 —— 防复辟
 

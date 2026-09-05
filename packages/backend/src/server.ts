@@ -88,7 +88,10 @@ import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/compositi
 import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
-import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
+import {
+  composeDatabaseWorkflowCatalog,
+  composeSkillContentAvailability,
+} from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeSqliteWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
@@ -2038,7 +2041,11 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       unfuseAboveVersionSync(tx, selector),
     ),
   })
-  const workflowCatalog = composeWorkflowCatalog({ db: effectiveDeps.db })
+  const workflowCatalog = composeDatabaseWorkflowCatalog({
+    db: effectiveDeps.db,
+    resourceCatalog: providerResourceCatalog,
+    skillContent: composeSkillContentAvailability({ appHome: Paths.root }),
+  })
   const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
   const resourcePackageCatalog =
     effectiveDeps.secretBox === undefined

@@ -1563,7 +1563,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteWorkflowRepository.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/workflowRepository.ts'),
       'utf8',
     )
     const composition = readFileSync(
@@ -1613,11 +1613,16 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('DeleteWorkflowSchema.safeParse')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
-    expect(repository).toContain("from '@/modules/resource-catalog/infrastructure/legacy/workflow'")
-    expect(repository).toContain('explicit compatibility island')
-    expect(composition).toContain('createSqliteWorkflowRepository')
+    // RFC-359 W4-D15：Workflow 仓库只有一份中立实现，不再有 legacy 包装的 SQLite 兼容岛。
+    expect(repository).not.toContain(
+      "from '@/modules/resource-catalog/infrastructure/legacy/workflow'",
+    )
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('runResourceCatalogTransaction(')
+    expect(composition).toContain('createWorkflowRepository({')
     expect(composition).toContain('createWorkflowApplication')
-    expect(composition).toContain('composeResourceAclOperationApplication')
+    expect(composition).toContain('composeProviderResourceAclOperationApplication')
+    expect(composition).not.toContain('createSqliteWorkflowRepository')
 
     const deleteCommandStart = application.indexOf('async delete(')
     const loadVisible = application.indexOf(

@@ -32,13 +32,19 @@ import {
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
 } from './legacy/resourceRefs'
-import type { PostgresqlResourceCatalogTransaction } from './postgresql/repositorySupport'
-import type { PostgresqlWorkflowPersistenceSemantics } from './postgresqlWorkflowRepository'
+import { WORKFLOW_NAME_INVALID_MESSAGE } from './legacy/workflow'
+import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
+import type { WorkflowDeletedAudience, WorkflowPersistenceSemantics } from './workflowRepository'
 
 interface WorkflowPersistenceEvents {
   created(workflow: Workflow): Promise<void> | void
   updated(receipt: SaveWorkflowReceipt): Promise<void> | void
-  deleted(id: string, version: number, input: DeleteWorkflow): Promise<void> | void
+  deleted(
+    id: string,
+    version: number,
+    input: DeleteWorkflow,
+    audience: WorkflowDeletedAudience,
+  ): Promise<void> | void
 }
 
 type ReferenceType = 'agent' | 'workflow' | 'workgroup'
@@ -73,6 +79,20 @@ function copyName(sourceName: string, occupiedNames: Iterable<string>): string {
   }
 }
 
+/**
+ * RFC-264 —— 只有**改名**才受统一命名规则约束：存量的历史名字（slug 规则之前写入的）原样回存必须继续能存。
+ * 旧 SQLite 路径一直有这道门，PG 版此前漏了——现在两个 provider 同一条门、同一段措辞。
+ */
+function assertChangedWorkflowName(currentName: string, submittedName: string): void {
+  if (currentName === submittedName) return
+  const parsed = WorkflowNameSchema.safeParse(submittedName)
+  if (!parsed.success) {
+    throw new ValidationError('workflow-name-invalid', WORKFLOW_NAME_INVALID_MESSAGE, {
+      issues: parsed.error.issues,
+    })
+  }
+}
+
 function canonicalDefinition(definition: WorkflowDefinition): WorkflowDefinition {
   const migrated = migrateWorkflowDefinitionToLatest(definition)
   const missingAgentNodeIds = (migrated.nodes ?? [])
@@ -103,7 +123,7 @@ function referenceGroups(definition: WorkflowDefinition): ReadonlyArray<{
 }
 
 async function loadReferenceRows(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   type: ReferenceType,
   domain: 'id' | 'name',
   values: readonly string[],
@@ -121,7 +141,6 @@ async function loadReferenceRows(
         })
         .from(agents)
         .where(inArray(domain === 'id' ? agents.id : agents.name, selected))
-        .all()
     case 'workflow':
       return transaction
         .select({
@@ -132,7 +151,6 @@ async function loadReferenceRows(
         })
         .from(workflows)
         .where(inArray(domain === 'id' ? workflows.id : workflows.name, selected))
-        .all()
     case 'workgroup':
       return transaction
         .select({
@@ -143,12 +161,11 @@ async function loadReferenceRows(
         })
         .from(workgroups)
         .where(inArray(domain === 'id' ? workgroups.id : workgroups.name, selected))
-        .all()
   }
 }
 
 async function grantedIds(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   authority: WorkflowOperationContext,
   type: ReferenceType,
 ): Promise<ReadonlySet<string>> {
@@ -157,12 +174,11 @@ async function grantedIds(
     .select({ resourceId: resourceGrants.resourceId })
     .from(resourceGrants)
     .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, authority.user.id)))
-    .all()
   return new Set(rows.map((row) => row.resourceId))
 }
 
 async function assertDefinitionReferences(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
+  readonly transaction: ResourceCatalogTransaction
   readonly authority: WorkflowOperationContext
   readonly definition: WorkflowDefinition
   readonly previous?: WorkflowDefinition
@@ -222,7 +238,7 @@ async function assertDefinitionReferences(input: {
  * interrupted）；仅被历史（终态）任务引用的 workflow 允许删除。此前 PG 删除完全不查任务引用。
  */
 async function assertNoNonTerminalTaskReferences(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   workflowId: string,
 ): Promise<void> {
   const rows = await transaction
@@ -231,7 +247,6 @@ async function assertNoNonTerminalTaskReferences(
     .where(
       and(eq(tasks.workflowId, workflowId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
     )
-    .all()
   if (rows.length > 0) {
     throw new ConflictError(
       'workflow-in-use',
@@ -244,7 +259,7 @@ async function assertNoNonTerminalTaskReferences(
 /** RFC-202 T5 / RFC-359 W1-T6：定时任务仍以该 workflow 为启动目标时拒删（与 SQLite 同形，同样只对
  * 主体可见的 schedule 披露名字，其余只给计数）。 */
 async function assertNoScheduledReferences(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   authority: WorkflowOperationContext,
   workflowId: string,
 ): Promise<void> {
@@ -257,7 +272,6 @@ async function assertNoScheduledReferences(
       ownerUserId: scheduledTasks.ownerUserId,
     })
     .from(scheduledTasks)
-    .all()
   const referencing = scheduledRowsReferencing(schedRows, {
     launchKind: 'workflow',
     payloadKey: 'workflowId',
@@ -278,13 +292,12 @@ async function assertNoScheduledReferences(
 }
 
 async function assertNotCalledByWorkflow(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   current: Pick<Workflow, 'id' | 'name'>,
 ): Promise<void> {
   const rows = await transaction
     .select({ id: workflows.id, definition: workflows.definition })
     .from(workflows)
-    .all()
   const caller = rows.find((row) => {
     if (row.id === current.id) return false
     try {
@@ -303,12 +316,12 @@ async function assertNotCalledByWorkflow(
   }
 }
 
-/** Owner-native semantics for the PostgreSQL Workflow repository. */
-export function createPostgresqlWorkflowPersistenceSemantics(input: {
+/** Owner-native semantics for the Workflow repository（RFC-359 W4-D15：一份实现，两个 provider 共用）。 */
+export function createWorkflowPersistenceSemantics(input: {
   readonly authorization: ResourceAuthorizationApplication
   readonly events?: WorkflowPersistenceEvents
-}): PostgresqlWorkflowPersistenceSemantics {
-  return Object.freeze<PostgresqlWorkflowPersistenceSemantics>({
+}): WorkflowPersistenceSemantics {
+  return Object.freeze<WorkflowPersistenceSemantics>({
     async canonicalizeCreate(authority, submitted): Promise<CreateWorkflow> {
       const definition = canonicalDefinition(submitted.definition)
       assertScriptAuthorAllowed({
@@ -338,7 +351,6 @@ export function createPostgresqlWorkflowPersistenceSemantics(input: {
         .select({ name: workflows.name })
         .from(workflows)
         .where(eq(workflows.ownerUserId, authority.user.id))
-        .all()
       return copyName(
         source.name,
         occupied.map((row) => row.name),
@@ -362,6 +374,7 @@ export function createPostgresqlWorkflowPersistenceSemantics(input: {
         current,
       )
       assertNameUnchangedForEditor(access, current.name, name)
+      assertChangedWorkflowName(current.name, name)
       assertScriptAuthorAllowed({
         next: definition,
         previous: current.definition,

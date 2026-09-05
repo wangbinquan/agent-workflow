@@ -8,7 +8,7 @@ import {
 } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { ValidationError } from '@/util/errors'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type {
@@ -18,7 +18,7 @@ import type {
 import { agentFromPersistenceRow } from './agentPersistence'
 import { mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginFromPersistenceRow } from './pluginPersistence'
-import type { PostgresqlSkillContentLifecycle } from './postgresqlSkillRepository'
+import type { SkillContentAvailability } from './skillContentAvailability'
 import { skillFromPersistenceRow } from './skillPersistence'
 import {
   validateWorkflowDefinition,
@@ -79,21 +79,22 @@ function workflowClosure(
   return closure
 }
 
-export function createPostgresqlWorkflowValidationPort(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly skillContent: Pick<PostgresqlSkillContentLifecycle, 'isAvailable'>
+/** RFC-359 W4-D15 —— 工作流校验的库存装载：一份实现，两个 provider 共用（skills 只算 ready 且本次启动可用的）。 */
+export function createWorkflowValidationPort(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly skillContent: SkillContentAvailability
 }): WorkflowValidationPort {
   const port: WorkflowValidationPort = {
     candidateHash: workflowDefinitionCandidateHashOf,
     async validate(candidate) {
       const [agentRows, skillRows, mcpRows, pluginRows, workflowRows, workgroupRows] =
         await Promise.all([
-          input.db.select().from(agents).all(),
-          input.db.select().from(skills).all(),
-          input.db.select().from(mcps).all(),
-          input.db.select().from(plugins).all(),
-          input.db.select().from(workflows).all(),
-          input.db.select({ name: workgroups.name }).from(workgroups).all(),
+          input.db.select().from(agents),
+          input.db.select().from(skills),
+          input.db.select().from(mcps),
+          input.db.select().from(plugins),
+          input.db.select().from(workflows),
+          input.db.select({ name: workgroups.name }).from(workgroups),
         ])
       const availableSkills: Skill[] = []
       for (const row of skillRows) {
@@ -151,7 +152,7 @@ interface AdmissionRow {
 }
 
 async function loadAdmissionRows(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   resourceType: 'agent' | 'workflow' | 'workgroup',
   domain: 'id' | 'name',
   references: readonly string[],
@@ -169,7 +170,6 @@ async function loadAdmissionRows(
         })
         .from(agents)
         .where(inArray(domain === 'id' ? agents.id : agents.name, selected))
-        .all()
     case 'workflow':
       return db
         .select({
@@ -180,7 +180,6 @@ async function loadAdmissionRows(
         })
         .from(workflows)
         .where(inArray(domain === 'id' ? workflows.id : workflows.name, selected))
-        .all()
     case 'workgroup':
       return db
         .select({
@@ -191,12 +190,11 @@ async function loadAdmissionRows(
         })
         .from(workgroups)
         .where(inArray(domain === 'id' ? workgroups.id : workgroups.name, selected))
-        .all()
   }
 }
 
-export function createPostgresqlWorkflowReferenceAdmissionPort(input: {
-  readonly db: PostgresqlDatabaseClient
+export function createWorkflowReferenceAdmissionPort(input: {
+  readonly db: ProviderNeutralDatabase
   readonly authorization: ResourceAuthorizationApplication
 }): WorkflowReferenceAdmissionPort {
   const port: WorkflowReferenceAdmissionPort = {

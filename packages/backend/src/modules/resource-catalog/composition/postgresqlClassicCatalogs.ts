@@ -1,5 +1,4 @@
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 
 import type {
   AgentCatalogModule,
@@ -15,7 +14,6 @@ import {
   createPostgresqlSkillContentLifecycle,
   type PostgresqlSkillRestoreMembershipPort,
 } from '../infrastructure/postgresqlSkillContentLifecycle'
-import { createPostgresqlWorkflowPersistenceSemantics } from '../infrastructure/postgresqlWorkflowPersistenceSemantics'
 import { composeAgentImportQueries } from './agentImportQueries'
 import {
   composeAgentResourceIntegrity,
@@ -25,7 +23,7 @@ import {
 import { composeAgentCatalog } from './agentOperations'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { composePostgresqlSkillCatalog } from './skillOperations'
-import { composePostgresqlWorkflowCatalog } from './workflowOperations'
+import { composeDatabaseWorkflowCatalog } from './workflowOperations'
 
 export interface PostgresqlClassicCatalogBundle {
   readonly agent: AgentCatalogModule
@@ -76,41 +74,10 @@ export function composePostgresqlClassicCatalogs(input: {
     content: skillContent,
     resourceCatalog: input.resourceCatalog,
   })
-  const workflow = composePostgresqlWorkflowCatalog({
+  const workflow = composeDatabaseWorkflowCatalog({
     db: input.db,
-    persistence: createPostgresqlWorkflowPersistenceSemantics({
-      authorization: input.resourceCatalog.authorization,
-      events: {
-        created(created) {
-          workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-            type: 'workflow.created',
-            workflowId: created.id,
-            name: created.name,
-            version: created.version,
-          })
-        },
-        updated(receipt) {
-          workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-            type: 'workflow.updated',
-            workflowId: receipt.revision.workflowId,
-            clientMutationId: receipt.clientMutationId,
-            version: receipt.revision.version,
-            snapshotHash: receipt.revision.snapshotHash,
-            updatedAt: receipt.revision.updatedAt,
-          })
-        },
-        deleted(workflowId, deletedVersion, deletion) {
-          workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-            type: 'workflow.deleted',
-            workflowId,
-            clientMutationId: deletion.clientMutationId,
-            deletedVersion,
-          })
-        },
-      },
-    }),
-    skillContent,
     resourceCatalog: input.resourceCatalog,
+    skillContent,
   })
   return Object.freeze({ agent, skill, workflow, agentResourceIntegrity, skillContent })
 }

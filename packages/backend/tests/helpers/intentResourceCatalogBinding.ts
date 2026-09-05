@@ -1,5 +1,5 @@
 import { workflows as workflowsTable } from '../../src/db/schema'
-import { createSqliteWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/sqliteWorkflowValidation'
+import { createWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/workflowValidation'
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { Actor } from '../../src/auth/actor'
 import type { DbClient } from '../../src/db/client'
@@ -238,7 +238,8 @@ export function runIntentTurnForTest(
  * 也让「某个 fixture 其实是张坏图」这种事在它被当作正例用之前就暴露出来。
  */
 export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphValidationPort {
-  const port = createSqliteWorkflowValidationPort(db)
+  // 测试里没有启动期复核，skill 只按 reservation ready 算可用（与旧 SQLite 校验器在测试里的行为一致）。
+  const port = createWorkflowValidationPort({ db, skillContent: { isAvailable: async () => true } })
   const graph: IntentWorkflowGraphValidationPort = {
     async validate(input) {
       const validated = await port.validate({

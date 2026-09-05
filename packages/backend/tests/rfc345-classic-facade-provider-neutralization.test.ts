@@ -39,11 +39,11 @@ describe('RFC-345 classic facade provider neutralization', () => {
     }
   })
 
+  // RFC-359 W4-D14/D15：Agent / Workflow 聚合已是一份中立实现，不再有 sqlite* / postgresql* 孪生可查。
   test('SQLite adapters consume owner infrastructure without crossing back through facades', () => {
     for (const path of [
       'src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
       'src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts',
-      'src/modules/resource-catalog/infrastructure/sqliteWorkflowRepository.ts',
     ]) {
       const text = source(path)
       expect(text).toContain('@/modules/resource-catalog/infrastructure/legacy/')
@@ -113,7 +113,6 @@ describe('RFC-345 classic facade provider neutralization', () => {
   test('classic PostgreSQL compositions remain native and provider-selected', () => {
     for (const [aggregate, operationFile] of [
       ['Skill', 'skillOperations'],
-      ['Workflow', 'workflowOperations'],
       ['Workgroup', 'workgroupOperations'],
     ] as const) {
       const composition = source(`src/modules/resource-catalog/composition/${operationFile}.ts`)
