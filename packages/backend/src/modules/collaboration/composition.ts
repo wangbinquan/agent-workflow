@@ -44,10 +44,8 @@ export {
   createPostgresqlCollaborationCommandContext,
 } from './composition/commandContext'
 export {
-  composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
-  composeSqliteWorkgroupTaskRoomClarifyParticipantFactory,
-  type PostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
-  type SqliteWorkgroupTaskRoomClarifyParticipantFactory,
+  composeWorkgroupTaskRoomClarifyParticipantFactory,
+  type WorkgroupTaskRoomClarifyParticipantFactory,
 } from './composition/workgroupTaskRoomClarify'
 
 // RFC-333 temporary legacy bridge inventory. These symbols stay internal to

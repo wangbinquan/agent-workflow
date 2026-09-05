@@ -1,27 +1,17 @@
-import type { DbTxSync } from '@/db/txSync'
 import type { WorkgroupTaskRoomClarifyParticipantInTx } from '@/modules/task-execution/public/commands'
-import type { PostgresqlCommittedEventTransaction } from '@/platform/events/committed/postgresqlPersistence'
-import { createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx } from '../infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant'
-import { createSqliteWorkgroupTaskRoomClarifyParticipantInTx } from '../infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { createWorkgroupTaskRoomClarifyParticipantInTx } from '../infrastructure/workgroupTaskRoomClarifyParticipant'
 
-export interface SqliteWorkgroupTaskRoomClarifyParticipantFactory {
-  inTransaction(transaction: DbTxSync): WorkgroupTaskRoomClarifyParticipantInTx
+/**
+ * RFC-359 W4-D19a —— 工作组任务房里 Collaboration 那一半的参与者工厂：一份装配，两个 provider 共用。
+ * 调用方（Resource Catalog 的任务房）持有事务，把它交给这里换一个只碰 Collaboration 表的参与者。
+ */
+export interface WorkgroupTaskRoomClarifyParticipantFactory {
+  inTransaction(transaction: DatabaseTransaction): WorkgroupTaskRoomClarifyParticipantInTx
 }
 
-export interface PostgresqlWorkgroupTaskRoomClarifyParticipantFactory {
-  inTransaction(
-    transaction: PostgresqlCommittedEventTransaction,
-  ): WorkgroupTaskRoomClarifyParticipantInTx
-}
-
-export function composeSqliteWorkgroupTaskRoomClarifyParticipantFactory(): SqliteWorkgroupTaskRoomClarifyParticipantFactory {
+export function composeWorkgroupTaskRoomClarifyParticipantFactory(): WorkgroupTaskRoomClarifyParticipantFactory {
   return Object.freeze({
-    inTransaction: createSqliteWorkgroupTaskRoomClarifyParticipantInTx,
-  })
-}
-
-export function composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory(): PostgresqlWorkgroupTaskRoomClarifyParticipantFactory {
-  return Object.freeze({
-    inTransaction: createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx,
+    inTransaction: createWorkgroupTaskRoomClarifyParticipantInTx,
   })
 }

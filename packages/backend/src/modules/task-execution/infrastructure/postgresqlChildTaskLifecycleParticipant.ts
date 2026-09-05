@@ -51,10 +51,8 @@ import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import {
-  assertPostgresqlTaskOwnerlessTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
@@ -270,7 +268,7 @@ async function admitResume(
   const intentId = ulid()
   const now = Date.now()
   const eventRefs = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
-    await assertPostgresqlTaskOwnerlessTx(tx, task.id)
+    await assertTaskOwnerlessTx(tx, task.id)
     const changed = await tx
       .update(tasks)
       .set({

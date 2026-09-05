@@ -1,7 +1,7 @@
 import type { WorkgroupHostLedgerParticipantInTx } from '../public/commands'
 import { createPostgresqlWorkgroupHostLedgerParticipantInTx } from '../infrastructure/postgresqlWorkgroupHostLedgerParticipant'
 import type { PostgresqlTaskExecutionTransaction } from '../infrastructure/postgresqlTaskLifecycleTransaction'
-import type { PostgresqlWorkgroupTaskRoomClarifyParticipantFactory } from './workgroupTaskRoomTask'
+import type { WorkgroupTaskRoomClarifyParticipantFactory } from './workgroupTaskRoomTask'
 
 export interface PostgresqlWorkgroupHostLedgerParticipantFactory {
   inTransaction(transaction: PostgresqlTaskExecutionTransaction): WorkgroupHostLedgerParticipantInTx
@@ -13,7 +13,7 @@ export interface PostgresqlWorkgroupHostLedgerParticipantFactory {
  * ledger participant for that exact transaction.
  */
 export function composePostgresqlWorkgroupHostLedgerParticipantFactory(input: {
-  readonly collaboration: PostgresqlWorkgroupTaskRoomClarifyParticipantFactory
+  readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
 }): PostgresqlWorkgroupHostLedgerParticipantFactory {
   return Object.freeze({
     inTransaction: (transaction: PostgresqlTaskExecutionTransaction) =>

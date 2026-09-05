@@ -17,8 +17,7 @@ import {
   workflows,
 } from '@/db/schema'
 import {
-  composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
-  composeSqliteWorkgroupTaskRoomClarifyParticipantFactory,
+  composeWorkgroupTaskRoomClarifyParticipantFactory,
   createPostgresqlClarifyRepairParticipant,
   createPostgresqlCollaborationRuntimeMechanics,
   createPostgresqlReviewRepairParticipant,
@@ -26,7 +25,7 @@ import {
   createSqliteReviewRepairParticipant,
 } from '@/modules/collaboration/composition'
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
-import type { PostgresqlWorkgroupTaskRoomClarifyParticipantFactory as TaskExecutionClarifyParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
+import type { WorkgroupTaskRoomClarifyParticipantFactory as TaskExecutionClarifyParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -402,7 +401,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
 
   test('provider factories remain inside collaboration and expose no SQLite fallback', () => {
     const reservedTransactionFactory: TaskExecutionClarifyParticipantFactory =
-      composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory()
+      composeWorkgroupTaskRoomClarifyParticipantFactory()
     const contract = SRC('modules/collaboration/application/ports/collaborationRuntimeMechanics.ts')
     const sqlite = SRC(
       'modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts',
@@ -495,17 +494,17 @@ describe('RFC-349 collaboration runtime mechanics', () => {
 
     let projectionPromise!: ReturnType<
       ReturnType<
-        ReturnType<typeof composeSqliteWorkgroupTaskRoomClarifyParticipantFactory>['inTransaction']
+        ReturnType<typeof composeWorkgroupTaskRoomClarifyParticipantFactory>['inTransaction']
       >['loadProjection']
     >
     let dismissalPromise!: ReturnType<
       ReturnType<
-        ReturnType<typeof composeSqliteWorkgroupTaskRoomClarifyParticipantFactory>['inTransaction']
+        ReturnType<typeof composeWorkgroupTaskRoomClarifyParticipantFactory>['inTransaction']
       >['dismissOpenSelfClarifies']
     >
     dbTxSync(db, (transaction) => {
       const participant =
-        composeSqliteWorkgroupTaskRoomClarifyParticipantFactory().inTransaction(transaction)
+        composeWorkgroupTaskRoomClarifyParticipantFactory().inTransaction(transaction)
       projectionPromise = participant.loadProjection(taskId)
       dismissalPromise = participant.dismissOpenSelfClarifies({ taskId, occurredAt: 4 })
     })

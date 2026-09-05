@@ -22,9 +22,9 @@ export {
   type PostgresqlNodeRunLifecycleParticipantFactory,
 } from './nodeRunLifecycle'
 export {
-  composePostgresqlWorkgroupTaskRoomTaskParticipantFactory,
-  type PostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
-  type PostgresqlWorkgroupTaskRoomTaskParticipantFactory,
+  composeWorkgroupTaskRoomTaskParticipantFactory,
+  type WorkgroupTaskRoomClarifyParticipantFactory,
+  type WorkgroupTaskRoomTaskParticipantFactory,
 } from './workgroupTaskRoomTask'
 export {
   createPostgresqlChildTaskLifecycleParticipant,

@@ -628,7 +628,28 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   **留下的债**：Workgroup 的任务房与回合（`sqliteWorkgroupTaskRoom.ts` 71 行薄驱动 vs PG 的
   `postgresqlWorkgroupTaskRoom*` 1457 行、`sqliteWorkgroupTurnsOperations.ts` 34 行 vs `postgresqlWorkgroupTurnsOperations.ts`
   567 行）是「SQLite 走 legacy engine、PG 全量实现」的不对称对，随 legacy workgroup engine 退役单独一刀（D19）。
-  **下一刀 D19**：Workgroup 任务房 / 回合合一（PG 实现成为唯一实现，legacy workgroup engine 的对应面退役）。
+  **下一刀 D19**：Workgroup 任务房 / 回合合一。这一刀体量最大且行为风险最高，拆三步走：
+
+  **勘察结论（决定拆法）**：任务房与回合是 W4 里最后、也是最不对称的一对——SQLite 侧是 legacy workgroup engine
+  上的薄驱动（`sqliteWorkgroupTaskRoom.ts` 71 行 + `sqliteWorkgroupTurnsOperations.ts` 34 行），PG 侧是原生实现
+  （任务房 `postgresqlWorkgroupTaskRoom*.ts` 1457 行；回合 `postgresqlWorkgroupTurnsOperations.ts` 567 行，
+  决策逻辑在 provider 中立的 `application/workgroups/workgroupTurnsDriver.ts` 2819 行里）。**测试覆盖也不对称**：
+  SQLite / legacy 路径有 13 个行为套件（rfc164 引擎 / rfc185 领队扇出 / rfc189 回合 / rfc215 批次 / rfc329 待办 /
+  rfc311 徽标 ACL / rfc108 自动恢复…），PG 走的中立驱动只有 3 个、且多是源码形状锁——**PostgreSQL 跑的是一条
+  几乎没有行为覆盖的路径**，正是本 RFC 要根除的形态。故按风险分三刀：D19a 结构（参与者对 + 围栏去重，零行为变更）、
+  D19b 任务房本体（SQLite 装配切到中立实现）、D19c 回合引擎（legacy engine 的回合面退役）。
+
+  **D19a ✅（任务房事务内参与者合一 + 无主围栏去重：零行为变更）**：
+  `collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts`（反问投影 / 关闭未决自问）与
+  `task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts`（继续 / 失败任务）各一份中立实现，装配层
+  `composeWorkgroupTaskRoomClarifyParticipantFactory` / `composeWorkgroupTaskRoomTaskParticipantFactory` 各一份
+  （事务类型三处都收敛到 `DatabaseTransaction`）。同批发现 `assertPostgresqlTaskOwnerlessTx` 与中立的
+  `assertTaskOwnerlessTx` 是**逐字重复**，删掉 PG 那份、六个消费方改指中立模块。三个 provider 文件删除；
+  rfc294 preflight 的能力债清单四条并成两条、rfc349 协作运行时锁改指中立工厂。
+  `rfc359-w4-d19a-adapters.test.ts` 两引擎各跑反问投影（按 asker 聚合 + 非空 shardKey 的 stop 指令）、
+  未决自问的 CAS 关闭与重放幂等、无主围栏的四种 owner 状态 + 源码锁。
+  **下一刀 D19b**：任务房本体（`postgresqlWorkgroupTaskRoom*.ts` 成为唯一实现，SQLite bootstrap 切过去，
+  `sqliteWorkgroupTaskRoom.ts` 与 legacy 的 taskActions / dwActions / room / configActions 退役）。
 
 ## 5. W5 —— 防复辟
 

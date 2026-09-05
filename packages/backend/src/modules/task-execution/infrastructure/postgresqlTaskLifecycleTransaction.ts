@@ -147,28 +147,3 @@ export async function assertPostgresqlTaskOwnerTx(
     )
   }
 }
-
-/**
- * 「无主写入」围栏：只有**活着的** owner（`claimed`）才是必须让路的写手。`released` /
- * `revoked` / `recovery-required` 都已没有能再通过 owner 围栏写库的 worker——旧世代 owner 由
- * successor daemon 的 `prepare` 撤销、本代 owner 由 exact-stop 标成需恢复——boot 孤儿收割、
- * 周期 orphan-reconcile 与自动修复正是要对这些任务写终态。此前把 `!== 'released'` 一律拒绝，
- * PostgreSQL 上撤销之后的收割与修复全部 409，任务永久卡 running（dual-provider-parity-audit
- * P0-3 / P0-4）；SQLite 侧这几条路根本不读 owner 行。
- */
-export async function assertPostgresqlTaskOwnerlessTx(
-  tx: PostgresqlTaskExecutionTransaction,
-  taskId: string,
-): Promise<void> {
-  const rows = await tx
-    .select({ state: taskExecutionOwners.state })
-    .from(taskExecutionOwners)
-    .where(eq(taskExecutionOwners.taskId, taskId))
-    .limit(1)
-  if (rows[0] !== undefined && rows[0].state === 'claimed') {
-    throw new TaskExecutionError(
-      'task-execution-stale-owner',
-      `ownerless task mutation refused durable owner for '${taskId}'`,
-    )
-  }
-}

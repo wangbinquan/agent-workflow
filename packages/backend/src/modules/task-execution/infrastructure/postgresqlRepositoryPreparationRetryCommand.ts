@@ -23,10 +23,8 @@ import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecu
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { submitTaskContinuation } from './taskContinuationAdmission'
-import {
-  assertPostgresqlTaskOwnerlessTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import type {
   PostgresqlTaskRoutePreparedWorkspace,
@@ -343,7 +341,7 @@ async function recordPreparationFailure(
   const operationRef = `repo-prep-retry:${snapshot.task.id}:${nextId()}`
   const summary = diagnosticText(error)
   const committed = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
-    await assertPostgresqlTaskOwnerlessTx(tx, snapshot.task.id)
+    await assertTaskOwnerlessTx(tx, snapshot.task.id)
     const admittedRows = await tx
       .update(tasks)
       .set({
@@ -451,7 +449,7 @@ async function commitPreparedWorkspace(
   const operationRef = `repo-prep-retry:${snapshot.task.id}:${nextId()}`
   const intentId = nextId()
   const committed = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
-    await assertPostgresqlTaskOwnerlessTx(tx, snapshot.task.id)
+    await assertTaskOwnerlessTx(tx, snapshot.task.id)
     const admittedRows = await tx
       .update(tasks)
       .set({

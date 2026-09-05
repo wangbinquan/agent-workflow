@@ -15,11 +15,11 @@ import type {
 } from '../application/ports/humanGateTaskLifecycle'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import {
-  assertPostgresqlTaskOwnerlessTx,
   assertPostgresqlTaskOwnerTx,
   withPostgresqlSerializableTaskExecution,
   type PostgresqlTaskExecutionTransaction,
 } from './postgresqlTaskLifecycleTransaction'
+import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
@@ -43,7 +43,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
     }
     const result = await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
       if (input.token === undefined) {
-        await assertPostgresqlTaskOwnerlessTx(tx, input.prepared.taskId)
+        await assertTaskOwnerlessTx(tx, input.prepared.taskId)
       } else {
         await assertPostgresqlTaskOwnerTx(tx, input.token, input.now)
       }
@@ -87,7 +87,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
   ): ReturnType<HumanGateTaskLifecycle['settleManualQuestionParks']> {
     const result = await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
       if (input.token === undefined) {
-        await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
+        await assertTaskOwnerlessTx(tx, input.taskId)
       } else {
         await assertPostgresqlTaskOwnerTx(tx, input.token, input.now)
       }

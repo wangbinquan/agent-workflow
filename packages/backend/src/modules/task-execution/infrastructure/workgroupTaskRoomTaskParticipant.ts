@@ -21,10 +21,7 @@ import { createTaskAuthorizationParticipantInTx } from './taskAuthorization'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import {
-  assertPostgresqlTaskOwnerlessTx,
-  type PostgresqlTaskExecutionTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+import { assertTaskOwnerlessTx, type TaskExecutionTransaction } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const HOST_NODE_IDS = ['__wg_leader__', '__wg_member__'] as const
@@ -60,7 +57,7 @@ const taskProjection = {
 }
 
 async function closeHolders(
-  tx: PostgresqlTaskExecutionTransaction,
+  tx: TaskExecutionTransaction,
   taskId: string,
   close: WorkgroupTaskRoomHolderClose | undefined,
   occurredAt: number,
@@ -79,8 +76,8 @@ async function closeHolders(
     .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
 }
 
-export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
-  tx: PostgresqlTaskExecutionTransaction,
+export function createWorkgroupTaskRoomTaskParticipantInTx(
+  tx: TaskExecutionTransaction,
   clarify: WorkgroupTaskRoomClarifyParticipantInTx,
 ): WorkgroupTaskRoomTaskParticipantInTx {
   const authorization = createTaskAuthorizationParticipantInTx(tx)
@@ -223,7 +220,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
       })
     },
     async continueTask(input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['continueTask']>[0]) {
-      await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
+      await assertTaskOwnerlessTx(tx, input.taskId)
       const task = (
         await tx
           .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })
@@ -289,7 +286,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
       })
     },
     async failTask(input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['failTask']>[0]) {
-      await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
+      await assertTaskOwnerlessTx(tx, input.taskId)
       const task = (
         await tx
           .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })

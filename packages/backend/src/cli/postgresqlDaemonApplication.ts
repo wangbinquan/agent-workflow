@@ -105,7 +105,7 @@ import type { TaskDriveCoordinator } from '@/modules/task-execution/application/
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
 import {
-  composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
+  composeWorkgroupTaskRoomClarifyParticipantFactory,
   createPostgresqlCollaborationCommandContext,
   createPostgresqlCollaborationRuntimeMechanics,
 } from '@/modules/collaboration/composition'
@@ -756,7 +756,7 @@ export async function composePostgresqlDaemonApplication(
     reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
   })
   collaborationContext = boundCollaborationContext
-  const workgroupClarify = composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory()
+  const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const workgroupTurns = composePostgresqlWorkgroupTurnsOperations(
     input.db,
     composePostgresqlWorkgroupHostLedgerParticipantFactory({

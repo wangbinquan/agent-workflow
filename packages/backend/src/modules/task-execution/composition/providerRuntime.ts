@@ -80,9 +80,9 @@ import {
   type TaskExecutionTriggerParticipant,
 } from './triggerExecution'
 import {
-  composePostgresqlWorkgroupTaskRoomTaskParticipantFactory,
-  type PostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
-  type PostgresqlWorkgroupTaskRoomTaskParticipantFactory,
+  composeWorkgroupTaskRoomTaskParticipantFactory,
+  type WorkgroupTaskRoomClarifyParticipantFactory,
+  type WorkgroupTaskRoomTaskParticipantFactory,
 } from './workgroupTaskRoomTask'
 import {
   composeTaskExecutionProviderBackground,
@@ -138,7 +138,7 @@ export interface SelectedPostgresqlTaskExecutionProviderRuntime extends Selected
    * reserves the transaction and binds this factory together with Workflow;
    * Collaboration receives the exact same reserved transaction.
    */
-  readonly workgroupTaskRoom: PostgresqlWorkgroupTaskRoomTaskParticipantFactory
+  readonly workgroupTaskRoom: WorkgroupTaskRoomTaskParticipantFactory
 }
 
 export type SelectedTaskExecutionProviderRuntime =
@@ -310,7 +310,7 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   >
   readonly fusion: Readonly<{ appHome: string }>
   readonly workgroupTaskRoom: Readonly<{
-    readonly collaboration: PostgresqlWorkgroupTaskRoomClarifyParticipantFactory
+    readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
   }>
 }
 
@@ -444,7 +444,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
       tasks: taskRoutes,
       clarifyDirective: composeTaskClarifyDirectiveRouteOperations(routeDependencies.collaboration),
     }),
-    workgroupTaskRoom: composePostgresqlWorkgroupTaskRoomTaskParticipantFactory({
+    workgroupTaskRoom: composeWorkgroupTaskRoomTaskParticipantFactory({
       collaboration: dependencies.workgroupTaskRoom.collaboration,
     }),
     background,

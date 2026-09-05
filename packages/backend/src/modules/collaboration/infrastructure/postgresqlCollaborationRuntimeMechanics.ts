@@ -50,11 +50,11 @@ import {
   workgroupAssignments,
 } from '@/db/schema'
 import {
-  assertPostgresqlTaskOwnerlessTx,
   assertPostgresqlTaskOwnerTx,
   type PostgresqlTaskExecutionTransaction,
   withPostgresqlSerializableTaskExecution,
 } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { assertTaskOwnerlessTx } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
@@ -1027,7 +1027,7 @@ async function inspectPostgresqlCrossClarify(
     // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则），真无主才走无主围栏。
     const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
     if (executionContext === undefined) {
-      await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
+      await assertTaskOwnerlessTx(tx, input.taskId)
     } else {
       if (executionContext.token.taskId !== input.taskId) {
         throw new ConflictError(
@@ -1173,7 +1173,7 @@ async function autoApproveEmptyPostgresqlReview(input: {
     // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则），真无主才走无主围栏。
     const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
     if (executionContext === undefined) {
-      await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
+      await assertTaskOwnerlessTx(tx, input.taskId)
     } else {
       if (executionContext.token.taskId !== input.taskId) {
         throw new ConflictError(
