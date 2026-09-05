@@ -6,7 +6,7 @@
     "moduleFiles": 1249,
     "productionFiles": 2637,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25544
+    "symbolsIncludingFileRoots": 25543
   },
   "entries": [
     {
@@ -136907,18 +136907,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#assertPostgresqlTaskOwnerTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertPostgresqlTaskOwnerTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -307229,5 +307217,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:05ee37298f1b02b5acb9e16cb328792cb1e76ca8c120391e60516a64d874027f"
+  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559"
 }

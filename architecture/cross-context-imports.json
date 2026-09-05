@@ -1550,6 +1550,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:046e96e38288ed378951",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W4",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts#assertTaskOwnerTx",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts",
+      "toSymbol": "assertTaskOwnerTx",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/resourceScopeAuthorization.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/resourceScopeAuthorization.ts",
       "fromSymbol": "$file",
@@ -62699,23 +62716,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:baf4e29546822146a14c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionOwners",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "taskExecutionOwners",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
       "fromSymbol": "$file",
@@ -71960,23 +71960,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentBundleRefs",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
-      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d511479705ce1ed0845c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W4",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#assertPostgresqlTaskOwnerTx",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "toSymbol": "assertPostgresqlTaskOwnerTx",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -86634,9 +86617,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5096,
+    "architectureExceptions": 5095,
     "implementationSccs": 0,
-    "observedEdges": 5734,
+    "observedEdges": 5733,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -88035,6 +88018,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/ws/broadcaster.ts",
       "toOwnerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#taskBroadcaster"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
+      "id": "import:046e96e38288ed378951",
+      "owner": "collaboration",
+      "removeAfterWave": "W4",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/task-execution/infrastructure/ownedTaskExecution",
+      "syntax": "static-import",
+      "targetSymbol": "assertTaskOwnerTx",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts#assertTaskOwnerTx"
     },
     {
       "edgeKind": "value",
@@ -153254,22 +153253,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#$file",
-      "id": "import:baf4e29546822146a14c",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "taskExecutionOwners",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionOwners"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file",
@@ -162979,22 +162962,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentBundleRefs"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
-      "id": "import:d511479705ce1ed0845c",
-      "owner": "collaboration",
-      "removeAfterWave": "W4",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction",
-      "syntax": "static-import",
-      "targetSymbol": "assertPostgresqlTaskOwnerTx",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#assertPostgresqlTaskOwnerTx"
     },
     {
       "edgeKind": "value",
@@ -178926,7 +178893,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:05ee37298f1b02b5acb9e16cb328792cb1e76ca8c120391e60516a64d874027f",
+  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
