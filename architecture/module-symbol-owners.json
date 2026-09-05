@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1879,
+    "backendFiles": 1878,
     "frontendFiles": 622,
     "legacyFiles": 614,
-    "moduleFiles": 1265,
-    "productionFiles": 2656,
+    "moduleFiles": 1264,
+    "productionFiles": 2655,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25753
+    "symbolsIncludingFileRoots": 25750
   },
   "entries": [
     {
@@ -49389,6 +49389,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/composition.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeDigitalEmployeeWriterCutoverFor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeDigitalEmployeeWriterCutoverFor",
+      "targetContext": "digital-employee",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/composition.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/composition.ts#composePostgresqlDigitalEmployee",
       "removeAfterWave": null,
       "status": "current-module",
@@ -49429,18 +49441,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composePostgresqlDigitalEmployeeWriterCutover",
-      "targetContext": "digital-employee",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/digital-employee/composition.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeSqliteDigitalEmployeeWriterCutover",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composeSqliteDigitalEmployeeWriterCutover",
       "targetContext": "digital-employee",
       "targetLayer": "composition"
     },
@@ -51871,12 +51871,12 @@
     {
       "currentContext": "digital-employee",
       "currentLayer": "infrastructure",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createEmployeeInputUploadStore",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#actorWhere",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createEmployeeInputUploadStore",
+      "symbol": "actorWhere",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -51885,10 +51885,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createSqliteEmployeeInputUploadPersistence",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createEmployeeInputUploadPersistence",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createSqliteEmployeeInputUploadPersistence",
+      "symbol": "createEmployeeInputUploadPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -51913,18 +51913,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "EMPLOYEE_INPUT_UPLOAD_TTL_MS",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#EmployeeInputUploadStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "EmployeeInputUploadStore",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -51961,42 +51949,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createDigitalEmployeeIntegrationTriggerParticipantIn",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts#createPostgresqlEmployeeInputUploadPersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlEmployeeInputUploadPersistence",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts#recordOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "recordOf",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -52459,12 +52411,12 @@
     {
       "currentContext": "digital-employee",
       "currentLayer": "infrastructure",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#countOpenLegacyMissions",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
+      "symbol": "countOpenLegacyMissions",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -52473,10 +52425,22 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createDigitalEmployeeWriterCutoverPersistence",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "symbol": "createDigitalEmployeeWriterCutoverPersistence",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#readWriter",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readWriter",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -309739,5 +309703,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1809a2b435a2bf0ea2910a7c6c894ee0abd558f6268e619b896fef54eaf14ae"
+  "sourceDigest": "sha256:70a2885ba95571d775407836cb405b7c9aa78d29e2a7d5e4dd695190d6a2e495"
 }

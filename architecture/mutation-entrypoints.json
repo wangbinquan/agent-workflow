@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1857,
+    "entries": 1854,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -10322,7 +10322,7 @@
       },
       "file": "packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createEmployeeInputUploadStore",
+      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createEmployeeInputUploadPersistence",
       "missingControls": [
         "audit",
         "authority",
@@ -10330,33 +10330,8 @@
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createEmployeeInputUploadStore",
-      "symbol": "createEmployeeInputUploadStore",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createSqliteEmployeeInputUploadPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createSqliteEmployeeInputUploadPersistence",
-      "symbol": "createSqliteEmployeeInputUploadPersistence",
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/inputUploadStore.ts#createEmployeeInputUploadPersistence",
+      "symbol": "createEmployeeInputUploadPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -10380,30 +10355,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/integrationTriggerParticipant.ts#createDigitalEmployeeIntegrationTriggerParticipantIn",
       "symbol": "createDigitalEmployeeIntegrationTriggerParticipantIn",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts#createPostgresqlEmployeeInputUploadPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts#createPostgresqlEmployeeInputUploadPersistence",
-      "symbol": "createPostgresqlEmployeeInputUploadPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -10557,36 +10508,14 @@
       },
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
+      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createDigitalEmployeeWriterCutoverPersistence",
       "missingControls": [
         "audit",
         "authorization",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createDigitalEmployeeWriterCutoverPersistence",
+      "symbol": "createDigitalEmployeeWriterCutoverPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -44296,7 +44225,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1809a2b435a2bf0ea2910a7c6c894ee0abd558f6268e619b896fef54eaf14ae",
+  "sourceDigest": "sha256:70a2885ba95571d775407836cb405b7c9aa78d29e2a7d5e4dd695190d6a2e495",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

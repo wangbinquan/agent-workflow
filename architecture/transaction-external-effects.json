@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 44,
-    "transactionCallbacks": 383
+    "transactionCallbacks": 379
   },
   "entries": [
     {
@@ -1459,35 +1459,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#dbTxSync:70",
-      "line": 70,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:117",
+      "line": 117,
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createDigitalEmployeeWriterCutoverPersistence",
       "status": "clear",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#dbTxSync:99",
-      "line": 99,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "status": "clear",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:131",
-      "line": 131,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "status": "clear",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "symbol": "createDigitalEmployeeWriterCutoverPersistence",
       "targetContext": "digital-employee",
       "transactionCallee": "transaction"
     },
@@ -1495,35 +1471,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:207",
-      "line": 207,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:98",
+      "line": 98,
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createDigitalEmployeeWriterCutoverPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:245",
-      "line": 245,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:282",
-      "line": 282,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
+      "symbol": "createDigitalEmployeeWriterCutoverPersistence",
       "targetContext": "digital-employee",
       "transactionCallee": "transaction"
     },
@@ -4701,7 +4653,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1809a2b435a2bf0ea2910a7c6c894ee0abd558f6268e619b896fef54eaf14ae",
+  "sourceDigest": "sha256:70a2885ba95571d775407836cb405b7c9aa78d29e2a7d5e4dd695190d6a2e495",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
