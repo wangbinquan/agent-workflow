@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 892,
+    "consumers": 890,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
@@ -148182,8 +148182,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24",
-        "import:c32ee23b798ff59d41f3"
+        "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -148201,12 +148200,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:c32ee23b798ff59d41f3",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -153120,8 +153113,7 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:2432113f72dfeb380072",
-        "import:3bf6cc018f92a5d2df35"
+        "import:5eea40bd1dc50559a2d2"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -153142,15 +153134,9 @@
         },
         {
           "context": "collaboration",
-          "edgeId": "import:2432113f72dfeb380072",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:3bf6cc018f92a5d2df35",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts#$file"
+          "edgeId": "import:5eea40bd1dc50559a2d2",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -163762,7 +163748,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d4f91ff6ee96405640e35a45317b76f83fbf59a10634f052a96952863ce0561b",
+  "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a",
   "targetContexts": [
     "collaboration",
     "development-automation",

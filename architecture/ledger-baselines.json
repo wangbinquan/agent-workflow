@@ -139,8 +139,8 @@
       "id": "node-run-direct-status-writes",
       "file": "packages/backend/tests/lifecycle-grep-guard.test.ts",
       "symbol": "DIRECT_STATUS_WRITE_ALLOWLIST",
-      "baseline": 9,
-      "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T2c：node_run 状态 CAS 合成一份中立事务内内核 `nodeRunLifecycleTransition.ts`（两处直写），PG participant 委托过去（其账本 2 → 1），8 → 9；W4 删 SQLite 同步孪生后回落。"
+      "baseline": 8,
+      "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T2c：node_run 状态 CAS 合成一份中立事务内内核 `nodeRunLifecycleTransition.ts`（两处直写），PG participant 委托过去（其账本 2 → 1），8 → 9；W4 删 SQLite 同步孪生后回落。 RFC-359 W4-B3a：终态清扫的两份 provider 文件合成一份中立实现（同一处 2 笔直写），9 → 8。"
     },
     {
       "id": "merge-state-blind-writes",
@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1936,
+      "baseline": 1932,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -405,14 +405,14 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 447,
+      "baseline": 446,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 370,
+      "baseline": 368,
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6271,
+      "baseline": 6235,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5280,
+      "baseline": 5269,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26071,
+      "baseline": 26052,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d4f91ff6ee96405640e35a45317b76f83fbf59a10634f052a96952863ce0561b",
+    "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4dce7dfa8cb334e982fe15226e2c51af49ee674b",
-    "contentDigest": "sha256:4df86c632cff9fbbff0f34ede1fd828b341a7e46d34d521c77006f7ee85c38f2",
+    "currentSnapshotSha": "046f5bb8a1196f08d8489b1306055fb846f5a5f0",
+    "contentDigest": "sha256:5722d7cc3c00cba8dc50733df76d7d48d163dbf398d119f58ed58e4c6067aaa1",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

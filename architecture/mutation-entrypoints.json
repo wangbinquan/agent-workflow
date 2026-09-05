@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1936,
+    "entries": 1932,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -4395,6 +4395,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts#createCollaborationTaskAccessPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts#createCollaborationTaskAccessPort",
+      "symbol": "createCollaborationTaskAccessPort",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -4413,6 +4437,51 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/fsHumanGateArtifactStore.ts#stageReceipt",
       "symbol": "stageReceipt",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts#createHumanGateContinuationRecoveryQueries",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts#createHumanGateContinuationRecoveryQueries",
+      "symbol": "createHumanGateContinuationRecoveryQueries",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+      "symbol": "createHumanGateTerminalSweepCommand",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -5891,54 +5960,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationTaskAccess.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationTaskAccess.ts#createPostgresqlCollaborationTaskAccessPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationTaskAccess.ts#createPostgresqlCollaborationTaskAccessPort",
-      "symbol": "createPostgresqlCollaborationTaskAccessPort",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts#createPostgresqlHumanGateContinuationRecoveryQueries",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts#createPostgresqlHumanGateContinuationRecoveryQueries",
-      "symbol": "createPostgresqlHumanGateContinuationRecoveryQueries",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "internal-family",
         "authorization": false,
         "event": false,
@@ -5985,27 +6006,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-      "symbol": "createPostgresqlHumanGateTerminalSweepCommand",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
@@ -6022,30 +6022,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewRepairParticipant.ts#createPostgresqlReviewRepairParticipant",
       "symbol": "createPostgresqlReviewRepairParticipant",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewTaskAccess.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewTaskAccess.ts#createPostgresqlReviewTaskAccessPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewTaskAccess.ts#createPostgresqlReviewTaskAccessPort",
-      "symbol": "createPostgresqlReviewTaskAccessPort",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -6166,6 +6142,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#createReviewDecisionCommandContext",
       "symbol": "createReviewDecisionCommandContext",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/reviewTaskAccess.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/reviewTaskAccess.ts#createReviewTaskAccessPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewTaskAccess.ts#createReviewTaskAccessPort",
+      "symbol": "createReviewTaskAccessPort",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -6297,75 +6297,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationTaskAccess.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationTaskAccess.ts#createSqliteCollaborationTaskAccessPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationTaskAccess.ts#createSqliteCollaborationTaskAccessPort",
-      "symbol": "createSqliteCollaborationTaskAccessPort",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts#createSqliteHumanGateContinuationRecoveryQueries",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts#createSqliteHumanGateContinuationRecoveryQueries",
-      "symbol": "createSqliteHumanGateContinuationRecoveryQueries",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-      "symbol": "createSqliteHumanGateTerminalSweepCommand",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
@@ -6382,30 +6313,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteReviewRepairParticipant.ts#createSqliteReviewRepairParticipant",
       "symbol": "createSqliteReviewRepairParticipant",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteReviewTaskAccess.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteReviewTaskAccess.ts#createSqliteReviewTaskAccessPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteReviewTaskAccess.ts#createSqliteReviewTaskAccessPort",
-      "symbol": "createSqliteReviewTaskAccessPort",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -46139,7 +46046,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d4f91ff6ee96405640e35a45317b76f83fbf59a10634f052a96952863ce0561b",
+  "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46249,11 +46156,59 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 269,
+      "durableWriterSites": 266,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
     "entries": [
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "run",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#58:nodeRuns",
+        "line": 58,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
+        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
+        "symbol": "createHumanGateTerminalSweepCommand"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "run",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#74:nodeRuns",
+        "line": 74,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
+        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
+        "symbol": "createHumanGateTerminalSweepCommand"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "run",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#84:nodeRuns",
+        "line": 84,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
+        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
+        "symbol": "createHumanGateTerminalSweepCommand"
+      },
       {
         "allowedTables": [
           "nodeRuns"
@@ -46528,54 +46483,6 @@
       },
       {
         "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "run",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#55:nodeRuns",
-        "line": 55,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
-        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
-        "symbol": "createPostgresqlHumanGateTerminalSweepCommand"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "run",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#71:nodeRuns",
-        "line": 71,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
-        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
-        "symbol": "createPostgresqlHumanGateTerminalSweepCommand"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "run",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#81:nodeRuns",
-        "line": 81,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
-        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
-        "symbol": "createPostgresqlHumanGateTerminalSweepCommand"
-      },
-      {
-        "allowedTables": [
           "nodeRunOutputs"
         ],
         "authorityKind": "control-revision",
@@ -46653,54 +46560,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "projectClarifyGateOpenTx"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "run",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#58:nodeRuns",
-        "line": 58,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
-        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
-        "symbol": "createSqliteHumanGateTerminalSweepCommand"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "run",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#75:nodeRuns",
-        "line": 75,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
-        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
-        "symbol": "createSqliteHumanGateTerminalSweepCommand"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "run",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#85:nodeRuns",
-        "line": 85,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-        "requiredBrandedProof": "TerminalMaintenanceExecutionFence",
-        "revisionPredicate": "terminal-human-gate-state-and-node-status-cas",
-        "symbol": "createSqliteHumanGateTerminalSweepCommand"
       },
       {
         "allowedTables": [

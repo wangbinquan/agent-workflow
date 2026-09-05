@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 56,
-    "transactionCallbacks": 447
+    "transactionCallbacks": 446
   },
   "entries": [
     {
@@ -408,6 +408,21 @@
     },
     {
       "effectTokens": [
+        "provider",
+        "push"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#transaction:27",
+      "line": 27,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+      "status": "co-located-risk",
+      "symbol": "createHumanGateTerminalSweepCommand",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
         "push"
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
@@ -633,18 +648,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewNodeReviewerStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewNodeReviewerStore.ts#transaction:83",
-      "line": 83,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewNodeReviewerStore.ts#PostgresqlReviewNodeReviewerStore",
-      "status": "clear",
-      "symbol": "PostgresqlReviewNodeReviewerStore",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewRepairParticipant.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewRepairParticipant.ts#transaction:64",
@@ -652,6 +655,18 @@
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlReviewRepairParticipant.ts#createPostgresqlReviewRepairParticipant",
       "status": "clear",
       "symbol": "createPostgresqlReviewRepairParticipant",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/reviewNodeReviewerStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/reviewNodeReviewerStore.ts#transaction:86",
+      "line": 86,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewNodeReviewerStore.ts#DrizzleReviewNodeReviewerStore",
+      "status": "clear",
+      "symbol": "DrizzleReviewNodeReviewerStore",
       "targetContext": "collaboration",
       "transactionCallee": "transaction"
     },
@@ -670,21 +685,6 @@
       "transactionCallee": "dbTxSync"
     },
     {
-      "effectTokens": [
-        "provider",
-        "push"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#dbTxSync:26",
-      "line": 26,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-      "status": "co-located-risk",
-      "symbol": "createSqliteHumanGateTerminalSweepCommand",
-      "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts",
       "finalCriterion": "no-external-effect-observed",
@@ -693,18 +693,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts#SqliteManualQuestionOpenWriter",
       "status": "clear",
       "symbol": "SqliteManualQuestionOpenWriter",
-      "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteReviewNodeReviewerStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/sqliteReviewNodeReviewerStore.ts#dbTxSync:84",
-      "line": 84,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteReviewNodeReviewerStore.ts#SqliteReviewNodeReviewerStore",
-      "status": "clear",
-      "symbol": "SqliteReviewNodeReviewerStore",
       "targetContext": "collaboration",
       "transactionCallee": "dbTxSync"
     },
@@ -5494,7 +5482,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d4f91ff6ee96405640e35a45317b76f83fbf59a10634f052a96952863ce0561b",
+  "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

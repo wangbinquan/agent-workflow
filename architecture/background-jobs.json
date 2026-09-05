@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 370,
-    "executionLocal": 54,
+    "entries": 368,
+    "executionLocal": 53,
     "longRunning": 83,
     "managed": 11,
-    "periodic": 222
+    "periodic": 221
   },
   "entries": [
     {
@@ -5881,6 +5881,52 @@
       "targetContext": "collaboration"
     },
     {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts#createHumanGateContinuationRecoveryQueries",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts#createHumanGateContinuationRecoveryQueries",
+      "phase": "execution",
+      "symbol": "createHumanGateContinuationRecoveryQueries",
+      "targetContext": "collaboration"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
+      "phase": "unknown",
+      "symbol": "createHumanGateTerminalSweepCommand",
+      "targetContext": "collaboration"
+    },
+    {
       "dependencies": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
       "finalCriterion": "owner lifecycle",
@@ -6033,98 +6079,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#reconcilePostgresqlRoundEntries",
       "phase": "execution",
       "symbol": "reconcilePostgresqlRoundEntries",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts#createPostgresqlHumanGateContinuationRecoveryQueries",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateContinuationRecovery.ts#createPostgresqlHumanGateContinuationRecoveryQueries",
-      "phase": "execution",
-      "symbol": "createPostgresqlHumanGateContinuationRecoveryQueries",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts#createPostgresqlHumanGateTerminalSweepCommand",
-      "phase": "unknown",
-      "symbol": "createPostgresqlHumanGateTerminalSweepCommand",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts#createSqliteHumanGateContinuationRecoveryQueries",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts#createSqliteHumanGateContinuationRecoveryQueries",
-      "phase": "execution",
-      "symbol": "createSqliteHumanGateContinuationRecoveryQueries",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts#createSqliteHumanGateTerminalSweepCommand",
-      "phase": "unknown",
-      "symbol": "createSqliteHumanGateTerminalSweepCommand",
       "targetContext": "collaboration"
     },
     {
@@ -13629,5 +13583,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d4f91ff6ee96405640e35a45317b76f83fbf59a10634f052a96952863ce0561b"
+  "sourceDigest": "sha256:5af99540dad0b8732822777d7b9a6adaad00675c035ad5cd2a84bdcab2b2b18a"
 }
