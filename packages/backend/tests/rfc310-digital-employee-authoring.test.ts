@@ -813,7 +813,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         composeDigitalEmployeeAgentTemplateCatalogParticipant,
       ),
       typePackageDescriptorJsons: [
-        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
+        ...(await readPersistedDigitalEmployeeTypePackageDescriptorJsons(db)),
         developmentEmployeeTypePackage.descriptorJson,
       ],
     })

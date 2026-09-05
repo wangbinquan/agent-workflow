@@ -126,8 +126,9 @@ import {
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   composePostgresqlDigitalEmployee,
-  composePostgresqlDigitalEmployeeBootstrapReads,
+  composeDigitalEmployeeBootstrapReadsFor,
   composePostgresqlDigitalEmployeeWriterCutover,
+  createDigitalEmployeeResourceCatalogAclProviders,
   createEmployeeInputArtifactStore,
   createPostgresqlEmployeeReactionRoundQueries,
   createReactionExecutionAdapter,
@@ -182,10 +183,7 @@ import {
   buildDevelopmentPipelineDeps,
   createDevelopmentWorkspaceRepositoryPreparation,
 } from '@/services/developmentDeliveryDeps'
-import {
-  createPostgresqlForeignResourceAclOperations,
-  type ForeignResourceAclType,
-} from '@/platform/persistence/postgresqlForeignResourceAcl'
+import type { DigitalEmployeeAclResourceType } from '@/routes/digitalEmployees'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { composePostgresqlIntentPersistence } from '@/modules/intent/composition/persistence'
 import {
@@ -331,12 +329,9 @@ const log = createLogger('postgresql-daemon-application')
 const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
 const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
 
-function isForeignAclType(type: string): type is ForeignResourceAclType {
+function isDigitalEmployeeAclType(type: string): type is DigitalEmployeeAclResourceType {
   return (
-    type === 'development_adapter' ||
-    type === 'employee_definition' ||
-    type === 'employee_tool' ||
-    type === 'employee_job_template'
+    type === 'employee_definition' || type === 'employee_tool' || type === 'employee_job_template'
   )
 }
 
@@ -1366,7 +1361,7 @@ export async function composePostgresqlDaemonApplication(
     workspace: employeeWorkspace,
     executionContracts,
   })
-  const persistedTypePackages = await composePostgresqlDigitalEmployeeBootstrapReads(
+  const persistedTypePackages = await composeDigitalEmployeeBootstrapReadsFor(
     input.db,
   ).listTypePackageDescriptorJsons()
   const digitalEmployee = composePostgresqlDigitalEmployee({
@@ -1536,17 +1531,35 @@ export async function composePostgresqlDaemonApplication(
       composePostgresqlDigitalEmployeeWriterCutover(input.db),
     ),
   })
-  const foreignAcl = createPostgresqlForeignResourceAclOperations({
-    db: input.db,
-    authorization: resourceCatalog.authorization,
+  // RFC-359 W4-D6c：employee_* 的 ACL 与 SQLite 根同一条目录中立 foreign-owner 路径，identity 行由
+  // digital-employee 在目录写事务里交出；PG 专属的 foreign ACL 适配器退役。
+  const digitalEmployeeAclIdentityProviders = createDigitalEmployeeResourceCatalogAclProviders(
+    input.db,
+  )
+  const digitalEmployeeAcl = Object.freeze({
+    employee_definition: composeForeignResourceAclFor({
+      db: input.db,
+      identity: digitalEmployeeAclIdentityProviders.employeeDefinition,
+    }),
+    employee_tool: composeForeignResourceAclFor({
+      db: input.db,
+      identity: digitalEmployeeAclIdentityProviders.employeeTool,
+    }),
+    employee_job_template: composeForeignResourceAclFor({
+      db: input.db,
+      identity: digitalEmployeeAclIdentityProviders.employeeJobTemplate,
+    }),
   })
   const digitalEmployeePersistence = composeDigitalEmployeeRoutePersistence({
     identityAccess,
     resourceCatalog,
     acl: {
-      getResourceAcl: (actor, type, row) => foreignAcl.read(actor, type, row),
+      getResourceAcl: (actor, type, row) =>
+        digitalEmployeeAcl[type].getResourceAcl(actor, type, row),
       updateResourceAcl: (actor, type, row, body, options) =>
-        foreignAcl.update(actor, type, row, body, options?.updatedAt),
+        digitalEmployeeAcl[type].updateResourceAcl(actor, type, row, body, {
+          ...(options?.updatedAt === undefined ? {} : { updatedAt: options.updatedAt }),
+        }),
     },
   })
   const developmentAclRoutes: PostgresqlAppCompositionInput['digitalDevelopment']['developmentConfig']['aclRoutes'] =
@@ -1568,16 +1581,24 @@ export async function composePostgresqlDaemonApplication(
           read: (actor, row) =>
             request.type === 'development_adapter'
               ? developmentAdapterAcl.getResourceAcl(actor, request.type, row)
-              : isForeignAclType(request.type)
-                ? foreignAcl.read(actor, request.type, row)
+              : isDigitalEmployeeAclType(request.type)
+                ? digitalEmployeeAcl[request.type].getResourceAcl(actor, request.type, row)
                 : resourceCatalog.acl.getResourceAcl(actor, request.type, row),
           update: (actor, row, body, updatedAt) =>
             request.type === 'development_adapter'
               ? developmentAdapterAcl.updateResourceAcl(actor, request.type, row, body, {
                   ...(updatedAt === undefined ? {} : { updatedAt }),
                 })
-              : isForeignAclType(request.type)
-                ? foreignAcl.update(actor, request.type, row, body, updatedAt)
+              : isDigitalEmployeeAclType(request.type)
+                ? digitalEmployeeAcl[request.type].updateResourceAcl(
+                    actor,
+                    request.type,
+                    row,
+                    body,
+                    {
+                      ...(updatedAt === undefined ? {} : { updatedAt }),
+                    },
+                  )
                 : resourceCatalog.acl.updateResourceAcl(actor, request.type, row, body, {
                     ...(updatedAt === undefined ? {} : { updatedAt }),
                   }),

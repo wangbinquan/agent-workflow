@@ -392,6 +392,25 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   的 scope 校验、引用存在性、同 scope 覆盖、§3.8 解析与删除；legacy 迁移的读—析—落库与幂等），末尾源码锁保证该族不再出现
   provider 专属文件。**下一刀 D6c**：digital-employee `AuthoringStore`（employee_definition / employee_tool /
   employee_job_template）接同一个异步 identity 端口，之后删 `postgresqlForeignResourceAcl.ts` 与 `Sync*` 形态。
+  **D6c ✅（digital-employee 作者面 + foreign-owner ACL 收尾）**：`authoringStore.ts` 一份（类型包 / 工具 / 岗位模版 /
+  员工定义 / 全局执行策略五个聚合的 identity + immutable revision；撞唯一索引经能力矩阵归类成 typed 409，多表写走统一事务
+  原语，缺席行按 returning 行数判 typed 404，publish / update 员工定义前先按同一谓词判 identity——revision 表带 FK，直接插会以
+  驱动错误而不是 404 收场；`ensureExecutionPolicy` 先 `lockAggregateRoot` 锁单例行再读—改—写；列表在 JS 侧排序，不让 DB
+  collation 决定顺序；ACL 列映射在函数内构造——模块级常量会把 SQLite 形态的列句柄冻结在 PG 路径上，aclRevision 以 int8 字符串
+  回来、CAS 永远不等）。端口 `DigitalEmployeeAuthoringPersistence` 改成显式异步接口，同步 `DigitalEmployeeAuthoringStore` 与
+  `asAsync*` 桥退役；employee_* 的 ACL identity 面改成与目录同形的异步端口（`loadForMutation(tx, id)` + aclRevision CAS），
+  `DigitalEmployeeAuthoringAdapter` 把它连同持久化一起交出；Bun-dev 的类型包草稿覆盖改包异步持久化，且两个 bootstrap 同一语义
+  （PG 装配也认 `typePackageDriftPolicy`）。装配：`composeDigitalEmployeeBootstrapReadsFor` / `createDigitalEmployeeAuthoringReads`
+  各一份，`readPersistedDigitalEmployeeTypePackageDescriptorJsons` 改异步。两个 bootstrap 的 employee_* ACL 都改走
+  `composeForeignResourceAclFor`（与 development_adapter 同一条路径），`platform/persistence/postgresqlForeignResourceAcl.ts`
+  删除；resource-catalog 的 `SyncResourceAclIdentity*` 端口形态、SQLite ACL 仓库里的同步 identity 分支、`services/resourceAcl.ts`
+  的同名再导出（连同其 R1 兼容边）一起退役，`updateResourceAcl` 的 `identityPersistence` 选项消失。三个 provider 文件删除，
+  digital-employee 作者面 dbTxSync 归零。`rfc359-w4-d6c-adapters.test.ts` 两引擎各跑（类型包幂等 / drift / 定序；工具登记—
+  校验回写—发布—退役；岗位模版撞名 / 404 / 发布；员工定义 create / update / 类型期望不符 404 / 撞名不留半个 revision；全局
+  执行策略幂等递增；foreign ACL 的读面、grants 替换、CAS、换 owner 撞名、岗位模版按类型版本分区、工具不判撞名、private 对陌生人
+  即 not-found），末尾源码锁保证该族不再有 provider 专属文件、目录不再有同步 identity 形态。rfc223 / rfc351 / drift 等用例改接
+  异步持久化与中立 foreign 路径。**下一刀**：digital-employee runtime / input-upload / writer-cutover 三对与 identity-access 的两对
+  大 PG 底。
 
 ## 5. W5 —— 防复辟
 

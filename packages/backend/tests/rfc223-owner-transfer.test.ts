@@ -18,7 +18,10 @@ import {
   workgroups,
 } from '../src/db/schema'
 import { createDigitalEmployeeResourceCatalogAclProviders } from '../src/modules/digital-employee/composition/resourceCatalogAcl'
-import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
+import {
+  composeForeignResourceAclFor,
+  updateResourceAcl,
+} from '../src/modules/resource-catalog/composition/resourceAcl'
 import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
 import { ConflictError, ForbiddenError, NotFoundError } from '../src/util/errors'
 
@@ -294,24 +297,19 @@ describe('RFC-330 —— 分区化的 owner-name 唯一转移预检', () => {
       createDigitalEmployeeResourceCatalogAclProviders(db).employeeJobTemplate
     const source = await seedTemplate('job-src', 'owner-a', 2, 'Reviewer')
     await seedTemplate('job-other-revision', 'owner-b', 1, 'Reviewer')
-    const moved = await updateResourceAcl(
+    const moved = await composeForeignResourceAclFor({
       db,
-      admin,
-      'employee_job_template',
-      source,
-      {
-        ownerUserId: 'owner-b',
-        expectedResourceId: source.id,
-        expectedAclRevision: 0,
-      },
-      { identityPersistence },
-    )
+      identity: identityPersistence,
+    }).updateResourceAcl(admin, 'employee_job_template', source, {
+      ownerUserId: 'owner-b',
+      expectedResourceId: source.id,
+      expectedAclRevision: 0,
+    })
     expect(moved.ownerUserId).toBe('owner-b')
 
     const second = await seedTemplate('job-src-2', 'owner-a', 2, 'Reviewer')
     await expect(
-      updateResourceAcl(
-        db,
+      composeForeignResourceAclFor({ db, identity: identityPersistence }).updateResourceAcl(
         admin,
         'employee_job_template',
         second,
@@ -320,7 +318,6 @@ describe('RFC-330 —— 分区化的 owner-name 唯一转移预检', () => {
           expectedResourceId: second.id,
           expectedAclRevision: 0,
         },
-        { identityPersistence },
       ),
     ).rejects.toMatchObject({ code: 'resource-name-conflict', status: 409 })
     expect(
@@ -355,8 +352,7 @@ describe('RFC-330 —— 分区化的 owner-name 唯一转移预检', () => {
     const source = await seedDefinition('emp-src', 'owner-a')
     await seedDefinition('emp-target', 'owner-b')
     await expect(
-      updateResourceAcl(
-        db,
+      composeForeignResourceAclFor({ db, identity: identityPersistence }).updateResourceAcl(
         admin,
         'employee_definition',
         source,
@@ -365,7 +361,6 @@ describe('RFC-330 —— 分区化的 owner-name 唯一转移预检', () => {
           expectedResourceId: source.id,
           expectedAclRevision: 0,
         },
-        { identityPersistence },
       ),
     ).rejects.toMatchObject({ code: 'resource-name-conflict', status: 409 })
   })

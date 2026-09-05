@@ -518,12 +518,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     // RFC-359 W4-D3：默认路径走中立端口；带 owner 侧同步参与者的调用仍走 SQLite 端口。
     expect(composition).toContain(': createResourceAclMutationPort(input.db)')
     expect(composition).toContain(': createResourceAclReadPort(input.db)')
-    expect(composition).toContain(
-      'createSqliteResourceAclMutationPort(input.db, input.lifecycle, input.identityPersistence)',
-    )
-    expect(composition).toContain(
-      'createSqliteResourceAclReadPort(input.db, input.identityPersistence)',
-    )
+    expect(composition).toContain('createSqliteResourceAclMutationPort(input.db, input.lifecycle)')
+    expect(composition).toContain('createSqliteResourceAclReadPort(input.db)')
     expect(composition).toContain('export function composeProviderResourceAclOperationApplication<')
     expect(composition).not.toContain('withSqliteResourceAclMutation')
     expect(composition).not.toContain('getAclResourceAccessRowInTx')

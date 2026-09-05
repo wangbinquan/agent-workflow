@@ -17,10 +17,7 @@ import {
   type ResourceAclApplication,
   type ResourceAclOperationLinearizer,
 } from '../application/resourceAcl'
-import type {
-  ResourceAclIdentityPersistence,
-  SyncResourceAclIdentityPersistence,
-} from '../application/ports/resourceAclPersistence'
+import type { ResourceAclIdentityPersistence } from '../application/ports/resourceAclPersistence'
 import type { ResourceCatalogOwnedAclType } from '../application/ports/providerResourceCatalogPersistence'
 import { createResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
@@ -49,24 +46,24 @@ import {
 
 function buildSqliteAclApplications(input: {
   readonly db: DbClient
-  readonly identityPersistence?: SyncResourceAclIdentityPersistence
   readonly lifecycle?: SqliteResourceAclMutationLifecycle
 }) {
   const authorization = createResourceAuthorizationApplication(
     createSqliteResourceGrantReadPort(input.db),
   )
-  // RFC-359 W4-D3：目录自有类型走中立的读 / 写端口（统一事务原语）；带 owner 侧同步 identity persistence /
-  // 同步 after-write 钩子的调用（development_adapter / employee_* / mcp 装配）仍走 SQLite 同步路径，随各 owner 的 dbTxSync 归零一起退。
-  const legacy = input.identityPersistence !== undefined || input.lifecycle !== undefined
+  // RFC-359 W4-D3：目录自有类型走中立的读 / 写端口（统一事务原语）；带同步 after-write 钩子的调用（mcp 装配）
+  // 仍走 SQLite 同步路径，随该 owner 的 dbTxSync 归零一起退。owner 在别的 context 的 identity 行（development_adapter /
+  // employee_*）已全部改走 `composeForeignResourceAclFor`（W4-D6a / D6c），同步 identity 形态不复存在。
+  const legacy = input.lifecycle !== undefined
   return Object.freeze({
     authorization,
     acl: createResourceAclApplication<AclResourceType>({
       authorization,
       mutation: legacy
-        ? createSqliteResourceAclMutationPort(input.db, input.lifecycle, input.identityPersistence)
+        ? createSqliteResourceAclMutationPort(input.db, input.lifecycle)
         : createResourceAclMutationPort(input.db),
       read: legacy
-        ? createSqliteResourceAclReadPort(input.db, input.identityPersistence)
+        ? createSqliteResourceAclReadPort(input.db)
         : createResourceAclReadPort(input.db),
     }),
   })
@@ -77,12 +74,9 @@ const sqliteAclApplications = new WeakMap<DbClient, SqliteAclApplications>()
 
 function applicationsFor(
   db: DbClient,
-  input: {
-    readonly identityPersistence?: SyncResourceAclIdentityPersistence
-    readonly lifecycle?: SqliteResourceAclMutationLifecycle
-  } = {},
+  input: { readonly lifecycle?: SqliteResourceAclMutationLifecycle } = {},
 ): SqliteAclApplications {
-  if (input.identityPersistence !== undefined || input.lifecycle !== undefined) {
+  if (input.lifecycle !== undefined) {
     return buildSqliteAclApplications({ db, ...input })
   }
   const current = sqliteAclApplications.get(db)
@@ -217,13 +211,11 @@ export function getResourceAcl(
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
-  identityPersistence?: SyncResourceAclIdentityPersistence,
 ): Promise<ResourceAcl> {
-  return applicationsFor(db, { identityPersistence }).acl.getResourceAcl(actor, type, row)
+  return applicationsFor(db).acl.getResourceAcl(actor, type, row)
 }
 
 export interface ResourceAclWriteEffects {
-  readonly identityPersistence?: SyncResourceAclIdentityPersistence
   readonly afterWriteInTx?: (
     tx: DbTxSync,
     change: {
@@ -259,10 +251,7 @@ export function updateResourceAcl(
               now: change.now,
             }),
         }
-  return applicationsFor(db, {
-    identityPersistence: options.identityPersistence,
-    lifecycle,
-  }).acl.updateResourceAcl(actor, type, row, body, {
+  return applicationsFor(db, { lifecycle }).acl.updateResourceAcl(actor, type, row, body, {
     updatedAt: options.updatedAt,
     afterCommit: async () => {
       await options.afterCommit?.(db)

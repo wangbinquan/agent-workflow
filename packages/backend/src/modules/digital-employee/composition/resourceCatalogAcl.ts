@@ -1,8 +1,8 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createDigitalEmployeeResourceCatalogAclAdapters as adaptResourceCatalogAcl } from '../application/adapters/resource-catalog-acl-adapter'
-import { createSqliteDigitalEmployeeAuthoringStore } from '../infrastructure/sqliteAuthoringStore'
+import { createDigitalEmployeeAuthoringPersistence } from '../infrastructure/authoringStore'
 
-/** Owner composition for resource-catalog ACL identity persistence. */
-export function createDigitalEmployeeResourceCatalogAclProviders(db: DbClient) {
-  return adaptResourceCatalogAcl(createSqliteDigitalEmployeeAuthoringStore(db))
+/** Owner composition for resource-catalog ACL identity persistence（两个 provider 同一份）。 */
+export function createDigitalEmployeeResourceCatalogAclProviders(db: ProviderNeutralDatabase) {
+  return adaptResourceCatalogAcl(createDigitalEmployeeAuthoringPersistence(db))
 }

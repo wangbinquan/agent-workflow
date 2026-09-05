@@ -9,6 +9,7 @@ import type {
   ToolRegistrationContent,
   ToolValidationReceipt,
 } from '../../domain/model'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 
 export interface TypePackageRecord {
   readonly descriptor: EmployeeTypePackageDescriptor
@@ -152,35 +153,47 @@ export interface DigitalEmployeeAclIdentityMutationRow {
   readonly aclRevision: number
 }
 
+/**
+ * RFC-359 W4-D6c —— owner 在 resource-catalog 的目录写事务里交出的 identity 行（与目录的
+ * `ResourceAclIdentityMutation` 结构同形，bootstrap 处结构装配）：撞名判定与写回都绑定同一个统一事务句柄，
+ * `update` 以 aclRevision 为 CAS（false = 有人先写了），目录据此回滚整笔事务。
+ */
 export interface DigitalEmployeeAclIdentityMutation {
   readonly current: DigitalEmployeeAclIdentityMutationRow
   readonly ownerNameIsUnique: boolean
-  hasOwnerNameCollision(nextOwnerUserId: string): boolean
+  hasOwnerNameCollision(nextOwnerUserId: string): Promise<boolean>
   update(input: {
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly aclRevision: number
     readonly updatedAt: number
-  }): void
+  }): Promise<boolean>
 }
+
+export type DigitalEmployeeAclIdentityType =
+  | 'employee_definition'
+  | 'employee_tool'
+  | 'employee_job_template'
 
 export interface DigitalEmployeeAclIdentityPersistence {
-  getRevision(resourceId: string): number
-  withMutation<T>(
+  readonly type: DigitalEmployeeAclIdentityType
+  getRevision(resourceId: string): Promise<number>
+  loadForMutation(
+    transaction: DatabaseTransaction,
     resourceId: string,
-    run: (mutation: DigitalEmployeeAclIdentityMutation) => T,
-  ): T | undefined
+  ): Promise<DigitalEmployeeAclIdentityMutation | undefined>
 }
 
-export interface DigitalEmployeeAuthoringStore {
-  readonly resourceAclIdentities: {
-    readonly employeeDefinition: DigitalEmployeeAclIdentityPersistence
-    readonly employeeTool: DigitalEmployeeAclIdentityPersistence
-    readonly employeeJobTemplate: DigitalEmployeeAclIdentityPersistence
-  }
+export interface DigitalEmployeeAclIdentities {
+  readonly employeeDefinition: DigitalEmployeeAclIdentityPersistence
+  readonly employeeTool: DigitalEmployeeAclIdentityPersistence
+  readonly employeeJobTemplate: DigitalEmployeeAclIdentityPersistence
+}
 
-  ensureTypePackage(input: TypePackageRecord): void
-  listTypePackageRegistrations(): TypePackageRegistrationRecord[]
+/** Live provider contract：两个 provider 同一份实现，只有异步形态（RFC-359 W4-D6c）。 */
+export interface DigitalEmployeeAuthoringPersistence {
+  ensureTypePackage(input: TypePackageRecord): Promise<void>
+  listTypePackageRegistrations(): Promise<TypePackageRegistrationRecord[]>
   /**
    * Raw immutable descriptors for schema-tolerant bootstrap projections.
    *
@@ -189,51 +202,56 @@ export interface DigitalEmployeeAuthoringStore {
    * catalog. Callers that need current authoring semantics must continue to
    * use list/getTypePackages, which parse the full descriptor.
    */
-  listTypePackageDescriptorJsons(): string[]
-  listTypePackages(): TypePackageRecord[]
-  getTypePackage(ref: EmployeeTypeRef): TypePackageRecord | null
+  listTypePackageDescriptorJsons(): Promise<string[]>
+  listTypePackages(): Promise<TypePackageRecord[]>
+  getTypePackage(ref: EmployeeTypeRef): Promise<TypePackageRecord | null>
 
-  createTool(input: ToolDraftRecord): void
+  createTool(input: ToolDraftRecord): Promise<void>
   updateToolValidation(
     id: string,
     content: ToolRegistrationContent,
     receipt: ToolValidationReceipt,
     updatedAt: number,
-  ): void
-  getTool(id: string): ToolDraftRecord | null
+  ): Promise<void>
+  getTool(id: string): Promise<ToolDraftRecord | null>
   /**
    * RFC-330 —— 只读 ACL 窄查询（与 getEmployeeDefinitionAcl 同理由）：不解析
    * draft_json，对任何存在的行都可答；retired 行仍返回，由调用方决定是否视为消失。
    */
-  getToolAcl(id: string): {
+  getToolAcl(id: string): Promise<{
     readonly id: string
     readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly retiredAt: number | null
-  } | null
-  listTools(typeRef: EmployeeTypeRef, workItemRef: string): ToolDraftRecord[]
-  publishTool(input: ToolRevisionRecord): void
-  getToolRevision(ref: ExactResourceRef): ToolRevisionRecord | null
-  retireTool(id: string, retiredAt: number): void
+  } | null>
+  listTools(typeRef: EmployeeTypeRef, workItemRef: string): Promise<ToolDraftRecord[]>
+  publishTool(input: ToolRevisionRecord): Promise<void>
+  getToolRevision(ref: ExactResourceRef): Promise<ToolRevisionRecord | null>
+  retireTool(id: string, retiredAt: number): Promise<void>
 
-  createJobTemplate(input: JobTemplateRecord): void
-  updateJobTemplate(id: string, name: string, draft: EmployeeJobTemplateContent, now: number): void
-  getJobTemplate(id: string): JobTemplateRecord | null
+  createJobTemplate(input: JobTemplateRecord): Promise<void>
+  updateJobTemplate(
+    id: string,
+    name: string,
+    draft: EmployeeJobTemplateContent,
+    now: number,
+  ): Promise<void>
+  getJobTemplate(id: string): Promise<JobTemplateRecord | null>
   /** RFC-330 —— 岗位模版的只读 ACL 窄查询（同上）。 */
-  getJobTemplateAcl(id: string): {
+  getJobTemplateAcl(id: string): Promise<{
     readonly id: string
     readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly archivedAt: number | null
-  } | null
-  listJobTemplates(typeRef: EmployeeTypeRef): JobTemplateRecord[]
-  listJobTemplatesByTypeId(typeId: string): JobTemplateRecord[]
-  publishJobTemplate(input: JobTemplateRevisionRecord): void
-  getJobTemplateRevision(ref: ExactResourceRef): JobTemplateRevisionRecord | null
+  } | null>
+  listJobTemplates(typeRef: EmployeeTypeRef): Promise<JobTemplateRecord[]>
+  listJobTemplatesByTypeId(typeId: string): Promise<JobTemplateRecord[]>
+  publishJobTemplate(input: JobTemplateRevisionRecord): Promise<void>
+  getJobTemplateRevision(ref: ExactResourceRef): Promise<JobTemplateRevisionRecord | null>
 
-  getEmployeeDefinition(id: string): EmployeeDefinitionRecord | null
+  getEmployeeDefinition(id: string): Promise<EmployeeDefinitionRecord | null>
   /**
    * RFC-317 T8 —— 只取行级 ACL 三元组，**不解析配置内容**。
    *
@@ -241,15 +259,15 @@ export interface DigitalEmployeeAuthoringStore {
    * 尚未完成、或存储内容随 schema 漂移到解析不了的员工定义，它会抛。授权判据不能
    * 依赖内容可解析——否则那样的行会从「谁都改不动」退化成 500，甚至绕过判据。
    */
-  getEmployeeDefinitionAcl(id: string): {
+  getEmployeeDefinitionAcl(id: string): Promise<{
     readonly id: string
     /** RFC-324 —— 改名围栏要比对「事务外看到的当前名字」，这是同一行上的零成本一列。 */
     readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly archivedAt: number | null
-  } | null
-  listEmployeeDefinitions(typeRef?: EmployeeTypeRef): EmployeeDefinitionRecord[]
+  } | null>
+  listEmployeeDefinitions(typeRef?: EmployeeTypeRef): Promise<EmployeeDefinitionRecord[]>
   saveEmployeeDefinition(input: {
     revision: EmployeeDefinitionRevisionRecord
     workScope: WorkScopeRevisionRecord
@@ -266,23 +284,20 @@ export interface DigitalEmployeeAuthoringStore {
           readonly configuration: DigitalEmployeeDefinitionDraft
           readonly updatedAt: number
         }
-  }): void
-  getEmployeeDefinitionRevision(ref: ExactResourceRef): EmployeeDefinitionRevisionRecord | null
-  getWorkScopeRevision(ref: ExactResourceRef): WorkScopeRevisionRecord | null
+  }): Promise<void>
+  getEmployeeDefinitionRevision(
+    ref: ExactResourceRef,
+  ): Promise<EmployeeDefinitionRevisionRecord | null>
+  getWorkScopeRevision(ref: ExactResourceRef): Promise<WorkScopeRevisionRecord | null>
 
-  getCurrentExecutionPolicy(): ExecutionPolicyRevisionRecord | null
-  getExecutionPolicyRevision(revision: number): ExecutionPolicyRevisionRecord | null
+  getCurrentExecutionPolicy(): Promise<ExecutionPolicyRevisionRecord | null>
+  getExecutionPolicyRevision(revision: number): Promise<ExecutionPolicyRevisionRecord | null>
   ensureExecutionPolicy(
     input: Omit<ExecutionPolicyRevisionRecord, 'revision'>,
-  ): ExecutionPolicyRevisionRecord
+  ): Promise<ExecutionPolicyRevisionRecord>
 }
 
-/** Live provider contract. SQLite keeps the synchronous store only as an oracle. */
-export type DigitalEmployeeAuthoringPersistence = {
-  readonly [K in Exclude<
-    keyof DigitalEmployeeAuthoringStore,
-    'resourceAclIdentities'
-  >]: DigitalEmployeeAuthoringStore[K] extends (...args: infer Args) => infer Result
-    ? (...args: Args) => Promise<Awaited<Result>>
-    : never
+/** infrastructure 交出的完整适配器：作者面持久化 + 交给 resource-catalog 的 ACL identity 面。 */
+export interface DigitalEmployeeAuthoringAdapter extends DigitalEmployeeAuthoringPersistence {
+  readonly resourceAclIdentities: DigitalEmployeeAclIdentities
 }

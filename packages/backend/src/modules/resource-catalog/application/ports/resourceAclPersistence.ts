@@ -44,29 +44,3 @@ export interface ResourceAclIdentityPersistence {
     resourceId: string,
   ): Promise<ResourceAclIdentityMutation | undefined>
 }
-
-// ---------------------------------------------------------------------------
-// 同步形态（legacy）：digital-employee 的 employee_* owner 仍跑在 dbTxSync 的同步回调里，随其 AuthoringStore /
-// ConfigResourceStore 对合一（W4-D6b/c）一起退役。SQLite 专属的同步 ACL 端口只认这一种。
-// ---------------------------------------------------------------------------
-
-export interface SyncResourceAclIdentityMutation {
-  readonly current: ResourceAclIdentityMutationRow
-  readonly ownerNameIsUnique: boolean
-  hasOwnerNameCollision(nextOwnerUserId: string): boolean
-  update(input: {
-    readonly ownerUserId: string | null
-    readonly visibility: ResourceVisibility
-    readonly aclRevision: number
-    readonly updatedAt: number
-  }): void
-}
-
-export interface SyncResourceAclIdentityPersistence {
-  readonly type: ForeignResourceAclType
-  getRevision(resourceId: string): number
-  withMutation<T>(
-    resourceId: string,
-    run: (mutation: SyncResourceAclIdentityMutation) => T,
-  ): T | undefined
-}

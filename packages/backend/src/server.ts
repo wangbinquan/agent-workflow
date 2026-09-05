@@ -2683,17 +2683,33 @@ function composeSqliteApiRouteMounts(
       ? {}
       : { runTurn: deps.intentTestDependencies.runFn }),
   } satisfies IntentSessionRouteDependencies)
+  // RFC-359 W4-D6c：employee_* 的 ACL 走目录的中立 foreign-owner 路径（与 development_adapter 同一条），
+  // identity 行由 digital-employee 在目录写事务里交出。
   const digitalEmployeeAclIdentityProviders = createDigitalEmployeeResourceCatalogAclProviders(
     deps.db,
   )
-  const digitalEmployeeAclIdentityFor = (type: DigitalEmployeeAclResourceType) => {
+  const digitalEmployeeAcl = Object.freeze({
+    employeeDefinition: composeForeignResourceAclFor({
+      db: deps.db,
+      identity: digitalEmployeeAclIdentityProviders.employeeDefinition,
+    }),
+    employeeTool: composeForeignResourceAclFor({
+      db: deps.db,
+      identity: digitalEmployeeAclIdentityProviders.employeeTool,
+    }),
+    employeeJobTemplate: composeForeignResourceAclFor({
+      db: deps.db,
+      identity: digitalEmployeeAclIdentityProviders.employeeJobTemplate,
+    }),
+  })
+  const digitalEmployeeAclFor = (type: DigitalEmployeeAclResourceType) => {
     switch (type) {
       case 'employee_definition':
-        return digitalEmployeeAclIdentityProviders.employeeDefinition
+        return digitalEmployeeAcl.employeeDefinition
       case 'employee_tool':
-        return digitalEmployeeAclIdentityProviders.employeeTool
+        return digitalEmployeeAcl.employeeTool
       case 'employee_job_template':
-        return digitalEmployeeAclIdentityProviders.employeeJobTemplate
+        return digitalEmployeeAcl.employeeJobTemplate
       default: {
         const exhaustive: never = type
         return exhaustive
@@ -2705,11 +2721,10 @@ function composeSqliteApiRouteMounts(
     resourceCatalog: providerResourceCatalog,
     acl: Object.freeze({
       getResourceAcl: (actor, type, row) =>
-        getResourceAcl(deps.db, actor, type, row, digitalEmployeeAclIdentityFor(type)),
+        digitalEmployeeAclFor(type).getResourceAcl(actor, type, row),
       updateResourceAcl: (actor, type, row, body, options) =>
-        updateResourceAcl(deps.db, actor, type, row, body, {
-          ...options,
-          identityPersistence: digitalEmployeeAclIdentityFor(type),
+        digitalEmployeeAclFor(type).updateResourceAcl(actor, type, row, body, {
+          ...(options?.updatedAt === undefined ? {} : { updatedAt: options.updatedAt }),
         }),
     }),
   })

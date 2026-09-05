@@ -2769,7 +2769,7 @@ async function composeSqliteProviderSession(
   const digitalEmployeePlatformTools = await composeDigitalEmployeeBuiltinToolCatalog({
     agentTemplates: digitalEmployeeAgentTemplates,
     typePackageDescriptorJsons: [
-      ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
+      ...(await readPersistedDigitalEmployeeTypePackageDescriptorJsons(db)),
       developmentEmployeeTypePackage.descriptorJson,
     ],
   })

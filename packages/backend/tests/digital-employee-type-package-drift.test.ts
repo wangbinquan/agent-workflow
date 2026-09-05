@@ -1,7 +1,7 @@
 /**
  * Locks the actionable failure surface of the built-in employee type package
  * digest guard (`employee-type-revision-drift`, see
- * `src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts`).
+ * `src/modules/digital-employee/infrastructure/authoringStore.ts`).
  *
  * Why this test exists: on 2026-08-21 `bun run dev` died at boot with the bare
  * line `development@1 changed without a revision bump` — no digests, no hint at
@@ -30,10 +30,7 @@ import {
   packageDigest,
   type EmployeeTypeRuntimePackage,
 } from '@/modules/digital-employee/domain/model'
-import {
-  asAsyncDigitalEmployeeAuthoringPersistence,
-  createSqliteDigitalEmployeeAuthoringStore,
-} from '@/modules/digital-employee/infrastructure/sqliteAuthoringStore'
+import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import { withTypePackageDraftOverlay } from '@/modules/digital-employee/application/typePackageDraftOverlay'
 import { DomainError } from '@/util/errors'
 
@@ -46,7 +43,7 @@ const descriptor = employeeTypePackageDescriptorSchema.parse(
 const currentDigest = packageDigest(descriptor)
 
 function newStore() {
-  return createSqliteDigitalEmployeeAuthoringStore(createInMemoryDb(MIGRATIONS))
+  return createDigitalEmployeeAuthoringPersistence(createInMemoryDb(MIGRATIONS))
 }
 
 function legacyDescriptor(): Record<string, unknown> {
@@ -94,16 +91,6 @@ function record(descriptorDigest: string): TypePackageRecord {
   return { descriptor, descriptorDigest, state: 'published', registeredAt: 1_000 }
 }
 
-function captureDrift(run: () => void): DomainError {
-  try {
-    run()
-  } catch (error) {
-    expect(error).toBeInstanceOf(DomainError)
-    return error as DomainError
-  }
-  throw new Error('expected employee-type-revision-drift to be thrown')
-}
-
 async function captureAsyncDrift(run: () => Promise<unknown>): Promise<DomainError> {
   try {
     await run()
@@ -115,28 +102,28 @@ async function captureAsyncDrift(run: () => Promise<unknown>): Promise<DomainErr
 }
 
 describe('employee type package digest guard', () => {
-  test('re-registering the identical descriptor is a no-op', () => {
+  test('re-registering the identical descriptor is a no-op', async () => {
     const store = newStore()
-    store.ensureTypePackage(record(currentDigest))
-    store.ensureTypePackage(record(currentDigest))
-    expect(store.listTypePackages()).toHaveLength(1)
-    expect(store.getTypePackage(descriptor.typeRef)?.descriptorDigest).toBe(currentDigest)
+    await store.ensureTypePackage(record(currentDigest))
+    await store.ensureTypePackage(record(currentDigest))
+    expect(await store.listTypePackages()).toHaveLength(1)
+    expect((await store.getTypePackage(descriptor.typeRef))?.descriptorDigest).toBe(currentDigest)
   })
 
-  test('a frozen development@1 registration upgrades by appending development@10', () => {
+  test('a frozen development@1 registration upgrades by appending development@10', async () => {
     const store = newStore()
     const previous = structuredClone(descriptor)
     previous.typeRef.revision = 1
-    store.ensureTypePackage({
+    await store.ensureTypePackage({
       descriptor: previous,
       descriptorDigest: packageDigest(previous),
       state: 'published',
       registeredAt: 900,
     })
 
-    store.ensureTypePackage(record(currentDigest))
+    await store.ensureTypePackage(record(currentDigest))
 
-    expect(store.listTypePackages().map((entry) => entry.descriptor.typeRef)).toEqual([
+    expect((await store.listTypePackages()).map((entry) => entry.descriptor.typeRef)).toEqual([
       { typeId: 'development', revision: 10 },
       { typeId: 'development', revision: 1 },
     ])
@@ -154,7 +141,7 @@ describe('employee type package digest guard', () => {
       ...historical.displayName,
       'en-US': 'Frozen historical development employee',
     }
-    store.ensureTypePackage({
+    await store.ensureTypePackage({
       descriptor: historical,
       descriptorDigest: packageDigest(historical),
       state: 'published',
@@ -162,7 +149,7 @@ describe('employee type package digest guard', () => {
     })
 
     const service = new DigitalEmployeeAuthoringService({
-      store: asAsyncDigitalEmployeeAuthoringPersistence(store),
+      store: store,
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,
@@ -177,9 +164,9 @@ describe('employee type package digest guard', () => {
     expect(await service.getType(descriptor.typeRef)).toEqual(descriptor)
   })
 
-  test('an immutable revision-1 descriptor is projected without rewriting its frozen row', () => {
+  test('an immutable revision-1 descriptor is projected without rewriting its frozen row', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = createSqliteDigitalEmployeeAuthoringStore(db)
+    const store = createDigitalEmployeeAuthoringPersistence(db)
     const legacy = legacyDescriptor()
     const frozenJson = JSON.stringify(legacy)
     const frozenDigest = 'b'.repeat(64)
@@ -194,7 +181,7 @@ describe('employee type package digest guard', () => {
       })
       .run()
 
-    const projected = store.getTypePackage({ typeId: 'development', revision: 1 })
+    const projected = await store.getTypePackage({ typeId: 'development', revision: 1 })
 
     expect(projected?.descriptor.workStartWorkItemRef).toBe('prepare-materials')
     expect(projected?.descriptor.authoringManifest.workIngresses).toEqual([])
@@ -213,7 +200,7 @@ describe('employee type package digest guard', () => {
 
   test('historical planning bindings are projected from their frozen option and slot without rewriting the row', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = createSqliteDigitalEmployeeAuthoringStore(db)
+    const store = createDigitalEmployeeAuthoringPersistence(db)
     const historical = descriptorBeforePlanningBindingFields()
     const historicalTypeRef = {
       typeId: descriptor.typeRef.typeId,
@@ -233,7 +220,7 @@ describe('employee type package digest guard', () => {
       })
       .run()
 
-    const projected = store.getTypePackage(historicalTypeRef)
+    const projected = await store.getTypePackage(historicalTypeRef)
     const analyzeImplement = projected?.descriptor.authoringManifest.workItems.find(
       (item) => item.workItemRef === 'analyze-implement',
     )
@@ -250,7 +237,7 @@ describe('employee type package digest guard', () => {
     expect(frozenRow?.descriptorJson).toBe(frozenJson)
 
     const service = new DigitalEmployeeAuthoringService({
-      store: asAsyncDigitalEmployeeAuthoringPersistence(withTypePackageDraftOverlay(store)),
+      store: withTypePackageDraftOverlay(store),
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,
@@ -265,13 +252,11 @@ describe('employee type package digest guard', () => {
     ).toMatchObject({ planningRoleRef: 'planning', planningSlotRef: 'plan' })
   })
 
-  test('an edited descriptor on a registered revision names both digests and both exits', () => {
+  test('an edited descriptor on a registered revision names both digests and both exits', async () => {
     const store = newStore()
-    store.ensureTypePackage(record(STALE_DIGEST))
+    await store.ensureTypePackage(record(STALE_DIGEST))
 
-    const error = captureDrift(() => {
-      store.ensureTypePackage(record(currentDigest))
-    })
+    const error = await captureAsyncDrift(() => store.ensureTypePackage(record(currentDigest)))
 
     expect(error.code).toBe('employee-type-revision-drift')
     expect(error.status).toBe(409)
@@ -300,10 +285,10 @@ describe('employee type package digest guard', () => {
 
   test('drift aborts authoring-service construction, i.e. daemon boot', async () => {
     const store = newStore()
-    store.ensureTypePackage(record(STALE_DIGEST))
+    await store.ensureTypePackage(record(STALE_DIGEST))
 
     const service = new DigitalEmployeeAuthoringService({
-      store: asAsyncDigitalEmployeeAuthoringPersistence(store),
+      store: store,
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,
@@ -326,7 +311,7 @@ describe('employee type package digest guard', () => {
       },
     })
     const frozenDigest = packageDigest(frozenDescriptor)
-    persistedStore.ensureTypePackage({
+    await persistedStore.ensureTypePackage({
       descriptor: frozenDescriptor,
       descriptorDigest: frozenDigest,
       state: 'published',
@@ -335,7 +320,7 @@ describe('employee type package digest guard', () => {
     const overlayStore = withTypePackageDraftOverlay(persistedStore)
 
     const service = new DigitalEmployeeAuthoringService({
-      store: asAsyncDigitalEmployeeAuthoringPersistence(overlayStore),
+      store: overlayStore,
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,
@@ -345,11 +330,11 @@ describe('employee type package digest guard', () => {
 
     expect(await service.getType(descriptor.typeRef)).toEqual(descriptor)
     expect(await service.listTypes()).toEqual([descriptor])
-    expect(overlayStore.getTypePackage(descriptor.typeRef)).toMatchObject({
+    expect(await overlayStore.getTypePackage(descriptor.typeRef)).toMatchObject({
       descriptor,
       descriptorDigest: currentDigest,
     })
-    expect(persistedStore.getTypePackage(descriptor.typeRef)).toMatchObject({
+    expect(await persistedStore.getTypePackage(descriptor.typeRef)).toMatchObject({
       descriptor: frozenDescriptor,
       descriptorDigest: frozenDigest,
       registeredAt: 1_000,
@@ -363,7 +348,7 @@ describe('employee type package digest guard', () => {
     // parse that immutable row with the newer schema; otherwise `bun dev`
     // aborts before the digest overlay can run.
     const db = createInMemoryDb(MIGRATIONS)
-    const persistedStore = createSqliteDigitalEmployeeAuthoringStore(db)
+    const persistedStore = createDigitalEmployeeAuthoringPersistence(db)
     const frozenDescriptor = descriptorBeforePlanningBindingFields()
     // Keep this row unparseable even after the known historical planning-field
     // projection, so the test locks the overlay's schema-independent lookup
@@ -381,12 +366,12 @@ describe('employee type package digest guard', () => {
         registeredAt: 1_000,
       })
       .run()
-    expect(() => persistedStore.getTypePackage(descriptor.typeRef)).toThrow()
-    expect(persistedStore.listTypePackageRegistrations()).toHaveLength(1)
+    await expect(persistedStore.getTypePackage(descriptor.typeRef)).rejects.toThrow()
+    expect(await persistedStore.listTypePackageRegistrations()).toHaveLength(1)
     const overlayStore = withTypePackageDraftOverlay(persistedStore)
 
     const service = new DigitalEmployeeAuthoringService({
-      store: asAsyncDigitalEmployeeAuthoringPersistence(overlayStore),
+      store: overlayStore,
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,
@@ -396,7 +381,7 @@ describe('employee type package digest guard', () => {
 
     expect(await service.getType(descriptor.typeRef)).toEqual(descriptor)
     expect(await service.listTypes()).toEqual([descriptor])
-    expect(overlayStore.getTypePackage(descriptor.typeRef)).toMatchObject({
+    expect(await overlayStore.getTypePackage(descriptor.typeRef)).toMatchObject({
       descriptor,
       descriptorDigest: currentDigest,
     })
@@ -489,10 +474,10 @@ describe('frozen employee type revisions', () => {
     return historical
   }
 
-  function seedFrozenRevision(store: ReturnType<typeof newStore>) {
+  async function seedFrozenRevision(store: ReturnType<typeof newStore>) {
     const historical = historicalDescriptor()
     const historicalRef = historical.typeRef
-    store.ensureTypePackage({
+    await store.ensureTypePackage({
       descriptor: historical,
       descriptorDigest: packageDigest(historical),
       state: 'published',
@@ -505,7 +490,7 @@ describe('frozen employee type revisions', () => {
     if (roleGroup === undefined) throw new Error('missing tool role fixture')
     const workContractRef = roleGroup.workContractRef ?? workItem.workContractRef
 
-    store.createTool({
+    await store.createTool({
       id: 'frozen-tool',
       typeRef: historicalRef,
       workItemRef: workItem.workItemRef,
@@ -547,7 +532,7 @@ describe('frozen employee type revisions', () => {
       orderedDispatchConfigurations: [],
       reactionLaneOrder: [],
     }
-    store.createJobTemplate({
+    await store.createJobTemplate({
       id: 'frozen-job',
       typeRef: historicalRef,
       name: 'Frozen job template',
@@ -559,7 +544,7 @@ describe('frozen employee type revisions', () => {
       updatedAt: 900,
       archivedAt: null,
     })
-    store.publishJobTemplate({
+    await store.publishJobTemplate({
       ref: { id: 'frozen-job', revision: 1 },
       content: jobDraft,
       contentDigest: '2'.repeat(64),
@@ -577,7 +562,7 @@ describe('frozen employee type revisions', () => {
       adapterOverrides: [],
       collaborationOverrides: [],
     }
-    store.saveEmployeeDefinition({
+    await store.saveEmployeeDefinition({
       revision: {
         ref: { id: 'frozen-employee', revision: 1 },
         content: {
@@ -630,7 +615,7 @@ describe('frozen employee type revisions', () => {
 
   function serviceOver(store: ReturnType<typeof newStore>) {
     return new DigitalEmployeeAuthoringService({
-      store: asAsyncDigitalEmployeeAuthoringPersistence(store),
+      store: store,
       typePackages: [runtimePackage()],
       connectionCatalog: stubConnectionCatalog,
       programArtifacts: stubProgramArtifacts,
@@ -641,7 +626,7 @@ describe('frozen employee type revisions', () => {
 
   test('the panels of a frozen revision read back its own rows', async () => {
     const store = newStore()
-    const { historicalRef, workItemRef } = seedFrozenRevision(store)
+    const { historicalRef, workItemRef } = await seedFrozenRevision(store)
     const service = serviceOver(store)
 
     expect((await service.listJobTemplates(historicalRef)).map((job) => job.id)).toEqual([
@@ -661,7 +646,7 @@ describe('frozen employee type revisions', () => {
 
   test('a type revision this build never compiled is still an ordinary 404', async () => {
     const store = newStore()
-    seedFrozenRevision(store)
+    await seedFrozenRevision(store)
     const service = serviceOver(store)
     const unknown = { typeId: descriptor.typeRef.typeId, revision: 9_999 }
 
@@ -675,7 +660,7 @@ describe('frozen employee type revisions', () => {
     // job templates. Saying "not found" about a revision the read APIs answer
     // for is what made the failure unreadable.
     const store = newStore()
-    const { historicalRef } = seedFrozenRevision(store)
+    const { historicalRef } = await seedFrozenRevision(store)
     const service = serviceOver(store)
 
     const error = await (async () => {

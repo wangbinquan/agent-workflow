@@ -42,7 +42,7 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
     const catalog = await composeDigitalEmployeeBuiltinToolCatalog({
       agentTemplates,
       typePackageDescriptorJsons: [
-        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(countedDb),
+        ...(await readPersistedDigitalEmployeeTypePackageDescriptorJsons(countedDb)),
         developmentEmployeeTypePackage.descriptorJson,
       ],
     })

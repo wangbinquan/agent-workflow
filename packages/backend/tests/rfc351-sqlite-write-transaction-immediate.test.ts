@@ -25,7 +25,7 @@ import { join } from 'node:path'
 import { createInMemoryDb, openDb } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { employeeToolRegistrations } from '@/db/schema'
-import { createSqliteDigitalEmployeeAuthoringStore } from '@/modules/digital-employee/infrastructure/sqliteAuthoringStore'
+import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import { MIGRATIONS } from './migration-freeze'
 
 const TOOL_ID = 'rfc351-contended'
@@ -88,7 +88,7 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
       })
       .run()
 
-    const store = createSqliteDigitalEmployeeAuthoringStore(db)
+    const store = createDigitalEmployeeAuthoringPersistence(db)
     const worker = new Worker(
       new URL('./fixtures/rfc351-write-contention-worker.ts', import.meta.url).href,
     )
@@ -107,9 +107,11 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
       const startedAt = performance.now()
       // 改造前：这里抛 SQLiteError code=SQLITE_BUSY_SNAPSHOT（0ms，不等 busy_timeout），
       // 经 util/errors.ts 兜底就是一个没有任何解释的 500。
-      expect(() => store.publishTool(publishInput())).not.toThrow()
-      expect(performance.now() - startedAt).toBeLessThan(1_000)
+      // RFC-359 W4-D6c：publish 是异步的统一事务原语；BEGIN IMMEDIATE 仍在 busy_timeout 内等竞争者释放。
+      const publish = store.publishTool(publishInput())
       expect(await released).toEqual({ type: 'released' })
+      await expect(publish).resolves.toBeUndefined()
+      expect(performance.now() - startedAt).toBeLessThan(1_000)
 
       const rows = db
         .select({ publishedRevision: employeeToolRegistrations.publishedRevision })

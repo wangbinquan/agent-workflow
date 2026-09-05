@@ -28,8 +28,6 @@ const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   'modules/development-automation/infrastructure/MissionStore.ts::toMissionRow': '行命名与取值转换',
   'modules/development-automation/infrastructure/PlaybookSagaStore.ts::approval': '仅换行排版',
   'modules/development-automation/infrastructure/PlaybookSagaStore.ts::step': '仅换行排版',
-  'modules/digital-employee/infrastructure/AuthoringStore.ts::toTool': '行命名与取值转换',
-  'modules/digital-employee/infrastructure/AuthoringStore.ts::uniqueError': '驱动错误形状',
   'modules/identity-access/infrastructure/UserAccessRepository.ts::mapGrant':
     '行命名（snake_case vs camelCase）',
   'modules/identity-access/infrastructure/UserAccessRepository.ts::mapUser': '行命名与取值转换',

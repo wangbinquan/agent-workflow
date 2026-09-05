@@ -62,7 +62,6 @@ export {
   visibleRowsCondition,
   type AclColumnRef,
 } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
-export type { SyncResourceAclIdentityPersistence as ResourceAclIdentityPersistence } from '@/modules/resource-catalog/application/ports/resourceAclPersistence'
 
 /** Compatibility re-export. The WebSocket post-commit notification now belongs
  *  to the composition itself, so this wrapper no longer overrides the caller's

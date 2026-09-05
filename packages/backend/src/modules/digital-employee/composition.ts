@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
@@ -28,15 +29,8 @@ import type {
   EmployeeInputUploadPersistence,
   EmployeeInputUploadRecord,
 } from './application/ports/inputUploadStore'
-import {
-  asAsyncDigitalEmployeeAuthoringPersistence,
-  createSqliteDigitalEmployeeAuthoringStore,
-} from './infrastructure/sqliteAuthoringStore'
-import { createPostgresqlDigitalEmployeeAuthoringPersistence } from './infrastructure/postgresqlAuthoringStore'
-import type {
-  DigitalEmployeeAuthoringPersistence,
-  DigitalEmployeeAuthoringStore,
-} from './application/ports/authoringStore'
+import { createDigitalEmployeeAuthoringPersistence } from './infrastructure/authoringStore'
+import type { DigitalEmployeeAuthoringPersistence } from './application/ports/authoringStore'
 import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
 import { createSqliteRuntimePersistence } from './infrastructure/sqliteRuntimeStore'
 import { createPostgresqlRuntimePersistence } from './infrastructure/postgresqlRuntimeStore'
@@ -149,10 +143,10 @@ export function composePostgresqlDigitalEmployeeWriterCutover(
 }
 
 /** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
-export function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
-  db: DbClient,
-): readonly string[] {
-  return createSqliteDigitalEmployeeAuthoringStore(db).listTypePackageDescriptorJsons()
+export async function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
+  db: ProviderNeutralDatabase,
+): Promise<readonly string[]> {
+  return await createDigitalEmployeeAuthoringPersistence(db).listTypePackageDescriptorJsons()
 }
 
 /** Bootstrap consumes this provider-neutral async projection, never a database handle. */
@@ -160,21 +154,11 @@ export interface DigitalEmployeeBootstrapReads {
   listTypePackageDescriptorJsons(): Promise<readonly string[]>
 }
 
-export function composeSqliteDigitalEmployeeBootstrapReads(
-  db: DbClient,
+/** 两个 provider 同一份（RFC-359 W4-D6c）。 */
+export function composeDigitalEmployeeBootstrapReadsFor(
+  db: ProviderNeutralDatabase,
 ): DigitalEmployeeBootstrapReads {
-  const authoring = asAsyncDigitalEmployeeAuthoringPersistence(
-    createSqliteDigitalEmployeeAuthoringStore(db),
-  )
-  return Object.freeze({
-    listTypePackageDescriptorJsons: () => authoring.listTypePackageDescriptorJsons(),
-  })
-}
-
-export function composePostgresqlDigitalEmployeeBootstrapReads(
-  db: PostgresqlDatabaseClient,
-): DigitalEmployeeBootstrapReads {
-  const authoring = createPostgresqlDigitalEmployeeAuthoringPersistence(db)
+  const authoring = createDigitalEmployeeAuthoringPersistence(db)
   return Object.freeze({
     listTypePackageDescriptorJsons: () => authoring.listTypePackageDescriptorJsons(),
   })
@@ -468,6 +452,8 @@ export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositio
 
 export interface ComposePostgresqlDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   readonly db: PostgresqlDatabaseClient
+  /** 与 SQLite 装配同一语义：Bun-dev 的类型包草稿覆盖只在显式要求时打开。 */
+  readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
 }
 
 interface DigitalEmployeePersistenceBundle {
@@ -511,30 +497,10 @@ export type DigitalEmployeeAuthoringReads = Pick<
   | 'listEmployeeDefinitions'
 >
 
-/** @deprecated Bootstrap should inject createSqliteDigitalEmployeeAuthoringReads. */
 export function createDigitalEmployeeAuthoringReads(
-  db: DbClient,
-): Pick<
-  DigitalEmployeeAuthoringStore,
-  | 'listTypePackages'
-  | 'listTypePackageDescriptorJsons'
-  | 'listTools'
-  | 'listJobTemplates'
-  | 'listEmployeeDefinitions'
-> {
-  return createSqliteDigitalEmployeeAuthoringStore(db)
-}
-
-export function createSqliteDigitalEmployeeAuthoringReads(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): DigitalEmployeeAuthoringReads {
-  return asAsyncDigitalEmployeeAuthoringPersistence(createSqliteDigitalEmployeeAuthoringStore(db))
-}
-
-export function createPostgresqlDigitalEmployeeAuthoringReads(
-  db: PostgresqlDatabaseClient,
-): DigitalEmployeeAuthoringReads {
-  return createPostgresqlDigitalEmployeeAuthoringPersistence(db)
+  return createDigitalEmployeeAuthoringPersistence(db)
 }
 
 interface DigitalEmployeePlatformInventoryAclRow {
@@ -1117,13 +1083,12 @@ function composeDigitalEmployeeFromPersistence(
 export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
-  const persistedStore = createSqliteDigitalEmployeeAuthoringStore(options.db)
-  const synchronousStore =
-    options.typePackageDriftPolicy === 'draft-overlay'
-      ? withTypePackageDraftOverlay(persistedStore)
-      : persistedStore
+  const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
   return composeDigitalEmployeeFromPersistence(options, {
-    authoring: asAsyncDigitalEmployeeAuthoringPersistence(synchronousStore),
+    authoring:
+      options.typePackageDriftPolicy === 'draft-overlay'
+        ? withTypePackageDraftOverlay(persisted)
+        : persisted,
     runtime: createSqliteRuntimePersistence(options.db),
     inputUploads: createSqliteEmployeeInputUploadPersistence(options.db),
     migrationStatus: () => composeSqliteDigitalEmployeeWriterCutover(options.db).analyze(),
@@ -1134,8 +1099,12 @@ export function composeDigitalEmployee(
 export function composePostgresqlDigitalEmployee(
   options: ComposePostgresqlDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
+  const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
   return composeDigitalEmployeeFromPersistence(options, {
-    authoring: createPostgresqlDigitalEmployeeAuthoringPersistence(options.db),
+    authoring:
+      options.typePackageDriftPolicy === 'draft-overlay'
+        ? withTypePackageDraftOverlay(persisted)
+        : persisted,
     runtime: createPostgresqlRuntimePersistence(options.db),
     inputUploads: createPostgresqlEmployeeInputUploadPersistence(options.db),
     migrationStatus: () => composePostgresqlDigitalEmployeeWriterCutover(options.db).analyze(),

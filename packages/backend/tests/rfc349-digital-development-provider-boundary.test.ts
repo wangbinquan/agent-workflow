@@ -96,8 +96,7 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     )
     expect(
       [
-        'sqliteAuthoringStore.ts',
-        'postgresqlAuthoringStore.ts',
+        'authoringStore.ts',
         'sqliteRuntimeStore.ts',
         'postgresqlRuntimeStore.ts',
         'inputUploadStore.ts',
@@ -154,10 +153,11 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     expect(digital).toContain('composeDigitalEmployeeIntegrationTriggerParticipant')
     expect(digital).toContain('composeAsyncDigitalEmployeeIntegrationTriggerParticipant')
     expect(digital).toContain('createDigitalEmployeeIntegrationTriggerParticipantIn')
-    expect(digital).toContain('composeSqliteDigitalEmployeeBootstrapReads')
-    expect(digital).toContain('composePostgresqlDigitalEmployeeBootstrapReads')
-    expect(digital).toContain('createSqliteDigitalEmployeeAuthoringReads')
-    expect(digital).toContain('createPostgresqlDigitalEmployeeAuthoringReads')
+    // RFC-359 W4-D6c：作者面读投影与 bootstrap 读面只剩 provider-中立的一份工厂。
+    expect(digital).toContain('composeDigitalEmployeeBootstrapReadsFor')
+    expect(digital).toContain('createDigitalEmployeeAuthoringReads')
+    expect(digital).not.toContain('composeSqliteDigitalEmployeeBootstrapReads')
+    expect(digital).not.toContain('createPostgresqlDigitalEmployeeAuthoringReads')
     expect(digital).toContain('composePostgresqlDigitalEmployeeMaintenanceCommands')
     expect(digital).toContain('composePostgresqlDigitalEmployeeWriterCutover')
     expect(development).toContain('composeDevelopmentAutomationMaintenanceCommands')
