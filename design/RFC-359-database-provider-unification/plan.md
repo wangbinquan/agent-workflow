@@ -648,8 +648,35 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   rfc294 preflight 的能力债清单四条并成两条、rfc349 协作运行时锁改指中立工厂。
   `rfc359-w4-d19a-adapters.test.ts` 两引擎各跑反问投影（按 asker 聚合 + 非空 shardKey 的 stop 指令）、
   未决自问的 CAS 关闭与重放幂等、无主围栏的四种 owner 状态 + 源码锁。
-  **下一刀 D19b**：任务房本体（`postgresqlWorkgroupTaskRoom*.ts` 成为唯一实现，SQLite bootstrap 切过去，
-  `sqliteWorkgroupTaskRoom.ts` 与 legacy 的 taskActions / dwActions / room / configActions 退役）。
+  **D19b ⛔ 已实现但未落地——需要用户先裁一个产品决策（任务房的「继续执行」语义不是持久化差异）**
+
+  按计划做了完整实现（三份中立房间文件 + 一份装配 + 两个 bootstrap 切过去 + 两引擎行为测试，
+  产物留在 scratchpad），双引擎房间测试本身四条全绿（房间聚合读 / 可见性 404 / 发言写入 + 广播 /
+  终态拒绝）——**PostgreSQL 房间路径的第一份行为覆盖**。但受影响批次抓到 6 条真行为回归，全部指向同一处：
+
+  - `rfc164-workgroup-room`「confirm 恢复失败时 gate、holder 与消息全部保持可重试」：期望 410，切换后得到 200。
+  - `rfc167-dynamic-workflow-engine` 5 条：dw-confirm 的快照替换 + `phase=executing` 原子落地、
+    holder 关闭、reject 的相位复位「骑在 resume 的 CAS 上」，切换后都不成立。
+
+  **根因不是数据库**：legacy 的 SQLite 房间在请求内**同步**恢复任务——
+  `taskActions.confirmGate` 走 `resumeTaskWithAtomicSideEffects(db, taskId, deps, (tx, transition) => …)`，
+  把闸门关闭 / holder 关闭 / 消息写入放进**恢复自己的那笔事务**，恢复失败则整体回滚并以 410 打回，
+  任务不会被搁浅（这几条锁正是 Codex P1「no stranding」审计的产物）。中立房间（PG 形状）走的是目标架构的
+  **意图模型**：`participant.continueTask` 把任务置 `pending` 并提交继续意图，由 daemon 异步接手，
+  请求同步返回 200，失败只能事后经任务状态浮现。PG daemon 是多进程、受理请求的进程未必持有该任务，
+  **无法**在请求内同步恢复；所以这是「daemon 在不在同一个进程里」的部署形态差异，不是 provider 差异。
+
+  **需要用户裁的决策**（三选一，都会改用户可见行为或工作量分布）：
+  1. **统一到意图模型**：confirm 一律返回 200，恢复失败改由任务状态 + daemon 重试浮现；
+     rfc164 / rfc167 的期望随之改写，前端「确认后立刻看到失败」的交互要重新设计。
+  2. **给房间注入 `resume` 端口**：单进程部署（SQLite 单二进制）注入同步 resume 并保留 410，
+     多进程 daemon 注入「提交意图」。一份房间实现、一处按**部署形态**（不是按数据库）分叉。
+  3. **先做「继续执行语义统一」再回来合房间**：把同步恢复的原子性保证在意图模型里补齐
+     （例如意图提交后由本进程 daemon 同步驱动一次并回传结果），代价最大但两种部署形态语义完全一致。
+
+  在用户裁定前 D19b 不落地：现状是 SQLite 房间保留 legacy 同步恢复（行为更强、有 13 个套件盯着），
+  PG 房间保留意图模型。**下一刀改为 D19c**：回合引擎的持久化端口中立化——它与「继续执行」语义无关，
+  可以独立推进。
 
 ## 5. W5 —— 防复辟
 
