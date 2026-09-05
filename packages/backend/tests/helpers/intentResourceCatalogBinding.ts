@@ -5,7 +5,7 @@ import type { Actor } from '../../src/auth/actor'
 import type { DbClient } from '../../src/db/client'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '../../src/modules/identity-access/public/participants'
-import { createSqliteResourceCatalogQuery } from '../../src/modules/resource-catalog/infrastructure/sqliteCatalogQuery'
+import { createResourceCatalogQuery } from '../../src/modules/resource-catalog/infrastructure/catalogQuery'
 import { createSqliteMcpRepository } from '../../src/modules/resource-catalog/infrastructure/sqliteMcpRepository'
 import { createSqlitePluginRepository } from '../../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
 import { getAgentById } from '../../src/services/agent'
@@ -165,7 +165,7 @@ export function intentResourceCatalogBinding(
       authority: context.authority,
       actor: actor as DirectAuthenticatedAuthority,
     }),
-    query: createSqliteResourceCatalogQuery(db, {
+    query: createResourceCatalogQuery(db, {
       resolveActor: (candidate) => {
         const principal = identityAccess.contexts.resolveQueryContext(candidate)
         if (principal.userId !== actor.user.id || principal.source !== actor.source) {

@@ -4,8 +4,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import type { ResourceRequestContext } from '../public/participants'
 import type { ResourceCatalogOverviewQuery } from '../public/queries'
 import { createResourceCatalogOverviewQuery } from '../application/resourceCatalogOverview'
-import { createPostgresqlResourceCatalogOverviewCountPort } from '../infrastructure/postgresqlResourceCatalogOverview'
-import { createSqliteResourceCatalogOverviewCountPort } from '../infrastructure/sqliteResourceCatalogOverview'
+import { createResourceCatalogOverviewCountPort } from '../infrastructure/resourceCatalogOverview'
 
 export interface ResourceCatalogOverviewAuthorityResolver {
   resolve(authority: ResourceRequestContext): Actor
@@ -17,7 +16,7 @@ export function composeSqliteResourceCatalogOverviewQuery(
 ): ResourceCatalogOverviewQuery {
   return createResourceCatalogOverviewQuery({
     authority,
-    counts: createSqliteResourceCatalogOverviewCountPort(db),
+    counts: createResourceCatalogOverviewCountPort(db),
   })
 }
 
@@ -27,6 +26,6 @@ export function composePostgresqlResourceCatalogOverviewQuery(
 ): ResourceCatalogOverviewQuery {
   return createResourceCatalogOverviewQuery({
     authority,
-    counts: createPostgresqlResourceCatalogOverviewCountPort(db),
+    counts: createResourceCatalogOverviewCountPort(db),
   })
 }

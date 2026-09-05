@@ -1,36 +1,12 @@
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import {
-  actionTemplates,
-  agents,
-  automationPolicies,
-  capabilityTemplates,
-  digitalEmployees,
-  mcps,
-  plugins,
-  skills,
-  verificationProfiles,
-  workflows,
-  workgroups,
-} from '@/db/schema'
 import type { ResourceCatalogOwnedAclType } from '../application/ports/providerResourceCatalogPersistence'
+import { ACL_TABLES } from './resourceVisibility'
 
 export type SqliteAclResourceType = ResourceCatalogOwnedAclType
 
-/** RFC-345 D4 — the canonical ACL roster's SQLite-only table registry. */
-export const SQLITE_ACL_TABLES = {
-  agent: agents,
-  skill: skills,
-  mcp: mcps,
-  plugin: plugins,
-  workflow: workflows,
-  workgroup: workgroups,
-  capability_template: capabilityTemplates,
-  action_template: actionTemplates,
-  verification_profile: verificationProfiles,
-  digital_employee: digitalEmployees,
-  automation_policy: automationPolicies,
-} as const
+/** RFC-359 W4-B2：表注册只有一份（resourceVisibility.ts）；这里只是 SQLite 侧同步调用方沿用的名字。 */
+export const SQLITE_ACL_TABLES = ACL_TABLES
 
 export type SqliteAclTableFor<K extends SqliteAclResourceType> = (typeof SQLITE_ACL_TABLES)[K]
 

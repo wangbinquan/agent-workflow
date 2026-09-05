@@ -1,24 +1,10 @@
-import type { AclResourceType, GrantResourceType, ResourceGrantLevel } from '@agent-workflow/shared'
-import { and, eq, inArray, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
+import type { GrantResourceType, ResourceGrantLevel } from '@agent-workflow/shared'
+import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { resourceGrants } from '@/db/schema'
-import {
-  hasPrivateResourceAccess,
-  hasResourceAclBypass,
-  type ResourceAclActorProjection,
-} from '../domain/resourceAccess'
-import type { ResourceCatalogGrantReadPort } from '../application/ports/providerResourceCatalogPersistence'
-
-/** The canonical grant-set predicate, shared by async and in-transaction reads. */
-export function grantsOfUserWhere(type: GrantResourceType, userId: string) {
-  return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, userId))
-}
-
-/** The canonical by-resource predicate, shared by audience and ACL reads. */
-export function grantsOfResourceWhere(type: GrantResourceType, resourceId: string) {
-  return and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, resourceId))
-}
+import type { ResourceAclActorProjection } from '../domain/resourceAccess'
+import { grantsOfResourceWhere, grantsOfUserWhere } from './resourceVisibility'
 
 export async function listGrantedResourceIds(
   db: DbClient,
@@ -155,40 +141,12 @@ export async function loadGrantLevelsForUser(
   return out
 }
 
-/** Column handles accepted by the count-only visibility projection. */
-export interface AclColumnRef {
-  readonly id: SQLWrapper
-  readonly ownerUserId: SQLWrapper
-  readonly visibility: SQLWrapper
-}
-
-/** SQL twin of the domain visibility ladder for count-only surfaces. */
-export function visibleRowsCondition(
-  db: DbClient,
-  actor: ResourceAclActorProjection,
-  type: AclResourceType,
-  cols: AclColumnRef,
-): SQL<unknown> | undefined {
-  if (hasResourceAclBypass(actor)) return undefined
-  const isPublic = sql`COALESCE(${cols.visibility}, 'public') = 'public'`
-  if (!hasPrivateResourceAccess(actor)) return isPublic
-  const granted = inArray(
-    cols.id,
-    db
-      .select({ resourceId: resourceGrants.resourceId })
-      .from(resourceGrants)
-      .where(grantsOfUserWhere(type, actor.user.id)),
-  )
-  return or(isPublic, sql`${cols.ownerUserId} = ${actor.user.id}`, granted)!
-}
-
-/** Provider-bound Promise facade used by the RFC-349 composition root. */
-export function createSqliteResourceGrantReadPort(db: DbClient): ResourceCatalogGrantReadPort {
-  const port: ResourceCatalogGrantReadPort = {
-    listGrantedResourceIds: (actor, type) => listGrantedResourceIds(db, actor, type),
-    loadGrantLevel: (type, resourceId, userId) => loadGrantLevel(db, type, resourceId, userId),
-    loadGrantLevelsForUser: (type, resourceIds, userId) =>
-      loadGrantLevelsForUser(db, type, resourceIds, userId),
-  }
-  return Object.freeze(port)
-}
+// RFC-359 W4-B2：可见性阶梯、grant 谓词与 Promise 形态的 grant 读端口只有一份（resourceVisibility.ts）；
+// 这里保留给 legacy 同步调用方的 `*InTx` 读法与 DbClient 形态的便捷函数（dbTxSync 归零时删）。
+export {
+  createResourceGrantReadPort as createSqliteResourceGrantReadPort,
+  grantsOfResourceWhere,
+  grantsOfUserWhere,
+  visibleRowsCondition,
+  type AclColumnRef,
+} from './resourceVisibility'

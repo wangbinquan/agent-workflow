@@ -124,6 +124,8 @@
 > `rfc359-w4-b1-batch2h-adapters.test.ts` 两引擎各跑。剩 14 对（全部是薄壳套 legacy 同步内核 vs PG 整份实现，随 dbTxSync 归零一起合）。
 > **W4-B2 批 a 已落**：resource-catalog 写事务统一原语 `resourceCatalogTransaction.ts` + 演示种子 / MCP 探测存储 / 插件 GC 引用 /
 > agent 库存四对合一，`rfc359-w4-b2a-adapters.test.ts` 两引擎各跑。B2 剩 25 对。
+> **W4-B2 批 b 已落**：ACL 表注册 + 可见性谓词 + grant 读端口一份（`resourceVisibility.ts`），目录概览 / 目录摘要查询合一
+> （搜索谓词两方言同一句 `instr(lower(…))`），`rfc359-w4-b2b-adapters.test.ts` 两引擎各跑。B2 剩 21 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

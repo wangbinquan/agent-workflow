@@ -17,7 +17,7 @@ import type {
   ResourcePackageResourceSnapshot,
 } from '../application/package/ports'
 import { POSTGRESQL_ACL_TABLES } from './postgresqlAclRegistry'
-import { createPostgresqlResourceGrantReadPort } from './postgresqlResourceGrantRepository'
+import { createResourceGrantReadPort } from './resourceVisibility'
 import {
   runPostgresqlResourceCatalogTransaction,
   type PostgresqlResourceCatalogTransaction,
@@ -171,7 +171,7 @@ async function listPostgresqlPackageRowsByNames(
 export function createPostgresqlResourcePackageReadPort(
   db: PostgresqlDatabaseClient,
 ): ResourcePackageReadPort {
-  const grants = createPostgresqlResourceGrantReadPort(db)
+  const grants = createResourceGrantReadPort(db)
   const port: ResourcePackageReadPort = {
     async listByIds(type, ids, options = {}) {
       return runPostgresqlResourceCatalogTransaction(db, async (transaction) =>

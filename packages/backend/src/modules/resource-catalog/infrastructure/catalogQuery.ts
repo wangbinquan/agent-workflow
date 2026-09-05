@@ -1,8 +1,11 @@
+// RFC-359 W4-B2 —— 目录摘要查询（分页 / 搜索 / 可见性）：一份实现，两个 provider 共用。
+// 此前 sqlite / postgresql 两份只差客户端类型与搜索谓词的方言写法；SQLite 侧另有三个无消费者的便捷函数一并删除。
+
 import { and, asc, eq, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   ResourceCatalogSummaryReadPort,
   ResourceCatalogSummaryReadQuery,
@@ -14,7 +17,7 @@ import type { ResourceCatalogQuery } from '../public/queries'
 import type { ResourceSummary } from '../public/types'
 import { mcpConfigHash, mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginConfigHash, pluginFromPersistenceRow } from './pluginPersistence'
-import { postgresqlVisibleRowsCondition } from './postgresqlResourceGrantRepository'
+import { visibleRowsCondition } from './resourceVisibility'
 
 interface CatalogColumns {
   readonly id: SQLWrapper
@@ -36,26 +39,27 @@ function afterCondition(
 }
 
 function catalogWhere(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   kind: CatalogSelectorKind,
   columns: CatalogColumns,
   query: ResourceCatalogSummaryReadQuery,
 ): SQL<unknown> | undefined {
-  const visibility = postgresqlVisibleRowsCondition(db, actor, kind, columns)
+  const visibility = visibleRowsCondition(db, actor, kind, columns)
   const normalizedSearch = query.search?.trim()
   const matching =
     normalizedSearch === undefined || normalizedSearch === ''
       ? undefined
       : or(
-          sql`position(lower(${normalizedSearch}) in lower(${columns.name})) > 0`,
-          sql`position(lower(${normalizedSearch}) in lower(COALESCE(${columns.description}, ''))) > 0`,
+          // `instr` 在 PostgreSQL 基线里有同名 shim（strpos），两个方言同一句（RFC-357 已用同法）。
+          sql`instr(lower(${columns.name}), lower(${normalizedSearch})) > 0`,
+          sql`instr(lower(COALESCE(${columns.description}, '')), lower(${normalizedSearch})) > 0`,
         )
   return and(visibility, matching, afterCondition(columns, query.after))
 }
 
 async function listKind(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   kind: CatalogSelectorKind,
   query: ResourceCatalogSummaryReadQuery,
@@ -76,7 +80,7 @@ async function listKind(
         .where(catalogWhere(db, actor, kind, agents, query))
         .orderBy(asc(agents.name), asc(agents.id))
         .limit(query.limit)
-        .all()
+
       return rows.map((row) => ({
         ref: { kind, id: row.id },
         kind,
@@ -101,7 +105,7 @@ async function listKind(
         .where(catalogWhere(db, actor, kind, skills, query))
         .orderBy(asc(skills.name), asc(skills.id))
         .limit(query.limit)
-        .all()
+
       return rows.map((row) => ({
         ref: { kind, id: row.id },
         kind,
@@ -125,7 +129,7 @@ async function listKind(
         .where(catalogWhere(db, actor, kind, mcps, query))
         .orderBy(asc(mcps.name), asc(mcps.id))
         .limit(query.limit)
-        .all()
+
       return rows.map((row) => {
         const resource = mcpFromPersistenceRow(row)
         return {
@@ -145,7 +149,7 @@ async function listKind(
         .where(catalogWhere(db, actor, kind, plugins, query))
         .orderBy(asc(plugins.name), asc(plugins.id))
         .limit(query.limit)
-        .all()
+
       return rows.map((row) => ({
         ref: { kind, id: row.id },
         kind,
@@ -172,7 +176,7 @@ async function listKind(
         .where(catalogWhere(db, actor, kind, workflows, query))
         .orderBy(asc(workflows.name), asc(workflows.id))
         .limit(query.limit)
-        .all()
+
       return rows.map((row) => ({
         ref: { kind, id: row.id },
         kind,
@@ -196,7 +200,7 @@ async function listKind(
         .where(catalogWhere(db, actor, kind, workgroups, query))
         .orderBy(asc(workgroups.name), asc(workgroups.id))
         .limit(query.limit)
-        .all()
+
       return rows.map((row) => ({
         ref: { kind, id: row.id },
         kind,
@@ -209,8 +213,8 @@ async function listKind(
   }
 }
 
-export function createPostgresqlResourceCatalogSummaryReadPort(
-  db: PostgresqlDatabaseClient,
+export function createResourceCatalogSummaryReadPort(
+  db: ProviderNeutralDatabase,
 ): ResourceCatalogSummaryReadPort {
   const port: ResourceCatalogSummaryReadPort = {
     listKind: (actor, kind, query) => listKind(db, actor, kind, query),
@@ -218,17 +222,17 @@ export function createPostgresqlResourceCatalogSummaryReadPort(
   return Object.freeze(port)
 }
 
-export interface PostgresqlResourceCatalogQueryDependencies {
+export interface ResourceCatalogQueryDependencies {
   resolveActor(context: QueryContext): Actor
 }
 
-/** PostgreSQL factory for the exact public ResourceCatalogQuery contract. */
-export function createPostgresqlResourceCatalogQuery(
-  db: PostgresqlDatabaseClient,
-  dependencies: PostgresqlResourceCatalogQueryDependencies,
+/** 精确 public ResourceCatalogQuery 合同的工厂（两个 provider 共用）。 */
+export function createResourceCatalogQuery(
+  db: ProviderNeutralDatabase,
+  dependencies: ResourceCatalogQueryDependencies,
 ): ResourceCatalogQuery {
   return createResourceCatalogQueryApplication({
-    summaries: createPostgresqlResourceCatalogSummaryReadPort(db),
+    summaries: createResourceCatalogSummaryReadPort(db),
     resolveActor: dependencies.resolveActor,
   })
 }

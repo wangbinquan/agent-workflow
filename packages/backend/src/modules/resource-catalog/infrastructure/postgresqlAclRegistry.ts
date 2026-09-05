@@ -1,32 +1,8 @@
-import {
-  actionTemplates,
-  agents,
-  automationPolicies,
-  capabilityTemplates,
-  digitalEmployees,
-  mcps,
-  plugins,
-  skills,
-  verificationProfiles,
-  workflows,
-  workgroups,
-} from '@/db/schema'
 import type { ResourceCatalogOwnedAclType } from '../application/ports/providerResourceCatalogPersistence'
+import { ACL_TABLES } from './resourceVisibility'
 
-/** PostgreSQL owns a distinct roster even though both dialects share logical ids. */
-export const POSTGRESQL_ACL_TABLES = {
-  agent: agents,
-  skill: skills,
-  mcp: mcps,
-  plugin: plugins,
-  workflow: workflows,
-  workgroup: workgroups,
-  capability_template: capabilityTemplates,
-  action_template: actionTemplates,
-  verification_profile: verificationProfiles,
-  digital_employee: digitalEmployees,
-  automation_policy: automationPolicies,
-} as const satisfies Readonly<Record<ResourceCatalogOwnedAclType, object>>
+/** RFC-359 W4-B2：表注册只有一份（resourceVisibility.ts）；这里只是 PG 侧原子沿用的名字。 */
+export const POSTGRESQL_ACL_TABLES = ACL_TABLES
 
 export const POSTGRESQL_OWNER_NAME_UNIQUE_TYPES: ReadonlySet<ResourceCatalogOwnedAclType> = new Set(
   [

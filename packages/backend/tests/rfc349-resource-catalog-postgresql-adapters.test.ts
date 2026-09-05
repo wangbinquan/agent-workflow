@@ -247,7 +247,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(postgresqlLookup).toContain('PostgresqlDatabaseClient')
     expect(postgresqlLookup).toContain('ResourcePackageOwnedResourceLookupPort')
     expect(postgresqlLookup).toContain('createPostgresqlResourcePackageReadPort')
-    expect(postgresqlLookup).toContain('createPostgresqlResourceGrantReadPort')
+    expect(postgresqlLookup).toContain('createResourceGrantReadPort')
     expect(postgresqlLookup).not.toMatch(
       /\bDbClient\b|\bDbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core|createSqlite|\bas\s+(?:unknown|DbClient)/,
     )

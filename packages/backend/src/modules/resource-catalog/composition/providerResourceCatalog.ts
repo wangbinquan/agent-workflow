@@ -17,7 +17,7 @@ import type {
 } from '../application/ports/providerResourceCatalogPersistence'
 import type { ResourceCatalogQuery } from '../public/queries'
 import { createSqliteResourceCatalogAclIdentityReadPort } from '../infrastructure/sqliteAclReadRepository'
-import { createSqliteResourceCatalogSummaryReadPort } from '../infrastructure/sqliteCatalogQuery'
+import { createResourceCatalogSummaryReadPort } from '../infrastructure/catalogQuery'
 import {
   createSqliteResourceAclMutationPort,
   createSqliteResourceAclReadPort,
@@ -32,8 +32,7 @@ import {
   createPostgresqlResourceAclMutationPort,
   type PostgresqlResourceAclMutationLifecycle,
 } from '../infrastructure/postgresqlResourceAclRepository'
-import { createPostgresqlResourceGrantReadPort } from '../infrastructure/postgresqlResourceGrantRepository'
-import { createPostgresqlResourceCatalogSummaryReadPort } from '../infrastructure/postgresqlCatalogQuery'
+import { createResourceGrantReadPort } from '../infrastructure/resourceVisibility'
 
 export interface ResourceCatalogQueryFactory {
   createQuery(input: {
@@ -81,7 +80,7 @@ export function composeSqliteResourceCatalog(input: {
       mutations: createSqliteResourceAclMutationPort(input.db, input.lifecycle),
       identities: createSqliteResourceCatalogAclIdentityReadPort(input.db),
     }),
-    createSqliteResourceCatalogSummaryReadPort(input.db),
+    createResourceCatalogSummaryReadPort(input.db),
   )
 }
 
@@ -91,11 +90,11 @@ export function composePostgresqlResourceCatalog(input: {
 }): ProviderResourceCatalogComposition {
   return composeProviderResourceCatalog(
     Object.freeze({
-      grants: createPostgresqlResourceGrantReadPort(input.db),
+      grants: createResourceGrantReadPort(input.db),
       reads: createPostgresqlResourceAclReadPort(input.db),
       mutations: createPostgresqlResourceAclMutationPort(input.db, input.lifecycle),
       identities: createPostgresqlResourceCatalogAclIdentityReadPort(input.db),
     }),
-    createPostgresqlResourceCatalogSummaryReadPort(input.db),
+    createResourceCatalogSummaryReadPort(input.db),
   )
 }

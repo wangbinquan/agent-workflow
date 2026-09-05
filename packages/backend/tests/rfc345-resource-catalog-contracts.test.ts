@@ -548,7 +548,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const catalog = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/catalogQuery.ts'),
       'utf8',
     )
 
@@ -573,7 +573,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     for (const kind of ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup']) {
       expect(catalog).toContain(`case '${kind}':`)
     }
-    expect(catalog).toContain('nextCursor')
+    // RFC-359 W4-B2：游标分页只属于 application（listAllVisibleResourceSummaries）；provider 中立的
+    // catalogQuery.ts 只出单页（`.limit(query.limit)` + after 游标谓词），不再各自带一份全量翻页便捷函数。
+    expect(
+      readFileSync(
+        resolve(sourceRoot, 'modules/resource-catalog/application/resourceCatalogQuery.ts'),
+        'utf8',
+      ),
+    ).toContain('nextCursor')
+    expect(catalog).toContain('afterCondition(')
     expect(catalog).not.toContain("from '@/services/")
   })
 
@@ -2091,7 +2099,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const catalogQuery = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/catalogQuery.ts'),
       'utf8',
     )
     const ledger = readFileSync(
@@ -2211,7 +2219,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
     expect(authorization).toContain('interface ResourceAccessEvaluator')
     expect(authorization).not.toContain('trustedResourceAuthorizations')
-    expect(catalogQuery).toContain('interface SqliteResourceCatalogQuery')
+    expect(catalogQuery).toContain('interface ResourceCatalogQueryDependencies')
     expect(catalogQuery).toContain("from '../public/queries'")
     for (const retiredExport of [
       '  ACL_CATALOG_KINDS,',

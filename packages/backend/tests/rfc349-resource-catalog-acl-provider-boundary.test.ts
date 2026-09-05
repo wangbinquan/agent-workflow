@@ -54,9 +54,7 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
   test('PostgreSQL adapters use their native client and SQL dialect without fallback', () => {
     const postgresqlPaths = [
       'src/modules/resource-catalog/infrastructure/postgresqlAclReadRepository.ts',
-      'src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts',
       'src/modules/resource-catalog/infrastructure/postgresqlResourceAclRepository.ts',
-      'src/modules/resource-catalog/infrastructure/postgresqlResourceGrantRepository.ts',
     ]
 
     for (const path of postgresqlPaths) {
@@ -67,9 +65,12 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
       )
     }
 
-    const query = source('src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts')
-    expect(query).toContain('position(lower(')
-    expect(query).not.toContain('instr(')
+    // RFC-359 W4-B2：目录摘要查询只有一份（catalogQuery.ts）；搜索谓词用两个方言同义的 `instr(lower(…))`
+    // （PostgreSQL 基线里有同名 shim），不再各写一份方言。
+    const query = source('src/modules/resource-catalog/infrastructure/catalogQuery.ts')
+    expect(query).toContain('instr(lower(')
+    expect(query).not.toContain('position(lower(')
+    expect(query).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|\bDbTxSync\b/)
     expect(query).toContain("from '../application/skills/skillToken'")
     expect(query).toContain("from './mcpPersistence'")
     expect(query).toContain("from './pluginPersistence'")
@@ -83,8 +84,8 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
     expect(composition).toContain('canViewResourceInTx')
     expect(composition).toContain('updateResourceAcl')
 
-    const sqliteQuery = source('src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts')
-    expect(sqliteQuery).toContain('createSqliteResourceCatalogSummaryReadPort')
-    expect(sqliteQuery).toContain('instr(lower(')
+    const sharedQuery = source('src/modules/resource-catalog/infrastructure/catalogQuery.ts')
+    expect(sharedQuery).toContain('createResourceCatalogSummaryReadPort')
+    expect(sharedQuery).toContain('instr(lower(')
   })
 })
