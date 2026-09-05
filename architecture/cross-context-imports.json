@@ -52635,23 +52635,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#$file",
-      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9b0637ceba6d4bc0b692",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E0",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/composition.ts#createSqliteAuthRuntime",
-      "toPath": "packages/backend/src/auth/composition.ts",
-      "toSymbol": "createSqliteAuthRuntime",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
       "fromSymbol": "$file",
@@ -69206,6 +69189,23 @@
       "toPath": "packages/backend/src/modules/identity-access/composition/providerOperations.ts",
       "toSymbol": "composeOwnerIdentityQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cbda1d2b4922230a04a1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W4-E0",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/composition.ts#createAuthRuntimeFor",
+      "toPath": "packages/backend/src/auth/composition.ts",
+      "toSymbol": "createAuthRuntimeFor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -143813,22 +143813,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "identity-access",
-      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#$file",
-      "id": "import:9b0637ceba6d4bc0b692",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E0",
-      "role": "legacy-outbound",
-      "specifier": "@/auth/composition",
-      "syntax": "static-import",
-      "targetSymbol": "createSqliteAuthRuntime",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/auth/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/composition.ts#createSqliteAuthRuntime"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts#$file",
@@ -161586,6 +161570,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/composition/providerOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/providerOperations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#$file",
+      "id": "import:cbda1d2b4922230a04a1",
+      "owner": "identity-access",
+      "removeAfterWave": "W4-E0",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/composition",
+      "syntax": "static-import",
+      "targetSymbol": "createAuthRuntimeFor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/composition.ts#createAuthRuntimeFor"
     },
     {
       "edgeKind": "value",
@@ -181421,7 +181421,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
+  "sourceDigest": "sha256:f4ac09edc0e547003aeddbee85873fbda3035accf978f29ac0f81815276bd225",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

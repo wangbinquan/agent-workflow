@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1851,
+    "entries": 1853,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -178,8 +178,56 @@
     {
       "controls": {
         "audit": false,
-        "authority": "system",
+        "authority": "none-observed",
         "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/auth/composition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/auth/composition.ts#createAuthRuntimeFor",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/auth/composition.ts#createAuthRuntimeFor",
+      "symbol": "createAuthRuntimeFor",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/auth/composition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/auth/composition.ts#CreateAuthRuntimeInput",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/auth/composition.ts#CreateAuthRuntimeInput",
+      "symbol": "CreateAuthRuntimeInput",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -189,6 +237,8 @@
       "id": "mutation:packages/backend/src/auth/composition.ts#createPostgresqlAuthRuntime",
       "missingControls": [
         "audit",
+        "authority",
+        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -209,7 +259,7 @@
       },
       "file": "packages/backend/src/auth/composition.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/composition.ts#createPostgresqlTokenCallAudit",
+      "id": "mutation:packages/backend/src/auth/composition.ts#createTokenCallAudit",
       "missingControls": [
         "authority",
         "authorization",
@@ -217,57 +267,30 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/auth/composition.ts#createPostgresqlTokenCallAudit",
-      "symbol": "createPostgresqlTokenCallAudit",
+      "ownerEntryId": "owner:packages/backend/src/auth/composition.ts#createTokenCallAudit",
+      "symbol": "createTokenCallAudit",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
     {
       "controls": {
-        "audit": false,
+        "audit": true,
         "authority": "system",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
+        "fenceOrOcc": true,
+        "transaction": true
       },
-      "file": "packages/backend/src/auth/composition.ts",
+      "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/composition.ts#createSqliteAuthRuntime",
+      "id": "mutation:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
       "missingControls": [
-        "audit",
-        "event",
-        "fenceOrOcc",
-        "transaction"
+        "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/auth/composition.ts#createSqliteAuthRuntime",
-      "symbol": "createSqliteAuthRuntime",
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
+      "symbol": "createAuthPersistence",
       "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/composition.ts#createSqliteTokenCallAudit",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/composition.ts#createSqliteTokenCallAudit",
-      "symbol": "createSqliteTokenCallAudit",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -634,6 +657,30 @@
       "symbol": "revokeSession",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/auth/infrastructure/tokenCallAudit.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/auth/infrastructure/tokenCallAudit.ts#createTokenCallAuditPersistence",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/tokenCallAudit.ts#createTokenCallAuditPersistence",
+      "symbol": "createTokenCallAuditPersistence",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -44165,7 +44212,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
+  "sourceDigest": "sha256:f4ac09edc0e547003aeddbee85873fbda3035accf978f29ac0f81815276bd225",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

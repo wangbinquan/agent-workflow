@@ -1,9 +1,73 @@
 {
   "denominator": {
     "coLocatedCandidates": 42,
-    "transactionCallbacks": 359
+    "transactionCallbacks": 354
   },
   "entries": [
+    {
+      "effectTokens": [
+        "provider"
+      ],
+      "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:150",
+      "line": 150,
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
+      "status": "co-located-risk",
+      "symbol": "createAuthPersistence",
+      "targetContext": "identity-access",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:192",
+      "line": 192,
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
+      "status": "clear",
+      "symbol": "createAuthPersistence",
+      "targetContext": "identity-access",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:280",
+      "line": 280,
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
+      "status": "clear",
+      "symbol": "createAuthPersistence",
+      "targetContext": "identity-access",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:335",
+      "line": 335,
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
+      "status": "clear",
+      "symbol": "createAuthPersistence",
+      "targetContext": "identity-access",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "provider"
+      ],
+      "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:478",
+      "line": 478,
+      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/authPersistence.ts#createAuthPersistence",
+      "status": "co-located-risk",
+      "symbol": "createAuthPersistence",
+      "targetContext": "identity-access",
+      "transactionCallee": "transaction"
+    },
     {
       "effectTokens": [
         "provider"
@@ -51,130 +115,6 @@
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createLoginSession",
       "status": "clear",
       "symbol": "createLoginSession",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts#transaction:69",
-      "line": 69,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts#serializable",
-      "status": "clear",
-      "symbol": "serializable",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/postgresqlTokenCallAudit.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/postgresqlTokenCallAudit.ts#transaction:56",
-      "line": 56,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/postgresqlTokenCallAudit.ts#PostgresqlTokenCallAuditPersistence",
-      "status": "clear",
-      "symbol": "PostgresqlTokenCallAuditPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:121",
-      "line": 121,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "co-located-risk",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:164",
-      "line": 164,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "clear",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:249",
-      "line": 249,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "clear",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:303",
-      "line": 303,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "clear",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:320",
-      "line": 320,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "clear",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:392",
-      "line": 392,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "clear",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:461",
-      "line": 461,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "co-located-risk",
-      "symbol": "SqliteAuthPersistence",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#dbTxSync:85",
-      "line": 85,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts#SqliteAuthPersistence",
-      "status": "clear",
-      "symbol": "SqliteAuthPersistence",
       "targetContext": "identity-access",
       "transactionCallee": "dbTxSync"
     },
@@ -4409,7 +4349,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
+  "sourceDigest": "sha256:f4ac09edc0e547003aeddbee85873fbda3035accf978f29ac0f81815276bd225",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

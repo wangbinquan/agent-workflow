@@ -391,8 +391,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1851,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1853,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D9：auth 认证持久化与 PAT 调用审计合一后的账本重采（一次性）"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -405,7 +408,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 359,
+      "baseline": 354,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -482,12 +485,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25692,
+      "baseline": 25676,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a0e0e6265c13518723e08e4c130e2e1217d9d63126c26858fa8c5d5b9e6af5df",
+    "sourceDigest": "sha256:f4ac09edc0e547003aeddbee85873fbda3035accf978f29ac0f81815276bd225",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "14045a5b06a180c75c0203442af523cf2ebfdd34",
-    "contentDigest": "sha256:efb2876da01e434c844d47c98d2a7cb27a690631ea32f6319eac3a21357685a2",
+    "currentSnapshotSha": "e2738eebf5238cd4220eb9089364ccb98744e361",
+    "contentDigest": "sha256:45082dd653d86af6a73c8a32d7251ffc4aa24ab48d59159d296c1654494ab218",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
