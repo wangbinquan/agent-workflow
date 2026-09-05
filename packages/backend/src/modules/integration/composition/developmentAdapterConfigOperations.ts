@@ -5,7 +5,6 @@
 import type { ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DevelopmentConfigResourceOperations } from '@/modules/development-automation/public/operations'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   archiveDevelopmentAdapter,
@@ -16,6 +15,21 @@ import {
 } from '../application/developmentAdapterCommands'
 import { createDevelopmentAdapterResourceCatalogAclAdapter } from '../application/adapters/resource-catalog-acl-adapter'
 import { createDevelopmentAdapterStore } from '../infrastructure/developmentAdapterStore'
+
+interface AdapterCreateInput {
+  readonly name: string
+  readonly draft?: unknown
+  readonly purpose?:
+    | 'requirement-source'
+    | 'pipeline-gate'
+    | 'pipeline-classifier'
+    | 'approval-gateway'
+}
+
+interface AdapterReviseInput {
+  readonly name?: string
+  readonly draft: unknown
+}
 
 function identityView(row: DevelopmentAdapterIdentityRow) {
   return Object.freeze({
@@ -83,23 +97,23 @@ export interface DevelopmentAdapterConfigCompositionInput {
   readonly now?: () => number
 }
 
-export type DevelopmentAdapterConfigOperations = DevelopmentConfigResourceOperations & {
-  readonly resourceAclIdentity: ReturnType<typeof createDevelopmentAdapterResourceCatalogAclAdapter>
-}
-
+/**
+ * 返回形状即 development-automation 的 `DevelopmentConfigResourceOperations` 合同（结构装配，bootstrap 处对齐），
+ * 这里不 import 那个 context 的类型——RFC-344 单一入口根锁：integration 的配置参与者不反向依赖 development-automation。
+ */
 export function composeDevelopmentAdapterConfigOperationsFor(
   input: DevelopmentAdapterConfigCompositionInput,
-): DevelopmentAdapterConfigOperations {
+) {
   const store = createDevelopmentAdapterStore(input.db)
   const now = input.now ?? (() => Date.now())
   const actorContext = (actor: Actor) => ({
     userId: actor.user.id,
     actorHasScriptsAuthor: actor.permissions.has('scripts:author'),
   })
-  const operations: DevelopmentAdapterConfigOperations = {
+  const operations = {
     kind: 'development-adapter' as const,
     resourceAclIdentity: createDevelopmentAdapterResourceCatalogAclAdapter(store),
-    async list(actor) {
+    async list(actor: Actor) {
       const rows = await input.access.filterVisible(
         actor,
         'development_adapter',
@@ -107,7 +121,7 @@ export function composeDevelopmentAdapterConfigOperationsFor(
       )
       return rows.map(identityView)
     },
-    async get(actor, id) {
+    async get(actor: Actor, id: string) {
       const row = await store.getById(id)
       if (row === null) throw new NotFoundError('resource-not-found', 'not found')
       const hasTechnicalAuthority =
@@ -141,7 +155,7 @@ export function composeDevelopmentAdapterConfigOperationsFor(
         'reading Adapter executable and secret projection names requires adapter-definitions:update, scripts:author, and ownership',
       )
     },
-    async create(actor, rawInput) {
+    async create(actor: Actor, rawInput: AdapterCreateInput) {
       if (rawInput.purpose === undefined) {
         throw new ValidationError('development-adapter-purpose-required', 'purpose is required')
       }
@@ -158,7 +172,7 @@ export function composeDevelopmentAdapterConfigOperationsFor(
         }),
       )
     },
-    async revise(actor, id, rawInput) {
+    async revise(actor: Actor, id: string, rawInput: AdapterReviseInput) {
       const row = await store.getById(id)
       if (row === null || row.archivedAt !== null) {
         throw new NotFoundError('resource-not-found', 'not found')
@@ -172,7 +186,7 @@ export function composeDevelopmentAdapterConfigOperationsFor(
         now: now(),
       })
     },
-    async publish(actor, id) {
+    async publish(actor: Actor, id: string) {
       const row = await store.getById(id)
       if (row === null || row.archivedAt !== null) {
         throw new NotFoundError('resource-not-found', 'not found')
@@ -180,15 +194,19 @@ export function composeDevelopmentAdapterConfigOperationsFor(
       await input.access.requireEdit(actor, 'development_adapter', row)
       return await publishDevelopmentAdapter(store, actorContext(actor), { id, now: now() })
     },
-    async archive(actor, id) {
+    async archive(actor: Actor, id: string) {
       const row = await store.getById(id)
       if (row === null) throw new NotFoundError('resource-not-found', 'not found')
       await input.access.requireGovern(actor, 'development_adapter', row)
       await archiveDevelopmentAdapter(store, { id, now: now() })
     },
-    async loadAclRow(id) {
+    async loadAclRow(id: string) {
       return await store.getById(id)
     },
   }
   return Object.freeze(operations)
 }
+
+export type DevelopmentAdapterConfigOperations = ReturnType<
+  typeof composeDevelopmentAdapterConfigOperationsFor
+>
