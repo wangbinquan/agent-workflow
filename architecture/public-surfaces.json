@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 890,
+    "consumers": 888,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1056,
+    "methods": 1055,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20493,
-    "symbols": 986
+    "recursiveFields": 20491,
+    "symbols": 985
   },
   "entries": [
     {
@@ -27838,7 +27838,7 @@
       },
       "consumerEdgeIds": [
         "import:5333aaa08afb9a37dfad",
-        "import:54a08d5953f4ebc0224d"
+        "import:a97646789f516ae71dad"
       ],
       "context": "digital-employee",
       "dataClass": "metadata",
@@ -27852,28 +27852,28 @@
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:0.kind",
           "type": "'revision-unavailable'"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:1.kind",
           "type": "'intake-unavailable'"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:2.currentRevision",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:2.employeeDefinitionId",
           "type": "string"
@@ -27890,21 +27890,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:2.kind",
           "type": "'ready'"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:2.typeId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadCurrentSnapshot.$return.$variant:2.typeRevision",
           "type": "number"
@@ -27936,7 +27936,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadIdentity.$return.$variant:0.id",
           "type": "string"
@@ -27953,14 +27953,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadIdentity.$return.$variant:0.typeId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "fieldPath": "$method:loadIdentity.$return.$variant:0.typeRevision",
           "type": "number"
@@ -27991,14 +27991,14 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "name": "loadCurrentSnapshot",
           "signatureDigest": "sha256:e2a760ae28f311ecff97165ffb8409f54506d6cee6e6fe822254f62239f2a34f"
         },
         {
           "consumerEdgeIds": [
-            "import:54a08d5953f4ebc0224d"
+            "import:a97646789f516ae71dad"
           ],
           "name": "loadIdentity",
           "signatureDigest": "sha256:babf2c796b32b29f47b2b86858f55faaea50ba00a49055a7a9a19899673f11b6"
@@ -28014,9 +28014,9 @@
         },
         {
           "context": "resource-catalog",
-          "edgeId": "import:54a08d5953f4ebc0224d",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntegrationTriggerResourceSnapshots.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntegrationTriggerResourceSnapshots.ts#$file"
+          "edgeId": "import:a97646789f516ae71dad",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -51136,7 +51136,6 @@
         "public:knowledge-evolution:operations:startFusionReconcileLoop",
         "public:knowledge-evolution:participants:FusionOperations",
         "public:memory:operations:MemoryOperations",
-        "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
         "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
         "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
@@ -100036,67 +100035,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:70ea12e1bde3eb6a580d"
-      ],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:loadAuthorized.$parameter:requests",
-          "type": "readonly IntegrationTriggerResourceRequest[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:loadAuthorized.$return",
-          "type": "readonly FrozenIntegrationTriggerResourceSnapshot[]"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
-      "members": [
-        "[integrationTriggerResourceSnapshotInTxBrand]",
-        "loadAuthorized"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:70ea12e1bde3eb6a580d"
-          ],
-          "name": "loadAuthorized",
-          "signatureDigest": "sha256:7cb6d329580b30f630dc0f6366359a1385fed834ee37ee95994987f2da97761b"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#IntegrationTriggerResourceSnapshotInTx",
-      "productionConsumers": [
-        {
-          "context": "integration",
-          "edgeId": "import:70ea12e1bde3eb6a580d",
-          "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:18a8edbbc648999a038908eb01c27e3bf7bb7875d934d9c180952d673c1756b5",
-      "status": "target-context-current-surface",
-      "symbol": "IntegrationTriggerResourceSnapshotInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
         "import:b2d82ebf2a8487245032"
       ],
       "context": "resource-catalog",
@@ -103112,7 +103050,6 @@
       ],
       "publicTypeConsumerIds": [
         "public:intent:operations:IntentApplyOperations",
-        "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
         "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:IntentContextResourceAuthorizationSession",
         "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
@@ -112489,11 +112426,11 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:076c2f4658e5033a7482",
         "import:4f5f3cd7adc4aa36eceb",
-        "import:4f83e520cb93b109a618",
         "import:56773ca8abbac06ccddf",
         "import:56a15d5448583ebc9ae8",
-        "import:625a340314e7c89f7ae4"
+        "import:589c867e298b2cecabfe"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -112502,10 +112439,10 @@
       "fields": [
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:0.kind",
           "type": "'scheduled-workflow'"
@@ -112520,10 +112457,10 @@
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:0.workflow.id",
           "type": "string"
@@ -112543,30 +112480,30 @@
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:1.agent",
           "type": "Pick<\n  Agent,\n  | 'id'\n  | 'name'\n  | 'description'\n  | 'outputs'\n  | 'outputKinds'\n  | 'branchPorts'\n  | 'inputs'\n  | 'outputWrapperPortNames'\n  | 'role'\n  | 'syncOutputsOnIterate'\n  | 'runtime'\n  | 'permission'\n  | 'skills'\n  | 'dependsOn'\n  | 'mcp'\n  | 'plugins'\n  | 'frontmatterExtra'\n  | 'bodyMd'\n  | 'schemaVersion'\n  | 'createdAt'\n  | 'updatedAt'\n>"
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:1.kind",
           "type": "'scheduled-agent'"
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:2.kind",
           "type": "'scheduled-workgroup'"
@@ -112581,10 +112518,10 @@
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:3.kind",
           "type": "'webhook-workflow'"
@@ -112599,10 +112536,10 @@
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:3.workflow.id",
           "type": "string"
@@ -112658,10 +112595,10 @@
         },
         {
           "consumerEdgeIds": [
+            "import:076c2f4658e5033a7482",
             "import:4f5f3cd7adc4aa36eceb",
             "import:56773ca8abbac06ccddf",
-            "import:56a15d5448583ebc9ae8",
-            "import:625a340314e7c89f7ae4"
+            "import:56a15d5448583ebc9ae8"
           ],
           "fieldPath": "$variant:4.kind",
           "type": "'webhook-digital-employee'"
@@ -112675,15 +112612,15 @@
       "productionConsumers": [
         {
           "context": "integration",
-          "edgeId": "import:4f5f3cd7adc4aa36eceb",
-          "file": "packages/backend/src/modules/integration/composition/webhookAdmission.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookAdmission.ts#$file"
+          "edgeId": "import:076c2f4658e5033a7482",
+          "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#$file"
         },
         {
           "context": "integration",
-          "edgeId": "import:4f83e520cb93b109a618",
-          "file": "packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#$file"
+          "edgeId": "import:4f5f3cd7adc4aa36eceb",
+          "file": "packages/backend/src/modules/integration/composition/webhookAdmission.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookAdmission.ts#$file"
         },
         {
           "context": "integration",
@@ -112699,9 +112636,9 @@
         },
         {
           "context": "integration",
-          "edgeId": "import:625a340314e7c89f7ae4",
-          "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#$file"
+          "edgeId": "import:589c867e298b2cecabfe",
+          "file": "packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -113664,10 +113601,9 @@
       },
       "consumerEdgeIds": [
         "import:0318ba1f3b00cb40ee42",
-        "import:13abb5c2412b7ec557fd",
-        "import:6d8f64c5baa624cf0f5b",
-        "import:89c40fd6d0df2e12d435",
-        "import:e4a912f9559f6b79a064"
+        "import:225fe7c7a2a6d62f39bd",
+        "import:70486a9c373a167bec4a",
+        "import:89c40fd6d0df2e12d435"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -113677,7 +113613,7 @@
         {
           "consumerEdgeIds": [
             "import:0318ba1f3b00cb40ee42",
-            "import:6d8f64c5baa624cf0f5b",
+            "import:225fe7c7a2a6d62f39bd",
             "import:89c40fd6d0df2e12d435"
           ],
           "fieldPath": "$variant:0.kind",
@@ -113700,7 +113636,7 @@
         {
           "consumerEdgeIds": [
             "import:0318ba1f3b00cb40ee42",
-            "import:6d8f64c5baa624cf0f5b",
+            "import:225fe7c7a2a6d62f39bd",
             "import:89c40fd6d0df2e12d435"
           ],
           "fieldPath": "$variant:1.kind",
@@ -113709,7 +113645,7 @@
         {
           "consumerEdgeIds": [
             "import:0318ba1f3b00cb40ee42",
-            "import:6d8f64c5baa624cf0f5b",
+            "import:225fe7c7a2a6d62f39bd",
             "import:89c40fd6d0df2e12d435"
           ],
           "fieldPath": "$variant:2.kind",
@@ -113725,7 +113661,7 @@
         {
           "consumerEdgeIds": [
             "import:0318ba1f3b00cb40ee42",
-            "import:6d8f64c5baa624cf0f5b",
+            "import:225fe7c7a2a6d62f39bd",
             "import:89c40fd6d0df2e12d435"
           ],
           "fieldPath": "$variant:3.kind",
@@ -113746,7 +113682,7 @@
         {
           "consumerEdgeIds": [
             "import:0318ba1f3b00cb40ee42",
-            "import:6d8f64c5baa624cf0f5b",
+            "import:225fe7c7a2a6d62f39bd",
             "import:89c40fd6d0df2e12d435"
           ],
           "fieldPath": "$variant:4.kind",
@@ -113767,27 +113703,21 @@
         },
         {
           "context": "integration",
-          "edgeId": "import:13abb5c2412b7ec557fd",
-          "file": "packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#$file"
+          "edgeId": "import:225fe7c7a2a6d62f39bd",
+          "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#$file"
         },
         {
           "context": "integration",
-          "edgeId": "import:6d8f64c5baa624cf0f5b",
-          "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#$file"
+          "edgeId": "import:70486a9c373a167bec4a",
+          "file": "packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#$file"
         },
         {
           "context": "legacy",
           "edgeId": "import:89c40fd6d0df2e12d435",
           "file": "packages/backend/src/services/scheduledTasks.ts",
           "ownerEntryId": "owner:packages/backend/src/services/scheduledTasks.ts#$file"
-        },
-        {
-          "context": "integration",
-          "edgeId": "import:e4a912f9559f6b79a064",
-          "file": "packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -162586,7 +162516,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0dc4b3dbafb05eaaa5b95d261a280347240fe8c54ae5fd9c513e2c85e36f1896",
+  "sourceDigest": "sha256:f81a28bf68bc66cc9d14c0a2d80376bfa73db20a251d9251bd97b200bc408418",
   "targetContexts": [
     "collaboration",
     "development-automation",

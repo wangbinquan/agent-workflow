@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1900,
+    "entries": 1895,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -10497,6 +10497,31 @@
       },
       "file": "packages/backend/src/modules/digital-employee/composition.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#createPostgresqlDigitalEmployeeIntegrationTriggerParticipant",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createPostgresqlDigitalEmployeeIntegrationTriggerParticipant",
+      "symbol": "createPostgresqlDigitalEmployeeIntegrationTriggerParticipant",
+      "targetContext": "digital-employee",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/digital-employee/composition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#createPostgresqlEmployeeReactionRoundQueries",
       "missingControls": [
         "audit",
@@ -10763,6 +10788,29 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/integrationTriggerParticipant.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/integrationTriggerParticipant.ts#createDigitalEmployeeIntegrationTriggerParticipantIn",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/integrationTriggerParticipant.ts#createDigitalEmployeeIntegrationTriggerParticipantIn",
+      "symbol": "createDigitalEmployeeIntegrationTriggerParticipantIn",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
@@ -10801,29 +10849,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlInputUploadStore.ts#createPostgresqlEmployeeInputUploadPersistence",
       "symbol": "createPostgresqlEmployeeInputUploadPersistence",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlIntegrationTriggerParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/postgresqlIntegrationTriggerParticipant.ts#createPostgresqlDigitalEmployeeIntegrationTriggerParticipant",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlIntegrationTriggerParticipant.ts#createPostgresqlDigitalEmployeeIntegrationTriggerParticipant",
-      "symbol": "createPostgresqlDigitalEmployeeIntegrationTriggerParticipant",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -10965,52 +10990,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#createSqliteDigitalEmployeeAuthoringStore",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteIntegrationTriggerParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/sqliteIntegrationTriggerParticipant.ts#createSqliteDigitalEmployeeIntegrationTriggerParticipant",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteIntegrationTriggerParticipant.ts#createSqliteDigitalEmployeeIntegrationTriggerParticipant",
-      "symbol": "createSqliteDigitalEmployeeIntegrationTriggerParticipant",
-      "targetContext": "digital-employee",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteIntegrationTriggerParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/sqliteIntegrationTriggerParticipant.ts#createSqliteDigitalEmployeeIntegrationTriggerParticipantSync",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteIntegrationTriggerParticipant.ts#createSqliteDigitalEmployeeIntegrationTriggerParticipantSync",
-      "symbol": "createSqliteDigitalEmployeeIntegrationTriggerParticipantSync",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -13700,6 +13679,29 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#createIntegrationTriggerResources",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#createIntegrationTriggerResources",
+      "symbol": "createIntegrationTriggerResources",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
@@ -13792,50 +13794,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#createPostgresqlIntegrationTriggerResources",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#createPostgresqlIntegrationTriggerResources",
-      "symbol": "createPostgresqlIntegrationTriggerResources",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "missingControls": [
-        "audit",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "symbol": "createPostgresqlScheduledTaskPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
@@ -13872,6 +13830,27 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#createPostgresqlWebhookDeliveryPersistence",
       "symbol": "createPostgresqlWebhookDeliveryPersistence",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "missingControls": [
+        "audit",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "symbol": "createScheduledTaskPersistence",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -13917,50 +13896,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
       "symbol": "createSqliteDevelopmentAdapterStore",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#createSqliteIntegrationTriggerResources",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#createSqliteIntegrationTriggerResources",
-      "symbol": "createSqliteIntegrationTriggerResources",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "missingControls": [
-        "audit",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "symbol": "createSqliteScheduledTaskPersistence",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -16665,30 +16600,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/application/participants/integrationTriggerResourceSnapshot.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/integrationTriggerResourceSnapshot.ts#createIntegrationTriggerResourceSnapshotInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/integrationTriggerResourceSnapshot.ts#createIntegrationTriggerResourceSnapshotInTx",
-      "symbol": "createIntegrationTriggerResourceSnapshotInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -19159,16 +19070,16 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#createLegacyIntegrationTriggerResourceSnapshotPorts",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts#createIntegrationTriggerResourceSnapshotReader",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#createLegacyIntegrationTriggerResourceSnapshotPorts",
-      "symbol": "createLegacyIntegrationTriggerResourceSnapshotPorts",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts#createIntegrationTriggerResourceSnapshotReader",
+      "symbol": "createIntegrationTriggerResourceSnapshotReader",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -19280,28 +19191,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts#createLegacyTaskExecutionResourceSnapshotPorts",
       "symbol": "createLegacyTaskExecutionResourceSnapshotPorts",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntegrationTriggerResourceSnapshots.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntegrationTriggerResourceSnapshots.ts#createPostgresqlIntegrationTriggerResourceSnapshotReader",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntegrationTriggerResourceSnapshots.ts#createPostgresqlIntegrationTriggerResourceSnapshotReader",
-      "symbol": "createPostgresqlIntegrationTriggerResourceSnapshotReader",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -45290,7 +45179,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0dc4b3dbafb05eaaa5b95d261a280347240fe8c54ae5fd9c513e2c85e36f1896",
+  "sourceDigest": "sha256:f81a28bf68bc66cc9d14c0a2d80376bfa73db20a251d9251bd97b200bc408418",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

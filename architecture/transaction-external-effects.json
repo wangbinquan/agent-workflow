@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 47,
-    "transactionCallbacks": 422
+    "transactionCallbacks": 415
   },
   "entries": [
     {
@@ -1825,6 +1825,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#transaction:64",
+      "line": 64,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#createIntegrationTriggerResources",
+      "status": "clear",
+      "symbol": "createIntegrationTriggerResources",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#transaction:172",
@@ -1870,78 +1882,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrLaunchGuardPersistence",
       "status": "co-located-risk",
       "symbol": "createMrLaunchGuardPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#transaction:63",
-      "line": 63,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#createPostgresqlIntegrationTriggerResources",
-      "status": "clear",
-      "symbol": "createPostgresqlIntegrationTriggerResources",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#transaction:123",
-      "line": 123,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#transaction:134",
-      "line": 134,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#transaction:191",
-      "line": 191,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#transaction:315",
-      "line": 315,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#transaction:338",
-      "line": 338,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts#createPostgresqlScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlScheduledTaskPersistence",
       "targetContext": "integration",
       "transactionCallee": "transaction"
     },
@@ -1997,6 +1937,66 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#transaction:127",
+      "line": 127,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "status": "clear",
+      "symbol": "createScheduledTaskPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#transaction:138",
+      "line": 138,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "status": "clear",
+      "symbol": "createScheduledTaskPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#transaction:193",
+      "line": 193,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "status": "clear",
+      "symbol": "createScheduledTaskPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#transaction:320",
+      "line": 320,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "status": "clear",
+      "symbol": "createScheduledTaskPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#transaction:343",
+      "line": 343,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#createScheduledTaskPersistence",
+      "status": "clear",
+      "symbol": "createScheduledTaskPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#dbTxSync:160",
@@ -2016,90 +2016,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
       "status": "clear",
       "symbol": "createDevelopmentAdapterAclIdentity",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#dbTxSync:21",
-      "line": 21,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#createSqliteIntegrationTriggerResources",
-      "status": "clear",
-      "symbol": "createSqliteIntegrationTriggerResources",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#dbTxSync:115",
-      "line": 115,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createSqliteScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#dbTxSync:128",
-      "line": 128,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createSqliteScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#dbTxSync:183",
-      "line": 183,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createSqliteScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#dbTxSync:295",
-      "line": 295,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createSqliteScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#dbTxSync:316",
-      "line": 316,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createSqliteScheduledTaskPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#dbTxSync:339",
-      "line": 339,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts#createSqliteScheduledTaskPersistence",
-      "status": "clear",
-      "symbol": "createSqliteScheduledTaskPersistence",
       "targetContext": "integration",
       "transactionCallee": "dbTxSync"
     },
@@ -5176,7 +5092,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0dc4b3dbafb05eaaa5b95d261a280347240fe8c54ae5fd9c513e2c85e36f1896",
+  "sourceDigest": "sha256:f81a28bf68bc66cc9d14c0a2d80376bfa73db20a251d9251bd97b200bc408418",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
