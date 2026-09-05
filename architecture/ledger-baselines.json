@@ -62,8 +62,8 @@
       "id": "rfc349-dual-provider-predicate-forks",
       "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
       "symbol": "ALLOWED_DIVERGENCE",
-      "baseline": 3,
-      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。 RFC-359 W4-D6c：digital-employee 作者面孪生对合一为 authoringStore.ts，`toTool` / `uniqueError` 两条豁免随孪生对消失删除，12 → 10。 RFC-359 W4-D16（2026-09-05）：Mcp 仓库合一后 ownerScopedNameWhere 的方言分叉退役，5→4。 RFC-359 W4-D17（2026-09-06）：Plugin 仓库合一后 ownerScopedNameWhere 的方言分叉退役，4→3。"
+      "baseline": 2,
+      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。 RFC-359 W4-D6c：digital-employee 作者面孪生对合一为 authoringStore.ts，`toTool` / `uniqueError` 两条豁免随孪生对消失删除，12 → 10。 RFC-359 W4-D16（2026-09-05）：Mcp 仓库合一后 ownerScopedNameWhere 的方言分叉退役，5→4。 RFC-359 W4-D17（2026-09-06）：Plugin 仓库合一后 ownerScopedNameWhere 的方言分叉退役，4→3。 RFC-359 W4-D18（2026-09-06）：Workgroup 仓库合一后 ownerScopedNameWhere 的方言分叉退役，3→2。"
     },
     {
       "id": "rfc294-cross-context-pilot-debt",
@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1832,
+      "baseline": 1831,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -405,7 +405,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 333,
+      "baseline": 329,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5761,
+      "baseline": 5741,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5103,
+      "baseline": 5097,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25598,
+      "baseline": 25560,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3a214d026fbdb5717959328e828cedd3d6c12b559a078e0f69ef267432633937",
+    "sourceDigest": "sha256:7d6347cd7d690c2f5a6a81f99fa7462a907256e6f1a9de82d67f59c108ae2afa",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c203ded63ea14c6de3166f14a9c9ed3dbad27b12",
-    "contentDigest": "sha256:5e7790a31cc16e3df638ee3308b672af60af40500c50dc2f42bf7a5c5ec52b57",
+    "currentSnapshotSha": "071e73eb2f390e5dba92ecc488b588144d596a71",
+    "contentDigest": "sha256:9a1a5138060996dc871588733ffde5422c65cbd050ad60a06ab223d3e3c3bf86",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3080",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3083",
       "kind": "register-call",
-      "line": 3080,
+      "line": 3083,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2874",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2877",
       "kind": "register-call",
-      "line": 2874,
+      "line": 2877,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3140",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3143",
       "kind": "register-call",
-      "line": 3140,
+      "line": 3143,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createComposedApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createComposedApp",
@@ -13451,5 +13451,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3a214d026fbdb5717959328e828cedd3d6c12b559a078e0f69ef267432633937"
+  "sourceDigest": "sha256:7d6347cd7d690c2f5a6a81f99fa7462a907256e6f1a9de82d67f59c108ae2afa"
 }

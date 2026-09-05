@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1832,
+    "entries": 1831,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20998,28 +20998,6 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts#createPostgresqlWorkgroupRepository",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts#createPostgresqlWorkgroupRepository",
-      "symbol": "createPostgresqlWorkgroupRepository",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -21757,28 +21735,6 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts#createSqliteWorkgroupRepository",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts#createSqliteWorkgroupRepository",
-      "symbol": "createSqliteWorkgroupRepository",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -21910,6 +21866,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowValidation.ts#createWorkflowValidationPort",
       "symbol": "createWorkflowValidationPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupRepository.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupRepository.ts#createWorkgroupRepository",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupRepository.ts#createWorkgroupRepository",
+      "symbol": "createWorkgroupRepository",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -43726,7 +43704,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3a214d026fbdb5717959328e828cedd3d6c12b559a078e0f69ef267432633937",
+  "sourceDigest": "sha256:7d6347cd7d690c2f5a6a81f99fa7462a907256e6f1a9de82d67f59c108ae2afa",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
