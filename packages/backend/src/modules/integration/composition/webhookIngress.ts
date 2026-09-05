@@ -10,11 +10,10 @@ import type { WebhookEndpointAdministrationPort } from '../application/ports/web
 import { createPostgresqlVerifiedWebhookDeliveryPersistence } from '../infrastructure/postgresqlVerifiedWebhookDeliveryPersistence'
 import { createPostgresqlWebhookDeliveryPersistence } from '../infrastructure/postgresqlWebhookDeliveryPersistence'
 import { createPostgresqlWebhookDeliveryQueries } from '../infrastructure/postgresqlWebhookDeliveryQueries'
-import { createPostgresqlWebhookEndpointAdministration } from '../infrastructure/postgresqlWebhookEndpointAdministration'
 import { createSqliteVerifiedWebhookDeliveryPersistence } from '../infrastructure/sqliteVerifiedWebhookDeliveryStore'
 import { createSqliteWebhookDeliveryPersistence } from '../infrastructure/sqliteWebhookDeliveryPersistence'
 import { createSqliteWebhookDeliveryQueries } from '../infrastructure/sqliteWebhookDeliveryQueries'
-import { createSqliteWebhookEndpointAdministration } from '../infrastructure/sqliteWebhookEndpointAdministration'
+import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
 
 export interface WebhookIngressPersistence {
   readonly endpoints: Pick<WebhookEndpointAdministrationPort, 'get' | 'getByUrlToken'>
@@ -36,7 +35,7 @@ export function composeWebhookIngressPersistence(
 export function composeSqliteWebhookIngressPersistence(db: DbClient): WebhookIngressPersistence {
   const verified = createSqliteVerifiedWebhookDeliveryPersistence(db)
   return composeWebhookIngressPersistence({
-    endpoints: createSqliteWebhookEndpointAdministration(db),
+    endpoints: createWebhookEndpointAdministration(db),
     deliveries: createSqliteWebhookDeliveryPersistence(db),
     acceptVerifiedDelivery: (input) => verified.accept(input),
   })
@@ -55,7 +54,7 @@ export function composePostgresqlWebhookIngressPersistence(
 ): WebhookIngressPersistence {
   const verified = createPostgresqlVerifiedWebhookDeliveryPersistence(db)
   return composeWebhookIngressPersistence({
-    endpoints: createPostgresqlWebhookEndpointAdministration(db),
+    endpoints: createWebhookEndpointAdministration(db),
     deliveries: createPostgresqlWebhookDeliveryPersistence(db),
     acceptVerifiedDelivery: (input) => verified.accept(input),
   })

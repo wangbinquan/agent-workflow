@@ -20,12 +20,10 @@ import {
 
 // RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
 export { setMemoryDistillLangProvider } from './application/distill/schedule'
-import { PostgresqlMemoryDistillReadStore } from './infrastructure/postgresqlMemoryDistillReadStore'
-import { SqliteMemoryDistillReadStore } from './infrastructure/sqliteMemoryDistillReadStore'
+import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillReadStore'
 import { PostgresqlMemoryDistillWorkStore } from './infrastructure/postgresqlMemoryDistillWorkStore'
 import { SqliteMemoryDistillWorkStore } from './infrastructure/sqliteMemoryDistillWorkStore'
-import { PostgresqlMemoryInjectionReadStore } from './infrastructure/postgresqlMemoryInjectionReadStore'
-import { SqliteMemoryInjectionReadStore } from './infrastructure/sqliteMemoryInjectionReadStore'
+import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'
 import {
   composePostgresqlMemoryCatalogOperations,
   type PostgresqlMemoryTransaction,
@@ -78,11 +76,11 @@ export function composeSqliteFusionMemoryMembership(): {
 export { composeSqliteMemoryCatalogOperations }
 
 export function composeSqliteMemoryDistillQueries(db: DbClient) {
-  return createMemoryDistillQueries(new SqliteMemoryDistillReadStore(db))
+  return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
 }
 
 export function composePostgresqlMemoryDistillQueries(db: PostgresqlDatabaseClient) {
-  return createMemoryDistillQueries(new PostgresqlMemoryDistillReadStore(db))
+  return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
 }
 
 function composeMemoryOperations(input: {
@@ -136,13 +134,13 @@ function composeMemoryInjectionQueries(store: MemoryInjectionReadStore): MemoryI
 }
 
 export function composeSqliteMemoryInjectionQueries(db: DbClient): MemoryInjectionQueries {
-  return composeMemoryInjectionQueries(new SqliteMemoryInjectionReadStore(db))
+  return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
 }
 
 export function composePostgresqlMemoryInjectionQueries(
   db: PostgresqlDatabaseClient,
 ): MemoryInjectionQueries {
-  return composeMemoryInjectionQueries(new PostgresqlMemoryInjectionReadStore(db))
+  return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
 }
 
 export function composeSqliteMemoryOperations(input: {
@@ -160,7 +158,7 @@ export function composeSqliteMemoryOperations(input: {
   }
 }): MemoryOperations {
   return composeMemoryOperations({
-    readStore: new SqliteMemoryDistillReadStore(input.db),
+    readStore: new DrizzleMemoryDistillReadStore(input.db),
     workStore: new SqliteMemoryDistillWorkStore(
       input.db,
       createSqliteMemoryDistillSessionCapture(input.db),
@@ -189,7 +187,7 @@ export function composePostgresqlMemoryOperations(input: {
   }
 }): MemoryOperations {
   return composeMemoryOperations({
-    readStore: new PostgresqlMemoryDistillReadStore(input.db),
+    readStore: new DrizzleMemoryDistillReadStore(input.db),
     workStore: new PostgresqlMemoryDistillWorkStore(
       input.db,
       createPostgresqlMemoryDistillSessionCapture(input.db),

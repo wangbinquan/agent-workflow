@@ -1,23 +1,33 @@
+// RFC-359 W4-B4 —— 记忆注入读存储：一份实现，两个 provider 共用。
+
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos, memories, nodeRuns, tasks, taskRepos } from '@/db/schema'
 import type {
   MemoryInjectionReadStore,
   MemoryInjectionRecord,
 } from '../application/ports/injectionReadStore'
 
-const INJECTION_COLUMNS = {
-  id: memories.id,
-  scopeType: memories.scopeType,
-  scopeId: memories.scopeId,
-  title: memories.title,
-  bodyMd: memories.bodyMd,
-  createdAt: memories.createdAt,
-  version: memories.version,
-  tagsJson: memories.tags,
-  sourceKind: memories.sourceKind,
-  approvedAt: memories.approvedAt,
+/**
+ * 每次查询时再取列：`@/db/schema` 的表是按当前 provider 投影的代理，模块加载时捕获的列对象会
+ * 固定在当时激活的 provider 上——PG 进程里若在切换投影前 import 了本文件，bigint 列的
+ * number mapper 就会丢失，createdAt / version / approvedAt 以字符串回到调用方
+ * （RFC-359 W4-B4a 双引擎用例实测；老的 PG 适配器同样以顶层常量捕获，同一缺陷）。
+ */
+function injectionColumns() {
+  return {
+    id: memories.id,
+    scopeType: memories.scopeType,
+    scopeId: memories.scopeId,
+    title: memories.title,
+    bodyMd: memories.bodyMd,
+    createdAt: memories.createdAt,
+    version: memories.version,
+    tagsJson: memories.tags,
+    sourceKind: memories.sourceKind,
+    approvedAt: memories.approvedAt,
+  }
 }
 
 function recordOf(row: MemoryInjectionRecord): MemoryInjectionRecord {
@@ -35,11 +45,11 @@ function recordOf(row: MemoryInjectionRecord): MemoryInjectionRecord {
   }
 }
 
-export class SqliteMemoryInjectionReadStore implements MemoryInjectionReadStore {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async findTaskContext(taskId: string) {
-    const row = this.db
+    const rows = await this.db
       .select({
         workflowId: tasks.workflowId,
         cachedRepoId: tasks.cachedRepoId,
@@ -48,7 +58,7 @@ export class SqliteMemoryInjectionReadStore implements MemoryInjectionReadStore 
       .from(tasks)
       .where(eq(tasks.id, taskId))
       .limit(1)
-      .get()
+    const row = rows[0]
     return row === undefined
       ? null
       : {
@@ -59,23 +69,23 @@ export class SqliteMemoryInjectionReadStore implements MemoryInjectionReadStore 
   }
 
   async listTaskRepositoryIds(taskId: string): Promise<readonly string[]> {
-    return this.db
-      .select({ cachedRepoId: taskRepos.cachedRepoId })
-      .from(taskRepos)
-      .where(eq(taskRepos.taskId, taskId))
-      .all()
-      .flatMap((row) => (row.cachedRepoId === null ? [] : [row.cachedRepoId]))
+    return (
+      await this.db
+        .select({ cachedRepoId: taskRepos.cachedRepoId })
+        .from(taskRepos)
+        .where(eq(taskRepos.taskId, taskId))
+    ).flatMap((row) => (row.cachedRepoId === null ? [] : [row.cachedRepoId]))
   }
 
   async filterExistingRepositoryIds(repositoryIds: readonly string[]): Promise<readonly string[]> {
     if (repositoryIds.length === 0) return []
-    return this.db
-      .select({ id: cachedRepos.id })
-      .from(cachedRepos)
-      .where(inArray(cachedRepos.id, [...repositoryIds]))
-      .limit(repositoryIds.length)
-      .all()
-      .map((row) => row.id)
+    return (
+      await this.db
+        .select({ id: cachedRepos.id })
+        .from(cachedRepos)
+        .where(inArray(cachedRepos.id, [...repositoryIds]))
+        .limit(repositoryIds.length)
+    ).map((row) => row.id)
   }
 
   async listApprovedMemories(
@@ -87,17 +97,17 @@ export class SqliteMemoryInjectionReadStore implements MemoryInjectionReadStore 
       ids === null
         ? eq(memories.scopeType, input.scopeType)
         : and(eq(memories.scopeType, input.scopeType), inArray(memories.scopeId, [...ids]))!
-    return this.db
-      .select(INJECTION_COLUMNS)
-      .from(memories)
-      .where(and(scopeCondition, eq(memories.status, 'approved')))
-      .orderBy(desc(memories.createdAt))
-      .all()
-      .map(recordOf)
+    return (
+      await this.db
+        .select(injectionColumns())
+        .from(memories)
+        .where(and(scopeCondition, eq(memories.status, 'approved')))
+        .orderBy(desc(memories.createdAt))
+    ).map(recordOf)
   }
 
   async listRunRecords(input: Parameters<MemoryInjectionReadStore['listRunRecords']>[0]) {
-    return this.db
+    return await this.db
       .select({
         id: nodeRuns.id,
         status: nodeRuns.status,
@@ -116,6 +126,5 @@ export class SqliteMemoryInjectionReadStore implements MemoryInjectionReadStore 
           isNull(nodeRuns.parentNodeRunId),
         ),
       )
-      .all()
   }
 }

@@ -333,7 +333,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
     )
     const webhookDispatch = read(
-      'packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts',
+      'packages/backend/src/modules/integration/infrastructure/webhookDispatchRuntime.ts',
     )
 
     expect(startTaskDeps).toContain('schedulerDriver: SchedulerDriverPort')

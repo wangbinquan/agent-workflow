@@ -5,12 +5,11 @@ import {
   createOwnerIdentityQueries,
   type OwnerIdentityQueries,
 } from '../application/ports/ownerIdentityQueries'
-import { PostgresqlOwnerIdentityPersistence } from '../infrastructure/postgresqlOwnerIdentityQueries'
-import { SqliteOwnerIdentityPersistence } from '../infrastructure/sqliteOwnerIdentityQueries'
+import { DrizzleOwnerIdentityPersistence } from '../infrastructure/ownerIdentityQueries'
 
 export function composeSqliteOwnerIdentityQueries(db: DbClient): OwnerIdentityQueries {
   return createOwnerIdentityQueries({
-    persistence: new SqliteOwnerIdentityPersistence(db),
+    persistence: new DrizzleOwnerIdentityPersistence(db),
     systemUserId: SYSTEM_USER_ID,
   })
 }
@@ -19,7 +18,7 @@ export function composePostgresqlOwnerIdentityQueries(
   db: PostgresqlDatabaseClient,
 ): OwnerIdentityQueries {
   return createOwnerIdentityQueries({
-    persistence: new PostgresqlOwnerIdentityPersistence(db),
+    persistence: new DrizzleOwnerIdentityPersistence(db),
     systemUserId: SYSTEM_USER_ID,
   })
 }

@@ -8,22 +8,22 @@ import type { WebhookDispatchPersistencePort } from '../application/ports/webhoo
 import type { WebhookTriggerAdministrationPort } from '../application/ports/webhookTriggerAdministration'
 import { createSqliteWebhookDeliveryPersistence } from '../infrastructure/sqliteWebhookDeliveryPersistence'
 import { createPostgresqlWebhookDispatchPersistence } from '../infrastructure/postgresqlWebhookDispatchPersistence'
-import { createPostgresqlWebhookTriggerAdministration } from '../infrastructure/postgresqlWebhookTriggerAdministration'
 import { createSqliteWebhookDispatchPersistence } from '../infrastructure/sqliteWebhookDispatchPersistence'
-import { createSqliteWebhookTriggerAdministration } from '../infrastructure/sqliteWebhookTriggerAdministration'
+import { createWebhookTriggerAdministration } from '../infrastructure/webhookTriggerAdministration'
 import { createSqliteWebhookTriggerValidation } from '../infrastructure/sqliteWebhookTriggerValidation'
-import { createSqliteWebhookLaunchAdmission } from '../infrastructure/sqliteWebhookDispatchRuntime'
+import { createWebhookLaunchAdmission } from '../infrastructure/webhookDispatchRuntime'
 import { createSqliteWebhookRepositoryResolver } from '../infrastructure/webhookRepositoryResolver'
 
 export type { WebhookTaskExecutionParticipant } from '../application/ports/webhookExecution'
+// RFC-359 W4-B4：执行运行时只有一份；两个 bootstrap 仍经各自的具名绑定装配。
 export {
-  createSqliteWebhookExecutionRuntime,
-  createSqliteWebhookOrchestrationRuntime,
-} from '../infrastructure/sqliteWebhookDispatchRuntime'
-export {
-  createPostgresqlWebhookExecutionRuntime,
-  createPostgresqlWebhookOrchestrationRuntime,
-} from '../infrastructure/postgresqlWebhookDispatchRuntime'
+  createWebhookDispatchExecutionRuntime,
+  createWebhookDispatchOrchestrationRuntime,
+  createWebhookDispatchExecutionRuntime as createSqliteWebhookExecutionRuntime,
+  createWebhookDispatchOrchestrationRuntime as createSqliteWebhookOrchestrationRuntime,
+  createWebhookDispatchExecutionRuntime as createPostgresqlWebhookExecutionRuntime,
+  createWebhookDispatchOrchestrationRuntime as createPostgresqlWebhookOrchestrationRuntime,
+} from '../infrastructure/webhookDispatchRuntime'
 
 export function composeWebhookDispatchPersistence(
   persistence: WebhookDispatchPersistencePort,
@@ -46,13 +46,13 @@ export function composePostgresqlWebhookDispatchPersistence(
 export function composeSqliteWebhookTriggerAdministration(
   db: DbClient,
 ): WebhookTriggerAdministrationPort {
-  return createSqliteWebhookTriggerAdministration(db)
+  return createWebhookTriggerAdministration(db)
 }
 
 export function composePostgresqlWebhookTriggerAdministration(
   db: PostgresqlDatabaseClient,
 ): WebhookTriggerAdministrationPort {
-  return createPostgresqlWebhookTriggerAdministration(db)
+  return createWebhookTriggerAdministration(db)
 }
 
 export function composeWebhookTriggerServiceDependencies(
@@ -67,7 +67,7 @@ export function composeSqliteWebhookTriggerServiceDependencies(
   scheduledTasks: ScheduledTaskOperations,
 ): WebhookTriggerServiceDeps {
   return composeWebhookTriggerServiceDependencies({
-    administration: createSqliteWebhookTriggerAdministration(db),
+    administration: createWebhookTriggerAdministration(db),
     dispatchPersistence: createSqliteWebhookDispatchPersistence(db),
     validateSaveable: createSqliteWebhookTriggerValidation(scheduledTasks, configPath),
   })
@@ -78,7 +78,7 @@ export function composePostgresqlWebhookTriggerServiceDependencies(
   validateSaveable: WebhookTriggerServiceDeps['validateSaveable'],
 ): WebhookTriggerServiceDeps {
   return composeWebhookTriggerServiceDependencies({
-    administration: createPostgresqlWebhookTriggerAdministration(db),
+    administration: createWebhookTriggerAdministration(db),
     dispatchPersistence: createPostgresqlWebhookDispatchPersistence(db),
     validateSaveable,
   })
@@ -96,6 +96,6 @@ export function composeSqliteWebhookDispatchCore(
     persistence: createSqliteWebhookDispatchPersistence(db),
     deliveryPersistence: createSqliteWebhookDeliveryPersistence(db),
     resolveRepo: createSqliteWebhookRepositoryResolver(db, secretBox),
-    admitLaunch: createSqliteWebhookLaunchAdmission(scheduledTasks),
+    admitLaunch: createWebhookLaunchAdmission(scheduledTasks),
   }
 }

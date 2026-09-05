@@ -3,10 +3,9 @@ import { describe, expect, test } from 'bun:test'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
 import {
-  createPostgresqlWebhookExecutionRuntime,
-  createPostgresqlWebhookOrchestrationRuntime,
-} from '@/modules/integration/infrastructure/postgresqlWebhookDispatchRuntime'
-import { createSqliteWebhookExecutionRuntime } from '@/modules/integration/infrastructure/sqliteWebhookDispatchRuntime'
+  createWebhookDispatchExecutionRuntime,
+  createWebhookDispatchOrchestrationRuntime,
+} from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import type { WebhookExecutionRuntimeDependencies } from '@/modules/integration/infrastructure/webhookExecutionRuntime'
 
 const actor: Actor = buildActor({
@@ -64,10 +63,8 @@ function taskExecutions(events: string[]): WebhookExecutionRuntimeDependencies['
 
 describe('RFC-349 Webhook execution provider composition', () => {
   test('SQLite and PostgreSQL runtimes delegate orchestration to the selected participant', async () => {
-    for (const compose of [
-      createSqliteWebhookExecutionRuntime,
-      createPostgresqlWebhookExecutionRuntime,
-    ]) {
+    // RFC-359 W4-B4：执行运行时只剩一份实现，这里只需跑一次。
+    for (const compose of [createWebhookDispatchExecutionRuntime]) {
       const events: string[] = []
       const runtime = compose({
         taskExecutions: taskExecutions(events),
@@ -102,7 +99,7 @@ describe('RFC-349 Webhook execution provider composition', () => {
 
   test('Digital Employee work stays outside TaskExecution and keeps Event Center idempotency', async () => {
     const events: string[] = []
-    const runtime = createPostgresqlWebhookExecutionRuntime({
+    const runtime = createWebhookDispatchExecutionRuntime({
       taskExecutions: taskExecutions(events),
       digitalEmployeeWorkStart: {
         async launch(input) {
@@ -139,7 +136,7 @@ describe('RFC-349 Webhook execution provider composition', () => {
   })
 
   test('orchestration-only PostgreSQL runtime fails closed for Digital Employee targets', async () => {
-    const runtime = createPostgresqlWebhookOrchestrationRuntime({
+    const runtime = createWebhookDispatchOrchestrationRuntime({
       taskExecutions: taskExecutions([]),
     })
     await expect(

@@ -3,8 +3,7 @@ import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { WebhookEndpointServiceDeps } from '@/services/webhookEndpoints'
 import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
-import { createPostgresqlWebhookEndpointAdministration } from '../infrastructure/postgresqlWebhookEndpointAdministration'
-import { createSqliteWebhookEndpointAdministration } from '../infrastructure/sqliteWebhookEndpointAdministration'
+import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
 
 export function composeWebhookEndpointAdministration(
   administration: WebhookEndpointAdministrationPort,
@@ -18,7 +17,7 @@ export function composeSqliteWebhookEndpointServiceDependencies(input: {
   readonly secretBox: SecretBox
 }): WebhookEndpointServiceDeps {
   return {
-    administration: createSqliteWebhookEndpointAdministration(input.db),
+    administration: createWebhookEndpointAdministration(input.db),
     configPath: input.configPath,
     secretBox: input.secretBox,
   }
@@ -30,7 +29,7 @@ export function composePostgresqlWebhookEndpointServiceDependencies(input: {
   readonly secretBox: SecretBox
 }): WebhookEndpointServiceDeps {
   return {
-    administration: createPostgresqlWebhookEndpointAdministration(input.db),
+    administration: createWebhookEndpointAdministration(input.db),
     configPath: input.configPath,
     secretBox: input.secretBox,
   }

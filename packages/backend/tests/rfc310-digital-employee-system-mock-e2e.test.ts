@@ -62,7 +62,7 @@ import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeSqliteWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
 import { composeSqliteWebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
-import { createSqliteWebhookExecutionRuntime } from '@/modules/integration/infrastructure/sqliteWebhookDispatchRuntime'
+import { createWebhookDispatchExecutionRuntime } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
@@ -299,7 +299,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         webhookSecretBox,
         scheduledTaskRuntime(db).operations,
       ),
-      ...createSqliteWebhookExecutionRuntime({
+      ...createWebhookDispatchExecutionRuntime({
         taskExecutions: {
           launch: async () => {
             throw new Error('digital employee system mock must use its dedicated WorkStart port')

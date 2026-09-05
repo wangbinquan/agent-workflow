@@ -17,7 +17,7 @@ import type { IntegrationTriggerResourceRequest } from '@/modules/resource-catal
 import { createPostgresqlMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence'
 import { createPostgresqlIntegrationTriggerResources } from '@/modules/integration/infrastructure/postgresqlIntegrationTriggerResources'
 import { createPostgresqlScheduledTaskPersistence } from '@/modules/integration/infrastructure/postgresqlScheduledTaskPersistence'
-import { createPostgresqlWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/postgresqlTerminalWorkspaceAttribution'
+import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
 import { createPostgresqlVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence'
 import { createPostgresqlWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence'
 import { createSqliteScheduledTaskPersistence } from '@/modules/integration/infrastructure/sqliteScheduledTaskPersistence'
@@ -463,7 +463,7 @@ describe('RFC-349 Integration provider adapters', () => {
   test('PostgreSQL terminal-workspace policy reads only provider-neutral attribution', async () => {
     const fake = fixture([{ values: [['trigger-1', 'subscription-1']] }])
     const policy = createWebhookTerminalWorkspacePrunePolicy({
-      attribution: createPostgresqlWebhookTerminalWorkspaceAttributionQueries(fake.db),
+      attribution: createWebhookTerminalWorkspaceAttributionQueries(fake.db),
       enabled: () => true,
     })
 

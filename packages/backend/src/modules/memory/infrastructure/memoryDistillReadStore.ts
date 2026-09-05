@@ -1,6 +1,8 @@
+// RFC-359 W4-B4 —— 记忆蒸馏读存储：一份实现，两个 provider 共用。
+
 import { and, asc, eq, inArray } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   clarifyRounds,
   docVersions,
@@ -11,26 +13,28 @@ import {
 } from '@/db/schema'
 import type { MemoryDistillReadStore } from '../application/ports/distillReadStore'
 
-export class SqliteMemoryDistillReadStore implements MemoryDistillReadStore {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async findJob(jobId: string) {
-    return (
-      this.db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get() ?? null
-    )
+    const rows = await this.db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, jobId))
+      .limit(1)
+    return rows[0] ?? null
   }
 
   async listSiblingJobs(debounceKey: string) {
-    return this.db
+    return await this.db
       .select()
       .from(memoryDistillJobs)
       .where(eq(memoryDistillJobs.debounceKey, debounceKey))
       .orderBy(asc(memoryDistillJobs.createdAt))
-      .all()
   }
 
   async listEvents(jobId: string) {
-    return this.db
+    return await this.db
       .select({
         id: memoryDistillEvents.id,
         attemptIndex: memoryDistillEvents.attemptIndex,
@@ -47,12 +51,11 @@ export class SqliteMemoryDistillReadStore implements MemoryDistillReadStore {
         asc(memoryDistillEvents.ts),
         asc(memoryDistillEvents.id),
       )
-      .all()
   }
 
   async listClarifySources(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: clarifyRounds.id,
         taskId: clarifyRounds.taskId,
@@ -60,12 +63,11 @@ export class SqliteMemoryDistillReadStore implements MemoryDistillReadStore {
       })
       .from(clarifyRounds)
       .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, [...ids])))
-      .all()
   }
 
   async listReviewSources(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: docVersions.id,
         taskId: docVersions.taskId,
@@ -74,20 +76,18 @@ export class SqliteMemoryDistillReadStore implements MemoryDistillReadStore {
       })
       .from(docVersions)
       .where(inArray(docVersions.id, [...ids]))
-      .all()
   }
 
   async listFeedbackSources(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({ id: taskFeedback.id, taskId: taskFeedback.taskId, bodyMd: taskFeedback.bodyMd })
       .from(taskFeedback)
       .where(inArray(taskFeedback.id, [...ids]))
-      .all()
   }
 
   async listCandidates(jobId: string) {
-    return this.db
+    return await this.db
       .select({
         id: memories.id,
         title: memories.title,
@@ -102,16 +102,14 @@ export class SqliteMemoryDistillReadStore implements MemoryDistillReadStore {
       .from(memories)
       .where(and(eq(memories.distillJobId, jobId)))
       .orderBy(asc(memories.createdAt))
-      .all()
   }
 
   async listJobs(status?: string) {
     const query = this.db.select().from(memoryDistillJobs)
     return status === undefined
-      ? query.orderBy(asc(memoryDistillJobs.createdAt)).all()
-      : query
+      ? await query.orderBy(asc(memoryDistillJobs.createdAt))
+      : await query
           .where(eq(memoryDistillJobs.status, status as 'pending'))
           .orderBy(asc(memoryDistillJobs.createdAt))
-          .all()
   }
 }

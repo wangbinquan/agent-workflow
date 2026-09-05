@@ -2,8 +2,8 @@
 // 生产入口只使用 dispatchSubscription：一条 Event Center Delivery 精确执行一条
 // 已匹配规则，绝不重扫 endpoint，也不修改共享 Webhook audit 状态。旧 dispatch
 // 仅为存量嵌入方/回归夹具保留。每个执行结果仍写一条 fires 行；启动唯一收口 =
-// startExecution（RFC-243 门面）。执行器调用面位于 provider-private
-// sqliteWebhookDispatchRuntime，并由 rfc243-executor-facade.test.ts 的手工清单锁定。
+// startExecution（RFC-243 门面）。执行器调用面位于 provider 中立的
+// webhookDispatchRuntime，并由 rfc243-executor-facade.test.ts 的手工清单锁定。
 //
 // 并发纪律（设计门 F-5 / D24）：per (triggerId, streamKey) 的 KeyedSerialQueue
 // 串行化「supersede 判定 → 熔断评估 → 启动 → 落库」全段。dispatch 全程多

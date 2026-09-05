@@ -21,7 +21,7 @@ describe('RFC-257 · source locks', () => {
 
   test('webhookDispatch launches only via the injected TaskExecution participant', () => {
     const text = readFileSync(
-      resolve(SRC, 'modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts'),
+      resolve(SRC, 'modules/integration/infrastructure/webhookDispatchRuntime.ts'),
       'utf8',
     )
     expect(text).toContain('createWebhookExecutionRuntime')
@@ -37,7 +37,7 @@ describe('RFC-257 · source locks', () => {
     // the injected TaskExecution participant. Integration must not rebuild a
     // SQLite StartTaskDeps graph or receive SecretBox/DbClient directly.
     const text = readFileSync(
-      resolve(SRC, 'modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts'),
+      resolve(SRC, 'modules/integration/infrastructure/webhookDispatchRuntime.ts'),
       'utf8',
     )
     expect(text).toContain('taskExecutions: input.taskExecutions')

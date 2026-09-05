@@ -1,13 +1,13 @@
 import type { DbClient } from '../../src/db/client'
-import { SqliteMemoryInjectionReadStore } from '../../src/modules/memory/infrastructure/sqliteMemoryInjectionReadStore'
+import { DrizzleMemoryInjectionReadStore } from '../../src/modules/memory/infrastructure/memoryInjectionReadStore'
 import type { MemoryInjectionQueries } from '../../src/modules/memory/public/queries'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
 } from '../../src/modules/memory/application/injection/injectMemory'
 
-export function sqliteMemoryInjectionStore(db: DbClient): SqliteMemoryInjectionReadStore {
-  return new SqliteMemoryInjectionReadStore(db)
+export function sqliteMemoryInjectionStore(db: DbClient): DrizzleMemoryInjectionReadStore {
+  return new DrizzleMemoryInjectionReadStore(db)
 }
 
 export function sqliteMemoryInjectionQueries(db: DbClient): MemoryInjectionQueries {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { PostgresqlMemoryInjectionReadStore } from '@/modules/memory/infrastructure/postgresqlMemoryInjectionReadStore'
+import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -53,7 +53,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    store: new PostgresqlMemoryInjectionReadStore(createPostgresqlDatabaseClient(runtime)),
+    store: new DrizzleMemoryInjectionReadStore(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }
