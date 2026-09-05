@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1947,
+    "entries": 1944,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -19932,6 +19932,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts#createDatabaseAgentResourceInventoryReadPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts#createDatabaseAgentResourceInventoryReadPort",
+      "symbol": "createDatabaseAgentResourceInventoryReadPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -20631,6 +20656,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlTaskExecutionResourceSnapshots.ts#createPostgresqlTaskExecutionResourceSnapshotReader",
       "symbol": "createPostgresqlTaskExecutionResourceSnapshotReader",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts#createDemoResourceCatalogSeedPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts#createDemoResourceCatalogSeedPersistence",
+      "symbol": "createDemoResourceCatalogSeedPersistence",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -22143,6 +22192,55 @@
         "fenceOrOcc": false,
         "transaction": true
       },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpProbeStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpProbeStore.ts#createMcpProbeStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpProbeStore.ts#createMcpProbeStore",
+      "symbol": "createMcpProbeStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginGenerationGc.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/pluginGenerationGc.ts#createPluginGenerationReferenceReadPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginGenerationGc.ts#createPluginGenerationReferenceReadPort",
+      "symbol": "createPluginGenerationReferenceReadPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#commitLegacyPluginCreateInTx",
@@ -22354,31 +22452,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentResourceInventory.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentResourceInventory.ts#createPostgresqlAgentResourceInventoryReadPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentResourceInventory.ts#createPostgresqlAgentResourceInventoryReadPort",
-      "symbol": "createPostgresqlAgentResourceInventoryReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts#createPostgresqlResourceCatalogQuery",
@@ -22417,30 +22490,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlCatalogQuery.ts#createPostgresqlResourceCatalogSummaryReadPort",
       "symbol": "createPostgresqlResourceCatalogSummaryReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts#createPostgresqlDemoResourceCatalogSeedPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts#createPostgresqlDemoResourceCatalogSeedPersistence",
-      "symbol": "createPostgresqlDemoResourceCatalogSeedPersistence",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -22487,30 +22536,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlIntentContextResourceAuthorization.ts#createPostgresqlIntentContextResourceAuthorizationReadPort",
       "symbol": "createPostgresqlIntentContextResourceAuthorizationReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpProbeStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpProbeStore.ts#createPostgresqlMcpProbeStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpProbeStore.ts#createPostgresqlMcpProbeStore",
-      "symbol": "createPostgresqlMcpProbeStore",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -22698,31 +22723,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPackageResourceRows.ts#createPostgresqlResourcePackageReadPort",
       "symbol": "createPostgresqlResourcePackageReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPluginGenerationGc.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPluginGenerationGc.ts#createPostgresqlPluginGenerationReferenceReadPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlPluginGenerationGc.ts#createPostgresqlPluginGenerationReferenceReadPort",
-      "symbol": "createPostgresqlPluginGenerationReferenceReadPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -23576,6 +23576,30 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourceCatalogTransaction.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/resourceCatalogTransaction.ts#runResourceCatalogTransaction",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourceCatalogTransaction.ts#runResourceCatalogTransaction",
+      "symbol": "runResourceCatalogTransaction",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts",
@@ -23697,31 +23721,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentResourceInventory.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentResourceInventory.ts#createSqliteAgentResourceInventoryReadPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentResourceInventory.ts#createSqliteAgentResourceInventoryReadPort",
-      "symbol": "createSqliteAgentResourceInventoryReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#createSqliteResourceCatalogQuery",
@@ -23760,30 +23759,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#createSqliteResourceCatalogSummaryReadPort",
       "symbol": "createSqliteResourceCatalogSummaryReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts#createSqliteDemoResourceCatalogSeedPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts#createSqliteDemoResourceCatalogSeedPersistence",
-      "symbol": "createSqliteDemoResourceCatalogSeedPersistence",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -23856,30 +23831,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteIntentContextResourceAuthorization.ts#createSqliteIntentContextResourceAuthorizationSyncReadPort",
       "symbol": "createSqliteIntentContextResourceAuthorizationSyncReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpProbeStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpProbeStore.ts#createSqliteMcpProbeStore",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpProbeStore.ts#createSqliteMcpProbeStore",
-      "symbol": "createSqliteMcpProbeStore",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -24069,31 +24020,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts#createSqliteResourcePackageReadPort",
       "symbol": "createSqliteResourcePackageReadPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginGenerationGc.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginGenerationGc.ts#createSqlitePluginGenerationReferenceReadPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginGenerationGc.ts#createSqlitePluginGenerationReferenceReadPort",
-      "symbol": "createSqlitePluginGenerationReferenceReadPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -46404,7 +46330,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e01cd09d5a4d4712912aa17904cefb72c978865505bd72335e898f2d7c383291",
+  "sourceDigest": "sha256:2d34003ea4e0361450a7eb0c85fd7b4ae0431c4208ea67aa6e064571163a0afe",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
