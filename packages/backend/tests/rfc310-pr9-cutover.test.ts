@@ -46,7 +46,7 @@ import {
   adoptActiveMr,
   runCutoverCommand,
 } from '../src/modules/development-automation/application/cutover'
-import { createSqliteCutoverStore } from '../src/modules/development-automation/infrastructure/sqliteCutoverStore'
+import { createCutoverStore } from '../src/modules/development-automation/infrastructure/cutoverStore'
 import {
   createSqliteMissionPersistence,
   createSqliteMissionStore,
@@ -69,7 +69,7 @@ const NOW = 1_755_500_000_000
 function freshDeps(db: DbClient) {
   let seq = 0
   return {
-    cutoverStore: createSqliteCutoverStore(db),
+    cutoverStore: createCutoverStore(db),
     now: () => NOW,
     mintId: () => `01CUTOVER${String(seq++).padStart(17, '0')}`,
   }

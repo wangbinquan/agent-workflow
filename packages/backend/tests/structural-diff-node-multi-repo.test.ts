@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
-import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
+import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { startTask } from '../src/services/task'
 import { nodeRuns, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -34,7 +34,7 @@ const getTaskStructuralDiff = (
   ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
     ? Rest
     : never
-) => getTaskStructuralDiffWithPort(createSqliteCodeWorkspaceRead(db), ...args)
+) => getTaskStructuralDiffWithPort(createCodeWorkspaceRead(db), ...args)
 
 interface Harness {
   db: DbClient

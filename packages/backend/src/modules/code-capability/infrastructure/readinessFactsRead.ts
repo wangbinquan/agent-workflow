@@ -1,10 +1,11 @@
-// RFC-349 — SQLite facts for the provider-neutral readiness use case.
+// RFC-359 W4-B5 —— 就绪度事实读取：一份实现，两个 provider 共用。
 
 import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, capabilityTemplates, webhookTriggers } from '@/db/schema'
 import type { ReadinessFactsReadPort } from '../application/ports/readinessFactsRead'
-import { createSqliteRepoEndpointRead } from './sqliteRepoEndpointRead'
+import { createRepoEndpointRead } from './repoEndpointRead'
 
 function mappedAgentId(raw: string, slot: string): string | null {
   try {
@@ -17,9 +18,9 @@ function mappedAgentId(raw: string, slot: string): string | null {
   }
 }
 
-export function createSqliteReadinessFactsRead(db: DbClient): ReadinessFactsReadPort {
+export function createReadinessFactsRead(db: ProviderNeutralDatabase): ReadinessFactsReadPort {
   return {
-    repoEndpoints: createSqliteRepoEndpointRead(db),
+    repoEndpoints: createRepoEndpointRead(db),
     async templateExists(templateId) {
       const row = await db
         .select({ id: capabilityTemplates.id })

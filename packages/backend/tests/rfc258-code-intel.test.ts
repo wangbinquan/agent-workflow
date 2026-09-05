@@ -29,13 +29,13 @@ import {
   type CodeIntelDeps,
   type CodeIntelQuery,
 } from '../src/services/codeIntel/codeIntel'
-import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
+import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import type { IndexerProbe } from '../src/services/structuralDiff/deep/indexers'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const getCodeIntel = (db: DbClient, taskId: string, query: CodeIntelQuery, deps?: CodeIntelDeps) =>
-  getCodeIntelWithPort(createSqliteCodeWorkspaceRead(db), taskId, query, deps)
+  getCodeIntelWithPort(createCodeWorkspaceRead(db), taskId, query, deps)
 
 const dirs: string[] = []
 afterAll(() => {

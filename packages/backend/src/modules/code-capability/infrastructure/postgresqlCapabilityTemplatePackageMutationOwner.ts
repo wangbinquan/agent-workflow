@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { capabilityTemplates } from '@/db/schema'
 import { prepareCapabilityTemplatePackageWrite } from '../application/capabilityTemplateOperations'
 import type { CapabilityTemplateRecord } from '../application/ports/capabilityTemplatePersistence'
-import { createPostgresqlCapabilityTemplatePersistence } from './postgresqlCapabilityTemplatePersistence'
+import { createCapabilityTemplatePersistence } from './capabilityTemplatePersistence'
 import { createPostgresqlCapabilityTemplatePackageCommit } from './capabilityTemplatePackageCommit'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { PostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
@@ -49,7 +49,7 @@ export function createPostgresqlCapabilityTemplatePackageMutationOwner(input: {
   readonly db: PostgresqlDatabaseClient
   readonly now?: () => number
 }): PostgresqlCapabilityTemplatePackageMutationOwner {
-  const persistence = createPostgresqlCapabilityTemplatePersistence(input.db)
+  const persistence = createCapabilityTemplatePersistence(input.db)
   const now = input.now ?? Date.now
   const preparedStates = new WeakMap<object, CapabilityTemplateRecord | null>()
   return Object.freeze({

@@ -30,8 +30,7 @@ import { createSqliteDevelopmentMigrationPersistence } from '../infrastructure/m
 import { createPostgresqlDevelopmentMigrationPersistence } from '../infrastructure/postgresqlMigrationAssets'
 import { createSqliteMissionReadModelQueries } from '../infrastructure/missionReadModels'
 import { createSqliteFactSnapshotReader } from '../infrastructure/sqliteReconcilerReaders'
-import { createSqliteCutoverStore } from '../infrastructure/sqliteCutoverStore'
-import { createPostgresqlCutoverStore } from '../infrastructure/postgresqlCutoverStore'
+import { createCutoverStore } from '../infrastructure/cutoverStore'
 import {
   createPostgresqlMissionInputUploadPersistence,
   createSqliteMissionInputUploadPersistence,
@@ -714,7 +713,7 @@ export function composeDevelopmentMissionOperations(
     missions: createSqliteMissionPersistence(deps.db),
     repositories: createSqliteRepositoryLocationRead(deps.db),
     readModels: createSqliteMissionReadModelQueries(deps.db),
-    cutover: createSqliteCutoverStore(deps.db),
+    cutover: createCutoverStore(deps.db),
     migration: createSqliteDevelopmentMigrationPersistence(deps.db),
   })
 }
@@ -730,7 +729,7 @@ export function composePostgresqlDevelopmentMissionOperations(
     missions: createPostgresqlMissionPersistence(deps.db),
     repositories: createPostgresqlRepositoryLocationRead(deps.db),
     readModels: createPostgresqlMissionReadModelQueries(deps.db),
-    cutover: createPostgresqlCutoverStore(deps.db),
+    cutover: createCutoverStore(deps.db),
     migration: createPostgresqlDevelopmentMigrationPersistence(deps.db),
   })
 }

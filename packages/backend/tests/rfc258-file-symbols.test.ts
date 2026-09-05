@@ -18,12 +18,12 @@ import {
   getTaskFileSymbols as getTaskFileSymbolsWithPort,
   type FileSymbolsQuery,
 } from '../src/services/codeIntel/fileSymbols'
-import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
+import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const getTaskFileSymbols = (db: DbClient, taskId: string, query: FileSymbolsQuery) =>
-  getTaskFileSymbolsWithPort(createSqliteCodeWorkspaceRead(db), taskId, query)
+  getTaskFileSymbolsWithPort(createCodeWorkspaceRead(db), taskId, query)
 
 const dirs: string[] = []
 afterAll(() => {

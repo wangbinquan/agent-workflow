@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeWorkItemProjectionQuery } from '@/modules/code-capability/application/codeMatrixQuery'
-import { createPostgresqlWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead'
+import { createWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/workItemProjectionRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -53,7 +53,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   const db = createPostgresqlDatabaseClient(runtime)
   return {
-    query: createCodeWorkItemProjectionQuery(createPostgresqlWorkItemProjectionRead(db)),
+    query: createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(db)),
     executions,
   }
 }

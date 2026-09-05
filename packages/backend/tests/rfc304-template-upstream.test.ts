@@ -24,14 +24,14 @@ import {
   templateDigest,
 } from '../src/services/capabilityTemplates'
 import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
-import { createSqliteCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/sqliteCapabilityTemplatePersistence'
+import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function bindTemplatePersistence<Args extends unknown[], Result>(
   operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
 ): (db: DbClient, ...args: Args) => Result {
-  return (db, ...args) => operation(createSqliteCapabilityTemplatePersistence(db), ...args)
+  return (db, ...args) => operation(createCapabilityTemplatePersistence(db), ...args)
 }
 
 const copyTemplate = bindTemplatePersistence(copyTemplateWithPersistence)

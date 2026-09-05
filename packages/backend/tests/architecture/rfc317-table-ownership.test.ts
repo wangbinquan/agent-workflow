@@ -126,14 +126,13 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
   },
   ...[
     'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
-    'development-automation/infrastructure/postgresqlEmployeeWorkspacePersistence.ts',
-    'development-automation/infrastructure/sqliteEmployeeWorkspacePersistence.ts',
+    'development-automation/infrastructure/employeeWorkspacePersistence.ts',
   ].map((file) => ({
     table: 'employeeCaseWorkspaces',
     owner: 'digital-employee',
     file,
     why:
-      'Development Automation 的双 provider workspace persistence 仍共享 Digital Employee workspace 表；所有站点均为精确 infrastructure 存量。',
+      'Development Automation 的 workspace persistence（RFC-359 已合一为单文件）仍共享 Digital Employee workspace 表；所有站点均为精确 infrastructure 存量。',
     removeWhen:
       'RFC-294 W4-E9 落地 Digital Employee owner-owned EmployeeWorkspaceStorePort，外域只消费 closed operations。',
   })),
@@ -148,14 +147,13 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
   },
   ...[
     'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
-    'development-automation/infrastructure/postgresqlEmployeeWorkspacePersistence.ts',
-    'development-automation/infrastructure/sqliteEmployeeWorkspacePersistence.ts',
+    'development-automation/infrastructure/employeeWorkspacePersistence.ts',
   ].map((file) => ({
     table: 'employeeRoundWorkspaceStates',
     owner: 'digital-employee',
     file,
     why:
-      'Development Automation 的双 provider workspace persistence 仍共享 Digital Employee round workspace 状态表；所有站点均被逐文件钉住。',
+      'Development Automation 的 workspace persistence（RFC-359 已合一为单文件）仍共享 Digital Employee round workspace 状态表；所有站点均被逐文件钉住。',
     removeWhen:
       'RFC-294 W4-E9 将 round workspace persistence 收回 Digital Employee owner port，删除跨 context 表访问。',
   })),

@@ -1,12 +1,12 @@
+// RFC-359 W4-B5 —— 仓库能力参数读取：一份实现，两个 provider 共用。
+
 import { and, eq } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { CapabilityParamRead } from '../application/ports/capabilityParamRead'
 
-export function createPostgresqlCapabilityParamRead(
-  db: PostgresqlDatabaseClient,
-): CapabilityParamRead {
+export function createCapabilityParamRead(db: ProviderNeutralDatabase): CapabilityParamRead {
   return {
     async find(input) {
       const rows = await db

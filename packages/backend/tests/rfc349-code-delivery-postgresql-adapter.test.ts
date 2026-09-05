@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeDeliveryChainQuery } from '@/modules/code-capability/application/codeMatrixQuery'
-import { createPostgresqlDeliveryChainRead } from '@/modules/code-capability/infrastructure/postgresqlDeliveryChain'
+import { createDeliveryChainRead } from '@/modules/code-capability/infrastructure/deliveryChainRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -53,7 +53,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   const db = createPostgresqlDatabaseClient(runtime)
   return {
-    query: createCodeDeliveryChainQuery(createPostgresqlDeliveryChainRead(db)),
+    query: createCodeDeliveryChainQuery(createDeliveryChainRead(db)),
     executions,
   }
 }

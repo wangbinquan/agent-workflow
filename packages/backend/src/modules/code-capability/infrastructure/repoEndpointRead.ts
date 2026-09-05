@@ -1,11 +1,12 @@
-// RFC-349 — SQLite observations for repository code-host resolution.
+// RFC-359 W4-B5 —— 仓库代码托管端点解析的观察读取：一份实现，两个 provider 共用。
 
 import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos, codeHostConnections, webhookEndpoints } from '@/db/schema'
 import type { RepoEndpointReadPort } from '../application/ports/repoEndpointRead'
 
-export function createSqliteRepoEndpointRead(db: DbClient): RepoEndpointReadPort {
+export function createRepoEndpointRead(db: ProviderNeutralDatabase): RepoEndpointReadPort {
   return {
     async listEnabledEndpoints() {
       return await db

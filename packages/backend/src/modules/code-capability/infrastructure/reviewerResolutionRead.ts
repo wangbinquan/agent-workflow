@@ -1,12 +1,14 @@
+// RFC-359 W4-B5 —— 评审人槽位解析的读取面：一份实现，两个 provider 共用。
+
 import { and, eq } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
 import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ReviewerResolutionRead } from '../application/ports/reviewerResolutionRead'
 
-export class PostgresqlReviewerResolutionRead implements ReviewerResolutionRead {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleReviewerResolutionRead implements ReviewerResolutionRead {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async loadRepositoryCapability(input: {
     readonly repositoryId: string

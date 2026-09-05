@@ -1,8 +1,10 @@
+// RFC-359 W4-B5 —— 代码工作区读取：一份实现，两个 provider 共用。
+
 import { asc, eq } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   CodeNodeRunSnapshot,
   CodeWorkspaceRead,
@@ -10,12 +12,15 @@ import type {
   CodeWorkspaceTask,
 } from '../application/ports/codeWorkspaceRead'
 
-const nodeProjection = {
-  id: nodeRuns.id,
-  preSnapshot: nodeRuns.preSnapshot,
-  preSnapshotReposJson: nodeRuns.preSnapshotReposJson,
-  startedAt: nodeRuns.startedAt,
-  wrapperProgressJson: nodeRuns.wrapperProgressJson,
+/** 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。 */
+function nodeProjection() {
+  return {
+    id: nodeRuns.id,
+    preSnapshot: nodeRuns.preSnapshot,
+    preSnapshotReposJson: nodeRuns.preSnapshotReposJson,
+    startedAt: nodeRuns.startedAt,
+    wrapperProgressJson: nodeRuns.wrapperProgressJson,
+  }
 }
 
 function fallbackRepository(task: {
@@ -30,7 +35,7 @@ function fallbackRepository(task: {
   }
 }
 
-export function createPostgresqlCodeWorkspaceRead(db: PostgresqlDatabaseClient): CodeWorkspaceRead {
+export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorkspaceRead {
   return {
     async findTask(taskId): Promise<CodeWorkspaceTask | null> {
       const rows = await db
@@ -63,15 +68,16 @@ export function createPostgresqlCodeWorkspaceRead(db: PostgresqlDatabaseClient):
       }
     },
     async listNodeRuns(taskId): Promise<readonly CodeNodeRunSnapshot[]> {
-      return db
-        .select(nodeProjection)
+      // 未启动的 run（started_at NULL）两个引擎都排最前：SQLite 的缺省，PG 须显式 nulls first。
+      return await db
+        .select(nodeProjection())
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id))
+        .orderBy(engineOf(db).ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id))
     },
     async findNodeRun(nodeRunId): Promise<CodeNodeRunSnapshot | null> {
       const rows = await db
-        .select(nodeProjection)
+        .select(nodeProjection())
         .from(nodeRuns)
         .where(eq(nodeRuns.id, nodeRunId))
         .limit(1)

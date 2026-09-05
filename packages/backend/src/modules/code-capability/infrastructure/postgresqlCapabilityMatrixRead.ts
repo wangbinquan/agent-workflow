@@ -18,7 +18,7 @@ import {
 } from '@/modules/code-capability/application/readinessFacts'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlRepoEndpointRead } from './postgresqlRepoEndpointRead'
+import { createRepoEndpointRead } from './repoEndpointRead'
 
 function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
   try {
@@ -34,7 +34,7 @@ function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
 export function createPostgresqlCapabilityMatrixRead(
   db: PostgresqlDatabaseClient,
 ): CapabilityMatrixReadPort {
-  const endpointReader = createPostgresqlRepoEndpointRead(db)
+  const endpointReader = createRepoEndpointRead(db)
   return {
     async loadForRepo(repoId) {
       const cells = await db

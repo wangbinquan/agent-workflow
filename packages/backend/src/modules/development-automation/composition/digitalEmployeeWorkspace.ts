@@ -20,8 +20,7 @@ import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
-import { createPostgresqlEmployeeWorkspacePersistence } from '../infrastructure/postgresqlEmployeeWorkspacePersistence'
-import { createSqliteEmployeeWorkspacePersistence } from '../infrastructure/sqliteEmployeeWorkspacePersistence'
+import { createEmployeeWorkspacePersistence } from '../infrastructure/employeeWorkspacePersistence'
 import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
 import {
   protectedRootSnapshotDigest,
@@ -537,13 +536,13 @@ function detailReader(
 export function createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(
   db: DbClient,
 ): DevelopmentEmployeeCaseWorkspaceDetailReader {
-  return detailReader(createSqliteEmployeeWorkspacePersistence(db))
+  return detailReader(createEmployeeWorkspacePersistence(db))
 }
 
 export function createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader(
   db: PostgresqlDatabaseClient,
 ): DevelopmentEmployeeCaseWorkspaceDetailReader {
-  return detailReader(createPostgresqlEmployeeWorkspacePersistence(db))
+  return detailReader(createEmployeeWorkspacePersistence(db))
 }
 
 export interface DevelopmentEmployeeWorkspaceCompositionInput {
@@ -1270,7 +1269,7 @@ export function composeSqliteDevelopmentEmployeeWorkspace(
   const { db, ...composition } = input
   return composeDevelopmentEmployeeWorkspaceFromPersistence({
     ...composition,
-    persistence: createSqliteEmployeeWorkspacePersistence(db),
+    persistence: createEmployeeWorkspacePersistence(db),
   })
 }
 
@@ -1282,6 +1281,6 @@ export function composePostgresqlDevelopmentEmployeeWorkspace(
   const { db, ...composition } = input
   return composeDevelopmentEmployeeWorkspaceFromPersistence({
     ...composition,
-    persistence: createPostgresqlEmployeeWorkspacePersistence(db),
+    persistence: createEmployeeWorkspacePersistence(db),
   })
 }

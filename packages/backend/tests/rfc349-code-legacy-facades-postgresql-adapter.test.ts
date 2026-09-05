@@ -5,9 +5,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { CapabilityTemplateRecord } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
-import { createPostgresqlCapabilityParamRead } from '@/modules/code-capability/infrastructure/postgresqlCapabilityParamRead'
-import { createPostgresqlCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePersistence'
-import { createPostgresqlCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/postgresqlCodeWorkspaceRead'
+import { createCapabilityParamRead } from '@/modules/code-capability/infrastructure/capabilityParamRead'
+import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
+import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -80,8 +80,8 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
       [['run-1', 'pre-sha', null, 100, null]],
       [['run-1', 'pre-sha', null, 100, '{"baselineCommit":"wrapper-sha"}']],
     ])
-    const params = createPostgresqlCapabilityParamRead(fake.db)
-    const workspace = createPostgresqlCodeWorkspaceRead(fake.db)
+    const params = createCapabilityParamRead(fake.db)
+    const workspace = createCodeWorkspaceRead(fake.db)
 
     await expect(params.find({ repoId: 'repo-1', capability: 'mr-review' })).resolves.toEqual({
       paramSchemaJson: '[{"name":"limit","kind":"number"}]',
@@ -122,7 +122,7 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
   test('capability-template writes execute against PostgreSQL', async () => {
     const fencedWrite = [[], [['dbg_code_legacy_facades_pg']], [], []] as const
     const fake = fixture([...fencedWrite, ...fencedWrite, ...fencedWrite])
-    const persistence = createPostgresqlCapabilityTemplatePersistence(fake.db)
+    const persistence = createCapabilityTemplatePersistence(fake.db)
     const row: CapabilityTemplateRecord = {
       id: 'template-1',
       name: 'Template',

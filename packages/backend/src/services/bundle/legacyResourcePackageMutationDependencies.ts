@@ -6,7 +6,7 @@
 
 import { prepareTemplateFromBundle } from '@/services/capabilityTemplates'
 import type { PreparedCapabilityTemplateWrite } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
-import { createSqliteCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/sqliteCapabilityTemplatePersistence'
+import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 import { createSqliteCapabilityTemplatePackageCommitSync } from '@/modules/code-capability/infrastructure/capabilityTemplatePackageCommit'
 import {
   commitAgentCreateInTx,
@@ -80,7 +80,7 @@ import type { ResourcePackageMutationRuntime, ResourcePackageMutationRuntimeFact
 export const legacyResourcePackageMutationDependencies = Object.freeze({
   prepareTemplateFromBundle: (db, payload, actor, existingId) =>
     prepareTemplateFromBundle(
-      createSqliteCapabilityTemplatePersistence(db),
+      createCapabilityTemplatePersistence(db),
       payload as never,
       actor,
       existingId,

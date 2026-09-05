@@ -8,7 +8,7 @@ import {
   ATTEMPTS_PER_ROUND,
   createCodeRoundAttemptsQuery,
 } from '@/modules/code-capability/application/codeMatrixQuery'
-import { createPostgresqlRoundAttemptsRead } from '@/modules/code-capability/infrastructure/postgresqlRoundAttemptsRead'
+import { createRoundAttemptsRead } from '@/modules/code-capability/infrastructure/roundAttemptsRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -56,7 +56,7 @@ function fixture(response: readonly (readonly unknown[])[]) {
   }
   const db = createPostgresqlDatabaseClient(runtime)
   return {
-    query: createCodeRoundAttemptsQuery(createPostgresqlRoundAttemptsRead(db)),
+    query: createCodeRoundAttemptsQuery(createRoundAttemptsRead(db)),
     executions,
   }
 }

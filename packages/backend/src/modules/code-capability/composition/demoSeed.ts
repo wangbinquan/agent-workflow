@@ -5,21 +5,18 @@ import {
   type CodeCapabilityDemoSeedParticipant,
   type CodeCapabilityDemoSeedReceipt,
 } from '../application/demoSeed'
-import { createPostgresqlCodeCapabilityDemoSeedPersistence } from '../infrastructure/postgresqlDemoSeedPersistence'
-import { createSqliteCodeCapabilityDemoSeedPersistence } from '../infrastructure/sqliteDemoSeedPersistence'
+import { createCodeCapabilityDemoSeedPersistence } from '../infrastructure/demoSeedPersistence'
 
 export type { CodeCapabilityDemoSeedParticipant, CodeCapabilityDemoSeedReceipt }
 
 export function composeSqliteCodeCapabilityDemoSeedParticipant(
   db: DbClient,
 ): CodeCapabilityDemoSeedParticipant {
-  return createCodeCapabilityDemoSeedParticipant(createSqliteCodeCapabilityDemoSeedPersistence(db))
+  return createCodeCapabilityDemoSeedParticipant(createCodeCapabilityDemoSeedPersistence(db))
 }
 
 export function composePostgresqlCodeCapabilityDemoSeedParticipant(
   db: PostgresqlDatabaseClient,
 ): CodeCapabilityDemoSeedParticipant {
-  return createCodeCapabilityDemoSeedParticipant(
-    createPostgresqlCodeCapabilityDemoSeedPersistence(db),
-  )
+  return createCodeCapabilityDemoSeedParticipant(createCodeCapabilityDemoSeedPersistence(db))
 }

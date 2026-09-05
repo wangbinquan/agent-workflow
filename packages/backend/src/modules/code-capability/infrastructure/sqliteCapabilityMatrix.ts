@@ -34,7 +34,7 @@ import {
   type ReadinessIssue,
   type ReadinessState,
 } from '@/modules/code-capability/domain/templateLayers'
-import { createSqliteReadinessFactsRead } from './sqliteReadinessFactsRead'
+import { createReadinessFactsRead } from './readinessFactsRead'
 
 export interface CapabilityCell {
   id: string
@@ -81,7 +81,7 @@ export async function listCapabilityCells(db: DbClient, repoId: string): Promise
 }
 
 export function createSqliteCapabilityMatrixRead(db: DbClient): CapabilityMatrixReadPort {
-  const readiness = createSqliteReadinessFactsRead(db)
+  const readiness = createReadinessFactsRead(db)
   return {
     async loadForRepo(repoId) {
       const cells = await listCapabilityCells(db, repoId)

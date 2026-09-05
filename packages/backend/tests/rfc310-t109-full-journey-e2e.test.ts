@@ -56,7 +56,7 @@ import {
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
 import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import { adoptActiveMr } from '../src/modules/development-automation/application/cutover'
-import { createSqliteCutoverStore } from '../src/modules/development-automation/infrastructure/sqliteCutoverStore'
+import { createCutoverStore } from '../src/modules/development-automation/infrastructure/cutoverStore'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -621,7 +621,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     const adopted = await adoptActiveMr(
       {
         store: fx.deps().store,
-        cutoverStore: createSqliteCutoverStore(fx.db),
+        cutoverStore: createCutoverStore(fx.db),
         ports: { mrEffects },
         now: () => Date.now(),
         mintId: () => ulid(),

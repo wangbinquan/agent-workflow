@@ -33,8 +33,8 @@ import {
 } from '../src/modules/code-capability/application/codeMatrixQuery'
 import { repairActionsFor } from '../src/modules/code-capability/domain/repairActions'
 import { createSqliteCapabilityMatrixRead } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
-import { createSqliteRoundAttemptsRead } from '../src/modules/code-capability/infrastructure/sqliteRoundAttemptsRead'
-import { createSqliteWorkItemProjectionRead } from '../src/modules/code-capability/infrastructure/sqliteWorkItemProjectionRead'
+import { createRoundAttemptsRead } from '../src/modules/code-capability/infrastructure/roundAttemptsRead'
+import { createWorkItemProjectionRead } from '../src/modules/code-capability/infrastructure/workItemProjectionRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -45,9 +45,9 @@ const ENDPOINT = 'ep-1'
 const createCodeMatrixQuery = (db: DbClient) =>
   createCodeMatrixQueryFromPort(createSqliteCapabilityMatrixRead(db))
 const createCodeWorkItemProjectionQuery = (db: DbClient) =>
-  createCodeWorkItemProjectionQueryFromPort(createSqliteWorkItemProjectionRead(db))
+  createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(db))
 const createCodeRoundAttemptsQuery = (db: DbClient) =>
-  createCodeRoundAttemptsQueryFromPort(createSqliteRoundAttemptsRead(db))
+  createCodeRoundAttemptsQueryFromPort(createRoundAttemptsRead(db))
 
 describe('RFC-304 — the capability matrix a page renders', () => {
   let db: DbClient

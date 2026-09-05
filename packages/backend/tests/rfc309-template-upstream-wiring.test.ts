@@ -30,7 +30,7 @@ import {
   composeSqliteCapabilityTemplateOperations,
   createSqliteCapabilityTemplatePersistence,
 } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
-import { createSqliteTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/sqliteTemplateUpstreamPersistence'
+import { createTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/templateUpstreamPersistence'
 import {
   mountCapabilityTemplateRoutes,
   type CapabilityTemplateRouteDeps,
@@ -57,10 +57,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 const readUpstreamReport = async (db: DbClient, row: typeof capabilityTemplates.$inferSelect) => {
-  const report = await readUpstreamReportWithPort(
-    createSqliteTemplateUpstreamPersistence(db),
-    row.id,
-  )
+  const report = await readUpstreamReportWithPort(createTemplateUpstreamPersistence(db), row.id)
   if (report === null) throw new Error(`no template ${row.id}`)
   return report
 }
@@ -69,7 +66,7 @@ const mergeFromUpstream = (
   row: typeof capabilityTemplates.$inferSelect,
   actor: Actor,
   now?: number,
-) => mergeFromUpstreamWithPort(createSqliteTemplateUpstreamPersistence(db), row.id, actor, now)
+) => mergeFromUpstreamWithPort(createTemplateUpstreamPersistence(db), row.id, actor, now)
 
 const copyTemplate = (
   db: DbClient,

@@ -39,7 +39,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // 债的形状不变——还是这一个 worker 入口依赖同一个 provider 机制模块，只是多一个符号。
   'packages/backend/src/services/backupVacuumWorker.ts -> @/platform/persistence/sqlite/systemBackupVacuum :: quickCheckSqlite,vacuumSqliteInto',
   'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/code-capability/infrastructure/capabilityTemplatePackageCommit :: createSqliteCapabilityTemplatePackageCommitSync',
-  'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/code-capability/infrastructure/sqliteCapabilityTemplatePersistence :: createSqliteCapabilityTemplatePersistence',
   'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: getAclResourceOwnerInTx',
   'packages/backend/src/services/bundle/postgresqlApply.ts -> @/platform/persistence/postgresqlResourcePackageAtomicApply :: export:*',
   'packages/backend/src/services/clarify/rounds.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyRounds :: export:*',

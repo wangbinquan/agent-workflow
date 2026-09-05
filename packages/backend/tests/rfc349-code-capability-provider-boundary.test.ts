@@ -74,6 +74,7 @@ describe('RFC-349 code-capability provider boundary', () => {
     ])
   })
 
+  // RFC-359 W4-B5a/b：十个家族已合一为单文件（两个 provider 共用一份实现），其余仍是 sqlite/postgresql 孪生对。
   test('SQLite and PostgreSQL own the same closed live adapter families', () => {
     const infrastructure = new Set(
       files(join(MODULE, 'infrastructure')).map((file) =>
@@ -83,16 +84,16 @@ describe('RFC-349 code-capability provider boundary', () => {
     const families = [
       ['sqliteCapabilityMatrix.ts', 'postgresqlCapabilityMatrixRead.ts'],
       ['sqliteCodeMetricsRead.ts', 'postgresqlCodeMetricsQuery.ts'],
-      ['sqliteDeliveryChain.ts', 'postgresqlDeliveryChain.ts'],
-      ['sqliteRoundAttemptsRead.ts', 'postgresqlRoundAttemptsRead.ts'],
-      ['sqliteWorkItemProjectionRead.ts', 'postgresqlWorkItemProjectionRead.ts'],
-      ['sqliteRepoEndpointRead.ts', 'postgresqlRepoEndpointRead.ts'],
-      ['sqliteReadinessFactsRead.ts', 'postgresqlReadinessFactsRead.ts'],
-      ['sqliteTemplateUpstreamPersistence.ts', 'postgresqlTemplateUpstreamPersistence.ts'],
-      ['sqliteCapabilityTemplatePersistence.ts', 'postgresqlCapabilityTemplatePersistence.ts'],
-      ['sqliteCapabilityParamRead.ts', 'postgresqlCapabilityParamRead.ts'],
-      ['sqliteCodeWorkspaceRead.ts', 'postgresqlCodeWorkspaceRead.ts'],
-      ['sqliteDemoSeedPersistence.ts', 'postgresqlDemoSeedPersistence.ts'],
+      ['deliveryChainRead.ts'],
+      ['roundAttemptsRead.ts'],
+      ['workItemProjectionRead.ts'],
+      ['repoEndpointRead.ts'],
+      ['readinessFactsRead.ts'],
+      ['templateUpstreamPersistence.ts'],
+      ['capabilityTemplatePersistence.ts'],
+      ['capabilityParamRead.ts'],
+      ['codeWorkspaceRead.ts'],
+      ['demoSeedPersistence.ts'],
     ]
     const missing = families.flatMap((family) => family.filter((file) => !infrastructure.has(file)))
     expect(missing).toEqual([])

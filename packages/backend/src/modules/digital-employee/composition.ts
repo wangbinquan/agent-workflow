@@ -20,8 +20,7 @@ import type {
   ToolConnectionVisibilitySubject,
 } from './composition/required-ports'
 import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
-import { createSqliteReactionRoundQueries } from './infrastructure/sqliteReactionRoundQueries'
-import { createPostgresqlReactionRoundQueries } from './infrastructure/postgresqlReactionRoundQueries'
+import { createReactionRoundQueries } from './infrastructure/reactionRoundQueries'
 import type { EmployeeReactionRoundQueryPort } from './public/types'
 import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 import { createSqliteEmployeeInputUploadPersistence } from './infrastructure/inputUploadStore'
@@ -486,13 +485,13 @@ interface DigitalEmployeePersistenceBundle {
  * 只认这个工厂与 `public/queries.ts` 里的接口。
  */
 export function createEmployeeReactionRoundQueries(db: DbClient): EmployeeReactionRoundQueryPort {
-  return createSqliteReactionRoundQueries(db)
+  return createReactionRoundQueries(db)
 }
 
 export function createPostgresqlEmployeeReactionRoundQueries(
   db: PostgresqlDatabaseClient,
 ): EmployeeReactionRoundQueryPort {
-  return createPostgresqlReactionRoundQueries(db)
+  return createReactionRoundQueries(db)
 }
 
 /**

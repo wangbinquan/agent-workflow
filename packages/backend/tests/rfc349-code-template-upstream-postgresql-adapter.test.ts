@@ -7,7 +7,7 @@ import { buildActor } from '@/auth/actor'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createTemplateUpstreamOperations } from '@/modules/code-capability/application/templateUpstreamStatus'
 import type { TemplateUpstreamRecord } from '@/modules/code-capability/application/ports/templateUpstreamPersistence'
-import { createPostgresqlTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/postgresqlTemplateUpstreamPersistence'
+import { createTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/templateUpstreamPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -73,7 +73,7 @@ function fixture() {
   }
   return {
     operations: createTemplateUpstreamOperations(
-      createPostgresqlTemplateUpstreamPersistence(createPostgresqlDatabaseClient(runtime)),
+      createTemplateUpstreamPersistence(createPostgresqlDatabaseClient(runtime)),
     ),
     executions,
     queued,

@@ -23,13 +23,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createCodeDeliveryChainQuery as createCodeDeliveryChainQueryFromPort } from '../src/modules/code-capability/application/codeMatrixQuery'
-import { createSqliteDeliveryChainRead } from '../src/modules/code-capability/infrastructure/sqliteDeliveryChain'
+import { createDeliveryChainRead } from '../src/modules/code-capability/infrastructure/deliveryChainRead'
 import { seedDelivery } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const createCodeDeliveryChainQuery = (db: DbClient) =>
-  createCodeDeliveryChainQueryFromPort(createSqliteDeliveryChainRead(db))
+  createCodeDeliveryChainQueryFromPort(createDeliveryChainRead(db))
 
 describe('RFC-304 T61 — reading the delivery chain', () => {
   let db: DbClient

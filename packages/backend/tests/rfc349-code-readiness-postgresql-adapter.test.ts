@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
-import { createPostgresqlReadinessFactsRead } from '@/modules/code-capability/infrastructure/postgresqlReadinessFactsRead'
+import { createReadinessFactsRead } from '@/modules/code-capability/infrastructure/readinessFactsRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -51,7 +51,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    reader: createPostgresqlReadinessFactsRead(createPostgresqlDatabaseClient(runtime)),
+    reader: createReadinessFactsRead(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }

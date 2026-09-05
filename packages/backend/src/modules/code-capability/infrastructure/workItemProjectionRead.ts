@@ -1,7 +1,8 @@
-// RFC-349 — SQLite projection for bounded code work-item history.
+// RFC-349 — projection for bounded code work-item history. RFC-359 W4-B5：一份实现，两个 provider 共用。
 
-import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+import { and, count, desc, eq, lt, type SQL } from 'drizzle-orm'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import {
   decodeCursor,
@@ -18,19 +19,56 @@ import type {
   CodeWorkItemProjection,
 } from '../public/queries'
 
+// 查询时再取列：表是按 provider 投影的代理，顶层捕获会钉死在加载时的 provider（见 dev-gotchas）。
+function workItemFields() {
+  return {
+    id: codeWorkItems.id,
+    capability: codeWorkItems.capability,
+    anchorKind: codeWorkItems.anchorKind,
+    anchorId: codeWorkItems.anchorId,
+    status: codeWorkItems.status,
+    epoch: codeWorkItems.epoch,
+    createdAt: codeWorkItems.createdAt,
+  }
+}
+
+function roundFields() {
+  return {
+    id: codeWorkRounds.id,
+    roundSeq: codeWorkRounds.roundSeq,
+    outcome: codeWorkRounds.outcome,
+    stageContractVer: codeWorkRounds.stageContractVer,
+    baselineSha: codeWorkRounds.baselineSha,
+    startedAt: codeWorkRounds.startedAt,
+    endedAt: codeWorkRounds.endedAt,
+  }
+}
+
+function stageFields() {
+  return {
+    stageName: codeRoundStages.stageName,
+    stageSeq: codeRoundStages.stageSeq,
+    stageKind: codeRoundStages.stageKind,
+    status: codeRoundStages.status,
+    error: codeRoundStages.error,
+    startedAt: codeRoundStages.startedAt,
+    endedAt: codeRoundStages.endedAt,
+  }
+}
+
 async function projectRounds(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   workItemId: string,
   limit: number,
 ): Promise<{ rounds: CodeRoundProjection[]; hidden: number }> {
   const [counted] = await db
-    .select({ n: sql<number>`count(*)` })
+    .select({ n: count() })
     .from(codeWorkRounds)
     .where(eq(codeWorkRounds.workItemId, workItemId))
   const total = counted?.n ?? 0
 
   const rounds = await db
-    .select()
+    .select(roundFields())
     .from(codeWorkRounds)
     .where(eq(codeWorkRounds.workItemId, workItemId))
     .orderBy(desc(codeWorkRounds.roundSeq))
@@ -39,10 +77,11 @@ async function projectRounds(
   const projected: CodeRoundProjection[] = []
   for (const round of rounds) {
     const stages = await db
-      .select()
+      .select(stageFields())
       .from(codeRoundStages)
       .orderBy(codeRoundStages.stageSeq)
       .where(eq(codeRoundStages.roundId, round.id))
+
     projected.push({
       roundId: round.id,
       roundSeq: round.roundSeq,
@@ -69,7 +108,9 @@ async function projectRounds(
   return { rounds: projected, hidden: roundWindow({ total, limit }).hidden }
 }
 
-export function createSqliteWorkItemProjectionRead(db: DbClient): WorkItemProjectionReadPort {
+export function createWorkItemProjectionRead(
+  db: ProviderNeutralDatabase,
+): WorkItemProjectionReadPort {
   return {
     async readPage(input) {
       const limit = Math.max(1, Math.min(input.limit ?? WORK_ITEM_PAGE_LIMIT, 100))
@@ -83,11 +124,12 @@ export function createSqliteWorkItemProjectionRead(db: DbClient): WorkItemProjec
       if (input.capability !== undefined) {
         filters.push(eq(codeWorkItems.capability, input.capability))
       }
+
       const cursor = input.cursor == null ? null : decodeCursor(input.cursor)
       if (cursor !== null) filters.push(lt(codeWorkItems.createdAt, cursor.createdAt))
 
       const rows = await db
-        .select()
+        .select(workItemFields())
         .from(codeWorkItems)
         .where(filters.length === 0 ? undefined : and(...filters))
         .orderBy(desc(codeWorkItems.createdAt), desc(codeWorkItems.id))

@@ -26,7 +26,6 @@ const SRC = resolve(import.meta.dir, '..', 'src')
  */
 const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   'modules/knowledge-evolution/infrastructure/FusionRepository.ts::uniqueViolation': '驱动错误形状',
-  'modules/code-capability/infrastructure/DeliveryChain.ts::toRow': '行命名与取值转换',
   'modules/development-automation/infrastructure/MissionStore.ts::toMissionRow': '行命名与取值转换',
   'modules/development-automation/infrastructure/PlaybookSagaStore.ts::approval': '仅换行排版',
   'modules/development-automation/infrastructure/PlaybookSagaStore.ts::step': '仅换行排版',

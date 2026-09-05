@@ -32,7 +32,7 @@ import {
   triggerChangeNarrative,
   type ChangeNarrativeDeps,
 } from '../src/services/changeNarrative'
-import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
+import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { requireTaskMember } from '../src/services/taskCollab'
 import { resolveInternalAgentRuntime } from '../src/services/runtimeRegistry'
 import {
@@ -44,7 +44,7 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const buildNarrativeInput = (db: DbClient, task: Task) =>
-  buildNarrativeInputWithPort(createSqliteCodeWorkspaceRead(db), task)
+  buildNarrativeInputWithPort(createCodeWorkspaceRead(db), task)
 
 let home: string
 beforeAll(() => {
@@ -264,7 +264,7 @@ describe('triggerChangeNarrative', () => {
   function deps(db: DbClient, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
     const runtimes = runtimeRegistryPersistence(db)
     const base: ChangeNarrativeDeps = {
-      workspace: createSqliteCodeWorkspaceRead(db),
+      workspace: createCodeWorkspaceRead(db),
       async requireMember(actor, taskId) {
         const rows = await db
           .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })

@@ -25,7 +25,7 @@ import {
   type GatherFactsInput,
 } from '../src/modules/code-capability/application/readinessFacts'
 import { deriveReadiness } from '../src/modules/code-capability/domain/templateLayers'
-import { createSqliteReadinessFactsRead } from '../src/modules/code-capability/infrastructure/sqliteReadinessFactsRead'
+import { createReadinessFactsRead } from '../src/modules/code-capability/infrastructure/readinessFactsRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -38,7 +38,7 @@ type SqliteGatherFactsInput = Omit<GatherFactsInput, 'reader'> & { readonly db: 
 const gatherReadinessFacts = ({ db, ...input }: SqliteGatherFactsInput) =>
   gatherReadinessFactsFromPort({
     ...input,
-    reader: createSqliteReadinessFactsRead(db),
+    reader: createReadinessFactsRead(db),
   })
 
 describe('RFC-304 — gathering readiness facts from the database', () => {
