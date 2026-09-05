@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:73369ddbb5eca538a00505b3b41cc374dafbba62fd9bbc79ca2bd303fe8e76fa`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:099ef555e8d665e374dade2f54a19294342acfd5667fa6a1fc8402fa88b6e31d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1957 |
+| backend production TS 文件 | 1956 |
 | `services/` 文件 | 326 |
-| `modules/**` 文件 / 非空 context | 1341 / 17 |
+| `modules/**` 文件 / 非空 context | 1340 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -32,11 +32,11 @@
 | `ambientWiring` | 494 |
 | `architectureExceptions` | 5301 |
 | `backgroundJobs` | 370 |
-| `crossContextImports` | 6370 |
+| `crossContextImports` | 6355 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26150 |
-| `mutationEntrypoints` | 1949 |
+| `moduleSymbolOwners` | 26139 |
+| `mutationEntrypoints` | 1948 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 987 |
 | `transactionExternalEffects` | 483 |
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | resource-catalog / infrastructure | 139 |
-| task-execution / infrastructure | 134 |
+| task-execution / infrastructure | 133 |
 | task-execution / application | 87 |
 | collaboration / infrastructure | 64 |
 | task-execution / composition | 58 |
@@ -202,8 +202,8 @@
 | --- | --- |
 | legacy-outbound | 3653 |
 | legacy-inbound | 1446 |
-| infrastructure-external | 398 |
-| provider-mirror | 396 |
+| infrastructure-external | 397 |
+| provider-mirror | 382 |
 | offered-consumption | 189 |
 | temporary-internal-debt | 96 |
 | off-dag-offered | 94 |

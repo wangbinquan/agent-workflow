@@ -5455,10 +5455,10 @@
     "ambientWiring": 494,
     "disabled": 11,
     "entries": 370,
-    "executionLocal": 53,
+    "executionLocal": 54,
     "longRunning": 83,
     "managed": 11,
-    "periodic": 223
+    "periodic": 222
   },
   "entries": [
     {
@@ -8779,6 +8779,29 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
       "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createPostgresqlRecoveryAdministration",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createPostgresqlRecoveryAdministration",
+      "phase": "before-ready",
+      "symbol": "createPostgresqlRecoveryAdministration",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createSqliteRecoveryAdministration",
       "kind": "execution-local",
       "lifecycle": {
@@ -9273,31 +9296,6 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "config",
-        "db",
-        "runtime"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#createPostgresqlTaskRecoveryOperations",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#createPostgresqlTaskRecoveryOperations",
-      "phase": "before-ready",
-      "symbol": "createPostgresqlTaskRecoveryOperations",
-      "targetContext": "task-execution"
-    },
-    {
       "dependencies": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
       "finalCriterion": "W9-B registry",
@@ -9410,30 +9408,6 @@
     },
     {
       "dependencies": [
-        "config",
-        "db"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#createSqliteTaskRecoveryOperations",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#createSqliteTaskRecoveryOperations",
-      "phase": "before-ready",
-      "symbol": "createSqliteTaskRecoveryOperations",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
         "db"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
@@ -9521,6 +9495,30 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
       "phase": "unknown",
       "symbol": "startOwnerHeartbeat",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "config",
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
+      "phase": "before-ready",
+      "symbol": "createTaskRecoveryOperations",
       "targetContext": "task-execution"
     },
     {
@@ -13631,5 +13629,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:73369ddbb5eca538a00505b3b41cc374dafbba62fd9bbc79ca2bd303fe8e76fa"
+  "sourceDigest": "sha256:099ef555e8d665e374dade2f54a19294342acfd5667fa6a1fc8402fa88b6e31d"
 }

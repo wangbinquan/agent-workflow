@@ -4,11 +4,11 @@
     "ambientWiring": 494,
     "architectureExceptions": 5301,
     "backgroundJobs": 370,
-    "crossContextImports": 6370,
+    "crossContextImports": 6355,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26150,
-    "mutationEntrypoints": 1949,
+    "moduleSymbolOwners": 26139,
+    "mutationEntrypoints": 1948,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 987,
     "transactionExternalEffects": 483
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1957,
+    "backendProductionFiles": 1956,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -119,10 +119,10 @@
       },
       {
         "context": "task-execution",
-        "files": 336
+        "files": 335
       }
     ],
-    "moduleFiles": 1341,
+    "moduleFiles": 1340,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:73369ddbb5eca538a00505b3b41cc374dafbba62fd9bbc79ca2bd303fe8e76fa"
+  "sourceDigest": "sha256:099ef555e8d665e374dade2f54a19294342acfd5667fa6a1fc8402fa88b6e31d"
 }
