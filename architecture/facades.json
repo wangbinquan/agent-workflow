@@ -2143,16 +2143,15 @@
     {
       "boundaryEdgeIds": [
         "import:009e88a4a9f3e53cffc7",
+        "import:12552376491df8078377",
         "import:16e62bef18d5c5c1c9c7",
         "import:185ec83ed7006ba324ec",
         "import:200dff27cfb98b80b59c",
-        "import:2291437019a4fed48678",
         "import:27fe8529b8b27e8358dc",
         "import:29768ca659a0280fda50",
         "import:2be3c2b024ac73ea7cf7",
         "import:363cb0c539a622dd8c52",
         "import:455160bbbde08edc0db9",
-        "import:455ae6e5c1eb95616df2",
         "import:49b4198c95812210b3fd",
         "import:4bd2db30ea57d97251f2",
         "import:67134c0b47087a25b42a",
@@ -2164,12 +2163,10 @@
         "import:9e426302612b0525c0df",
         "import:b5ebd46dc2c269e19a17",
         "import:b72f66cbd9246a8d6a90",
-        "import:ca8c045212d8f55bf248",
-        "import:cdb59ca6db17d5e8d809",
-        "import:e56d97a34bf0c903c6b5",
+        "import:c85245f39054f279586b",
         "import:ea4043db602870031e42",
         "import:eb428ee087bc0dad2e9f",
-        "import:f860115b38f2a43297af"
+        "import:ebf4fb21e04c518d9719"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/lifecycle.ts",
@@ -6874,5 +6871,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b52a2452295d3cdc4f3a7df2b86d45d45a4bef8b2c99c93a35d04397ddaf06b7"
+  "sourceDigest": "sha256:e3b4efcd5c1a3c747721b7b1f7475932a55e7fc3e9ec30ec04b2ade524612f2d"
 }

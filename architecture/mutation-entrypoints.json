@@ -30693,6 +30693,28 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#createNodeRunLifecycleParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#createNodeRunLifecycleParticipantInTx",
+      "symbol": "createNodeRunLifecycleParticipantInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": true
@@ -31045,28 +31067,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#createPostgresqlFusionEngineTaskOperations",
       "symbol": "createPostgresqlFusionEngineTaskOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#createPostgresqlNodeRunLifecycleParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#createPostgresqlNodeRunLifecycleParticipantInTx",
-      "symbol": "createPostgresqlNodeRunLifecycleParticipantInTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46404,7 +46404,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b52a2452295d3cdc4f3a7df2b86d45d45a4bef8b2c99c93a35d04397ddaf06b7",
+  "sourceDigest": "sha256:e3b4efcd5c1a3c747721b7b1f7475932a55e7fc3e9ec30ec04b2ade524612f2d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46514,7 +46514,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 269,
+      "durableWriterSites": 270,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -47465,6 +47465,38 @@
       },
       {
         "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "mint",
+        "controlSubtype": null,
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#154:nodeRunOutputs",
+        "line": 154,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#DrizzleNodeRunLifecyclePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeRunLifecyclePersistence"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "transition",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#184:nodeRuns",
+        "line": 184,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts#DrizzleNodeRunLifecyclePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleNodeRunLifecyclePersistence"
+      },
+      {
+        "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
@@ -47750,22 +47782,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "cancelPostgresqlTask"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "transition",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#177:nodeRuns",
-        "line": 177,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#PostgresqlNodeRunLifecyclePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlNodeRunLifecyclePersistence"
       },
       {
         "allowedTables": [
@@ -48361,38 +48377,6 @@
       },
       {
         "allowedTables": [
-          "taskExecutionIntents"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "terminalizePostgresqlTaskExecutionIntentsTx",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionIntents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#64:taskExecutionIntents",
-        "line": 64,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#terminalizePostgresqlTaskExecutionIntentsTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "terminalizePostgresqlTaskExecutionIntentsTx"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "terminalizePostgresqlTaskExecutionIntentsTx",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#94:taskExecutionLineageOperationRecords",
-        "line": 94,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#terminalizePostgresqlTaskExecutionIntentsTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "terminalizePostgresqlTaskExecutionIntentsTx"
-      },
-      {
-        "allowedTables": [
           "taskExecutionLineageOperationRecords"
         ],
         "authorityKind": "recovery-proof",
@@ -48806,38 +48790,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "replaceTaskMembers"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "set",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts#108:tasks",
-        "line": 108,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts#PostgresqlTaskRuntimeLifecyclePersistence",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "PostgresqlTaskRuntimeLifecyclePersistence"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "set",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts#140:tasks",
-        "line": 140,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts#PostgresqlTaskRuntimeLifecyclePersistence",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "PostgresqlTaskRuntimeLifecyclePersistence"
       },
       {
         "allowedTables": [
@@ -50233,6 +50185,38 @@
       },
       {
         "allowedTables": [
+          "taskExecutionIntents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "terminalizeTaskExecutionIntentsInTx",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionIntents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#49:taskExecutionIntents",
+        "line": 49,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#terminalizeTaskExecutionIntentsInTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "terminalizeTaskExecutionIntentsInTx"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionLineageOperationRecords"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "terminalizeTaskExecutionIntentsInTx",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionLineageOperationRecords",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#79:taskExecutionLineageOperationRecords",
+        "line": 79,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#terminalizeTaskExecutionIntentsInTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "terminalizeTaskExecutionIntentsInTx"
+      },
+      {
+        "allowedTables": [
           "tasks"
         ],
         "authorityKind": "control-revision",
@@ -50294,6 +50278,38 @@
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
         "symbol": "createTaskRecoveryOperations"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "set",
+        "controlSubtype": null,
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#110:tasks",
+        "line": 110,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleTaskRuntimeLifecyclePersistence"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "set",
+        "controlSubtype": null,
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#142:tasks",
+        "line": 142,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleTaskRuntimeLifecyclePersistence"
       },
       {
         "allowedTables": [

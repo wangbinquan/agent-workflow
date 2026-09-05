@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 62,
-    "transactionCallbacks": 483
+    "transactionCallbacks": 480
   },
   "entries": [
     {
@@ -5000,30 +5000,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#transaction:25",
-      "line": 25,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#serializable",
-      "status": "clear",
-      "symbol": "serializable",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#transaction:19",
-      "line": 19,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#serializable",
-      "status": "clear",
-      "symbol": "serializable",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#transaction:73",
@@ -5263,18 +5239,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts#submitTaskContinuation",
       "status": "clear",
       "symbol": "submitTaskContinuation",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentTerminalPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentTerminalPersistence.ts#dbTxSync:14",
-      "line": 14,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntentTerminalPersistence.ts#SqliteTaskExecutionIntentTerminalPersistence",
-      "status": "clear",
-      "symbol": "SqliteTaskExecutionIntentTerminalPersistence",
       "targetContext": "task-execution",
       "transactionCallee": "dbTxSync"
     },
@@ -5526,8 +5490,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:242",
-      "line": 242,
+      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:249",
+      "line": 249,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
       "status": "clear",
       "symbol": "createPostgresqlDatabaseSession",
@@ -5538,8 +5502,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:254",
-      "line": 254,
+      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:261",
+      "line": 261,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
       "status": "clear",
       "symbol": "createPostgresqlDatabaseSession",
@@ -5938,7 +5902,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b52a2452295d3cdc4f3a7df2b86d45d45a4bef8b2c99c93a35d04397ddaf06b7",
+  "sourceDigest": "sha256:e3b4efcd5c1a3c747721b7b1f7475932a55e7fc3e9ec30ec04b2ade524612f2d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
