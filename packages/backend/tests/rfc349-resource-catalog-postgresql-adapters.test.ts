@@ -65,9 +65,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
   })
 
   test('composition exposes exact adapter injection and PostgreSQL factories without public DB leakage', () => {
-    for (const [aggregate, file] of [
-      ['Workgroup', 'workgroupOperations'],
-    ] as const) {
+    for (const [aggregate, file] of [['Workgroup', 'workgroupOperations']] as const) {
       const text = source(`src/modules/resource-catalog/composition/${file}.ts`)
       expect(text).toContain(`compose${aggregate}CatalogFromAdapters`)
       expect(text).toContain(`composePostgresql${aggregate}Catalog`)

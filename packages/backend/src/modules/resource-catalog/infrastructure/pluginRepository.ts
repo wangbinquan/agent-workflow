@@ -219,7 +219,9 @@ export function createPluginRepository(deps: {
             await transaction
               .select({ id: plugins.id })
               .from(plugins)
-              .where(ownerScopedNameWhere(plugin.ownerUserId ?? null, renaming.newName, renaming.id))
+              .where(
+                ownerScopedNameWhere(plugin.ownerUserId ?? null, renaming.newName, renaming.id),
+              )
               .limit(1)
           )[0]
           if (collision !== undefined) throw nameConflict(renaming.newName, 'rename')
