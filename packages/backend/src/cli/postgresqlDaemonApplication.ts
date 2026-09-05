@@ -33,13 +33,10 @@ import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
-import {
-  createPostgresqlIdentityAccessCrossContextBindings,
-  composePostgresqlOidcIdentityOperations,
-} from '@/modules/identity-access/composition/providerOperations'
+import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import { DrizzleOidcProviderRepository } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
-import { composePostgresqlOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import {
   composePostgresqlRepositoryWorkspaceStore,
   composeRepositoryTransportCredentials,
@@ -421,7 +418,6 @@ export async function composePostgresqlDaemonApplication(
     secretBox: input.secretBox,
     realtimePolicy: realtimePolicy.policy,
     onCredentialRevoked: triggerRevalidation,
-    identityCrossContext: createPostgresqlIdentityAccessCrossContextBindings(),
     identityEvents: {
       authorityRevisionChanged({ userId, revision, onFailure }) {
         triggerAuthorityRevalidation(userId, revision, onFailure)
@@ -564,7 +560,7 @@ export async function composePostgresqlDaemonApplication(
     )
   const authorityFor = (actor: Actor) =>
     directOperationAuthority(identityAccess.directAuthority, actor)
-  const oidcIdentities = composePostgresqlOidcIdentityOperations({
+  const oidcIdentities = composeOidcIdentityOperations({
     db: input.db,
     identityAccess,
   })
@@ -895,7 +891,7 @@ export async function composePostgresqlDaemonApplication(
     routes: () => ({
       collaboration: boundCollaborationContext,
       users: identityAccess.userDirectory,
-      owners: composePostgresqlOwnerIdentityQueries(input.db),
+      owners: composeOwnerIdentityQueries(input.db),
       membershipEvents: {
         async committed(change) {
           await triggerRevalidationAndWait('task-members-changed')
@@ -1071,7 +1067,7 @@ export async function composePostgresqlDaemonApplication(
     // 下推页查询；owner 身份由这里注入（模块自己去 compose 别的 context 是被判红的形状）。
     createPostgresqlTaskExecutionCatalogSourceFactory(
       input.db,
-      composePostgresqlOwnerIdentityQueries(input.db),
+      composeOwnerIdentityQueries(input.db),
     ),
   )
   const workgroupTaskRoom = composePostgresqlWorkgroupTaskRoom({

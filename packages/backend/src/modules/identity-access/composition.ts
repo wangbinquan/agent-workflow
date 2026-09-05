@@ -1,7 +1,5 @@
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { TransactionScope } from '@/platform/persistence/transactionScope'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
 import { GetUserPresence } from './application/queries/getUserPresence'
 import {
@@ -25,21 +23,10 @@ import { UpdateOwnProfile } from './application/commands/updateOwnProfile'
 import { SyncOidcProfile } from './application/commands/syncOidcProfile'
 import { ResolveAuthority } from './application/queries/resolveAuthority'
 import {
-  SQLiteUserAccessRepository,
-  SQLiteUserAccessTransactionRunner,
-  insertInitialUserAccessInTransaction,
-  syncOidcProfileInTransaction,
-} from './infrastructure/sqliteUserAccessRepository'
-import {
-  PostgresqlAuthorityFenceCache,
-  PostgresqlUserAccessRepository,
-  PostgresqlUserAccessTransactionRunner,
-} from './infrastructure/postgresqlUserAccessRepository'
-import { mapOidcEmailConstraint } from './application/commands/syncOidcProfile'
-import type {
-  SyncOidcProfileCommand,
-  SyncOidcProfileResult,
-} from './application/commands/syncOidcProfile'
+  AuthorityFenceCache,
+  createUserAccessRepository,
+  createUserAccessTransactionRunner,
+} from './infrastructure/userAccessPersistence'
 import {
   IdentityAccessObservability,
   type IdentityAccessDiagnostics,
@@ -50,8 +37,6 @@ import type {
   DirectAuthorityAdmission,
   DirectAuthorityBinding,
   DirectQueryContextFactory,
-  InitialUserAccessProvisioner,
-  InitialUserAccessProvision,
   PresenceConnectionTracker,
   PresenceLease,
   PresenceQuery,
@@ -75,12 +60,6 @@ interface RuntimeIdentityAccessEventSink {
 
 interface RuntimePresenceProjectionSink {
   publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
-}
-
-/** Composition-only bridge. Public consumers receive only the provisioner
- * returned for the currently live transaction scope. */
-export interface InitialUserAccessTransactionBinding {
-  forTransaction(transactionScope: TransactionScope): InitialUserAccessProvisioner
 }
 
 class RuntimePresenceConnections implements PresenceConnectionTracker {
@@ -126,14 +105,7 @@ export interface IdentityAccessRuntime {
   readonly getUserGitCommitIdentity: GetUserGitCommitIdentity
   readonly updateOwnProfile: UpdateOwnProfile
   readonly userDirectory: PublicUserDirectory
-  readonly initialUserAccess: InitialUserAccessTransactionBinding
   readonly syncOidcProfile: SyncOidcProfile
-  readonly syncOidcProfileInTransaction: (
-    transactionScope: TransactionScope,
-    command: SyncOidcProfileCommand,
-    now?: number,
-  ) => SyncOidcProfileResult
-  readonly mapOidcEmailConstraint: (error: unknown) => unknown
   readonly resolveAuthority: ResolveAuthority
   readonly authorityFence: UserAccessFenceReader
   readonly diagnostics: IdentityAccessDiagnostics
@@ -151,27 +123,8 @@ export type IdentityAccessFixtureRuntime = Omit<IdentityAccessRuntime, 'contexts
 }
 
 export interface CreateIdentityAccessRuntimeInput {
-  readonly db: DbClient
-  readonly events?: RuntimeIdentityAccessEventSink
-  readonly presenceProjection?: RuntimePresenceProjectionSink
-  readonly id?: () => string
-  readonly now?: () => number
-}
-
-/**
- * PostgreSQL account bootstrap/OIDC linking must join the caller's surrounding
- * async transaction.  The platform composition root supplies these opaque-
- * scope bridges; identity-access never receives a raw PostgreSQL transaction.
- */
-export interface PostgresqlIdentityAccessCrossContextBindings {
-  readonly initialUserAccess: InitialUserAccessTransactionBinding
-  readonly syncOidcProfileInTransaction: IdentityAccessRuntime['syncOidcProfileInTransaction']
-}
-
-export interface CreatePostgresqlIdentityAccessRuntimeInput {
-  readonly db: PostgresqlDatabaseClient
-  /** Required: account bootstrap and OIDC linking must join their owning PG transaction. */
-  readonly crossContextTransactions: PostgresqlIdentityAccessCrossContextBindings
+  /** 两个 provider 同一份持久化（RFC-359 W4-D8）；装配入口收中立句柄。 */
+  readonly db: ProviderNeutralDatabase
   readonly events?: RuntimeIdentityAccessEventSink
   readonly presenceProjection?: RuntimePresenceProjectionSink
   readonly id?: () => string
@@ -181,35 +134,21 @@ export interface CreatePostgresqlIdentityAccessRuntimeInput {
 interface IdentityAccessPersistence {
   readonly repository: UserAccessReadRepository & UserAccessFenceReader
   readonly transactions: UserAccessTransactionRunner
-  readonly initialUserAccess: InitialUserAccessTransactionBinding
-  readonly syncOidcProfileInTransaction: IdentityAccessRuntime['syncOidcProfileInTransaction']
 }
 
-/** Pure composition factory.  Runtime lifetime belongs to the caller; there is
- * deliberately no DB-keyed cache and no WS import in this module. */
+/** Pure composition factory（两个 provider 同一份实现，RFC-359 W4-D8）.  Runtime lifetime belongs to
+ * the caller; there is deliberately no DB-keyed cache and no WS import in this module. */
 export function createIdentityAccessRuntime(
   input: CreateIdentityAccessRuntimeInput,
 ): IdentityAccessRuntime {
-  return buildIdentityAccessRuntime(input, sqlitePersistence(input.db), false)
+  return buildIdentityAccessRuntime(input, neutralPersistence(input.db), false)
 }
 
-/** PostgreSQL composition root. Provider mechanics remain below composition;
- * callers receive the same IdentityAccessRuntime Promise surface. */
+/** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
 export function createPostgresqlIdentityAccessRuntime(
-  input: CreatePostgresqlIdentityAccessRuntimeInput,
+  input: CreateIdentityAccessRuntimeInput,
 ): IdentityAccessRuntime {
-  const fenceCache = new PostgresqlAuthorityFenceCache()
-  const repository = new PostgresqlUserAccessRepository(input.db, fenceCache)
-  return buildIdentityAccessRuntime(
-    input,
-    {
-      repository,
-      transactions: new PostgresqlUserAccessTransactionRunner(input.db, fenceCache),
-      initialUserAccess: input.crossContextTransactions.initialUserAccess,
-      syncOidcProfileInTransaction: input.crossContextTransactions.syncOidcProfileInTransaction,
-    },
-    false,
-  )
+  return createIdentityAccessRuntime(input)
 }
 
 function buildIdentityAccessRuntime(
@@ -309,17 +248,12 @@ function buildIdentityAccessRuntime(
       search: repository.search.bind(repository),
       lookup: repository.lookup.bind(repository),
     }),
-    initialUserAccess: Object.freeze({
-      forTransaction: persistence.initialUserAccess.forTransaction,
-    }),
     syncOidcProfile: new SyncOidcProfile({
       transactions,
       auditId: factoryDeps.id,
       operationId: factoryDeps.id,
       now: factoryDeps.now,
     }),
-    syncOidcProfileInTransaction: persistence.syncOidcProfileInTransaction,
-    mapOidcEmailConstraint,
     presenceConnections,
     presenceQuery: Object.freeze({ snapshot: () => getUserPresence.snapshot() }),
     resolveAuthority,
@@ -340,28 +274,17 @@ function buildIdentityAccessRuntime(
   })
 }
 
-function bindInitialUserAccessProvisioner(
-  transactionScope: TransactionScope,
-): InitialUserAccessProvisioner {
-  return Object.freeze({
-    insert(provision: InitialUserAccessProvision): void {
-      insertInitialUserAccessInTransaction(transactionScope, provision)
-    },
-  })
-}
-
 /** Explicit local/test fixture factory. Production daemon/server code receives
  * one createIdentityAccessRuntime result from its bootstrap root. */
-export function composeIdentityAccess(db: DbClient): IdentityAccessFixtureRuntime {
-  return buildIdentityAccessRuntime({}, sqlitePersistence(db), true)
+export function composeIdentityAccess(db: ProviderNeutralDatabase): IdentityAccessFixtureRuntime {
+  return buildIdentityAccessRuntime({}, neutralPersistence(db), true)
 }
 
-function sqlitePersistence(db: DbClient): IdentityAccessPersistence {
-  const repository = new SQLiteUserAccessRepository(db)
+function neutralPersistence(db: ProviderNeutralDatabase): IdentityAccessPersistence {
+  // 围栏缓存与写事务绑在同一份：提交后刷新的就是围栏读的那份。
+  const fenceCache = new AuthorityFenceCache()
   return {
-    repository,
-    transactions: new SQLiteUserAccessTransactionRunner(db),
-    initialUserAccess: Object.freeze({ forTransaction: bindInitialUserAccessProvisioner }),
-    syncOidcProfileInTransaction,
+    repository: createUserAccessRepository(db, fenceCache),
+    transactions: createUserAccessTransactionRunner(db, fenceCache),
   }
 }

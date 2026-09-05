@@ -2,7 +2,7 @@
   "activeTableCount": 178,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:72744adbc26303338e84847a08af708cf53cec80342f1eada567cb0edbf8e1fe",
+  "digest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
   "sourceProjection": "sqlite",
   "sourceTableCount": 184,
   "tables": [
@@ -53260,6 +53260,15 @@
           "name": "idx_user_identities_provider",
           "unique": false,
           "where": null
+        },
+        {
+          "columns": [
+            "provider_id",
+            "subject"
+          ],
+          "name": "user_identities_provider_subject_unique",
+          "unique": true,
+          "where": null
         }
       ],
       "migrationKey": [
@@ -53281,7 +53290,16 @@
       },
       "schemaSymbol": "userIdentities",
       "sourceTable": "user_identities",
-      "unique": []
+      "unique": [
+        {
+          "columns": [
+            "provider_id",
+            "subject"
+          ],
+          "expression": null,
+          "name": "user_identities_provider_subject_unique"
+        }
+      ]
     },
     {
       "checks": [],

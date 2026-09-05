@@ -38,12 +38,7 @@ import {
   createDatabaseTaskListPage,
   taskListViewerOf,
 } from '@/modules/task-execution/infrastructure/taskListPage'
-import {
-  composePostgresqlOwnerIdentityQueries,
-  composeSqliteOwnerIdentityQueries,
-} from '@/modules/identity-access/composition/providerOperations'
-import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -139,18 +134,8 @@ async function seedClaimedOwner(
 }
 
 function ownerIdentityQueriesFor(db: ProviderNeutralDatabase) {
-  const provider = databaseSessionFor(db).engine.provider
-  if (provider === 'sqlite') {
-    return composeSqliteOwnerIdentityQueries(
-      db as Parameters<typeof composeSqliteOwnerIdentityQueries>[0],
-    )
-  }
-  if (provider === 'postgresql') {
-    return composePostgresqlOwnerIdentityQueries(
-      db as Parameters<typeof composePostgresqlOwnerIdentityQueries>[0],
-    )
-  }
-  return unhandledDatabaseProvider(provider)
+  // RFC-359 W4-D8：owner 身份查询的装配入口收中立句柄，两个 provider 同一份。
+  return composeOwnerIdentityQueries(db)
 }
 
 describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harness) => {

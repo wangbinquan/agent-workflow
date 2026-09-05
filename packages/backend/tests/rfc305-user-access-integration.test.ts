@@ -19,7 +19,10 @@ import {
   trustedContextMetadata,
 } from '../src/modules/identity-access/application/operationContext'
 import { IdentityAccessObservability } from '../src/modules/identity-access/infrastructure/identityAccessObservability'
-import { SQLiteUserAccessTransactionRunner } from '../src/modules/identity-access/infrastructure/sqliteUserAccessRepository'
+import {
+  AuthorityFenceCache,
+  createUserAccessTransactionRunner,
+} from '../src/modules/identity-access/infrastructure/userAccessPersistence'
 import { createUser, patchUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
@@ -167,7 +170,7 @@ describe('RFC-305 identity-access integration', () => {
     const f = await fixture()
     const observer = new IdentityAccessObservability()
     const update = new UpdateUserAccess({
-      transactions: new SQLiteUserAccessTransactionRunner(db),
+      transactions: createUserAccessTransactionRunner(db, new AuthorityFenceCache()),
       auditId: () => 'audit-targeted-refresh-failure',
       systemUserId: '__system__',
       events: {

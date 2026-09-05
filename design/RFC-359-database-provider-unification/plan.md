@@ -437,6 +437,23 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   digest」（两引擎同形，漂移仍报错）；`ensureExecutionPolicy` 先 `advisoryLock` 再锁单例行（PG 上首次创建也串行）；service 暴露
   `ready()`、后台初始化的拒绝标记为已接手；`composeDigitalEmployee` 收中立句柄、PG 入口成别名。
   `rfc359-w4-d6c-bootstrap-idempotency.test.ts` 两引擎各跑（改前 5/6 红），教训进 `docs/dev-gotchas.md`。
+  **D8 ✅（identity-access 账户 / 授权持久化 + OIDC 身份关联）**：`userAccessPersistence.ts` 一份（以 PG 版的「读集 → 同步纯决策
+  → 落库」为底：`BufferedUserAccessTransaction` 只认读集声明过的行、未声明读 fail closed，两个引擎都走 `session.serializable`；
+  唯一冲突经能力矩阵新项 `uniqueViolationTarget` 映射回 `username-taken` / `profile-email-conflict` / `oidc-email-conflict`，两个
+  引擎同一条正则）；出站授权围栏一份代码：先问能力矩阵新项 `readRowSync`（SQLite 驱动同步，跨进程写者立即可见），PG 退回本
+  进程缓存（授权读预热、写提交后刷新）。`oidcIdentityCrossContext.ts` 一份（PG 的内存暂存 + 一笔 serializable 回放；RFC-220 S13 的
+  选择器复核仍先于 profile 名字判定；用户名冲突不再漏成裸驱动错误）——OIDC 本就是 identity-access 的 infrastructure，直接用同一份
+  写模型，RFC-349 期经 TransactionScope 认领桥绕回运行时公共面的 `initialUserAccess.forTransaction` / `syncOidcProfileInTransaction` /
+  `mapOidcEmailConstraint` 与 `InitialUserAccessProvisioner` 参与者退役（src 里唯一的外部消费者是 auth 中只有测试在用的
+  `completeBootstrapWithAdmin`，一并删除；bootstrap 首管理员只剩 `auth.completeBootstrap` 一条路——admin 没有默认附加授权，两个 auth
+  persistence 直落用户 + 审计已是完整语义）。装配：`createIdentityAccessRuntime({db})` 收中立句柄、PG 入口成别名且不再要
+  `crossContextTransactions`；`composeOidcIdentityOperations` / `composeOwnerIdentityQueries` 各一个中立入口，provider 名入口删除、
+  消费者改名。五个 provider 文件（554 + 760 + 318 + 781 + 35 行）与两个假 PG 测试删除；schema 补上
+  `user_identities_provider_subject_unique`（SQLite 迁移早有、PG 缺）并重采 PG 基线。`rfc359-w4-d8-adapters.test.ts` 两引擎各跑
+  （目录搜索 / 查找顺序、围栏预热与旁路写者可见性、同步决策 + CAS、未声明读 fail closed、唯一冲突映射、选择器漂移回滚、建号一笔
+  提交、绑定 / 解绑 / 用户不存在），能力矩阵两新项在 `rfc359-engine-capabilities` 两侧各有真实执行；rfc305 / rfc347 / rfc345 /
+  rfc349 各锁与账本改指中立文件。**下一刀 D9**：auth 的 `sqliteAuthPersistence` / `postgresqlAuthPersistence` 对（含 legacy
+  login policy / session / pat store）。
 
 ## 5. W5 —— 防复辟
 

@@ -153,6 +153,23 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(cap.classifyError(caught)).toBe('unique-violation')
     expect(cap.classifyError(new Error('anything else'))).toBe('other')
   })
+
+  test('readRowSync：驱动本身同步，直接给行 / 无行给 null；uniqueViolationTarget 给撞上的列', () => {
+    const db = scratch()
+    db.run(sql`insert into cap_scratch(name, v) values ('row', 7)`)
+    expect(cap.readRowSync(db, sql`select name, v from cap_scratch where name = ${'row'}`)).toEqual(
+      { name: 'row', v: 7 },
+    )
+    expect(cap.readRowSync(db, sql`select name from cap_scratch where name = ${'none'}`)).toBeNull()
+    let caught: unknown
+    try {
+      db.run(sql`insert into cap_scratch(name) values ('row')`)
+    } catch (error) {
+      caught = error
+    }
+    expect(cap.uniqueViolationTarget(caught)).toBe('cap_scratch.name')
+    expect(cap.uniqueViolationTarget(new Error('anything else'))).toBeUndefined()
+  })
 })
 
 // ─── PostgreSQL：真实执行 ─────────────────────────────────────────────────────
@@ -288,6 +305,10 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
           caught = error
         }
         expect(cap.classifyError(caught)).toBe('unique-violation')
+        // ⑩ 唯一冲突的目标是约束名；同步读在网络驱动上不可用（undefined，调用方退回缓存）
+        expect(cap.uniqueViolationTarget(caught)).toBe('cap_scratch_name_key')
+        expect(cap.uniqueViolationTarget(new Error('anything else'))).toBeUndefined()
+        expect(cap.readRowSync(db, sql`select 1 as one`)).toBeUndefined()
 
         // ⑧ serializable()：两个并发事务对同一行读—改—写，SERIALIZABLE 下必有一方 40001；
         //    重试后两次自增都落地。这条证明 opt-in 的重试路径真的在真库上工作。

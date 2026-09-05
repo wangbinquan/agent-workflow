@@ -2,8 +2,8 @@
   "activeTableCount": 178,
   "archiveOnlyTableCount": 6,
   "baselineId": "0000_rfc349_baseline_v1",
-  "contractDigest": "sha256:72744adbc26303338e84847a08af708cf53cec80342f1eada567cb0edbf8e1fe",
-  "planDigest": "sha256:aa1afc975915eb47460badcab1bcea13bb525a94551fa65ea2fce89251761028",
+  "contractDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+  "planDigest": "sha256:faba80bbbba0777c04f4af1c6f750ae952fa208aea1eaefd2b020f12eeb5fb02",
   "statements": [
     {
       "digest": "sha256:e421e3eb972c6504590f83ebd92f1a2eb76e8c95f2515c6641943e3aea99c31f",
@@ -2431,6 +2431,11 @@
       "logicalId": "user_identities:index:idx_user_identities_provider"
     },
     {
+      "digest": "sha256:eea58a3804ce307bf02a4cd42f6ca59c5e896124de21eba1d998abd5a6dfdb6b",
+      "kind": "index",
+      "logicalId": "user_identities:index:user_identities_provider_subject_unique"
+    },
+    {
       "digest": "sha256:78a0b2d555f8e83143c8f5e5588dbac16c7caae6429dccf4778a1e1e3ef08c2a",
       "kind": "index",
       "logicalId": "user_pats:index:idx_user_pats_user"
@@ -3586,7 +3591,7 @@
       "logicalId": "contract-table"
     },
     {
-      "digest": "sha256:17203a2c6230fc5147159c9dc9c278fa9e2ae971a3d8caab8281a570b8a20b4d",
+      "digest": "sha256:e16a71ceefc6308fdc2f8c4992bf3418322abee54dd7f73c0b64d3cc6af1e1ce",
       "kind": "metadata",
       "logicalId": "contract-row"
     },

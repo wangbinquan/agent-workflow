@@ -33,7 +33,10 @@
 // 不是隔离级别。
 
 import { sql, type SQL, type SQLWrapper } from 'drizzle-orm'
-import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { SQLiteSyncDialect, type SQLiteColumn, type SQLiteTable } from 'drizzle-orm/sqlite-core'
+
+import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 
 import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
@@ -97,6 +100,20 @@ export interface EngineCapabilities {
 
   /** 驱动错误 → 与引擎无关的分类。 */
   classifyError(error: unknown): EngineErrorClass
+
+  /**
+   * 唯一冲突撞上的是谁：PG 给约束名（`users_username_unique`），SQLite 给 `UNIQUE constraint failed:` 之后的
+   * 列清单（`users.username`）；不是唯一冲突时 undefined。调用方用一条两边都认的正则判（`/users[._]username/`），
+   * 把驱动冲突映射回自己的闭合错误合同——这是「驱动错误形状」这一类 provider 差异的唯一容身处。
+   */
+  uniqueViolationTarget(error: unknown): string | undefined
+
+  /**
+   * 同步读一行（不经事件循环）。SQLite 驱动本身同步：直接读文件，跨进程写者（CLI 建号 / 改权）立即可见；
+   * PG 无法同步网络读，返回 undefined——调用方退回本进程缓存等替代面。返回 null 表示查到了但没有行。
+   * 只给确实必须在当前 tick 判定的路径（RFC-305 的 WS 出站授权围栏）；别的读一律走异步。
+   */
+  readRowSync(db: ProviderNeutralDatabase, query: SQL): Record<string, unknown> | null | undefined
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,6 +153,15 @@ function walkCause(error: unknown, pick: (node: object) => string | undefined): 
   return undefined
 }
 
+/** 沿 cause 链取第一个命中 pattern 的 message 的捕获组 1。 */
+function firstMessageCapture(error: unknown, pattern: RegExp): string | undefined {
+  return walkCause(error, (node) => {
+    const message = (node as { readonly message?: unknown }).message
+    if (typeof message !== 'string') return undefined
+    return pattern.exec(message)?.[1]
+  })
+}
+
 /** 沿 cause 链取第一个字符串 `code`（SQLite：`SQLITE_*`；PG 的 SQLSTATE 走 errno，另有判据）。 */
 function codeOf(error: unknown): string | undefined {
   return walkCause(error, (node) => {
@@ -161,6 +187,19 @@ function anyMessageMatches(error: unknown, pattern: RegExp): boolean {
 // SQLite
 // ─────────────────────────────────────────────────────────────────────────────
 
+const sqliteDialect = new SQLiteSyncDialect()
+
+function classifySqliteError(error: unknown): EngineErrorClass {
+  // 结构化优先：SQLiteError 带 `code`（SQLITE_CONSTRAINT_UNIQUE / SQLITE_BUSY*），它在 drizzle
+  // 包装的 cause 里；外层 DrizzleError 没有 code。message 正则只作兜底，且逐层扫。
+  const code = codeOf(error)
+  if (code === 'SQLITE_CONSTRAINT_UNIQUE') return 'unique-violation'
+  if (code === 'SQLITE_BUSY' || code === 'SQLITE_BUSY_SNAPSHOT') return 'busy'
+  if (anyMessageMatches(error, /UNIQUE constraint failed/i)) return 'unique-violation'
+  if (anyMessageMatches(error, /SQLITE_BUSY|database is locked/i)) return 'busy'
+  return 'other'
+}
+
 export function createSqliteCapabilities(): EngineCapabilities {
   return Object.freeze({
     provider: 'sqlite',
@@ -185,15 +224,17 @@ export function createSqliteCapabilities(): EngineCapabilities {
       sql`${column} like ${pattern} escape ${escape}`,
     likeEscape,
     numericFromRawRow,
-    classifyError: (error) => {
-      // 结构化优先：SQLiteError 带 `code`（SQLITE_CONSTRAINT_UNIQUE / SQLITE_BUSY*），它在 drizzle
-      // 包装的 cause 里；外层 DrizzleError 没有 code。message 正则只作兜底，且逐层扫。
-      const code = codeOf(error)
-      if (code === 'SQLITE_CONSTRAINT_UNIQUE') return 'unique-violation'
-      if (code === 'SQLITE_BUSY' || code === 'SQLITE_BUSY_SNAPSHOT') return 'busy'
-      if (anyMessageMatches(error, /UNIQUE constraint failed/i)) return 'unique-violation'
-      if (anyMessageMatches(error, /SQLITE_BUSY|database is locked/i)) return 'busy'
-      return 'other'
+    classifyError: classifySqliteError,
+    uniqueViolationTarget: (error) =>
+      classifySqliteError(error) === 'unique-violation'
+        ? (firstMessageCapture(error, /UNIQUE constraint failed:\s*([^\n]+?)\s*$/) ?? '')
+        : undefined,
+    readRowSync: (db, query) => {
+      const compiled = sqliteDialect.sqlToQuery(query)
+      const row = (db as unknown as DbClient).$client
+        .query(compiled.sql)
+        .get(...(compiled.params as never[]))
+      return (row as Record<string, unknown> | null | undefined) ?? null
     },
   } satisfies EngineCapabilities)
 }
@@ -266,5 +307,8 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
       if (state === '55P03') return 'busy' // lock_not_available（NOWAIT）
       return 'other'
     },
+    uniqueViolationTarget: (error) => postgresqlUniqueViolationConstraint(error),
+    // 网络驱动没有同步读；围栏类调用方退回本进程缓存（RFC-349 V1 的既有形态）。
+    readRowSync: () => undefined,
   } satisfies EngineCapabilities)
 }

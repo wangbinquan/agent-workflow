@@ -49,7 +49,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
   'packages/backend/src/services/nodeRollback.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRollback :: LegacySqliteRollbackDatabase,createLegacySqliteRollbackEffectObserver,loadLegacySqliteRollbackTarget',
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,LegacySqliteNodeRunTransaction,createLegacySqliteNodeRunOperations,mintLegacySqliteNodeRunInTx',
-  'packages/backend/src/services/ownerIdentity.ts -> @/modules/identity-access/composition/providerOperations :: composeSqliteOwnerIdentityQueries',
   'packages/backend/src/services/pendingRestore.ts -> @/platform/persistence/sqlite/systemProviderRestore :: SqlitePostRestoreRecovery',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: export:getAclResourceAccessRow,export:getAclResourceAccessRowInTx,export:getAclResourceIdentityRowInTx,export:getAclResourceOwner,export:getAclResourceOwnerInTx,export:listAclResourceIdentityRowsByIds,export:listAclResourceIdentityRowsByIdsInTx,export:listAclResourceIdentityRowsByNames,export:listAclResourceIdentityRowsByNamesInTx,export:listOwnedAclResourceNames,export:loadAclResourceNamesByIds',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository :: export:AclColumnRef,export:grantsOfResourceWhere,export:listGrantedResourceIds,export:listGrantedResourceIdsInTx,export:listResourceGrantUserIdsInTx,export:listResourceGrants,export:listWritableGrantedResourceIds,export:loadGrantLevel,export:visibleRowsCondition',
@@ -76,7 +75,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/taskQuestionDispatch.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch :: export:*',
   'packages/backend/src/services/taskQuestions.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestions :: export:*',
   'packages/backend/src/services/tokenAudit.ts -> @/auth/composition :: legacySqliteTokenCallAudit',
-  'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/composition/providerOperations :: composeSqliteOidcIdentityOperations',
   'packages/backend/src/services/users.ts -> @/modules/identity-access/composition/legacySqliteUserService :: legacySqliteUserService',
 ] as const
 

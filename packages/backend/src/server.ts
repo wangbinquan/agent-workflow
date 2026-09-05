@@ -74,7 +74,6 @@ import {
   createPostgresqlIdentityAccessRuntime,
   type IdentityAccessModule,
   type IdentityAccessRuntime,
-  type PostgresqlIdentityAccessCrossContextBindings,
 } from '@/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
@@ -141,8 +140,8 @@ import type { HealthDatabaseReadModel } from '@/modules/system-operations/public
 import { createPostgresqlHealthDatabaseReadModel } from '@/modules/system-operations/composition'
 import { createSqliteHealthDatabaseReadModel } from '@/platform/persistence/sqlite/systemHealthReadModel'
 import {
-  composeSqliteOidcIdentityOperations,
-  composeSqliteOwnerIdentityQueries,
+  composeOidcIdentityOperations,
+  composeOwnerIdentityQueries,
 } from '@/modules/identity-access/composition/providerOperations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
@@ -515,7 +514,6 @@ export interface ComposePostgresqlDaemonProviderCoreInput extends DaemonProvider
   readonly db: PostgresqlDatabaseClient
   readonly runtime: PostgresqlDatabaseRuntime
   readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
-  readonly identityCrossContext: PostgresqlIdentityAccessCrossContextBindings
   readonly lockPath: string
   readonly contract?: LogicalSchemaContract
   readonly plan?: PostgresqlSchemaPlan
@@ -627,7 +625,6 @@ export function composePostgresqlDaemonProviderCore(
   })
   const identityAccess = createPostgresqlIdentityAccessRuntime({
     db: input.db,
-    crossContextTransactions: input.identityCrossContext,
     ...daemonIdentityOptions(input),
   })
 
@@ -2495,7 +2492,7 @@ function composeSqliteApiRouteMounts(
     sources: [
       // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
       // task-execution 只声明端口，不去 compose 别的 context 的 provider。
-      ...composeTaskExecutionCatalogSources(deps.db, composeSqliteOwnerIdentityQueries(deps.db)),
+      ...composeTaskExecutionCatalogSources(deps.db, composeOwnerIdentityQueries(deps.db)),
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })
@@ -2507,7 +2504,7 @@ function composeSqliteApiRouteMounts(
     deps.secretBox === undefined
       ? null
       : createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-  const oidcIdentities = composeSqliteOidcIdentityOperations({
+  const oidcIdentities = composeOidcIdentityOperations({
     db: deps.db,
     identityAccess,
   })

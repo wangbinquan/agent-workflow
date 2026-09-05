@@ -1596,8 +1596,6 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts#createSqliteWorkgroupTaskRoomClarifyParticipantInTx: factory is outside capability owner',
   'modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts: casts/rewraps WorkgroupTaskRoomClarifyParticipantInTx outside owner factory',
   'modules/collaboration/public/types.ts: ReviewActor leaks through public/types',
-  'modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts: constructs ScopeClaim outside owner factory',
-  'modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts: mutates sensitive current',
   'modules/task-execution/application/sourceTerminationCapability.ts#mintSourceTerminationEffectCapability: factory is outside capability owner',
   'modules/task-execution/application/sourceTerminationCapability.ts: casts/rewraps SourceTerminationEffectCapability outside owner factory',
   'modules/task-execution/composition/triggerExecution.ts#createPostgresqlTaskExecutionTriggerParticipant: factory is outside capability owner',

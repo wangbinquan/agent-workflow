@@ -356,13 +356,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/mcpRuntimeTestTransitions.ts',
-    'modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
-    ['transitionOwnerRuntimeTestsInTx'],
-    'owner MCP runtime-test transition',
-    REMOVE_OWNERS.mcpRuntimePersistence,
-  ),
-  edge(
-    'services/mcpRuntimeTestTransitions.ts',
     'server.ts',
     ['deletePreparedMcpRuntimeTestsInTx', 'transitionMcpRuntimeTestsInTx'],
     'bootstrap MCP runtime-test lifecycle',

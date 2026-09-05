@@ -13,7 +13,6 @@ import { hashPassword } from '../src/auth/passwords'
 import { createInMemoryDb } from '../src/db/client'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '../src/db/schema'
 import {
-  completeBootstrapWithAdmin,
   createPasswordLoginSession,
   getAuthMethodDiscovery,
   getAuthLoginPolicy,
@@ -21,7 +20,7 @@ import {
   setPasswordLoginEnabled,
 } from '../src/auth/loginPolicy'
 import { createUser } from '../src/services/users'
-import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { createSqliteAuthRuntime } from '../src/auth/composition'
 import { DomainError } from '../src/util/errors'
 import { freezeAt } from './migration-freeze'
 
@@ -136,17 +135,17 @@ describe('RFC-221 auth policy service', () => {
 
   test('first admin + completion marker commit as one irreversible handoff', async () => {
     const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-    const identityAccess = createIdentityAccessRuntime({ db })
+    // RFC-359 W4-D8：bootstrap 首管理员只剩 auth.completeBootstrap 这一条生产路径（旧的
+    // completeBootstrapWithAdmin + identity-access TransactionScope 认领桥随 provider 适配器退役）。
+    const auth = createSqliteAuthRuntime({ db, revalidate: () => undefined })
     expect(getAuthLoginPolicy(db).bootstrapCompletedAt).toBeNull()
-    const created = completeBootstrapWithAdmin(
-      db,
+    const created = await auth.completeBootstrap(
       {
         username: 'first-admin',
         displayName: 'First Admin',
         email: 'ADMIN@example.test',
         passwordHash: await hashPassword('password123'),
       },
-      identityAccess.initialUserAccess,
       1234,
     )
     expect(created.role).toBe('admin')
@@ -170,22 +169,15 @@ describe('RFC-221 auth policy service', () => {
       bootstrapCompletedAt: 1234,
       updatedAt: 1234,
     })
-    expectCode(
-      () =>
-        completeBootstrapWithAdmin(
-          db,
-          {
-            username: 'second-admin',
-            displayName: 'Second',
-            passwordHash: 'prepared',
-          },
-          identityAccess.initialUserAccess,
-        ),
-      'bootstrap-already-complete',
-    )
+    await expect(
+      auth.completeBootstrap({
+        username: 'second-admin',
+        displayName: 'Second',
+        passwordHash: 'prepared',
+      }),
+    ).rejects.toMatchObject({ code: 'bootstrap-already-complete' })
     const humans = db.select().from(users).where(eq(users.role, 'admin')).all()
     expect(humans.filter((row) => row.id !== '__system__')).toHaveLength(1)
-    identityAccess.shutdown()
   })
 
   test('password login cannot be disabled without an enabled provider', () => {

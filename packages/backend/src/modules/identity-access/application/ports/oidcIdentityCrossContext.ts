@@ -1,7 +1,5 @@
 import type { UserIdentity } from '@agent-workflow/shared'
 import type { SyncOidcProfileCommand, SyncOidcProfileResult } from '../../public/commands'
-import type { InitialUserAccessProvisioner } from '../../public/participants'
-import type { TransactionScope } from '@/platform/persistence/transactionScope'
 
 export interface OidcIdentityRecord {
   readonly id: string
@@ -32,29 +30,14 @@ export interface CreateOidcIdentityInput {
 
 export type OidcIdentitySeed = Omit<CreateOidcIdentityInput, 'userId'>
 
+/**
+ * identity-access 运行时交给 OIDC 身份操作的账户面。RFC-359 W4-D8 起只剩独立事务的 profile 同步：
+ * 建号 / 绑定 / 关联在 infrastructure 内直接用同一份写模型，不再经 TransactionScope 认领桥绕回运行时。
+ */
 export interface OidcIdentityProfileAccess {
-  readonly initialUserAccess: Readonly<{
-    forTransaction(transactionScope: TransactionScope): InitialUserAccessProvisioner
-  }>
   readonly syncOidcProfile: Readonly<{
     execute(command: SyncOidcProfileCommand): Promise<SyncOidcProfileResult>
   }>
-  readonly syncOidcProfileInTransaction: (
-    transactionScope: TransactionScope,
-    command: SyncOidcProfileCommand,
-    now?: number,
-  ) => SyncOidcProfileResult
-  readonly mapOidcEmailConstraint: (error: unknown) => unknown
-}
-
-/**
- * Exact bootstrap bridge consumed by createPostgresqlIdentityAccessRuntime.
- * The object is structural so identity-access composition does not import its
- * own provider adapter back through infrastructure.
- */
-export interface PostgresqlIdentityAccessCrossContextBindings {
-  readonly initialUserAccess: OidcIdentityProfileAccess['initialUserAccess']
-  readonly syncOidcProfileInTransaction: OidcIdentityProfileAccess['syncOidcProfileInTransaction']
 }
 
 export interface OidcIdentityOperations {

@@ -3379,6 +3379,12 @@ export const userIdentities = sqliteTable(
   (t) => ({
     userIdx: index('idx_user_identities_user').on(t.userId),
     providerIdx: index('idx_user_identities_provider').on(t.providerId),
+    // RFC-359 W4-D8：SQLite 迁移（0018 / 0019）早有这条唯一索引，drizzle 声明是 PG DDL 的唯一来源——
+    // 缺它则 PG 上同一 provider/subject 可被关联两次（并发 race 的最后防线只在 SQLite 生效）。
+    providerSubjectUq: uniqueIndex('user_identities_provider_subject_unique').on(
+      t.providerId,
+      t.subject,
+    ),
   }),
 )
 

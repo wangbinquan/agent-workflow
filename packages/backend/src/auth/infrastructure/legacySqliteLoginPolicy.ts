@@ -10,16 +10,11 @@ import type {
   OidcDefaultRole,
   UpdateAuthLoginPolicyBody,
 } from '@agent-workflow/shared'
-import { SYSTEM_USER_ID } from '@/auth/actor'
 import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from './legacySqliteSessionStore'
 import type { DbClient } from '@/db/client'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
-import type { InitialUserAccessProvisioner } from '@/modules/identity-access/public/participants'
-import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
-import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
-import { triggerRevalidation } from '@/ws/revalidationHook'
 
 const GLOBAL_POLICY_ID = 'global'
 
@@ -180,96 +175,6 @@ export function setOidcDefaultRole(
 export interface PreparedBootstrapAdmin extends Omit<CreateBootstrapAdminBody, 'password'> {
   id?: string
   passwordHash: string
-}
-
-export interface InitialUserAccessTransactionBinding {
-  forTransaction(transactionScope: TransactionScope): InitialUserAccessProvisioner
-}
-
-export function completeBootstrapWithAdmin(
-  db: DbClient,
-  input: PreparedBootstrapAdmin,
-  initialUserAccess: InitialUserAccessTransactionBinding,
-  now: number = Date.now(),
-): typeof users.$inferSelect {
-  const id = input.id ?? ulid()
-  const operationId = ulid()
-  const created = dbTxSync(db, (tx) => {
-    const policy = tx
-      .select()
-      .from(authLoginPolicy)
-      .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .get()
-    if (policy === undefined) return missingPolicy()
-    if (policy.bootstrapCompletedAt !== null) {
-      throw new ConflictError(
-        'bootstrap-already-complete',
-        'another administrator already completed bootstrap',
-      )
-    }
-    if (input.username === SYSTEM_USER_ID) {
-      throw new ConflictError('username-reserved', `username '${SYSTEM_USER_ID}' is reserved`)
-    }
-    const duplicateUsername = tx
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.username, input.username))
-      .limit(1)
-      .get()
-    if (duplicateUsername !== undefined) {
-      throw new ConflictError('username-taken', `username '${input.username}' already exists`)
-    }
-    if (input.email !== undefined) {
-      const duplicateEmail = tx
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, input.email.toLowerCase()))
-        .limit(1)
-        .get()
-      if (duplicateEmail !== undefined) {
-        throw new ConflictError('email-taken', `email '${input.email}' already exists`)
-      }
-    }
-    withExistingSQLiteTransactionScope(tx, (transactionScope) => {
-      initialUserAccess.forTransaction(transactionScope).insert({
-        user: {
-          id,
-          username: input.username,
-          email: input.email?.toLowerCase() ?? null,
-          displayName: input.displayName,
-          gitName: input.displayName,
-          passwordHash: input.passwordHash,
-          role: 'admin',
-          status: 'active',
-          forcePasswordChange: false,
-          createdBy: SYSTEM_USER_ID,
-          createdAt: now,
-        },
-        audit: {
-          id: ulid(),
-          actorUserId: SYSTEM_USER_ID,
-          actorKind: 'system',
-          operationId,
-        },
-      })
-      return undefined
-    })
-    tx.update(authLoginPolicy)
-      .set({
-        passwordLoginEnabled: true,
-        bootstrapCompletedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .run()
-    const row = tx.select().from(users).where(eq(users.id, id)).get()
-    if (row === undefined) {
-      throw new Error('bootstrap administrator insert did not materialize')
-    }
-    return row
-  })
-  triggerRevalidation('bootstrap-completed')
-  return created
 }
 
 export interface CreatePasswordLoginSessionInput {

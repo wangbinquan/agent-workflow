@@ -13,7 +13,7 @@
 import { describe, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composePostgresqlOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
@@ -66,7 +66,7 @@ describe('RFC-357 shared page scenario — real PostgreSQL', () => {
         const db = createPostgresqlDatabaseClient(runtime)
         await seedRfc357Page(db)
         await expectRfc357PageScenario(
-          createDatabaseTaskListPage(db, composePostgresqlOwnerIdentityQueries(db)),
+          createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
         )
       } finally {
         restoreProvider?.()

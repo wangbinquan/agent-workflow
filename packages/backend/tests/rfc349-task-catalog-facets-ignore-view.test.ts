@@ -27,7 +27,7 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
 import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
-import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
@@ -67,7 +67,7 @@ async function catalogSource(): Promise<TaskCatalogSource> {
   const db = createInMemoryDb(MIGRATIONS)
   await seed(db)
   return createTaskExecutionCatalogSourceFactory(
-    createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
+    createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
   ).create('workflow')
 }
 

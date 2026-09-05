@@ -32,7 +32,7 @@ import { resolve } from 'node:path'
 import type { Actor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
 import { tasks, users, workflows } from '@/db/schema'
-import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { listTaskItems } from '@/services/task'
@@ -190,7 +190,7 @@ function actor(): Actor {
 /** 目录源（用户真正打到的那一层）建在同一个真库上，不再假造 provider。 */
 async function catalogSource(db: Db) {
   return createTaskExecutionCatalogSourceFactory(
-    createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
+    createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
   ).create('workflow')
 }
 

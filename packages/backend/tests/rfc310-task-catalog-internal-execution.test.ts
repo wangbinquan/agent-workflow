@@ -12,7 +12,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows } from '../src/db/schema'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/sqliteTaskCatalogSources'
 import { listTaskItems, listTasks } from '../src/services/task'
-import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -96,7 +96,7 @@ describe('task catalog internal execution boundary', () => {
     })
     const workflowSource = composeTaskExecutionCatalogSources(
       db,
-      composeSqliteOwnerIdentityQueries(db),
+      composeOwnerIdentityQueries(db),
     ).find((source) => source.sourceId === 'workflow')
     if (workflowSource === undefined) throw new Error('workflow source is missing')
 

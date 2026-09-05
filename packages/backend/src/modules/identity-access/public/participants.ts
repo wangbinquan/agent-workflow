@@ -1,5 +1,5 @@
 import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
-import type { ManagedUserStatus, ResolvedAuthoritySubject } from './types'
+import type { ResolvedAuthoritySubject } from './types'
 
 export type DirectTransport = 'http' | 'mcp' | 'cli'
 export type PrincipalSource = 'session' | 'pat' | 'daemon' | 'cli' | 'system'
@@ -68,35 +68,6 @@ export type ValidatedIdempotencyKey = string & {
 
 export interface IdempotentCommandContext extends CommandContext {
   readonly idempotencyKey: ValidatedIdempotencyKey
-}
-
-export interface InitialUserAccessProvision {
-  readonly user: {
-    readonly id: string
-    readonly username: string
-    readonly email: string | null
-    readonly displayName: string
-    readonly gitName: string
-    readonly passwordHash: string | null
-    readonly role: Role
-    readonly status: ManagedUserStatus
-    readonly forcePasswordChange: boolean
-    readonly createdBy: string | null
-    readonly createdAt: number
-  }
-  readonly audit: {
-    readonly id: string
-    readonly actorUserId: string | null
-    readonly actorKind: 'session' | 'cli' | 'system'
-    readonly operationId: string
-  }
-}
-
-/** Transaction-bound participant for bootstrap/OIDC account creation. The
- * composition root binds it to one live persistence scope; public consumers
- * can insert through that bound lifetime without importing platform types. */
-export interface InitialUserAccessProvisioner {
-  insert(provision: InitialUserAccessProvision): void
 }
 
 export interface AuthenticatedPrincipal {

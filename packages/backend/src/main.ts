@@ -38,11 +38,7 @@ import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import { loadConfig } from './config'
 import { createPostgresqlAuthRuntime, createSqliteAuthRuntime } from './auth/composition'
-import {
-  createIdentityAccessRuntime,
-  createPostgresqlIdentityAccessRuntime,
-} from './modules/identity-access/composition'
-import { createPostgresqlIdentityAccessCrossContextBindings } from './modules/identity-access/composition/providerOperations'
+import { createIdentityAccessRuntime } from './modules/identity-access/composition'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import {
   composeResourcePackageOperations,
@@ -111,13 +107,7 @@ async function composeUserCommandBootstrap() {
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
     return unhandledDatabaseProvider(provider)
   }
-  const identityAccess =
-    provider.provider === 'sqlite'
-      ? createIdentityAccessRuntime({ db: provider.db })
-      : createPostgresqlIdentityAccessRuntime({
-          db: provider.db,
-          crossContextTransactions: createPostgresqlIdentityAccessCrossContextBindings(),
-        })
+  const identityAccess = createIdentityAccessRuntime({ db: provider.db })
   const auth =
     provider.provider === 'sqlite'
       ? createSqliteAuthRuntime({ db: provider.db })
@@ -134,7 +124,6 @@ async function composeUserCommandBootstrap() {
   }
   const identity = Object.freeze({
     operations,
-    initialUserAccess: identityAccess.initialUserAccess,
     commandContext: () => localOperator.commandContext(),
     queryContext: () => localOperator.queryContext(),
   }) satisfies UserCommandIdentityHandle
@@ -194,13 +183,7 @@ async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
     return unhandledDatabaseProvider(provider)
   }
-  const identityAccess =
-    provider.provider === 'sqlite'
-      ? createIdentityAccessRuntime({ db: provider.db })
-      : createPostgresqlIdentityAccessRuntime({
-          db: provider.db,
-          crossContextTransactions: createPostgresqlIdentityAccessCrossContextBindings(),
-        })
+  const identityAccess = createIdentityAccessRuntime({ db: provider.db })
   type PostgresqlResourcePackageProviderInput = Parameters<
     typeof composePostgresqlResourcePackageProvider
   >[0]

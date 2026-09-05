@@ -12,7 +12,6 @@ import { join, resolve } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlIdentityAccessCrossContextBindings } from '@/modules/identity-access/composition/providerOperations'
 import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/public/participants'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'
 import {
@@ -174,7 +173,6 @@ describe('RFC-349 daemon provider core', () => {
       db: fake.db,
       runtime: fake.runtime,
       databaseConfig,
-      identityCrossContext: createPostgresqlIdentityAccessCrossContextBindings(),
       appHome,
       lockPath: join(appHome, '.daemon.lock'),
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 2)),

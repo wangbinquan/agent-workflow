@@ -323,14 +323,15 @@ describe('RFC-347 exact production source locks', () => {
     expect(authRoutes).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(authRoutes).not.toContain('fromAuthenticatedPrincipal(')
 
+    // RFC-359 W4-D8：OIDC 建号是 identity-access 自己的 infrastructure，直接用同一份写模型；跨 context 的
+    // TransactionScope 认领桥（initialUserAccess.forTransaction / *InTransaction）随两个 provider 适配器退役，
+    // bootstrap 首管理员只剩 auth.completeBootstrap 这一条路。
     const participants = source('src/modules/identity-access/public/participants.ts')
     const composition = source('src/modules/identity-access/composition.ts')
-    expect(participants).toContain('insert(provision: InitialUserAccessProvision): void')
+    expect(participants).not.toContain('InitialUserAccessProvisioner')
     expect(participants).not.toContain('TransactionScope')
-    expect(composition).toContain('forTransaction(transactionScope: TransactionScope)')
-    expect(composition).toContain(
-      'insertInitialUserAccessInTransaction(transactionScope, provision)',
-    )
+    expect(composition).not.toContain('TransactionScope')
+    expect(composition).not.toContain('initialUserAccess')
 
     const mainRoot = source('src/main.ts')
     expect(mainRoot).toContain('.localOperator.forUser(')

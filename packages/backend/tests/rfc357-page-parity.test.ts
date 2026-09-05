@@ -8,7 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 
 import { seedRfc357Page } from './helpers/rfc357PageSeed'
@@ -20,16 +20,14 @@ describe('RFC-357 shared page scenario — SQLite', () => {
   test('the whole scenario holds', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedRfc357Page(db)
-    await expectRfc357PageScenario(
-      createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
-    )
+    await expectRfc357PageScenario(createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)))
   })
 
   // 场景本身必须有预言力：如果它在一个空库上也「通过」，那 PostgreSQL 那一遍
   // 就成了摆设。这条用空库把场景钉成会红的。
   test('the scenario has teeth — it fails against an unseeded database', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const page = createDatabaseTaskListPage(db, composeSqliteOwnerIdentityQueries(db))
+    const page = createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db))
     let threw = false
     try {
       await expectRfc357PageScenario(page)

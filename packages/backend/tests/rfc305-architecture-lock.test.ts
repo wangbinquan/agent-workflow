@@ -386,8 +386,6 @@ describe('RFC-305 identity-access architecture', () => {
       'DirectRequestAuthority',
       'DirectTransport',
       'IdempotentCommandContext',
-      'InitialUserAccessProvision',
-      'InitialUserAccessProvisioner',
       'LegacyActorProjection',
       'PresenceConnectionTracker',
       'PresenceLease',
@@ -402,7 +400,6 @@ describe('RFC-305 identity-access architecture', () => {
 
   test('module composition and public contracts have only the reviewed consumers', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
-      'packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
@@ -412,7 +409,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition',
-      'packages/backend/src/main.ts -> ./modules/identity-access/composition/providerOperations',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition/userOperations',
       'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
@@ -516,23 +512,32 @@ describe('RFC-305 identity-access architecture', () => {
   })
 
   test('role/grants/revision/audit retain a single production writer', () => {
+    // RFC-359 W4-D8：identity-access 的持久化只剩一份中立实现，授权与审计不再有裸 SQL 写者——
+    // 写点按 drizzle 表标识符扫。bootstrap 首管理员的用户与审计行由 auth 自己落（admin 没有默认附加授权）。
     expect(filesCallingTableMethod(BACKEND_SRC, 'insert', 'users')).toEqual([
       'packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts',
       'packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts',
-      'packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts',
-      'packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts',
-      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
+      'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
     ])
     expect(
       filesContainingCodePattern(
         BACKEND_SRC,
         /(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\s+user_permission_grants/i,
       ),
-    ).toEqual([
-      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
-    ])
-    expect(filesContainingCodePattern(BACKEND_SRC, /INSERT\s+INTO\s+user_access_audit/i)).toEqual([
-      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessAuditRepository.ts',
+    ).toEqual([])
+    for (const method of ['insert', 'delete']) {
+      expect(filesCallingTableMethod(BACKEND_SRC, method, 'userPermissionGrants')).toEqual([
+        'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
+      ])
+    }
+    expect(filesCallingTableMethod(BACKEND_SRC, 'update', 'userPermissionGrants')).toEqual([])
+    expect(filesContainingCodePattern(BACKEND_SRC, /INSERT\s+INTO\s+user_access_audit/i)).toEqual(
+      [],
+    )
+    expect(filesCallingTableMethod(BACKEND_SRC, 'insert', 'userAccessAudit')).toEqual([
+      'packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts',
+      'packages/backend/src/auth/infrastructure/sqliteAuthPersistence.ts',
+      'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
     ])
     expect(
       filesContainingCodePattern(BACKEND_SRC, /(?:UPDATE|DELETE\s+FROM)\s+user_access_audit/i),
@@ -545,8 +550,7 @@ describe('RFC-305 identity-access architecture', () => {
       })
       .map(relativeToRepo)
     expect(roleRevisionWriters).toEqual([
-      'packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts',
-      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
+      'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
     ])
 
     const facade = readFileSync(resolve(BACKEND_SRC, 'services', 'users.ts'), 'utf8')
@@ -564,7 +568,7 @@ describe('RFC-305 identity-access architecture', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(IDENTITY_ROOT, 'infrastructure', 'sqliteUserAccessRepository.ts'),
+      resolve(IDENTITY_ROOT, 'infrastructure', 'userAccessPersistence.ts'),
       'utf8',
     )
     expect(authority).toContain('findAccessSnapshot')
@@ -574,7 +578,9 @@ describe('RFC-305 identity-access architecture', () => {
     expect(directory).toContain('listAccessSnapshots')
     expect(directory).not.toContain('.findUser(')
     expect(directory).not.toContain('.listGrants(')
-    expect(repository).toContain('LEFT JOIN user_permission_grants AS g ON g.user_id = u.id')
+    expect(repository).toContain(
+      '.leftJoin(userPermissionGrants, eq(userPermissionGrants.userId, users.id))',
+    )
   })
 })
 
@@ -682,8 +688,7 @@ describe('RFC-305 permission catalog architecture', () => {
       'packages/backend/src/mcp/tools.ts',
       // The identity-access writer copies the initial preset into its audit
       // record; it never branches authorization behavior on the role.
-      'packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts',
-      'packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts',
+      'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
       'packages/backend/src/routes/docs.ts',
       'packages/backend/src/server.ts',
     ])
@@ -868,11 +873,15 @@ describe('RFC-305 reusable-authority fences', () => {
         'modules',
         'identity-access',
         'infrastructure',
-        'sqliteUserAccessRepository.ts',
+        'userAccessPersistence.ts',
       ),
       'utf8',
     )
-    expect(fenceRepository).toContain('SELECT status, access_revision FROM users WHERE id = ?')
+    // RFC-359 W4-D8：同一份实现里，围栏读先问能力矩阵的同步读（SQLite 直接读文件），PG 退回本进程缓存。
+    expect(fenceRepository).toContain(
+      'SELECT status, access_revision FROM users WHERE id = ${id} LIMIT 1',
+    )
+    expect(fenceRepository).toContain('engine.readRowSync(')
     expect(registry).toContain('authorityFence.readAuthorityFence(ws.data.actor.user.id)')
     expect(registry).toContain('if (!authorityRevisionCurrent(ws)) return')
     // 传输层不得再出现任何 raw client 用法（裸 SQL 会绕过上面那条端口判据）。

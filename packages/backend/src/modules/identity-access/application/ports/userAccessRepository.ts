@@ -85,6 +85,29 @@ export interface UserAccessSnapshot {
 
 export type InsertManagedUserRecord = UserAccessRecord
 
+/** 建号入口（OIDC 自助建号）交给写模型的初始账户 + 审计要素；默认授权由写模型按角色补齐（RFC-312）。 */
+export interface InitialUserAccessProvision {
+  readonly user: {
+    readonly id: string
+    readonly username: string
+    readonly email: string | null
+    readonly displayName: string
+    readonly gitName: string
+    readonly passwordHash: string | null
+    readonly role: Role
+    readonly status: ManagedUserStatus
+    readonly forcePasswordChange: boolean
+    readonly createdBy: string | null
+    readonly createdAt: number
+  }
+  readonly audit: {
+    readonly id: string
+    readonly actorUserId: string | null
+    readonly actorKind: 'session' | 'cli' | 'system'
+    readonly operationId: string
+  }
+}
+
 export interface ConditionalUserUpdate {
   readonly id: string
   readonly expectedAccessRevision: number

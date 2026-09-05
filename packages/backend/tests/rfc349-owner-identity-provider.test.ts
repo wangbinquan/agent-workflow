@@ -9,10 +9,7 @@ import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { users } from '@/db/schema'
 import { createOwnerIdentityQueries } from '@/modules/identity-access/application/ports/ownerIdentityQueries'
-import {
-  composePostgresqlOwnerIdentityQueries,
-  composeSqliteOwnerIdentityQueries,
-} from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { isOwnerScopedNameConflict } from '@/modules/identity-access/public/operations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -114,7 +111,7 @@ describe('RFC-349 owner identity provider seam', () => {
       createdAt: 1,
       updatedAt: 1,
     })
-    const sqliteQueries = composeSqliteOwnerIdentityQueries(sqlite)
+    const sqliteQueries = composeOwnerIdentityQueries(sqlite)
     await expect(sqliteQueries.loadOwnerIdentities(['owner-sqlite'])).resolves.toMatchObject(
       new Map([
         [
@@ -125,7 +122,7 @@ describe('RFC-349 owner identity provider seam', () => {
     )
 
     const postgresql = postgresqlFixture()
-    const postgresqlQueries = composePostgresqlOwnerIdentityQueries(postgresql.db)
+    const postgresqlQueries = composeOwnerIdentityQueries(postgresql.db)
     await expect(postgresqlQueries.loadOwnerIdentities(['owner-pg'])).resolves.toMatchObject(
       new Map([
         ['owner-pg', { id: 'owner-pg', username: 'owner-pg', displayName: 'PostgreSQL Owner' }],

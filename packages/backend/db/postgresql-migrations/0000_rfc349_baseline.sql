@@ -4077,6 +4077,9 @@ CREATE INDEX "idx_user_identities_user" ON "agent_workflow"."user_identities" ("
 -- index: user_identities:index:idx_user_identities_provider
 CREATE INDEX "idx_user_identities_provider" ON "agent_workflow"."user_identities" ("provider_id");
 
+-- index: user_identities:index:user_identities_provider_subject_unique
+CREATE UNIQUE INDEX "user_identities_provider_subject_unique" ON "agent_workflow"."user_identities" ("provider_id", "subject");
+
 -- index: user_pats:index:idx_user_pats_user
 CREATE INDEX "idx_user_pats_user" ON "agent_workflow"."user_pats" ("user_id");
 
@@ -4771,7 +4774,7 @@ CREATE TABLE "agent_workflow_meta"."schema_migrations" (baseline_id TEXT PRIMARY
 CREATE TABLE "agent_workflow_meta"."schema_contract" (singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton), contract_digest TEXT NOT NULL, active_table_count BIGINT NOT NULL, archive_only_table_count BIGINT NOT NULL);
 
 -- metadata: contract-row
-INSERT INTO "agent_workflow_meta"."schema_contract" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:72744adbc26303338e84847a08af708cf53cec80342f1eada567cb0edbf8e1fe', 178, 6);
+INSERT INTO "agent_workflow_meta"."schema_contract" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7', 178, 6);
 
 -- metadata: logical-copy-operations
 CREATE TABLE "agent_workflow_meta"."logical_copy_operations" (operation_id TEXT PRIMARY KEY, source_generation_id TEXT NOT NULL, contract_digest TEXT NOT NULL, plan_digest TEXT NOT NULL, stage TEXT NOT NULL CHECK (stage IN ('prepared', 'copying', 'verified', 'activated', 'finalized')), created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL);

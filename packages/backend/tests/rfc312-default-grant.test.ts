@@ -1,7 +1,7 @@
 // RFC-312 —— 建号默认授权在**所有**入口都生效的回归锁。
 //
 // 为什么单独立一条：`createManagedUser`（HTTP/CLI）不是唯一建号入口。OIDC 自助建号走
-// `services/userIdentities.ts` 的 `createUserWithIdentity → insertInitialUserAccessInTransaction`，
+// `services/userIdentities.ts` 的 `createUserWithIdentity → stageInitialUserAccess`，
 // 那条路径此前**一条 grant 都不插**（audit 的 addedPermissions 恒为 []）。
 // 于是当管理员把 OIDC 默认角色配成 user 时，新账号是 active user 却拿不到 `users:presence`，
 // 开着界面也不会被同事看到在线——功能在一整类部署上静默失效。

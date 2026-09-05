@@ -1,16 +1,16 @@
-// RFC-036/RFC-349 — SQLite compatibility facade for legacy tests and setup
-// callers. Production HTTP/OIDC routes receive provider-neutral identity
-// operations from bootstrap; database mechanisms live in provider adapters.
+// RFC-036/RFC-349 — compatibility facade for legacy tests and setup callers.
+// Production HTTP/OIDC routes receive the identity operations from bootstrap;
+// RFC-359 W4-D8 起两个 provider 共用同一份实现，这里只是 db 参数形态的旧门面。
 
-import { composeSqliteOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
+import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import type { OidcIdentityProfileAccess } from '@/modules/identity-access/public/operations'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
-type SqliteIdentityCompositionInput = Parameters<typeof composeSqliteOidcIdentityOperations>[0]
+type SqliteIdentityCompositionInput = Parameters<typeof composeOidcIdentityOperations>[0]
 type SqliteIdentityDatabase = SqliteIdentityCompositionInput['db']
-type ComposedIdentityOperations = ReturnType<typeof composeSqliteOidcIdentityOperations>
+type ComposedIdentityOperations = ReturnType<typeof composeOidcIdentityOperations>
 
 export type OidcProfileIdentityAccess = OidcIdentityProfileAccess
 export type CreateIdentityArgs = Parameters<ComposedIdentityOperations['createIdentity']>[0]
@@ -19,7 +19,7 @@ function sqliteOperations(
   db: SqliteIdentityDatabase,
   identityAccess?: OidcProfileIdentityAccess,
 ): ComposedIdentityOperations {
-  return composeSqliteOidcIdentityOperations({
+  return composeOidcIdentityOperations({
     db,
     ...(identityAccess === undefined ? {} : { identityAccess }),
     onIdentityDeleted: () => triggerRevalidation('identity-deleted'),

@@ -6,7 +6,7 @@
 
 import type { OwnerIdentity } from '@agent-workflow/shared'
 
-import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   OWNER_IDENTITY_SQL_BATCH_SIZE,
   type OwnerIdentityQueries,
@@ -14,7 +14,7 @@ import {
 
 export { OWNER_IDENTITY_SQL_BATCH_SIZE }
 
-type LegacySqliteOwnerIdentitySource = Parameters<typeof composeSqliteOwnerIdentityQueries>[0]
+type LegacySqliteOwnerIdentitySource = Parameters<typeof composeOwnerIdentityQueries>[0]
 
 function isOwnerIdentityQueries(
   source: LegacySqliteOwnerIdentitySource | OwnerIdentityQueries,
@@ -31,8 +31,6 @@ export async function loadOwnerIdentities(
   source: LegacySqliteOwnerIdentitySource | OwnerIdentityQueries,
   ownerUserIds: ReadonlyArray<string | null | undefined>,
 ): Promise<Map<string, OwnerIdentity>> {
-  const queries = isOwnerIdentityQueries(source)
-    ? source
-    : composeSqliteOwnerIdentityQueries(source)
+  const queries = isOwnerIdentityQueries(source) ? source : composeOwnerIdentityQueries(source)
   return new Map(await queries.loadOwnerIdentities(ownerUserIds))
 }
