@@ -370,8 +370,8 @@
       "id": "rfc294-capability-compatibility-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
-      "baseline": 24,
-      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。"
+      "baseline": 22,
+      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。"
     },
     {
       "id": "rfc348-teaching-validator-allowlist",
@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1831,
+      "baseline": 1830,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5741,
+      "baseline": 5735,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5097,
+      "baseline": 5095,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25560,
+      "baseline": 25555,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:bcf50a7b15248af139a4afa4e8875cbbff936c799b589929ceb97b4d43aa2c41",
+    "sourceDigest": "sha256:a154242d10c75a158ffeee87304f5b7c34da811cbd71484b6bae55ca5f608530",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b24da9242d4fb7d789391cb52f6d7c069c0c3234",
-    "contentDigest": "sha256:09cd86fa552094914690a935d0a5a65255d1fa04e1886964cd56399dde4a3984",
+    "currentSnapshotSha": "6887c9811c408c8be8c787267d2f15311fd55ba2",
+    "contentDigest": "sha256:f7e4b23e82db502ca43aefaee78b4e5d9f051261c81f371379afe9fb4f6752a4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

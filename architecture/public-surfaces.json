@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 867,
+    "consumers": 866,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1051,
@@ -141582,9 +141582,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:28350d5ed471052616b9",
         "import:c194e5991f4224bd0a60",
-        "import:d3d193dc84b138a31008"
+        "import:dae39d8938a0f762a571"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -141598,24 +141597,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "fieldPath": "$method:dismissOpenSelfClarifies.$parameter:input.taskId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "fieldPath": "$method:dismissOpenSelfClarifies.$return.dismissedSessions",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "fieldPath": "$method:dismissOpenSelfClarifies.$return.parks",
           "type": "readonly WorkgroupTaskRoomOpenSelfClarifyPark[]"
@@ -141627,16 +141623,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "fieldPath": "$method:loadProjection.$return.askingNodeRunIds",
           "type": "readonly string[]"
         },
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "fieldPath": "$method:loadProjection.$return.stopDirectives",
           "type": "readonly Readonly<{\n    nodeId: string\n    shardKey: string\n    directive: ClarifyDirective\n  }>[]"
@@ -141651,16 +141645,14 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "name": "dismissOpenSelfClarifies",
           "signatureDigest": "sha256:28b4d8fc9a1833fbf5d0521751c06f9b049108026aa69e607fdd043d24ece608"
         },
         {
           "consumerEdgeIds": [
-            "import:28350d5ed471052616b9",
-            "import:d3d193dc84b138a31008"
+            "import:dae39d8938a0f762a571"
           ],
           "name": "loadProjection",
           "signatureDigest": "sha256:3930f45d2c291ef92ce74ebf46e535b1b4f9a5f8a2d12f5c0b7044188ffe2e68"
@@ -141670,21 +141662,15 @@
       "productionConsumers": [
         {
           "context": "collaboration",
-          "edgeId": "import:28350d5ed471052616b9",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant.ts#$file"
-        },
-        {
-          "context": "collaboration",
           "edgeId": "import:c194e5991f4224bd0a60",
           "file": "packages/backend/src/modules/collaboration/composition/workgroupTaskRoomClarify.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/collaboration/composition/workgroupTaskRoomClarify.ts#$file"
         },
         {
           "context": "collaboration",
-          "edgeId": "import:d3d193dc84b138a31008",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts#$file"
+          "edgeId": "import:dae39d8938a0f762a571",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161476,7 +161462,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bcf50a7b15248af139a4afa4e8875cbbff936c799b589929ceb97b4d43aa2c41",
+  "sourceDigest": "sha256:a154242d10c75a158ffeee87304f5b7c34da811cbd71484b6bae55ca5f608530",
   "targetContexts": [
     "collaboration",
     "development-automation",

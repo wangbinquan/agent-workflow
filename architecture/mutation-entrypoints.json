@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1831,
+    "entries": 1830,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -5858,28 +5858,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant.ts#createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant.ts#createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx",
-      "symbol": "createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
@@ -6149,29 +6127,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts#createSqliteWorkgroupTaskRoomClarifyParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts#createSqliteWorkgroupTaskRoomClarifyParticipantInTx",
-      "symbol": "createSqliteWorkgroupTaskRoomClarifyParticipantInTx",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -6215,6 +6170,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#createWorkgroupClarifyAskGate",
       "symbol": "createWorkgroupClarifyAskGate",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#createWorkgroupTaskRoomClarifyParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#createWorkgroupTaskRoomClarifyParticipantInTx",
+      "symbol": "createWorkgroupTaskRoomClarifyParticipantInTx",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -29476,27 +29454,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#createPostgresqlWorkgroupTaskRoomTaskParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#createPostgresqlWorkgroupTaskRoomTaskParticipantInTx",
-      "symbol": "createPostgresqlWorkgroupTaskRoomTaskParticipantInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": true,
@@ -30648,6 +30605,27 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
       "symbol": "transitionTerminalMaintenanceClaimTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
+      "symbol": "createWorkgroupTaskRoomTaskParticipantInTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -43704,7 +43682,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bcf50a7b15248af139a4afa4e8875cbbff936c799b589929ceb97b4d43aa2c41",
+  "sourceDigest": "sha256:a154242d10c75a158ffeee87304f5b7c34da811cbd71484b6bae55ca5f608530",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -44884,8 +44862,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#274:tasks",
-        "line": 274,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#272:tasks",
+        "line": 272,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#admitResume",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44900,8 +44878,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "taskExecutionOwners",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#568:taskExecutionOwners",
-        "line": 568,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#566:taskExecutionOwners",
+        "line": 566,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44916,8 +44894,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#595:tasks",
-        "line": 595,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#593:tasks",
+        "line": 593,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44932,8 +44910,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#609:nodeRuns",
-        "line": 609,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#607:nodeRuns",
+        "line": 607,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#cancelCascade",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -45028,8 +45006,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#347:tasks",
-        "line": 347,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#345:tasks",
+        "line": 345,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#recordPreparationFailure",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -45044,8 +45022,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#386:tasks",
-        "line": 386,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#384:tasks",
+        "line": 384,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#recordPreparationFailure",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -45060,8 +45038,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#455:tasks",
-        "line": 455,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#453:tasks",
+        "line": 453,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#commitPreparedWorkspace",
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
@@ -46074,70 +46052,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "applyOperation"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "replaceConfig",
-        "controlSubtype": "membership-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#164:tasks",
-        "line": 164,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#createPostgresqlWorkgroupTaskRoomTaskParticipantInTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "createPostgresqlWorkgroupTaskRoomTaskParticipantInTx"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "continueTask",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#237:tasks",
-        "line": 237,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#createPostgresqlWorkgroupTaskRoomTaskParticipantInTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "createPostgresqlWorkgroupTaskRoomTaskParticipantInTx"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "failTask",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#303:tasks",
-        "line": 303,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#createPostgresqlWorkgroupTaskRoomTaskParticipantInTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "createPostgresqlWorkgroupTaskRoomTaskParticipantInTx"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "closeHolders",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#69:nodeRuns",
-        "line": 69,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts#closeHolders",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "closeHolders"
       },
       {
         "allowedTables": [
@@ -47562,6 +47476,70 @@
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
         "symbol": "transitionTerminalMaintenanceClaimTx"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "replaceConfig",
+        "controlSubtype": "membership-control",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#161:tasks",
+        "line": 161,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "createWorkgroupTaskRoomTaskParticipantInTx"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "continueTask",
+        "controlSubtype": "continuation-admission",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#234:tasks",
+        "line": 234,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "createWorkgroupTaskRoomTaskParticipantInTx"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "failTask",
+        "controlSubtype": "terminal-control",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#300:tasks",
+        "line": 300,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "createWorkgroupTaskRoomTaskParticipantInTx"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "closeHolders",
+        "controlSubtype": "continuation-admission",
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#66:nodeRuns",
+        "line": 66,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#closeHolders",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "closeHolders"
       },
       {
         "allowedTables": [
