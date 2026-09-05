@@ -132,6 +132,8 @@
 > **W4-B4 批 b 已落**：integration 四对合一（事件响应目录 / 派发持久化 / 投递审计读模型 / MR 守卫与终态 effect，advisory lock 走引擎能力矩阵），`rfc359-w4-b4b-adapters.test.ts` 两引擎各跑。B4 剩 14 对。
 > **W4-B4 批 c 已落**：OIDC provider 仓库（serializable 走统一原语）与记忆蒸馏工作存储（含会话捕获 sink）两对合一，`rfc359-w4-b4c-adapters.test.ts` 两引擎各跑。B4 剩 12 对。
 > **W4-B6 批 a 已落**：source-control 工作区维护 / 仓库工作区存储 + event-center 事件响应规则 / 自定义事件源四对合一；能力矩阵新增 `indexHint` 与 `reclaimScrubbedStorage`，PG 的 `LOCK TABLE` 改走 `advisoryLock`。`rfc359-w4-b6a-adapters.test.ts` 两引擎各跑。B6 剩 3 对。
+> **W4-B6 批 b 已落**：event-center 事件存储（1377 行孪生对）合一，`rfc359-w4-b6b-adapters.test.ts` 两引擎各跑。B6 剩 2 对。
+> **W4-B6 批 c 已落**：source-control 仓库传输凭据仓库合一，`rfc359-w4-b6c-adapters.test.ts` 两引擎各跑。B6 剩 1 对（fusionRepository，随 dbTxSync 归零）。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

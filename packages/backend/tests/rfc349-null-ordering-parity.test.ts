@@ -174,7 +174,7 @@ describe('RFC-349 NULL ordering is the same on both providers', () => {
       'utf8',
     )
     const events = readFileSync(
-      join(srcRoot, 'modules/event-center/infrastructure/postgresqlEventStore.ts'),
+      join(srcRoot, 'modules/event-center/infrastructure/eventStore.ts'),
       'utf8',
     )
     expect(

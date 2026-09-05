@@ -16,9 +16,8 @@ import type {
 } from './composition/required-ports'
 import { createCustomEventObserverProgram } from './infrastructure/customEventObserverProgram'
 import { createCustomEventSourceStore } from './infrastructure/customEventSourceStore'
-import { createSqliteEventStore } from './infrastructure/sqliteEventStore'
+import { createEventStore } from './infrastructure/eventStore'
 import { createEventResponseRuleStore } from './infrastructure/eventResponseRuleStore'
-import { createPostgresqlEventStore } from './infrastructure/postgresqlEventStore'
 import type { CustomEventSourceStorePort } from './application/ports/customEventSourceStore'
 import type { EventStorePort } from './application/ports/eventStore'
 import type { EventResponseRuleStorePort } from './application/ports/responseRuleStore'
@@ -487,7 +486,7 @@ export async function composeEventCenter(
   return await composeEventCenterWithPorts({
     ...shared,
     persistence: {
-      events: createSqliteEventStore(db),
+      events: createEventStore(db),
       customSources: createCustomEventSourceStore(db),
       responseRules: createEventResponseRuleStore(db),
       committedEvents: createSqliteCommittedEventDeliveryPersistence(db),
@@ -504,7 +503,7 @@ export async function composePostgresqlEventCenter(
   return await composeEventCenterWithPorts({
     ...shared,
     persistence: {
-      events: createPostgresqlEventStore(db),
+      events: createEventStore(db),
       customSources: createCustomEventSourceStore(db),
       responseRules: createEventResponseRuleStore(db),
       committedEvents: createPostgresqlCommittedEventDeliveryPersistence(db),

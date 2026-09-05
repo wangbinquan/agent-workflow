@@ -7,8 +7,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlEventStore } from '@/modules/event-center/infrastructure/postgresqlEventStore'
-import { createSqliteEventStore } from '@/modules/event-center/infrastructure/sqliteEventStore'
+import { createEventStore } from '@/modules/event-center/infrastructure/eventStore'
 import {
   eventContentDigest,
   eventTypeContentDigest,
@@ -129,7 +128,7 @@ afterEach(() => {
 
 describe('RFC-349 Event Center provider behavior', () => {
   test('SQLite notification settlement rejects a stale attempt and accepts the live lease', async () => {
-    const store = createSqliteEventStore(createInMemoryDb(MIGRATIONS))
+    const store = createEventStore(createInMemoryDb(MIGRATIONS))
     await store.registerSource(SOURCE, eventContentDigest(SOURCE), 1)
     await store.registerEventType(EVENT_TYPE, eventTypeContentDigest(EVENT_TYPE), 1)
     await store.subscribe({
@@ -188,7 +187,7 @@ describe('RFC-349 Event Center provider behavior', () => {
 
   test('PostgreSQL notification settlement fences both lease owner and attempt count', async () => {
     const fake = postgresqlFixture([{}, { values: [['delivery-1']] }, {}, {}, { values: [] }, {}])
-    const store = createPostgresqlEventStore(fake.db)
+    const store = createEventStore(fake.db)
 
     await expect(
       store.settleNotificationDelivery({
