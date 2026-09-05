@@ -89,15 +89,9 @@ describe('RFC-345 provider-owned demo Resource Catalog seed', () => {
       join(root, 'src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts'),
       'utf8',
     )
-    const sqlite = readFileSync(
-      join(root, 'src/modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts'),
-      'utf8',
-    )
-    const postgresql = readFileSync(
-      join(
-        root,
-        'src/modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts',
-      ),
+    // RFC-359 W4-B2：两份 provider 持久化合成一份（demoResourceCatalogSeed.ts），写事务走 resource-catalog 的统一原语。
+    const shared = readFileSync(
+      join(root, 'src/modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts'),
       'utf8',
     )
 
@@ -106,10 +100,7 @@ describe('RFC-345 provider-owned demo Resource Catalog seed', () => {
     expect(publicParticipants).not.toContain('DemoResourceCatalogSeedParticipant extends DbClient')
     expect(composition).toContain('composeSqliteDemoResourceCatalogSeedParticipant')
     expect(composition).toContain('composePostgresqlDemoResourceCatalogSeedParticipant')
-    expect(sqlite).toContain('dbTxSync(db, (transaction) =>')
-    expect(postgresql).toContain(
-      'runPostgresqlResourceCatalogTransaction(db, async (transaction) =>',
-    )
-    expect(postgresql).not.toContain('createSqliteDemoResourceCatalogSeedPersistence')
+    expect(shared).toContain('runResourceCatalogTransaction(db, async (transaction) =>')
+    expect(shared).not.toMatch(/dbTxSync|PostgresqlDatabaseClient|DbClient/)
   })
 })

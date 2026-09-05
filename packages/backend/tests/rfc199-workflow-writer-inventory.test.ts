@@ -31,9 +31,8 @@ const EXPECTED_WRITERS = {
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
-    'modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts': 1,
     'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 2,
-    'modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts': 1,
+    'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts': 1,
   },
   updateEditable: {
     'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts': 1,
@@ -178,18 +177,17 @@ describe('RFC-199 workflow writer inventory', () => {
         'serializeWorkflowDefinitionStorageV1(',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts':
         'serializeWorkflowDefinitionStorageV1(',
-      'modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts':
-        'createWorkflowPersistenceValues(',
       'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts':
         'createWorkflowPersistenceValues(',
-      'modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts':
+      'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts':
         'createWorkflowPersistenceValues(',
       'modules/task-execution/composition/actionExecutionRunners.ts':
         'serializeWorkflowDefinitionStorageV1(',
       'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts':
         'serializeWorkflowDefinitionStorageV1(',
     }
-    expect(inventory.insertValueArgs).toHaveLength(14)
+    // RFC-359 W4-B2：演示种子的两份 provider 持久化合成一份（14 → 13）。
+    expect(inventory.insertValueArgs).toHaveLength(13)
     expect(Object.keys(inventory.insert).sort()).toEqual(
       Object.keys(canonicalMarkerByWriter).sort(),
     )

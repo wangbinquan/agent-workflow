@@ -44,12 +44,9 @@ describe('RFC-349 Resource Catalog provider contributions', () => {
       join(root, 'src/modules/resource-catalog/composition/pluginGenerationGc.ts'),
       'utf8',
     )
-    const sqlite = readFileSync(
-      join(root, 'src/modules/resource-catalog/infrastructure/sqlitePluginGenerationGc.ts'),
-      'utf8',
-    )
-    const postgresql = readFileSync(
-      join(root, 'src/modules/resource-catalog/infrastructure/postgresqlPluginGenerationGc.ts'),
+    // RFC-359 W4-B2：两份 provider 适配合成一份（pluginGenerationGc.ts），两个具名装配只做绑定。
+    const shared = readFileSync(
+      join(root, 'src/modules/resource-catalog/infrastructure/pluginGenerationGc.ts'),
       'utf8',
     )
 
@@ -59,8 +56,9 @@ describe('RFC-349 Resource Catalog provider contributions', () => {
     expect(application).toContain('listReferencedCachedPaths()')
     expect(composition).toContain('composeSqlitePluginGenerationGcCommand')
     expect(composition).toContain('composePostgresqlPluginGenerationGcCommand')
-    expect(sqlite).toContain('.from(plugins)')
-    expect(postgresql).toContain('.from(plugins).all()')
+    expect(shared).toContain('.from(plugins)')
+    expect(shared).not.toContain('PostgresqlDatabaseClient')
+    expect(shared).not.toContain('DbClient')
     expect(publicCommands).not.toContain('DbClient')
     expect(publicCommands).not.toContain('pluginsDir')
   })

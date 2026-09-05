@@ -63,12 +63,10 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
       'modules/resource-catalog/composition/agentResourceIntegrity.ts',
     )
     expect(integrityComposition).toContain('composeAgentResourceInventorySource(')
-    expect(
-      source('modules/resource-catalog/infrastructure/sqliteAgentResourceInventory.ts'),
-    ).toContain('createSqliteAgentResourceInventoryReadPort(')
-    expect(
-      source('modules/resource-catalog/infrastructure/postgresqlAgentResourceInventory.ts'),
-    ).toContain('createPostgresqlAgentResourceInventoryReadPort(')
+    // RFC-359 W4-B2：两份 provider 库存读取合成一份（agentResourceInventory.ts 的 createDatabaseAgentResourceInventoryReadPort）。
+    expect(source('modules/resource-catalog/infrastructure/agentResourceInventory.ts')).toContain(
+      'createDatabaseAgentResourceInventoryReadPort(',
+    )
   })
 
   test('public operations no longer republishes internal compatibility mechanics', () => {

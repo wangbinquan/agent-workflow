@@ -1,24 +1,26 @@
+// RFC-359 W4-B2 —— 演示目录种子的持久化：一份实现，两个 provider 共用。
+
 import { eq } from 'drizzle-orm'
 import { agents, workflows } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   DemoResourceCatalogSeedPersistence,
   PreparedDemoResourceCatalogSeed,
 } from '../application/ports/demoResourceCatalogSeed'
 import type { DemoResourceCatalogSeedReceipt } from '../public/participants'
 import { createAgentPersistenceValues } from './agentPersistence'
-import { runPostgresqlResourceCatalogTransaction } from './postgresql/repositorySupport'
+import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import { createWorkflowPersistenceValues } from './workflowPersistence'
 
 type DemoResourceCatalogOccupiedIdWarning =
   DemoResourceCatalogSeedReceipt['occupiedIdWarnings'][number]
 
-export function createPostgresqlDemoResourceCatalogSeedPersistence(
-  db: PostgresqlDatabaseClient,
+export function createDemoResourceCatalogSeedPersistence(
+  db: ProviderNeutralDatabase,
 ): DemoResourceCatalogSeedPersistence {
   return Object.freeze({
     async seed(input: PreparedDemoResourceCatalogSeed): Promise<DemoResourceCatalogSeedReceipt> {
-      return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+      return runResourceCatalogTransaction(db, async (transaction) => {
         const warnings: DemoResourceCatalogOccupiedIdWarning[] = []
         let createdAgent = false
         const createdWorkflowIds: string[] = []

@@ -42,8 +42,8 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     const types = source('modules/resource-catalog/public/types.ts')
     const participants = source('modules/resource-catalog/public/participants.ts')
     const composition = source('modules/resource-catalog/composition/mcpProbeStore.ts')
-    const sqlite = source('modules/resource-catalog/infrastructure/sqliteMcpProbeStore.ts')
-    const postgresql = source('modules/resource-catalog/infrastructure/postgresqlMcpProbeStore.ts')
+    // RFC-359 W4-B2：两份 provider 适配合成一份（mcpProbeStore.ts），写事务走 resource-catalog 的统一原语。
+    const shared = source('modules/resource-catalog/infrastructure/mcpProbeStore.ts')
 
     expect(types).toContain('export interface McpProbeRecord')
     expect(types).toContain('export interface McpProbeWrite')
@@ -58,11 +58,9 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     )
     expect(composition).toContain('composeSqliteMcpProbeStore')
     expect(composition).toContain('composePostgresqlMcpProbeStore')
-    expect(sqlite).toContain('createSqliteMcpProbeStore')
-    expect(sqlite).toContain('dbTxSync(db,')
-    expect(postgresql).toContain('createPostgresqlMcpProbeStore')
-    expect(postgresql).toContain('runPostgresqlResourceCatalogTransaction(db,')
-    expect(postgresql).not.toContain('createSqliteMcpProbeStore')
+    expect(shared).toContain('createMcpProbeStore')
+    expect(shared).toContain('runResourceCatalogTransaction(db,')
+    expect(shared).not.toMatch(/dbTxSync|PostgresqlDatabaseClient|DbClient/)
   })
 
   test('generation GC delegates provider reads to the module-owned command', () => {

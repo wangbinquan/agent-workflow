@@ -1,9 +1,8 @@
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { createDatabaseAgentResourceInventoryReadPort } from '../infrastructure/agentResourceInventory'
 import { isSkillAvailableThisBoot } from '../infrastructure/legacy/skillBootVerify'
-import { createPostgresqlAgentResourceInventoryReadPort } from '../infrastructure/postgresqlAgentResourceInventory'
-import { createSqliteAgentResourceInventoryReadPort } from '../infrastructure/sqliteAgentResourceInventory'
 import type {
   AgentResourceInventoryReadPort,
   AgentResourceInventorySource,
@@ -78,7 +77,7 @@ export function composeSqliteAgentResourceInventorySource(input: {
   readonly authorization: ResourceAuthorizationApplication
 }): AgentResourceInventorySource {
   return composeAgentResourceInventorySource({
-    inventory: createSqliteAgentResourceInventoryReadPort({
+    inventory: createDatabaseAgentResourceInventoryReadPort({
       db: input.db,
       skillAvailability,
     }),
@@ -99,7 +98,7 @@ export function composePostgresqlAgentResourceInventorySource(input: {
   readonly authorization: ResourceAuthorizationApplication
 }): AgentResourceInventorySource {
   return composeAgentResourceInventorySource({
-    inventory: createPostgresqlAgentResourceInventoryReadPort({
+    inventory: createDatabaseAgentResourceInventoryReadPort({
       db: input.db,
       skillAvailability,
     }),
