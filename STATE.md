@@ -101,7 +101,10 @@
 > **W4-B1 批 2a 已落**：五对只差客户端类型 / 同步异步形态的适配器合一（gateContinuationEffectPersistence /
 > nodeActivationSnapshotReader / taskArtifactPathQueries / dynamicWorkflowPersistence / frameBackfillStore，
 > 后者改走统一事务原语），十个 provider 文件删除；`settleGateRollback` 上端口；`rfc359-w4-b1-batch2a-adapters.test.ts`
-> 两引擎各跑。剩 34 对。
+> 两引擎各跑。
+> **W4-B1 批 2b 已落**：读模型 / WS 投影 / 子任务预算三对合一（`taskExecutionReadModels` / `taskLifecycleWsProjection` /
+> `childTaskBudgetQueries`），六个 provider 文件删除；`services/execution/*` 四处 legacy 消费面改指中立实现，RFC-349 cutover 账本
+> 四条边退役（62 → 58）；`rfc359-w4-b1-batch2b-adapters.test.ts` 两引擎各跑。剩 31 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

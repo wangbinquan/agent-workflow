@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1955,
+    "entries": 1952,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -31556,29 +31556,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionReadModels.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionReadModels.ts#createPostgresqlTaskExecutionReadModels",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionReadModels.ts#createPostgresqlTaskExecutionReadModels",
-      "symbol": "createPostgresqlTaskExecutionReadModels",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "system",
         "authorization": false,
         "event": false,
@@ -31687,56 +31664,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts#createPostgresqlTaskLifecycleAutoRepairCommand",
       "symbol": "createPostgresqlTaskLifecycleAutoRepairCommand",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleWsProjection.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleWsProjection.ts#createPostgresqlTaskLifecycleWsProjection",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleWsProjection.ts#createPostgresqlTaskLifecycleWsProjection",
-      "symbol": "createPostgresqlTaskLifecycleWsProjection",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleWsProjection.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleWsProjection.ts#createPostgresqlTaskLifecycleWsProjector",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleWsProjection.ts#createPostgresqlTaskLifecycleWsProjector",
-      "symbol": "createPostgresqlTaskLifecycleWsProjector",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -32750,29 +32677,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#createSqliteTaskExecutionReadModels",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#createSqliteTaskExecutionReadModels",
-      "symbol": "createSqliteTaskExecutionReadModels",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": true
@@ -32860,56 +32764,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts#createSqliteTaskLifecycleAutoRepairCommand",
       "symbol": "createSqliteTaskLifecycleAutoRepairCommand",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts#createSqliteTaskLifecycleWsProjection",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts#createSqliteTaskLifecycleWsProjection",
-      "symbol": "createSqliteTaskLifecycleWsProjection",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts#createSqliteTaskLifecycleWsProjector",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection.ts#createSqliteTaskLifecycleWsProjector",
-      "symbol": "createSqliteTaskLifecycleWsProjector",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -33338,6 +33192,29 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels",
+      "symbol": "createTaskExecutionReadModels",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -33375,6 +33252,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
       "symbol": "createTaskIdleTimeoutPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts#createDatabaseTaskLifecycleWsProjection",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts#createDatabaseTaskLifecycleWsProjection",
+      "symbol": "createDatabaseTaskLifecycleWsProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts#createDatabaseTaskLifecycleWsProjector",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts#createDatabaseTaskLifecycleWsProjector",
+      "symbol": "createDatabaseTaskLifecycleWsProjector",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46598,7 +46525,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:97ea34bf19d7c3184dd538e2c9e44eeec2120e6c57841ba12659532f7d6222c5",
+  "sourceDigest": "sha256:4f1c26affd6817ea4ae69cd6aa16de2786a71acd7f3f55927aaf0c31c7202b93",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -3171,7 +3171,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:28535409b824d198ae25"
+        "import:a4cc48c75297713bc44f"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -3217,7 +3217,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:7f549b81379663016ab4"
+        "import:20f3493197f6d49d4dbd"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/executionWatch.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -3470,7 +3470,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:b071e6142fd4ea614821"
+        "import:eca01bcba382fb2d12cf"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/outcome.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -3516,7 +3516,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:1ac1287869101b1a593e"
+        "import:c13f6bacd84df40b7e06"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/startupVerificationRead.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -8816,15 +8816,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:97ea34bf19d7c3184dd538e2c9e44eeec2120e6c57841ba12659532f7d6222c5",
+    "sourceDigest": "sha256:4f1c26affd6817ea4ae69cd6aa16de2786a71acd7f3f55927aaf0c31c7202b93",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "3a86a26904736907cb00aa2f54d1126d23988079",
-    "contentDigest": "sha256:911995fee96529eebdd33193b359d57a27fcd76fdca7c245c54e89d53bc9b1b0",
+    "currentSnapshotSha": "988682879e6cd3151f528aadeda7fb5db49f317a",
+    "contentDigest": "sha256:b414b033ddcb91aecc2a7d919d8e2a400fa7ed8f1cd2489abaa73f6c52a1db0c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
