@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1853,
+    "entries": 1848,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -8044,7 +8044,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts#createPostgresqlDevelopmentMissionExecutionTerminalObserver",
+      "id": "mutation:packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts#createDevelopmentMissionExecutionTerminalObserver",
       "missingControls": [
         "audit",
         "authority",
@@ -8053,33 +8053,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts#createPostgresqlDevelopmentMissionExecutionTerminalObserver",
-      "symbol": "createPostgresqlDevelopmentMissionExecutionTerminalObserver",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts#createSqliteDevelopmentMissionExecutionTerminalObserver",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts#createSqliteDevelopmentMissionExecutionTerminalObserver",
-      "symbol": "createSqliteDevelopmentMissionExecutionTerminalObserver",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts#createDevelopmentMissionExecutionTerminalObserver",
+      "symbol": "createDevelopmentMissionExecutionTerminalObserver",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -9078,7 +9053,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts#createPostgresqlMissionCodeHostEventContinuation",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts#createMissionCodeHostEventContinuation",
       "missingControls": [
         "audit",
         "authority",
@@ -9086,32 +9061,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts#createPostgresqlMissionCodeHostEventContinuation",
-      "symbol": "createPostgresqlMissionCodeHostEventContinuation",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts#createSqliteMissionCodeHostEventContinuation",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts#createSqliteMissionCodeHostEventContinuation",
-      "symbol": "createSqliteMissionCodeHostEventContinuation",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionCodeHostEventContinuation.ts#createMissionCodeHostEventContinuation",
+      "symbol": "createMissionCodeHostEventContinuation",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -9223,7 +9174,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#createSqliteMissionReadModelQueries",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#createMissionReadModelQueries",
       "missingControls": [
         "audit",
         "authority",
@@ -9232,8 +9183,28 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#createSqliteMissionReadModelQueries",
-      "symbol": "createSqliteMissionReadModelQueries",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#createMissionReadModelQueries",
+      "symbol": "createMissionReadModelQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
+      "missingControls": [
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
+      "symbol": "createMissionPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -9258,46 +9229,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/pipelineEvidenceImport.ts#createPipelineImportAdapter",
       "symbol": "createPipelineImportAdapter",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/postgresqlMissionReadModels.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/postgresqlMissionReadModels.ts#createPostgresqlMissionReadModelQueries",
-      "missingControls": [
-        "audit",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlMissionReadModels.ts#createPostgresqlMissionReadModelQueries",
-      "symbol": "createPostgresqlMissionReadModelQueries",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/postgresqlMissionStore.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/postgresqlMissionStore.ts#createPostgresqlMissionPersistence",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlMissionStore.ts#createPostgresqlMissionPersistence",
-      "symbol": "createPostgresqlMissionPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -9485,45 +9416,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementMaterializer.ts#createRequirementMaterializer",
       "symbol": "createRequirementMaterializer",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionPersistence",
-      "missingControls": [
-        "audit",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionPersistence",
-      "symbol": "createSqliteMissionPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
-      "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -44212,7 +44104,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f4ac09edc0e547003aeddbee85873fbda3035accf978f29ac0f81815276bd225",
+  "sourceDigest": "sha256:546490d5828f2e117a4065b2269c3fca884e15265d0b6756fe01ffd78f5491e4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
