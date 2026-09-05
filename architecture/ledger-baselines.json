@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1830,
+      "baseline": 1826,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5735,
+      "baseline": 5734,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,8 +447,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5095,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5096,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D20（2026-09-06）：两对对称适配器合一后，中立文件继承了原两份 provider 文件的**同类既有边**（`packageResourceRows.ts` 同时带上 db/schema 与 db/query，`intentContextResourceAuthorization.ts` 带上 db/schema），净增 1 条，不是新的耦合方向；修它等于把中立实现再拆回两份，与本 RFC 的目标相反。下一次重采若仍为 +1 即可退役这条豁免。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +485,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25555,
+      "baseline": 25544,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a154242d10c75a158ffeee87304f5b7c34da811cbd71484b6bae55ca5f608530",
+    "sourceDigest": "sha256:05ee37298f1b02b5acb9e16cb328792cb1e76ca8c120391e60516a64d874027f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d3e992913c8b8c66c3184fc6ad63fe67d26f188d",
-    "contentDigest": "sha256:f7e4b23e82db502ca43aefaee78b4e5d9f051261c81f371379afe9fb4f6752a4",
+    "currentSnapshotSha": "bde0e3e1b95705502652e916b2a568f497704465",
+    "contentDigest": "sha256:8e41f97493bd2841ed38d19245f37c564eecb37e0ae86f83c9704f531110a608",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
