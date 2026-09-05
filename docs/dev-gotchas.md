@@ -4182,3 +4182,15 @@ node_runs.status）、架构锁（`rfc217-architecture-locks` 的房间表写点
 把它列出的文件并进本地批次；`architecture:write` 之前也先跑一遍——分类器
 （`tests/architecture/rfc294Canonical.ts` 的 `classifyTaskExecutionAuthority` 等）同样按
 `(postgresql|sqlite)` 前缀白名单认文件，中立化后的名字要补进它已有的中立名尾巴，否则 census 直接失败。
+
+### `allowGrowth` 是一次性的：加了它，紧接着的下一个提交必须重采账本
+
+`architecture/ledger-baselines.json` 的 `allowGrowth` 只为「这一个 commit」放行；守卫
+（rfc317 T17「allowGrowth 无过期条目」）要求**下一个 commit 如果没再涨，就必须把这条删掉**。
+`scripts/architecture-census.ts` + 重采流程会自动删，但**只有跑了重采的提交才会删**。
+
+2026-09-06 实撞：一刀的账本提交带了一条 `allowGrowth`，随后连推两个**纯文档**提交（没跑重采），
+守卫在那两个提交上直接红——纯文档改动弄红后端分片，从红的位置完全看不出原因。
+
+**做法**：加过 `allowGrowth` 之后，下一个提交要么是带重采的下一刀，要么在推之前先跑一次
+`bun run architecture:write --snapshot-sha HEAD` 把过期条目清掉再提交；不要在两者之间插纯文档提交。
