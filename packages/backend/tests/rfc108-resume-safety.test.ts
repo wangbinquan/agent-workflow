@@ -127,6 +127,14 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
     h = await buildHarness()
     // Simulate worktreeAutoGc reclaiming the worktree of a resumable task.
     rmSync(h.repoPath, { recursive: true, force: true })
+    // 2026-09-05（5541d8505，macos shard 3/4 单点红，前置条件本身失败：目录还在、resumeTask 没抛）：harness 落盘后
+    // macOS runner 上可能还有 git 子进程在目录里收尾，一次 rmSync 赢不了这场竞态。先把「目录确实没了」钉死再讨论 410，
+    // 让这条断言只剩「resume 是否重建了目录」一种含义。
+    for (let attempt = 0; existsSync(h.repoPath) && attempt < 40; attempt += 1) {
+      await new Promise((resolveSleep) => setTimeout(resolveSleep, 50))
+      rmSync(h.repoPath, { recursive: true, force: true })
+    }
+    expect(existsSync(h.repoPath), 'precondition: worktree dir removed before resume').toBe(false)
 
     // 2026-08-09（RFC-271 T6f2 的 push `9da5cc63`，macos shard 2/4 单点红）：这条
     // 断言此前只取 `err.code`，于是「压根没抛」与「抛了个不带 code 的错」在失败

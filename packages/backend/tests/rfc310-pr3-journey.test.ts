@@ -132,8 +132,9 @@ function launchBody(
 async function pumpUntil(
   missionId: string,
   predicate: (mission: MissionRow) => boolean | Promise<boolean>,
-  // 预算按最慢 arm 放：adapter CLI 首跑要过 bun 编译，秒级；400×25ms ≈ 10s。
-  rounds = 400,
+  // 预算按最慢 arm 放：adapter CLI 首跑要过 bun 编译，秒级；本机 400×25ms ≈ 10s 够用，
+  // macOS CI runner 在四分片满载时首跑编译更慢（2026-09-05 两次单点红都卡在 status=working），放到 1600×25ms ≈ 40s。
+  rounds = 1600,
 ): Promise<MissionRow> {
   let lastError: unknown = null
   for (let i = 0; i < rounds; i += 1) {
