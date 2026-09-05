@@ -392,10 +392,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1833,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D16 Mcp 聚合合一 + D14/D15 回归修复"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5108,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D16 Mcp 聚合合一 + D14/D15 回归修复"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -506,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a40bb027b9074d36fe6a35dcddac862da177a378",
-    "contentDigest": "sha256:dc5025f93570aadb6aa74e226cb2c0251fa14210c27bd2d00a30225fe8c82888",
+    "currentSnapshotSha": "1aef083a3552ad11fd64bfe620e6901e32265442",
+    "contentDigest": "sha256:6384203974e0a15865d96c28f9adb9f420db2d33893cde555e915dba4a1ddf91",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
