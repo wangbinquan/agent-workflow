@@ -162114,10 +162114,10 @@
       "rollback": "Disable the projection reader; retain the DigitalEmployee-owned value and single writer.",
       "writers": [
         {
-          "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
+          "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#createRuntimePersistence",
           "sourceToken": "name: input.caseRecord.name",
-          "symbol": "createSqliteRuntimeStore"
+          "symbol": "createRuntimePersistence"
         }
       ]
     }
@@ -162140,7 +162140,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:70a2885ba95571d775407836cb405b7c9aa78d29e2a7d5e4dd695190d6a2e495",
+  "sourceDigest": "sha256:173387b1ab586db9c5eb50f093e9894e4c5f5ccbdd61d81d8397778c99746ba2",
   "targetContexts": [
     "collaboration",
     "development-automation",
