@@ -1031,17 +1031,40 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   **结论：这一对的端口面本来就一致**（不像技能那次一跑就照出 PG 缺一道屏障），
   所以 D28b 的合一风险主要在事务原语本身，不在行为分叉。
 
-  **D28b 的形状已勘明（本轮起手后回退，未提交）**：`withOwnedTaskTx` 是
-  `assertTaskOwnerTx`（`ownedTaskExecution.ts` 里的中立 owner CAS 围栏）**逐字重复的一份**，
-  只是外面裹了 `dbTxSync`——D21 的去重没走完最后一步。把它改成中立事务原语会连锁拉动
-  `sqliteTaskExecutionEffect.ts`(1756 行 / 66 处同步调用)、`services/task.ts`、
-  `platform/persistence/sqlite/taskLifecycle.ts`、`legacySqliteReview.ts` 等**十余个文件**
-  一起转异步（实测一口气拉到 140+ 处类型错）。另有一处**现成的合一红利**：
-  `sqliteTerminalizeExecutionIntent.ts` 与 `effectQuiescence.ts` 的
-  `terminalizeTaskExecutionIntentsTx` 是同一函数的两份，而中立那份**更强**——它校验
-  terminalize 的行数与预期相等、不等就抛 `task-continuation-stale`，同步那份直接放过。
-  合一时按「好的那份」抬齐即可。这一刀建议**单独一个 PR 从下往上做**（先 owner 围栏去重，
-  再 effect store，最后调用方），不要和别的改动混在一起。
+  ### D28b 的真实形状（2026-09-07 实做到一半后回退，未提交；这是本轮最有价值的勘察结论）
+
+  **它不是「再合一对」，而是把剩下的整条同步事务面一次性拔掉**——因为那 30 个文件是**一个连通分量**，
+  由五个共享的同步 helper 绑在一起，动其中任何一个都会连锁拉动其余：
+
+  | 同步 helper | 调用点 | 中立孪生 |
+  | --- | --- | --- |
+  | `setNodeRunStatusTx` | 8 | ✅ `nodeRunLifecycleTransition.ts`（异步、中立） |
+  | `terminalizeTaskExecutionIntentsTx` | 8 | ✅ `effectQuiescence.ts`（异步、中立，且**更强**） |
+  | `withOwnedTaskTx` | 10 | ❌（但它本身就是中立 `assertTaskOwnerTx` 逐字重复的一份） |
+  | `withTaskExecutionMutation` | 4 | ❌ |
+  | `withTaskExecutionTransaction` | 3 | ❌ |
+
+  实测：把 owner 围栏一改，类型错一口气从 0 涨到 140+，跨
+  `sqliteTaskExecutionEffect.ts`(1756 行 / 66 处同步调用)、`sqliteTaskExecutionEffectPersistence.ts`、
+  `services/task.ts`、`platform/persistence/sqlite/taskLifecycle.ts`、
+  `collaboration/legacySqliteReview.ts`、`sqliteCollaborationWorkgroupClarify.ts` 等十余个文件。
+  **本轮把已改的部分整体回退**（工作树留干净），理由是：在一次会话里把这么大的异步化连同
+  「漏 await 静默通过类型检查」的风险一起推上共享 main，不划算——这一刀值得单独一个 PR 专门做。
+
+  **已勘明的三条，下一刀可以直接用**：
+
+  1. **`withOwnedTaskTx` 是 `assertTaskOwnerTx` 的逐字重复**（`ownedTaskExecution.ts`），
+     只是外面裹了 `dbTxSync`——D21 的 owner CAS 去重没走完最后一步。中立那份唯一缺的是
+     「把 bump 后的 revision 交出来」，加上即可，不必新写。
+  2. **两个现成的合一红利，且中立那份都更强**：
+     `terminalizeTaskExecutionIntentsTx` 的中立版校验 terminalize 行数与预期相等、不等就抛
+     `task-continuation-stale`，同步那份直接放过；`setNodeRunStatusTx` 同样有中立异步孪生。
+     合一时按「好的那份」抬齐（与 D23c 处理引用完整性复核同一原则）。
+  3. **顺序**：先给 `assertTaskOwnerTx` 加返回值并让 `withOwnedTaskTx` 委托过去 → 再退
+     `terminalizeTaskExecutionIntentsTx` / `setNodeRunStatusTx` 的同步孪生 → 再 effect store →
+     最后调用方。每一步跑一次 `bunx tsc` 与 D28a 套件；**每把一个函数从同步改成异步，都要按
+     `docs/dev-gotchas.md` 那条「按导出名 grep 调用点」扫一遍**——这一轮在技能那边就是靠它
+     逮到 3 处漏 await 静默通过类型检查（两处是 `boolean && Promise` 恒真、判据直接失效）。
 
   ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
 
