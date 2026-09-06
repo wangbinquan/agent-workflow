@@ -4040,3 +4040,19 @@ CI 今天是绿的，因为分片把这些文件分到了不同 job；**分片�
 
 判据：上面两条的用例名 + `skill-not-found`；复现方式是
 `bun test $(ls tests/*.test.ts | grep -i skill)`。
+
+## `workgroup-matrix` 的领队回合计数在 Windows e2e 上偶发多出几轮（2026-09-06 一次）
+
+`e2e/workgroup-matrix.spec.ts:348` 断言第二道门之前领队恰好跑过 5 轮
+（`expect(leaderRuns).toHaveLength(5)`），在 `c8c3beca5` 的 Windows e2e 分片 4/4 上红成
+**收到 6**，同一 run 的 retry #1 收到 **9**。重跑该 job 后绿。
+
+**为什么值得记一笔而不是当噪音**：①计数在同一 run 的重试之间**还在涨**（6 → 9），这是「采样到
+一个还在动的目标」的签名，不是「答案固定但算错」；②测试等待的谓词只锁**状态**
+（`awaiting_review` + 门待确认 + 某张卡 done），没有锁「到这一步该跑过几轮领队」——协议重提示
+多发生一次，计数就多一个，而慢 lane 上正是它更容易多发生。
+
+**尚未证实**的是「多出来的那几轮是否合法」。没有证据之前不动这条断言（放宽它会让真的多轮回归
+从此看不见）。下次再红时要抓的证据：那几轮领队的 `promptText` 是不是重提示块
+（`## Protocol errors in your previous reply`），以及 `runHistory` 里它们的时间戳分布。
+判据：`workgroup-matrix.spec.ts:348` + `Expected length: 5`。
