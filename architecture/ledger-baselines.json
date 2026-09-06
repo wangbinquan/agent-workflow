@@ -398,7 +398,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1809,
+      "baseline": 1807,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -433,7 +433,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5564,
+      "baseline": 5562,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -454,8 +454,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4963,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4964,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D23b：4963 → 4964，净增一条 `legacy-outbound` 的**类型**边——技能机器迁到中立事务原语后，这些 legacy 文件 import 的是 `platform/persistence/databaseTransaction` 的 `DatabaseTransaction` / `ProviderNeutralDatabase`，取代了原来的 `db/txSync` 的 `DbTxSync`。换句话说这一格不是新增耦合，是**同一条依赖换了更中立的目标**：旧目标是 bun:sqlite 专属的同步事务面，新目标是两个 provider 共用的原语。这些 legacy 文件本就整体挂在 W9 退役波次上，边随文件一起消失。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -468,7 +471,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 980,
+      "baseline": 979,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -489,12 +492,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25338,
+      "baseline": 25331,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:8491db5a8320eca35147c14753caba7e4583546f71f480acf2b1ef0d8256faa6",
+    "sourceDigest": "sha256:720946387affc638669c81fb1614394c27321533004404d12ec40a7973ab9821",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -507,8 +510,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ab5a6710531b53c208bfa7a5499648ff2197c8fc",
-    "contentDigest": "sha256:6415ef532c250a897a06567ff8133df850f124cc50428558339081b7922b39ae",
+    "currentSnapshotSha": "a21a87ba22cd4dcd70dc548b9c4424ef8ae33fe3",
+    "contentDigest": "sha256:b1c6b8c1c2622585dbbc851d89963a5164d85fb21c36901232cff67ae04776ce",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

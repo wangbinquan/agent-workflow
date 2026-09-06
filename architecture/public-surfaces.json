@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 859,
+    "consumers": 858,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1051,
+    "methods": 1049,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20386,
-    "symbols": 980
+    "recursiveFields": 20378,
+    "symbols": 979
   },
   "entries": [
     {
@@ -66195,7 +66195,9 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:29d0f4c2ad8f773f6e54"
+        "import:29d0f4c2ad8f773f6e54",
+        "import:a6b7c3d599eef85e96b3",
+        "import:e467ed4599fd012fab07"
       ],
       "context": "knowledge-evolution",
       "dataClass": "metadata",
@@ -66209,7 +66211,9 @@
         },
         {
           "consumerEdgeIds": [
-            "import:29d0f4c2ad8f773f6e54"
+            "import:29d0f4c2ad8f773f6e54",
+            "import:a6b7c3d599eef85e96b3",
+            "import:e467ed4599fd012fab07"
           ],
           "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.actorUserId",
           "type": "string"
@@ -66226,14 +66230,17 @@
         },
         {
           "consumerEdgeIds": [
-            "import:29d0f4c2ad8f773f6e54"
+            "import:29d0f4c2ad8f773f6e54",
+            "import:a6b7c3d599eef85e96b3",
+            "import:e467ed4599fd012fab07"
           ],
           "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.now",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:29d0f4c2ad8f773f6e54"
+            "import:29d0f4c2ad8f773f6e54",
+            "import:e467ed4599fd012fab07"
           ],
           "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.skillId",
           "type": "string"
@@ -66260,7 +66267,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:29d0f4c2ad8f773f6e54"
+            "import:29d0f4c2ad8f773f6e54",
+            "import:e467ed4599fd012fab07"
           ],
           "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:reassignFusedSkill.$parameter:input.skillId",
           "type": "string"
@@ -66277,7 +66285,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:29d0f4c2ad8f773f6e54"
+            "import:29d0f4c2ad8f773f6e54",
+            "import:e467ed4599fd012fab07"
           ],
           "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:unfuseAboveVersion.$parameter:selector.skillId",
           "type": "string"
@@ -66289,7 +66298,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:29d0f4c2ad8f773f6e54"
+            "import:29d0f4c2ad8f773f6e54",
+            "import:e467ed4599fd012fab07"
           ],
           "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.skillId",
           "type": "string"
@@ -66352,6 +66362,18 @@
           "edgeId": "import:29d0f4c2ad8f773f6e54",
           "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
           "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a6b7c3d599eef85e96b3",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e467ed4599fd012fab07",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -66360,108 +66382,6 @@
       "signatureDigest": "sha256:34dcded1cedaec570299279749656bab238c4d342dec74f2058233c0ebfb6543",
       "status": "target-context-current-surface",
       "symbol": "createAsyncSkillRestoreMembership",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:d3c112f796d186aed136",
-        "import:e44c11ea797e01e1ba1a"
-      ],
-      "context": "knowledge-evolution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:unfuse.$call.$parameter:selector.aboveVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:d3c112f796d186aed136"
-          ],
-          "fieldPath": "$call.$parameter:unfuse.$call.$parameter:selector.skillId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:unfuse.$call.$parameter:tx",
-          "type": "TTx"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:unfuse.$call.$return[]",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:d3c112f796d186aed136"
-          ],
-          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.skillId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.targetVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:tx",
-          "type": "TTx"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$return.$method:unfuseForRestore.$return[]",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/knowledge-evolution/public/participants.ts",
-      "id": "public:knowledge-evolution:participants:createSyncSkillRestoreMembership",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:37a99dc63df6718a20abf866c78b1537381b777fe96a31962377773f3fb31f6e"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "unfuseForRestore",
-          "signatureDigest": "sha256:7f15a06e8a61f79e4cb73594a9e4b19687cd69213308866cf9b23b7bce04bf73"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:d3c112f796d186aed136",
-          "file": "packages/backend/src/server.ts",
-          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:e44c11ea797e01e1ba1a",
-          "file": "packages/backend/src/cli/start.ts",
-          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:e090e1ec305601e77d7701cf90f6f96e8e69143a5a416042bc50d8e36da1e162",
-      "status": "target-context-current-surface",
-      "symbol": "createSyncSkillRestoreMembership",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -70976,8 +70896,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/participants.ts#$file",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership",
-        "public:knowledge-evolution:participants:createSyncSkillRestoreMembership"
+        "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -74162,8 +74081,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:899f20cd6d34e882cd89",
-        "import:8fb9b1d35c1f66713879"
+        "import:899f20cd6d34e882cd89"
       ],
       "context": "memory",
       "dataClass": "metadata",
@@ -74172,16 +74090,14 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:899f20cd6d34e882cd89",
-            "import:8fb9b1d35c1f66713879"
+            "import:899f20cd6d34e882cd89"
           ],
           "fieldPath": "aboveVersion",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:899f20cd6d34e882cd89",
-            "import:8fb9b1d35c1f66713879"
+            "import:899f20cd6d34e882cd89"
           ],
           "fieldPath": "skillId",
           "type": "string"
@@ -74201,17 +74117,10 @@
           "edgeId": "import:899f20cd6d34e882cd89",
           "file": "packages/backend/src/modules/knowledge-evolution/domain/skillRestore.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/domain/skillRestore.ts#$file"
-        },
-        {
-          "context": "knowledge-evolution",
-          "edgeId": "import:8fb9b1d35c1f66713879",
-          "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
         "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership",
-        "public:knowledge-evolution:participants:createSyncSkillRestoreMembership",
         "public:memory:participants:MemoryMembershipParticipantInTx"
       ],
       "removeAfterWave": null,
@@ -161367,7 +161276,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8491db5a8320eca35147c14753caba7e4583546f71f480acf2b1ef0d8256faa6",
+  "sourceDigest": "sha256:720946387affc638669c81fb1614394c27321533004404d12ec40a7973ab9821",
   "targetContexts": [
     "collaboration",
     "development-automation",
