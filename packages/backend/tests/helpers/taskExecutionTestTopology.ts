@@ -11,8 +11,8 @@ import { driveTaskEngineApplication } from '../../src/modules/task-execution/com
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
-import { legacyTaskExecutionResourceDependencies } from '../../src/services/execution/legacyTaskExecutionResourceDependencies'
-import { createSqliteTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
+import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
+import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { runGit } from '../../src/util/git'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
@@ -54,9 +54,9 @@ function createTaskExecutionTestIdentity(db: DbClient) {
     identityAccess,
     resources: Object.freeze({
       delegatedRequests: identityAccess.delegatedRequests,
-      taskExecutionResources: createSqliteTaskExecutionResourceBinding(
+      taskExecutionResources: createTaskExecutionResourceBinding(
         db,
-        composeTaskExecutionResourceBinding(legacyTaskExecutionResourceDependencies),
+        composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
       ),
     }),
   })

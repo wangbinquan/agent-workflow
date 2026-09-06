@@ -43,8 +43,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/bundle/postgresqlApply.ts -> @/platform/persistence/postgresqlResourcePackageAtomicApply :: export:*',
   'packages/backend/src/services/clarify/rounds.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyRounds :: export:*',
   'packages/backend/src/services/clarifyDecision.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyDecision :: export:*',
-  'packages/backend/src/services/execution/taskExecutionResources.ts -> @/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots :: export:createPostgresqlTaskExecutionResourceBinding',
-  'packages/backend/src/services/execution/taskExecutionResources.ts -> @/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots :: export:createSqliteTaskExecutionResourceBinding',
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
   'packages/backend/src/services/nodeRollback.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRollback :: LegacySqliteRollbackDatabase,createLegacySqliteRollbackEffectObserver,loadLegacySqliteRollbackTarget',
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,LegacySqliteNodeRunTransaction,createLegacySqliteNodeRunOperations,mintLegacySqliteNodeRunInTx',

@@ -1,6 +1,6 @@
 // RFC-345 T4a — task-execution consumer adapter for the named Resource
 // Catalog participant. Every call binds one exact authority/actor pair to one
-// synchronous SQLite transaction; callers see frozen data-only snapshots.
+// 只读快照事务；callers see frozen data-only snapshots.
 
 import { join } from 'node:path'
 
@@ -28,8 +28,7 @@ export type {
   TaskExecutionResourceAuthorityPair,
   TaskExecutionResourceBinding,
 } from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
-export { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
-export { createPostgresqlTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots'
+export { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 
 export async function loadTaskExecutionResourceSnapshot<
   K extends TaskExecutionResourceRequest['kind'],

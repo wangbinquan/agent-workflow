@@ -101,16 +101,28 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
       expect(source, service).not.toMatch(/\bdb\.(?:select|insert|update|delete|transaction)\b/)
     }
 
-    const legacy = readFileSync(
+    // RFC-359 W4-D27：行映射器不再经策略束注入——判据搬到取用它们的那份中立适配器上，
+    // 立场不变：读的是 `*Persistence` 的纯映射器，不是 `@/services/mcp` / `@/services/plugin` 门面。
+    const snapshots = readFileSync(
       resolve(
         import.meta.dir,
-        '../src/services/execution/legacyTaskExecutionResourceDependencies.ts',
+        '../src/modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts',
       ),
       'utf8',
     )
-    expect(legacy).toContain('infrastructure/mcpPersistence')
-    expect(legacy).toContain('infrastructure/pluginPersistence')
-    expect(legacy).not.toMatch(/@\/services\/(?:mcp|plugin)['"]/)
+    expect(snapshots).toContain('../mcpPersistence')
+    expect(snapshots).toContain('../pluginPersistence')
+    expect(snapshots).not.toMatch(/@\/services\/(?:mcp|plugin)['"]/)
+    // 策略束里只剩 legacy 行为神谕（`legacyTaskExecutionInjectionResolver`）还要的三个行映射器；
+    // 快照适配器与可见性判据都不再经这里注入。
+    const dependencies = readFileSync(
+      resolve(import.meta.dir, '../src/services/execution/taskExecutionResourceDependencies.ts'),
+      'utf8',
+    )
+    expect(dependencies).not.toMatch(/rowTo(?:WorkflowDetail|Workgroup)\b/)
+    expect(dependencies).not.toContain('canViewResourceInTx')
+    expect(dependencies).toContain('infrastructure/mcpPersistence')
+    expect(dependencies).toContain('infrastructure/pluginPersistence')
   })
 
   test('SQLite agent-launch and dynamic-workflow adapters perform real durable reads and writes', async () => {

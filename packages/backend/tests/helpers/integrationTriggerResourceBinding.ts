@@ -8,7 +8,7 @@ import { composeIntegrationTriggerResourceSnapshotFactory } from '../../src/modu
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { createSqliteTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
+import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { assertNotBuiltin } from '../../src/services/systemResources'
 import {
   createScheduledTask as createScheduledTaskService,
@@ -23,7 +23,7 @@ import {
   type IntegrationTriggerResourceAuthority,
   updateScheduledTask as updateScheduledTaskService,
 } from '../../src/services/scheduledTasks'
-import { legacyTaskExecutionResourceDependencies } from '../../src/services/execution/legacyTaskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
 import { composeSqliteScheduledTaskRuntime } from '../../src/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '../../src/services/taskLaunchGate'
 import { assertAgentResourceIntegrity } from '../../src/modules/resource-catalog/application/agents/agentResourceIntegrity'
@@ -34,11 +34,12 @@ export function integrationTriggerResourceBinding() {
 }
 
 export function taskExecutionResourceBinding(db: DbClient) {
-  return createSqliteTaskExecutionResourceBinding(db, {
+  return createTaskExecutionResourceBinding(db, {
     inTransaction(tx, pair) {
-      return composeTaskExecutionResourceBinding(
-        legacyTaskExecutionResourceDependencies,
-      ).inTransaction(tx, pair)
+      return composeTaskExecutionResourceBinding(taskExecutionResourceDependencies).inTransaction(
+        tx,
+        pair,
+      )
     },
   })
 }

@@ -1,3 +1,18 @@
+// RFC-345 T4a / RFC-359 W4-D27 —— 任务执行资源快照：一份实现，两个引擎共用。
+//
+// 合一前 `legacyTaskExecutionResourceSnapshots.ts`（494 行，同步 `DbTxSync` + 注入 legacy 行映射器）
+// 与 `postgresqlTaskExecutionResourceSnapshots.ts`（529 行）逐行同一套逻辑，差别只有三处：
+// ①事务句柄与 await；②可见性判据 —— legacy 注入 `canViewResourceInTx`，PG 自己内联了一份等价查询；
+// ③行映射 —— legacy 注入 `rowToAgent` / `rowToMcp` / `rowToPlugin` / `rowToWorkflowDetail` /
+// `rowToWorkgroup`，PG 直接调 `*FromPersistenceRow`。逐条对账后取中立形态：可见性走中立异步
+// `canViewResourceForTx`（与 legacy 的 `canViewResourceInTx` 同一条判据：audience → 私有才查授权
+// → `resolveAccessFrom` → `canViewAccess`），行映射一律用 `*Persistence` 里的中立映射器
+// （与 legacy 映射器逐字段等价，含 sidecar 提升与 runtime 列的规则）。
+//
+// Resource Catalog owns row lookup, visibility and runtime-resource hydration.
+// 事务由 task-execution 侧的 `snapshotRead` 打开（PG: REPEATABLE READ READ ONLY；
+// SQLite: BEGIN IMMEDIATE，与合一前 `dbTxSync` 同一条边界），闭包递归取数全绑在那一笔上。
+
 import type {
   AclResourceType,
   Agent,
@@ -6,32 +21,19 @@ import type {
   WorkflowDetail,
   Workgroup,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import {
-  agents,
-  mcps,
-  plugins,
-  resourceGrants,
-  skills,
-  workflows,
-  workgroupMembers,
-  workgroups,
-} from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { agents, mcps, plugins, skills, workflows, workgroupMembers, workgroups } from '@/db/schema'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, SkillQuarantinedError, ValidationError } from '@/util/errors'
-import {
-  resolveAccessFrom,
-  resourceAclAudienceAuthority,
-  canViewAccess,
-  type AclRow,
-} from '../../domain/resourceAccess'
 import { agentFromPersistenceRow } from '../agentPersistence'
 import { mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginFromPersistenceRow } from '../pluginPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
+import { canViewResourceForTx } from '../resourceAclTransaction'
+import type { TaskExecutionResourceSnapshotPorts } from '../../application/participants/taskExecutionResourceSnapshot'
 import type { ResourceRequestContext } from '../../public/participants'
 import type {
   FrozenTaskExecutionResourceSnapshot,
@@ -43,15 +45,13 @@ import type {
   TaskExecutionWorkgroupSnapshot,
 } from '../../public/types'
 
-export type PostgresqlTaskExecutionResourceTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
-
 type TaskExecutionSkillSnapshot = Extract<
   FrozenTaskExecutionResourceSnapshot,
   { readonly kind: 'agent-injection' }
 >['skills'][number]
 
+type WorkflowRow = typeof workflows.$inferSelect
+type WorkgroupRow = typeof workgroups.$inferSelect
 type ManagedInjectionNameConflict = Readonly<{
   readonly kind: 'agent' | 'managed-skill' | 'mcp'
   readonly name: string
@@ -59,7 +59,7 @@ type ManagedInjectionNameConflict = Readonly<{
   readonly secondId: string
 }>
 
-export interface PostgresqlTaskExecutionResourceDependencies {
+export interface TaskExecutionResourceDependencies {
   readonly assertNotBuiltin: (
     type: AclResourceType,
     row: Readonly<{ readonly builtin?: boolean | null }>,
@@ -86,11 +86,10 @@ export interface PostgresqlTaskExecutionResourceDependencies {
   ) => T | undefined
 }
 
-export interface PostgresqlTaskExecutionResourceSnapshotReader {
-  loadAuthorized(
-    authority: ResourceRequestContext,
-    requests: readonly TaskExecutionResourceRequest[],
-  ): Promise<readonly FrozenTaskExecutionResourceSnapshot[]>
+export interface TaskExecutionResourceOptions {
+  readonly tx: DatabaseTransaction
+  readonly authority: ResourceRequestContext
+  readonly actor: Actor
 }
 
 function workflowSnapshot(workflow: WorkflowDetail): TaskExecutionWorkflowSnapshot {
@@ -129,18 +128,17 @@ function agentSnapshot(agent: Agent): TaskExecutionAgentSnapshot {
 }
 
 function mcpSnapshot(mcp: Mcp): TaskExecutionMcpSnapshot {
-  const common = {
+  return Object.freeze({
     id: mcp.id,
     name: mcp.name,
     description: mcp.description,
+    type: mcp.type,
+    config: mcp.config,
     enabled: mcp.enabled,
     schemaVersion: mcp.schemaVersion,
     createdAt: mcp.createdAt,
     updatedAt: mcp.updatedAt,
-  }
-  return mcp.type === 'local'
-    ? Object.freeze({ ...common, type: 'local', config: mcp.config })
-    : Object.freeze({ ...common, type: 'remote', config: mcp.config })
+  }) as TaskExecutionMcpSnapshot
 }
 
 function pluginSnapshot(plugin: Plugin): TaskExecutionPluginSnapshot {
@@ -183,69 +181,35 @@ function requestFailure(code: string, message: string, runtimeMessage?: string):
   )
 }
 
-async function canViewResourceInTransaction(
-  transaction: PostgresqlTaskExecutionResourceTransaction,
-  actor: Actor,
-  type: 'workflow' | 'workgroup',
-  row: AclRow,
-): Promise<boolean> {
-  const audience = resourceAclAudienceAuthority(actor)
-  const grant =
-    audience.bypass || !audience.private
-      ? null
-      : ((
-          await transaction
-            .select({ level: resourceGrants.level })
-            .from(resourceGrants)
-            .where(
-              and(
-                eq(resourceGrants.resourceType, type),
-                eq(resourceGrants.resourceId, row.id),
-                eq(resourceGrants.userId, actor.user.id),
-              ),
-            )
-            .limit(1)
-            .get()
-        )?.level ?? null)
-  return canViewAccess(resolveAccessFrom(audience, actor.user.id, row, grant))
-}
-
-export function createPostgresqlTaskExecutionResourceSnapshotReader(
-  input: {
-    readonly transaction: PostgresqlTaskExecutionResourceTransaction
-    readonly authority: ResourceRequestContext
-    readonly actor: Actor
-  },
-  dependencies: PostgresqlTaskExecutionResourceDependencies,
-): PostgresqlTaskExecutionResourceSnapshotReader {
-  const { transaction } = input
+export function createTaskExecutionResourceSnapshotPorts(
+  options: TaskExecutionResourceOptions,
+  dependencies: TaskExecutionResourceDependencies,
+): TaskExecutionResourceSnapshotPorts {
+  const { tx } = options
   const actorFor = (authority: ResourceRequestContext): Actor => {
-    if (authority !== input.authority) throw new Error('foreign-task-execution-authority')
-    return input.actor
+    if (authority !== options.authority) throw new Error('foreign-task-execution-authority')
+    return options.actor
   }
 
-  async function loadWorkflowLaunch(
+  const loadWorkflowLaunch = async (
     authority: ResourceRequestContext,
     workflowId: string,
-  ): Promise<TaskExecutionWorkflowSnapshot> {
+  ): Promise<TaskExecutionWorkflowSnapshot> => {
     const actor = actorFor(authority)
-    const row = await transaction.select().from(workflows).where(eq(workflows.id, workflowId)).get()
-    if (
-      row === undefined ||
-      !(await canViewResourceInTransaction(transaction, actor, 'workflow', row))
-    ) {
+    const row = await tx.select().from(workflows).where(eq(workflows.id, workflowId)).get()
+    if (row === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', row))) {
       throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
     }
     dependencies.assertNotBuiltin('workflow', row)
     return workflowSnapshot(workflowDetailOf(workflowFromPersistenceRow(row)))
   }
 
-  async function visibleWorkflowTarget(
+  const visibleWorkflowTarget = async (
     authority: ResourceRequestContext,
     request: Extract<TaskExecutionResourceRequest, { readonly kind: 'call-workflow' }>,
-  ): Promise<TaskExecutionWorkflowSnapshot> {
+  ): Promise<TaskExecutionWorkflowSnapshot> => {
     const actor = actorFor(authority)
-    const rows = await transaction
+    const rows = await tx
       .select()
       .from(workflows)
       .where(eq(workflows.name, request.name))
@@ -254,10 +218,10 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     const hinted =
       request.idHint === undefined
         ? undefined
-        : await transaction.select().from(workflows).where(eq(workflows.id, request.idHint)).get()
-    const byId = new Map<string, typeof workflows.$inferSelect>()
+        : await tx.select().from(workflows).where(eq(workflows.id, request.idHint)).get()
+    const byId = new Map<string, WorkflowRow>()
     for (const row of [...rows, ...(hinted === undefined ? [] : [hinted])]) {
-      if (!(await canViewResourceInTransaction(transaction, actor, 'workflow', row))) continue
+      if (!(await canViewResourceForTx(tx, actor, 'workflow', row))) continue
       if (!byId.has(row.id)) byId.set(row.id, row)
     }
     const row = dependencies.pickCallTarget(
@@ -283,12 +247,12 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     }
   }
 
-  async function visibleWorkgroupTarget(
+  const visibleWorkgroupTarget = async (
     authority: ResourceRequestContext,
     request: Extract<TaskExecutionResourceRequest, { readonly kind: 'call-workgroup' }>,
-  ): Promise<TaskExecutionWorkgroupSnapshot> {
+  ): Promise<TaskExecutionWorkgroupSnapshot> => {
     const actor = actorFor(authority)
-    const rows = await transaction
+    const rows = await tx
       .select()
       .from(workgroups)
       .where(eq(workgroups.name, request.name))
@@ -297,10 +261,10 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     const hinted =
       request.idHint === undefined
         ? undefined
-        : await transaction.select().from(workgroups).where(eq(workgroups.id, request.idHint)).get()
-    const byId = new Map<string, typeof workgroups.$inferSelect>()
+        : await tx.select().from(workgroups).where(eq(workgroups.id, request.idHint)).get()
+    const byId = new Map<string, WorkgroupRow>()
     for (const row of [...rows, ...(hinted === undefined ? [] : [hinted])]) {
-      if (!(await canViewResourceInTransaction(transaction, actor, 'workgroup', row))) continue
+      if (!(await canViewResourceForTx(tx, actor, 'workgroup', row))) continue
       if (!byId.has(row.id)) byId.set(row.id, row)
     }
     const row = dependencies.pickCallTarget(
@@ -316,7 +280,7 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
         `a call node references workgroup '${request.name}' which does not exist or is not visible to the launcher`,
       )
     }
-    const members = await transaction
+    const members = await tx
       .select()
       .from(workgroupMembers)
       .where(eq(workgroupMembers.workgroupId, row.id))
@@ -331,12 +295,14 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     }
   }
 
-  async function loadAgentInjection(
+  const loadAgentInjection = async (
     authority: ResourceRequestContext,
     agentId: string,
-  ): Promise<Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: 'agent-injection' }>> {
+  ): Promise<
+    Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: 'agent-injection' }>
+  > => {
     actorFor(authority)
-    const rootRow = await transaction.select().from(agents).where(eq(agents.id, agentId)).get()
+    const rootRow = await tx.select().from(agents).where(eq(agents.id, agentId)).get()
     if (rootRow === undefined) {
       return requestFailure('agent-not-found', `agent '${agentId}' not found`)
     }
@@ -356,7 +322,7 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
         )
       }
       if (seen.has(entry.id)) continue
-      const row = await transaction.select().from(agents).where(eq(agents.id, entry.id)).get()
+      const row = await tx.select().from(agents).where(eq(agents.id, entry.id)).get()
       if (row === undefined) {
         return requestFailure(
           'agent-dependency-not-found',
@@ -384,7 +350,7 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
         skillSnapshots.push(Object.freeze({ kind: 'project', name: ref.name }))
         continue
       }
-      const row = await transaction.select().from(skills).where(eq(skills.id, ref.skillId)).get()
+      const row = await tx.select().from(skills).where(eq(skills.id, ref.skillId)).get()
       if (row === undefined) {
         return requestFailure(
           'skill-not-found',
@@ -429,9 +395,7 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     }
     const mcpIds = collectIds((agent) => agent.mcp)
     const mcpRows =
-      mcpIds.length === 0
-        ? []
-        : await transaction.select().from(mcps).where(inArray(mcps.id, mcpIds)).all()
+      mcpIds.length === 0 ? [] : await tx.select().from(mcps).where(inArray(mcps.id, mcpIds)).all()
     const mcpById = new Map(mcpRows.map((row) => [row.id, mcpFromPersistenceRow(row)]))
     if (mcpIds.some((id) => !mcpById.has(id))) {
       return requestFailure('mcp-not-found', `agent '${root.name}' references a missing MCP`)
@@ -458,7 +422,7 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     const pluginRows =
       pluginIds.length === 0
         ? []
-        : await transaction.select().from(plugins).where(inArray(plugins.id, pluginIds)).all()
+        : await tx.select().from(plugins).where(inArray(plugins.id, pluginIds)).all()
     const pluginById = new Map(pluginRows.map((row) => [row.id, pluginFromPersistenceRow(row)]))
     if (pluginIds.some((id) => !pluginById.has(id))) {
       return requestFailure('plugin-not-found', `agent '${root.name}' references a missing Plugin`)
@@ -484,46 +448,43 @@ export function createPostgresqlTaskExecutionResourceSnapshotReader(
     })
   }
 
-  const reader: PostgresqlTaskExecutionResourceSnapshotReader = {
-    async loadAuthorized(authority, requests) {
-      const snapshots: FrozenTaskExecutionResourceSnapshot[] = []
-      for (const request of requests) {
-        switch (request.kind) {
-          case 'workflow-launch':
-            snapshots.push(
-              Object.freeze({
-                kind: 'workflow-launch',
-                workflow: await loadWorkflowLaunch(authority, request.workflowId),
-              }),
-            )
-            break
-          case 'agent-injection':
-            snapshots.push(await loadAgentInjection(authority, request.agentId))
-            break
-          case 'call-workflow':
-            snapshots.push(
-              Object.freeze({
-                kind: 'call-workflow',
-                sourceWorkflowId: request.sourceWorkflowId,
-                nodeId: request.nodeId,
-                workflow: await visibleWorkflowTarget(authority, request),
-              }),
-            )
-            break
-          case 'call-workgroup':
-            snapshots.push(
-              Object.freeze({
-                kind: 'call-workgroup',
-                sourceWorkflowId: request.sourceWorkflowId,
-                nodeId: request.nodeId,
-                workgroup: await visibleWorkgroupTarget(authority, request),
-              }),
-            )
-            break
-        }
-      }
-      return snapshots
+  return Object.freeze({
+    async workflowLaunch(
+      authority: ResourceRequestContext,
+      request: Extract<TaskExecutionResourceRequest, { readonly kind: 'workflow-launch' }>,
+    ) {
+      return Object.freeze({
+        kind: 'workflow-launch',
+        workflow: await loadWorkflowLaunch(authority, request.workflowId),
+      })
     },
-  }
-  return Object.freeze(reader)
+    async agentInjection(
+      authority: ResourceRequestContext,
+      request: Extract<TaskExecutionResourceRequest, { readonly kind: 'agent-injection' }>,
+    ) {
+      return await loadAgentInjection(authority, request.agentId)
+    },
+    async callWorkflow(
+      authority: ResourceRequestContext,
+      request: Extract<TaskExecutionResourceRequest, { readonly kind: 'call-workflow' }>,
+    ) {
+      return Object.freeze({
+        kind: 'call-workflow',
+        sourceWorkflowId: request.sourceWorkflowId,
+        nodeId: request.nodeId,
+        workflow: await visibleWorkflowTarget(authority, request),
+      })
+    },
+    async callWorkgroup(
+      authority: ResourceRequestContext,
+      request: Extract<TaskExecutionResourceRequest, { readonly kind: 'call-workgroup' }>,
+    ) {
+      return Object.freeze({
+        kind: 'call-workgroup',
+        sourceWorkflowId: request.sourceWorkflowId,
+        nodeId: request.nodeId,
+        workgroup: await visibleWorkgroupTarget(authority, request),
+      })
+    },
+  })
 }

@@ -241,7 +241,7 @@ export interface TaskExecutionResourceSnapshotInTx {
   loadAuthorized(
     authority: ResourceRequestContext,
     requests: readonly TaskExecutionResourceRequest[],
-  ): readonly FrozenTaskExecutionResourceSnapshot[]
+  ): Promise<readonly FrozenTaskExecutionResourceSnapshot[]>
 }
 
 export interface IntentApplyResourceParticipantInTx {

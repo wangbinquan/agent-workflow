@@ -76,7 +76,7 @@ import {
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
-import { composePostgresqlTaskExecutionResourceSnapshotFactory } from '@/modules/resource-catalog/composition/taskExecution'
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
@@ -86,8 +86,8 @@ import {
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { tasks, workflows } from '@/db/schema'
-import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
-import { createPostgresqlTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { composePostgresqlAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import {
   composePostgresqlTaskExecutionProviderRuntime,
@@ -731,10 +731,10 @@ export async function composePostgresqlDaemonApplication(
       atomicApply: resourcePackageAtomicApply,
     }),
   })
-  const taskExecutionResourceSnapshots = composePostgresqlTaskExecutionResourceSnapshotFactory(
-    legacyTaskExecutionResourceDependencies,
+  const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
+    taskExecutionResourceDependencies,
   )
-  const taskExecutionResources = createPostgresqlTaskExecutionResourceBinding(
+  const taskExecutionResources = createTaskExecutionResourceBinding(
     input.db,
     taskExecutionResourceSnapshots,
   )

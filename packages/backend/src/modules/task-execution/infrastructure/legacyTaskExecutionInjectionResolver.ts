@@ -37,7 +37,7 @@ import {
 } from '@/services/runtime/injectionIdentity'
 import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
 import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
-import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { skillFilesRel } from '@/services/skillIdentityPaths'
 import type { AgentInjectionSpecV1, ResolvedSkill } from '@/services/runtime/types'
 
@@ -84,9 +84,7 @@ export function createSqliteLegacyAgentDependencyLookup(db: DbClient): AgentDepe
   return Object.freeze({
     async get(id: string) {
       const rows = await db.select().from(agentRows).where(eq(agentRows.id, id)).limit(1)
-      return rows[0] === undefined
-        ? null
-        : legacyTaskExecutionResourceDependencies.rowToAgent(rows[0])
+      return rows[0] === undefined ? null : taskExecutionResourceDependencies.rowToAgent(rows[0])
     },
   })
 }
@@ -185,7 +183,7 @@ export async function resolveInjection(
           .from(mcpRows)
           .where(inArray(mcpRows.id, [...ids]))
           .all()
-          .map(legacyTaskExecutionResourceDependencies.rowToMcp)
+          .map(taskExecutionResourceDependencies.rowToMcp)
       },
     },
     mcpIds,
@@ -233,7 +231,7 @@ export async function resolveInjection(
           .from(pluginRows)
           .where(inArray(pluginRows.id, [...ids]))
           .all()
-          .map(legacyTaskExecutionResourceDependencies.rowToPlugin)
+          .map(taskExecutionResourceDependencies.rowToPlugin)
       },
     },
     pluginIds,

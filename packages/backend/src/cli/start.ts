@@ -47,7 +47,7 @@ import {
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import {
   composeSqliteMemoryOperations,
   composeSqliteMemoryInjectionQueries,
@@ -171,7 +171,7 @@ import {
   runDigitalEmployeeOsCycle,
 } from '@/modules/digital-employee/composition'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
   developmentExecutionContractRegistrations,
@@ -1812,9 +1812,9 @@ async function composeSqliteProviderSession(
   })
   const agentResourceIntegrity = composeAgentResourceIntegrity(agentResourceInventory)
   const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
-    legacyTaskExecutionResourceDependencies,
+    taskExecutionResourceDependencies,
   )
-  const taskExecutionResources = createSqliteTaskExecutionResourceBinding(
+  const taskExecutionResources = createTaskExecutionResourceBinding(
     db,
     taskExecutionResourceSnapshots,
   )

@@ -679,7 +679,7 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
         'resource-catalog',
         'infrastructure',
         'aggregateAdapters',
-        'legacyTaskExecutionResourceSnapshots.ts',
+        'taskExecutionResourceSnapshots.ts',
       ),
       'utf-8',
     )

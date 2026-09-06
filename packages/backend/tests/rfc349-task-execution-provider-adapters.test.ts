@@ -20,11 +20,7 @@ import { assertTaskOwnerTx } from '@/modules/task-execution/infrastructure/owned
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { DrizzleTaskEngineApplicationPersistence } from '@/modules/task-execution/infrastructure/taskEngineApplicationPersistence'
-import {
-  createPostgresqlTaskExecutionResourceBinding,
-  type PostgresqlTaskExecutionResourceSnapshotInTransaction,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots'
-import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { Actor } from '@/auth/actor'
 import type {
@@ -303,7 +299,10 @@ describe('RFC-349 task-execution provider adapters', () => {
     )
   })
 
-  test('SQLite and PostgreSQL freeze the same call closure behind one async atomic port', async () => {
+  // RFC-359 W4-D27：绑定只剩一份（`createTaskExecutionResourceBinding`），所以这条从「两份实现
+  // 冻出同一个闭包」变成「同一份实现在两个引擎上冻出同一个闭包」，并继续锁 PG 那笔仍是
+  // REPEATABLE READ READ ONLY（SQLite 侧仍是 BEGIN IMMEDIATE，与合一前 `dbTxSync` 同一条边界）。
+  test('一份绑定在两个引擎上冻出同一个调用闭包，PG 仍走只读可重复读快照', async () => {
     const emptyDefinition = {
       $schema_version: 4,
       inputs: [],
@@ -340,9 +339,17 @@ describe('RFC-349 task-execution provider adapters', () => {
       })
 
     const sqlite = createInMemoryDb(MIGRATIONS)
-    const sqliteBinding = createSqliteTaskExecutionResourceBinding(sqlite, {
+    const participant = {
+      async loadAuthorized(
+        authority: ResourceRequestContext,
+        requests: readonly TaskExecutionResourceRequest[],
+      ) {
+        return load(authority, requests)
+      },
+    } as unknown as TaskExecutionResourceSnapshotInTx
+    const sqliteBinding = createTaskExecutionResourceBinding(sqlite, {
       inTransaction() {
-        return { loadAuthorized: load } as unknown as TaskExecutionResourceSnapshotInTx
+        return participant
       },
     })
     const sqliteClosure = await sqliteBinding.freezeCallClosure(pair, {
@@ -351,13 +358,9 @@ describe('RFC-349 task-execution provider adapters', () => {
     })
 
     const fake = postgresqlFixture([])
-    const postgresqlBinding = createPostgresqlTaskExecutionResourceBinding(fake.db, {
+    const postgresqlBinding = createTaskExecutionResourceBinding(fake.db, {
       inTransaction() {
-        return {
-          async loadAuthorized(authority, requests) {
-            return load(authority, requests)
-          },
-        } satisfies PostgresqlTaskExecutionResourceSnapshotInTransaction
+        return participant
       },
     })
     const postgresqlClosure = await postgresqlBinding.freezeCallClosure(pair, {

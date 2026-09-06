@@ -138,6 +138,13 @@ export interface DatabaseSession {
    * 相同（BEGIN IMMEDIATE 本就完全串行）。重入时复用外层事务，不再抬升隔离级别。
    */
   serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
+  /**
+   * 只读快照事务：体内的多次读要互相一致（典型是「冻结调用闭包」这类递归取数）。
+   * PG：`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`；
+   * SQLite：与 `transaction` 相同（`BEGIN IMMEDIATE` 本来就是全库独占的一致视图，
+   * 也正是合一前 `dbTxSync` 给这些读路径的同一条边界）。重入时复用外层事务。
+   */
+  snapshotRead<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
 }
 
 interface TransactionFrame {
@@ -235,6 +242,8 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
     engine: SQLITE_ENGINE,
     transaction,
     serializable: transaction,
+    // BEGIN IMMEDIATE 已经是全库独占的一致视图；合一前这些读路径走的 `dbTxSync` 也是同一条边界。
+    snapshotRead: transaction,
   })
 }
 
@@ -247,6 +256,15 @@ export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): D
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
       return await db.transaction(async (tx) => {
+        const handle = tx as unknown as DatabaseTransaction
+        return await withFrame(client, handle, async () => await body(handle))
+      })
+    },
+    async snapshotRead<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+      const reused = reuseFrame(client)
+      if (reused !== undefined) return await body(reused)
+      return await db.transaction(async (tx) => {
+        await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
         const handle = tx as unknown as DatabaseTransaction
         return await withFrame(client, handle, async () => await body(handle))
       })

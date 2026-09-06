@@ -1,18 +1,12 @@
 // RFC-345 T4a — bootstrap binding for task-execution resource snapshots.
 
 import type { Actor } from '@/auth/actor'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createTaskExecutionResourceSnapshotInTx } from '../application/participants/taskExecutionResourceSnapshot'
 import {
-  createLegacyTaskExecutionResourceSnapshotPorts,
-  type LegacyTaskExecutionResourceDependencies,
-} from '../infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots'
-import {
-  createPostgresqlTaskExecutionResourceSnapshotReader,
-  type PostgresqlTaskExecutionResourceDependencies,
-  type PostgresqlTaskExecutionResourceSnapshotReader,
-  type PostgresqlTaskExecutionResourceTransaction,
-} from '../infrastructure/aggregateAdapters/postgresqlTaskExecutionResourceSnapshots'
+  createTaskExecutionResourceSnapshotPorts,
+  type TaskExecutionResourceDependencies,
+} from '../infrastructure/aggregateAdapters/taskExecutionResourceSnapshots'
 import type {
   ResourceRequestContext,
   TaskExecutionResourceSnapshotInTx,
@@ -25,49 +19,21 @@ interface TaskExecutionResourceAuthorityPair {
 
 interface TaskExecutionResourceBinding {
   inTransaction(
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     pair: TaskExecutionResourceAuthorityPair,
   ): TaskExecutionResourceSnapshotInTx
 }
 
-export interface PostgresqlTaskExecutionResourceSnapshotFactory {
-  inTransaction(
-    transaction: PostgresqlTaskExecutionResourceTransaction,
-    pair: TaskExecutionResourceAuthorityPair,
-  ): PostgresqlTaskExecutionResourceSnapshotReader
-}
-
 export function composeTaskExecutionResourceBinding(
-  dependencies: LegacyTaskExecutionResourceDependencies,
+  dependencies: TaskExecutionResourceDependencies,
 ): TaskExecutionResourceBinding {
   return Object.freeze({
-    inTransaction(tx: DbTxSync, pair: TaskExecutionResourceAuthorityPair) {
+    inTransaction(tx: DatabaseTransaction, pair: TaskExecutionResourceAuthorityPair) {
       return createTaskExecutionResourceSnapshotInTx(
-        createLegacyTaskExecutionResourceSnapshotPorts(
+        createTaskExecutionResourceSnapshotPorts(
           { tx, authority: pair.authority, actor: pair.actor },
           dependencies,
         ),
-      )
-    },
-  })
-}
-
-/**
- * PostgreSQL Task Execution adapter factory. The Task Execution owner opens a
- * repeatable-read transaction; Resource Catalog binds every recursive closure
- * lookup to that exact transaction and exact admitted authority pair.
- */
-export function composePostgresqlTaskExecutionResourceSnapshotFactory(
-  dependencies: PostgresqlTaskExecutionResourceDependencies,
-): PostgresqlTaskExecutionResourceSnapshotFactory {
-  return Object.freeze({
-    inTransaction(
-      transaction: PostgresqlTaskExecutionResourceTransaction,
-      pair: TaskExecutionResourceAuthorityPair,
-    ) {
-      return createPostgresqlTaskExecutionResourceSnapshotReader(
-        { transaction, authority: pair.authority, actor: pair.actor },
-        dependencies,
       )
     },
   })

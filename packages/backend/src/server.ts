@@ -273,7 +273,7 @@ import {
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import { createDigitalEmployeeResourceCatalogAclProviders } from '@/modules/digital-employee/composition'
 import type {
@@ -323,7 +323,7 @@ import {
   composeTaskExecutionRuntime,
   createSqliteTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
+import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -923,9 +923,9 @@ function withIntegrationTriggerResources(
       db,
       composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     ),
-    taskExecutionResources: createSqliteTaskExecutionResourceBinding(
+    taskExecutionResources: createTaskExecutionResourceBinding(
       db,
-      composeTaskExecutionResourceBinding(legacyTaskExecutionResourceDependencies),
+      composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
     ),
   })
 }

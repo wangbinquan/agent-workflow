@@ -866,12 +866,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const adapter = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts',
       ),
       'utf8',
     )
     const dependencies = readFileSync(
-      resolve(sourceRoot, 'services/execution/legacyTaskExecutionResourceDependencies.ts'),
+      resolve(sourceRoot, 'services/execution/taskExecutionResourceDependencies.ts'),
       'utf8',
     )
     const resources = readFileSync(
@@ -908,17 +908,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/identity-access/application/operationContext.ts'),
       'utf8',
     )
-    const sqliteBinding = readFileSync(
+    // RFC-359 W4-D27：绑定只剩一份，两个 bootstrap 共用。
+    const binding = readFileSync(
       resolve(
         sourceRoot,
-        'modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts',
-      ),
-      'utf8',
-    )
-    const postgresqlBinding = readFileSync(
-      resolve(
-        sourceRoot,
-        'modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts',
+        'modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts',
       ),
       'utf8',
     )
@@ -946,18 +940,21 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(closure).toContain(
       'resourceAuthority.resources.freezeCallClosure(resourceAuthority, root)',
     )
-    for (const binding of [sqliteBinding, postgresqlBinding]) {
-      expect(binding).toContain("from '@/modules/resource-catalog/public/participants'")
-      expect(binding).toContain('participant.loadAuthorized(pair.authority, requests)')
+    expect(binding).toContain("from '@/modules/resource-catalog/public/participants'")
+    expect(binding).toContain('participant.loadAuthorized(pair.authority, requests)')
+    expect(binding).toContain('TaskExecutionResourceSnapshotInTx')
+    expect(binding).toContain('const participant = factory.inTransaction(tx, pair)')
+    // 闭包冻结只剩异步一份（与同步版逐语句同构），事务走中立只读快照。
+    expect(binding).toContain('freezeTaskExecutionCallClosureAsync(')
+    expect(binding).toContain('session.snapshotRead(')
+    for (const retired of [
+      'modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts',
+      'modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts',
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlTaskExecutionResourceSnapshots.ts',
+      'modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts',
+    ]) {
+      expect(() => readFileSync(resolve(sourceRoot, retired), 'utf8')).toThrow()
     }
-    expect(sqliteBinding).toContain('TaskExecutionResourceSnapshotInTx')
-    expect(sqliteBinding).toContain('const participant = factory.inTransaction(tx, pair)')
-    expect(sqliteBinding).toContain('freezeTaskExecutionCallClosureSync(')
-    expect(postgresqlBinding).toContain('PostgresqlTaskExecutionResourceSnapshotInTransaction')
-    expect(postgresqlBinding).toContain(
-      'const participant = factory.inTransaction(transaction, pair)',
-    )
-    expect(postgresqlBinding).toContain('freezeTaskExecutionCallClosureAsync(')
 
     expect(task).toContain('freezeTaskExecutionCallClosure(')
     expect(task).not.toContain('freezeCallClosure(')
