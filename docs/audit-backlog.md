@@ -4018,6 +4018,29 @@ mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次�
 **已排除**：与 RFC-359 W4-D27（任务执行资源快照合一）无关——给中立绑定加桩后确认，本用例
 整条路径**一次都没调到**那个绑定；且该形态在 D27 之前的 commit 上就已出现。
 
+**第四次实撞（2026-09-06，`7f94a1154` macOS 分片 1/4）**：同一形态，这次一次红**两条**
+（`external three-file bundle …` 与 `direct body-only …`），都是整 90s 墙钟耗尽。重跑该分片即绿——
+再次印证是间歇竞态而非代码回归（该 commit 只删了零消费者的 legacy 工作组引擎，与本模块无交集）。
+
+**一条具体嫌疑（2026-09-06 读码得出，尚未证实）**：`commitAndHandle` 的去重逃生门只认
+**dispatched** 的自治 effect：
+
+```ts
+const hangingSelfSettled = (await deps.store.listUnsettledEffects(mission.id)).some(
+  (e) => e.state === 'dispatched' && (DELIVERY_EFFECT_KINDS.has(...) || ...),
+)
+```
+
+而 `listUnsettledEffects` 返回的是 **`prepared` ∪ `dispatched`**。一条停在 `prepared` 的
+delivery / pipeline / mr-care effect 同时满足三件事：①被 `projectGuards` 的 filter 排除，
+所以不改 guards；②不改 cells；③不满足上面的 `state === 'dispatched'`。于是
+`decisionInputDigest` 不变 ⇒ 决策被去重 ⇒ `handleDecision` 不跑 ⇒ 那条 effect 永远等不到派发，
+mission 停在 `working`、`blockCode` 为 null——与本条签名逐字吻合。这与本模块已经修过的**两个**
+同类缺陷（guard 面未入去重键、dispatched 悬挂 effect 被去重吞）是同一族。
+**验证办法**：复现时 dump `development_effects` 的 (state, effect_kind)；若真有 `prepared` 的
+自治 effect，把逃生门从 `state === 'dispatched'` 放宽成「任何未结算的自治 effect」即可
+（重放本就按 idempotencyKey 幂等，注释已写明）。
+
 **未决**：`modules/development-automation/application/missionReconciler.ts` 与
 `commands/launchMission.ts` 里 `status='working'` 的那几处推进点，需要找出哪一条在竞态下会
 丢掉推进（典型嫌疑：fire-and-forget 的 arm 完成回调与 `reconcile` 的读—判—写交错）。
