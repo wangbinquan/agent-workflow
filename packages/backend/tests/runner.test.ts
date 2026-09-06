@@ -132,16 +132,18 @@ function proxyDbInsert(db: DbClient, intercept: (table: unknown) => void): DbCli
   }) as DbClient
 }
 
-function proxyDbTransaction(db: DbClient, intercept: () => void): DbClient {
+/**
+ * RFC-359 W4-D24 —— 统一事务原语用 `BEGIN IMMEDIATE`（`db.run`），不是 drizzle 的 `db.transaction`。
+ * 想数「整笔事务被重试了几次」，插桩点就得跟着挪到真正的事务起点上。
+ */
+function proxyDbBeginImmediate(db: DbClient, intercept: () => void): DbClient {
   return new Proxy(db, {
     get(target, property) {
-      if (property === 'transaction') {
+      if (property === 'run') {
         return (...args: unknown[]) => {
-          intercept()
-          return (target.transaction as unknown as (...values: unknown[]) => unknown).apply(
-            target,
-            args,
-          )
+          const [query] = args as [{ readonly queryChunks?: unknown } | undefined]
+          if (JSON.stringify(query ?? '').includes('BEGIN IMMEDIATE')) intercept()
+          return (target.run as unknown as (...values: unknown[]) => unknown).apply(target, args)
         }
       }
       const value = Reflect.get(target, property, target) as unknown
@@ -531,7 +533,7 @@ describe('runNode', () => {
     const { log } = captureWarnings()
     let transactionAttempts = 0
     let failNextTransaction = true
-    const transientDb = proxyDbTransaction(h.db, () => {
+    const transientDb = proxyDbBeginImmediate(h.db, () => {
       transactionAttempts += 1
       if (!failNextTransaction) return
       failNextTransaction = false
