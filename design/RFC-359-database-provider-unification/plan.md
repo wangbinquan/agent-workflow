@@ -746,8 +746,7 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 
   | 相似度 | 对 | SQLite / PG 规模（字符） |
   | --- | --- | --- |
-  | 0.59 | TaskExecutionResourceSnapshots | 1512 / 2567 |
-    | 0.31 | TaskExecutionRuntimeParticipants | 5215 / 6082 |
+      | 0.31 | TaskExecutionRuntimeParticipants | 5215 / 6082 |
   | 0.26 | TaskExecutionEffectPersistence | 9821 / 28952 |
   | 0.22 | TaskLifecycleAutoRepairCommand | 2176 / 5988 |
   | 0.13 | TaskExecutionRecovery | 10139 / 19951 |
@@ -802,6 +801,37 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   判据，其实早已被**双引擎**的 `rfc359-t1-human-gate-journal.test.ts` 逐条接管（同名五条 + 恢复
   认领排序一条），所以该文件只留与引擎无关的规范化请求断言；`rfc333-human-gate-artifact-recovery.test.ts`
   的夹具改用中立 journal。新增 `rfc359-w4-d26-adapters.test.ts` 九条两引擎各绿。
+
+  **D27 ✅（任务执行资源快照合一 + 中立只读快照事务，2026-09-06）**：相似度表里最高的那一对
+  （0.59）。resource-catalog 侧两份读面（legacy 494 行 / PG 529 行）本来就**逐行同一套逻辑**，
+  差别只有三处，逐条对账后取中立形态：
+
+  - **事务**：`DatabaseSession` 新增 `snapshotRead`。这是本刀唯一的新能力，加它是因为两个引擎
+    在这条读路径上**本来就各有边界**且都不能丢：SQLite 走 `dbTxSync`（BEGIN IMMEDIATE），PG 走
+    `REPEATABLE READ READ ONLY`。中立 `transaction()` 在 PG 上是 READ COMMITTED，会让闭包递归
+    取数失去一致视图；所以按能力矩阵的路子补一条只读快照，两边各取原样，**边界一格未改**。
+  - **可见性**：新增 `infrastructure/resourceAclTransaction.ts` 的 `canViewResourceForTx`。
+    与 legacy `canViewResourceInTx` 同一条判据（audience → 私有才查授权 → `resolveAccessFrom`
+    → `canViewAccess`）；PG 此前在读面里内联了逐字等价的一份。
+  - **行映射**：改用同 context 内的 `*Persistence` 中立映射器。这是本刀风险最高的一处，逐个对账过
+    ——`rowToAgent` vs `agentFromPersistenceRow`（sidecar 提升规则、runtime 列规则逐条相同）、
+    `rowToWorkflowDetail` vs `workflowDetailOf∘workflowFromPersistenceRow`（两侧的
+    `normalizeWorkflowSnapshot` / `workflowDraftSnapshotOf` 是同一个 `WorkflowDraftSnapshotSchema.parse`，
+    所以 `snapshotHash` 逐字节相同）、`rowToWorkgroup` vs `workgroupFromRows`（函数体逐行相同）、
+    mcp / plugin 两个本来就是同一个函数的别名。
+
+  闭包冻结只保留异步一份：`freezeTaskExecutionCallClosureAsync` 与同步版**逐语句同构**（同一个
+  builder、同一顺序、同一序列化），只在 loader 上多一个 await——所以「异步版能不能覆盖同步版」
+  这个挂了很久的待裁决问题，答案是可以，且不必做行为取舍。参与者合同随之改成 Promise 面，
+  `loadAuthorized` 顺序求值（闭包依赖「上一条结果决定下一条」，并发化会改变错误先后）。
+
+  策略束里只留 legacy 行为神谕（`legacyTaskExecutionInjectionResolver`，生产零消费）还要的三个
+  行映射器：它在 task-execution 里，直接 import 对方 infrastructure 会新增跨 context 内部边
+  （实撞一次，R1 守卫当场报红），所以照旧经 services 装配边注入，随该文件退役一并删。
+
+  `rfc359-w4-d27-adapters.test.ts` 九条两引擎各绿；`rfc349-task-execution-provider-adapters` 的
+  闭包一致性断言从「两份实现冻出同一结果」改成「同一份实现在两个引擎上冻出同一结果」，并继续锁
+  PG 那笔仍是只读可重复读快照。
 
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
