@@ -489,12 +489,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25225,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25226,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-310（2026-09-07，修 29067e3d3 引入的循环依赖）：`recordOnMission` 从 `missionReconciler` 挪进新文件 `application/missionRecord.ts`——挂在 reconciler 上会成环（orchestrator / actionInvalidation 本来就被它依赖），depcheck no-circular 拦下，按其处置顺序「拆掉这条边」办。新文件带来 `MissionRecordDeps` 一个额外符号，25225 → 25226；同时 delivery chain 那份重复的 `occPatchWithRetry` 已并掉。一次性豁免，下一个不增长的提交删除。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c79ab02a43d4825425070a2c182912fa580cb353f7a3956c9808468c46f0ee2f",
+    "sourceDigest": "sha256:6240421c7de160c6519f931a7a97092e2af1420bc6114961991d45dc31296253",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -507,8 +510,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "04130b9a63e9b7ac16eedb095ad7717e2e94b96d",
-    "contentDigest": "sha256:ac6008d27467b9cf31fbd81d0f6d5cceb9109830e2ada6f5e6bea076c20b6384",
+    "currentSnapshotSha": "9985e2179be1001761ccc86dea32ce1b278bdc4e",
+    "contentDigest": "sha256:a5ba4957c38e86f726d2aa09173643df73642ebc29d1af1eb097596e63c3e3c6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
