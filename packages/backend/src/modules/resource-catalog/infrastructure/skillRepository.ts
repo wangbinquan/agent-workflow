@@ -1,4 +1,4 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createManagedSkill,
   deleteSkill,
@@ -23,14 +23,16 @@ import {
 import type { SkillRepository } from '../application/skills/ports'
 
 /**
- * SQLite/filesystem explicit compatibility island for the Skill vertical slice.
+ * Filesystem-backed explicit compatibility island for the Skill vertical slice.
  *
- * Active transports consume module-owned handles; the mature crash-safe
- * version and filesystem funnels remain behind this infrastructure port until
- * T9 can move them without changing their recovery protocol.
+ * RFC-359 W4-D23c：一份仓库，两个数据库共用——底下那套成熟的崩溃安全版本 / 文件系统漏斗
+ * 已在 D23b 迁到中立事务原语，PostgreSQL 的 3342 行原生重写随之退役。它仍留在这个基础设施端口
+ * 后面（而不是搬进 application），是因为搬动会改到它的恢复协议；那是 T9 的事。
+ *
+ * Active transports consume module-owned handles.
  */
-export function createSqliteSkillRepository(
-  db: DbClient,
+export function createSkillRepository(
+  db: ProviderNeutralDatabase,
   fsOptions: SkillFsOptions,
   // RFC-353 T7：回滚时「哪些记忆退回待用」由 knowledge-evolution 的协调器裁定，
   // bootstrap 注入。此前这里直接 import memory 的 infrastructure——跨 context 内部 import。

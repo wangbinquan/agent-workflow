@@ -23,7 +23,7 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { skills, skillVersions } from '@/db/schema'
 import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
@@ -138,7 +138,7 @@ interface BootVerifyOptions {
  * Passing marks the skill boot-verified; failing CAS-quarantines it fail-closed.
  */
 export async function verifyManagedSnapshot(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: BootVerifyOptions,
   skill: ReverifySkill,
 ): Promise<VerifyOutcome> {
@@ -245,7 +245,7 @@ export async function verifyManagedSnapshot(
 }
 
 async function inspectManagedSnapshot(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: BootVerifyOptions,
   skill: ReverifySkill,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
@@ -336,7 +336,7 @@ async function inspectManagedSnapshot(
  * quarantined for size.
  */
 export async function runBootSnapshotReverify(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: BootVerifyOptions,
 ): Promise<{ verified: number; quarantined: number }> {
   bootReverifyActivated = true

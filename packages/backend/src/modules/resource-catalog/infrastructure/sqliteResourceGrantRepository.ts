@@ -1,6 +1,7 @@
 import type { GrantResourceType, ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
 import { resourceGrants } from '@/db/schema'
 import type { ResourceAclActorProjection } from '../domain/resourceAccess'
@@ -83,7 +84,7 @@ export function listResourceGrantUserIdsInTx(
 }
 
 export async function listWritableGrantedResourceIds(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: ResourceAclActorProjection,
   type: GrantResourceType,
 ): Promise<Set<string>> {

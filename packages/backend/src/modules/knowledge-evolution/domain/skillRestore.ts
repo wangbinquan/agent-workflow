@@ -4,7 +4,8 @@
 // 但**「记忆属于技能的哪一版」这条关系在回滚时怎么动**既不是前者的账也不是后者的账——
 // 它是知识演化的规则，归 knowledge-evolution。此前它散在 RC 的 `legacy/skillVersion.ts`
 // 里（SQLite）和 `postgresqlSkillContentLifecycle.prepareRestore` 里（PostgreSQL），
-// 两处各写一遍同一句 `aboveVersion: request.version`。
+// 两处各写一遍同一句 `aboveVersion: request.version`。（后者已随 RFC-359 W4-D23c 的技能目录
+// 合一退役——技能机器现在只有一份，两个数据库共用。）
 
 import type { MemoryMembershipUnfuseSelector } from '../../memory/public/participants'
 

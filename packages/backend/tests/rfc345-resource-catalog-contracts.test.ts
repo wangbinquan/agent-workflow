@@ -513,13 +513,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     expect(composition).toContain('createResourceAuthorizationApplication(')
-    expect(composition).toContain('createSqliteResourceGrantReadPort(input.db)')
+    expect(composition).toContain('createResourceGrantReadPort(db)')
     expect(composition).toContain('createResourceAclApplication<AclResourceType>({')
-    // RFC-359 W4-D3：默认路径走中立端口；带 owner 侧同步参与者的调用仍走 SQLite 端口。
-    expect(composition).toContain(': createResourceAclMutationPort(input.db)')
-    expect(composition).toContain(': createResourceAclReadPort(input.db)')
-    expect(composition).toContain('createSqliteResourceAclMutationPort(input.db, input.lifecycle)')
-    expect(composition).toContain('createSqliteResourceAclReadPort(input.db)')
+    // RFC-359 W4-D23c：分叉没有了——读 / 写端口各只剩中立的一份。带同步 after-write 钩子的
+    // SQLite 专属装配（连同它背后 334 行的 sqliteResourceAclRepository.ts）已退役：它最后一个
+    // 生产调用方在 W4-D16 就改走中立 lifecycle 了。
+    expect(composition).toContain('mutation: createResourceAclMutationPort(db)')
+    expect(composition).toContain('read: createResourceAclReadPort(db)')
+    expect(composition).not.toContain('createSqliteResourceAclMutationPort')
+    expect(composition).not.toContain('createSqliteResourceAclReadPort')
     expect(composition).toContain('export function composeProviderResourceAclOperationApplication<')
     expect(composition).not.toContain('withSqliteResourceAclMutation')
     expect(composition).not.toContain('getAclResourceAccessRowInTx')
@@ -1437,7 +1439,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/skillRepository.ts'),
       'utf8',
     )
     const composition = readFileSync(
@@ -1507,9 +1509,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       "from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'",
     )
     expect(repository).toContain('explicit compatibility island')
-    expect(composition).toContain('createSqliteSkillRepository')
-    expect(composition).toContain('createSqliteSkillZipImportParticipant')
-    expect(composition).toContain('createPostgresqlSkillZipImportParticipant')
+    expect(composition).toContain('createSkillRepository')
+    // RFC-359 W4-D23c：ZIP 导入参与者也只剩中立的一份，PostgreSQL 原生那份已退役。
+    expect(composition).toContain('createSkillZipImportParticipant')
+    expect(composition).not.toContain('createPostgresqlSkillZipImportParticipant')
     expect(composition).toContain('createSkillApplication')
     expect(composition).toContain('composeResourceAclOperationApplication')
 

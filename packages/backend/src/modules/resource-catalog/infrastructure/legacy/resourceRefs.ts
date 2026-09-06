@@ -21,7 +21,7 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import {
@@ -440,21 +440,10 @@ function referencingSelectShape(column: AnySQLiteColumn) {
 }
 
 export async function findAgentsReferencingIdInJsonColumn(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   args: ReferencingScanArgs,
 ): Promise<ReferencingAgentRow[]> {
   const rows = await db
-    .select(referencingSelectShape(args.column))
-    .from(agents)
-    .where(like(args.column, `%"${args.id}"%`))
-  return collectReferencing(rows, args)
-}
-
-export async function findAgentsReferencingIdInJsonColumnInTx(
-  tx: DatabaseTransaction,
-  args: ReferencingScanArgs,
-): Promise<ReferencingAgentRow[]> {
-  const rows = await tx
     .select(referencingSelectShape(args.column))
     .from(agents)
     .where(like(args.column, `%"${args.id}"%`))

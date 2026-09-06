@@ -5,11 +5,7 @@
 // performs abort/reap/cleanup after commit.
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import {
-  normalizeStoredAdditionalPermissions,
-  resolveEffectiveAccountPermissions,
-} from '@agent-workflow/shared'
-import { isVisibleToAudienceSnapshot } from '../../domain/resourceAccess'
+import {} from '@agent-workflow/shared'
 import { listResourceGrantUserIdsInTx } from '../sqliteResourceGrantRepository'
 import type { DbTxSync } from '@/db/txSync'
 import {
@@ -17,8 +13,6 @@ import {
   mcpRuntimeTestSessions,
   mcpRuntimeTestSessionLeases,
   runtimes,
-  userPermissionGrants,
-  users,
 } from '@/db/schema'
 import { ConflictError } from '@/util/errors'
 
@@ -97,68 +91,6 @@ export function transitionMcpRuntimeTestsInTx(
       blockAfterTurn(tx, session, input.reason, input.now)
     } else {
       endNow(tx, session, input.reason, input.now)
-    }
-  }
-}
-
-export function transitionMcpAclRuntimeTestsInTx(
-  tx: DbTxSync,
-  input: {
-    mcpId: string
-    ownerUserId: string | null
-    visibility: 'public' | 'private'
-    grantedUserIds: ReadonlySet<string>
-    now: number
-  },
-): void {
-  const sessions = tx
-    .select()
-    .from(mcpRuntimeTestSessions)
-    .where(
-      and(
-        eq(mcpRuntimeTestSessions.mcpId, input.mcpId),
-        eq(mcpRuntimeTestSessions.status, 'active'),
-      ),
-    )
-    .all()
-  for (const session of sessions) {
-    const account = tx
-      .select({ role: users.role, status: users.status })
-      .from(users)
-      .where(eq(users.id, session.ownerUserId))
-      .get()
-    const storedPermissions = tx
-      .select({ permission: userPermissionGrants.permission })
-      .from(userPermissionGrants)
-      .where(eq(userPermissionGrants.userId, session.ownerUserId))
-      .all()
-      .map((grant) => grant.permission)
-    const accountPermissions =
-      account === undefined
-        ? null
-        : resolveEffectiveAccountPermissions({
-            role: account.role,
-            additionalPermissions: normalizeStoredAdditionalPermissions({
-              role: account.role,
-              additionalPermissions: storedPermissions,
-            }).additionalPermissions,
-          })
-    // RFC-284 T10（§2.4）：可见性四分支收编快照判定；status 检查按设计留调用方。
-    const stillVisible =
-      account?.status === 'active' &&
-      accountPermissions !== null &&
-      isVisibleToAudienceSnapshot(
-        session.ownerUserId,
-        {
-          bypass: accountPermissions.has('resource-acl:bypass'),
-          private: accountPermissions.has('resource-acl:private'),
-        },
-        input,
-      )
-    if (!stillVisible) {
-      endNow(tx, session, 'access-revoked', input.now)
-    } else {
-      blockAfterTurn(tx, session, 'mcp-config-changed', input.now)
     }
   }
 }

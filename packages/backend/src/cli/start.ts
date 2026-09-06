@@ -245,7 +245,7 @@ import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 import { createDaemonRealtimePolicyBinding } from './daemonRealtimePolicy'
 import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeSqliteSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
+import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import type { SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
 import { composeSqliteWebhookDeliveryPersistence } from '@/modules/integration/composition/webhookDelivery'
 import {
@@ -2038,7 +2038,7 @@ async function composeSqliteProviderSession(
   // legacy/current structural op while locks remain evidence, migrate
   // skills/{name} -> skills/{id}, and prove DB/FS/FK consistency before users,
   // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
-  const skillCatalogBoot: SkillCatalogBootParticipant = composeSqliteSkillCatalogBoot({
+  const skillCatalogBoot: SkillCatalogBootParticipant = composeSkillCatalogBoot({
     db,
     appHome: Paths.root,
   })

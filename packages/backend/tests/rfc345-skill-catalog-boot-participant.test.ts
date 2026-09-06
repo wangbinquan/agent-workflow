@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createSkillCatalogBootParticipant } from '../src/modules/resource-catalog/application/skills/skillCatalogBootParticipant'
 
@@ -65,23 +65,27 @@ describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
     expect(application).not.toMatch(/as unknown|WeakSet/)
   })
 
-  test('binds real SQLite and PostgreSQL state machines without fallback or aliases', () => {
+  // RFC-359 W4-D23c：启动状态机也只剩一份——`composeSkillCatalogBoot` 一个入口，两个 daemon 共用，
+  // 底下是中立事务的 `legacy/skill*` 崩溃安全机器。PostgreSQL 那份 1418 行原生重写已退役，
+  // 它此前还整条略过了身份迁移屏障末尾的引用完整性复核（合一时按「好的那份」补齐）。
+  test('boot binds one state machine for both engines, with no provider-native twin', () => {
     const composition = source('composition/skillCatalogBoot.ts')
-    const sqlite = source('infrastructure/sqliteSkillCatalogBoot.ts')
-    const postgresql = source('infrastructure/postgresqlSkillCatalogBoot.ts')
+    const adapter = source('infrastructure/skillCatalogBootAdapter.ts')
 
-    expect(composition).toContain('composeSqliteSkillCatalogBoot')
-    expect(composition).toContain('composePostgresqlSkillCatalogBoot')
-    expect(sqlite).toContain('runSkillIdentityMigrationBarrier(input.db, input)')
-    expect(sqlite).toContain('reconcileSkillLiveFiles(input.db, input)')
-    expect(sqlite).toContain('backfillLegacySkillVersions(input.db, input)')
-    expect(sqlite).toContain('runBootSnapshotReverify(input.db, input)')
+    expect(composition).toContain('export function composeSkillCatalogBoot')
+    expect(composition).not.toMatch(
+      /composeSqliteSkillCatalogBoot|composePostgresqlSkillCatalogBoot/,
+    )
+    expect(adapter).toContain('runSkillIdentityMigrationBarrier(input.db, input)')
+    expect(adapter).toContain('reconcileSkillLiveFiles(input.db, input)')
+    expect(adapter).toContain('backfillLegacySkillVersions(input.db, input)')
+    expect(adapter).toContain('runBootSnapshotReverify(input.db, input)')
+    expect(adapter).toContain('ProviderNeutralDatabase')
+    expect(adapter).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient|createSqlite|fallback/)
 
-    expect(postgresql).toContain('runPostgresqlResourceCatalogTransaction')
-    expect(postgresql).toContain('.from(skillOperations)')
-    expect(postgresql).toContain('.from(skillVersions)')
-    expect(postgresql).toContain('fingerprintTree')
-    expect(postgresql).toContain('hashRegularFileTree')
-    expect(postgresql).not.toMatch(/DbClient|createSqlite|as unknown|as DbClient|fallback|no-op/)
+    expect(
+      existsSync(resolve(sourceRoot, 'infrastructure', 'postgresqlSkillCatalogBoot.ts')),
+      'postgresqlSkillCatalogBoot.ts must stay retired',
+    ).toBe(false)
   })
 })

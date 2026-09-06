@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const backendRoot = resolve(import.meta.dir, '..')
@@ -42,7 +42,7 @@ describe('RFC-345 classic facade provider neutralization', () => {
   // RFC-359 W4-D14/D15：Agent / Workflow 聚合已是一份中立实现，不再有 sqlite* / postgresql* 孪生可查。
   test('SQLite adapters consume owner infrastructure without crossing back through facades', () => {
     for (const path of [
-      'src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
+      'src/modules/resource-catalog/infrastructure/skillRepository.ts',
       'src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts',
     ]) {
       const text = source(path)
@@ -110,16 +110,25 @@ describe('RFC-345 classic facade provider neutralization', () => {
     expect(offenders.map((file) => file.slice(backendRoot.length + 1))).toEqual([])
   })
 
-  test('classic PostgreSQL compositions remain native and provider-selected', () => {
-    for (const [aggregate, operationFile] of [['Skill', 'skillOperations']] as const) {
-      const composition = source(`src/modules/resource-catalog/composition/${operationFile}.ts`)
-      const repository = source(
-        `src/modules/resource-catalog/infrastructure/postgresql${aggregate}Repository.ts`,
-      )
-      expect(composition).toContain(`composePostgresql${aggregate}Catalog`)
-      expect(composition).toContain(`compose${aggregate}CatalogFromAdapters`)
-      expect(repository).toContain('PostgresqlDatabaseClient')
-      expect(repository).not.toMatch(/\bDbClient\b|\bDbTxSync\b|\bdbTxSync\b|createSqlite/)
+  // RFC-359 W4-D23c：Skill 是最后一个还有 provider 原生孪生的经典聚合。它退役后这里不再有
+  // 「PostgreSQL 那份保持原生」可锁——改锁**只剩一份**：装配只有一个入口，四个 postgresqlSkill*
+  // 实现文件（共 3342 行）已不存在，两个数据库跑同一条技能目录。
+  test('Skill catalog has exactly one composition and no provider-native twin', () => {
+    const composition = source('src/modules/resource-catalog/composition/skillOperations.ts')
+    expect(composition).toContain('composeSkillCatalogFromAdapters')
+    expect(composition).toContain('export function composeSkillCatalog(')
+    expect(composition).not.toContain('composePostgresqlSkillCatalog')
+    expect(composition).not.toMatch(/PostgresqlDatabaseClient|createSqlite/)
+    for (const retired of [
+      'postgresqlSkillRepository.ts',
+      'postgresqlSkillContentLifecycle.ts',
+      'postgresqlSkillZipImport.ts',
+      'postgresqlSkillCatalogBoot.ts',
+    ]) {
+      expect(
+        existsSync(resolve(backendRoot, 'src/modules/resource-catalog/infrastructure', retired)),
+        `${retired} must stay retired`,
+      ).toBe(false)
     }
   })
 })

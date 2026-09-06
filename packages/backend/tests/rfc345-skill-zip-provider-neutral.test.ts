@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 import { decodeSkillZipArchive } from '../src/modules/resource-catalog/infrastructure/skillZipArchive'
@@ -33,39 +33,22 @@ describe('RFC-345 Skill ZIP provider-neutral participant', () => {
     expect(ports).not.toMatch(/DbClient|PostgresqlDatabaseClient|@\/db|drizzle-orm/)
   })
 
-  test('SQLite is an explicit legacy adapter while PostgreSQL is owner-native', () => {
-    const sqlite = source('infrastructure/sqliteSkillZipImport.ts')
-    const postgresql = source('infrastructure/postgresqlSkillZipImport.ts')
-    const repository = source('infrastructure/postgresqlSkillRepository.ts')
+  // RFC-359 W4-D23c：ZIP 导入不再有 provider 孪生——一份适配器（`skillZipImportAdapter.ts`）
+  // 套中立事务的 `legacy/skill-zip` 机器，两个数据库共用。此前 PostgreSQL 那份 546 行原生实现
+  // （连同它依赖的 postgresqlSkillRepository.ts）已退役。
+  test('ZIP import has exactly one adapter and no provider-native twin', () => {
+    const adapter = source('infrastructure/skillZipImportAdapter.ts')
 
-    expect(sqlite).toContain("from './legacy/skill-zip'")
-    expect(sqlite).toContain('createSkillZipImportParticipant(Object.freeze(port))')
+    expect(adapter).toContain("from './legacy/skill-zip'")
+    expect(adapter).toContain('createParticipant(Object.freeze(port))')
+    expect(adapter).toContain('ProviderNeutralDatabase')
+    expect(adapter).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient|createSqlite|as unknown/)
 
-    expect(postgresql).toContain('createPostgresqlSkillZipImportParticipant')
-    expect(postgresql).toContain('runPostgresqlResourceCatalogTransaction')
-    expect(postgresql).toContain('prepareImportCreate')
-    expect(postgresql).toContain('prepareImportOverwrite')
-    expect(postgresql).toContain('plan.commitInTransaction(transaction')
-    expect(postgresql).toContain('executePostgresqlSkillVersionPlan')
-    for (const fence of [
-      'expectedOwnerUserId',
-      'expectedVisibility',
-      'expectedAclRevision',
-      'contentVersion',
-      'metaRevision',
-    ]) {
-      expect(postgresql).toContain(fence)
+    for (const retired of ['postgresqlSkillZipImport.ts', 'postgresqlSkillRepository.ts']) {
+      expect(
+        existsSync(resolve(SOURCE_ROOT, 'infrastructure', retired)),
+        `${retired} must stay retired`,
+      ).toBe(false)
     }
-    expect(postgresql).not.toContain('prepareWriteFile')
-    expect(postgresql).not.toMatch(/\.transaction\(/)
-    expect(postgresql).not.toMatch(
-      /@\/services\/|legacy\/skill-zip|\bDbClient\b|createSqlite|as unknown|as DbClient/,
-    )
-
-    expect(repository).toContain('prepareImportCreate(input:')
-    expect(repository).toContain('prepareImportOverwrite(input:')
-    expect(repository).toContain('databaseCommitted = true')
-    expect(repository).toContain('await plan.publish()')
-    expect(repository).toContain('await plan.abort({ databaseCommitted })')
   })
 })

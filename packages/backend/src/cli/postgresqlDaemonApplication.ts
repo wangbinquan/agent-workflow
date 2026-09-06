@@ -11,7 +11,7 @@ import {
   createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
-import { composePostgresqlSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
+import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import {
   createDaemonLockProof,
@@ -461,7 +461,7 @@ export async function composePostgresqlDaemonApplication(
   // RFC-223 PR-5 / RFC-359 W1-T7d（P0-11）：技能身份屏障是 DB 就绪后的第一件事——恢复遗留结构操作、
   // 清理崩溃残留的 skill_operation_locks / reserving 行、证明 DB/FS/FK 一致，然后才允许任何消费方
   // 读技能。fail-closed：不包 try，屏障失败即 daemon 不起。此前 PG daemon 从未装配它。
-  const skillCatalogBoot = composePostgresqlSkillCatalogBoot({
+  const skillCatalogBoot = composeSkillCatalogBoot({
     db: input.db,
     appHome: input.appHome,
   })

@@ -33,7 +33,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, skills } from '@/db/schema'
 import { commitSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
@@ -83,7 +83,7 @@ export interface SkillDeleteHooks {
 
 // --- query helpers ---
 
-export async function listSkills(db: DbClient): Promise<Skill[]> {
+export async function listSkills(db: ProviderNeutralDatabase): Promise<Skill[]> {
   // RFC-170 §9: skills mid-creation (reservation_state='reserving') are not yet
   // published and must stay invisible until their reserve op reaches 'ready'.
   const rows = await db.select().from(skills).where(eq(skills.reservationState, 'ready'))
@@ -93,7 +93,10 @@ export async function listSkills(db: DbClient): Promise<Skill[]> {
   return rows.filter((r) => isSkillAvailableThisBoot(r)).map(rowToSkill)
 }
 
-export async function getSkillById(db: DbClient, skillId: string): Promise<Skill | null> {
+export async function getSkillById(
+  db: ProviderNeutralDatabase,
+  skillId: string,
+): Promise<Skill | null> {
   const rows = await db
     .select()
     .from(skills)
@@ -133,7 +136,7 @@ export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
  * does not.
  */
 export async function isSkillNameOccupiedForOwner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   ownerUserId: string | null,
 ): Promise<boolean> {
@@ -150,7 +153,7 @@ export async function isSkillNameOccupiedForOwner(
 // --- create ---
 
 export async function createManagedSkill(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   input: CreateManagedSkill,
   aclOpts?: { ownerUserId?: string; actor?: Actor | null },
@@ -189,7 +192,7 @@ export async function createManagedSkill(
  * failed with "skill disappeared right after insert".
  */
 export async function createManagedSkillWithFiles(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   meta: { name: string; description: string; ownerUserId?: string; actor?: Actor | null },
   produceFiles: (filesDir: string) => void,
@@ -218,20 +221,18 @@ export async function createManagedSkillWithFiles(
   let opId: string
   try {
     opId = await databaseSessionFor(db).transaction(async (tx) => {
-      tx.insert(skills)
-        .values({
-          id,
-          name: meta.name,
-          description: meta.description,
-          managedPath: skillFilesRel(id),
-          // RFC-231: every user-created resource starts private with ACL rev 0.
-          ...initialAcl,
-          reservationState: 'reserving',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
-      return beginOperation(tx, {
+      await tx.insert(skills).values({
+        id,
+        name: meta.name,
+        description: meta.description,
+        managedPath: skillFilesRel(id),
+        // RFC-231: every user-created resource starts private with ACL rev 0.
+        ...initialAcl,
+        reservationState: 'reserving',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return await beginOperation(tx, {
         skillId: id,
         kind: 'reserve',
         ownerUserId: ownerUserId ?? undefined,
@@ -296,8 +297,8 @@ export async function createManagedSkillWithFiles(
       /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
     }
     await databaseSessionFor(db).transaction(async (tx) => {
-      tx.delete(skills).where(eq(skills.id, id)).run()
-      abandonOperation(tx, opId)
+      await tx.delete(skills).where(eq(skills.id, id))
+      await abandonOperation(tx, opId)
     })
     throw err
   }
@@ -324,7 +325,7 @@ export async function commitSkillReadyInTx(
  *  The skill stays INVISIBLE until commitSkillReadyInTx runs. On throw the
  *  stage is already compensated (same rollback as the create path). */
 export async function stageManagedSkill(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   meta: {
     name: string
@@ -347,19 +348,17 @@ export async function stageManagedSkill(
   let opId: string
   try {
     opId = await databaseSessionFor(db).transaction(async (tx) => {
-      tx.insert(skills)
-        .values({
-          id,
-          name: meta.name,
-          description: meta.description,
-          managedPath: skillFilesRel(id),
-          ...initialAcl,
-          reservationState: 'reserving',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
-      return beginOperation(tx, {
+      await tx.insert(skills).values({
+        id,
+        name: meta.name,
+        description: meta.description,
+        managedPath: skillFilesRel(id),
+        ...initialAcl,
+        reservationState: 'reserving',
+        createdAt: now,
+        updatedAt: now,
+      })
+      return await beginOperation(tx, {
         skillId: id,
         kind: 'reserve',
         ownerUserId: ownerUserId ?? undefined,
@@ -399,7 +398,7 @@ export async function stageManagedSkill(
  *  boot convergence): files best-effort, then row + op in one tx (RFC-208
  *  ordering: a stranded lock is worse than a leftover dir). */
 export async function compensateManagedSkillStage(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   p: { skillId: string; opId: string; skillDir: string },
 ): Promise<void> {
   try {
@@ -416,7 +415,7 @@ export async function compensateManagedSkillStage(
 // --- delete ---
 
 export async function deleteSkill(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
   actor: Actor,
@@ -530,7 +529,7 @@ export async function deleteSkill(
 // --- SKILL.md content (parsed view) ---
 
 export async function readSkillContent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
 ): Promise<SkillContent> {
@@ -601,7 +600,7 @@ export async function readSkillContent(
  * A→B recreate resolve to null → the fusion is refused before any side effect.
  */
 export async function getSkillPreconditionTokenById(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   skillId: string,
 ): Promise<string | null> {
   const row = await db
@@ -625,7 +624,7 @@ export async function getSkillPreconditionTokenById(
 }
 
 export async function writeSkillContent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
   patch: UpdateSkillContent,
@@ -717,7 +716,7 @@ export async function writeSkillContent(
  * writeSkillContent (which bumps content_version) and returns the fresh token.
  */
 export async function saveSkillWithToken(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
   patch: UpdateSkillContent,
@@ -773,7 +772,7 @@ export async function saveSkillWithToken(
 // --- file tree ---
 
 export async function listSkillFiles(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
 ): Promise<FileNode[]> {
@@ -810,7 +809,7 @@ function walkDir(absRoot: string, relRoot: string): FileNode[] {
 }
 
 export async function readSkillFile(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
   relPath: string,
@@ -839,7 +838,7 @@ export async function readSkillFile(
 }
 
 export async function writeSkillFile(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
   relPath: string,
@@ -892,7 +891,7 @@ export async function writeSkillFile(
 }
 
 export async function deleteSkillFile(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   skillId: string,
   relPath: string,

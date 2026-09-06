@@ -29,7 +29,7 @@ import {
   type ZipEntryRef,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { skills } from '@/db/schema'
 import {
   createManagedSkillWithFiles,
@@ -356,7 +356,7 @@ type SkillZipTargetRow = {
 }
 
 async function listTargetRowsByName(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   names: ReadonlyArray<string>,
 ): Promise<SkillZipTargetRow[]> {
   if (names.length === 0) return []
@@ -376,7 +376,10 @@ async function listTargetRowsByName(
     .where(inArray(skills.name, [...new Set(names)]))
 }
 
-async function loadTargetRowById(db: DbClient, skillId: string): Promise<SkillZipTargetRow | null> {
+async function loadTargetRowById(
+  db: ProviderNeutralDatabase,
+  skillId: string,
+): Promise<SkillZipTargetRow | null> {
   const rows = await db
     .select({
       id: skills.id,
@@ -414,7 +417,7 @@ function toOverwriteCandidate(row: SkillZipTargetRow): SkillZipOverwriteCandidat
 }
 
 export async function parseSkillZipBuffer(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   buffer: Uint8Array,
 ): Promise<{ response: ParseSkillZipResponse; candidates: SkillCandidate[] }> {
@@ -475,7 +478,7 @@ interface CommitOutcome {
 }
 
 export async function commitSkillZipBuffer(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SkillZipFsOptions,
   buffer: Uint8Array,
   decisions: SkillZipDecisionMap,

@@ -45,7 +45,7 @@ import {
   matchesManagedSkillReference,
   type SkillReferencingAgentRow,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
-import { findAgentsReferencingIdInJsonColumnInTx } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
+import { findAgentsReferencingIdInJsonColumn } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { staleConflictError } from '@/util/errors'
 function trashPath(appHome: string, skillId: string, opId: string): string {
   if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(opId)) {
@@ -125,7 +125,7 @@ export async function deleteManagedSkillOp(
       const refs = await findAgentsUsingManagedSkill(
         {
           find: async (skillId) =>
-            await findAgentsReferencingIdInJsonColumnInTx(tx, {
+            await findAgentsReferencingIdInJsonColumn(tx, {
               column: agents.skills,
               id: skillId,
               matches: matchesManagedSkillReference,

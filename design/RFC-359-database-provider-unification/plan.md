@@ -961,6 +961,62 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   （按改成异步的导出名逐个 grep 调用点）全部找出。**D23c**（SQLite 装配切到这套机器、PG 那 3342 行
   原生实现退役）是下一刀。
 
+  ### D23c ✅ 落地（2026-09-07）：技能目录合一，PostgreSQL 原生实现整体退役
+
+  **动手前先做了一次决定性实验**：把双引擎一致性夹具的 PG 分支直接指向（D23b 已中立化的）legacy
+  机器，跑 D23a 的 8 个场景。第一轮 8 条全红——`loadSkillRow` 在 create 之后读不到刚写的行。
+  排下来是**我自己**在上一轮把 `tx.insert(skills).values({...}).run()` 的 `.run()` 摘掉时漏了
+  `await`（同一个坑第四次）：SQLite 单连接下这条也一样不执行，只是那轮没跑测试没暴露；PG 上
+  立刻现形。补上 `await` 后**两个引擎各 8/8 全绿**——合一可行由实测而非纸面对账确认。
+
+  **合一的四刀**：
+
+  1. **技能身份迁移屏障中立化**（`legacy/skillIdentityMigration.ts`，942 行）。这是最后一块
+     SQLite-only 的技能机器：19 处同步读写 + 一条 `PRAGMA foreign_key_check('skill_versions')`。
+     文件系统布局两个引擎共用（`~/.agent-workflow/skills/`），所以 SQLite→PG 迁过来的部署**照样
+     可能**带着旧的 name-目录布局，屏障两边都真的需要，不能按「PG 没有历史包袱」糊弄过去。
+     期间又逮到 **3 处漏 await 静默通过类型检查**：两处是 `boolean && versionPathsCanonical(...)`
+     ——`false | Promise<boolean>` 是合法类型，而 Promise 恒真，判据直接失效；一处是两条 authority
+     断言被整个丢掉。全部由「按改成异步的导出名逐个 grep」找出，`docs/dev-gotchas.md` 那条办法再次奏效。
+  2. **合一时按「好的那份」抬齐**：PG 原生屏障**整条略过**了引用完整性复核（SQLite 侧有
+     `PRAGMA foreign_key_check`）。合一没有取交集，而是把判据改写成两个引擎都能跑的孤儿行查询
+     （`skill_versions LEFT JOIN skills WHERE skills.id IS NULL`），语义与 PRAGMA 对该表的检查一致
+     ——**PG 侧因此补齐了此前缺失的这道屏障**。这正是「不允许一个好一个不好」的处理方式。
+  3. **顺手退掉挡路的 ACL 分叉**：`updateResourceAcl` 的 SQLite 专属同步 after-write 分支
+     （连同 `sqliteResourceAclRepository.ts` 334 行、`transitionMcpAclRuntimeTestsInTx`）**没有任何
+     生产调用方**——最后一个在 W4-D16 就改走中立 `ResourceAclMutationLifecycle` 了，只剩一个测试
+     自己手接旧钩子、证明一处没人用的接线。测试改指生产装配后整条退役，ACL 读面随之全面中立化
+     （`createSqliteResourceGrantReadPort` 这个别名一直只是中立实现的旧名字）。
+  4. **装配收口**：`sqliteSkillRepository/ZipImport/CatalogBoot` 更名为中立的
+     `skillRepository/skillZipImportAdapter/skillCatalogBootAdapter`；`composePostgresqlSkillCatalog`
+     与 `composePostgresqlSkillCatalogBoot` 删除，两个 daemon 走同一个 `composeSkillCatalog` /
+     `composeSkillCatalogBoot`；PG bundle 的技能格换成中立目录 + 共用的 `createSkillContentAvailability`。
+
+  **退役的四个文件（3342 行）**：`postgresqlSkillRepository.ts`(505) /
+  `postgresqlSkillContentLifecycle.ts`(873) / `postgresqlSkillZipImport.ts`(546) /
+  `postgresqlSkillCatalogBoot.ts`(1418)，加上 `sqliteResourceAclRepository.ts`(334)。
+
+  **补上的验收缺口（这一刀最重要的一步）**：合一前，那套崩溃安全机器的 14 个套件（boot 验证 /
+  操作恢复 / 身份迁移 / 发布 staging 阶梯 / 版本…共 4140 行）**全是单引擎**的。合一之后它们描述的
+  就是 PostgreSQL 的行为，却一次都没在 PG 上跑过——只把实现并成一份、验收面仍只覆盖一个引擎，
+  等于把「一个测到、一个没测到」换个位置放。新增 `rfc359-w4-d23c-skill-machinery-conformance.test.ts`
+  补上那一层，挑**引擎语义真的可能分叉**的路径两个引擎各跑一遍（8 场景 × 2 = 16 条全绿）：
+  ① 两阶段 op 的锁互斥；② 重名冲突的唯一冲突分类必须判 409 而非 500（SQLite 看 errno、PG 看
+  SQLSTATE，最容易只在一侧成立）；③ 崩在 create 途中的 `reserving` 行 + 锁被恢复驱动清干净
+  ——**正是 P0-11 说的那个「PG 上永远没人清、同名永远建不了」的形态**，现在两个引擎都实测清得掉；
+  ④ 身份迁移屏障的引用完整性复核两个引擎都真的执行（外键在两侧都挡得住孤儿行，制造不出来，
+  所以另加一条源码锁：判据必须是可移植的孤儿行查询、不得退回 PRAGMA）；⑤ 版本提交 / 回滚同形；
+  ⑥ 孤儿锁 GC 不误伤活着的 op；⑦ phase 阶梯走完锁真的释放。纯文件系统的部分与引擎无关，
+  留给既有单引擎套件，不重复。
+
+  **判据面**：技能 / 包 / RFC-345 / RFC-359 相关 **156 个测试文件**在两个引擎上全绿
+  （SQLite 1143 条、开 PG 后 1423 条）；D23a 的 8 场景 × 2 引擎现在跑的是**同一份实现**。
+  9 条源码锁按新形状改写（不是放宽：`rfc345-classic-facade-provider-neutralization` /
+  `rfc345-skill-zip-provider-neutral` / `rfc345-skill-catalog-boot-participant` /
+  `rfc349-resource-catalog-classic-postgresql-adapters` 都从「PG 那份保持原生」改成
+  **锁「只剩一份、四个原生文件必须保持不存在」**）。同步事务面账本 32 → **30 个文件、83 → 81 个调用点**；
+  RFC-294 的 off-DAG offered 边少一条（`postgresqlSkillRepository → memory` 随文件退役，早于其 W4-E3 计划波次）。
+
   ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
 
   上面两条勘察（D23b 卡在 bundle apply 的同步大事务、剩余 task-execution 对卡在 `withOwnedTaskTx`）

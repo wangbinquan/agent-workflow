@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, mcpRuntimeTestSessions, resourceGrants, runtimes, users } from '../src/db/schema'
-import { transitionMcpAclRuntimeTestsInTx } from '../src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions'
+import { mcpAclRuntimeTestLifecycle } from '../src/modules/resource-catalog/composition/mcpOperations'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createMcpTransactionLifecycle } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import {
@@ -13,7 +14,6 @@ import {
   getMcpByIdForTest as getMcpById,
   updateMcpForTest as updateMcp,
 } from './helpers/mcpServiceBinding'
-import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
 import {
   invalidateInheritedRuntimeProbeReceipts,
   updateRuntime,
@@ -217,8 +217,14 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     const row = await getMcpById(composeMcpServiceBindingForTest(db, { actor: admin }), 'mcp-1')
     if (row === null) throw new Error('MCP fixture missing')
 
-    await updateResourceAcl(
+    // RFC-359 W4-D23c：走**生产装配**——目录 ACL 写事务里的失效钩子由
+    // `mcpAclRuntimeTestLifecycle()` 提供，两个 provider 同一份。此前这里自己手接一条
+    // 只有 SQLite 才有的同步 afterWriteInTx，证明的是一处没人用的接线；生产早在 W4-D16
+    // 就改走中立 lifecycle 了。
+    await composeResourceCatalogFor({
       db,
+      lifecycle: mcpAclRuntimeTestLifecycle(),
+    }).acl.updateResourceAcl(
       admin,
       'mcp',
       row,
@@ -227,17 +233,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
         expectedAclRevision: 0,
         grants: [],
       },
-      {
-        updatedAt: 2,
-        afterWriteInTx: (tx, change) =>
-          transitionMcpAclRuntimeTestsInTx(tx, {
-            mcpId: change.resourceId,
-            ownerUserId: change.ownerUserId,
-            visibility: change.visibility,
-            grantedUserIds: change.grantedUserIds,
-            now: change.now,
-          }),
-      },
+      { updatedAt: 2 },
     )
 
     expect(lifecycle(db, 'session-owner')).toMatchObject({

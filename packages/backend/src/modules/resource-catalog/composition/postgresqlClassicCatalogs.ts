@@ -5,15 +5,15 @@ import type {
   SkillCatalogModule,
   WorkflowCatalogModule,
 } from '../public/operations'
-import type { PostgresqlSkillContentLifecycle } from '../infrastructure/postgresqlSkillRepository'
 import {
   createAgentPersistenceSemantics,
   type AgentRuntimeProfileLookup,
 } from '../infrastructure/agentPersistenceSemantics'
 import {
-  createPostgresqlSkillContentLifecycle,
-  type PostgresqlSkillRestoreMembershipPort,
-} from '../infrastructure/postgresqlSkillContentLifecycle'
+  createSkillContentAvailability,
+  type SkillContentAvailability,
+} from '../infrastructure/skillContentAvailability'
+import type { SkillRestoreMembershipPort } from '../infrastructure/legacy/skillVersion'
 import { composeAgentImportQueries } from './agentImportQueries'
 import {
   composeAgentResourceIntegrity,
@@ -22,7 +22,7 @@ import {
 } from './agentResourceIntegrity'
 import { composeAgentCatalog } from './agentOperations'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
-import { composePostgresqlSkillCatalog } from './skillOperations'
+import { composeSkillCatalog } from './skillOperations'
 import { composeDatabaseWorkflowCatalog } from './workflowOperations'
 
 export interface PostgresqlClassicCatalogBundle {
@@ -30,8 +30,12 @@ export interface PostgresqlClassicCatalogBundle {
   readonly skill: SkillCatalogModule
   readonly workflow: WorkflowCatalogModule
   readonly agentResourceIntegrity: AgentResourceIntegrityComposition
-  /** Provider-private lifecycle reused by ZIP import, workflow validation and boot composition. */
-  readonly skillContent: PostgresqlSkillContentLifecycle
+  /**
+   * RFC-359 W4-D23c：技能内容可用性。此前这里是 PostgreSQL 私有的 873 行内容生命周期
+   * （ZIP 导入 / 工作流校验 / 启动装配共用），随原生技能实现一并退役；剩下真正被外部需要的
+   * 只是「这个技能的内容在不在」，由两个数据库共用的文件系统实现回答（与 SQLite 侧同一份）。
+   */
+  readonly skillContent: SkillContentAvailability
 }
 
 /**
@@ -44,14 +48,10 @@ export function composePostgresqlClassicCatalogs(input: {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
   readonly runtimeProfiles: AgentRuntimeProfileLookup
-  readonly restoreMembership: PostgresqlSkillRestoreMembershipPort
+  readonly restoreMembership: SkillRestoreMembershipPort
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }): PostgresqlClassicCatalogBundle {
-  const skillContent = createPostgresqlSkillContentLifecycle({
-    db: input.db,
-    appHome: input.appHome,
-    restoreMembership: input.restoreMembership,
-  })
+  const skillContent = createSkillContentAvailability({ appHome: input.appHome })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: input.db,
     authorization: input.resourceCatalog.authorization,
@@ -69,10 +69,10 @@ export function composePostgresqlClassicCatalogs(input: {
     importQueries: composeAgentImportQueries(input.db),
     resourceIntegrityQueries: agentResourceIntegrity.queries,
   })
-  const skill = composePostgresqlSkillCatalog({
+  const skill = composeSkillCatalog({
     db: input.db,
-    content: skillContent,
-    resourceCatalog: input.resourceCatalog,
+    appHome: input.appHome,
+    restoreMembership: input.restoreMembership,
   })
   const workflow = composeDatabaseWorkflowCatalog({
     db: input.db,

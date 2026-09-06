@@ -9,8 +9,8 @@ function source(path: string): string {
 }
 
 describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
-  // RFC-359 W4-D14：Agent 聚合已是一份中立实现（见下面单独的断言），不再有 postgresql* 孪生。
-  const aggregates = [['Skill', 'skillOperations']] as const
+  // RFC-359 W4-D14 / W4-D23c：Agent 与 Skill 聚合都已收成一份中立实现（各见下面单独的断言），
+  // 经典六件套里不再有任何 postgresql* 孪生仓库，因此这里没有可循环的聚合了。
 
   test('agent repository and composition are one provider-neutral implementation (RFC-359 W4-D14)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/agentRepository.ts')
@@ -26,44 +26,20 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(composition).not.toMatch(/composePostgresqlAgentCatalog|createSqliteAgentRepository/)
   })
 
-  test('repositories use the shared asynchronous transaction boundary without SQLite fallback', () => {
-    for (const [aggregate] of aggregates) {
-      const repository = source(
-        `src/modules/resource-catalog/infrastructure/postgresql${aggregate}Repository.ts`,
-      )
-      expect(repository).toContain('PostgresqlDatabaseClient')
-      expect(repository).toContain('runPostgresqlResourceCatalogTransaction')
-      expect(repository).toContain('await ')
-      expect(repository).not.toMatch(
-        /\bDbClient\b|\bdbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core/,
-      )
-      expect(repository).not.toMatch(/createSqlite|as PostgresqlDatabaseClient|as DbClient/)
-    }
-  })
-
-  test('composition keeps provider adapters injectable and the SQLite entrypoints compatible', () => {
-    for (const [aggregate, file] of aggregates) {
-      const composition = source(`src/modules/resource-catalog/composition/${file}.ts`)
-      expect(composition).toContain(`compose${aggregate}CatalogFromAdapters`)
-      expect(composition).toContain(`composePostgresql${aggregate}Catalog`)
-      expect(composition).toContain(`createPostgresql${aggregate}Repository`)
-      expect(composition).toContain(`export function compose${aggregate}Catalog(`)
-    }
-  })
-
-  test('skill PostgreSQL content mutations require a durable lifecycle owner', () => {
-    const repository = source(
-      'src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts',
+  // RFC-359 W4-D23c：技能聚合与 Agent 一样收成一份中立实现。此前 PostgreSQL 侧是 3342 行原生
+  // 重写（仓库 / 内容生命周期 / ZIP 导入 / 启动装配四个文件），与 SQLite 侧那套成熟的崩溃安全机器
+  // 归一化相似度只有 7%、行为覆盖 52:6 倒挂。四份原生实现整体退役，两个数据库跑同一条技能目录。
+  test('skill repository and composition are one provider-neutral implementation (RFC-359 W4-D23c)', () => {
+    const repository = source('src/modules/resource-catalog/infrastructure/skillRepository.ts')
+    const composition = source('src/modules/resource-catalog/composition/skillOperations.ts')
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
     )
-    expect(repository).toContain('export interface PostgresqlSkillContentLifecycle')
-    expect(repository).toContain('prepareCreate(')
-    expect(repository).toContain('prepareSave(')
-    expect(repository).toContain('prepareDelete(')
-    expect(repository).toContain('commitInTransaction(')
-    expect(repository).toContain('publish()')
-    expect(repository).toContain('complete()')
-    expect(repository).toContain('abort(input: { readonly databaseCommitted: boolean })')
-    expect(repository).not.toMatch(/createSqliteSkillRepository|@\/services\/skill/)
+    expect(composition).toContain('composeSkillCatalogFromAdapters')
+    expect(composition).toContain('createSkillRepository(')
+    expect(composition).toContain('export function composeSkillCatalog(')
+    expect(composition).not.toMatch(/composePostgresqlSkillCatalog|createSqliteSkillRepository/)
   })
 
   test('one owner-native bundle supplies all PostgreSQL classic catalog semantics', () => {
@@ -72,20 +48,20 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     const workflow = source(
       'src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts',
     )
-    const skill = source(
-      'src/modules/resource-catalog/infrastructure/postgresqlSkillContentLifecycle.ts',
-    )
 
     expect(bundle).toContain('export function composePostgresqlClassicCatalogs(')
     expect(bundle).toContain('createAgentPersistenceSemantics({')
-    expect(bundle).toContain('createPostgresqlSkillContentLifecycle({')
+    // RFC-359 W4-D23c：技能这一格不再有 provider 私有的内容生命周期——bundle 装配的是中立目录，
+    // 工作流校验要的「技能内容在不在」由两个数据库共用的文件系统实现回答。
+    expect(bundle).toContain('createSkillContentAvailability({ appHome: input.appHome })')
+    expect(bundle).not.toContain('createPostgresqlSkillContentLifecycle')
     // RFC-353 T7：回滚成员关系由 knowledge-evolution 裁定、bootstrap 注入，
-    // 这里断言的是「bundle 把它原样传给内容生命周期」这条装配事实（名字随之改了）。
+    // 这里断言的是「bundle 把它原样传给技能目录」这条装配事实。
     expect(bundle).toContain('restoreMembership: input.restoreMembership')
     expect(bundle).toContain('runtimeProfiles: input.runtimeProfiles')
     expect(bundle).toContain('composeAgentCatalog({')
     expect(bundle).toContain('composeDatabaseWorkflowCatalog({')
-    expect(bundle).toContain('composePostgresqlSkillCatalog({')
+    expect(bundle).toContain('composeSkillCatalog({')
     expect(bundle).not.toMatch(/createSqlite|as DbClient|as PostgresqlDatabaseClient/)
 
     expect(agent).toContain('export function createAgentPersistenceSemantics(')
@@ -95,15 +71,6 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(agent).not.toMatch(/\bruntimes\b/)
     expect(workflow).toContain('export function createWorkflowPersistenceSemantics(')
     expect(workflow).toContain('assertDefinitionReferences({')
-    expect(skill).toContain('export function createPostgresqlSkillContentLifecycle(')
-    expect(skill).toContain("kind: input.reserve === undefined ? 'version-write' : 'reserve'")
-    // RFC-353 T7：回滚的「退回哪些记忆」判据迁给了 knowledge-evolution，resource-catalog
-    // 只把事务与回滚目标交出去；断言随之改为这条注入面（原判据的锁在 KE 侧）。
-    expect(skill).toContain('.unfuseForRestore(transaction, {')
-    expect(skill).toContain(".set({ phase: 'db-committed' })")
-    expect(skill).toContain('swapInStaged(state.filesDir, state.opId)')
-    expect(skill).toContain("await retireOperation(db, state.opId, 'done')")
-    expect(skill).not.toMatch(/createSqlite|DbClient|dbTxSync|as PostgresqlDatabaseClient/)
   })
 
   test('agent visibility projection consumes AgentQueries rather than a legacy ACL facade', () => {

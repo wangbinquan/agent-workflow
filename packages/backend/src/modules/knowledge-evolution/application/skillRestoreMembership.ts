@@ -2,7 +2,7 @@
 //
 // resource-catalog 负责「铸一个内容等于 v{target} 的新版本」，memory 负责「退回这批记忆」，
 // 而「回滚时该退回哪些、必须与版本推进同事务」这条规则属于知识演化。此前它没有归属：
-// SQLite 侧由 `resource-catalog/infrastructure/sqliteSkillRepository.ts` 直接
+// SQLite 侧由 `resource-catalog/infrastructure/skillRepository.ts` 直接
 // `import { unfuseAboveVersionSync } from '@/modules/memory/infrastructure/...'`
 // （跨 context **内部** import，RFC-317 R2 明令禁止），PostgreSQL 侧由 RC 的 composition
 // 直接注入 memory 的 participant 工厂——两条路径各自把同一句 `aboveVersion` 写了一遍。

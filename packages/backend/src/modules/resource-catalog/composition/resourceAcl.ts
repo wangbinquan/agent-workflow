@@ -2,11 +2,9 @@ import type {
   AclResourceType,
   ResourceAccess,
   ResourceAcl,
-  ResourceVisibility,
   UpdateResourceAclBody,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -34,60 +32,37 @@ import {
 import { createResourceAclReadPort } from '../infrastructure/aclReadRepository'
 import { createResourceGrantReadPort } from '../infrastructure/resourceVisibility'
 import { createResourceAclMutationPort } from '../infrastructure/resourceAclRepository'
-import {
-  createSqliteResourceAclMutationPort,
-  createSqliteResourceAclReadPort,
-  type SqliteResourceAclMutationLifecycle,
-} from '../infrastructure/sqliteResourceAclRepository'
-import {
-  createSqliteResourceGrantReadPort,
-  loadGrantLevelInTx,
-} from '../infrastructure/sqliteResourceGrantRepository'
+import { loadGrantLevelInTx } from '../infrastructure/sqliteResourceGrantRepository'
 
-function buildSqliteAclApplications(input: {
-  readonly db: DbClient
-  readonly lifecycle?: SqliteResourceAclMutationLifecycle
-}) {
-  const authorization = createResourceAuthorizationApplication(
-    createSqliteResourceGrantReadPort(input.db),
-  )
-  // RFC-359 W4-D3：目录自有类型走中立的读 / 写端口（统一事务原语）；带同步 after-write 钩子的调用（mcp 装配）
-  // 仍走 SQLite 同步路径，随该 owner 的 dbTxSync 归零一起退。owner 在别的 context 的 identity 行（development_adapter /
-  // employee_*）已全部改走 `composeForeignResourceAclFor`（W4-D6a / D6c），同步 identity 形态不复存在。
-  const legacy = input.lifecycle !== undefined
+function buildAclApplications(db: ProviderNeutralDatabase): AclApplications {
+  const authorization = createResourceAuthorizationApplication(createResourceGrantReadPort(db))
   return Object.freeze({
     authorization,
     acl: createResourceAclApplication<AclResourceType>({
       authorization,
-      mutation: legacy
-        ? createSqliteResourceAclMutationPort(input.db, input.lifecycle)
-        : createResourceAclMutationPort(input.db),
-      read: legacy
-        ? createSqliteResourceAclReadPort(input.db)
-        : createResourceAclReadPort(input.db),
+      mutation: createResourceAclMutationPort(db),
+      read: createResourceAclReadPort(db),
     }),
   })
 }
 
-type SqliteAclApplications = ReturnType<typeof buildSqliteAclApplications>
-const sqliteAclApplications = new WeakMap<DbClient, SqliteAclApplications>()
+interface AclApplications {
+  readonly authorization: ResourceAuthorizationApplication
+  readonly acl: ReturnType<typeof createResourceAclApplication<AclResourceType>>
+}
 
-function applicationsFor(
-  db: DbClient,
-  input: { readonly lifecycle?: SqliteResourceAclMutationLifecycle } = {},
-): SqliteAclApplications {
-  if (input.lifecycle !== undefined) {
-    return buildSqliteAclApplications({ db, ...input })
-  }
-  const current = sqliteAclApplications.get(db)
+const aclApplications = new WeakMap<ProviderNeutralDatabase, AclApplications>()
+
+function applicationsFor(db: ProviderNeutralDatabase): AclApplications {
+  const current = aclApplications.get(db)
   if (current !== undefined) return current
-  const created = buildSqliteAclApplications({ db })
-  sqliteAclApplications.set(db, created)
+  const created = buildAclApplications(db)
+  aclApplications.set(db, created)
   return created
 }
 
 export function discloseRefs(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   rows: ReadonlyArray<AclRow & { readonly name: string }>,
@@ -96,7 +71,7 @@ export function discloseRefs(
 }
 
 export function filterVisibleRows<T extends AclRow>(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   rows: readonly T[],
@@ -105,7 +80,7 @@ export function filterVisibleRows<T extends AclRow>(
 }
 
 export function projectVisibleRowsWithAccess<T extends AclRow>(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   rows: readonly T[],
@@ -114,7 +89,7 @@ export function projectVisibleRowsWithAccess<T extends AclRow>(
 }
 
 export function resolveResourceAccessFor(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -140,7 +115,7 @@ export function resolveResourceAccessForInTx(
 }
 
 export function canViewResource(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -158,7 +133,7 @@ export function canViewResourceInTx(
 }
 
 export function canEditResource(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -180,7 +155,7 @@ export function canGovernResource(actor: Actor, row: AclRow): boolean {
 }
 
 export function requireResourceView(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -189,7 +164,7 @@ export function requireResourceView(
 }
 
 export function requireResourceGovern(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -198,7 +173,7 @@ export function requireResourceGovern(
 }
 
 export function requireResourceEdit(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -207,7 +182,7 @@ export function requireResourceEdit(
 }
 
 export function getResourceAcl(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
@@ -216,42 +191,28 @@ export function getResourceAcl(
 }
 
 export interface ResourceAclWriteEffects {
-  readonly afterWriteInTx?: (
-    tx: DbTxSync,
-    change: {
-      readonly resourceId: string
-      readonly ownerUserId: string | null
-      readonly visibility: ResourceVisibility
-      readonly grantedUserIds: ReadonlySet<string>
-      readonly now: number
-    },
-  ) => void
-  readonly afterCommit?: (db: DbClient) => void
+  readonly afterCommit?: (db: ProviderNeutralDatabase) => void
   readonly updatedAt?: number
 }
 
+/**
+ * RFC-359 W4-D23c —— 一份装配，两个数据库共用。
+ *
+ * 这里曾经分叉：带同步 after-write 钩子的写走 SQLite 专属的 ACL 读 / 写端口，其余走中立端口。
+ * 那条尾巴的最后一个生产调用方（MCP 运行时测试失效）在 W4-D16 就已改走中立的
+ * `ResourceAclMutationLifecycle`（`mcpAclRuntimeTestLifecycle`，装进 `composeResourceCatalogFor`），
+ * 只剩一个测试还在自己手接旧钩子——它证明的是一处没人用的接线。测试已改指生产装配，
+ * 分叉与它背后的 334 行 SQLite 专属 ACL 仓库一并退役。
+ */
 export function updateResourceAcl(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   type: AclResourceType,
   row: AclRow,
   body: UpdateResourceAclBody,
   options: ResourceAclWriteEffects = {},
 ): Promise<ResourceAcl> {
-  const lifecycle: SqliteResourceAclMutationLifecycle | undefined =
-    options.afterWriteInTx === undefined
-      ? undefined
-      : {
-          afterWriteInTransaction: (tx, change) =>
-            options.afterWriteInTx?.(tx, {
-              resourceId: change.resourceId,
-              ownerUserId: change.ownerUserId,
-              visibility: change.visibility,
-              grantedUserIds: change.grantedUserIds,
-              now: change.now,
-            }),
-        }
-  return applicationsFor(db, { lifecycle }).acl.updateResourceAcl(actor, type, row, body, {
+  return applicationsFor(db).acl.updateResourceAcl(actor, type, row, body, {
     updatedAt: options.updatedAt,
     afterCommit: async () => {
       await options.afterCommit?.(db)
@@ -267,11 +228,10 @@ export function updateResourceAcl(
 }
 
 export interface ResourceAclOperationCompositionDependencies<Row extends AclRow> {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly type: AclResourceType
   load(id: string): Promise<Row | null>
   readonly linearizer?: ResourceAclOperationLinearizer<Row>
-  readonly afterWriteInTx?: ResourceAclWriteEffects['afterWriteInTx']
   afterUpdated?(resourceId: string): void | Promise<void>
 }
 
@@ -330,7 +290,6 @@ export function composeResourceAclOperationApplication<Context extends Actor, Ro
     update: (authority, row, body, updatedAt): Promise<ResourceAcl> =>
       updateResourceAcl(input.db, authority, input.type, row, body, {
         updatedAt,
-        afterWriteInTx: input.afterWriteInTx,
       }),
     linearizer: input.linearizer,
     afterUpdated: input.afterUpdated,

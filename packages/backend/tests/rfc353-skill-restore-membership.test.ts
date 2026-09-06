@@ -2,7 +2,7 @@
 //
 // 这条测试存在的理由（重构时别删）：
 //   ① 「回滚到 v{target} 时该退回哪些记忆」此前没有归属——SQLite 侧由
-//      `resource-catalog/infrastructure/sqliteSkillRepository.ts` 直接
+//      `resource-catalog/infrastructure/skillRepository.ts` 直接
 //      `import { unfuseAboveVersionSync } from '@/modules/memory/infrastructure/...'`
 //      （跨 context **内部** import，RFC-317 R2 明令禁止），PostgreSQL 侧由 RC 的
 //      composition 直接注入 memory 的 participant 工厂，两条路径各写一遍同一句 aboveVersion。
@@ -76,11 +76,8 @@ describe('RFC-353 T7 协调器：两个 provider 走同一条判据', () => {
 
 describe('RFC-353 T7 装配面：resource-catalog 不认识 memory，也不认识 knowledge-evolution', () => {
   test.each([
-    ['sqliteSkillRepository.ts', ['infrastructure', 'sqliteSkillRepository.ts']],
-    [
-      'postgresqlSkillContentLifecycle.ts',
-      ['infrastructure', 'postgresqlSkillContentLifecycle.ts'],
-    ],
+    // RFC-359 W4-D23c：技能仓库只剩中立的一份；PostgreSQL 的 873 行内容生命周期已退役。
+    ['skillRepository.ts', ['infrastructure', 'skillRepository.ts']],
     ['postgresqlClassicCatalogs.ts', ['composition', 'postgresqlClassicCatalogs.ts']],
     ['composition/skillOperations.ts', ['composition', 'skillOperations.ts']],
   ] as const)('%s 既不 import memory 也不 import knowledge-evolution', (_name, parts) => {

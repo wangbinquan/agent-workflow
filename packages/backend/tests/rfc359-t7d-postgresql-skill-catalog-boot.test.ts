@@ -4,18 +4,16 @@
 // 崩溃残留的 skill_operation_locks / reserving 行在 PG 上永远没人清（该技能永久保存不了、同名永远
 // 建不了），`bootReverifyActivated` 恒 false 让损坏快照照常注入任务。SQLite 侧的接线顺序锁在
 // rfc223-pr5-boot-restore-wiring.test.ts；这里给 PG daemon 同样的顺序锁，并在两个引擎上各跑一遍屏障。
+//
+// RFC-359 W4-D23c 起装配只剩一份（`composeSkillCatalogBoot`），两个 daemon 同一个入口，
+// 下面的顺序锁与双引擎实跑照旧——它锁的是**接线顺序与可跑性**，与实现份数无关。
 
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import {
-  composePostgresqlSkillCatalogBoot,
-  composeSqliteSkillCatalogBoot,
-} from '@/modules/resource-catalog/composition/skillCatalogBoot'
+import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import { isBootReverifyActive } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -25,7 +23,7 @@ test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之�
     'utf8',
   )
   const restore = source.indexOf('await core.systemOperations.applyPendingRestore()')
-  const compose = source.indexOf('composePostgresqlSkillCatalogBoot({', restore)
+  const compose = source.indexOf('composeSkillCatalogBoot({', restore)
   const barrier = source.indexOf('skillCatalogBoot.runIdentityMigrationBarrier()', compose)
   const gate = source.indexOf('skillCatalogBoot.activateAvailabilityGate()', barrier)
   const reconcile = source.indexOf('skillCatalogBoot.reconcileLiveFiles()', gate)
@@ -50,14 +48,8 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
     const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc359-skill-boot-'))
     mkdirSync(join(tmp, 'skills'), { recursive: true })
     try {
-      const boot =
-        // 按能力分叉（harness 约定不按 provider 名分叉）：read-committed 的是 PostgreSQL。
-        harness.capabilities.isolation === 'read-committed'
-          ? composePostgresqlSkillCatalogBoot({
-              db: harness.db as unknown as PostgresqlDatabaseClient,
-              appHome: tmp,
-            })
-          : composeSqliteSkillCatalogBoot({ db: harness.db as unknown as DbClient, appHome: tmp })
+      // W4-D23c：不再按引擎分叉装配——同一个 `composeSkillCatalogBoot` 两个引擎各跑一遍。
+      const boot = composeSkillCatalogBoot({ db: harness.db, appHome: tmp })
       const report = await boot.runIdentityMigrationBarrier()
       expect(report).toMatchObject({ recoveredOperations: 0, removedHusks: 0, migratedSkills: 0 })
       boot.activateAvailabilityGate()

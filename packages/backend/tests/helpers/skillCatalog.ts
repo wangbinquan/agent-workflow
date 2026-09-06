@@ -8,31 +8,19 @@
 // 场景，用实测差异代替纸面对账：D19b/D19c 的经验是「按端口数覆盖、不是按实现数」，一跑就照出
 // 用户可见的分叉。这个夹具只负责把两侧装配成同一个模块面；分叉本身留给断言去照。
 //
-// 装配形状本身就是分叉的一部分（SQLite 取 `{db, appHome, restoreMembership}`，PG 还要
-// `content` 与 `resourceCatalog`），所以这里按能力矩阵的 `isolation` 分派——`describeEachProvider`
-// 有意不把 provider 名交给 body，能力矩阵是唯一合法的分叉依据。
+// RFC-359 W4-D23c 起分叉没有了：装配只剩一份 `composeSkillCatalog({db, appHome, restoreMembership})`，
+// 两个引擎同一个入口——这个夹具因此不再需要按能力矩阵分派。它照到的分叉正是被合掉的那些。
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DbClient } from '@/db/client'
-import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import {
-  composePostgresqlSkillCatalog,
-  composeSkillCatalog,
-} from '@/modules/resource-catalog/composition/skillOperations'
+import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import type { SkillCatalogModule } from '@/modules/resource-catalog/public/operations'
-import { createPostgresqlSkillContentLifecycle } from '@/modules/resource-catalog/infrastructure/postgresqlSkillContentLifecycle'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
-/** 回滚时「哪些记忆退回待用」在一致性场景里不参与判据，两侧都给空实现。 */
-const syncRestoreMembership = Object.freeze({
-  unfuseForRestore: (): string[] => [],
-})
-const asyncRestoreMembership = Object.freeze({
+/** 回滚时「哪些记忆退回待用」在一致性场景里不参与判据，给空实现。 */
+const restoreMembership = Object.freeze({
   unfuseForRestore: async (): Promise<readonly string[]> => [],
 })
 
@@ -51,28 +39,8 @@ process.on('exit', () => {
 export function composeTestSkillCatalog(db: ProviderNeutralDatabase): SkillCatalogFixture {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-conformance-'))
   roots.push(appHome)
-  const exclusive = databaseSessionFor(db).engine.isolation === 'exclusive'
-  if (exclusive) {
-    return {
-      appHome,
-      catalog: composeSkillCatalog({
-        db: db as unknown as DbClient,
-        appHome,
-        restoreMembership: syncRestoreMembership as never,
-      }),
-    }
-  }
-  const client = db as unknown as PostgresqlDatabaseClient
   return {
     appHome,
-    catalog: composePostgresqlSkillCatalog({
-      db: client,
-      content: createPostgresqlSkillContentLifecycle({
-        db: client,
-        appHome,
-        restoreMembership: asyncRestoreMembership as never,
-      }),
-      resourceCatalog: composeResourceCatalogFor({ db: db as never }),
-    }),
+    catalog: composeSkillCatalog({ db, appHome, restoreMembership }),
   }
 }

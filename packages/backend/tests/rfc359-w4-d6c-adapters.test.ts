@@ -692,7 +692,6 @@ test('源码锁：作者面持久化与 foreign ACL 不再有 provider 专属文
   for (const relative of [
     'modules/resource-catalog/application/ports/resourceAclPersistence.ts',
     'modules/resource-catalog/composition/resourceAcl.ts',
-    'modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts',
     'modules/digital-employee/application/ports/authoringStore.ts',
     'services/resourceAcl.ts',
     'server.ts',
