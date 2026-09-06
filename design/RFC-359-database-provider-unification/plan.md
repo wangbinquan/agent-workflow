@@ -680,6 +680,42 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   ——本地绿、提交之后才红（288a8f888 把 main 推红即此）；rfc345 的 schema 导入扫描在三份源码**拼接**后
   贪婪匹配，正文里出现「tasks」这个词（哪怕只是注释）就被误判成导入了 tasks 表，改为逐文件取块。
 
+  **D19c ✅（回合引擎合一：SQLite 切到中立驱动，并补回它缺的整套提示词）**：
+  持久化适配器中立化（`workgroupTurnsOperations.ts`；`GREATEST` 收进能力矩阵新增的 `greatest`，两方言各取
+  `GREATEST` / `max`）、宿主账本参与者中立化（`workgroupHostLedgerParticipant.ts`）、装配收成一份
+  `composeWorkgroupTurnsOperations`，三个 bootstrap 装同一条；SQLite 的 34 行 legacy 薄壳与
+  `services/workgroup/engine.ts` 门面删除，回合操作改由 bootstrap 注入。
+
+  **关键发现**：13 个「SQLite 行为套件」全都直接调 `runWorkgroupEngine`，**一条都没经过中立驱动**——
+  PostgreSQL 跑的那条路几乎没有行为覆盖。把其中 5 个套件（约 88 条断言）改接
+  `tests/helpers/workgroupTurns.ts` 的 shim 后，一次照出中立驱动与正典之间 8 处差异，逐条按
+  「合一前 SQLite 为准」修回（每一条都是 PG 上一直存在的用户可见退化）：
+
+  1. **整套提示词是降级版**——没有 charter 围栏 / goal 块 / 能力卡名册 / 领队账本 / peer results ·
+     mentions · 黑板三段切片 / 闸门打回反馈块。legacy 的 `prompts.ts` + `context.ts` 搬进 application 层
+     （`workgroupTurnPrompts.ts` / `workgroupTurnContext.ts`，输入换成 `WorkgroupTurnsSnapshot`）。
+  2. **协议重提示块**写成了另一套更短的 `## Protocol correction`（G6 单一定义点随之搬进中立驱动）。
+  3. **失败重试判据**：中立驱动对任何失败都重试并贴原始 errorMessage；正典走 FOLLOWUP_POLICY 表，
+     只有协议失误才重试，且给按原因裁剪的可操作指引。
+  4. **瞬时运行时故障**没有单独预算（正典：换新进程整轮重跑、不吃协议预算、不贴提示）。
+  5. **反问被硬压制**（RFC-181 C）没有专门分支（正典：按角色贴 `Ask-back is OFF` 重试，耗尽后领队推游标
+     丢弃继续、成员卡片浮 failed，绝不 park）。
+  6. **17 处系统消息**各手写正文、逐条与模板渲染器不同 → 一律改由 `buildSystemMessage` 渲染。
+  7. **标题去重丢弃**没有系统告警；去重只可能在提交时定论（并发成员回合共享快照），所以提交回执带上
+     被跳过的操作键，驱动据此补消息。
+  8. **free_collab 机械收敛**的闸门说明恒为空（它没有领队回合能推 idle → declared）。
+
+  另加一条：`node.status{pending}` 广播在中立驱动里变成宿主的可选能力，测试 shim 按生产形态接上。
+  十把点名清单锁改指中立实现；`rfc359-w4-d19c-adapters.test.ts` 两引擎各跑「领队派单 → 成员交付 →
+  领队收敛」与「协议出错重提示一次后收敛」+ 源码锁。
+
+  **D19c-tail（待办，独立一刀）**：legacy engine 那一片（`engine` / `turnExecution` / `memberTurns` /
+  `rounds` / `wake` / `prompts` / `hooks` / `messages` / `lifecycle` / `strategies/*`，约 4500 行）现在
+  **生产零消费者**，只剩测试还在引。删它不是机械 sweep：8 个模块共 25 个符号被测试直接消费
+  （`decideAssignmentReconcile` / `deriveWakeSet` / `deriveLeaderClarifyPark` / `resolveWgClarifyAllowed` /
+  `executeTurn` / `casAssignmentStatus`…），要逐个判定「中立驱动里的对应判据是哪一个、要不要导出、
+  断言怎么改写」。`state` / `launch` / `constants` / `askerKey` 四个文件仍有真实生产消费者，不在退役范围内。
+
   **剩余 provider 对的形态普查（决定后续排序）**：把 resource-catalog 里剩下的成对文件按
   「SQLite 是不是 legacy 薄壳」分两类——
   - **对称对（机械可合，无行为风险）**：`PackageResourceRows`（230 / 220 行，无 legacy import）、

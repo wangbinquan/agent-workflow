@@ -4232,3 +4232,32 @@ node_runs.status）、架构锁（`rfc217-architecture-locks` 的房间表写点
 
 **做法**：把下限调到新的真实值之下并在注释里写清「哪一刀、删了什么、为什么这不是回归」。
 不要为了让它绿而去恢复实现，也不要把下限删掉——下限没了，假绿的口子就回来了。
+
+### 「SQLite 的行为套件」不一定测的是生产那条路——先查它调的是端口还是实现
+
+RFC-359 W4-D19c 实撞：工作组回合有 13 个「SQLite 行为套件」，看名字像是把这条链锁死了。实际上它们
+**全部直接 import `runWorkgroupEngine`**（legacy 实现本身），一条都没有经过 `WorkgroupTurnsOperations`
+这个端口。于是把 SQLite 的装配从 legacy 换成中立驱动之后，那 13 个套件**照样全绿**——它们测的还是那份
+已经没人跑的实现，而真正上线的那条路一条断言都没有。
+
+**做法**：合并一对 provider 实现之前，先对着它的**端口**数一遍覆盖：
+
+    grep -l "<PortName>" tests/*.ts        # 经端口的套件
+    grep -l "<legacyEntryPointName>" tests/*.ts   # 直连实现的套件
+
+两个集合差得远，就说明「覆盖倒挂」——把直连实现那批改接端口（给一个同形的 shim，保持调用形状不变），
+再动实现。这一步本身就是这类合并的主要产出：W4-D19c 改接之后一次照出 8 处用户可见差异
+（整套提示词降级、重试判据、系统消息文案……），全是 PostgreSQL 上一直存在的退化。
+
+### `git status --porcelain` 的重命名行，第二列是**旧**路径
+
+`RM old/path.ts -> new/path.ts`。用 `awk '{print $2}'` 取路径会拿到 `old/path.ts`——那个文件已经不在了，
+后面的 `prettier --write` / `eslint` 会因为找不到文件而失败；`set -e` 的脚本就此静默退出，什么也没提交。
+
+    # 坏：重命名后指向不存在的旧路径
+    git status --porcelain | awk '{print $2}'
+    # 好：去掉前三列的状态位，再取 `->` 之后那一段
+    git status --porcelain | sed 's/^...//; s/^.* -> //'
+
+提交时反过来：`git commit -- <pathspec>` 要**两端都给**（新路径要 add，旧路径要让 commit 看见它已删除），
+所以那一份清单用 `sed 's/^...//; s/ -> /\n/'` 把重命名拆成两行。
