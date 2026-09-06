@@ -6,7 +6,7 @@
     "moduleFiles": 1231,
     "productionFiles": 2618,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25432
+    "symbolsIncludingFileRoots": 25433
   },
   "entries": [
     {
@@ -141971,6 +141971,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createWorkgroupHostLedgerParticipantInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#leaderClarifyParkedOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "leaderClarifyParkedOf",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -305885,5 +305897,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1580204cb861066caedb85582a3a1298dd5c5550da35e41d5f0d9f9546ea814b"
+  "sourceDigest": "sha256:7356486a524b19bde0e475d94735dae372ba21f91390eea9509646a88d5201c8"
 }

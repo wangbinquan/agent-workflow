@@ -43326,7 +43326,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1580204cb861066caedb85582a3a1298dd5c5550da35e41d5f0d9f9546ea814b",
+  "sourceDigest": "sha256:7356486a524b19bde0e475d94735dae372ba21f91390eea9509646a88d5201c8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46906,8 +46906,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#113:nodeRuns",
-        "line": 113,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#131:nodeRuns",
+        "line": 131,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#applyOperation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
