@@ -12,7 +12,7 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type { StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 
 /**
  * RFC-048 — subagent live-capture cadence from live config (moved verbatim from
