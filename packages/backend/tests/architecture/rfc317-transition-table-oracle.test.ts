@@ -297,8 +297,11 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
 
   test('语料非空：确实抽到了静态可知的 CAS 站点（抽空即假绿）', () => {
     // 这条不可省：下面的判据形如「越界集合等于账本」，抽不到站点时两边都空，满绿。
+    // 下限随收敛下调：RFC-359 W4-D19b 收尾退役 legacy 任务房（1749 行）后，它那 3 个 CAS
+    // 站点随实现一起消失（合一后的房间用同一条准入，不是另一套 CAS）。下限只是「别抽空」的
+    // 兜底，不是站点数的账本——真正逐条对齐的是下面那条越界集合等于账本的判据。
     expect(units.length).toBeGreaterThan(700)
-    expect(sites.length).toBeGreaterThanOrEqual(40)
+    expect(sites.length).toBeGreaterThanOrEqual(35)
   })
 
   test('表内站点确实占多数（判据不是恒真）', () => {
