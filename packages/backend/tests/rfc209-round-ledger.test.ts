@@ -19,14 +19,15 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { ulid } from 'ulid'
-import { buildRoomMessageRow } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/messages'
+// RFC-359 W4-D19c-tail：判据改指生产那份——回合账本的推法住在中立的房间投影里，
+// 消息草稿构造器住在中立回合驱动里（`messageDraft`，行的 round 由它带出）。
+import { messageDraft as buildRoomMessageRow } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import {
   deriveBudgetUsed,
   roundedModeOf,
   type RoundLedgerRow,
   type RoundedWorkgroupMode,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/rounds'
+} from '@/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
 
 const WG_LEADER = '__wg_leader__'
 const WG_MEMBER = '__wg_member__'
@@ -278,17 +279,14 @@ describe('RFC-209 §2.1 — roundedModeOf 窄化', () => {
 describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
   test('round 原样落行；mentions 归一成 JSON；可选列缺省成 null', () => {
     const r = buildRoomMessageRow({
-      id: ulid(),
-      taskId: 't1',
       round: 7,
       authorKind: 'human',
       kind: 'chat',
       bodyMd: 'hi',
-      triggerMessageId: null,
-      createdAt: 123,
     })
     expect(r.round).toBe(7)
-    expect(r.mentionsJson).toBe('[]')
+    // 中立草稿把 mentions 留成数组，归一成 JSON 是持久化那一层的事（`workgroupTurnsOperations`）。
+    expect(r.mentionMemberIds).toEqual([])
     expect(r.authorMemberId).toBeNull()
     expect(r.authorUserId).toBeNull()
     expect(r.assignmentId).toBeNull()

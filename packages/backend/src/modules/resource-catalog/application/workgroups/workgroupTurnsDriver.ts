@@ -397,7 +397,7 @@ function messageRound(snapshot: WorkgroupTurnsSnapshot): number {
   return snapshot.config.mode === 'leader_worker' ? roundBudget(snapshot) : 0
 }
 
-function messageDraft(input: {
+export function messageDraft(input: {
   readonly round: number
   readonly authorKind: WorkgroupMessageAuthorKind
   readonly authorMemberId?: string | null
@@ -405,6 +405,11 @@ function messageDraft(input: {
   readonly bodyMd: string
   readonly templateKey?: string
   readonly templateParams?: Readonly<Record<string, unknown>>
+  /**
+   * 系统署名但**正文是原文**（用户写的目标等）时的显式分类。它不落库，只是逼写入方表态：
+   * 要么给模板 key（平台文案，可本地化），要么声明这是原文——见下面的判据。
+   */
+  readonly localization?: 'original'
   readonly mentionMemberIds?: readonly string[]
   readonly assignmentId?: string | null
   readonly triggerMessageId?: string | null
@@ -414,6 +419,17 @@ function messageDraft(input: {
   // `buildSystemMessage`，而中立驱动在 17 处各手写了一份、逐条与它不同
   // （例如「free-collab converged — N task(s) done」被写成「free_collab converged (N)」）。
   // 从这里统一取，就再也回不到两份（RFC-359 W4-D19c）。
+  // RFC-274 / RFC-359 W4-D19c-tail：系统署名的消息要么带模板 key（平台文案，本地化由渲染器负责），
+  // 要么显式声明 `localization: 'original'`（正文是用户原文，例如目标）。少了这条判据，平台自己
+  // 手写的英文兜底文案会直接落进房间且无从本地化——合一前 `legacy/workgroup/messages.ts` 的行
+  // 构造器正是靠它把关，中立驱动接手时把分类字段一起丢了，于是**两个 provider 都少了这道关**。
+  if (
+    input.authorKind === 'system' &&
+    input.templateKey === undefined &&
+    input.localization !== 'original'
+  ) {
+    throw new Error('workgroup-system-message-localization-unclassified')
+  }
   const rendered =
     input.templateKey === undefined
       ? null
@@ -2459,6 +2475,8 @@ export function createWorkgroupTurnsOperations(
             round: 0,
             authorKind: 'system',
             kind: 'chat',
+            // 目标是用户写的原文，不是平台文案。
+            localization: 'original',
             bodyMd: first.config.goal.trim(),
             mentionMemberIds:
               directed && first.config.leaderMemberId !== null ? [first.config.leaderMemberId] : [],

@@ -8,11 +8,11 @@ import {
   type WorkgroupSystemTemplate,
 } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
-import { buildRoomMessageRow } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/messages'
 import {
   buildSystemMessage,
   parseStoredSystemTemplate,
 } from '../src/modules/resource-catalog/application/workgroups/workgroupSystemMessages'
+import { messageDraft as draftSystemMessage } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -80,33 +80,41 @@ describe('RFC-274 typed room-system-message registry', () => {
     expect(parseStoredSystemTemplate('leaderNudge', '{')).toBeNull()
   })
 
+  // RFC-359 W4-D19c-tail：判据改指生产那份（中立驱动的 `messageDraft`）。合一时这条分类判据
+  // 连同 `localization` 字段一起被丢掉了——**两个 provider 都少了这道关**，本次一并补回。
   test('the unique row constructor writes key+params+fallback atomically', () => {
-    const row = buildRoomMessageRow({
-      id: 'm1',
-      taskId: 't1',
+    const row = draftSystemMessage({
       round: 0,
       authorKind: 'system',
       kind: 'system',
-      systemTemplate: { key: 'maxRoundsFailed', params: { maxRounds: 5 } },
-      triggerMessageId: null,
-      createdAt: 1,
+      bodyMd: '',
+      templateKey: 'maxRoundsFailed',
+      templateParams: { maxRounds: 5 },
     })
     expect(row.templateKey).toBe('maxRoundsFailed')
-    expect(row.templateParamsJson).toBe('{"maxRounds":5}')
+    expect(JSON.stringify(row.templateParams)).toBe('{"maxRounds":5}')
     expect(row.bodyMd).toContain('5')
 
+    // 系统署名 + 无模板 + 未声明原文 ⇒ 拒绝（平台文案必须可本地化）。
     expect(() =>
-      buildRoomMessageRow({
-        id: 'm2',
-        taskId: 't1',
+      draftSystemMessage({
         round: 0,
         authorKind: 'system',
         kind: 'system',
         bodyMd: 'unclassified platform copy',
-        triggerMessageId: null,
-        createdAt: 1,
       }),
     ).toThrow('workgroup-system-message-localization-unclassified')
+
+    // 显式声明是原文（例如用户写的目标）则放行，正文原样保留。
+    expect(
+      draftSystemMessage({
+        round: 0,
+        authorKind: 'system',
+        kind: 'chat',
+        bodyMd: "the goal, in the user's own words",
+        localization: 'original',
+      }).bodyMd,
+    ).toBe("the goal, in the user's own words")
   })
 
   test('wire pairing is enforced while future bounded keys remain bodyMd-compatible', () => {
