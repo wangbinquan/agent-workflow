@@ -57,7 +57,11 @@ export interface WrapperDataPort {
     nodeId: string,
     frame: { readonly containerRunId: string | null; readonly iteration: number },
   ): Promise<WrapperResolvedInputs>
-  recordConsumed(runId: string, consumed: Readonly<Record<string, string>>): void
+  /**
+   * 记录 fan-out 已消费的上游产出。**返回 Promise**：实现要写 `node_execution` 行，
+   * 契约写成 `void` 会让调用方合法地丢掉这次写（2026-09-07 由 no-floating-promises 抓出）。
+   */
+  recordConsumed(runId: string, consumed: Readonly<Record<string, string>>): Promise<void>
   priorFanoutConsumed(
     nodeId: string,
     iteration: number,

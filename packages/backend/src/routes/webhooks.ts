@@ -293,7 +293,7 @@ export function mountWebhookIngressRoutes(
       // not dispatch the Webhook; it merely advances a subscribed active source.
       if (event.mrIid !== undefined) {
         try {
-          deps.digitalEmployeeEventCenter?.observerControl.nudgeSource({
+          void deps.digitalEmployeeEventCenter?.observerControl.nudgeSource({
             id: 'code-host.activity',
             revision: 1,
           })

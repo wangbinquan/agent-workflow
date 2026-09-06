@@ -135,7 +135,12 @@ export interface ActionExecutionEnvironment {
   launchHostTask(input: ActionHostTaskLaunch): Promise<string>
   /** provider 私有：取消宿主任务（已终态时抛错，由调用方兜成 already-terminal）。 */
   cancelHostTask(executionRef: string): Promise<void>
-  readonly onTerminal?: (executionRef: string) => void
+  /**
+   * 终态回调，同步 / 异步都可以：唯一的消费者 `watchTerminal` 用 `.then(() => notify(ref))`
+   * 接它，两种都会被等到。**这里的 `void |` 不是 dev-gotchas 警告的那种放宽**——那条说的是
+   * 「产出方的 Promise 被调用方合法丢掉」；此处调用方显式串进了 promise 链。
+   */
+  readonly onTerminal?: (executionRef: string) => void | Promise<void>
   readonly terminalPollMs?: number
 }
 

@@ -229,9 +229,9 @@ export async function rollbackNodeRunWorktrees(
       }
     }
     if (outcome.failures.length === 0) {
-      effect?.succeed({ attempted: outcome.attempted, repoCount: target.repos.length })
+      await effect?.succeed({ attempted: outcome.attempted, repoCount: target.repos.length })
     } else {
-      effect?.fail(new Error(outcome.failures.map((failure) => failure.message).join('; ')), {
+      await effect?.fail(new Error(outcome.failures.map((failure) => failure.message).join('; ')), {
         attempted: outcome.attempted,
         repoCount: target.repos.length,
       })
@@ -281,9 +281,9 @@ export async function rollbackNodeRunWorktrees(
     })
   }
   if (outcome.failures.length === 0) {
-    effect?.succeed({ attempted: outcome.attempted })
+    await effect?.succeed({ attempted: outcome.attempted })
   } else {
-    effect?.fail(new Error(outcome.failures.map((failure) => failure.message).join('; ')), {
+    await effect?.fail(new Error(outcome.failures.map((failure) => failure.message).join('; ')), {
       attempted: outcome.attempted,
     })
   }

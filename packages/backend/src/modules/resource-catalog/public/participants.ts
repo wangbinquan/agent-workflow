@@ -284,33 +284,37 @@ export interface CapabilityTemplatePackageMutationParticipant {
 
 export interface AgentPackageMutationParticipantInTx {
   readonly [agentPackageMutationParticipantInTxBrand]: 'agent-package-mutation'
-  commit(prepared: PreparedAgentPackageMutation): ResourcePackageMutationReceipt<'agent'>
+  commit(prepared: PreparedAgentPackageMutation): Promise<ResourcePackageMutationReceipt<'agent'>>
 }
 export interface SkillPackageMutationParticipantInTx {
   readonly [skillPackageMutationParticipantInTxBrand]: 'skill-package-mutation'
-  commit(prepared: PreparedSkillPackageMutation): ResourcePackageMutationReceipt<'skill'>
+  commit(prepared: PreparedSkillPackageMutation): Promise<ResourcePackageMutationReceipt<'skill'>>
 }
 export interface McpPackageMutationParticipantInTx {
   readonly [mcpPackageMutationParticipantInTxBrand]: 'mcp-package-mutation'
-  commit(prepared: PreparedMcpPackageMutation): ResourcePackageMutationReceipt<'mcp'>
+  commit(prepared: PreparedMcpPackageMutation): Promise<ResourcePackageMutationReceipt<'mcp'>>
 }
 export interface PluginPackageMutationParticipantInTx {
   readonly [pluginPackageMutationParticipantInTxBrand]: 'plugin-package-mutation'
-  commit(prepared: PreparedPluginPackageMutation): ResourcePackageMutationReceipt<'plugin'>
+  commit(prepared: PreparedPluginPackageMutation): Promise<ResourcePackageMutationReceipt<'plugin'>>
 }
 export interface WorkflowPackageMutationParticipantInTx {
   readonly [workflowPackageMutationParticipantInTxBrand]: 'workflow-package-mutation'
-  commit(prepared: PreparedWorkflowPackageMutation): ResourcePackageMutationReceipt<'workflow'>
+  commit(
+    prepared: PreparedWorkflowPackageMutation,
+  ): Promise<ResourcePackageMutationReceipt<'workflow'>>
 }
 export interface WorkgroupPackageMutationParticipantInTx {
   readonly [workgroupPackageMutationParticipantInTxBrand]: 'workgroup-package-mutation'
-  commit(prepared: PreparedWorkgroupPackageMutation): ResourcePackageMutationReceipt<'workgroup'>
+  commit(
+    prepared: PreparedWorkgroupPackageMutation,
+  ): Promise<ResourcePackageMutationReceipt<'workgroup'>>
 }
 export interface CapabilityTemplatePackageMutationParticipantInTx {
   readonly [capabilityTemplatePackageMutationParticipantInTxBrand]: 'capability-template-package-mutation'
   commit(
     prepared: PreparedCapabilityTemplatePackageMutation,
-  ): ResourcePackageMutationReceipt<'capability_template'>
+  ): Promise<ResourcePackageMutationReceipt<'capability_template'>>
 }
 
 export interface ResourcePackageMutationParticipants {

@@ -445,7 +445,7 @@ async function applyInner(
 
       const applyTx = mutationRuntime.bindApplyTx(sqliteMembers(tx), bundleCreatedNames)
       for (const item of preparedOps) {
-        const receipt = (() => {
+        const receipt = await (async () => {
           switch (item.mutation.kind) {
             case 'agent-create':
             case 'agent-update':

@@ -4193,6 +4193,26 @@ B2 批 b/c 推上 main 后两个 OS 的 backend 分片 2 同一条红：`rfc349-
   `tx.insert(t).values({...})` 少了 `.run()` 又没有 `await`，**语句根本不执行**——在 bun:sqlite 上也一样。
   症状是「刚写完的行读不到」。中立化改写时这两步是一件事，不是两步。
 
+### 同步 → 异步的大迁移，靠人工 grep 兜不住：把 `no-floating-promises` 开成门
+
+- **实测**（RFC-359，2026-09-07）：把 30 个文件的 bun:sqlite 同步事务面机械迁到中立异步原语后，
+  `bunx tsc` **全绿**；随后第一次把类型感知的 `@typescript-eslint/no-floating-promises` 指向那批文件，
+  当场报出 **62 处**被丢掉的 Promise。也就是说「类型检查过了 + 测试没红」在这类迁移里**不构成证据**——
+  漏掉的 await 只表现为「写好像没生效」，而且多半发生在只有崩溃 / 并发才走到的分支上。
+- **本仓已把这道门常设**（`bun run lint:promises` → `eslint.promises.config.js`，只针对
+  `packages/backend/src/**/*.ts`，只开 `no-floating-promises` + `no-misused-promises`，约 30s，
+  已挂进 `bun run lint`）。**故意独立于主 eslint 配置**：仓里有测试用 `eslint.lintText` 去 lint
+  磁盘上不存在的 `src/**` 合成路径（RFC-282 的边界探针），主配置一旦带上 `project`，那些路径会
+  解析失败并把该文件其它规则的报告一起吞掉（实测 RFC-282 五条直接红）。第一次开门时照出 **15 处存量真丢弃**，
+  逐条修掉后归零：effect 台账的 `succeed`/`fail`（不等它落库就返回）、fan-out 的 `recordConsumed`
+  （`node_execution` 写被丢）、资源包 apply 在 `applyPrepared` 落库**之前**就铸回执，等等。
+- **端口签名别写成 `void | Promise<void>`**：联合里混进 `void`，丢掉 Promise 就成了合法写法，
+  连 `no-floating-promises` 都不再报（它只对**确定**返回 Promise 的表达式生效）。实现是异步的、
+  调用方也都 await，契约就写成 `Promise<void>`。确实要允许两种（回调既可同步又可异步、且消费者
+  显式串进 promise 链）时，把「为什么这里是安全的」写在注释里，别让下一个人以为是随手放宽。
+- **做法**：动这类迁移**先开门再动手**，让它在整个过程里一直亮着；不要迁完再补，
+  62 处那种量级靠事后人工 grep 是找不干净的。
+
 ### 「读一行 → 无校验 OCC 写回」是静默丢写：并发下补丁没了，调用方还以为成功了
 
 - **现象**（RFC-310，2026-09-07 定位一条查了一周的 CI 间歇红）：`getMission()` 读出 revision，

@@ -1571,9 +1571,9 @@ export async function discardNodeIso(
         await handoff()
       }
     }
-    effect?.succeed({ repoCount: handle.repos.length, partialFailures })
+    await effect?.succeed({ repoCount: handle.repos.length, partialFailures })
   } catch (error) {
-    effect?.fail(error, { repoCount: handle.repos.length, partialFailures })
+    await effect?.fail(error, { repoCount: handle.repos.length, partialFailures })
     throw error
   }
 }

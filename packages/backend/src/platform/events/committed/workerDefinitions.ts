@@ -118,7 +118,8 @@ export function startManagedWorkerDefinition(
   daemonGeneration: string,
 ): Readonly<{ stop(reason?: string): Promise<void>; done: Promise<void> }> {
   const controller = new AbortController()
-  definition.start({ signal: controller.signal, daemonGeneration })
+  // `start` 是点火、`run` 才是可 join 的那一半（下面作为 `done` 返回）——这里的不等待是刻意的。
+  void definition.start({ signal: controller.signal, daemonGeneration })
   const done = definition.run({ signal: controller.signal, daemonGeneration })
   return {
     async stop(reason = 'daemon-stopping') {

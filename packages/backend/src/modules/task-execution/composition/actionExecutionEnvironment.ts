@@ -68,7 +68,12 @@ export interface SqliteActionExecutionEnvironmentDependencies {
   /** agent 资源查询，由 bootstrap 注入（与 PostgreSQL 侧同形，本模块不 import resource-catalog 内部）。 */
   readonly agents: ActionExecutionEnvironment['agents']
   /** attempt 终态通知（DA 侧据此记 wake hint）；daemon 内 watcher 轮询驱动。 */
-  readonly onTerminal?: (executionRef: string) => void
+  /**
+   * 终态回调，同步 / 异步都可以：唯一的消费者 `watchTerminal` 用 `.then(() => notify(ref))`
+   * 接它，两种都会被等到。**这里的 `void |` 不是 dev-gotchas 警告的那种放宽**——那条说的是
+   * 「产出方的 Promise 被调用方合法丢掉」；此处调用方显式串进了 promise 链。
+   */
+  readonly onTerminal?: (executionRef: string) => void | Promise<void>
   /** watcher 轮询间隔（测试提速用）。 */
   readonly terminalPollMs?: number
 }
@@ -133,7 +138,12 @@ export interface PostgresqlActionExecutionEnvironmentDependencies {
   readonly cancelTask: (taskId: string) => Promise<unknown>
   readonly readModels: Pick<TaskExecutionReadModels, 'executionOutcome' | 'statusProjection'>
   readonly agents: ActionExecutionEnvironment['agents']
-  readonly onTerminal?: (executionRef: string) => void
+  /**
+   * 终态回调，同步 / 异步都可以：唯一的消费者 `watchTerminal` 用 `.then(() => notify(ref))`
+   * 接它，两种都会被等到。**这里的 `void |` 不是 dev-gotchas 警告的那种放宽**——那条说的是
+   * 「产出方的 Promise 被调用方合法丢掉」；此处调用方显式串进了 promise 链。
+   */
+  readonly onTerminal?: (executionRef: string) => void | Promise<void>
   readonly terminalPollMs?: number
 }
 

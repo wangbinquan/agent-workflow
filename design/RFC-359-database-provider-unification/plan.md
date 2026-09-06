@@ -1066,6 +1066,37 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
      `docs/dev-gotchas.md` 那条「按导出名 grep 调用点」扫一遍**——这一轮在技能那边就是靠它
      逮到 3 处漏 await 静默通过类型检查（两处是 `boolean && Promise` 恒真、判据直接失效）。
 
+  ### D28b 第二次尝试与它换来的门（2026-09-07，实测后再次回退）
+
+  按上面的顺序真的做了一遍：30 个文件机械迁完、`bunx tsc` **全绿**。然后把类型感知的
+  `@typescript-eslint/no-floating-promises` 第一次指向那批文件——**当场 62 处被丢掉的 Promise**。
+  也就是说这条路上「类型检查过了」根本不构成证据：漏掉的 await 只表现为「写好像没生效」，
+  而且集中在崩溃 / 并发才走到的分支上，正是任务执行内核最不能出错的地方。**据此再次整体回退**
+  （工作树干净、main 全绿），但这一次带回了让它安全的东西：
+
+  **① 这道门已经常设**（`bun run lint:promises` → 独立的 `eslint.promises.config.js`，只针对
+  `packages/backend/src/**/*.ts`，只开 `no-floating-promises` + `no-misused-promises`，约 30s，
+  已挂进 `bun run lint`）。独立成一份配置是必要的：主配置带上 `project` 会让 RFC-282 那种
+  `eslint.lintText` 合成路径解析失败、连带吞掉该文件其它规则的报告。
+  下一次做这刀**先开门再动手**，让它全程亮着——事后补是补不干净的。
+
+  **② 开门当天照出并修掉 15 处存量真丢弃**（与本次迁移无关、早已在 main 上）：
+  - `effect?.succeed()/fail()`（`nodeRollback` / `nodeIsolation` 共 6 处）——effect 台账的结算
+    记录不等落库就返回；
+  - fan-out 的 `recordConsumed`——端口写成 `void`、实现是异步写 `node_execution`，
+    这次写被合法丢掉（契约已收窄成 `Promise<void>`）；
+  - **资源包 apply 在写入落库之前就铸回执**——`commitCapability` 同步调用异步的 `applyPrepared`，
+    「已应用」的回执可能先于写入返回。**这一处是 W4-D23b（本轮 `2de427ad8`）自己引入的**，
+    由这道门当场抓出；契约（7 个 `*PackageMutationParticipantInTx.commit`）已改成 Promise 形。
+  - 另有 4 处确属刻意的 fire-and-forget，改成显式 `void` 并写明理由。
+
+  **③ 契约不要写 `void | Promise<void>`**：联合里混进 `void` 之后，丢 Promise 是合法写法，
+  连 `no-floating-promises` 都不报。本轮把 `commitSkillReadyInTx` / `compensateManagedSkillStage`
+  等 3 处收窄成 `Promise<void>`（实现本来就是异步、消费者本来就 await）。
+
+  **结论**：D28b 依然是「把剩下整条同步事务面一次性拔掉」，形状与顺序同上一节；
+  改变的是**它现在有了机械化的验收面**。没有这道门之前不该再尝试第三次。
+
   ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
 
   上面两条勘察（D23b 卡在 bundle apply 的同步大事务、剩余 task-execution 对卡在 `withOwnedTaskTx`）

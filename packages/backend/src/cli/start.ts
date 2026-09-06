@@ -1153,7 +1153,7 @@ async function serveDaemon(input: {
     shuttingDown = true
     input.log.info('shutting down', { signal, databaseProvider: input.databaseProvider })
     removeDaemonInfo()
-    server.stop(true)
+    await server.stop(true)
     try {
       await input.bootstrap.stop()
     } catch (error) {

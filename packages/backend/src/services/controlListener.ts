@@ -124,7 +124,8 @@ export function startControlListener(options: {
     endpoint,
     close: () => {
       try {
-        server.stop(true)
+        // close() 的契约是同步的；停监听是 best-effort，异常已在下面吞掉。
+        void server.stop(true)
       } catch {
         /* already stopped */
       }

@@ -413,12 +413,17 @@ export interface LegacyResourcePackageMutationDependencies {
   readonly compensateManagedSkillStage: (
     db: DbClient,
     stage: { readonly skillId: string; readonly opId: string; readonly skillDir: string },
-  ) => void
+  ) => Promise<void>
   // RFC-359 W4-D23b：技能版本机器迁到中立事务原语后这些面变成异步；端口签名跟着放宽。
+  /**
+   * 实现是异步的、消费者也都 await——契约就写成 `Promise<void>`。
+   * 早先的 `void | Promise<void>` 正是 dev-gotchas 记的那种放宽：联合里混进 `void`
+   * 之后，漏 await 变成合法写法，`no-floating-promises` 也不再报。
+   */
   readonly commitSkillReadyInTx: (
     tx: DatabaseTransaction,
     input: { readonly skillId: string; readonly opId: string },
-  ) => void | Promise<void>
+  ) => Promise<void>
   readonly stageSkillVersion: (
     db: ProviderNeutralDatabase,
     options: { readonly appHome: string },
@@ -1028,15 +1033,17 @@ export function createLegacyResourcePackageMutationAdapter(
             dependencies.commitTemplateInTx(syncTx, prepared.prepared)
         }
       }
-      const commitCapability = <K extends ResourcePackageMutationReceipt['resourceType']>(
+      // `applyPrepared` 是异步的（W4-D23b 把技能提交面迁到中立事务后）——收据必须等它落库
+      // 之后再铸，否则「已应用」的回执会先于写入返回。2026-09-07 由 no-floating-promises 抓出。
+      const commitCapability = async <K extends ResourcePackageMutationReceipt['resourceType']>(
         capability: PreparedPackageMutation,
         resourceType: K,
-      ): ResourcePackageMutationReceipt<K> => {
+      ): Promise<ResourcePackageMutationReceipt<K>> => {
         const prepared = internalPrepared(capability)
         if (prepared.op.resourceType !== resourceType) {
           throw new Error('resource-package-participant-kind-mismatch')
         }
-        applyPrepared(prepared)
+        await applyPrepared(prepared)
         const receipt = mutationReceipt(prepared)
         return {
           resourceType,

@@ -187,7 +187,7 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
         reuseDisabled: true,
       })
     }
-    this.data.recordConsumed(wrapperRunId, wrapperConsumed)
+    await this.data.recordConsumed(wrapperRunId, wrapperConsumed)
 
     const derivedOutputs = deriveWrapperFanoutOutputsInScope(
       definition,

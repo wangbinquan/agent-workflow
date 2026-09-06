@@ -274,7 +274,7 @@ export interface LegacyIntentApplyResourceDependencies {
   readonly commitSkillReadyInTx: (
     tx: DatabaseTransaction,
     input: { readonly skillId: string; readonly opId: string },
-  ) => void | Promise<void>
+  ) => Promise<void>
   readonly commitSkillVersionInTx: (
     tx: DatabaseTransaction,
     staged: LegacyIntentStagedSkillVersion,
@@ -284,7 +284,7 @@ export interface LegacyIntentApplyResourceDependencies {
       readonly expectedOwnerUserId: string
       readonly setDescription: string
     },
-  ) => void | Promise<void>
+  ) => Promise<void>
 
   readonly prepareWorkflowSave: (
     db: DbClient,
