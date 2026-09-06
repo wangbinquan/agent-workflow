@@ -413,10 +413,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 363,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D19c-tail 第九刀：362 → 363，是合一窗口期的**重复计数**，不是新增后台工作。中立驱动的 `decideAssignmentReconcile` 与 legacy engine 里同名的那份此刻并存，普查按 file#symbol 各记一条；D19c-tail 收尾删掉 legacy workgroup engine 后这一格会自行退回。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -486,14 +483,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25438,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D19c-tail 第九 / 第十刀：25435 → 25438，三格全是「把既有规则命名」的代价，生产行为一格未变。第九刀抽出 `decideAssignmentReconcile`（崩溃后派单对账的收法），让 RFC-186 的断言锁中立驱动而不是已退役的 legacy engine；第十刀补回 RFC-187 T13 「已回答澄清」续跑的复活，带来 `reviveKilledClarifyContinuations` 与它的判据 `isKilledClarifyContinuation`。澄清 cause 集合从 services 搬进 shared 是**平移**，不占格。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:76d48f9eaa3b489251db6fbf1c086203239828a015b42e4246298bff1b5befe8",
+    "sourceDigest": "sha256:bfbb45e8e5aefd8d8dc6f4a85a61579a451211ac2c14240ecff248e1e0469cce",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -506,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bccf6fa6bd67fded8ef09711e409e59fc855f034",
-    "contentDigest": "sha256:2b42127b461de5dc6d59bdd9d16592ee094cc25a45a560d98f242ab904e716e2",
+    "currentSnapshotSha": "f85e3c997f6e87f28373820792bd290d9e696b54",
+    "contentDigest": "sha256:5030fab1df1e76778b9b88dc3d3b18b3cb1789f3dd71264de034be74d18b30ac",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

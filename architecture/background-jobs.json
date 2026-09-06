@@ -509,9 +509,9 @@
     {
       "callee": "registerMint",
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:556",
+      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:562",
       "kind": "register-call",
-      "line": 556,
+      "line": 562,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#executeHostTurn",
       "removeAfterWave": "W6/W9",
       "symbol": "executeHostTurn",
@@ -13472,5 +13472,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:76d48f9eaa3b489251db6fbf1c086203239828a015b42e4246298bff1b5befe8"
+  "sourceDigest": "sha256:bfbb45e8e5aefd8d8dc6f4a85a61579a451211ac2c14240ecff248e1e0469cce"
 }
