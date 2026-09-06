@@ -7417,6 +7417,29 @@
     },
     {
       "dependencies": [
+        "runtime"
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
+      "finalCriterion": "remain disabled or delete",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
+      "kind": "disabled",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "disabled",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
+      "phase": "unknown",
+      "symbol": "assertRuntimeReference",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [
         "db",
         "runtime"
       ],
@@ -7797,29 +7820,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#resolveWgClarifyAllowed",
       "phase": "unknown",
       "symbol": "resolveWgClarifyAllowed",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [
-        "runtime"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "disabled",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
-      "phase": "unknown",
-      "symbol": "assertRuntimeReference",
       "targetContext": "resource-catalog"
     },
     {
@@ -13451,5 +13451,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:68e674f9230fd02acf91c0a83ebc0d9327ff15e18c4b5d338c938f9377347210"
+  "sourceDigest": "sha256:2f76c805a10bb57a37f01acfc710ad12406753ee66bca57cec99bb58b8b345cc"
 }
