@@ -10,13 +10,14 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows, workgroupAssignments, workgroupMemberCursors } from '../src/db/schema'
-import {
-  advanceMemberCursor,
-  casAssignmentStatus,
-  // RFC-359 W4-D19c-tail 待收：`casAssignmentStatus` 这条写面还只有 legacy 一份，
-  // 它抛的具名错误跟着它留在这里，随该写面归位一并改指。
-  IllegalWorkgroupAssignmentTransition,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
+// RFC-359 W4-D19c-tail：写面判据改指**生产**的账本（`createWorkgroupTurnsPersistence` 的
+// commit）。合一前只有 legacy 的 `casAssignmentStatus` / `advanceMemberCursor` 有具名形态，
+// 套件锁的是那份；生产两个 provider 走的是账本操作 `transition-assignment` /
+// `advance-member-cursor`——同一条判据（CAS 的 from 匹配、游标取 max 单调推进）。
+import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import {
   CLARIFY_FORMAT_EXAMPLE,
   normalizeWgTaskTitle,
@@ -50,6 +51,69 @@ import {
   deriveWakeSet,
 } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+
+/** 生产账本的持久化面（与两个 bootstrap 装的是同一条）。 */
+function turnsLedger(client: DbClient) {
+  return createWorkgroupTurnsPersistence({
+    db: client as never,
+    hostLedgerFactory: {
+      inTransaction: (transaction) =>
+        composeWorkgroupHostLedgerParticipantFactory({
+          collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+        }).inTransaction(transaction),
+    },
+    clarifyAskGate: createWorkgroupClarifyAskGate(client as never),
+  })
+}
+
+/** 旧调用面 → 账本操作：CAS 的 from 匹配即提交，冲突回 false。 */
+async function casAssignmentStatus(
+  client: DbClient,
+  assignmentId: string,
+  from: WorkgroupAssignmentStatus,
+  to: WorkgroupAssignmentStatus,
+  set: Readonly<{ nodeRunId?: string | null }> = {},
+): Promise<boolean> {
+  const row = (
+    await client
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.id, assignmentId))
+  )[0]
+  const receipt = await turnsLedger(client).commit({
+    taskId: row?.taskId ?? '',
+    operations: [
+      {
+        kind: 'transition-assignment',
+        operationKey: `cas:${assignmentId}:${from}:${to}`,
+        assignmentId,
+        from,
+        to,
+        ...(set.nodeRunId === undefined ? {} : { set: { nodeRunId: set.nodeRunId } }),
+      },
+    ],
+  })
+  return receipt.committed
+}
+
+async function advanceMemberCursor(
+  client: DbClient,
+  taskIdValue: string,
+  memberId: string,
+  messageId: string,
+): Promise<void> {
+  await turnsLedger(client).commit({
+    taskId: taskIdValue,
+    operations: [
+      {
+        kind: 'advance-member-cursor',
+        operationKey: `cursor:${memberId}:${messageId}`,
+        memberId,
+        messageId,
+      },
+    ],
+  })
+}
 
 // RFC-359 W4-D19c-tail：转移表改指生产那份（`WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS`，与合一前
 // 的表逐字相同）。谓词与断言器在中立侧是表上的内联检查（`workgroupTurnsOperations.ts` 的
@@ -825,7 +889,7 @@ describe('RFC-164 core — casAssignmentStatus + advanceMemberCursor (DB)', () =
   test('illegal transitions throw before touching the DB', async () => {
     const id = await seedAssignment('done')
     expect(casAssignmentStatus(db, id, 'done', 'open')).rejects.toThrow(
-      IllegalWorkgroupAssignmentTransition,
+      'illegal workgroup assignment transition done -> open',
     )
   })
 

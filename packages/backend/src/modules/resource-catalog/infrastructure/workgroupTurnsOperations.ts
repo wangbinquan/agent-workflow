@@ -520,7 +520,12 @@ async function applyResourceCatalogOperation(
   if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
   return null
 }
-function createWorkgroupTurnsPersistence(
+/**
+ * RFC-359 W4-D19c-tail：持久化面单独导出，供套件直接锁**生产**的账本写入判据
+ * （派单卡 CAS、成员游标单调推进）。合一前这些判据只有 legacy 的
+ * `casAssignmentStatus` / `advanceMemberCursor` 有具名形态，套件锁的是那份。
+ */
+export function createWorkgroupTurnsPersistence(
   dependencies: WorkgroupTurnsDependencies,
 ): WorkgroupTurnsPersistencePort {
   return Object.freeze({
