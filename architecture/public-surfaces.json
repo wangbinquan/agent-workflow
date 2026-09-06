@@ -98465,7 +98465,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:1ef63fa419f1b15fbf21a396957a642edae2c1ef65dbaa96956f943aa3f9fa19"
+          "signatureDigest": "sha256:f5c8688553a9175a693a641b5569e1aa081d8f91de8e47856e7cba38f1fcda53"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#AgentPackageMutationParticipantInTx",
@@ -98475,7 +98475,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:bbc5fc3ae719d07e27d9acfbb89adfbb7ca09985ece501fc47fdda53049d16ae",
+      "signatureDigest": "sha256:649ed4446d49ed08b935aa4cb931912d3fcf367282967ee2f0e468be6c60f185",
       "status": "target-context-current-surface",
       "symbol": "AgentPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -98598,7 +98598,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:16d95a1b735443f3a942e676b3404318b52a21930e8a0e614b7398a7737189b4"
+          "signatureDigest": "sha256:5cf6eebad37edc0982d86de4c79948ff1b4a94abfe239a0f18b349084b7c8871"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#CapabilityTemplatePackageMutationParticipantInTx",
@@ -98608,7 +98608,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:82c7c20c1651c5d4d722928417e11da50f5940a0f59ddebaacb25aee7f25a941",
+      "signatureDigest": "sha256:1f7c3f9a122e5ba289409acb03816c757ddba0dd249cd813fd6a76e178b0b41c",
       "status": "target-context-current-surface",
       "symbol": "CapabilityTemplatePackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -99724,7 +99724,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:cb0288f4685b3d7d23b70b5b87aa745141ce67aedcdb15ab6c248b45988e5e5d"
+          "signatureDigest": "sha256:fe005a76e7abc06cc4d22c5582a8c71c5ac99dfb3f5b44f344a8438622c952de"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpPackageMutationParticipantInTx",
@@ -99734,7 +99734,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:33c0478353bdf00c0314c2342da09d7fc0242a52b4e0baa809237554d4688f53",
+      "signatureDigest": "sha256:2b4c55a77c47ea28161a6e33e1d373fd2f33777c0be5df9add1f6fb3f634edf9",
       "status": "target-context-current-surface",
       "symbol": "McpPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -100975,7 +100975,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:3ee855c6ad83e81a72c5535885b1045e58a416a0be44b858dc9ec9ae93ddd652"
+          "signatureDigest": "sha256:b2000960c7b1481c4817be22fe5d43e8fbb848e19f33c4214869e4aa6d1157ec"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#PluginPackageMutationParticipantInTx",
@@ -100985,7 +100985,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:ed2c07dceef3840fb837897aab481e608abc4b0413ee4b5056c3ca0f5030224e",
+      "signatureDigest": "sha256:2e04245151fae7dd40b509db494cc91818de515f9392ab11f60fe536c97bbeb8",
       "status": "target-context-current-surface",
       "symbol": "PluginPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -101639,7 +101639,7 @@
             "import:86fcd27f407b262374e2"
           ],
           "name": "commit",
-          "signatureDigest": "sha256:16d95a1b735443f3a942e676b3404318b52a21930e8a0e614b7398a7737189b4"
+          "signatureDigest": "sha256:5cf6eebad37edc0982d86de4c79948ff1b4a94abfe239a0f18b349084b7c8871"
         },
         {
           "consumerEdgeIds": [
@@ -102592,7 +102592,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:c2d283aa8e9ce658acf08217e83f19bcb7e3f4d6434e5f9b6caf0da5f86ef094"
+          "signatureDigest": "sha256:01131e57e951461c304a125a8812dbf50fb8296e8efe60eb2dc25d4d8f62b296"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillPackageMutationParticipantInTx",
@@ -102602,7 +102602,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:26999d204e8342765ba7665124ac05f7d5a7fce62ee787343174f798a7d5dc6a",
+      "signatureDigest": "sha256:667fd95bf2f79974f968b95acd515cf02a10d16f968a247d696a360f88b11abf",
       "status": "target-context-current-surface",
       "symbol": "SkillPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -103722,7 +103722,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:6a78cc1ddca1b5e0f8b6ca4493a4d273829ef2fbeeaa01785fd65a6b8d3c20ff"
+          "signatureDigest": "sha256:8336509ce7472484b007f3024bfef711ba8d702e9ef19d9aabcdd06450f509dc"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkflowPackageMutationParticipantInTx",
@@ -103732,7 +103732,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:3433f780bcc1a2b83f3e5bc4f0d3c8d689333692a1c9479be7efb8de887fc0d1",
+      "signatureDigest": "sha256:6143983a64a5474eebf8f1df5330ea936fa73058249a348fa7d104eefff6b08d",
       "status": "target-context-current-surface",
       "symbol": "WorkflowPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -103999,7 +103999,7 @@
         {
           "consumerEdgeIds": [],
           "name": "commit",
-          "signatureDigest": "sha256:cc659f236aa18656b381e66fc452ff74b92549d1b25ac57e1e5957c807bd03a9"
+          "signatureDigest": "sha256:b17f01a87b10c772a7922330a59bb2850f2947b88fec74c4ef6ecff9a7a1580b"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkgroupPackageMutationParticipantInTx",
@@ -104009,7 +104009,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:d22da2ac92e463e1e3d51a40442c52bf4aa447a35f13bc7a7c36b91384e7fa32",
+      "signatureDigest": "sha256:56e39361a4c131367012fcce17cf9458539e09818bbf26b9e2ade189b2f3e95e",
       "status": "target-context-current-surface",
       "symbol": "WorkgroupPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -161269,7 +161269,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6240421c7de160c6519f931a7a97092e2af1420bc6114961991d45dc31296253",
+  "sourceDigest": "sha256:d1f394631cefe9ced5b023674b11d539fbe7435846e710dadfe7baef9b605fbe",
   "targetContexts": [
     "collaboration",
     "development-automation",
