@@ -5442,12 +5442,12 @@
   },
   "denominator": {
     "ambientWiring": 493,
-    "disabled": 11,
-    "entries": 359,
+    "disabled": 10,
+    "entries": 352,
     "executionLocal": 50,
-    "longRunning": 82,
+    "longRunning": 77,
     "managed": 11,
-    "periodic": 216
+    "periodic": 215
   },
   "entries": [
     {
@@ -7783,161 +7783,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#postgresqlResourcePackageSkillRecoveryDisposition",
       "phase": "unknown",
       "symbol": "postgresqlResourcePackageSkillRecoveryDisposition",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#reconcileLiveFiles",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#reconcileLiveFiles",
-      "phase": "before-ready",
-      "symbol": "reconcileLiveFiles",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverActiveOperations",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "disabled",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverActiveOperations",
-      "phase": "unknown",
-      "symbol": "recoverActiveOperations",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverDeleteFilesystem",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverDeleteFilesystem",
-      "phase": "unknown",
-      "symbol": "recoverDeleteFilesystem",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverMigrateFilesystem",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverMigrateFilesystem",
-      "phase": "unknown",
-      "symbol": "recoverMigrateFilesystem",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverReserveFilesystem",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverReserveFilesystem",
-      "phase": "unknown",
-      "symbol": "recoverReserveFilesystem",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverVersionWriteFilesystem",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#recoverVersionWriteFilesystem",
-      "phase": "unknown",
-      "symbol": "recoverVersionWriteFilesystem",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#sweepMissingLegacyHusks",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillCatalogBoot.ts#sweepMissingLegacyHusks",
-      "phase": "unknown",
-      "symbol": "sweepMissingLegacyHusks",
       "targetContext": "resource-catalog"
     },
     {
@@ -13370,5 +13215,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:56877179b1b345fec65e1f91b443b2a5e951e30a3b7316ea7855dd5b9e694aeb"
+  "sourceDigest": "sha256:2ef317979bc1b0017ad453908c0d7fc075f8e0350d1ed9956b23df6bbbdacf64"
 }

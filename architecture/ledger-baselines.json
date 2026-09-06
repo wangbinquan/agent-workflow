@@ -507,8 +507,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e4c992986560a408301e5345cf1e2cd094f24a06",
-    "contentDigest": "sha256:211fc7ae320d2804c2ab4fedf6250481d592fa0ef3462ec22b0d38c589f45a68",
+    "currentSnapshotSha": "2de427ad87a17cb61622f4d455f54a6b2e25ad7d",
+    "contentDigest": "sha256:6e4e9dd46e3e666b9e254ac99df14490c89859998e920febb0b6f659187632dc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

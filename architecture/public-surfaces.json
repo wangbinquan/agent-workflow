@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 858,
+    "consumers": 857,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1049,
@@ -73901,8 +73901,7 @@
       },
       "consumerEdgeIds": [
         "import:a6495dac6c75131c590d",
-        "import:d82b43f3e5bf44c2cdf3",
-        "import:f1e6b941772112a3577d"
+        "import:d82b43f3e5bf44c2cdf3"
       ],
       "context": "memory",
       "dataClass": "metadata",
@@ -73918,8 +73917,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:a6495dac6c75131c590d",
-            "import:f1e6b941772112a3577d"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.fusionId",
           "type": "string"
@@ -73933,8 +73931,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:a6495dac6c75131c590d",
-            "import:f1e6b941772112a3577d"
+            "import:a6495dac6c75131c590d"
           ],
           "fieldPath": "$method:markFused.$parameter:command.now",
           "type": "number"
@@ -73942,8 +73939,7 @@
         {
           "consumerEdgeIds": [
             "import:a6495dac6c75131c590d",
-            "import:d82b43f3e5bf44c2cdf3",
-            "import:f1e6b941772112a3577d"
+            "import:d82b43f3e5bf44c2cdf3"
           ],
           "fieldPath": "$method:markFused.$parameter:command.skillId",
           "type": "string"
@@ -73977,8 +73973,7 @@
         {
           "consumerEdgeIds": [
             "import:a6495dac6c75131c590d",
-            "import:d82b43f3e5bf44c2cdf3",
-            "import:f1e6b941772112a3577d"
+            "import:d82b43f3e5bf44c2cdf3"
           ],
           "fieldPath": "$method:reassignFusedSkill.$parameter:input.skillId",
           "type": "string"
@@ -73998,8 +73993,7 @@
         {
           "consumerEdgeIds": [
             "import:a6495dac6c75131c590d",
-            "import:d82b43f3e5bf44c2cdf3",
-            "import:f1e6b941772112a3577d"
+            "import:d82b43f3e5bf44c2cdf3"
           ],
           "fieldPath": "$method:unfuseAboveVersion.$parameter:selector.skillId",
           "type": "string"
@@ -74052,12 +74046,6 @@
           "edgeId": "import:d82b43f3e5bf44c2cdf3",
           "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
-          "edgeId": "import:f1e6b941772112a3577d",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -161281,7 +161269,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:56877179b1b345fec65e1f91b443b2a5e951e30a3b7316ea7855dd5b9e694aeb",
+  "sourceDigest": "sha256:2ef317979bc1b0017ad453908c0d7fc075f8e0350d1ed9956b23df6bbbdacf64",
   "targetContexts": [
     "collaboration",
     "development-automation",

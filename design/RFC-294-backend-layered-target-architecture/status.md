@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:56877179b1b345fec65e1f91b443b2a5e951e30a3b7316ea7855dd5b9e694aeb`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:2ef317979bc1b0017ad453908c0d7fc075f8e0350d1ed9956b23df6bbbdacf64`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,15 +10,15 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1828 |
+| backend production TS 文件 | 1823 |
 | `services/` 文件 | 323 |
-| `modules/**` 文件 / 非空 context | 1218 / 17 |
+| `modules/**` 文件 / 非空 context | 1213 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 493 |
-| background work entries | 359 |
+| background work entries | 352 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
 | RFC-317 boundary census（inbound / outbound） | 277 / 35 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 4965 |
-| `backgroundJobs` | 359 |
-| `crossContextImports` | 5563 |
+| `architectureExceptions` | 4920 |
+| `backgroundJobs` | 352 |
+| `crossContextImports` | 5513 |
 | `facades` | 323 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25332 |
-| `mutationEntrypoints` | 1808 |
+| `moduleSymbolOwners` | 25223 |
+| `mutationEntrypoints` | 1794 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 979 |
-| `transactionExternalEffects` | 319 |
+| `transactionExternalEffects` | 317 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | task-execution / infrastructure | 119 |
-| resource-catalog / infrastructure | 103 |
+| resource-catalog / infrastructure | 98 |
 | task-execution / application | 86 |
 | task-execution / composition | 58 |
 | resource-catalog / application | 56 |
@@ -200,11 +200,11 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3329 |
+| legacy-outbound | 3285 |
 | legacy-inbound | 1449 |
-| infrastructure-external | 297 |
+| infrastructure-external | 292 |
 | offered-consumption | 164 |
-| off-dag-offered | 89 |
+| off-dag-offered | 88 |
 | temporary-internal-debt | 87 |
 | provider-mirror | 60 |
 | authority-type-only | 58 |
@@ -215,9 +215,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3329 |
+| legacy-outbound | 3285 |
 | legacy-inbound | 1449 |
-| off-dag-offered | 89 |
+| off-dag-offered | 88 |
 | temporary-internal-debt | 87 |
 | no-circular | 6 |
 | external-layer-debt | 3 |
@@ -227,8 +227,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2574 |
-| W4-E1 | 835 |
+| W9 | 2535 |
+| W4-E1 | 830 |
 | W4-C | 409 |
 | W4-E0 | 220 |
 | W4 | 202 |
@@ -238,7 +238,7 @@
 | W4-E9 | 60 |
 | W4-E4a | 44 |
 | W4-E7 | 44 |
-| W4-E2 | 39 |
+| W4-E2 | 38 |
 | W4-E4b | 37 |
 | W4-E3 | 27 |
 | W9-E | 11 |
