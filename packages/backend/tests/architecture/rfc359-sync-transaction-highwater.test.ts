@@ -95,22 +95,22 @@ function scan(): string[] {
 }
 
 /** 扫到的全部 backend 源文件——语料下限的分母（RFC-317 T13：扫空 = 假绿）。 */
-function corpusSize(): number {
-  let count = 0
+function corpusFiles(): string[] {
+  const out: string[] = []
   const walk = (dir: string): void => {
     for (const entry of readdirSync(join(SRC, dir), { withFileTypes: true })) {
       const rel = dir === '' ? entry.name : `${dir}/${entry.name}`
       if (entry.isDirectory()) walk(rel)
-      else if (entry.name.endsWith('.ts')) count += 1
+      else if (entry.name.endsWith('.ts')) out.push(rel)
     }
   }
   walk('')
-  return count
+  return out
 }
 
 describe('RFC-359 —— 同步 SQLite 事务面只降不升', () => {
   test('语料非空：确实扫到了整棵 backend 源码树（扫成 0 说明扫描根失效，此刻零预言力）', () => {
-    expect(corpusSize()).toBeGreaterThanOrEqual(800)
+    expect(corpusFiles().length).toBeGreaterThanOrEqual(800)
   })
 
   test('逐文件调用点数与账本逐字相等（增了是新的单引擎分支，减了是收敛，都要改账本）', () => {
