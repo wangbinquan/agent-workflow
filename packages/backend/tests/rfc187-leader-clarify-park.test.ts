@@ -202,51 +202,38 @@ describe('RFC-187 F3 — deriveWakeSet does not re-drive a clarify-parked leader
   })
 })
 
-describe('RFC-187 F3 — source locks (engine wiring)', () => {
-  const RUNNER = readFileSync(
+describe('RFC-187 F3 — source locks (宿主账本接线)', () => {
+  // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役。停靠信号的两半——「读出未答反问」与
+  // 「按它判领队是否停靠」——现在都住在宿主账本参与者里，两个 provider 共用这一份。
+  const LEDGER = readFileSync(
     resolve(
       import.meta.dir,
       '..',
       'src',
       'modules',
-      'resource-catalog',
+      'task-execution',
       'infrastructure',
-      'legacy',
-      'workgroup',
-      'engine.ts',
-    ),
-    'utf8',
-  )
-  // RFC-217 T3 — loadDbState 迁入 state.ts（EngineDbState 的家）；锁随迁。
-  const STATE = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'resource-catalog',
-      'infrastructure',
-      'legacy',
-      'workgroup',
-      'state.ts',
+      'workgroupHostLedgerParticipant.ts',
     ),
     'utf8',
   )
 
-  test('loadDbState loads clarify ROUNDS (Codex P0-1: the answerable park signal; RFC-217 T7 读切统一表)', () => {
-    expect(STATE).toContain('.from(clarifyRounds)')
-    expect(STATE).toContain("eq(clarifyRounds.kind, 'self')")
-    expect(STATE).toContain('clarifySessions: clarifySessionRows')
-    // hostRuns is back to leader/member only (clarify park no longer keyed on the run).
-    expect(STATE).toMatch(/inArray\(nodeRuns\.nodeId, \[WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID\]\)/)
+  test('宿主快照读的是未答反问的提问 run（Codex P0-1：可回答、崩溃安全的那个信号）', () => {
+    expect(LEDGER).toContain('clarify.loadProjection(taskId)')
+    expect(LEDGER).toContain('new Set(clarifyProjection.askingNodeRunIds)')
+    // hostRuns 仍只取领队 / 成员两个宿主节点（停靠不再挂在 run 的状态上）。
+    expect(LEDGER).toMatch(
+      /inArray\(\s*nodeRuns\.nodeId,\s*\[WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID\],?\s*\)/,
+    )
   })
 
-  test('leaderParked is derived from clarify SESSIONS, not the dead hostRuns check', () => {
-    expect(RUNNER).toContain('deriveLeaderClarifyPark(state.clarifySessions)')
-    // the old dead predicate (leader host run at awaiting_human) must be gone.
-    expect(RUNNER).not.toMatch(/r\.nodeId === WG_LEADER_NODE_ID && r\.status === 'awaiting_human'/)
-    // and it must NOT be folded back into leaderRunning (that yields a generic
-    // `running` outcome instead of the leader-clarify park).
-    expect(RUNNER).not.toContain('inflightMeta.leaderRunning || leaderParked')
+  test('领队停靠由未答反问推出，不是已死的 hostRuns 状态判据', () => {
+    expect(LEDGER).toContain(
+      'leaderClarifyParked: leaderClarifyParkedOf(hostRows, askingNodeRunIds)',
+    )
+    // 旧的死判据（领队宿主 run 处于 awaiting_human）绝不能回潮。
+    expect(LEDGER).not.toMatch(
+      /nodeId === WORKGROUP_TURN_LEADER_NODE_ID && \w+\.status === 'awaiting_human'/,
+    )
   })
 })

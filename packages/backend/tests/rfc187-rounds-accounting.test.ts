@@ -19,6 +19,9 @@ describe('RFC-187 §3-3 — wg-protocol-retry cause', () => {
 })
 
 describe('RFC-187 §3-3 — source locks', () => {
+  // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，四个 driver 与骨架合成了一份中立回合驱动。
+  // 「协议重跑铸 wg-protocol-retry」这条判据随之从「每个角色各写一遍」收成骨架里的**唯一**一处，
+  // 角色只提供各自的主 cause；本锁按新形状分成「唯一决策点」与「四个主 cause 都在」两半。
   const RUNNER = readFileSync(
     resolve(
       import.meta.dir,
@@ -26,57 +29,11 @@ describe('RFC-187 §3-3 — source locks', () => {
       'src',
       'modules',
       'resource-catalog',
-      'infrastructure',
-      'legacy',
-      'workgroup',
-      'engine.ts',
+      'application',
+      'workgroups',
+      'workgroupTurnsDriver.ts',
     ),
     'utf8',
-  ).concat(
-    readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'memberTurns.ts',
-      ),
-      'utf8',
-    ),
-    readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'strategies',
-        'leaderWorker.ts',
-      ),
-      'utf8',
-    ),
-    readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'strategies',
-        'freeCollab.ts',
-      ),
-      'utf8',
-    ),
   )
   // RFC-345 —— provider-neutral 回合账本推导本体。SQLite/PG room adapters
   // 共用 application owner；legacy rounds.ts 只保留 DB read/write mechanics。
@@ -94,15 +51,17 @@ describe('RFC-187 §3-3 — source locks', () => {
     'utf8',
   )
 
-  test('protocol retries (attempt>0) mint the wg-protocol-retry cause (leader + assignment)', () => {
-    // leader
+  test('重跑一律铸 wg-protocol-retry：骨架里唯一一处决策，角色只给主 cause', () => {
+    // 首轮用角色的主 cause，其余（协议重跑与「换进程」的传输重跑）一律 wg-protocol-retry。
     expect(RUNNER).toMatch(
-      /attempt > 0 \? WG_RERUN_CAUSE\.protocolRetry : WG_RERUN_CAUSE\.leaderRound/,
+      /attempt === 0 && !transientRetryPending \? spec\.primaryCause : 'wg-protocol-retry'/,
     )
-    // member assignment
-    expect(RUNNER).toMatch(
-      /attempt > 0 \? WG_RERUN_CAUSE\.protocolRetry : WG_RERUN_CAUSE\.assignment/,
-    )
+    // 决策点只有这一个——回潮出第二处就意味着有人绕开骨架自己铸行。
+    expect(RUNNER.split('cause: attempt === 0').length - 1).toBe(1)
+    // 领队 / 派单（单卡 + 批量）/ 消息回合四处主 cause 都还在。
+    expect(RUNNER).toContain("primaryCause: 'wg-leader-round'")
+    expect(RUNNER.split("primaryCause: 'wg-assignment'").length - 1).toBe(2)
+    expect(RUNNER).toContain("primaryCause: 'wg-message-turn'")
   })
 
   test('countBudgetUsed excludes wg-protocol-retry in BOTH modes', () => {

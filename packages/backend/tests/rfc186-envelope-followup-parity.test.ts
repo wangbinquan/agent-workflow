@@ -105,29 +105,26 @@ describe('RFC-186 — protocol block carries the literal <workflow-output> examp
 // Source locks — the string-prefix chain + per-code special-case must be GONE
 // from the turn drivers (they are the fragility RFC-186 removed), and the budget
 // must be the aligned value.
-describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)', () => {
-  // RFC-217 T3 dissolved workgroupRunner.ts into engine + strategies +
-  // memberTurns; the banned branches must stay out of ALL of them.
-  const wg = (...seg: string[]): string =>
-    readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        ...seg,
-      ),
-      'utf8',
-    )
-  const src = wg('engine.ts').concat(
-    wg('memberTurns.ts'),
-    wg('strategies', 'leaderWorker.ts'),
-    wg('strategies', 'freeCollab.ts'),
+describe('RFC-186 — source locks (中立回合驱动)', () => {
+  // RFC-217 T3 曾把 workgroupRunner.ts 拆成 engine + strategies + memberTurns；
+  // RFC-359 W4-D19c-tail 起这些连同骨架合成了一份中立回合驱动，两个 provider 共用，
+  // legacy 岛已退役。判据整体改锚它——「同一次 FOLLOWUP_POLICY consult」这条从
+  // 「骨架 1 / driver 0」变成「整份驱动里恰好 1 次」，语义不变：绕开骨架手写失败路由
+  // 就会长出第二个消费点。
+  const DRIVER = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'application',
+      'workgroups',
+      'workgroupTurnsDriver.ts',
+    ),
+    'utf8',
   )
+  const src = DRIVER
 
   // Match the LIVE branch form (`&& attempt`), not the explanatory comments that
   // document what was removed.
@@ -142,35 +139,21 @@ describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)',
   test('turn drivers route through followupForFailure (RFC-217 T3: ONE consult in the skeleton)', () => {
     // 收编后所有 driver 经 executeTurn 走同一次 FOLLOWUP_POLICY consult —— runner
     // 里不允许再长出第二个消费点（那意味着有人绕开骨架手写失败路由）。
-    const skeleton = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'turnExecution.ts',
-      ),
-      'utf8',
-    )
-    expect((skeleton.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length).toBe(1)
-    expect((src.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length).toBe(0)
+    expect((DRIVER.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length).toBe(1)
   })
 
   test('retry budget rides the shared normal-node budget (parity by construction)', () => {
     // 调度架构审视 2026-07-14：字面量 `= 3` 收敛为跨引擎共享常量——parity 从
     // 「注释对齐」升级为「同一符号」；常量取值 3 由
     // retry-budget-single-source.test.ts / envelope-followup-source-grep 锁定。
-    // RFC-217 T5 起该常量的家在 turnExecution.ts（executeTurn 的 retryPolicy 单源）。
-    const skeleton = wg('turnExecution.ts')
-    expect(skeleton).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(skeleton).not.toContain('const WG_PROTOCOL_RETRIES = 3')
+    // RFC-359 W4-D19c：该常量的家是中立驱动的回合骨架（每回合上限允许被 spec 覆盖，兜底走共享常量）。
+    expect(DRIVER).toContain('spec.maxProtocolRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(DRIVER).not.toContain('maxProtocolRetries ?? 3')
   })
 
   test('failed message turn is surfaced to the room, not silently swallowed', () => {
-    expect(src).toContain("key: 'messageTurnFailed'")
+    // RFC-359 W4-D19c：房间系统消息在中立驱动里按模板 key 声明（`templateKey`），
+    // 合一前 legacy 用的是 `key`；两处（领队 / 成员方向）都必须还在。
+    expect(src.split("templateKey: 'messageTurnFailed'").length - 1).toBe(2)
   })
 })

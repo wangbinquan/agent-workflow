@@ -79,24 +79,20 @@ describe('RFC-200 source wiring locks', () => {
     expect(memory).toContain('fenceUntrusted(`memory:${m.id}`, m.bodyMd, fencing.nonce)')
     expect(memory).toContain("fencing.kind === 'legacy-unfenced'")
 
-    // RFC-217 T3 — nonce 线程收编进 executeTurn（唯一 load 点），prompt 组装
-    // 迁至 memberTurns/strategies；本锁真正关心的「nonce 必须先取再渲染」不变。
-    const skeleton = read(
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+    // RFC-217 T3 — nonce 线程收编进回合骨架（唯一取用点），prompt 组装由各角色提供。
+    // RFC-359 W4-D19c：骨架与三处角色组装合一进中立驱动，nonce 直接来自铸行回执
+    //（不再单独查一次库）；本锁真正关心的「nonce 必须先取再渲染」不变。
+    const driver = read(
+      'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
     )
-    expect(skeleton.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBe(1)
-    expect(skeleton).toContain('spec.composePrompt(envelopeNonce)')
-    expect(skeleton).toContain('renderWgProtocolBlock(')
-    const member = read(
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/memberTurns.ts',
+    expect(driver.match(/spec\.prompt\(run\.envelopeNonce, errorNotice\)/g)?.length).toBe(1)
+    expect(driver).toContain('renderWgProtocolBlock(')
+    // 单卡派单 / 批量派单 / 消息回合三处组装都把 nonce 传进去。
+    expect(driver).toContain(
+      'composeMemberPrompt(input.snapshot, memberId, [input.assignment], nonce',
     )
-    expect(member).toContain(
-      'composeMemberPrompt(state, memberId, [card], envelopeNonce, { singleCard: true })',
-    )
-    const fc = read(
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts',
-    )
-    expect(fc).toContain('composeMemberPrompt(state, memberId, batch, envelopeNonce)')
+    expect(driver).toContain('composeMemberPrompt(input.snapshot, input.memberId, cards, nonce)')
+    expect(driver).toContain('composeMemberPrompt(input.snapshot, input.memberId, null, nonce)')
 
     const dynamic = read('packages/backend/src/services/dynamicWorkflowRunner.ts')
     expect(dynamic).toContain('const envelopeNonce = await nodeRuns.loadEnvelopeNonce(runId)')

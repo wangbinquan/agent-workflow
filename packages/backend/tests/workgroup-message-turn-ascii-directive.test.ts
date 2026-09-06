@@ -1,5 +1,5 @@
 // Regression guard: the workgroup "## Message turn" directive built by
-// composeMemberPrompt (Resource Catalog legacy workgroup/prompts since RFC-217 T3) is
+// composeMemberPrompt (RFC-359 W4-D19c 起住在 application/workgroups/workgroupTurnPrompts.ts) is
 // agent-facing ENGLISH prompt text. A stray CJK char had leaked into it — the
 // literal read `'... Do NOT claim or start任务 work in this turn.'` — which
 // renders to the member agent as the garbled token "start[任务] work". This
@@ -16,7 +16,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('workgroup message-turn directive stays English', () => {
-  const wg = (...p: string[]): string =>
+  // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，提示词组装与回合驱动合成了两个 provider
+  // 共用的一份；指令文案随之只有这两个文件可能承载。
+  const app = (name: string): string =>
     readFileSync(
       resolve(
         import.meta.dir,
@@ -24,19 +26,13 @@ describe('workgroup message-turn directive stays English', () => {
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        ...p,
+        'application',
+        'workgroups',
+        name,
       ),
       'utf8',
     )
-  const src = wg('engine.ts').concat(
-    wg('memberTurns.ts'),
-    wg('prompts.ts'),
-    wg('strategies', 'leaderWorker.ts'),
-    wg('strategies', 'freeCollab.ts'),
-  )
+  const src = app('workgroupTurnPrompts.ts').concat(app('workgroupTurnsDriver.ts'))
 
   test('the message-turn directive is present and fully English', () => {
     expect(src).toContain('Do NOT claim or start task work in this turn.')

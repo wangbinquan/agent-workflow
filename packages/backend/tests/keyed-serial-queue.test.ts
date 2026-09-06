@@ -48,27 +48,15 @@ describe('KeyedSerialQueue', () => {
     expect(queue.size).toBe(0)
   })
 
-  test('workgroup and git cache use the cleanup-capable primitive', () => {
-    const workgroup = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'lifecycle.ts',
-      ),
-      'utf8',
-    )
+  test('git cache uses the cleanup-capable primitive', () => {
+    // RFC-359 W4-D19c-tail：工作组那一半退役了——不是丢了保护，是换了更强的一层。
+    // 合一前 legacy 用 per-task 的进程内串行队列挡 `wg_tasks_add` 并发重名；中立回合驱动把定论
+    // 挪进**提交事务**（`applyResourceCatalogOperation` 的 dedupKey 撞车检查），跨进程也成立，
+    // 于是那个队列连同 legacy 引擎岛一起删除。这里只剩 git cache 这一处用例。
     const gitCache = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
       'utf8',
     )
-    expect(workgroup).toContain('tasksAddQueue.run(taskId')
-    expect(workgroup).not.toContain('tasksAddChains')
     expect(gitCache).toContain('urlQueue.run(urlHash')
     expect(gitCache).not.toContain('urlMutex')
   })

@@ -199,16 +199,15 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
     // T3b 收形后的快照（原 runner 单文件 15 处+全仓 40+ 散射）。新增比较必须
     // 落在 strategies/；数字**逐字相等**——增了是新散射，减了是收敛，都要改账本。
     const SNAPSHOT: Record<string, number> = {
-      'memberTurns.ts': 6,
-      'engine.ts': 4,
       // RFC-345 provider split: DB mechanics keep one mode guard; the three
       // pure projection branches live in the shared SQLite/PG application owner.
-      'rounds.ts': 1,
       'application/workgroups/workgroupRoomProjection.ts': 3,
-      'prompts.ts': 3,
-      'wake.ts': 2,
-      'strategies/leaderWorker.ts': 1,
-      'lifecycle.ts': 1,
+      // RFC-359 W4-D19c-tail：legacy 工作组引擎岛（engine / memberTurns / prompts / wake /
+      // rounds / lifecycle / strategies，共 18 处）整个退役——它的模式分支不是收敛了，是搬到了
+      // 两个 provider 共用的中立回合驱动里。那两个文件此前不在棘轮的扫描面上，等于这些分支从
+      // 账本视野里消失了；这次把它们一并纳入按同一把棘轮记账。
+      'application/workgroups/workgroupTurnsDriver.ts': 17,
+      'application/workgroups/workgroupTurnPrompts.ts': 3,
       // RFC-243 §6.3 +2：startWorkgroupTaskFromFrozen（冻结启动面）在同文件内
       // 复刻 readiness 的 leader 判定与 dw 快照选择——与 fresh 启动同语义、
       // 不新增 mode 分支散射面（strategies/ 之外唯一属主仍是 launch.ts）。
@@ -228,8 +227,12 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       }
     }
     walk(WG)
-    const applicationProjection =
-      'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts'
+    const APP = 'packages/backend/src/modules/resource-catalog/application/workgroups'
+    const applicationFiles = [
+      `${APP}/workgroupRoomProjection.ts`,
+      `${APP}/workgroupTurnsDriver.ts`,
+      `${APP}/workgroupTurnPrompts.ts`,
+    ]
     // 合一后的任务房不在 legacy 目录里，但它承接了房间那部分模式分支——一起纳入扫描面，
     // 否则这些分支会从棘轮的视野里消失。
     const roomFiles = [
@@ -237,15 +240,14 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts',
     ]
-    files.push(applicationProjection, ...roomFiles)
+    files.push(...applicationFiles, ...roomFiles)
     const actual: Record<string, number> = {}
     for (const f of files) {
-      const rel =
-        f === applicationProjection
-          ? 'application/workgroups/workgroupRoomProjection.ts'
-          : roomFiles.includes(f)
-            ? `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
-            : f.slice(WG.length + 1)
+      const rel = applicationFiles.includes(f)
+        ? `application/workgroups/${f.slice(f.lastIndexOf('/') + 1)}`
+        : roomFiles.includes(f)
+          ? `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
+          : f.slice(WG.length + 1)
       const count = read(f).split("mode === '").length - 1
       if (count > 0) actual[rel] = count
     }
@@ -328,7 +330,6 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
     expect(offenders).toEqual([
       'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
       'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',

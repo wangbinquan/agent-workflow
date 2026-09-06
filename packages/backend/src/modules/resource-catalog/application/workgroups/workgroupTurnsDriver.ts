@@ -35,7 +35,7 @@ import {
   type WorkgroupRuntimeConfig,
   isClarifyRerunCause,
 } from '@agent-workflow/shared'
-import { ulid } from 'ulid'
+import { monotonicFactory, ulid } from 'ulid'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -398,6 +398,15 @@ function messageRound(snapshot: WorkgroupTurnsSnapshot): number {
   return snapshot.config.mode === 'leader_worker' ? roundBudget(snapshot) : 0
 }
 
+/**
+ * RFC-186 §3-4 / RFC-359 W4-D19c-tail —— 房间消息 id 必须**单调**。房间切片与成员游标推进都按
+ * `message.id > cursor` 的字典序判「我没看过的」，而普通 `ulid()` 在同一毫秒内是随机熵：两条同毫秒
+ * 消息之间没有稳定序，游标若先落在字典序较大的那条上，另一条对该成员就永远不再出现。
+ * 合一时这条丢过一次（中立驱动直接用了 `ulid()`），两个 provider 同时中招；这里按合一前 SQLite
+ * 的形状补回。
+ */
+const nextMessageId = monotonicFactory()
+
 export function messageDraft(input: {
   readonly round: number
   readonly authorKind: WorkgroupMessageAuthorKind
@@ -439,7 +448,7 @@ export function messageDraft(input: {
           params: input.templateParams ?? {},
         } as WorkgroupSystemTemplate)
   return Object.freeze({
-    id: ulid(),
+    id: nextMessageId(),
     round: input.round,
     authorKind: input.authorKind,
     authorMemberId: input.authorMemberId ?? null,

@@ -871,13 +871,60 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
     于是两个 provider 都少了这道关，平台手写的英文兜底文案可以直接落进房间且无从本地化。已补回
     （目标种子那条正文是用户原文，显式标 original；其余 15 处本来就带模板 key），并由 rfc274 锁住三态。
 
-  **还剩九处引用**（收干净才能删岛）：`casAssignmentStatus` / `advanceMemberCursor` 这条写面、
-  `dismissOpenClarifyParksForAutonomous` / `isTaskClarifySuppressed` / `resolveWgClarifyAllowed`、
-  `executeTurn`、`decideAssignmentReconcile` / `isKilledClarifyContinuation`、
-  `isLeaderWrapUpContinuation` / `detectZeroDeltaDone` / `warnIfZeroDeltaDone`、
-  `resolveMessageTurnTrigger`。其中 `isLeaderWrapUpContinuation` 要留意：legacy 用 `>= maxRounds`、
-  中立用 `=== maxRounds` + `capExceeded` 两分支，是**两个不同问题**的答案（「这轮算不算收尾」vs
-  「还要不要叫醒领队」），改指时不能直接对拍。
+  - **第五刀（派单卡 CAS / 成员游标）**：写面判据改锁中立账本操作。
+  - **第六刀（反问许可）**：断言直接问 gate，legacy 的转发层不再被锁。
+  - **第七刀（消息回合边界）**：`messageTurnBoundary` 抽名；「失败即关闭」那条改锁它的结构前提。
+  - **第八刀（收尾轮）——第二处真缺口**：收尾轮丢掉的派单在房间里没有任何说明（模板
+    `roundCapDispatchIgnored` 早就有，合一后没有调用方）。补回，并把零增量 / 收尾判据抽名改锁生产。
+  - **第九刀（崩溃后派单对账）**：`decideAssignmentReconcile` 抽名改锁生产。
+  - **第十刀（澄清续跑复活）——第三处真缺口**：RFC-187 T13 的恢复有两半，合一只带来一半。
+    唤醒还在（`autoResumeInterruptedTasks`），**按原样澄清血缘重铸续跑**丢了：中立驱动的采纳只取
+    pending，而 `interrupted` 是终态，于是只会另铸一条普通 `wg-leader-round`。而人回答过的 Q&A 是
+    **靠 rerun cause 的血缘**注回提示词的（`buildClarifyQueueContext` 只在 clarify-answer /
+    cross-clarify-questioner-rerun 上返回 Q&A），少了这半，任务虽被唤醒、领队却再看不到答案。已补回。
+  - **第十一刀（传输重试进账本）——第四处真缺口**：中立驱动带来了「换进程重跑不吃协议预算」，
+    却没带来**重跑自己进账本**那半：`retryIndex: retryBase + attempt` / `cause: attempt === 0 ? 主 cause`
+    在流中断重跑（不推进 attempt）时会**撞同一个 retryIndex**、还挂主 cause。前者破坏 node_run 的
+    身份（血缘 / 采纳会挑错行），后者让它**进轮次记账**——free_collab 的 `roundBudget` 逐条数成员 run、
+    只跳过 `wg-protocol-retry`，一次流中断就白吃掉一整轮。补回 `freshMintOffset` +
+    `transientRetryPending` 两个语义，先红后绿，双引擎锁。
+  - **第十二刀（删岛）**：最后四处引用改指生产后，`engine` / `turnExecution` / `memberTurns` /
+    `messages` / `prompts` / `rounds` / `lifecycle` / `wake` / `hooks` / `strategies/*` 共 **4112 行**
+    整片删除（`askerKey` / `constants` / `launch` / `state` 是被全仓复用的共享件，留下）。RFC-181 的
+    两条澄清判据改指 `CollaborationRuntimeMechanics` 的 SQLite 实现（collaboration 早有自己的一份，
+    legacy 那份是重复件）；RFC-185 的两条传输重试断言改走中立驱动的真消息回合；RFC-182 的 pending 帧
+    唯一广播点、重试预算单源锁、RFC-200 的 nonce 线程锁全部改锚中立驱动。
+    `rfc294-review-off-dag-offered-edges` 的那条 RC→COL 边按它自己写明的销账条件退账（43 → 42）；
+    rfc217 G5 的模式分支棘轮把中立驱动与提示词组装**纳入扫描面**（此前它们不在账内，等于 20 处分支
+    从棘轮视野里消失了），rfc328 的写点允许表删掉 `rounds.ts#stampWgRound`。
+
+    删之前还要把八个「按路径段拼」的源码锁逐条重指（`scripts/tests-referencing.sh` 只找 import，
+    找不到这种形态），其中一条照出**第五处**缺口：房间消息 id 在中立驱动里退回了普通 `ulid()`。
+    房间切片与成员游标都按 `message.id > cursor` 的**字典序**判「我没看过的」，同毫秒两条消息之间
+    没有稳定序，游标若先落在字典序较大的那条上，另一条对该成员**永远不再出现**——正是 RFC-186 §3-4
+    引入 `monotonicFactory()` 要消除的窗口。已补回，并加了「同毫秒连发 64 条严格递增」的行为判据。
+
+  **D19c-tail ✅ 完工**：legacy workgroup 引擎岛已删除，两个 provider 只剩一条回合实现。
+  过程中照出并修好**五处**合一遗漏的真缺口（系统消息分类、收尾轮房间说明、澄清续跑复活、
+  传输重试记账、房间消息单调 id），全部带判据。
+
+  ### D28 候选（勘察于 2026-09-06）：生命周期自动修复是目前最大的一处「一好一坏」
+
+  `TaskLifecycleAutoRepairCommand` 这一对（相似度 0.22）不是两种写法，是**两种能力**：
+
+  - SQLite：65 行薄适配器，套在 `platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行）+
+    `taskLifecycleRepair/options-*.ts`（12 个规则族、2613 行）这套成熟机器上，按告警规则给出整份
+    修复选项目录（C1 / CR1 / R1 / R2 / S1–S6 / T3 / U1）。
+  - PostgreSQL：198 行原生实现，**只有一个** `S4.kick-task` 选项。也就是说 PG 上的诊断页除了
+    「踢一脚」之外无路可走，其余十一族告警在 PG 上没有任何可执行修复。
+
+  好消息是这套机器**天然就是中立的**：`taskLifecycleRepair.ts` 与全部 options 模块里
+  `dbTxSync` / `.all()` / `.get()` / `.run()` 各 0 处，用的全是 drizzle 的异步面，只是被类型
+  钉成了 `DbClient`、并住在 `platform/persistence/sqlite/` 路径下。合一的形状因此是
+  **把它整体提为中立**（重命名出 sqlite 目录 + 类型换成 `ProviderNeutralDatabase`，
+  事务点走 `databaseSessionFor`），PG 那 198 行整体退役——与 D19c 把 PG 提为基线的方向相反，
+  这次是 SQLite 侧才是那份成熟实现。验收面照 D19c 的方法论：先按端口把两侧行为逐条对照，
+  再让既有的修复用例在两个引擎上各跑一遍。
 
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 

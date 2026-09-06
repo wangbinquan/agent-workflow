@@ -39,10 +39,6 @@ const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
   ],
   ['packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts', new Set(['tickOnce'])],
   ['packages/backend/src/services/runtime/claudeCode/sessionCapture.ts', new Set(['persistRows'])],
-  [
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/rounds.ts',
-    new Set(['stampWgRound']),
-  ],
   ['packages/backend/src/services/task.ts', new Set(['persistPreparedProjection'])],
 ])
 const WORKER_MUTATION_TABLES = new Set(['tasks', 'nodeRuns', 'nodeRunOutputs', 'nodeRunEvents'])

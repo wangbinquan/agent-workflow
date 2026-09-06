@@ -159,10 +159,7 @@ test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配�
   expect(adapter).toContain('dependencies.clarifyAskGate.allowed(input)')
   const daemon = readFileSync(resolve(root, 'cli/postgresqlDaemonApplication.ts'), 'utf8')
   expect(daemon).toContain('createWorkgroupClarifyAskGate(input.db)')
-  const legacy = readFileSync(
-    resolve(root, 'modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts'),
-    'utf8',
-  )
-  expect(legacy).toContain('return await createWorkgroupClarifyAskGate(db).allowed({')
-  expect(legacy).toContain('return await countWorkgroupClarifyAsks(db, taskId, askerKey)')
+  // RFC-359 W4-D19c-tail：转发这一份的 legacy 回合执行已随工作组引擎岛退役，判定只剩这一处。
+  const server = readFileSync(resolve(root, 'server.ts'), 'utf8')
+  expect(server).toContain('createWorkgroupClarifyAskGate(')
 })

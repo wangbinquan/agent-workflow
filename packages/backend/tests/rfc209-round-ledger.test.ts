@@ -294,6 +294,8 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
   })
 
   test('round 是必填字段（类型层锁 —— schema 的 .default(0) 会让省略静默写 0）', () => {
+    // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，房间消息的行形状由中立驱动的
+    // `WorkgroupTurnMessageDraft` 定义，两个 provider 共用这一份。
     const SRC = readFileSync(
       resolve(
         import.meta.dir,
@@ -301,23 +303,20 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'messages.ts',
+        'application',
+        'workgroups',
+        'workgroupTurnsDriver.ts',
       ),
       'utf8',
     )
     // 必填 = 没有 `?`；有默认值会让「忘了带回合号」重新变成静默 round 0。
-    // RFC-217 T3 起 messages.ts 还承载 PostMessageArgs（round?: 是 §2.3 的
-    // 有意省略=写入时实时解析），锁面窄化到 RoomMessageRowArgs 块本身。
     const block = SRC.slice(
-      SRC.indexOf('export interface RoomMessageRowArgs'),
-      SRC.indexOf('}', SRC.indexOf('export interface RoomMessageRowArgs')),
+      SRC.indexOf('export interface WorkgroupTurnMessageDraft'),
+      SRC.indexOf('}', SRC.indexOf('export interface WorkgroupTurnMessageDraft')),
     )
-    expect(block).toMatch(/\n\s*round: number\n/)
+    expect(block).toMatch(/\n\s*readonly round: number\n/)
     expect(block).not.toMatch(/round\?:/)
-    expect(block).toMatch(/\n\s*triggerMessageId: string \| null\n/)
+    expect(block).toMatch(/\n\s*readonly triggerMessageId: string \| null\n/)
     expect(block).not.toMatch(/triggerMessageId\?:/)
   })
 })

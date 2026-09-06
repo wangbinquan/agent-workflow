@@ -367,39 +367,31 @@ describe('RFC-215 — source locks', () => {
   test('fc batch drive path never advances the member cursor (G3)', () => {
     // 游标单一归属消息轨：driveBatchTurn / settleBatchResults 里出现
     // advanceMemberCursor 即回归（双轨并发双推游标 = v1 探针 S1 的竞态）。
-    // RFC-217 T3b：批 driver 迁 strategies/freeCollab.ts（整文件即 fc 批域）。
-    const fc = readFileSync(
+    // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，批回合与单卡回合是同一份中立驱动里的
+    // 两个函数。判据从「两个文件各有 / 各无」改成「两个函数体各有 / 各无」，语义不变。
+    const DRIVER = readFileSync(
       resolve(
         import.meta.dir,
         '..',
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'strategies',
-        'freeCollab.ts',
+        'application',
+        'workgroups',
+        'workgroupTurnsDriver.ts',
       ),
       'utf-8',
     )
-    expect(fc).toContain('async function driveBatchTurn')
-    expect(fc).not.toContain('advanceMemberCursor')
-    // lw 单卡路径保留推进（AC-5 对照面）：memberTurns 仍有调用。
-    const member = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'memberTurns.ts',
-      ),
-      'utf-8',
-    )
-    expect(member).toContain('advanceMemberCursor')
+    /** 取出一个顶层函数的函数体（到下一个顶层函数声明为止）。 */
+    const bodyOf = (name: string): string => {
+      const head = DRIVER.indexOf(`async function ${name}(`)
+      expect(head).toBeGreaterThan(-1)
+      const next = DRIVER.slice(head + 1).search(/\n(?:async )?function \w+\(/)
+      return DRIVER.slice(head, next === -1 ? undefined : head + 1 + next)
+    }
+    // fc 批回合不推进成员游标（AC-5：批域自己管进度）。
+    expect(bodyOf('driveBatchTurn')).not.toContain('cursorOperation(')
+    // lw 单卡路径保留推进（AC-5 对照面）。
+    expect(bodyOf('driveAssignmentTurn')).toContain('cursorOperation(')
   })
 })

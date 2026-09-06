@@ -83,6 +83,7 @@ describe('RFC-187 §4 — source locks', () => {
   })
 
   test('the engine wires a zero-delta warn on done (both the gated and un-gated finish)', () => {
+    // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，两条收场路径都在中立驱动里。
     const runner = readFileSync(
       resolve(
         import.meta.dir,
@@ -90,16 +91,15 @@ describe('RFC-187 §4 — source locks', () => {
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'engine.ts',
+        'application',
+        'workgroups',
+        'workgroupTurnsDriver.ts',
       ),
       'utf8',
     )
-    // called before BOTH `return { kind: 'ok' }` sites (autonomous done + gate-approved done).
-    const calls = runner.split('await warnIfZeroDeltaDone(args, state)').length - 1
-    expect(calls).toBeGreaterThanOrEqual(2)
+    // 自主 done 与闸门批准 done 两条收场路径各叫一次。
+    const calls = runner.split('warnIfZeroDelta(').length - 1
+    expect(calls).toBeGreaterThanOrEqual(3) // 1 处定义 + 2 处调用
     // The canonical-diff hook is provided by task-execution node mechanics, not the engine.
     const nodeMechanics = readFileSync(
       resolve(
