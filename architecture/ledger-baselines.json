@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25433,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25435,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D19c-tail 第八刀：中立回合驱动把两条既有规则从内联条件抽成具名导出（`detectZeroDeltaDone` / `isLeaderWrapUpContinuation`），好让 RFC-187 §4 与 §3-7 的断言锁生产那份、而不是已退役的 legacy strategies。25433 → 25435，两格都是「把既有规则命名」的代价，生产行为一格未变（同批补回的收尾轮房间说明是另一处，不占 symbol owner）。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:549aa8461f0a5c9232796fa3a5605a8fc8b500d7f00222427af76357b6944762",
+    "sourceDigest": "sha256:615baf5ebdcd724eb936102d82f4b5cf88f08194e5b832b7e3c5405ce80a82fb",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8601a5ea84df67c2606bf5faf25b54ea75b878a9",
-    "contentDigest": "sha256:bfa1ddd666ae9e843eb9c7d4b698165dcf11b9bdbb21c2caf69ae6a6dda49ca6",
+    "currentSnapshotSha": "4cc6b8a69f5d7e4988ee28f5fa604b9d0cc39bbe",
+    "contentDigest": "sha256:0843051961a4695200b4e402e81bd9c52cc98a1852860458aca12b7452b69a7e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
