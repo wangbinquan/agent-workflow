@@ -20,7 +20,6 @@ import {
   renderWgProtocolBlock,
   wgHostRolePorts,
 } from '@/modules/resource-catalog/application/workgroups/workgroupProtocol'
-import { resolveWgClarifyAllowed } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
 import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@/modules/task-execution/public/commands'
 import { describeEachProvider } from './helpers/eachProvider'
 import { CL, DESIGNER, freshTaskId, seedRun, seedTask } from './helpers/questionDispatchFixture'
@@ -98,8 +97,16 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
       clarifyBudget: 9,
     }
     expect(await gate.allowed(input)).toBe(false)
+    // RFC-359 W4-D19c-tail：legacy 的 `resolveWgClarifyAllowed` 本来就只是转发给这同一个 gate，
+    // 转发层退役后直接问 gate 本身——判定只有一份，这一条锁的就是它。
     expect(
-      await resolveWgClarifyAllowed(db as never, taskId, HUMAN_AND_AGENT, 9, DESIGNER, null),
+      await createWorkgroupClarifyAskGate(db as never).allowed({
+        taskId,
+        nodeId: DESIGNER,
+        shardKey: null,
+        members: HUMAN_AND_AGENT,
+        clarifyBudget: 9,
+      }),
     ).toBe(false)
   })
 })
