@@ -80,14 +80,16 @@ const routeFiles = [
   // 而真正的危害是反过来的——搬走之后这些分支就再也不受本守卫约束了。
   // 缩小语料 = 静默丢掉压力，正是本文件开头那段注释在防的事。
   ...trackedFiles('packages/backend/src/modules/*/inbound/*.ts'),
+  // RFC-359 W4-D19b：两个 provider 的任务房合成一份中立实现，legacy 那三个动作文件随之退役。
+  // 同样的道理——语料跟着搬，否则这些客户端可达的错误码会从棘轮里消失。
   ...trackedFiles(
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts',
+    'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
   ),
   ...trackedFiles(
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
+    'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
   ),
   ...trackedFiles(
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts',
+    'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts',
   ),
 ]
 
@@ -168,10 +170,10 @@ const UNCOVERED_BASELINE: readonly string[] = [
   'retry-request-invalid',
   'workflow-draft-validation-invalid',
   'workgroup-assignment-not-found',
-  'workgroup-message-invalid',
+  // RFC-359 W4-D19b：房间合一后 `rfc359-w4-d19b-adapters` 两引擎各点了一遍
+  // 「不可见任务 404」与「发言载荷非法」，按「baseline 只缩不涨」从表里移除。
   'workgroup-rename-invalid',
   'workgroup-save-as-invalid',
-  'workgroup-task-not-found',
 ]
 
 describe('route-local error codes are named by tests', () => {

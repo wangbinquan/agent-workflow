@@ -76,8 +76,12 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     ]) {
       expect(provider).toContain(ownedTable)
     }
-    const schemaImports =
-      provider.match(/import \{[\s\S]*?\} from '@\/db\/schema'/gu)?.join('\n') ?? ''
+    // 逐文件取自己的 schema 导入块：在三份源码**拼接**后再匹配，`import {` 到
+    // `} from '@/db/schema'` 之间会跨文件贪婪吞进整段正文，正文里出现「tasks」这个词
+    // （哪怕只是注释）就会被误判成导入了 tasks 表（2026-09-06 实撞）。
+    const schemaImportsOf = (source: string): string =>
+      source.match(/import \{[^}]*\} from '@\/db\/schema'/gu)?.join('\n') ?? ''
+    const schemaImports = [adapter, commands, queries].map(schemaImportsOf).join('\n')
     for (const foreignTable of [
       'clarifyRounds',
       'nodeRuns',

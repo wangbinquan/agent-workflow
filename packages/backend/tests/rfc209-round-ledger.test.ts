@@ -334,10 +334,12 @@ describe('RFC-209 §1.3 — 路由层不再硬编码 round: 0', () => {
     expect(ROUTES.split('round: 0').length - 1).toBe(0)
   })
 
-  test('每一处 insert(workgroupMessages) 都经 buildRoomMessageRow（RFC-217 T4：写编排全量迁 service）', () => {
-    // G2 终态：route 层裸写归零；taskActions 里每个 insert 都经构造器。
+  test('房间里每一处 insert(workgroupMessages) 的 round 都来自账本，没有硬编码（RFC-217 T4 / RFC-359 W4-D19b）', () => {
+    // G2 终态：route 层裸写归零。写编排先迁进 Resource Catalog 的 legacy 实现（经
+    // `buildRoomMessageRow` 构造器），RFC-359 W4-D19b 房间合一后落在中立命令面里——
+    // 那里不再走构造器，而是逐处显式取 round，所以这条锁改为直接检查 round 的来源。
     expect(ROUTES.split('insert(workgroupMessages)').length - 1).toBe(0)
-    const ACTIONS = readFileSync(
+    const COMMANDS = readFileSync(
       resolve(
         import.meta.dir,
         '..',
@@ -345,15 +347,17 @@ describe('RFC-209 §1.3 — 路由层不再硬编码 round: 0', () => {
         'modules',
         'resource-catalog',
         'infrastructure',
-        'legacy',
-        'workgroup',
-        'taskActions.ts',
+        'workgroupTaskRoomCommands.ts',
       ),
       'utf8',
     )
-    const inserts = ACTIONS.split('insert(workgroupMessages)').length - 1
-    const builders = ACTIONS.split('buildRoomMessageRow(').length - 1
+    const inserts = COMMANDS.split('insert(workgroupMessages)').length - 1
     expect(inserts).toBeGreaterThanOrEqual(4)
-    expect(builders).toBeGreaterThanOrEqual(inserts)
+    // round 只有两个合法来源：房间账本解析出来的当前回合，或派单卡自己的那一轮。
+    const fromLedger = COMMANDS.split('round: await messageRound(').length - 1
+    const fromAssignment = COMMANDS.split('round: assignment.round').length - 1
+    const fromResolvedLocal = COMMANDS.split('\n          round,\n').length - 1
+    expect(fromLedger + fromAssignment + fromResolvedLocal).toBe(inserts)
+    expect(COMMANDS.split('round: 0').length - 1).toBe(0)
   })
 })

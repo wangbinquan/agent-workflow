@@ -61,7 +61,6 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  * The exact per-file snapshot catches a new write authority in either provider.
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
-  'modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts': 1,
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': 1,
   'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': 1,
   'modules/system-operations/infrastructure/sqliteResourceLimitPersistence.ts': 1,

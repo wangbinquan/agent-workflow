@@ -377,7 +377,6 @@ describe('RFC-231 private create invariant', () => {
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
-      'modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts',
       'modules/resource-catalog/infrastructure/workgroupRepository.ts',
     ]
     const sources = new Map(
@@ -419,9 +418,15 @@ describe('RFC-231 private create invariant', () => {
     for (const file of ['modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts']) {
       expect(sources.get(file)).toContain('initialBuiltinResourceAcl')
     }
+    // RFC-359 W4-D19b：房间的「另存为工作流」不再自己 insert(workflows)，改为把提交递给
+    // 工作流目录的 create 操作（`composeWorkgroupTaskRoomDynamicWorkflow`）。归属判定因此
+    // 收进上面那条 `legacy/workflow.ts` + `initialPrivateResourceAcl` 的断言，不再单列。
     expect(
-      sources.get('modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts'),
-    ).toContain('{ ownerUserId: actor.user.id, actor }')
+      await readFile(
+        join(BACKEND_SRC, 'modules/resource-catalog/composition/workgroupTaskRoom.ts'),
+        'utf8',
+      ),
+    ).toContain('input.workflows.invoke(authority as never')
   })
 })
 

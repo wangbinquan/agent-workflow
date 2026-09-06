@@ -31,8 +31,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createAgent, getAgentById, updateAgent } from '../src/services/agent'
-import { buildConfigActions } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions'
-import { buildWorkgroupTaskActions } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions'
+import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 import { importWorkflowYaml } from '../src/services/workflow.yaml'
 import {
   createWorkflow,
@@ -46,8 +45,6 @@ import {
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
-import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -555,7 +552,12 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
     expect((await getWorkgroupById(db, current.id))?.members).toHaveLength(1)
   })
 
-  test('mid-run addMembers rejects a target deleted after ACL/name preflight', async () => {
+  // RFC-359 W4-D19b —— 房间合一后这条的形态变了：合一前 SQLite 的配置更新先在事务外做 ACL/名字
+  // 预检、再在写事务里复核，测试靠 `beforeWriteTransaction` 这个仅测试可见的接缝在两者之间删掉目标，
+  // 证明复核确实在。中立房间把整段（可见性解析 + 归并 + 写入）放进同一笔事务，那个窗口不复存在、
+  // 接缝也随 legacy 实现一起退役。留下来能断言的是同一条用户可见行为：引用解析不到就以
+  // `acl-missing-refs` 拒绝，且名册一行不改。
+  test('mid-run addMembers 拒绝解析不到的 agent 引用，名册保持不变', async () => {
     const baseAgent = await createAgent(db, { name: 'room-base', ...EMPTY_AGENT })
     const lateAgent = await createAgent(
       db,
@@ -607,34 +609,31 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
       workgroupId: config.workgroupId,
       workgroupConfigJson: JSON.stringify(config),
     })
-    const core = buildWorkgroupTaskActions({
-      db,
-      configPath: '/tmp/rfc223-ref-fence-config.json',
-      schedulerDriver: createNoopSchedulerDriver(),
-      taskRecoveryOperations: taskRecoveryOperations(db),
-    })
-    const actions = buildConfigActions(
-      {
-        db,
-        configPath: '/tmp/rfc223-ref-fence-config.json',
-        beforeWriteTransaction: async () => {
-          await db.delete(agents).where(eq(agents.id, lateAgent.id))
-        },
-      },
-      core,
-    )
+    const room = composeTestWorkgroupTaskRoom(db)
+    await db.delete(agents).where(eq(agents.id, lateAgent.id))
 
     await expect(
-      actions.updateTaskConfig(editor, taskId, {
-        addMembers: [
-          {
-            memberType: 'agent',
-            agentId: lateAgent.id,
-            displayName: 'late',
-            roleDesc: '',
+      room.commands.updateConfig(
+        Object.freeze({ ...editor, userId: editor.user.id }) as unknown as Parameters<
+          typeof room.commands.updateConfig
+        >[0],
+        {
+          taskId,
+          submission: {
+            kind: 'json-body',
+            body: JSON.stringify({
+              addMembers: [
+                {
+                  memberType: 'agent',
+                  agentId: lateAgent.id,
+                  displayName: 'late',
+                  roleDesc: '',
+                },
+              ],
+            }),
           },
-        ],
-      }),
+        },
+      ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
     const stored = JSON.parse(
       (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workgroupConfigJson!,

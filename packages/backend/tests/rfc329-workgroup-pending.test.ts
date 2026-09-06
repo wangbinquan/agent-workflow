@@ -15,7 +15,8 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows, workgroupAssignments, workgroupTaskState } from '../src/db/schema'
-import { buildRoomReads } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/room'
+import type { WorkgroupOperationContext } from '../src/modules/resource-catalog/public/participants'
+import { composeTestWorkgroupTaskRoom, roomDocument } from './helpers/workgroupTaskRoom'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_278_400_000
@@ -26,6 +27,28 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
     user: { id, username: id, displayName: id, role, status: 'active' },
     source: 'session',
   })
+}
+
+/** 任务可见性判定读的是扁平的 `authority.userId`（不是 `user.id`），投影里两者都在。 */
+function authority(id: string, role: 'admin' | 'user' = 'user'): WorkgroupOperationContext {
+  return Object.freeze({
+    ...actor(id, role),
+    userId: id,
+  }) as unknown as WorkgroupOperationContext
+}
+
+interface PendingRow {
+  taskId: string
+  name: string
+  status: string
+  gateStatus: string | null
+  awaitingConfirmation: boolean
+  pendingDeliveries: number
+}
+interface PendingCount {
+  deliveries: number
+  gates: number
+  total: number
 }
 
 /** alice owns it and is a human member; bob is unrelated. */
@@ -129,10 +152,18 @@ async function seed(db: Db, specs: ReadonlyArray<TaskSpec>): Promise<void> {
 }
 
 function reads(db: Db) {
-  return buildRoomReads(
-    { db } as never,
-    { loadVisibleWorkgroupTask: async () => ({}) as never } as never,
-  )
+  const room = composeTestWorkgroupTaskRoom(db)
+  return {
+    pendingRows: async (who: Actor): Promise<PendingRow[]> =>
+      roomDocument<{ items: PendingRow[] }>(await room.queries.pending(authorityOf(who))).items,
+    pendingCount: async (who: Actor): Promise<PendingCount> =>
+      roomDocument<PendingCount>(await room.queries.pendingCount(authorityOf(who))),
+  }
+}
+
+/** 套件里现成的 Actor 直接补上房间要的扁平 userId。 */
+function authorityOf(who: Actor): WorkgroupOperationContext {
+  return authority(who.user.id, who.user.role === 'admin' ? 'admin' : 'user')
 }
 
 /** The identity the refactor has to preserve. */

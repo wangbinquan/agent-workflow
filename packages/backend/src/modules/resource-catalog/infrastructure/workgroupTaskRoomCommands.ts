@@ -33,6 +33,7 @@ import {
   type WorkgroupTaskRoomDependencies,
   type WorkgroupTaskRoomTransactionRunner,
 } from './workgroupTaskRoom'
+import { assertNoMissingResourceRefs } from './referenceUsability'
 
 /** 事务里认领到的继续意图 id；没有继续执行就是 null。 */
 type AdmittedContinuation = string | null
@@ -50,6 +51,31 @@ export function createWorkgroupTaskRoomCommands(
   const drive = async (taskId: string, continuation: AdmittedContinuation): Promise<void> => {
     if (continuation === null) return
     await dependencies.continuation.driveAfterCommit({ taskId, intentId: continuation })
+  }
+  /**
+   * 「还停着就补一次续跑」：自己开一笔短事务重读**新鲜**状态，可恢复才准入 + 驱动。
+   *
+   * 用途只有一个——配置更新把最后一个人类成员遣散之后。引擎可能带着**遣散前**的快照，
+   * 慢一拍才把任务提交成 `awaiting_human`；那一拍落在配置更新的事务之后，上面那条
+   * `isResumable(loaded.task.status)` 看不到它，任务就会永远停在等一个已经不存在的人。
+   * 合一前 SQLite 的 configActions 用「立刻重读一次 + 2.5s 后再重读一次」兜这个窗口
+   * （`kickIfParked` / `lateKick.unref()`），这里是同一条，只是准入换成房间的继续意图。
+   */
+  const continueIfStillParked = async (taskId: string): Promise<void> => {
+    const continuation = await withTransaction(async (_transaction, participant) => {
+      // 任务行归 TaskExecution，房间只能通过参与者读它（rfc345 的边界锁：房间不得 import `tasks`）。
+      const fresh = await participant.load(taskId)
+      if (fresh === null || !isResumable(fresh.status)) return null
+      const continued = await participant.continueTask({
+        taskId,
+        expectedStatus: fresh.status,
+        actorUserId: dependencies.systemUserId,
+        occurredAt: now(),
+        identity: identity('workgroup-task-room.dismissed-humans-kick.v1', nextId),
+      })
+      return continued?.intentId ?? null
+    })
+    await drive(taskId, continuation)
   }
   const commands = Object.freeze<WorkgroupTaskRoomCommands>({
     async postMessage(authority, input) {
@@ -509,17 +535,18 @@ export function createWorkgroupTaskRoomCommands(
           ),
         ]
         const addedAgents = await visibleAgentRows(transaction, authority, addedAgentIds)
-        const missingAgents = addedAgentIds.filter((id) => !addedAgents.has(id))
-        if (missingAgents.length > 0) {
-          throw new ValidationError(
-            'workgroup-config-agent-missing',
-            `agent member(s) do not exist: ${missingAgents.join(', ')}`,
-            { missingAgentIds: missingAgents },
-          )
-        }
+        // 中途加成员和编辑工作组资源一样是「新增引用」：解析不到的 id 一律以 `acl-missing-refs` 报出
+        // （RFC-359 W4-D19b 合一时这里一度改成了 `workgroup-config-agent-missing`，与合一前 SQLite
+        // 的 `resolveRefsUsableById` + `assertNoMissingRefs` 不同码；判据本身两边一致，只是错误码回归）。
+        assertNoMissingResourceRefs(
+          addedAgentIds
+            .filter((id) => !addedAgents.has(id))
+            .map((id) => ({ type: 'agent' as const, name: id })),
+        )
         const changes: string[] = []
         let members = [...loaded.config.members]
         const hadHumanMember = workgroupHasHumanMember(members)
+        let dismissedHumans = false
         const removing = new Set(patch.removeMemberIds ?? [])
         if (removing.size > 0) {
           if (loaded.config.leaderMemberId !== null && removing.has(loaded.config.leaderMemberId)) {
@@ -755,6 +782,7 @@ export function createWorkgroupTaskRoomCommands(
               `dismissed ${dismissed.dismissedSessions} open clarify session(s) (no human member left)`,
             )
           }
+          dismissedHumans = true
         }
         const messageId = nextId()
         await transaction.insert(workgroupMessages).values({
@@ -779,7 +807,7 @@ export function createWorkgroupTaskRoomCommands(
           })
           continuation = continued?.intentId ?? null
         }
-        return { changes, assignmentEvents, messageId, continuation }
+        return { changes, assignmentEvents, messageId, continuation, dismissedHumans }
       })
       for (const event of result.assignmentEvents) {
         dependencies.broadcast(input.taskId, {
@@ -794,6 +822,12 @@ export function createWorkgroupTaskRoomCommands(
         kind: 'system',
       })
       await drive(input.taskId, result.continuation)
+      if (result.dismissedHumans) {
+        // 紧接着一次，外加 2.5s 后一次：慢一拍才提交的 park 也能被接住（形态同合一前）。
+        await continueIfStillParked(input.taskId)
+        const late = setTimeout(() => void continueIfStillParked(input.taskId), 2_500)
+        late.unref?.()
+      }
       return { changes: result.changes }
     },
     async cancelAssignment(authority, input) {

@@ -13,7 +13,8 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
-import { buildRoomReads } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/room'
+import type { WorkgroupOperationContext } from '../src/modules/resource-catalog/public/participants'
+import { composeTestWorkgroupTaskRoom, roomDocument } from './helpers/workgroupTaskRoom'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_278_400_000
@@ -88,10 +89,16 @@ async function seed(db: Db): Promise<void> {
 }
 
 function reads(db: Db) {
-  return buildRoomReads(
-    { db } as never,
-    { loadVisibleWorkgroupTask: async () => ({}) as never } as never,
-  )
+  const room = composeTestWorkgroupTaskRoom(db)
+  return {
+    // 任务可见性判定读的是扁平的 `authority.userId`（不是 `user.id`），投影里两者都在。
+    pendingCount: async (who: Actor): Promise<Record<string, number>> =>
+      roomDocument<Record<string, number>>(
+        await room.queries.pendingCount(
+          Object.freeze({ ...who, userId: who.user.id }) as unknown as WorkgroupOperationContext,
+        ),
+      ),
+  }
 }
 
 describe('RFC-311 — workgroup pending-count honours task visibility', () => {

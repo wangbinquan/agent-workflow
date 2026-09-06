@@ -128,11 +128,11 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
   })
 
   test('G2: room-table writes live in Resource Catalog infrastructure (routes are transport only)', () => {
-    // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 taskActions
-    //（config PUT 编排）；routes/ 里任何房间表裸写（messages/assignments/
-    // configJson）都是回归。
+    // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 TaskExecution 的房间参与者
+    //（房间的 config PUT 通过它落盘）；routes/ 里任何房间表裸写（messages/assignments/
+    // configJson）都是回归。RFC-359 W4-D19b 合一后 legacy 那份 `configActions.ts` 已随
+    // 两份 provider 房间一起退役，写点从两处收敛成一处。
     const allow = new Set([
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
       'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
     ])
     const offenders: string[] = []
@@ -154,7 +154,7 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     expect(offenders).toEqual([])
     const puts =
       read(
-        'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
+        'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
       ).split('.set({ workgroupConfigJson').length - 1
     expect(puts).toBe(1)
   })
@@ -211,8 +211,10 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       // 复刻 readiness 的 leader 判定与 dw 快照选择——与 fresh 启动同语义、
       // 不新增 mode 分支散射面（strategies/ 之外唯一属主仍是 launch.ts）。
       'launch.ts': 3,
-      // T4：config PUT 编排（含 dynamic_workflow 免疫判断）落 configActions
-      'configActions.ts': 1,
+      // RFC-359 W4-D19b：房间合一，legacy 的 configActions / room / dwActions 一起退役；
+      // 它们的模式分支落到中立房间的这两个文件里，继续按同一把棘轮记账。
+      'infrastructure/workgroupTaskRoom.ts': 2,
+      'infrastructure/workgroupTaskRoomCommands.ts': 1,
       // RFC-317 T18：room.ts 与 dwActions.ts 原记 1 / 2，实际已收敛到 0——
       // 那 3 个差额就是被回收的免费槽位，删掉条目即等于把上限收到 0。
     }
@@ -226,13 +228,22 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
     walk(WG)
     const applicationProjection =
       'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts'
-    files.push(applicationProjection)
+    // 合一后的任务房不在 legacy 目录里，但它承接了房间那部分模式分支——一起纳入扫描面，
+    // 否则这些分支会从棘轮的视野里消失。
+    const roomFiles = [
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts',
+    ]
+    files.push(applicationProjection, ...roomFiles)
     const actual: Record<string, number> = {}
     for (const f of files) {
       const rel =
         f === applicationProjection
           ? 'application/workgroups/workgroupRoomProjection.ts'
-          : f.slice(WG.length + 1)
+          : roomFiles.includes(f)
+            ? `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
+            : f.slice(WG.length + 1)
       const count = read(f).split("mode === '").length - 1
       if (count > 0) actual[rel] = count
     }

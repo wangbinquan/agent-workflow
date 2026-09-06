@@ -538,12 +538,12 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {
-    // RFC-217 T4：业务体在 taskActions/configActions（routes 纯 transport）。
-    const route =
-      SRC('modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts') +
-      SRC('modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts')
-    expect(route).toContain("config.mode !== 'dynamic_workflow'")
-    expect(route).toContain('const kickIfParked')
-    expect(route).toContain('lateKick.unref?.()')
+    // RFC-217 T4：业务体不在 routes（routes 纯 transport）。RFC-359 W4-D19b 起两个 provider
+    // 共用同一份任务房，这段就住在中立房间的命令面里。
+    const route = SRC('modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts')
+    expect(route).toContain("loaded.config.mode !== 'dynamic_workflow'")
+    // 遣散最后一个人类成员后的补跑：立刻一次 + 2.5s 后一次，接住慢一拍才提交的 park。
+    expect(route).toContain('const continueIfStillParked')
+    expect(route).toContain('late.unref?.()')
   })
 })
