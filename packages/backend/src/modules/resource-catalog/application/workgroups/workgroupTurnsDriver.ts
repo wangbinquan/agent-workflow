@@ -35,6 +35,7 @@ import {
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
+import { isClarifyRerunCause } from '@/services/nodeRunMint'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -2348,6 +2349,77 @@ export function decideAssignmentReconcile(
   return 'redispatch'
 }
 
+/**
+ * RFC-187 T13 —— 这一行宿主 run 是不是「被重启杀掉的、已回答澄清的续跑」？
+ *
+ * 提问被回答时会 commit（session→answered）并铸一条 pending 续跑行，随后 `resumeTask` 是
+ * fire-and-forget；这个窗口里崩一次，开机 reaper 把那条 pending 翻成 `interrupted`，而任务本身
+ * 停在 `awaiting_human`（reaper 只收 pending/running 的**任务**）。`interrupted` 是终态、没有回到
+ * pending 的转移，采纳又只取 pending —— 于是那条已回答的续跑永远卡住，人的回答静默丢失。
+ *
+ * RFC-359 W4-D19c-tail：合一前这条判据 + 复活在 legacy engine 里（`isKilledClarifyContinuation`
+ * / `reviveKilledClarifyContinuations`），中立驱动接手时**两样都没带过来**——auto-resume 那一半
+ * 还在（任务会被唤醒），但唤醒后驱动只会铸一条普通的 `wg-leader-round`，而 Q&A 的注入恰恰只在
+ * 澄清血缘的 rerun 上发生（`nodeMechanics` 的 buildClarifyQueueContext：非 answer 轮拿到空队列）。
+ * 结果就是 RFC-187 T13 修掉的那个故障原样回来：领队再也看不到它问来的答案。这里把它补回。
+ */
+export function isKilledClarifyContinuation(
+  run: Readonly<{ status: string; rerunCause: string | null }>,
+): boolean {
+  return run.status === 'interrupted' && isClarifyRerunCause(run.rerunCause)
+}
+
+/**
+ * 把每个 (nodeId, shardKey) 分组里**最新**那条被杀的澄清续跑按原样血缘重铸成 pending，
+ * 交给正常的 pending 采纳去驱动。只复活最新一条——更早的 interrupted 续跑已被后来的行取代，
+ * 属于历史。幂等：重铸之后该分组最新的是 pending，再跑一次就不再命中。
+ */
+async function reviveKilledClarifyContinuations(
+  persistence: WorkgroupTurnsPersistencePort,
+  snapshot: WorkgroupTurnsSnapshot,
+  log: WorkgroupTurnLogger,
+): Promise<void> {
+  const groups = new Map<string, WorkgroupTurnHostRun[]>()
+  for (const run of snapshot.hostRuns) {
+    const key = `${run.nodeId}\u0000${run.shardKey ?? ''}`
+    const group = groups.get(key)
+    if (group === undefined) groups.set(key, [run])
+    else group.push(run)
+  }
+  const operations: WorkgroupTurnLedgerOperation[] = []
+  for (const group of groups.values()) {
+    // hostRuns 按 id 升序装载，最后一条即最新。
+    const latest = group[group.length - 1]
+    if (latest === undefined || !isKilledClarifyContinuation(latest)) continue
+    const runId = ulid()
+    operations.push({
+      kind: 'mint-host-run',
+      operationKey: `revive-clarify-continuation:${latest.id}`,
+      runId,
+      nodeId: latest.nodeId,
+      status: 'pending',
+      // 保住澄清血缘：正是它让人回答过的 Q&A 重新注回提示词。
+      cause:
+        latest.rerunCause === 'clarify-answer'
+          ? 'clarify-answer'
+          : 'cross-clarify-questioner-rerun',
+      retryIndex: Math.max(...group.map((run) => run.retryIndex)) + 1,
+      shardKey: latest.shardKey,
+      agentOverrideName: null,
+      agentOverrideId: null,
+      wgRound: null,
+    })
+  }
+  if (operations.length === 0) return
+  const receipt = await commit(persistence, snapshot.taskId, operations)
+  if (receipt.committed) {
+    log.info('workgroup revived clarify continuations killed by a restart', {
+      taskId: snapshot.taskId,
+      revived: operations.length,
+    })
+  }
+}
+
 async function reconcileRunningAssignments(
   persistence: WorkgroupTurnsPersistencePort,
   snapshot: WorkgroupTurnsSnapshot,
@@ -2542,6 +2614,9 @@ export function createWorkgroupTurnsOperations(
         })
       }
       await commit(persistence, input.taskId, initialOperations)
+      // RFC-187 T13：先把重启杀掉的已回答澄清续跑复活，再收 running 卡——两者都是「进门先收拾
+      // 上一轮的残局」，顺序与合一前 legacy engine 的入口一致。
+      await reviveKilledClarifyContinuations(persistence, first, input.log)
       await reconcileRunningAssignments(persistence, first)
 
       const inflightState: InflightTurns = {

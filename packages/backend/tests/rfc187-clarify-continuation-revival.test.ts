@@ -21,7 +21,10 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { isKilledClarifyContinuation } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/engine'
+// RFC-359 W4-D19c-tail：判据 + 复活都改指生产那份（中立回合驱动）。合一时这两样**都没带过来**
+// ——auto-resume 那一半还在，但唤醒后驱动只铸普通 `wg-leader-round`，而 Q&A 注入只发生在澄清
+// 血缘的 rerun 上，于是人的回答照样丢。本次一并补回。
+import { isKilledClarifyContinuation } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
@@ -156,8 +159,8 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
   })
 })
 
-describe('RFC-187 T13 — source locks (engine-entry revive)', () => {
-  // RFC-217 T3: the engine entry lives in engine.ts (runner.ts dissolved).
+describe('RFC-187 T13 — source locks (driver-entry revive)', () => {
+  // RFC-359 W4-D19c-tail：入口搬到中立回合驱动，两个 provider 共用。
   const RUNNER = readFileSync(
     resolve(
       import.meta.dir,
@@ -165,34 +168,21 @@ describe('RFC-187 T13 — source locks (engine-entry revive)', () => {
       'src',
       'modules',
       'resource-catalog',
-      'infrastructure',
-      'legacy',
-      'workgroup',
-      'engine.ts',
+      'application',
+      'workgroups',
+      'workgroupTurnsDriver.ts',
     ),
     'utf8',
   )
 
-  test('the engine revives killed continuations at (re)entry, next to the assignment reconcile', () => {
-    expect(RUNNER).toContain('await reviveKilledClarifyContinuations(db, taskId, rec, log)')
-    // re-mint (interrupted is terminal — there is no transition back to pending).
-    expect(RUNNER).toMatch(/reviveKilledClarifyContinuations[\s\S]{0,1400}mintNodeRun\(db, \{/)
-    // the clarify lineage cause is preserved — it is what re-injects the answered Q&A.
-    expect(RUNNER).toContain('cause: latest.rerunCause as RerunCause')
-  })
-
-  // Codex P1-7② — RFC-181 A2's dismissal runs OUTSIDE the config-PATCH transaction, so a
-  // RFC-207 — the invariant is unchanged, only its input: a crash between "last
-  // human removed" and "dismiss" leaves a group with no one to answer holding an
-  // open clarify. Re-assert at engine entry.
-  // sitting on an open clarify — which (with F3) parks the task awaiting_human for an
-  // answer autonomous mode promises never to ask for. Re-assert at engine entry.
-  test('a human-less group re-entering with an open clarify dismisses it (invariant re-asserted)', () => {
-    expect(RUNNER).toContain('dismissOpenClarifyParksForAutonomous(db, taskId, rec.config.mode)')
-    expect(RUNNER).toMatch(
-      /!workgroupHasHumanMember\(rec\.config\.members\)[\s\S]{0,200}awaiting_human/,
+  test('the driver revives killed continuations at (re)entry, next to the assignment reconcile', () => {
+    expect(RUNNER).toContain(
+      'await reviveKilledClarifyContinuations(persistence, first, input.log)',
     )
-    // dynamic_workflow has no clarify channel — excluded, like the PATCH path.
-    expect(RUNNER).toMatch(/rec\.config\.mode !== 'dynamic_workflow'/)
+    expect(RUNNER).toMatch(/reviveKilledClarifyContinuations[\s\S]{0,1600}kind: 'mint-host-run'/)
+    // 保住澄清血缘——正是它让人回答过的 Q&A 重新注回提示词。
+    expect(RUNNER).toContain("cause: latest.rerunCause === 'clarify-answer'")
+    // 只复活每组最新那条（更早的 interrupted 续跑已被取代，属于历史）。
+    expect(RUNNER).toContain('const latest = group[group.length - 1]')
   })
 })

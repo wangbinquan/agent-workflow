@@ -11,7 +11,14 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents, tasks, workflows, workgroupAssignments, workgroupMessages } from '@/db/schema'
+import {
+  agents,
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroupAssignments,
+  workgroupMessages,
+} from '@/db/schema'
 import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,
@@ -224,6 +231,44 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     // 重提示块的标题与围栏形态是用户可见的提示词——合一后两个引擎都取这一份。
     expect(requests[1]?.promptTemplate).toContain('## Protocol errors in your previous reply')
     expect(requests[1]?.promptTemplate).toContain('Re-emit a CORRECT envelope.')
+  })
+
+  test('重启杀掉的「已回答澄清」续跑在进门时按原样血缘复活（两个引擎同一条恢复）', async () => {
+    const db = harness.db as unknown as ProviderNeutralDatabase
+    const taskId = await seedTask(db)
+    // 人回答后铸出的那条 pending 续跑，被重启的 reaper 翻成了 interrupted。
+    const killedId = ulid()
+    await db.insert(nodeRuns).values({
+      id: killedId,
+      taskId,
+      nodeId: WORKGROUP_TURN_LEADER_NODE_ID,
+      status: 'interrupted',
+      iteration: 0,
+      retryIndex: 0,
+      rerunCause: 'clarify-answer',
+      startedAt: T0,
+    })
+
+    const { hooks } = scriptedHost({
+      leader: [
+        {
+          status: 'done',
+          outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'answered' }) },
+        },
+      ],
+      member: [],
+    })
+    await runWorkgroupTurns({ db, taskId, log, hooks })
+
+    // 复活出来的那条必须**保住澄清血缘**——Q&A 的注入只发生在这种 rerun 上（nodeMechanics 的
+    // buildClarifyQueueContext：非 answer 轮拿到空队列）。铸成普通 wg-leader-round 就等于把人的
+    // 回答丢了，正是 RFC-187 T13 当初修掉的故障；合一时这条恢复没被带过来，本次补回。
+    const revived = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+      (run) => run.id !== killedId && run.rerunCause === 'clarify-answer',
+    )
+    expect(revived).toHaveLength(1)
+    expect(revived[0]?.nodeId).toBe(WORKGROUP_TURN_LEADER_NODE_ID)
+    expect(revived[0]?.retryIndex).toBe(1)
   })
 })
 

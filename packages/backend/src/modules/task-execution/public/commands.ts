@@ -172,6 +172,10 @@ export interface WorkgroupHostLedgerMintOperation {
     | 'wg-message-turn'
     | 'wg-protocol-retry'
     | 'wg-gate'
+    // RFC-187 T13 / RFC-359 W4-D19c-tail：重启杀掉的「已回答澄清」续跑要按**原样的澄清血缘**
+    // 重铸——正是这个 cause 让 buildClarifyQueueContext 把人回答过的 Q&A 重新注回提示词。
+    | 'clarify-answer'
+    | 'cross-clarify-questioner-rerun'
   readonly retryIndex: number
   readonly shardKey: string | null
   readonly agentOverrideName: string | null
