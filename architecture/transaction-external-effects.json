@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 38,
-    "transactionCallbacks": 328
+    "transactionCallbacks": 324
   },
   "entries": [
     {
@@ -3222,42 +3222,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts#dbTxSync:163",
-      "line": 163,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts#SqliteHumanGateTaskLifecyclePersistence",
-      "status": "clear",
-      "symbol": "SqliteHumanGateTaskLifecyclePersistence",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts#dbTxSync:85",
-      "line": 85,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts#SqliteHumanGateTaskLifecyclePersistence",
-      "status": "clear",
-      "symbol": "SqliteHumanGateTaskLifecyclePersistence",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteManualQuestionParkTransaction.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteManualQuestionParkTransaction.ts#dbTxSync:55",
-      "line": 55,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteManualQuestionParkTransaction.ts#ManualQuestionParkTransaction",
-      "status": "clear",
-      "symbol": "ManualQuestionParkTransaction",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#dbTxSync:59",
@@ -3461,18 +3425,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts#SqliteTaskOwnershipStore",
       "status": "clear",
       "symbol": "SqliteTaskOwnershipStore",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts#dbTxSync:62",
-      "line": 62,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts#TaskParkTransaction",
-      "status": "clear",
-      "symbol": "TaskParkTransaction",
       "targetContext": "task-execution",
       "transactionCallee": "dbTxSync"
     },
@@ -4028,7 +3980,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aebc259b37870e4448b691b71f3aeb55f040161df792c61246bc6ead367c6120",
+  "sourceDigest": "sha256:c214e337119e4a82a273adfeb2f1d7570edddbc557e51429cbffb72a9c4bb1ef",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

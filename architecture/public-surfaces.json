@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 868,
+    "consumers": 864,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1051,
@@ -14662,9 +14662,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:c9e3664c97c00d182497"
-      ],
+      "consumerEdgeIds": [],
       "context": "collaboration",
       "dataClass": "metadata",
       "direction": "offered",
@@ -14686,14 +14684,7 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "task-execution",
-          "edgeId": "import:c9e3664c97c00d182497",
-          "file": "packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:collaboration:commands:dispatchTaskQuestions",
         "public:collaboration:commands:encodeGateDecisionReceipt",
@@ -14954,8 +14945,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:3a6400a7a6b624f74c0e",
-        "import:43849a4f40645b848b67",
         "import:5a8d3c6a9b4abd65df11",
         "import:ae6b343bffebc276a3bc",
         "import:ee8a6acf1ea711565165"
@@ -14966,38 +14955,27 @@
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:3a6400a7a6b624f74c0e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "expectedTaskRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:3a6400a7a6b624f74c0e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "gateKind",
           "type": "(typeof HUMAN_GATE_KINDS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3a6400a7a6b624f74c0e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "manifestDigest",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:3a6400a7a6b624f74c0e",
-            "import:43849a4f40645b848b67"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "operationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:3a6400a7a6b624f74c0e",
-            "import:43849a4f40645b848b67",
             "import:5a8d3c6a9b4abd65df11",
             "import:ae6b343bffebc276a3bc"
           ],
@@ -15011,18 +14989,6 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
       "productionConsumers": [
-        {
-          "context": "task-execution",
-          "edgeId": "import:3a6400a7a6b624f74c0e",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts#$file"
-        },
-        {
-          "context": "task-execution",
-          "edgeId": "import:43849a4f40645b848b67",
-          "file": "packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts#$file"
-        },
         {
           "context": "task-execution",
           "edgeId": "import:5a8d3c6a9b4abd65df11",
@@ -136112,7 +136078,6 @@
       },
       "consumerEdgeIds": [
         "import:80a6656947cab18c5d3a",
-        "import:b3e7e7e466f63af6639c",
         "import:d83ccf7a62e17966b7b3"
       ],
       "context": "task-execution",
@@ -136123,7 +136088,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.cause",
@@ -136131,7 +136095,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.expectedStatus",
@@ -136161,7 +136124,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.eventGroupOrdinal",
@@ -136170,7 +136132,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.operationRef",
@@ -136179,7 +136140,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.nodeId",
@@ -136188,7 +136148,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.nodeRunId",
@@ -136197,7 +136156,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.occurredAt",
@@ -136206,7 +136164,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.status",
@@ -136215,7 +136172,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.taskId",
@@ -136224,7 +136180,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.id",
@@ -136233,7 +136188,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.kind",
@@ -136258,7 +136212,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.eventGroupOrdinal",
@@ -136271,7 +136224,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.family",
@@ -136301,8 +136253,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c"
+            "import:80a6656947cab18c5d3a"
           ],
           "fieldPath": "$method:set.$parameter:input.allowedFrom",
           "type": "readonly NodeRunStatus[]"
@@ -136395,7 +136346,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:set.$parameter:input.extra.reviewIteration",
@@ -136479,7 +136429,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:set.$parameter:input.nodeRunId",
@@ -136487,8 +136436,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c"
+            "import:80a6656947cab18c5d3a"
           ],
           "fieldPath": "$method:set.$parameter:input.reason",
           "type": "string"
@@ -136496,7 +136444,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:set.$parameter:input.to",
@@ -136505,7 +136452,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:set.$return.from",
@@ -136514,7 +136460,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "fieldPath": "$method:set.$return.to",
@@ -136538,7 +136483,6 @@
         {
           "consumerEdgeIds": [
             "import:80a6656947cab18c5d3a",
-            "import:b3e7e7e466f63af6639c",
             "import:d83ccf7a62e17966b7b3"
           ],
           "name": "set",
@@ -136552,12 +136496,6 @@
           "edgeId": "import:80a6656947cab18c5d3a",
           "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:b3e7e7e466f63af6639c",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#$file"
         },
         {
           "context": "collaboration",
@@ -161457,7 +161395,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aebc259b37870e4448b691b71f3aeb55f040161df792c61246bc6ead367c6120",
+  "sourceDigest": "sha256:c214e337119e4a82a273adfeb2f1d7570edddbc557e51429cbffb72a9c4bb1ef",
   "targetContexts": [
     "collaboration",
     "development-automation",

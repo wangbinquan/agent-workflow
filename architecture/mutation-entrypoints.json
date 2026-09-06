@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1819,
+    "entries": 1817,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -5783,51 +5783,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#openPostgresqlAgentClarify",
       "symbol": "openPostgresqlAgentClarify",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#commitOperation",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#commitOperation",
-      "symbol": "commitOperation",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#transitionGateNode",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#transitionGateNode",
-      "symbol": "transitionGateNode",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -43416,7 +43371,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aebc259b37870e4448b691b71f3aeb55f040161df792c61246bc6ead367c6120",
+  "sourceDigest": "sha256:c214e337119e4a82a273adfeb2f1d7570edddbc557e51429cbffb72a9c4bb1ef",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43526,11 +43481,59 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 255,
+      "durableWriterSites": 252,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
     "entries": [
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "projectReviewGateOpen",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts#237:nodeRuns",
+        "line": 237,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts#projectReviewGateOpen",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "projectReviewGateOpen"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "projectReviewGateOpen",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts#275:nodeRunEvents",
+        "line": 275,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts#projectReviewGateOpen",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "projectReviewGateOpen"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "projectClarifyGateOpen",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts#474:nodeRunEvents",
+        "line": 474,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts#projectClarifyGateOpen",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "projectClarifyGateOpen"
+      },
       {
         "allowedTables": [
           "nodeRuns"
@@ -43805,54 +43808,6 @@
       },
       {
         "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "projectReviewGateOpen",
-        "controlSubtype": "gate-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#351:nodeRuns",
-        "line": 351,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#projectReviewGateOpen",
-        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
-        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
-        "symbol": "projectReviewGateOpen"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "projectReviewGateOpen",
-        "controlSubtype": "gate-control",
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#389:nodeRunEvents",
-        "line": 389,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#projectReviewGateOpen",
-        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
-        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
-        "symbol": "projectReviewGateOpen"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "projectClarifyGateOpen",
-        "controlSubtype": "gate-control",
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#569:nodeRunEvents",
-        "line": 569,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts#projectClarifyGateOpen",
-        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
-        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
-        "symbol": "projectClarifyGateOpen"
-      },
-      {
-        "allowedTables": [
           "nodeRunOutputs"
         ],
         "authorityKind": "control-revision",
@@ -43882,54 +43837,6 @@
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "createPostgresqlReviewRepairParticipant"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "projectReviewGateOpenTx",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#193:nodeRuns",
-        "line": 193,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#projectReviewGateOpenTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "projectReviewGateOpenTx"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "projectReviewGateOpenTx",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#229:nodeRunEvents",
-        "line": 229,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#projectReviewGateOpenTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "projectReviewGateOpenTx"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "projectClarifyGateOpenTx",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#414:nodeRunEvents",
-        "line": 414,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#projectClarifyGateOpenTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "projectClarifyGateOpenTx"
       },
       {
         "allowedTables": [
