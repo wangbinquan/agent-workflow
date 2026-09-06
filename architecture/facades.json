@@ -1964,7 +1964,6 @@
         "import:9c8eceaa5f410087fda5",
         "import:bd0e77d598925cfb243e",
         "import:c03d7d384cf732703275",
-        "import:c8cb3881721a45867470",
         "import:c9e98dbd2bc6c2936dd9",
         "import:cb4b8a61e7514e0be033",
         "import:cec3edcdb48a1c4c4030",
@@ -1979,7 +1978,6 @@
       "exportedSymbols": [
         "ClarifyDecisionManifestBridge",
         "ClarifyDecisionReceiptEnvelopeBridge",
-        "HumanGateOperationStoreBridge",
         "QuestionDispatchManifestBridge",
         "QuestionDispatchReceiptEnvelopeBridge",
         "ReviewDecisionManifestBridge",
@@ -6805,5 +6803,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c214e337119e4a82a273adfeb2f1d7570edddbc557e51429cbffb72a9c4bb1ef"
+  "sourceDigest": "sha256:a7ba3b98fc6ed6816b46c4e2d79d37e055561e57f1b5d9bc56e124265897c01e"
 }

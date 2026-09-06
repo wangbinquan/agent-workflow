@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 38,
-    "transactionCallbacks": 324
+    "transactionCallbacks": 322
   },
   "entries": [
     {
@@ -530,21 +530,9 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#transaction:100",
-      "line": 100,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#transaction:101",
+      "line": 101,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#serializable",
-      "status": "clear",
-      "symbol": "serializable",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts#transaction:39",
-      "line": 39,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts#serializable",
       "status": "clear",
       "symbol": "serializable",
       "targetContext": "collaboration",
@@ -585,18 +573,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts#dismissSqliteOpenClarifyParksForAutonomous",
       "status": "co-located-risk",
       "symbol": "dismissSqliteOpenClarifyParksForAutonomous",
-      "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts#dbTxSync:40",
-      "line": 40,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts#SqliteManualQuestionOpenWriter",
-      "status": "clear",
-      "symbol": "SqliteManualQuestionOpenWriter",
       "targetContext": "collaboration",
       "transactionCallee": "dbTxSync"
     },
@@ -3980,7 +3956,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c214e337119e4a82a273adfeb2f1d7570edddbc557e51429cbffb72a9c4bb1ef",
+  "sourceDigest": "sha256:a7ba3b98fc6ed6816b46c4e2d79d37e055561e57f1b5d9bc56e124265897c01e",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
