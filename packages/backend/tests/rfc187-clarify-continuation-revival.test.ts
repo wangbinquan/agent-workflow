@@ -181,7 +181,8 @@ describe('RFC-187 T13 — source locks (driver-entry revive)', () => {
     )
     expect(RUNNER).toMatch(/reviveKilledClarifyContinuations[\s\S]{0,1600}kind: 'mint-host-run'/)
     // 保住澄清血缘——正是它让人回答过的 Q&A 重新注回提示词。
-    expect(RUNNER).toContain("cause: latest.rerunCause === 'clarify-answer'")
+    // 用 regex 而非 toContain：prettier 会把这个三元按行宽折行，锁字面串等于锁排版。
+    expect(RUNNER).toMatch(/cause:\s*latest\.rerunCause === 'clarify-answer'/)
     // 只复活每组最新那条（更早的 interrupted 续跑已被取代，属于历史）。
     expect(RUNNER).toContain('const latest = group[group.length - 1]')
   })

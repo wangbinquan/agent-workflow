@@ -21,7 +21,7 @@
 // deriveFrontier's in-flight set and freeze the frontier. Violation throws
 // (pinned by node-run-mint.test.ts).
 
-import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
+import { isClarifyRerunCause, type NodeRunStatus, type RerunCause } from '@agent-workflow/shared'
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
 import { defaultConfigDirProfile } from '@/services/runtimeRegistry'
@@ -272,38 +272,12 @@ export function schedulerMintCause(
 }
 
 /**
- * RFC-098 WP-10 T-c — gate-2 (`isClarifyRerun`) cause set. TRUE only for the
- * two rerun kinds whose prompt/session semantics are "the SAME logical round
- * continues after a human answered":
- *   - 'clarify-answer'                  — RFC-023 self-clarify answer rerun
- *   - 'cross-clarify-questioner-rerun'  — questioner stop / reject / continue
- *     rerun (deliberately minted at retryIndex 0 pre-WP-10 to ride the same
- *     gate; the cause column now states it outright)
- *
- * Deliberately NOT in the set (RFC-098 对抗检视修订 #11):
- *   - 'cross-clarify-answer' (designer update rerun) — it uses the separate
- *     retry-agnostic `isCrossClarifyTriggeredRerun` update-mode path, which
- *     stays generation-derived (in-attempt process retries must see the same
- *     working draft).
- *   - 'process-retry' — design.md §7 forbids inline resume on technical
- *     retries; a retry within a clarify round re-derives its Q&A from
- *     generation order, not from this gate.
- *
- * `null` (pre-0044 legacy rows dispatched across a daemon upgrade) gates
- * FALSE: the rerun still runs and still sees its Q&A context (that path is
- * generation-derived, not gated here) — it only loses inline-session resume
- * and latest-directive application for that one boundary dispatch.
+ * RFC-359 W4-D19c-tail：这两个判据搬到 `@agent-workflow/shared` 的 task-questions——
+ * 澄清血缘的 cause 集合是**领域常量**，`NEW_CLARIFY_TRIGGER_CAUSES` 早已住在那里；放共享包后
+ * 中立回合驱动（resource-catalog/application）能直接用，不必为两个字面量新开一条跨 context 出边，
+ * 也不必就地再抄一份 literal（那正是被搬走的那段注释警告的 drift）。这里保留同名再导出，既有调用方不动。
  */
-/**
- * The causes {@link isClarifyRerunCause} gates TRUE, as a value list. Exported so a SQL
- * filter (RFC-187 T13's auto-resume sweep for killed clarify continuations) selects the
- * exact same set the predicate does, instead of re-listing the literals and drifting.
- */
-export const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
-
-export function isClarifyRerunCause(cause: string | null | undefined): boolean {
-  return (CLARIFY_RERUN_CAUSES as readonly string[]).includes(cause ?? '')
-}
+export { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '@agent-workflow/shared'
 
 /**
  * RFC-183 (Codex design-gate P2#1 + P2#4) — does the CURRENT dispatch
