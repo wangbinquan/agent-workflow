@@ -1110,6 +1110,39 @@ export async function stepFailureDetail(
   return remediation === '' ? null : remediation.slice(0, MAX_STEP_FAILURE_DETAIL_CHARS)
 }
 
+/**
+ * 「把刚产出的东西记到 mission 行上」的 OCC 补丁：修订漂移就**重读重试**。
+ *
+ * 为什么必须重试而不能吞掉失败（2026-09-07 定位 `rfc310-pr3-journey` 停顿的根因）：
+ * 这些补丁写的是 `repositoryFactsRef` / `uploadPlacementRef` / `currentActionRunId` /
+ * `status` 这类**决策依据**。此前的写法是 `getMission` 之后直接 `occUpdate`、**不看返回值**——
+ * 只要在这两步之间有并发写手 bump 了 revision（路由的 fire-and-forget reconcile、定时器、
+ * 另一轮泵都会），补丁就静默丢失。丢失之后 mission 回到「事实还没收集」的样子，而决策的
+ * `decisionInputDigest` 一个字节都没变 ⇒ 下一轮被去重 ⇒ handler 再也不跑 ⇒ 事实永远收不上来。
+ * 实测形态：status 停在 `working`、`blockCode` 为 null、`repositoryFactsRef` 为 null、
+ * reconcile 不抛错、fact 快照一轮一条涨到几千条，把任何预算耗光。
+ *
+ * epoch 冲突不重试：epoch+1 是 cancel/handover/resume 有意让在途 continuation 过期，
+ * 这时候把旧产物记回去才是错的。
+ */
+async function recordOnMission(
+  deps: ReconcileDeps,
+  missionId: string,
+  build: (fresh: MissionRow) => Parameters<MissionPersistence['occUpdate']>[3] | null,
+  attempts = 8,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const fresh = await deps.store.getMission(missionId)
+    if (fresh === null) return false
+    const patch = build(fresh)
+    if (patch === null) return false
+    const result = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, patch)
+    if (result.ok) return true
+    if (result.code !== 'revision-conflict') return false
+  }
+  return false
+}
+
 async function blockMission(
   deps: ReconcileDeps,
   missionId: string,
@@ -1321,12 +1354,7 @@ async function handleDecision(
         digest: canonicalDigest(collected.cells),
         now,
       })
-      const fresh = await deps.store.getMission(mission.id)
-      if (fresh !== null) {
-        await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-          repositoryFactsRef: snapshotId,
-        })
-      }
+      await recordOnMission(deps, mission.id, () => ({ repositoryFactsRef: snapshotId }))
       return 'collected'
     }
     case 'collect-mr-facts': {
@@ -1445,12 +1473,7 @@ async function handleDecision(
         digest: canonicalDigest(merged),
         now,
       })
-      const fresh = await deps.store.getMission(mission.id)
-      if (fresh !== null) {
-        await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-          repositoryFactsRef: snapshotId,
-        })
-      }
+      await recordOnMission(deps, mission.id, () => ({ repositoryFactsRef: snapshotId }))
       return 'collected'
     }
     case 'seed-repository-uploads': {
@@ -1467,12 +1490,9 @@ async function handleDecision(
         await blockMission(deps, mission.id, `placement-failed:${placed.failure.code}`, null)
         return 'blocked'
       }
-      const fresh = await deps.store.getMission(mission.id)
-      if (fresh !== null) {
-        await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-          uploadPlacementRef: placed.seedTreeDigest,
-        })
-      }
+      await recordOnMission(deps, mission.id, () => ({
+        uploadPlacementRef: placed.seedTreeDigest,
+      }))
       return 'placement-done'
     }
     case 'run-agent-action': {
@@ -1501,14 +1521,7 @@ async function handleDecision(
         await blockMission(deps, mission.id, created.code, null)
         return 'blocked'
       }
-      {
-        const fresh = await deps.store.getMission(mission.id)
-        if (fresh !== null) {
-          await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-            currentActionRunId: actionRunId,
-          })
-        }
-      }
+      await recordOnMission(deps, mission.id, () => ({ currentActionRunId: actionRunId }))
       // PR-4：完整 attempt 编排（workspace 物化 → manifest/nonce/prompt →
       // launcher → 台账；失败一律 typed block，端口缺席细分 *-not-wired）。
       const launchOutcome = await launchAgentAttempt(deps, mission, {
@@ -1621,14 +1634,9 @@ async function handleDecision(
           }),
           now,
         })
-        {
-          const fresh = await deps.store.getMission(mission.id)
-          if (fresh !== null && fresh.currentActionRunId === actionRunId) {
-            await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-              currentActionRunId: null,
-            })
-          }
-        }
+        await recordOnMission(deps, mission.id, (fresh) =>
+          fresh.currentActionRunId === actionRunId ? { currentActionRunId: null } : null,
+        )
         await blockMission(deps, mission.id, launchOutcome.blockCode, launchOutcome.detail)
         return 'action-launch-failed'
       }
@@ -1763,19 +1771,15 @@ async function handleDecision(
         },
       )
       if (selected.channel === 'platform') {
-        const fresh = await deps.store.getMission(mission.id)
-        if (fresh !== null && fresh.status !== 'awaiting-information') {
+        await recordOnMission(deps, mission.id, (fresh) => {
+          if (fresh.status === 'awaiting-information') return null
           const verdict = checkMissionTransition({
             from: fresh.status,
             to: 'awaiting-information',
             fence: fresh.transitionFence,
           })
-          if (verdict.ok) {
-            await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-              status: 'awaiting-information',
-            })
-          }
-        }
+          return verdict.ok ? { status: 'awaiting-information' } : null
+        })
       }
       return 'collected'
     }
@@ -1870,21 +1874,21 @@ async function handleDecision(
         { '__gate.pendingHumanDecision': knownCell('no-change-confirmation') },
         { kind: 'human-gate', gate: selected.gate },
       )
-      const fresh = await deps.store.getMission(mission.id)
-      if (fresh !== null && fresh.status !== 'awaiting-information') {
+      await recordOnMission(deps, mission.id, (fresh) => {
+        if (fresh.status === 'awaiting-information') return null
         const verdict = checkMissionTransition({
           from: fresh.status,
           to: 'awaiting-information',
           fence: fresh.transitionFence,
         })
-        if (verdict.ok) {
-          await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-            status: 'awaiting-information',
-            blockCode: null,
-            blockDetail: 'no-change-confirmation pending',
-          })
-        }
-      }
+        return verdict.ok
+          ? {
+              status: 'awaiting-information',
+              blockCode: null,
+              blockDetail: 'no-change-confirmation pending',
+            }
+          : null
+      })
       return 'collected'
     }
     // ---- 发布链 arm（PR-5，实现在 missionDeliveryChain.ts）------------------

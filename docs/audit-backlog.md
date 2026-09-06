@@ -4022,8 +4022,28 @@ mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次�
 （`external three-file bundle …` 与 `direct body-only …`），都是整 90s 墙钟耗尽。重跑该分片即绿——
 再次印证是间歇竞态而非代码回归（该 commit 只删了零消费者的 legacy 工作组引擎，与本模块无交集）。
 
-> **✅ 已定位并修复（2026-09-07，见 `missionReconciler.ts` 的 `hangingSelfSettled`）。**
-> 下面那条「一条具体嫌疑」**证实了**：`claimDeliveryEffect` 的预留与派发标记是**两笔事务**，
+> **✅ 真因已定位并修复（2026-09-07 第二轮，见 `missionReconciler.ts` 的 `recordOnMission`）。**
+>
+> **勘误**：第一轮据「悬挂 `prepared` effect 被去重吞」下的结论**不是这条停顿的原因**。
+> 那是一个真实的潜在缺陷（有先红后绿的回归锁），但把自诊断加进 `pumpUntil` 之后，
+> 下一次 CI 红当场给出 `unsettledEffects=[none]`——根本没有悬挂 effect，假说当场被否掉。
+> 自诊断这一步是值回票价的：它把一条查了一周的红变成了一次读日志。
+>
+> **真因**：本机在并发负载下按 1/6 复现，dump 出 `repositoryFactsRef=null`、决策只有 2 条、
+> fact 快照却涨到 2808 条。collector 把事实引用写回 mission 行用的是
+> 「`getMission` 之后直接 `occUpdate`、**不看返回值**」；两步之间只要有并发写手 bump 了
+> revision（路由的 fire-and-forget reconcile、定时器、另一轮泵都会），补丁就**静默丢失**。
+> 丢失后 mission 看起来仍是「事实还没收集」，而 `decisionInputDigest` 一个字节没变
+> ⇒ 下一轮被去重 ⇒ handler 再也不跑 ⇒ 事实永远收不上来，mission 永久停在 `working`。
+> 同一形态的「读后无校验 OCC 写回」在 reconciler 里共 **7 处**（`repositoryFactsRef` ×2、
+> `uploadPlacementRef`、`currentActionRunId` 置位与清位、`awaiting-information` ×2），
+> 全部改走 `recordOnMission`（修订漂移重读重试；epoch 冲突不重试——那是 cancel/handover
+> 有意让在途 continuation 过期）。
+> 回归锁：`rfc310-pr2-reconciler.test.ts` 的「并发挤掉的事实写回必须重试落库」，
+> 用「第一次 occUpdate 必冲突」精确构造竞态，先红（`repositoryFactsRef` 为 null）后绿。
+> 验证：复现负载下连跑 24 次全绿（此前 1/6 必红）。
+>
+> 第一轮那条「悬挂 `prepared` effect」的修复与回归锁**保留**——它本身成立：`claimDeliveryEffect` 的预留与派发标记是**两笔事务**，
 > 中间进程死或输掉 OCC，行就停在 `prepared`；而逃生门只认 `dispatched`，于是决策被去重、
 > handler 不跑、那条 effect 永远等不到派发。journey 测试里路由的 fire-and-forget reconcile
 > 与显式泵**并发**，正是这个窗口偶发的来源——这解释了为什么它只在负载高的 CI 上间歇红、

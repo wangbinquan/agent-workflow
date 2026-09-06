@@ -96,6 +96,56 @@ describe('rfc310 pr2 reconciler', () => {
     expect(actionDecision.selectedJson).not.toContain('pending-route')
   })
 
+  // 「把刚产出的东西记到 mission 行上」被并发写手挤掉之后，必须重试而不是静默丢失。
+  //
+  // 由来（2026-09-07 定位）：`rfc310-pr3-journey` 的 mission stall 跨 5 个 commit、3 个 OS lane
+  // 红了 7 次，形态永远是 status 停在 `working`、`blockCode` 为 null、reconcile 不抛错、
+  // 把任何预算耗光。本机在并发负载下 1/6 复现后 dump 出真相：`repositoryFactsRef` 为 null、
+  // 决策只有 2 条、fact 快照却涨到 2808 条。根因是 collector 写回事实引用的那一步用的是
+  // 「`getMission` 之后直接 `occUpdate`、**不看返回值**」——两步之间只要有并发写手 bump 了
+  // revision（路由的 fire-and-forget reconcile、定时器、另一轮泵都会），补丁就静默丢失；
+  // 丢失后 mission 看起来仍是「事实还没收集」，而 `decisionInputDigest` 一个字节没变
+  // ⇒ 下一轮被去重 ⇒ handler 再也不跑 ⇒ 事实永远收不上来。
+  //
+  // 这里用「第一次 occUpdate 必冲突」精确构造那个竞态，不靠卡时序。
+  test('并发挤掉的事实写回必须重试落库 —— 丢了就是永久停顿', async () => {
+    const f = await buildPr2Fixture()
+    const missionId = await f.launch('idem-occ-retry-1')
+    const base = f.deps({
+      repositoryFacts: repoCollector,
+      ...fakeAgentActionPorts({ db: f.db, overrides: { agentLauncher: okLauncher } }),
+    })
+    // 只让**第一次**写回撞上修订漂移；之后放行——等价于「另一轮 reconcile 抢先 bump 了一次」。
+    let conflictArmed = true
+    const store: typeof base.store = {
+      ...base.store,
+      occUpdate: async (id, revision, epoch, patch) => {
+        if (conflictArmed && 'repositoryFactsRef' in patch) {
+          conflictArmed = false
+          return { ok: false, code: 'revision-conflict' }
+        }
+        return await base.store.occUpdate(id, revision, epoch, patch)
+      },
+    }
+
+    const first = await runMissionReconcile({ ...base, store }, missionId)
+    expect(first).toMatchObject({
+      kind: 'decided',
+      selected: { kind: 'collect-repository-facts' },
+      handled: 'collected',
+    })
+    // 修复前：写回被吞，这里是 null —— 而且此后每一轮都会被去重，mission 永远停在 working。
+    expect((await f.store.getMission(missionId))!.repositoryFactsRef).not.toBeNull()
+
+    // 事实到位 ⇒ 下一轮规则可判，journey 照常推进（不是「看起来没红」而已）。
+    const second = await runMissionReconcile({ ...base, store }, missionId)
+    expect(second).toMatchObject({
+      kind: 'decided',
+      selected: { kind: 'run-agent-action' },
+      handled: 'action-launched',
+    })
+  })
+
   test('missing launcher is a typed block, never a silent skip', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-nolaunch-1')
