@@ -435,6 +435,15 @@ push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推
 
 1. **自拼的门禁检查**。`bunx prettier --check "packages/**/*.ts" | grep "^\[warn\]" || echo "format clean"` —— `grep` 恒不匹配，`||` 兜底触发，打印一句「format clean」。**匹配不到 ≠ 没问题**：它和「真的没问题」打印同一句话。定式：**跑仓库自己的脚本并判退出码**（`bun run format:check` / `bun run lint`），不要自己拼管道；非要过滤就先 `sed 's/\x1b\[[0-9;]*m//g'` 剥色。实撞：`b67fb839c` 带着两个未格式化文件上了 main，本地那条自拼检查报「clean」（修复 `35814bd40`）。
 
+   **2026-09-06 又中一次，形态是「文件清单被静默过滤成空」**：用
+   `git status --porcelain | sed …` 收集改动路径（仓库相对，如 `packages/backend/src/…`），再用
+   `while read f; do [ -f "$f" ] && echo "$f"; done` 过滤掉已删除的文件——但当时 cwd 在
+   `packages/backend/`，那些路径**一个都不存在**，清单落成 0 行。后面
+   `xargs -0 bunx prettier --write` / `eslint` 收到零个文件、正常退出、什么都不打印，看起来完全干净；
+   CI 的 `format:check` 与 `lint --max-warnings 0` 各逮到一处，连推两笔补。
+   定式：**收集路径与消费路径必须在同一个 cwd**（一律用仓库根），且清单生成后先
+   `wc -l` 断言非空再往下走——`xargs` 对空输入不报错，是这类失误唯一的沉默点。
+
 2. **断言子进程输出的测试**。`console.error('x')` 在 `FORCE_COLOR` 生效时会被裹上 ANSI，子串断言当场碎。Claude Code 会设 `FORCE_COLOR=3` 并传给子进程，于是「本地红、裸终端绿」——典型的「重跑就过了」形状。写测试固件时用 `process.stderr.write(...)` 这类**不上色**的写法。实撞：`test-command-helper.test.ts`（修复 `8d9a24013`）。
 
 顺带：`ps aux | grep -c "[b]un"` 这类自拼判断同理——它数的是恰好匹配的行，进程名一变就静默失真。能用退出码就别数行。
@@ -565,6 +574,11 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
 
 同一段还有一条：**census 的生成物不要进 `prettier --write` 批处理**。它们必须与生成器逐字
 相等，被 prettier 重排一次就红（实撞的是 `design/RFC-294-…/status.md`，A2 投影守卫）。
+
+再一条（2026-09-06 实撞）：**重采账本必须是这一推的最后一笔**。`architecture:write --snapshot-sha HEAD`
+会把 provenance 钉在当时的 HEAD，并按当时的源码算摘要；此后**再落任何一笔源码提交**（哪怕只是
+prettier 换行或删一个未用 import），N1b 的「生成投影逐字相等」就会在 CI 上红。顺序固定为：
+源码提交 → 重采 → 账本提交 → 推；中途若被 CI 逼着补一笔源码修复，**补完要再重采一次**。
 
 ## `git checkout -- architecture/` 会静默吃掉别人手写的账本条目（2026-09-03 实撞）
 
