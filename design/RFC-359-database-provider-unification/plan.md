@@ -726,6 +726,43 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   `rfc359-w4-d22-adapters.test.ts` 两引擎各跑建 builtin 的三列落值 / 重复 id 与同名冲突 / 双 OCC 围栏 /
   非系统 builtin 的行按 id 被占用拒绝。
 
+  **D24 ✅（运行时会话租约合一：一份实现，且不改隔离级别）**：这是「乙类」里取证已完成的那一对
+  （502 / 504 行，归一化相似度 0.65）。差别只有三处，逐条收掉：①事务原语——**合一没有改隔离级别**，
+  中立会话本来就有 `serializable`（PG 抬到 SERIALIZABLE 并按 40001 重放，SQLite 的 `BEGIN IMMEDIATE`
+  本来就是全库独占），新增的 `withTaskExecutionSerializable` 两边各取所需，于是「PG 能不能降到
+  READ COMMITTED」这个待裁决问题**不必回答**；②owner 围栏——PG 的本地 `fence()` 与中立
+  `fenceTaskWrite` 逐字同义，改为委派，环境上下文至此只在 `ownedTaskExecution.ts` 读一次；
+  ③驱动错误形状——改走能力矩阵 `classifyError`（`claimNew` 防重复认领靠的本来就是主键
+  `(protocol, session_id)` + 这条映射，不是隔离级别）。
+  `sqliteRuntimeSessionLeaseOperations.ts` 删除，按品牌分派的装配收成一行转出口；三个 bootstrap 改从
+  装配层取（直连 infrastructure 会新增 R1 inbound 越界边）。四把清单锁改指中立实现，其中三条是**销账**
+  （fork 计数 2→1、provider 专属依赖 50→49、能力兼容债 22→21、`taskExecutionPersistence` 的分派 4→2）。
+  `rfc359-w4-d24-adapters.test.ts` 两引擎各跑，含 plan 点名的那条：**并发 `claimNew` 恰好一个成功、
+  另一个 owner-conflict**，且落库行与胜出者一致、败者的 run 不带 session。
+
+  ### 剩余 task-execution 对的相似度普查（2026-09-06，按可合难度排序）
+
+  归一化（去注释、抹掉 provider 词）之后逐对量的相似度，越高越接近「同一份逻辑的两种写法」：
+
+  | 相似度 | 对 | SQLite / PG 规模（字符） |
+  | --- | --- | --- |
+  | 0.59 | TaskExecutionResourceSnapshots | 1512 / 2567 |
+  | 0.50 | HumanGateTaskLifecyclePersistence | 5856 / 5955 |
+  | 0.31 | TaskExecutionRuntimeParticipants | 5215 / 6082 |
+  | 0.26 | TaskExecutionEffectPersistence | 9821 / 28952 |
+  | 0.22 | TaskLifecycleAutoRepairCommand | 2176 / 5988 |
+  | 0.13 | TaskExecutionRecovery | 10139 / 19951 |
+  | 0.09 | TaskOwnershipPersistence | 1541 / 12763 |
+  | 0.08 | TaskArchiveMaintenanceCommand | 2133 / 21589 |
+  | ≤0.04 | TaskRouteOperations / SourceTerminationParticipant / TerminalMaintenancePersistence / TaskRouteLaunchOperations / ChildExecutionLaunchOperations | 见普查 |
+
+  **`HumanGateTaskLifecyclePersistence` 动过一次、又还原了**（本次 session）：它的 PG 那份已经全部
+  建立在**已合一的中立原语**上（`transitionHumanGateTask` / `nodeRunLifecyclePersistence` /
+  `taskRuntimeLifecyclePersistence` / `assertTaskOwnerTx`），改名 + 换事务原语十分钟就走完；
+  **卡在它内部还 new 了 `PostgresqlHumanGateOpenParticipantInTx`**——那是 collaboration 侧的另一对
+  （695 / 820 行，相似度 0.62），不先把它合掉，这一对就只能停在半截。所以这两对是**同一刀**，
+  下次从 collaboration 的 `HumanGateOpenParticipant` 起手，再回来收 task-execution 这半。
+
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
   形态与任务房 / 回合完全同类，但深一个量级：**SQLite 侧是一层薄适配器，套在成熟的崩溃安全机器上**
