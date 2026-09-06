@@ -46,7 +46,7 @@ import {
   type TaskExecutionBackgroundControl,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
 import {
   composeSqliteMemoryOperations,
@@ -1819,7 +1819,7 @@ async function composeSqliteProviderSession(
     taskExecutionResourceSnapshots,
   )
   const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
-  const runtimeSessionLeases = createSqliteRuntimeSessionLeaseOperations(db)
+  const runtimeSessionLeases = createRuntimeSessionLeaseOperations(db)
   const runtimeRegistry = providerCore.runtimeRegistry
   let collaborationContext: ReturnType<typeof createCollaborationCommandContext> | null = null
   const requireCollaborationContext = (): ReturnType<typeof createCollaborationCommandContext> => {

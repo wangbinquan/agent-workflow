@@ -9,8 +9,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/postgresqlRuntimeSessionLeaseOperations'
-import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -113,9 +112,7 @@ function postgresqlFixture() {
     async close() {},
   }
   return {
-    operations: createPostgresqlRuntimeSessionLeaseOperations(
-      createPostgresqlDatabaseClient(runtime),
-    ),
+    operations: createRuntimeSessionLeaseOperations(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }
@@ -127,7 +124,7 @@ afterEach(() => {
 describe('RFC-349 runtime-session lease provider operations', () => {
   test('SQLite preserves claim, reset rotation, resume, and terminal repair semantics', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-before-reset',
@@ -192,7 +189,7 @@ describe('RFC-349 runtime-session lease provider operations', () => {
   })
 
   test('facade rejects malformed claims before reaching provider infrastructure', async () => {
-    const operations = createSqliteRuntimeSessionLeaseOperations(seedTaskRuns())
+    const operations = createRuntimeSessionLeaseOperations(seedTaskRuns())
     await expect(
       claimNewRuntimeSession(operations, {
         protocol: 'opencode',

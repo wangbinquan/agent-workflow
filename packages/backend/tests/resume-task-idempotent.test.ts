@@ -28,7 +28,7 @@ import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -414,7 +414,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       pid: null,
       startedAt: Date.now() - 200,
     })
-    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
+    await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'resume-held-native',
       taskId: h.taskId,

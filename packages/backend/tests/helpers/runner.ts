@@ -3,7 +3,7 @@ import {
   type RunNodeOptions as ProviderRunNodeOptions,
 } from '../../src/services/runner'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
-import { createSqliteRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import type { DbClient } from '../../src/db/client'
 import { createSqliteTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
@@ -31,8 +31,7 @@ export async function runNode(options: RunNodeOptions) {
   return await runNodeWithProvider({
     ...providerOptions,
     memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
-    runtimeSessionLeases:
-      options.runtimeSessionLeases ?? createSqliteRuntimeSessionLeaseOperations(db),
+    runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     persistence: options.persistence ?? createSqliteTaskExecutionPersistence(db),
     runtimeRegistry: options.runtimeRegistry ?? composeSqliteRuntimeRegistryOperations(db),
   })

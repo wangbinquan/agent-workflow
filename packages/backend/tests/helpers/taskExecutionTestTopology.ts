@@ -6,7 +6,7 @@ import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createSqliteTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { createSqliteRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
@@ -84,7 +84,7 @@ export function composeTaskExecutionTestRuntime(
         }),
         createWorkgroupClarifyAskGate(db),
       ),
-      runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(db),
+      runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       runtimeRegistry: composeSqliteRuntimeRegistryOperations(db),
       dynamicWorkflow: {
         persistence: composeSqliteDynamicWorkflowPersistence(db),
@@ -192,7 +192,7 @@ export function runTaskWithRealTestTopology(
     options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(options.db)
   const persistence = options.persistence ?? createSqliteTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
-    options.runtimeSessionLeases ?? createSqliteRuntimeSessionLeaseOperations(options.db)
+    options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
   const runtimeRegistry =
     options.runtimeRegistry ?? composeSqliteRuntimeRegistryOperations(options.db)
   const repositoryPublicationTransport =

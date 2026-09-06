@@ -726,6 +726,32 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   `rfc359-w4-d22-adapters.test.ts` 两引擎各跑建 builtin 的三列落值 / 重复 id 与同名冲突 / 双 OCC 围栏 /
   非系统 builtin 的行按 id 被占用拒绝。
 
+  ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
+
+  形态与任务房 / 回合完全同类，但深一个量级：**SQLite 侧是一层薄适配器，套在成熟的崩溃安全机器上**
+  （`sqliteSkillRepository.ts` 129 行 → `legacy/skill.ts` + `legacy/skillVersion.ts`；
+  `sqliteSkillCatalogBoot.ts` 22 行 → `legacy/skillBootVerify` + `skillIdentityMigration` +
+  `skillVersion`；`sqliteSkillZipImport.ts` 23 行 → `legacy/skill-zip`），**PostgreSQL 侧是 3342 行原生
+  重写**（`postgresqlSkillCatalogBoot.ts` 1418 / `postgresqlSkillContentLifecycle.ts` 873 /
+  `postgresqlSkillRepository.ts` 505 / `postgresqlSkillZipImport.ts` 546）。两侧归一化后的**相似度只有
+  7%**——不是同一份逻辑的两种写法，是两套机器。测试覆盖同样倒挂：SQLite / legacy 侧 52 个套件，PG 侧 6 个。
+
+  **为什么不能照 D19c 的做法直接合**：D19c 能把 PG 那份提为中立基线，是因为它的决策逻辑本来就在
+  provider 中立的 driver 里、PG 那份只是持久化适配器。Skill 不是——SQLite 那套机器同时耦合
+  **文件系统**（`skillFsPublish` 的暂存目录 / 原子换入、`skillHash` 的树哈希、`skillIdentityPaths`）
+  与 **`dbTxSync`**（28 处），崩溃安全协议就建立在「同步事务 + 目录换入」的次序上。把它中立化＝把
+  这套恢复协议整体迁到 `DatabaseSession`，那正是账本里一直挂着的 **W9-E** 波次。
+
+  **建议拆法（每一刀都要能独立跑绿）**：
+  1. **D23a 勘察对账（零生产改动）**：把两侧的行为逐条列成对照表——版本快照 / 内容围栏 / 目录换入 /
+     启动重验 / 身份迁移屏障 / zip 导入的解析与提交，各自的失败模式与恢复点。产出是「哪一份是正典」的
+     逐条裁决，呈用户确认。参照 D19c 的教训：**先对着端口数覆盖**（`SkillRepository` /
+     `SkillCatalogBootAdapter` / `SkillZipImportPort`），52 个套件里有多少是直连 legacy 实现的。
+  2. **D23b 把 legacy skill 机器迁到 `DatabaseSession`**（W9-E 的实质）：28 处 `dbTxSync` 换成统一事务
+     原语，恢复协议的次序不变。这一刀不碰 provider 分叉，只把 SQLite 那套变成两个引擎都能跑的。
+  3. **D23c 合一**：SQLite 装配切到那套（已中立的）机器，PG 的 3342 行原生实现退役；差异按 D19c 的三条
+     处置（正典恒取合一前 SQLite / 部署形态差异抽端口 / 合完立刻跑「谁引用了这些路径」的全部测试）。
+
   **剩余 provider 对的形态普查（决定后续排序）**：把 resource-catalog 里剩下的成对文件按
   「SQLite 是不是 legacy 薄壳」分两类——
   - **对称对（机械可合，无行为风险）**：`PackageResourceRows`（230 / 220 行，无 legacy import）、

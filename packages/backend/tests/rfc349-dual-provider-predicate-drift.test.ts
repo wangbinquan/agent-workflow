@@ -29,8 +29,6 @@ const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   // 两个 provider 共用一份，fork 不复存在（账本口径：销账要把条目一并删掉）。
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance.ts::parseArtifacts':
     '行命名与取值转换',
-  'modules/task-execution/infrastructure/RuntimeSessionLeaseOperations.ts::constraintViolation':
-    '驱动错误形状',
 }
 
 function walk(dir: string): string[] {

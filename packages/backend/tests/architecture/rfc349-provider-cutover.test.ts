@@ -60,7 +60,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/scheduleLaunch.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
   'packages/backend/src/services/startTaskDeps.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
-  'packages/backend/src/services/startTaskDeps.ts -> @/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations :: createSqliteRuntimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
   'packages/backend/src/services/task.ts -> @/modules/task-execution/composition/sqliteGateContinuationPreDrive :: createSqliteGateContinuationPreDriveStep',
   'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,LegacySqliteTaskTransaction,SQL,agents,and,asc,cachedRepos,clarifyRounds,count,dbTxSync,desc,docVersions,eq,gt,inArray,isNotNull,isNull,lifecycleAlerts,nodeRunEvents,nodeRunOutputs,nodeRuns,runtimeSessionLeases,sql,taskCollaborators,taskExecutionIntents,taskExecutionOwners,taskRepos,taskSpaceNodes,tasks,users,workflows',

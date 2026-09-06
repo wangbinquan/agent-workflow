@@ -38,9 +38,7 @@ import {
   repairRuntimeSessionLeaseAfterOrphanReapTx,
 } from '../infrastructure/taskRecoveryOperations'
 import { terminalizeTaskExecutionIntentsInTx } from '../infrastructure/taskExecutionIntentTerminalPersistence'
-import { createSqliteRuntimeSessionLeaseOperations } from '../infrastructure/sqliteRuntimeSessionLeaseOperations'
-import { createPostgresqlRuntimeSessionLeaseOperations } from '../infrastructure/postgresqlRuntimeSessionLeaseOperations'
-import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
 import { terminalizeTaskExecutionIntentsTx } from '../infrastructure/sqliteTerminalizeExecutionIntent'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
@@ -107,7 +105,7 @@ function createPostgresqlRecoveryAdministration(db: PostgresqlDatabaseClient) {
 function createSqliteRecoveryAdministration(db: DbClient) {
   const nodeLifecycle = new DrizzleNodeRunLifecyclePersistence(db)
   const taskLifecycle = new DrizzleTaskRuntimeLifecyclePersistence(db)
-  const runtimeLeaseOperations = createSqliteRuntimeSessionLeaseOperations(db)
+  const runtimeLeaseOperations = createRuntimeSessionLeaseOperationsInternal(db)
   return createTaskRecoveryOperations(db, {
     async interruptBootOrphanTask(input) {
       return await trySetTaskStatus({
@@ -242,14 +240,8 @@ export function createTaskExecutionPersistence(
       : unhandledDatabaseProvider(provider)
 }
 
-/** RFC-359 W3-T4：runtime session lease 操作按客户端品牌选实现；同上，调用方看不见 provider。 */
-export function createRuntimeSessionLeaseOperations(
-  db: ProviderNeutralDatabase,
-): RuntimeSessionLeaseOperations {
-  const provider = databaseSessionFor(db).engine.provider
-  return provider === 'postgresql'
-    ? createPostgresqlRuntimeSessionLeaseOperations(db as unknown as PostgresqlDatabaseClient)
-    : provider === 'sqlite'
-      ? createSqliteRuntimeSessionLeaseOperations(db as unknown as DbClient)
-      : unhandledDatabaseProvider(provider)
-}
+/**
+ * RFC-359 W4-D24：runtime session lease 只剩一份实现，这里不再按品牌分派，直接转出去。
+ * 保留这个名字是为了两个 bootstrap 与既有测试的 import 不变。
+ */
+export { createRuntimeSessionLeaseOperations } from '../infrastructure/runtimeSessionLeaseOperations'

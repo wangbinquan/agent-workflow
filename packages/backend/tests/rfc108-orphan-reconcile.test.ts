@@ -24,7 +24,7 @@ import {
   markRuntimeSessionResetPending,
 } from '../src/services/runtimeSessionLease'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_000_000
@@ -97,7 +97,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
-    const leaseOperations = createSqliteRuntimeSessionLeaseOperations(db)
+    const leaseOperations = createRuntimeSessionLeaseOperations(db)
     const lease = await claimNewRuntimeSession(leaseOperations, {
       protocol: 'claude-code',
       sessionId: 'periodic-reset-old',
@@ -133,7 +133,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
     db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId)).run()
-    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(db), {
+    await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(db), {
       protocol: 'claude-code',
       sessionId: 'periodic-unproven-native',
       taskId,
@@ -172,7 +172,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
-    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(db), {
+    await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(db), {
       protocol: 'claude-code',
       sessionId: 'periodic-command-mismatch-native',
       taskId,

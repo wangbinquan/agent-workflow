@@ -2,18 +2,19 @@ import { TERMINAL_NODE_RUN_STATUSES } from '@agent-workflow/shared'
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
 import { nodeRunEvents, nodeRuns, runtimeSessionLeases } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import type {
   RuntimeSessionLeaseOperations,
   RuntimeSessionLeaseToken,
 } from '../application/ports/runtimeSessionLeaseOperations'
 import { RuntimeSessionLeaseError } from '../application/ports/runtimeSessionLeaseOperations'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import {
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
-import { assertTaskOwnerTx, assertTaskOwnerlessTx } from './ownedTaskExecution'
+  fenceTaskWrite,
+  withTaskExecutionSerializable,
+  type TaskExecutionTransaction,
+} from './ownedTaskExecution'
 
 const TERMINAL = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
@@ -21,33 +22,28 @@ function fail(reason: string): never {
   throw new RuntimeSessionLeaseError(reason)
 }
 
-function constraintViolation(error: unknown): boolean {
-  let current: unknown = error
-  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth += 1) {
-    const code = (current as { readonly code?: unknown }).code
-    if (code === '23505' || code === '23514') return true
-    current = (current as { readonly cause?: unknown }).cause
-  }
+/**
+ * 租约表撞唯一键 / CHECK：`claimNew` 防重复认领靠的就是主键 `(protocol, session_id)` + 这一条映射，
+ * 不是靠隔离级别。驱动错误的形状经能力矩阵归类（PG 的 23505/23514 与 SQLite 的 SQLITE_CONSTRAINT
+ * 都归到 `unique-violation`），再按表名兜一层——两个引擎同一条判据。
+ */
+function constraintViolation(engine: EngineCapabilities, error: unknown): boolean {
+  if (engine.classifyError(error) === 'unique-violation') return true
   const message = error instanceof Error ? error.message : String(error)
-  return /runtime_session_leases|duplicate key|unique constraint/i.test(message)
+  return /runtime_session_leases|duplicate key|unique constraint|CHECK constraint failed/i.test(
+    message,
+  )
 }
 
-async function fence(
-  tx: PostgresqlTaskExecutionTransaction,
-  taskId: string,
-  now: number,
-): Promise<void> {
-  const context = currentTaskExecutionContext(taskId)
-  if (context === undefined) {
-    await assertTaskOwnerlessTx(tx, taskId)
-    return
-  }
-  await assertTaskOwnerTx(tx, context.token, now)
+/** 按「当前执行上下文 > 无主」为一次租约写入选围栏（与其余 owned 写手同一份 `fenceTaskWrite`）。 */
+async function fence(tx: TaskExecutionTransaction, taskId: string, now: number): Promise<void> {
+  await fenceTaskWrite(tx, { taskId, now })
 }
 
-export function createPostgresqlRuntimeSessionLeaseOperations(
-  db: PostgresqlDatabaseClient,
+export function createRuntimeSessionLeaseOperations(
+  db: ProviderNeutralDatabase,
 ): RuntimeSessionLeaseOperations {
+  const engine = databaseSessionFor(db).engine
   const operations: RuntimeSessionLeaseOperations = {
     async load(protocol, sessionId) {
       const rows = await db
@@ -65,7 +61,7 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
 
     async claimNew(input) {
       try {
-        return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+        return await withTaskExecutionSerializable(db, async (tx) => {
           await fence(tx, input.taskId, input.leasedAt)
           const runs = await tx
             .select({ id: nodeRuns.id })
@@ -110,13 +106,13 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
         })
       } catch (error) {
         if (error instanceof RuntimeSessionLeaseError) throw error
-        if (constraintViolation(error)) fail('owner-conflict')
+        if (constraintViolation(engine, error)) fail('owner-conflict')
         throw error
       }
     },
 
     async preclaimResume(input) {
-      return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+      return await withTaskExecutionSerializable(db, async (tx) => {
         await fence(tx, input.taskId, input.leasedAt)
         const owners = await tx
           .select()
@@ -177,7 +173,7 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
     },
 
     async confirmResume(token) {
-      return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+      return await withTaskExecutionSerializable(db, async (tx) => {
         const owners = await tx
           .select({ taskId: runtimeSessionLeases.taskId, nodeId: runtimeSessionLeases.nodeId })
           .from(runtimeSessionLeases)
@@ -212,7 +208,7 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
 
     async rotate(token, nextSessionId) {
       try {
-        return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+        return await withTaskExecutionSerializable(db, async (tx) => {
           const outgoingRows = await tx
             .select()
             .from(runtimeSessionLeases)
@@ -336,13 +332,13 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
         })
       } catch (error) {
         if (error instanceof RuntimeSessionLeaseError) throw error
-        if (constraintViolation(error)) fail('owner-conflict')
+        if (constraintViolation(engine, error)) fail('owner-conflict')
         throw error
       }
     },
 
     async markResetPending(token) {
-      return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+      return await withTaskExecutionSerializable(db, async (tx) => {
         const heldRows = await tx
           .select({
             taskId: runtimeSessionLeases.taskId,
@@ -388,7 +384,7 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
     },
 
     async discard(token) {
-      return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+      return await withTaskExecutionSerializable(db, async (tx) => {
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })
           .from(runtimeSessionLeases)
@@ -427,7 +423,7 @@ export function createPostgresqlRuntimeSessionLeaseOperations(
     },
 
     async release(token) {
-      return await withPostgresqlSerializableTaskExecution(db, async (tx) => {
+      return await withTaskExecutionSerializable(db, async (tx) => {
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })
           .from(runtimeSessionLeases)

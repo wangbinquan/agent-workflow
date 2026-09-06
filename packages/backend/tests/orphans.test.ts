@@ -14,7 +14,7 @@ import {
   repairRuntimeSessionLeasesAfterOrphanReap,
 } from '../src/services/runtimeSessionLease'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -107,7 +107,7 @@ describe('reapOrphanRuns', () => {
 
   test('terminal run with a held native lease is reaped before lease repair', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
+    await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'terminal-held-native',
       taskId,
@@ -130,7 +130,7 @@ describe('reapOrphanRuns', () => {
     expect(calls).toEqual(['kill:4242'])
     expect(
       await repairRuntimeSessionLeasesAfterOrphanReap(
-        createSqliteRuntimeSessionLeaseOperations(h.db),
+        createRuntimeSessionLeaseOperations(h.db),
         true,
       ),
     ).toBe(1)
@@ -145,7 +145,7 @@ describe('reapOrphanRuns', () => {
 
   test('terminal child that survives keeps its native lease held and aborts boot recovery', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
+    await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'terminal-live-native',
       taskId,
@@ -171,7 +171,7 @@ describe('reapOrphanRuns', () => {
 
   test('a held native lease with no PID is not treated as proof that its child is gone', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
+    await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'held-without-pid',
       taskId,

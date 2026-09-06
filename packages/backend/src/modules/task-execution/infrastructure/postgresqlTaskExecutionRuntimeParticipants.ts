@@ -27,7 +27,7 @@ import {
   createPostgresqlChildExecutionLaunchOperations,
   type PostgresqlChildWorkgroupLaunchResources,
 } from './postgresqlChildExecutionLaunchOperations'
-import { createPostgresqlRuntimeSessionLeaseOperations } from './postgresqlRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from './runtimeSessionLeaseOperations'
 
 /**
  * Cross-context capabilities whose implementations are selected by bootstrap.
@@ -86,7 +86,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
       persistence,
     })
   const runtimeSessionLeases =
-    dependencies.runtimeSessionLeases ?? createPostgresqlRuntimeSessionLeaseOperations(db)
+    dependencies.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db)
   const memoryInjectionQueries = composePostgresqlMemoryInjectionQueries(db)
   const runtimeRegistry = composePostgresqlRuntimeRegistryOperations(db)
   const childLaunch = createPostgresqlChildExecutionLaunchOperations({

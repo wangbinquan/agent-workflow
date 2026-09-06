@@ -202,14 +202,14 @@ test('源码锁：每个 PG owner 围栏都先读环境上下文；effect 账本
     'task-execution',
     'infrastructure',
   )
-  for (const file of [
-    // RFC-359 W4-B1 批 2c：wrapper run / node-run runtime / scheduler completion 的围栏合到中立原语。
-    'ownedTaskExecution.ts',
-    'postgresqlRuntimeSessionLeaseOperations.ts',
-  ]) {
-    const source = readFileSync(resolve(infrastructure, file), 'utf8')
-    expect(source, file).toContain('currentTaskExecutionContext(')
-  }
+  // 环境上下文只在中立原语里读一次；其余写手一律经 `fenceTaskWrite` 拿围栏，不各自再读一遍
+  // （RFC-359 W4-D24：租约那份合一时就改成了委派）。
+  expect(readFileSync(resolve(infrastructure, 'ownedTaskExecution.ts'), 'utf8')).toContain(
+    'currentTaskExecutionContext(',
+  )
+  const leases = readFileSync(resolve(infrastructure, 'runtimeSessionLeaseOperations.ts'), 'utf8')
+  expect(leases).toContain('fenceTaskWrite(tx, { taskId, now })')
+  expect(leases).not.toContain('currentTaskExecutionContext(')
   const effects = readFileSync(
     resolve(infrastructure, 'postgresqlTaskExecutionEffectPersistence.ts'),
     'utf8',

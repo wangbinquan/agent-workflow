@@ -325,7 +325,7 @@ import {
 } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
@@ -1833,7 +1833,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
             memoryInjectionQueries,
             collaborationRuntime: createSqliteCollaborationRuntimeMechanics(deps.db),
             persistence: taskExecutionPersistence,
-            runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(deps.db),
+            runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
             runtimeRegistry,
             dynamicWorkflow: {
               persistence: composeSqliteDynamicWorkflowPersistence(deps.db),

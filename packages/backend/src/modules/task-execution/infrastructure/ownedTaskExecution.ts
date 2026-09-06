@@ -35,6 +35,19 @@ export function withTaskExecutionWrite<T>(
   return databaseSessionFor(db).transaction(body)
 }
 
+/**
+ * 带跨行不变量的任务执行写事务。PG 抬到 SERIALIZABLE 并按 40001 重放整笔，SQLite 的
+ * `BEGIN IMMEDIATE` 本来就是全库独占——同一条 `DatabaseSession.serializable`，两个引擎各取所需。
+ * 只给「先查后写」跨多行的写路径用；单行 CAS 走上面的 `withTaskExecutionWrite` 就够。
+ * **体必须可重放**：PG 上它可能被整笔重跑。
+ */
+export function withTaskExecutionSerializable<T>(
+  db: ProviderNeutralDatabase,
+  body: (tx: TaskExecutionTransaction) => Promise<T>,
+): Promise<T> {
+  return databaseSessionFor(db).serializable(body)
+}
+
 /** owner CAS 围栏：token 命中 `claimed` 的精确 owner（id + 世代 + epoch）才放行，并推进 revision。 */
 export async function assertTaskOwnerTx(
   tx: TaskExecutionTransaction,

@@ -22,7 +22,7 @@ import {
   rotateMcpRuntimeTestSessionLease,
 } from '../src/services/mcpRuntimeTestLease'
 import { createMcpRuntimeTestLeaseOperations } from '../src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease'
-import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import {
   claimNewRuntimeSession,
   confirmRuntimeSessionResume,
@@ -137,7 +137,7 @@ function seedMcpTurn(protocol: 'opencode' | 'claude-code' = 'opencode') {
 describe('natural runtime session leases', () => {
   test('business conversation reset atomically rotates the holder and run pointer', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-before-reset',
@@ -186,7 +186,7 @@ describe('natural runtime session leases', () => {
 
   test('resumed reset preserves creator provenance and retags prior logical rounds', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-lineage-a',
@@ -259,7 +259,7 @@ describe('natural runtime session leases', () => {
 
   test('business conversation reset collision rolls back the outgoing lease', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-before-reset',
@@ -304,7 +304,7 @@ describe('natural runtime session leases', () => {
 
   test('pending business reset keeps the outgoing lease held while clearing stale resume', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-reset-without-result',
@@ -335,7 +335,7 @@ describe('natural runtime session leases', () => {
 
   test('migration fence rejects neutral or non-boolean reset_pending states', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-reset-trigger',
@@ -363,7 +363,7 @@ describe('natural runtime session leases', () => {
 
   test('boot repair deletes a reset-pending outgoing id instead of making it resumable', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-reset-crash',
@@ -392,7 +392,7 @@ describe('natural runtime session leases', () => {
 
   test('boot repair discards an identity-invalid lease even if the early fence write was lost', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
       sessionId: 'native-invalid-unfenced',
@@ -419,7 +419,7 @@ describe('natural runtime session leases', () => {
 
   test('business sessions allow one writer, resume after release, and repair terminal holders', async () => {
     const db = seedTaskRuns()
-    const operations = createSqliteRuntimeSessionLeaseOperations(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'opencode',
       sessionId: 'native-business-1',

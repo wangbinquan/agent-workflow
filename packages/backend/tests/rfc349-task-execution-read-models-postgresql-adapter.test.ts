@@ -23,7 +23,7 @@ import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { composeTestWorkgroupTurns } from './helpers/workgroupTurns'
-import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
@@ -163,7 +163,7 @@ describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
         memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
         collaborationRuntime: createSqliteCollaborationRuntimeMechanics(sqlite),
         persistence: createSqliteTaskExecutionPersistence(sqlite),
-        runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(sqlite),
+        runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
         runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
         workgroupTurns: composeTestWorkgroupTurns(sqlite),
         repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
