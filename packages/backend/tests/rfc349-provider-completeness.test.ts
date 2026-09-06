@@ -103,8 +103,9 @@ const PROVIDER_FORK_LEDGER = {
   // without its own variant.
   // modules/task-execution/composition/frameBackfill.ts：RFC-359 W4-B1 后存储只有一份实现，不再按 provider 分叉。
   'modules/task-execution/composition/providerRuntime.ts': { forks: 2, fence: 'fenced-dispatch' },
+  // RFC-359 W4-D24：运行时会话租约合一后这里少了一处按品牌的分派（4 → 2；租约那两支收成一行转出口）。
   'modules/task-execution/composition/taskExecutionPersistence.ts': {
-    forks: 4,
+    forks: 2,
     fence: 'fenced-dispatch',
   },
   'platform/background/maintenanceService.ts': { forks: 2, fence: 'discriminated-union' },

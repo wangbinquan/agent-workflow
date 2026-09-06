@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 283,
+    "inboundEdges": 281,
     "outboundEdges": 35,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -516,27 +516,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#composeIntentResourceCatalogFor"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/start.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:d4be0df1addfddcdd4d9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations.ts#createSqliteRuntimeSessionLeaseOperations"
       ],
       "canonicalFacadeIds": []
     },
@@ -1502,27 +1481,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#createSqliteFusionEngineTaskOperations"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5fb084a3f7ed3abbe36c"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations.ts#createSqliteRuntimeSessionLeaseOperations"
       ],
       "canonicalFacadeIds": []
     },
@@ -4340,6 +4298,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/questionDispatchComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand",
+      "specifier": "@/modules/collaboration/infrastructure/questionDispatchCommand",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；RFC-359 W1-T2a 起目标已是 provider-中立的 questionDispatchCommand，这条边要等 services facade 退役才消失，仍须收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file"
+      ],
+      "canonicalImportEdgeIds": [
+        "import:754a1c00e0512e2efcb4"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/questionDispatchComposition.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/recovery.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations",
       "specifier": "@/modules/task-execution/application/ports/taskRecoveryOperations",
@@ -5006,6 +4987,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduleLaunch.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fa7f42a4e5f943296975"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduleLaunch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduleLaunch.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/scheduledTasks.ts",
       "to": "packages/backend/src/modules/integration/application/ports/scheduledTaskPersistence",
       "specifier": "@/modules/integration/application/ports/scheduledTaskPersistence",
@@ -5033,29 +5037,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/scheduledTasks.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/scheduleLaunch.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:fa7f42a4e5f943296975"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduleLaunch.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/scheduleLaunch.ts"
       ]
     },
     {
@@ -5201,6 +5182,29 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/startTaskDeps.ts",
+      "to": "modules/task-execution/composition/taskExecutionPersistence",
+      "specifier": "@/modules/task-execution/composition/taskExecutionPersistence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 W4-D24：运行时会话租约合一后只剩一份实现，这条边从 `infrastructure/sqliteRuntimeSessionLeaseOperations`（此前同样在账）改指装配层的转出口。`startTaskDeps` 是 legacy service，规则只放行 bootstrap 指向 composition，所以它仍在账；正解是把租约操作改为由调用方注入（与 W4-D19c 给回合操作做的同一处置），随 StartTaskDeps 的收口一起清。",
+      "introducedByRFC": "RFC-359 W4-D24（运行时会话租约合一）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c91264f1cd01c4f3207e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/startTaskDeps.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/startTaskDeps.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskDatabase",
       "edgeKind": "type",
@@ -5216,29 +5220,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts#LegacySqliteTaskDatabase"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/startTaskDeps.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/startTaskDeps.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:711aeddef1d3dd9b184c"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations.ts#createSqliteRuntimeSessionLeaseOperations"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/startTaskDeps.ts"
@@ -5554,6 +5535,29 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/branchTraceSnapshotReader",
+      "specifier": "@/modules/task-execution/infrastructure/branchTraceSnapshotReader",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。 RFC-359 W4-B1 起改指一份中立实现（branchTraceSnapshotReader）。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:ffa4a1eec74d8b9f1819"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/branchTraceSnapshotReader.ts#DrizzleBranchTraceSnapshotReader"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "edgeKind": "value",
@@ -5622,29 +5626,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/branchTraceSnapshotReader",
-      "specifier": "@/modules/task-execution/infrastructure/branchTraceSnapshotReader",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。 RFC-359 W4-B1 起改指一份中立实现（branchTraceSnapshotReader）。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:ffa4a1eec74d8b9f1819"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/branchTraceSnapshotReader.ts#DrizzleBranchTraceSnapshotReader"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -6737,29 +6718,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/workgroups.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/questionDispatchComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand",
-      "specifier": "@/modules/collaboration/infrastructure/questionDispatchCommand",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；RFC-359 W1-T2a 起目标已是 provider-中立的 questionDispatchCommand，这条边要等 services facade 退役才消失，仍须收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file"
-      ],
-      "canonicalImportEdgeIds": [
-        "import:754a1c00e0512e2efcb4"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/questionDispatchComposition.ts"
       ]
     },
     {
@@ -8702,15 +8660,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2f76c805a10bb57a37f01acfc710ad12406753ee66bca57cec99bb58b8b345cc",
+    "sourceDigest": "sha256:aebc259b37870e4448b691b71f3aeb55f040161df792c61246bc6ead367c6120",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "59e8dd9f54a6433f4e6a4bab9cd927162837d353",
-    "contentDigest": "sha256:96efc9e6e38ba39849e7565cb554c316246c1abaab15e67d3c74f93b9cced95f",
+    "currentSnapshotSha": "0910f2305a335c8312af510d571af71021a851f4",
+    "contentDigest": "sha256:a87065fac6574a12910dd20afe7bd1ed4164a3453004f2fd6a17b3bffe7a88e0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
