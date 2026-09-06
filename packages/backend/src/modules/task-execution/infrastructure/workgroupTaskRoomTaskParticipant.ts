@@ -254,15 +254,27 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
         .returning({ id: tasks.id })
       if (changed[0] === undefined) return null
       const intentId = ulid()
+      // RFC-359 W4-D19b —— 意图类别必须是 `gate-continuation`：两个部署形态的续跑驱动方
+      // （单进程的 `human-gate-continuation` worker、多进程 daemon 的同名 worker）都只认这一类，
+      // 写成 `resume` 的意图落库后没有任何人来跑，任务会停在 pending。类别与 legacy 的
+      // `resumeTaskWithAtomicSideEffects`（`services/task.ts` 的 resumeKick，intentKind 同为
+      // `gate-continuation`）一致，`advanceOperationGeneration` 也随之取 false——门决策不推进
+      // 操作代际，人工门的节点投影据此判新鲜度。
+      //
+      // 载荷必须恰好是 `{v,event}` 两键：`gate-continuation` 这一类里还住着 RFC-333 人工门
+      // （评审 / 反问 / 澄清）的富载荷——门引用、节点投影摘要、lineage、工作区回滚计划——驱动链会
+      // 用 `decodeHumanGateContinuationPayload` 解它。房间的继续执行没有这些东西，靠
+      // `isLegacyTaskGateContinuationPayload` 的两键判据被识别成「由准入方自己驱动」而跳过那几步
+      // （多一个键就会被当成富载荷去解，当场 `invalid-human-gate-continuation-payload`）。
       await submitTaskContinuation(tx, {
         taskId: input.taskId,
         intentId,
-        kind: 'resume',
+        kind: 'gate-continuation',
         source: 'rest',
         actorUserId: input.actorUserId,
-        payload: { v: 1, event: 'resume', source: 'workgroup-task-room' },
+        payload: { v: 1, event: 'resume' },
         now: input.occurredAt,
-        advanceOperationGeneration: true,
+        advanceOperationGeneration: false,
       })
       const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,

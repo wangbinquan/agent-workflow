@@ -142,7 +142,7 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
         : ('workgroup-host-ledger-provider' as const),
   })),
   ...['WorkgroupTaskRoomEventIdentity', 'WorkgroupTaskRoomTaskParticipantInTx'].map((symbol) => ({
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts',
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
     specifier: '@/modules/task-execution/public/commands',
     symbol,
     edgeKind: 'type' as const,

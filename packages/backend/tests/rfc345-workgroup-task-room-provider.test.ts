@@ -28,25 +28,33 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     }
   })
 
-  test('SQLite legacy mechanics terminate in infrastructure', () => {
-    const sqlite = read('modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts')
-    expect(sqlite).toContain('buildWorkgroupTaskActions(dependencies)')
-    expect(sqlite).toContain('buildConfigActions(dependencies, core)')
-    expect(sqlite).toContain('buildDwActions(dependencies, core)')
-    expect(sqlite).toContain('buildRoomReads(dependencies, core)')
+  test('两个 provider 各自的任务房实现已退役，只剩一份中立实现', () => {
+    // RFC-359 W4-D19b —— 合一前 SQLite 走 legacy 引擎上的薄驱动、PostgreSQL 走原生实现；
+    // 现在两个 bootstrap 装的是同一份 `composeWorkgroupTaskRoom`。
+    for (const retired of [
+      'sqliteWorkgroupTaskRoom',
+      'postgresqlWorkgroupTaskRoom',
+      'postgresqlWorkgroupTaskRoomCommands',
+      'postgresqlWorkgroupTaskRoomQueries',
+    ]) {
+      expect(() => read(`modules/resource-catalog/infrastructure/${retired}.ts`)).toThrow()
+    }
+    const composition = read('modules/resource-catalog/composition/workgroupTaskRoom.ts')
+    expect(composition).toContain('export function composeWorkgroupTaskRoom(')
+    expect(composition).not.toContain('composeSqliteWorkgroupTaskRoom')
+    expect(composition).not.toContain('composePostgresqlWorkgroupTaskRoom')
+    for (const bootstrap of ['server.ts', 'cli/postgresqlDaemonApplication.ts']) {
+      expect(read(bootstrap)).toContain('composeWorkgroupTaskRoom({')
+    }
   })
 
-  test('PostgreSQL owns room rows and joins the exact TaskExecution participant', () => {
-    const adapter = read('modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts')
-    const commands = read(
-      'modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts',
-    )
-    const queries = read(
-      'modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts',
-    )
+  test('房间拥有自己的行，并在同一笔事务里接上 TaskExecution 参与者', () => {
+    const adapter = read('modules/resource-catalog/infrastructure/workgroupTaskRoom.ts')
+    const commands = read('modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts')
+    const queries = read('modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts')
     const composition = read('modules/resource-catalog/composition/workgroupTaskRoom.ts')
 
-    expect(adapter).toContain('runPostgresqlResourceCatalogTransaction')
+    expect(adapter).toContain('runResourceCatalogTransaction')
     expect(adapter).toContain('taskParticipantFactory.inTransaction(transaction)')
     expect(adapter).toContain('participant.loadVisible')
     expect(commands).toContain('loadVisibleTask(transaction, participant')
@@ -57,8 +65,7 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     expect(queries).toContain('participant.listVisibleActive')
     expect(queries).toContain('participant.loadClarifyProjection')
     expect(queries).toContain('participant.listHostRuns')
-    expect(composition).toContain('composePostgresqlWorkgroupTaskRoom')
-    expect(composition).toContain('createPostgresqlWorkgroupTaskRoomTransactionRunner')
+    expect(composition).toContain('createWorkgroupTaskRoomTransactionRunner')
 
     const provider = `${adapter}\n${commands}\n${queries}`
     for (const ownedTable of [
@@ -83,15 +90,24 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     }
     expect(provider).not.toContain('/legacy/')
     expect(provider).not.toContain('createSqliteWorkgroupTaskRoomDriver')
+    // 房间不认识数据库品牌：客户端类型只有中立那一个。
+    for (const source of [adapter, commands, queries]) {
+      expect(source).not.toContain('PostgresqlDatabaseClient')
+      expect(source).not.toContain('DbClient')
+    }
   })
 
-  test('PostgreSQL route behavior stays behind closed injected seams', () => {
-    const adapter = read('modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts')
+  test('路由行为全部走注入的封闭接缝', () => {
+    const adapter = read('modules/resource-catalog/infrastructure/workgroupTaskRoom.ts')
     expect(adapter).toContain('WorkgroupTaskRoomActiveUserDirectory')
     expect(adapter).toContain('WorkgroupTaskRoomDynamicWorkflowOperations')
     expect(adapter).toContain('findActiveUserIds')
     expect(adapter).toContain('validateGenerated')
     expect(adapter).toContain('readonly broadcast:')
+    // RFC-359 W4-D19b —— 「恢复执行」按部署形态注入：单进程做预检 + 内联驱动，多进程两件皆空操作。
+    expect(adapter).toContain('WorkgroupTaskRoomContinuationDriver')
+    expect(adapter).toContain('assertResumable')
+    expect(adapter).toContain('driveAfterCommit')
     expect(adapter).not.toContain('PostgresqlTaskExecutionTransaction')
     expect(adapter).not.toContain('PostgresqlCollaborationTransaction')
   })

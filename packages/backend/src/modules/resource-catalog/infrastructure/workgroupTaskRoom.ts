@@ -19,7 +19,7 @@ import type {
   WorkgroupTaskRoomEventIdentity,
   WorkgroupTaskRoomTaskParticipantInTx,
 } from '@/modules/task-execution/public/commands'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { deriveBudgetUsed, roundedModeOf } from '../application/workgroups/workgroupRoomProjection'
 import {
@@ -30,9 +30,9 @@ import {
 import type { WorkgroupOperationContext } from '../public/participants'
 import type { WorkgroupTaskJsonDocument } from '../public/types'
 import {
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 import { workgroupTaskSubmissionBody } from './workgroupTaskSubmission'
 
 type AssignmentRow = typeof workgroupAssignments.$inferSelect
@@ -43,10 +43,8 @@ export type RoomEvent =
   | Readonly<{ type: 'wg.gate.updated'; awaitingConfirmation: boolean }>
   | Readonly<{ type: 'node.status'; nodeRunId: string; nodeId: string; status: 'done' }>
 
-export interface PostgresqlWorkgroupTaskRoomTaskParticipantFactory {
-  inTransaction(
-    transaction: PostgresqlResourceCatalogTransaction,
-  ): WorkgroupTaskRoomTaskParticipantInTx
+export interface WorkgroupTaskRoomTaskParticipantFactory {
+  inTransaction(transaction: ResourceCatalogTransaction): WorkgroupTaskRoomTaskParticipantInTx
 }
 
 export interface WorkgroupTaskRoomActiveUserDirectory {
@@ -68,9 +66,30 @@ export interface WorkgroupTaskRoomDynamicWorkflowOperations {
   ): Promise<Readonly<{ id: string; name: string }>>
 }
 
-export interface PostgresqlWorkgroupTaskRoomDependencies {
-  readonly db: PostgresqlDatabaseClient
-  readonly taskParticipantFactory: PostgresqlWorkgroupTaskRoomTaskParticipantFactory
+/**
+ * RFC-359 W4-D19b —— 房间「恢复执行」的部署形态差异，收成一个注入端口（按 daemon 在不在同一进程里分，
+ * 不按数据库分）。房间自己只负责在一笔事务里把决策与继续执行的意图一起落库；意图统一是
+ * `gate-continuation` 类，落库形态两端完全一致。
+ *
+ * - 单进程部署（SQLite 单二进制）：受理请求的进程就是持有工作树、也持有调度器的那个进程。
+ *   于是提交前能判定这次恢复是否可行——工作树被 GC 回收掉的任务直接 410 打回，闸门 / holder /
+ *   消息随事务整体回滚、决策保持可重试（rfc164「confirm 恢复失败时全部保持可重试」与 rfc167 的
+ *   相位复位锁的就是这条）；提交后就地认领意图把执行驱起来。
+ * - 多进程部署（PostgreSQL daemon）：受理请求的进程未必看得到该任务的工作树、也未必该驱动它，
+ *   两件都是空操作，由 daemon 的 `human-gate-continuation` worker 轮询认领
+ *   （`humanGateContinuationRecovery.ts` / `humanGateContinuationWorker.ts`）。
+ */
+export interface WorkgroupTaskRoomContinuationDriver {
+  /** 提交前的可恢复性预检；不可恢复就抛（房间的写入随事务回滚）。 */
+  assertResumable(taskId: string, verb: string): Promise<void>
+  /** 提交后驱动这条**已准入**的继续意图：只认领它，不做第二次生命周期转移、不落第二条意图。 */
+  driveAfterCommit(continuation: Readonly<{ taskId: string; intentId: string }>): Promise<void>
+}
+
+export interface WorkgroupTaskRoomDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly taskParticipantFactory: WorkgroupTaskRoomTaskParticipantFactory
+  readonly continuation: WorkgroupTaskRoomContinuationDriver
   readonly activeUsers: WorkgroupTaskRoomActiveUserDirectory
   readonly dynamicWorkflow: WorkgroupTaskRoomDynamicWorkflowOperations
   readonly systemUserId: string
@@ -197,21 +216,22 @@ function parseState(row: typeof workgroupTaskState.$inferSelect | undefined): Lo
 }
 
 async function loadState(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   taskId: string,
 ): Promise<LoadedState> {
   return parseState(
-    await transaction
-      .select()
-      .from(workgroupTaskState)
-      .where(eq(workgroupTaskState.taskId, taskId))
-      .limit(1)
-      .get(),
+    (
+      await transaction
+        .select()
+        .from(workgroupTaskState)
+        .where(eq(workgroupTaskState.taskId, taskId))
+        .limit(1)
+    )[0],
   )
 }
 
 export async function loadVisibleTask(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   participant: WorkgroupTaskRoomTaskParticipantInTx,
   authority: WorkgroupOperationContext,
   taskId: string,
@@ -268,7 +288,7 @@ export function mentionIds(json: string): string[] {
 }
 
 export async function transitionAssignment(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   input: Readonly<{
     id: string
     taskId: string
@@ -289,7 +309,6 @@ export async function transitionAssignment(
       ),
     )
     .returning({ id: workgroupAssignments.id })
-    .all()
   return changed.length === 1
 }
 
@@ -304,7 +323,7 @@ export async function messageRound(
 }
 
 export async function visibleAgentRows(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   authority: WorkgroupOperationContext,
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ id: string; name: string }>>> {
@@ -318,7 +337,6 @@ export async function visibleAgentRows(
     })
     .from(agents)
     .where(inArray(agents.id, [...ids]))
-    .all()
   let granted = new Set<string>()
   if (!hasResourceAclBypass(authority) && hasPrivateResourceAccess(authority)) {
     granted = new Set(
@@ -333,7 +351,6 @@ export async function visibleAgentRows(
               inArray(resourceGrants.resourceId, [...ids]),
             ),
           )
-          .all()
       ).map((row) => row.resourceId),
     )
   }
@@ -357,7 +374,7 @@ export async function visibleAgentRows(
 }
 
 export async function requeueDismissedAssignments(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   input: Readonly<{
     taskId: string
     mode: WorkgroupRuntimeConfig['mode']
@@ -389,27 +406,26 @@ export async function requeueDismissedAssignments(
       ),
     )
     .returning({ id: workgroupAssignments.id })
-    .all()
   return changed.map((row) => ({ assignmentId: row.id, status }))
 }
 
 export type WorkgroupTaskRoomTransactionRunner = <T>(
   body: (
-    transaction: PostgresqlResourceCatalogTransaction,
+    transaction: ResourceCatalogTransaction,
     participant: WorkgroupTaskRoomTaskParticipantInTx,
   ) => Promise<T>,
 ) => Promise<T>
 
-export function createPostgresqlWorkgroupTaskRoomTransactionRunner(
-  dependencies: Pick<PostgresqlWorkgroupTaskRoomDependencies, 'db' | 'taskParticipantFactory'>,
+export function createWorkgroupTaskRoomTransactionRunner(
+  dependencies: Pick<WorkgroupTaskRoomDependencies, 'db' | 'taskParticipantFactory'>,
 ): WorkgroupTaskRoomTransactionRunner {
   return async <T>(
     body: (
-      transaction: PostgresqlResourceCatalogTransaction,
+      transaction: ResourceCatalogTransaction,
       participant: WorkgroupTaskRoomTaskParticipantInTx,
     ) => Promise<T>,
   ): Promise<T> =>
-    runPostgresqlResourceCatalogTransaction(dependencies.db, async (transaction) =>
+    runResourceCatalogTransaction(dependencies.db, async (transaction) =>
       body(transaction, dependencies.taskParticipantFactory.inTransaction(transaction)),
     )
 }

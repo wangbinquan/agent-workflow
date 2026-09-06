@@ -297,10 +297,10 @@ describe('rfc217 G4 — the workgroup discriminator has ONE oracle', () => {
 
 describe('rfc217 T6 — assignment writes have ONE owning module', () => {
   test('update(workgroupAssignments) stays inside the exact owner-native infrastructure set', () => {
-    // SQLite compatibility keeps the legacy lifecycle owner. PostgreSQL
-    // composes the same reserved-transaction mutations across Resource Catalog
-    // and Collaboration owner-native adapters. Transport/application code is
-    // deliberately absent; any new writer still changes this exact inventory.
+    // 工作组任务房合一后（RFC-359 W4-D19b）两个 provider 共用同一份房间写入；剩下的写点是
+    // legacy 回合引擎的生命周期、Collaboration 两侧的澄清机制与 PG 回合操作。
+    // Transport/application code is deliberately absent; any new writer still changes this
+    // exact inventory.
     const offenders: string[] = []
     const walk = (dir: string): void => {
       for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
@@ -316,9 +316,9 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
       'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
       'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts',
-      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts',
-      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
     ])
   })
 })

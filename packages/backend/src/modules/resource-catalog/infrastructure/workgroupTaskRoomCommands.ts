@@ -30,16 +30,27 @@ import {
   transitionAssignment,
   visibleAgentRows,
   type AssignmentStatus,
-  type PostgresqlWorkgroupTaskRoomDependencies,
+  type WorkgroupTaskRoomDependencies,
   type WorkgroupTaskRoomTransactionRunner,
-} from './postgresqlWorkgroupTaskRoom'
+} from './workgroupTaskRoom'
 
-export function createPostgresqlWorkgroupTaskRoomCommands(
-  dependencies: PostgresqlWorkgroupTaskRoomDependencies,
+/** 事务里认领到的继续意图 id；没有继续执行就是 null。 */
+type AdmittedContinuation = string | null
+
+export function createWorkgroupTaskRoomCommands(
+  dependencies: WorkgroupTaskRoomDependencies,
   withTransaction: WorkgroupTaskRoomTransactionRunner,
 ): WorkgroupTaskRoomCommands {
   const now = dependencies.now ?? Date.now
   const nextId = dependencies.id ?? ulid
+  /**
+   * 提交之后驱动那条已准入的继续意图。放在事务外、广播之后：事务里驱动会把调度器的整段执行
+   * 拖进写锁，广播之前驱动则会让实时订阅看到「先动起来、后收到消息」的倒序。
+   */
+  const drive = async (taskId: string, continuation: AdmittedContinuation): Promise<void> => {
+    if (continuation === null) return
+    await dependencies.continuation.driveAfterCommit({ taskId, intentId: continuation })
+  }
   const commands = Object.freeze<WorkgroupTaskRoomCommands>({
     async postMessage(authority, input) {
       const result = await withTransaction(async (transaction, participant) => {
@@ -90,16 +101,19 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
           assignmentId: assignmentIds[0] ?? null,
           createdAt: at,
         })
+        let continuation: AdmittedContinuation = null
         if (isResumable(loaded.task.status)) {
-          await participant.continueTask({
+          const continued = await participant.continueTask({
             taskId: input.taskId,
             expectedStatus: loaded.task.status,
             actorUserId: authority.user.id,
             occurredAt: at,
             identity: identity('workgroup-task-room.post-message.v1', nextId),
           })
+          continuation = continued?.intentId ?? null
         }
         return {
+          continuation,
           receipt: { messageId, assignmentIds: Object.freeze(assignmentIds) },
           events: [
             ...assignmentIds.map((assignmentId) => ({
@@ -116,6 +130,7 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
         }
       })
       for (const event of result.events) dependencies.broadcast(input.taskId, event)
+      await drive(input.taskId, result.continuation)
       return result.receipt
     },
     async deliverAssignment(authority, input) {
@@ -127,17 +142,18 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             issues: parsed.error.issues,
           })
         }
-        const assignment = await transaction
-          .select()
-          .from(workgroupAssignments)
-          .where(
-            and(
-              eq(workgroupAssignments.id, input.assignmentId),
-              eq(workgroupAssignments.taskId, input.taskId),
-            ),
-          )
-          .limit(1)
-          .get()
+        const assignment = (
+          await transaction
+            .select()
+            .from(workgroupAssignments)
+            .where(
+              and(
+                eq(workgroupAssignments.id, input.assignmentId),
+                eq(workgroupAssignments.taskId, input.taskId),
+              ),
+            )
+            .limit(1)
+        )[0]
         if (assignment === undefined) {
           throw new NotFoundError('workgroup-assignment-not-found', 'assignment not found')
         }
@@ -182,16 +198,18 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
           assignmentId: input.assignmentId,
           createdAt: at,
         })
+        let continuation: AdmittedContinuation = null
         if (isResumable(loaded.task.status)) {
-          await participant.continueTask({
+          const continued = await participant.continueTask({
             taskId: input.taskId,
             expectedStatus: loaded.task.status,
             actorUserId: authority.user.id,
             occurredAt: at,
             identity: identity('workgroup-task-room.deliver-assignment.v1', nextId),
           })
+          continuation = continued?.intentId ?? null
         }
-        return { messageId }
+        return { messageId, continuation }
       })
       dependencies.broadcast(input.taskId, {
         type: 'wg.assignment.updated',
@@ -203,7 +221,8 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
         messageId: result.messageId,
         kind: 'delivery',
       })
-      return result
+      await drive(input.taskId, result.continuation)
+      return { messageId: result.messageId }
     },
     async confirmGate(authority, input) {
       const result = await withTransaction(async (transaction, participant) => {
@@ -223,6 +242,9 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             'the completion gate is not awaiting confirmation',
           )
         }
+        // 预检放在所有写之前：不可恢复就整笔回滚，门与消息一行都不落，用户可重试同一决策
+        // （rfc164「confirm 恢复失败时全部保持可重试」）。
+        await dependencies.continuation.assertResumable(input.taskId, 'resume')
         const at = now()
         const nextGate = parsed.data.decision === 'approve' ? 'approved' : 'rejected'
         const changed = await transaction
@@ -240,7 +262,6 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             ),
           )
           .returning({ taskId: workgroupTaskState.taskId })
-          .all()
         if (changed.length !== 1) {
           throw new ConflictError(
             'workgroup-gate-not-open',
@@ -279,7 +300,12 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
           mentionsJson: '[]',
           createdAt: at,
         })
-        return { decision: parsed.data.decision, messageId, closed: continued.closedHolderIds }
+        return {
+          decision: parsed.data.decision,
+          messageId,
+          closed: continued.closedHolderIds,
+          continuation: continued.intentId,
+        }
       })
       for (const nodeRunId of result.closed) {
         dependencies.broadcast(input.taskId, {
@@ -298,10 +324,11 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
         type: 'wg.gate.updated',
         awaitingConfirmation: false,
       })
+      await drive(input.taskId, result.continuation)
       return { decision: result.decision }
     },
     async confirmDynamicWorkflow(authority, input) {
-      return await withTransaction(async (transaction, participant) => {
+      const result = await withTransaction(async (transaction, participant) => {
         const loaded = await loadVisibleTask(transaction, participant, authority, input.taskId)
         const parsed = ConfirmSchema.safeParse(inputBody(input.submission))
         if (!parsed.success) {
@@ -339,12 +366,15 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
                 : [],
             ),
           })
+          // 预检排在复核之后：提案本身不合法要以 409 打回（rfc167「不再通过当前池校验 → 409」），
+          // 工作树没了才是 410。顺序与合一前的 dwActions（先 validate，再 resumeDynamicWorkflowExecution
+          // 里做 worktreePreflight）一致。
+          await dependencies.continuation.assertResumable(input.taskId, 'resume')
           const { rejectionComment: _rejectionComment, ...rest } = dw
           await transaction
             .update(workgroupTaskState)
             .set({ dwStateJson: JSON.stringify({ ...rest, phase: 'executing' }), updatedAt: at })
             .where(eq(workgroupTaskState.taskId, input.taskId))
-            .run()
           const continued = await participant.continueTask({
             taskId: input.taskId,
             expectedStatus: 'awaiting_review',
@@ -360,7 +390,7 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
               'the dynamic workflow confirm gate is not awaiting confirmation',
             )
           }
-          return { decision: 'approve' as const }
+          return { decision: 'approve' as const, continuation: continued.intentId }
         }
         const rejectRounds = dw.rejectRounds + 1
         const comment = parsed.data.comment ?? ''
@@ -375,7 +405,6 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             .update(workgroupTaskState)
             .set({ dwStateJson: JSON.stringify(nextDw), updatedAt: at })
             .where(eq(workgroupTaskState.taskId, input.taskId))
-            .run()
           const failed = await participant.failTask({
             taskId: input.taskId,
             expectedStatus: 'awaiting_review',
@@ -391,8 +420,11 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
               'the dynamic workflow confirm gate is not awaiting confirmation',
             )
           }
-          return { decision: 'reject' as const, exhausted: true as const }
+          return { decision: 'reject' as const, exhausted: true as const, continuation: null }
         }
+        // 落到这里就是「打回并重新生成」，要恢复执行，所以要预检；上面「打回次数耗尽」那支是判失败
+        // 收场、不恢复，已经 return 掉了。
+        await dependencies.continuation.assertResumable(input.taskId, 'resume')
         const { generatedDef: _generatedDef, ...rest } = dw
         const nextDw = {
           ...rest,
@@ -405,7 +437,6 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
           .update(workgroupTaskState)
           .set({ dwStateJson: JSON.stringify(nextDw), updatedAt: at })
           .where(eq(workgroupTaskState.taskId, input.taskId))
-          .run()
         const continued = await participant.continueTask({
           taskId: input.taskId,
           expectedStatus: 'awaiting_review',
@@ -420,8 +451,11 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             'the dynamic workflow confirm gate is not awaiting confirmation',
           )
         }
-        return { decision: 'reject' as const }
+        return { decision: 'reject' as const, continuation: continued.intentId }
       })
+      await drive(input.taskId, result.continuation)
+      const { continuation: _continuation, ...outcome } = result
+      return outcome
     },
     async saveDynamicWorkflow(authority, input) {
       const prepared = await withTransaction(async (transaction, participant) => {
@@ -510,7 +544,6 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             .from(workgroupMessages)
             .where(eq(workgroupMessages.taskId, input.taskId))
             .orderBy(asc(workgroupMessages.id))
-            .all()
         ).at(-1)?.id
         const humanIds: string[] = []
         const joinCursors: Array<{ memberId: string; messageId: string }> = []
@@ -614,7 +647,6 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             .select()
             .from(workgroupAssignments)
             .where(eq(workgroupAssignments.taskId, input.taskId))
-            .all()
           for (const assignment of assignments) {
             if (
               assignment.assigneeMemberId === null ||
@@ -736,16 +768,18 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
           mentionsJson: '[]',
           createdAt: at,
         })
+        let continuation: AdmittedContinuation = null
         if (isResumable(loaded.task.status)) {
-          await participant.continueTask({
+          const continued = await participant.continueTask({
             taskId: input.taskId,
             expectedStatus: loaded.task.status,
             actorUserId: authority.user.id,
             occurredAt: at,
             identity: identity('workgroup-task-room.update-config.v1', nextId),
           })
+          continuation = continued?.intentId ?? null
         }
-        return { changes, assignmentEvents, messageId }
+        return { changes, assignmentEvents, messageId, continuation }
       })
       for (const event of result.assignmentEvents) {
         dependencies.broadcast(input.taskId, {
@@ -759,22 +793,24 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
         messageId: result.messageId,
         kind: 'system',
       })
+      await drive(input.taskId, result.continuation)
       return { changes: result.changes }
     },
     async cancelAssignment(authority, input) {
       const messageId = await withTransaction(async (transaction, participant) => {
         await loadVisibleTask(transaction, participant, authority, input.taskId)
-        const assignment = await transaction
-          .select()
-          .from(workgroupAssignments)
-          .where(
-            and(
-              eq(workgroupAssignments.id, input.assignmentId),
-              eq(workgroupAssignments.taskId, input.taskId),
-            ),
-          )
-          .limit(1)
-          .get()
+        const assignment = (
+          await transaction
+            .select()
+            .from(workgroupAssignments)
+            .where(
+              and(
+                eq(workgroupAssignments.id, input.assignmentId),
+                eq(workgroupAssignments.taskId, input.taskId),
+              ),
+            )
+            .limit(1)
+        )[0]
         if (assignment === undefined) {
           throw new NotFoundError('workgroup-assignment-not-found', 'assignment not found')
         }
@@ -790,7 +826,6 @@ export function createPostgresqlWorkgroupTaskRoomCommands(
             ),
           )
           .returning({ id: workgroupAssignments.id })
-          .all()
         if (canceled.length !== 1) {
           throw new ConflictError(
             'workgroup-assignment-not-cancelable',

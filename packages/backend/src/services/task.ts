@@ -3,6 +3,7 @@
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
+import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type {
   ScriptLanguage,
   PlannedDirectoryNode,
@@ -4455,6 +4456,54 @@ export async function wakeHumanGateContinuation(
     if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
     else deferBehindCurrentOwner()
   }
+}
+
+/**
+ * RFC-359 W4-D19b —— 单进程部署下工作组任务房的「继续执行」适配器（预检 + 驱动）。
+ *
+ * 房间自己既不认识工作树也不认识调度器：它只负责在一笔事务里把决策与继续执行的意图一起落库。
+ * 两件按**部署形态**（不是按数据库）分的事由这个适配器补上：
+ *
+ * - `assertResumable`：写任何一行之前先撞一次 `assertWorktreePresentForResume`——工作树被 GC
+ *   回收的任务当场 410，闸门与消息随事务回滚、决策保持可重试（判据与合一前
+ *   `resumeTaskWithAtomicSideEffects` 的 `worktreePreflight` 完全一致）。
+ * - `driveAfterCommit`：提交后就地认领那条意图并驱动，等于合一前 resumeKick 在准入 CAS 之后
+ *   接着做的那半。
+ *
+ * 多进程 daemon 部署两件都做不了（受理请求的进程未必看得到工作树、也未必该驱动这个任务），
+ * 注入的是空操作，由 daemon 的 `human-gate-continuation` worker 轮询认领。
+ */
+export function composeWorkgroupTaskRoomContinuationDriver(input: {
+  readonly db: LegacySqliteTaskDatabase
+  readonly configPath: string
+  readonly schedulerDriver: StartTaskDeps['schedulerDriver']
+  readonly taskRecoveryOperations: TaskRecoveryOperations
+}): Readonly<{
+  assertResumable: (taskId: string, verb: string) => Promise<void>
+  driveAfterCommit: (continuation: Readonly<{ taskId: string; intentId: string }>) => Promise<void>
+}> {
+  const resumeDeps = (): StartTaskDeps => ({
+    db: input.db,
+    schedulerDriver: input.schedulerDriver,
+    taskRecoveryOperations: input.taskRecoveryOperations,
+    appHome: Paths.root,
+    configPath: input.configPath,
+    ...resolveLaunchRuntimeConfig(input.configPath),
+  })
+  return Object.freeze({
+    async assertResumable(taskId, verb) {
+      const task = await getTask(input.db, taskId)
+      // 任务不存在不归这里管：房间的可见性判据已经先跑过，会给出 404/403。
+      if (task === null) return
+      await assertWorktreePresentForResume(input.taskRecoveryOperations, task, verb)
+    },
+    async driveAfterCommit(continuation) {
+      // 与合一前同一条路：意图已在房间事务里准入，这里只认领并驱动它，不做第二次生命周期转移、
+      // 不落第二条意图（`wakeHumanGateContinuation` 的契约）。等它是有意的——合一前 confirm 也是
+      // 等 `resumeTaskWithAtomicSideEffects` 整个跑完才应答，`awaitScheduler` 的确定性依赖这一点。
+      await wakeHumanGateContinuation(continuation.taskId, continuation.intentId, resumeDeps())
+    },
+  })
 }
 
 /** Bootstrap-owned adapter used by collaboration's continuous continuation

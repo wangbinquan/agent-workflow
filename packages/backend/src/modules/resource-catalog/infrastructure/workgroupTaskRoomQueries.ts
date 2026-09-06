@@ -16,9 +16,9 @@ import {
   mentionIds,
   parseConfig,
   type WorkgroupTaskRoomTransactionRunner,
-} from './postgresqlWorkgroupTaskRoom'
+} from './workgroupTaskRoom'
 
-export function createPostgresqlWorkgroupTaskRoomQueries(
+export function createWorkgroupTaskRoomQueries(
   withTransaction: WorkgroupTaskRoomTransactionRunner,
 ): WorkgroupTaskRoomQueries {
   async function pendingRows(authority: WorkgroupOperationContext) {
@@ -35,7 +35,6 @@ export function createPostgresqlWorkgroupTaskRoomQueries(
               })
               .from(workgroupTaskState)
               .where(inArray(workgroupTaskState.taskId, taskIds))
-              .all()
       const cards =
         taskIds.length === 0
           ? []
@@ -51,7 +50,6 @@ export function createPostgresqlWorkgroupTaskRoomQueries(
                   eq(workgroupAssignments.status, 'dispatched'),
                 ),
               )
-              .all()
       const gateByTask = new Map(states.map((state) => [state.taskId, state.gateStatus]))
       return tasks.flatMap((task) => {
         const parsed = parseConfig(task.workgroupConfigJson)
@@ -106,14 +104,12 @@ export function createPostgresqlWorkgroupTaskRoomQueries(
             .select()
             .from(workgroupMessages)
             .where(eq(workgroupMessages.taskId, input.taskId))
-            .orderBy(asc(workgroupMessages.id))
-            .all(),
+            .orderBy(asc(workgroupMessages.id)),
           transaction
             .select()
             .from(workgroupAssignments)
             .where(eq(workgroupAssignments.taskId, input.taskId))
-            .orderBy(asc(workgroupAssignments.id))
-            .all(),
+            .orderBy(asc(workgroupAssignments.id)),
           participant.listHostRuns(input.taskId),
           participant.loadClarifyProjection(input.taskId),
         ])

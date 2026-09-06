@@ -21,7 +21,6 @@ import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/co
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
   WORKFLOW_SCHEMA_VERSION,
-  parseTriggerContextJson,
   serializeWorkflowDefinitionStorageV1,
   type Config,
 } from '@agent-workflow/shared'
@@ -70,7 +69,11 @@ import {
 } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
-import { composePostgresqlWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
+import {
+  composeWorkgroupTaskRoom,
+  composeWorkgroupTaskRoomActiveUsers,
+  composeWorkgroupTaskRoomDynamicWorkflow,
+} from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { composePostgresqlTaskExecutionResourceSnapshotFactory } from '@/modules/resource-catalog/composition/taskExecution'
@@ -313,9 +316,7 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { createDaemonRealtimePolicyBinding } from './daemonRealtimePolicy'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
-import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
 import { ConflictError } from '@/util/errors'
 import { assertNotBuiltin } from '@/services/systemResources'
 import {
@@ -1076,47 +1077,23 @@ export async function composePostgresqlDaemonApplication(
       composeOwnerIdentityQueries(input.db),
     ),
   )
-  const workgroupTaskRoom = composePostgresqlWorkgroupTaskRoom({
+  const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db: input.db,
     taskParticipantFactory: taskExecutionProvider.workgroupTaskRoom,
-    activeUsers: {
-      async findActiveUserIds(userIds) {
-        const users = await identityAccess.userDirectory.lookup(userIds)
-        return new Set(users.filter((user) => user.status === 'active').map((user) => user.id))
-      },
-    },
-    dynamicWorkflow: {
-      async validateGenerated(authority, request) {
-        assertTriggerPreflight({
-          root: request.definition,
-          closureJson: null,
-          source: parseTriggerContextJson(request.triggerContextJson),
-        })
-        const generic = validateWorkflowDef(request.definition, await validationContext.load())
-        const dynamic = validateDynamicWorkflowDef(request.definition, request.poolAgentIds)
-        const issues = [...generic.issues, ...dynamic.issues].filter(
-          (issue) => (issue.severity ?? 'error') === 'error',
-        )
-        if (issues.length > 0) {
-          throw new ConflictError(
-            'dw-generated-def-stale',
-            'the generated workflow no longer validates against the current agent pool — reject with feedback to regenerate',
-            { issues },
-          )
-        }
-        return request.definition
-      },
-      async create(authority, request) {
-        const created = await classicCatalogs.workflow.operations.create.invoke(authority, {
-          submission: {
-            kind: 'json-body',
-            body: JSON.stringify(request),
-          },
-        })
-        return { id: created.id, name: created.name }
-      },
-    },
+    activeUsers: composeWorkgroupTaskRoomActiveUsers({
+      userDirectory: identityAccess.userDirectory,
+    }),
+    dynamicWorkflow: composeWorkgroupTaskRoomDynamicWorkflow({
+      validationContext,
+      workflows: classicCatalogs.workflow.operations.create,
+    }),
     systemUserId: SYSTEM_USER_ID,
+    continuation: {
+      // 多进程部署：受理请求的进程未必看得到该任务的工作树、也未必该驱动它。两件都交给 daemon 的
+      // `human-gate-continuation` worker 轮询认领（start.ts 注册），这里是空操作。
+      assertResumable: async () => {},
+      driveAfterCommit: async () => {},
+    },
     broadcast(taskId, event) {
       taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
     },

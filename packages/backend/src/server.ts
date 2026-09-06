@@ -97,7 +97,13 @@ import {
   composeSkillContentAvailability,
 } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
-import { composeSqliteWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
+import {
+  composeWorkgroupTaskRoom,
+  composeWorkgroupTaskRoomActiveUsers,
+  composeWorkgroupTaskRoomDynamicWorkflow,
+} from '@/modules/resource-catalog/composition/workgroupTaskRoom'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   composeSqliteResourceCatalog,
@@ -353,6 +359,7 @@ import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaborati
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/sqliteTaskCatalogSources'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { createSqliteResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
@@ -416,6 +423,7 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import type { DeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
+import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { canManageCaseMembers } from '@/services/employeeCaseMembers'
 import {
   bindCandidateDeliveryParticipant,
@@ -2551,11 +2559,29 @@ function composeSqliteApiRouteMounts(
         agentLaunchResources,
       }),
     })
-  const workgroupTaskRoom = composeSqliteWorkgroupTaskRoom({
+  const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db: deps.db,
-    configPath: deps.configPath,
-    schedulerDriver,
-    taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
+    taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
+      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+    }),
+    activeUsers: composeWorkgroupTaskRoomActiveUsers({
+      userDirectory: identityAccess.userDirectory,
+    }),
+    dynamicWorkflow: composeWorkgroupTaskRoomDynamicWorkflow({
+      validationContext: composeSqliteDynamicWorkflowValidationContext(deps.db),
+      workflows: workflowCatalog.operations.create,
+    }),
+    systemUserId: SYSTEM_USER_ID,
+    // 单进程部署：受理请求的进程既看得到工作树、也持有调度器，预检与驱动都在本进程内做。
+    continuation: composeWorkgroupTaskRoomContinuationDriver({
+      db: deps.db,
+      configPath: deps.configPath,
+      schedulerDriver,
+      taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
+    }),
+    broadcast(taskId, event) {
+      taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
+    },
   })
   const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
     db: deps.db,
