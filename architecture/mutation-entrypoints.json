@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1826,
+    "entries": 1823,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -19887,79 +19887,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker.ts#openCompletionGate",
       "symbol": "openCompletionGate",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts#ConfirmSchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts#ConfirmSchema",
-      "symbol": "ConfirmSchema",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts#DeliverSchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts#DeliverSchema",
-      "symbol": "DeliverSchema",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts#SaveAsWorkflowSchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts#SaveAsWorkflowSchema",
-      "symbol": "SaveAsWorkflowSchema",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -43584,7 +43511,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f",
+  "sourceDigest": "sha256:b2ed8aee91b02bddd2c2f4acb03204d783ffc182ff79617997111724e58626a9",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43694,7 +43621,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 264,
+      "durableWriterSites": 263,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -44130,22 +44057,6 @@
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "createSqliteReviewRepairParticipant"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "updateTaskConfig",
-        "controlSubtype": "membership-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts",
-        "id": "task-authority:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts#330:tasks",
-        "line": 330,
-        "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts#buildConfigActions",
-        "requiredBrandedProof": "AuthorizedWorkgroupTaskRoomCommand",
-        "revisionPredicate": "workgroup-config-revision-and-task-node-cas",
-        "symbol": "buildConfigActions"
       },
       {
         "allowedTables": [

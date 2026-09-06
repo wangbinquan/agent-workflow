@@ -7709,29 +7709,6 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts#$setTimeout:479",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:479",
-      "targetContext": "resource-catalog"
-    },
-    {
       "dependencies": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts",
       "finalCriterion": "W9-B registry",
@@ -8065,6 +8042,29 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#createSqliteResourcePackageApplyArtifactRecovery",
       "phase": "after-ready",
       "symbol": "createSqliteResourcePackageApplyArtifactRecovery",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#$setTimeout:828",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:828",
       "targetContext": "resource-catalog"
     },
     {
@@ -13451,5 +13451,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f"
+  "sourceDigest": "sha256:b2ed8aee91b02bddd2c2f4acb03204d783ffc182ff79617997111724e58626a9"
 }
