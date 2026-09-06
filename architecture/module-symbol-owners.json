@@ -83094,7 +83094,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#decideWorkgroupOutcome",
       "removeAfterWave": null,
@@ -83106,7 +83106,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#deriveWakeSet",
       "removeAfterWave": null,
@@ -83322,7 +83322,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#InflightTurns",
       "removeAfterWave": null,
@@ -83622,7 +83622,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WakeItem",
       "removeAfterWave": null,
@@ -83646,7 +83646,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WakeSet",
       "removeAfterWave": null,
@@ -83730,7 +83730,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WorkgroupOutcome",
       "removeAfterWave": null,
@@ -105918,7 +105918,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#readonlyPermission",
       "removeAfterWave": null,
@@ -305885,5 +305885,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:597c78e6bbe7b9312f7e57a93aff9b4731648457ed4848a8ad834064fc006680"
+  "sourceDigest": "sha256:1580204cb861066caedb85582a3a1298dd5c5550da35e41d5f0d9f9546ea814b"
 }
