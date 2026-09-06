@@ -19,7 +19,9 @@ import {
   deriveWakeSet,
 } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
-import { deriveLeaderClarifyPark } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
+// RFC-359 W4-D19c-tail：判据改指生产那条（宿主账本按 run id 连接未答反问）；夹具把
+// 「会话」翻成「宿主 run + 提问 run 集合」，断言逐条保留。
+import { leaderClarifyParkedOf } from '@/modules/task-execution/infrastructure/workgroupHostLedgerParticipant'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 function deriveWake(input: WakeInput) {
@@ -96,6 +98,24 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
 type Sess = { sourceAgentNodeId: string; status: string }
 const LEADER = '__wg_leader__'
 const MEMBER = '__wg_member__'
+
+/**
+ * 旧夹具（反问会话列表）→ 生产判据要的两样：领队/成员的宿主 run，以及**未答**反问的提问 run 集合。
+ * 每条会话映射成一条同 nodeId 的 run；只有 `awaiting_human` 的那条进提问集合——这正是
+ * 合一前 `deriveLeaderClarifyPark` 用 status 过滤表达的同一件事。
+ */
+function deriveLeaderClarifyPark(sessions: readonly Sess[]): boolean {
+  const runs = sessions.map((session, index) => ({
+    id: `run-${index}`,
+    nodeId: session.sourceAgentNodeId,
+  }))
+  const asking = new Set(
+    sessions.flatMap((session, index) =>
+      session.status === 'awaiting_human' ? [`run-${index}`] : [],
+    ),
+  )
+  return leaderClarifyParkedOf(runs, asking)
+}
 
 describe('RFC-187 F3 — deriveLeaderClarifyPark (session-keyed, Codex P0-1)', () => {
   test('an open (awaiting_human) session sourced from the leader host node = leader park', () => {

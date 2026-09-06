@@ -68,10 +68,28 @@ async function loadSnapshot(
       wgRound: row.wgRound,
       envelopeNonce: row.envelopeNonce ?? '',
     })),
-    leaderClarifyParked: hostRows.some(
-      (row) => row.nodeId === WORKGROUP_TURN_LEADER_NODE_ID && askingNodeRunIds.has(row.id),
-    ),
+    leaderClarifyParked: leaderClarifyParkedOf(hostRows, askingNodeRunIds),
   }
+}
+
+/**
+ * RFC-187 F3 —— 「领队自己在等人回答」的判据：**领队宿主 run** 上挂着一个未答的反问。
+ *
+ * 与成员反问的区别在于后果：成员反问会把它那张卡停成 `awaiting_human`（由 humanPending 抓到），
+ * 而领队反问没有卡——不单独认这一条，驱动每轮都会再叫醒领队，于是它反复重问、孤儿出 N 个反问
+ * 会话，最后撞 max_rounds。
+ *
+ * RFC-359 W4-D19c-tail：合一前这条住在 `legacy/workgroup/strategies/leaderWorker.ts` 的
+ * `deriveLeaderClarifyPark`，按「会话的 sourceAgentNodeId 是领队且 status=awaiting_human」判；
+ * 这里按 run id 连接（`askingNodeRunIds` 就是未答反问的提问 run 集合），判据同一条。
+ */
+export function leaderClarifyParkedOf(
+  hostRuns: readonly Readonly<{ id: string; nodeId: string }>[],
+  askingNodeRunIds: ReadonlySet<string>,
+): boolean {
+  return hostRuns.some(
+    (run) => run.nodeId === WORKGROUP_TURN_LEADER_NODE_ID && askingNodeRunIds.has(run.id),
+  )
 }
 
 async function applyOperation(
