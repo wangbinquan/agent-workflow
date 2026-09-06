@@ -26,6 +26,26 @@ import type { BundleOp } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+
+/**
+ * RFC-359 W4-D23 —— 大事务已经改走中立事务原语，但这条捆绑应用链上还有一批**同步**的
+ * `*InTx` 成员（agent / mcp / workflow / workgroup / template 的提交面）没迁完。
+ *
+ * 把中立句柄重新窄化给它们**不是强转谎话**：SQLite 会话交出的事务句柄**就是 `DbClient` 本身**
+ * （`createSqliteDatabaseSession`：`const tx = db as unknown as DatabaseTransaction`，显式
+ * BEGIN IMMEDIATE 划边界），所以这些成员在运行时拿到的对象与从前逐字相同，同步面照常可用。
+ * 这个适配器只是把那条**平台层已经依赖的身份**在类型上说一遍。
+ *
+ * 它是有退役条件的：本文件是 SQLite 专属的捆绑应用引擎（对面是
+ * `postgresqlResourcePackageAtomicApply.ts`）。等那批 `*InTx` 成员迁到中立事务、两套 apply
+ * 引擎合一时，这个适配器连同本文件一起消失。新增同步成员会被
+ * `rfc359-sync-transaction-highwater` 账本挡下。
+ */
+function sqliteMembers(tx: DatabaseTransaction): DbTxSync {
+  return tx as unknown as DbTxSync
+}
 import { resourceBundleApplies } from '@/db/schema'
 import {
   compensateLegacyResourcePackageArtifact,
@@ -388,25 +408,24 @@ async function applyInner(
 
     // ── ③ big tx ─────────────────────────────────────────────────────────
     const applied: BundleReceipt['applied'] = []
-    const receipt = dbTxSync(db, (tx) => {
-      const cas = tx
+    const receipt = await databaseSessionFor(db).transaction(async (tx) => {
+      const cas = await tx
         .update(resourceBundleApplies)
         .set({ state: 'applying', updatedAt: Date.now() })
         .where(
           and(eq(resourceBundleApplies.id, journalId), eq(resourceBundleApplies.state, 'prepared')),
         )
-        .run()
-      if ((cas as unknown as { changes?: number }).changes !== 1) {
+      if (affectedRows(cas) !== 1) {
         throw new ConflictError('bundle-apply-unsettled', 'journal claim lost')
       }
 
       // I6：CAS 之后、任何 commit 内核之前。pre-stage 窗口足够长（npm 安装 / 技能
       // 暂存），claim 期校验过的东西在这里可能已经过期。
-      provider.revalidateInTx?.(tx)
+      provider.revalidateInTx?.(sqliteMembers(tx))
 
       // T12：**每个 update 目标**在提交事务里断言 owner。这是 §5.4 的核心——
       // 内容 hash 只证明「我读到的是这一版」，不是授权。
-      mutationRuntime.assertUpdateTargetsOwnedInTx(tx, lowered)
+      mutationRuntime.assertUpdateTargetsOwnedInTx(sqliteMembers(tx), lowered)
 
       // 设计门 B3：本 bundle 正在创建的名字要从引用 ACL 复核里排除——那些行是
       // actor 在**这个事务里**创建的，没有别人的行可以躲在同名背后。
@@ -424,7 +443,7 @@ async function applyInner(
         if (typeof name === 'string' && name.length > 0) bucket.add(name)
       }
 
-      const applyTx = mutationRuntime.bindApplyTx(tx, bundleCreatedNames)
+      const applyTx = mutationRuntime.bindApplyTx(sqliteMembers(tx), bundleCreatedNames)
       for (const item of preparedOps) {
         const receipt = (() => {
           switch (item.mutation.kind) {
@@ -491,15 +510,15 @@ async function applyInner(
 
       const receiptValue: BundleReceipt = { journalId, applied }
       // I7：provider 的伴随写入在 journal committed **之前**，同事务。
-      provider.finalizeInTx?.(tx, receiptValue)
-      tx.update(resourceBundleApplies)
+      provider.finalizeInTx?.(sqliteMembers(tx), receiptValue)
+      await tx
+        .update(resourceBundleApplies)
         .set({
           state: 'committed',
           receiptJson: JSON.stringify(receiptValue),
           updatedAt: Date.now(),
         })
         .where(eq(resourceBundleApplies.id, journalId))
-        .run()
       return receiptValue
     })
     committedReceipt = receipt

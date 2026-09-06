@@ -58,7 +58,7 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 5',
   'modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts: 5',
   'platform/events/committed/sqliteStore.ts: 2',
-  'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 5',
+  'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 4',
   'platform/persistence/sqlite/maintenanceRunStore.ts: 4',
   'platform/persistence/sqlite/systemWorkspaceGc.ts: 1',
   'platform/persistence/sqlite/taskLifecycle.ts: 4',
