@@ -357,8 +357,10 @@ describe('rfc284 批C T10 §2.4 — 快照式可见性全矩阵（迁移快照�
   test('迁移结构锁：registry 两处受众判定与 mcpRuntimeTestTransitions 均已委托；status 检查留调用方', () => {
     const registry = SRC('ws/registry.ts')
     expect(registry.split('visibleToAudienceSnapshot(').length - 1).toBeGreaterThanOrEqual(3)
-    // RFC-359 W4-D16：services/mcpRuntimeTestTransitions.ts 门面已退役（零生产消费）；委托关系直接看 legacy 实现。
-    const trans = SRC('modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts')
+    // RFC-359 W4-D16：services/mcpRuntimeTestTransitions.ts 门面已退役（零生产消费）。
+    // W4-D23c：ACL 失效那一支的 SQLite 同步孪生（legacy 里的 `transitionMcpAclRuntimeTestsInTx`）
+    // 也退役了——它零生产调用方，两个 provider 早已跑中立的这一份。委托关系因此直接看**活着的**实现。
+    const trans = SRC('modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts')
     expect(trans).toContain("accountPermissions.has('resource-acl:bypass')")
     expect(trans).toContain("account?.status === 'active' &&")
   })
