@@ -28,6 +28,12 @@ const srcRoot = resolve(import.meta.dir, '..', 'src')
 
 /** `文件相对路径 -> 列名 -> 谁负责把驱动交回的字符串解码成 number`。 */
 const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
+  'platform/persistence/capabilities.ts': {
+    '?':
+      'RFC-359 W4-D19c 的 `greatest` 能力：SQLite 分支渲染的是**两参数的标量** max(a, b)（SQLite 只有多参数' +
+      '形态才是标量函数，单参数才是聚合），PG 分支渲染 greatest(a, b)。它用在 onConflictDoUpdate 的 set 子句里' +
+      '让游标只前进不后退，根本不是投影列——没有值回到 JS 侧，也就没有可解码的东西。',
+  },
   'modules/integration/infrastructure/webhookDeliveryQueries.ts': {
     '?':
       'listRepoPaths 的递归 CTE 里 min(repo_path) 是 text 列的字典序最小值，不是数值聚合——' +

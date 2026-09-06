@@ -195,8 +195,12 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
       .from(workgroupMessages)
       .where(eq(workgroupMessages.taskId, taskId))
     expect(messages.some((message) => message.kind === 'dispatch')).toBe(true)
-    expect(messages.some((message) => message.kind === 'result')).toBe(true)
     expect(messages.some((message) => message.kind === 'decision')).toBe(true)
+    // 结果消息必须署上执行者。卡片是在**同一笔提交**里被认领的，照快照里的 `assigneeMemberId` 取会拿到
+    // 认领前的 null，房间里就出现一条没有作者的结果（e2e 业务场景实撞，2026-09-06）。
+    const result = messages.find((message) => message.kind === 'result')
+    expect(result?.authorMemberId).toBe('m-worker')
+    expect(result?.assignmentId).toBe(cards[0]?.id ?? null)
   })
 
   test('领队协议出错：按正典文案重提示一次后收敛（两个引擎同一条重试路径）', async () => {

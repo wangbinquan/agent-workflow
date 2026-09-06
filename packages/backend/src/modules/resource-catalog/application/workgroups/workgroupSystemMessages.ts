@@ -1,8 +1,4 @@
 import { WorkgroupSystemTemplateSchema, type WorkgroupSystemTemplate } from '@agent-workflow/shared'
-export {
-  parseStoredTemplateMetadata,
-  type StoredWorkgroupTemplateMetadata,
-} from '@/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
 
 export interface BuiltWorkgroupSystemMessage {
   authorKind: 'system'

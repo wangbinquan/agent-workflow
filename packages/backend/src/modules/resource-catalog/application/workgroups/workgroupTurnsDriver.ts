@@ -1146,6 +1146,8 @@ function batchSettleOperations(input: {
   readonly snapshot: WorkgroupTurnsSnapshot
   readonly cards: readonly WorkgroupTurnAssignment[]
   readonly reported: readonly BatchReportedItem[]
+  /** 跑这一批的成员。卡片是在**同一笔提交**里被认领的，快照里的 `assigneeMemberId` 还是认领前的值。 */
+  readonly memberId: string
   readonly keyPrefix: string
 }): readonly WorkgroupTurnLedgerOperation[] {
   const operations: WorkgroupTurnLedgerOperation[] = []
@@ -1156,7 +1158,9 @@ function batchSettleOperations(input: {
       const result = messageDraft({
         round: card.round,
         authorKind: 'member',
-        authorMemberId: card.assigneeMemberId,
+        // 取本轮执行者，不取快照里的 `card.assigneeMemberId`——open 卡在这一笔提交里才被认领，
+        // 快照上那一列还是 null，落进消息就成了「没有作者的结果」（e2e 业务场景实撞）。
+        authorMemberId: card.assigneeMemberId ?? input.memberId,
         kind: 'result',
         bodyMd: item.summary,
         assignmentId: card.id,
@@ -1180,7 +1184,7 @@ function batchSettleOperations(input: {
           detail: item.detail ?? item.summary,
           keyPrefix: `${input.keyPrefix}:reported-failed:${card.id}`,
           effectiveAttemptCount: card.attemptCount + (card.status === 'open' ? 1 : 0),
-          reportedByMemberId: card.assigneeMemberId,
+          reportedByMemberId: card.assigneeMemberId ?? input.memberId,
         }),
       )
     }
@@ -1395,6 +1399,7 @@ async function driveBatchTurn(input: {
         snapshot: input.snapshot,
         cards,
         reported: lastReported,
+        memberId: input.memberId,
         keyPrefix: `batch-partial:${outcome.runId}`,
       }),
       createMessage(
@@ -1449,6 +1454,7 @@ async function driveBatchTurn(input: {
         snapshot: input.snapshot,
         cards,
         reported: outcome.value.reported,
+        memberId: input.memberId,
         keyPrefix: `batch-settle:${outcome.runId}`,
       }),
     )
