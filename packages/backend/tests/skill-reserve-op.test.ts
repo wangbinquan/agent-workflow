@@ -11,7 +11,6 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { dbTxSync } from '../src/db/txSync'
 import { skillOperationLocks, skills } from '../src/db/schema'
 import {
   createManagedSkill,

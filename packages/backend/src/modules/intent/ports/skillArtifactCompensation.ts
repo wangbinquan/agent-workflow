@@ -14,7 +14,7 @@
 // 只会得到一个两边都用不满的联合体。端口按消费者的真实需要划，不按对称美感划。
 
 import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 
 /** SQLite 恢复路径要的技能工件原语。 */
 export interface SqliteSkillArtifactCompensation {
@@ -31,7 +31,8 @@ export interface SqliteSkillArtifactCompensation {
   /** 撤销某技能的本次 boot admission（发布前必须撤，见 RC 的 stage/publish 注释）。 */
   unmarkSkillBootVerified(skillId: string): void
   /** 收尾一个 skill operation（在调用方的事务里）。 */
-  finishOperation(tx: DbTxSync, operationId: string): void
+  // RFC-359 W4-D23b：op 原语迁到中立事务后是异步的。
+  finishOperation(tx: DatabaseTransaction, operationId: string): void | Promise<void>
   /** 读一个 skill operation 的当前状态；`undefined` = 不存在。 */
   loadSkillOperationState(
     db: DbClient,

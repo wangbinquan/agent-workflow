@@ -697,9 +697,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
     const prepare = engine.indexOf('await resourceSession.prepare(plan, {')
     const prestage = engine.indexOf('await resourceSession.prestage(plan, { recordArtifact })')
-    const bigTransaction = engine.indexOf('const receipt = dbTxSync(db, (tx) =>')
-    const participant = engine.indexOf('resourceSession.participantInTransaction(tx,')
-    const authorize = engine.indexOf('resourceParticipant.authorizeAndCommit(deps.authority, plan)')
+    // RFC-359 W4-D23b：大事务改走中立会话；链上仍是同步面的成员经具名 `syncMembers(tx)` 拿到
+    // 同一个句柄（SQLite 上就是 DbClient 本身）。次序判据不变。
+    const bigTransaction = engine.indexOf(
+      'const receipt = await databaseSessionFor(db).transaction(async (tx) =>',
+    )
+    const participant = engine.indexOf('resourceSession.participantInTransaction(syncMembers(tx),')
+    const authorize = engine.indexOf(
+      'await resourceParticipant.authorizeAndCommit(deps.authority, plan)',
+    )
     expect(prepare).toBeGreaterThanOrEqual(0)
     expect(prestage).toBeGreaterThan(prepare)
     expect(bigTransaction).toBeGreaterThan(prestage)
@@ -1705,8 +1711,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(sqliteEngine).not.toContain('createLegacyResourcePackageMutationAdapter')
     expect(sqliteEngine).toContain('resourceBundleApplies')
     expect(sqliteEngine).toContain("state: 'applying'")
-    expect(sqliteEngine).toContain('provider.revalidateInTx?.(tx)')
-    expect(sqliteEngine).toContain('provider.finalizeInTx?.(tx, receiptValue)')
+    // RFC-359 W4-D23b：大事务改走中立会话后，仍是同步面的 provider 钩子经具名适配器
+    // `sqliteMembers(tx)` 拿到同一个句柄（SQLite 上就是 DbClient 本身），位置与次序不变。
+    expect(sqliteEngine).toContain('provider.revalidateInTx?.(sqliteMembers(tx))')
+    expect(sqliteEngine).toContain('provider.finalizeInTx?.(sqliteMembers(tx), receiptValue)')
     expect(sqliteEngine).toContain('ACTIVE_BUNDLE_APPLIES')
     expect(sqliteEngine).toContain('convergeResourceBundleApplies')
     expect(sqliteEngine).toContain('deps.resourcePackageMutations ??')

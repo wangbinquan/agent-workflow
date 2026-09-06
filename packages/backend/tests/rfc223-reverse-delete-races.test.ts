@@ -222,7 +222,7 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     expect(readFileSync(join(root, 'files', 'SKILL.md'), 'utf8')).toContain('keep me')
     const trashDir = join(appHome, 'skills', '.trash')
     expect(existsSync(trashDir) ? readdirSync(trashDir) : []).toEqual([])
-    expect(getActiveOp(db, skill.id)).toBeNull()
+    expect(await getActiveOp(db, skill.id)).toBeNull()
     expect(
       await db
         .select()

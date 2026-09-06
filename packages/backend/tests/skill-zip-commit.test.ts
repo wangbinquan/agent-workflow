@@ -583,8 +583,8 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       { versioned: staleDecision },
       {
         actor: ADMIN,
-        __beforeOverwriteVersionForTest: ({ skillId }) => {
-          commitSkillVersion(
+        __beforeOverwriteVersionForTest: async ({ skillId }) => {
+          await commitSkillVersion(
             h.db,
             h.fsOpts,
             skillId,
@@ -620,7 +620,7 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       { 'owner-drift': decision },
       {
         actor: ADMIN,
-        __beforeOverwriteVersionForTest: ({ skillId }) => {
+        __beforeOverwriteVersionForTest: async ({ skillId }) => {
           h.db
             .update(skills)
             .set({ ownerUserId: BOB.user.id, aclRevision: decision.expectedAclRevision + 1 })
@@ -651,7 +651,7 @@ describe('RFC-223 AC19 owner-scoped ZIP import', () => {
       { 'visibility-drift': decision },
       {
         actor: ADMIN,
-        __beforeOverwriteVersionForTest: ({ skillId }) => {
+        __beforeOverwriteVersionForTest: async ({ skillId }) => {
           h.db
             .update(skills)
             .set({ visibility: 'private', aclRevision: decision.expectedAclRevision + 1 })

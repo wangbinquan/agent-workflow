@@ -29,6 +29,8 @@
 // op-lock + staged-version roll-forward path.
 
 import { and, eq } from 'drizzle-orm'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -89,6 +91,16 @@ import {
   type IntentJournalArtifactV1,
 } from '@/modules/intent/domain/journalArtifacts'
 import type { SqliteIntentApplyArtifactLifecycle } from './sqliteIntentApplyArtifactLifecycle'
+
+/**
+ * RFC-359 W4-D23b —— 意图应用的大事务已改走中立事务原语，但链上还有一批**同步**的 `*InTx` 成员
+ * 没迁完。把中立句柄重新窄化给它们**不是强转谎话**：SQLite 会话交出的事务句柄**就是 `DbClient`
+ * 本身**（`createSqliteDatabaseSession`），这些成员运行时拿到的对象逐字相同。
+ * 退役条件同 bundle apply：那批成员迁完、两套 apply 引擎合一时随之消失。
+ */
+function syncMembers(tx: DatabaseTransaction): DbTxSync {
+  return tx as unknown as DbTxSync
+}
 
 export interface IntentApplyReceipt {
   journalId: string
@@ -434,7 +446,7 @@ async function applyInner(
 
     // ── the big transaction (design §9.4 ③) ──
     const applied: IntentApplyReceipt['applied'] = []
-    const receipt = dbTxSync(db, (tx) => {
+    const receipt = await databaseSessionFor(db).transaction(async (tx) => {
       const cas = tx
         .update(intentApplyJournal)
         .set({ state: 'applying', updatedAt: Date.now() })
@@ -444,11 +456,13 @@ async function applyInner(
         throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
       }
 
-      const sessionRow = tx
-        .select()
-        .from(intentSessions)
-        .where(eq(intentSessions.id, input.sessionId))
-        .get()
+      const sessionRow = (
+        await tx
+          .select()
+          .from(intentSessions)
+          .where(eq(intentSessions.id, input.sessionId))
+          .limit(1)
+      )[0]
       const baseline = {
         claimSession: claim.session,
         claimDraftId: claim.draft.id,
@@ -458,12 +472,14 @@ async function applyInner(
       const sessionNow = baseline.sessionNow
       const bundleCreatedNames = bundleCreatedNamesOf(plans)
 
-      const resourceParticipant = resourceSession.participantInTransaction(tx, {
+      // RFC-359 W4-D23b：同 bundle apply——大事务已走中立会话，链上仍是同步面的成员经具名窄化
+      // 拿到同一个句柄（SQLite 上就是 DbClient 本身，见 `createSqliteDatabaseSession`）。
+      const resourceParticipant = resourceSession.participantInTransaction(syncMembers(tx), {
         bundleCreatedNames,
       })
       for (const [index, plan] of plans.entries()) {
         const op = requireOpForPlan(bundle.ops[index], plan)
-        resourceParticipant.authorizeAndCommit(deps.authority, plan)
+        await resourceParticipant.authorizeAndCommit(deps.authority, plan)
         applied.push(appliedEntryOf(op))
         tx.insert(intentProvenance)
           .values({

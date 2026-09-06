@@ -13,7 +13,6 @@ import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentApplyJournal, intentSessions, skillOperations, users } from '../src/db/schema'
-import { dbTxSync } from '../src/db/txSync'
 import {
   __intentApplyLockCountForTests,
   __withSessionApplyLockForTests,

@@ -391,7 +391,7 @@
       "id": "rfc359-sync-transaction-surface",
       "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
       "symbol": "SYNC_TRANSACTION_DEBT",
-      "baseline": 33,
+      "baseline": 32,
       "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 32（调用点合计 100）；账本正文逐文件记着各自的调用点数，逐字相等。"
     },
     {
@@ -455,10 +455,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4964,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D23b：4963 → 4964，净增一条 `legacy-outbound` 的**类型**边——技能机器迁到中立事务原语后，这些 legacy 文件 import 的是 `platform/persistence/databaseTransaction` 的 `DatabaseTransaction` / `ProviderNeutralDatabase`，取代了原来的 `db/txSync` 的 `DbTxSync`。换句话说这一格不是新增耦合，是**同一条依赖换了更中立的目标**：旧目标是 bun:sqlite 专属的同步事务面，新目标是两个 provider 共用的原语。这些 legacy 文件本就整体挂在 W9 退役波次上，边随文件一起消失。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",

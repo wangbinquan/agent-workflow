@@ -19,7 +19,7 @@ type ReceiptOf<K extends CatalogSelectorKind> = Extract<
 type CommitPort<K extends CatalogSelectorKind> = (
   authority: ResourceRequestContext,
   plan: PlanOf<K>,
-) => ReceiptOf<K>
+) => ReceiptOf<K> | Promise<ReceiptOf<K>>
 
 export interface IntentApplyResourceCommitPorts {
   readonly agent: CommitPort<'agent'>

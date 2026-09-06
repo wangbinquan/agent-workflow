@@ -7,6 +7,7 @@
 // dependency port so infrastructure never imports the compatibility service layer in reverse.
 
 import { eq } from 'drizzle-orm'
+import type { DbTxSync } from '@/db/txSync'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   databaseSessionFor,
@@ -32,7 +33,6 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { plugins, skillOperations } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Logger } from '@/util/log'

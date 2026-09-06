@@ -25,7 +25,6 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { dbTxSync } from '../src/db/txSync'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   abortStagedSkillVersion,

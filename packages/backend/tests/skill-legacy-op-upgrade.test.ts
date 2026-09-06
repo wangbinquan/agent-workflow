@@ -24,7 +24,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
-import { dbTxSync } from '../src/db/txSync'
 import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 import {

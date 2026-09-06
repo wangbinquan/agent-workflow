@@ -54,6 +54,11 @@ const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
   'modules/resource-catalog/infrastructure/pluginRepository.ts': {
     'agents.plugins': '同上，按 `%"<pluginId>"%` 找引用',
   },
+  // RFC-359 W4-D23b：这份反查随技能删除路径迁到中立事务后进入 PG 执行面，守卫因此第一次看到它。
+  // 判据与上面两条同源：按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对。
+  'modules/resource-catalog/infrastructure/legacy/resourceRefs.ts': {
+    'args.column': '按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
+  },
   'platform/events/committed/postgresqlPersistence.ts': {
     'committedEventDeliveries.consumerId': "按平台常量前缀 'event-center.%' 过滤消费者",
   },

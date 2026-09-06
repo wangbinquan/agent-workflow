@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
 import type { SqliteSkillArtifactCompensation } from '../ports/skillArtifactCompensation'
 import type { Logger } from '@/util/log'
@@ -107,7 +107,9 @@ async function rollForward(
       continue
     }
     try {
-      dbTxSync(db, (transaction) => rc.finishOperation(transaction, stage.opId))
+      await databaseSessionFor(db).transaction(
+        async (transaction) => await rc.finishOperation(transaction, stage.opId),
+      )
     } catch (error) {
       complete = false
       log.warn('intent-skill-finish-replayed-or-failed', {

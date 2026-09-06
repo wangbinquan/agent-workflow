@@ -482,7 +482,10 @@ export async function commitSkillZipBuffer(
   aclOpts: {
     actor: Actor
     /** Test-only race seam after preview checks, before the version funnel tx. */
-    __beforeOverwriteVersionForTest?: (target: { skillId: string; candidateName: string }) => void
+    __beforeOverwriteVersionForTest?: (target: {
+      skillId: string
+      candidateName: string
+    }) => void | Promise<void>
   },
 ): Promise<CommitSkillZipResponse> {
   // Re-parse only the archive at apply time. Existing DB rows are never
@@ -642,7 +645,7 @@ export async function commitSkillZipBuffer(
         )
         outcome.created.push(created)
       } else {
-        aclOpts.__beforeOverwriteVersionForTest?.({
+        await aclOpts.__beforeOverwriteVersionForTest?.({
           skillId: overwriteTarget.id,
           candidateName: candidate.name,
         })

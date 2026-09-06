@@ -26,7 +26,6 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skillOperationLocks, skillOperations, skills, skillVersions } from '../src/db/schema'
-import { dbTxSync } from '../src/db/txSync'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 import {
   skillFilesAbs,

@@ -11,7 +11,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { dbTxSync } from '../src/db/txSync'
 import { skills } from '../src/db/schema'
 import {
   createManagedSkill,

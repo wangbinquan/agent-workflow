@@ -246,10 +246,12 @@ export interface TaskExecutionResourceSnapshotInTx {
 
 export interface IntentApplyResourceParticipantInTx {
   readonly [intentApplyResourceParticipantInTxBrand]: 'intent-apply-resource-participant'
+  // RFC-359 W4-D23b：技能提交面迁到中立事务后是异步的，这里放宽成「同步或异步都行」——
+  // PostgreSQL 侧本来就 await 它（`postgresqlIntentApplyOperations`），SQLite 侧现在也 await。
   authorizeAndCommit(
     authority: ResourceRequestContext,
     plan: VersionedIntentResourceChangesetPlan,
-  ): IntentResourceChangesetReceipt
+  ): IntentResourceChangesetReceipt | Promise<IntentResourceChangesetReceipt>
 }
 
 // memory 的资源 scope（agent / workflow）访问判定参与者**不在这里**：那是 memory 自己声明的端口

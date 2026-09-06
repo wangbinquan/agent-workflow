@@ -27,7 +27,6 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
 import { memories } from '../src/db/schema'
-import { dbTxSync } from '../src/db/txSync'
 import {
   fusedProvenanceStamp,
   memoriesToMarkFused,

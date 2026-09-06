@@ -668,12 +668,12 @@ export function createLegacyIntentApplyResourceSession(
     return prepared
   }
 
-  const commit = <K extends CatalogSelectorKind>(
+  const commit = async <K extends CatalogSelectorKind>(
     tx: DbTxSync,
     context: LegacyIntentApplyCommitContext,
     authority: ResourceRequestContext,
     plan: PlanOf<K>,
-  ): ReceiptOf<K> => {
+  ): Promise<ReceiptOf<K>> => {
     if (authority !== options.authority) throw new Error('foreign-intent-apply-authority')
     const prepared = requirePrepared(plan)
     switch (prepared.kind) {
@@ -723,13 +723,16 @@ export function createLegacyIntentApplyResourceSession(
       case 'skill-create': {
         const stage = skillStages.get(plan.operationId)
         if (stage === undefined) throw new Error('skill stage missing')
-        dependencies.commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
+        await dependencies.commitSkillReadyInTx(tx, {
+          skillId: stage.skillId,
+          opId: stage.opId,
+        })
         break
       }
       case 'skill-update': {
         const staged = skillVersionStages.get(plan.operationId)
         if (staged === undefined) throw new Error('skill version stage missing')
-        dependencies.commitSkillVersionInTx(tx, staged, {
+        await dependencies.commitSkillVersionInTx(tx, staged, {
           source: 'editor',
           authorUserId: actor.user.id,
           expectedOwnerUserId: actor.user.id,
