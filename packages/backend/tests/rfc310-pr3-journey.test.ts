@@ -142,8 +142,10 @@ async function pumpUntil(
   budgetMs = 90_000,
 ): Promise<MissionRow> {
   let lastError: unknown = null
+  let rounds = 0
   const deadline = Date.now() + budgetMs
   for (let i = 0; Date.now() < deadline; i += 1) {
+    rounds = i + 1
     const mission = await fx.store.getMission(missionId)
     if (mission === null) throw new Error(`mission disappeared: ${missionId}`)
     if (await predicate(mission)) return mission
@@ -157,8 +159,17 @@ async function pumpUntil(
     await new Promise((resolveSleep) => setTimeout(resolveSleep, 25))
   }
   const last = await fx.store.getMission(missionId)
+  // 耗尽时把**为什么停住**一并带出来。这条红在 2026-09-06/07 跨 5 个 commit、3 个 OS lane
+  // 复现了 6 次，每次只留下 `status=working blockCode=null`——不足以归因，于是每个撞上的人
+  // 都要重新查一遍。audit-backlog 记的验证办法就是「复现时 dump development_effects 的
+  // (state, effect_kind)」：悬挂在 `prepared` 的自治 effect 是首要嫌疑（去重逃生门只认
+  // `dispatched`），dump 出来就能一眼证实或排除，不必再赌能不能本地复现。
+  const unsettled = await fx.store.listUnsettledEffects(missionId)
+  const effectSummary =
+    unsettled.length === 0 ? 'none' : unsettled.map((e) => `${e.effectKind}:${e.state}`).join(',')
   throw new Error(
     `pumpUntil exhausted after ${budgetMs}ms: status=${last?.status ?? 'gone'} blockCode=${last?.blockCode ?? 'null'}` +
+      ` unsettledEffects=[${effectSummary}] rounds=${rounds}` +
       (lastError instanceof Error ? ` lastError=${lastError.message}` : ''),
   )
 }

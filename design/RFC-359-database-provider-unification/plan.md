@@ -1017,6 +1017,32 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   **锁「只剩一份、四个原生文件必须保持不存在」**）。同步事务面账本 32 → **30 个文件、83 → 81 个调用点**；
   RFC-294 的 off-DAG offered 边少一条（`postgresqlSkillRepository → memory` 随文件退役，早于其 W4-E3 计划波次）。
 
+  ### D28a ✅ 落地（2026-09-07）：任务归属端口的双引擎取证基线
+
+  下一对（`TaskOwnershipPersistence`）与合一前的技能目录**同形**：SQLite 是 43 行薄适配器套
+  563 行成熟同步实现，PostgreSQL 是 444 行原生重写；覆盖同样倒挂——
+  `rfc328-durable-ownership.test.ts` 有 1495 行正确性矩阵，**全部只跑 SQLite**，PG 那 444 行的
+  owner CAS / 租约 / 撤销 / 恢复逻辑**没有任何活着的行为覆盖**（现有引用全是源码文本锁）。
+
+  按 D23a 的方法论先取证：新增 `rfc359-w4-d28a-task-ownership-conformance.test.ts`，
+  九个场景通过同一个端口在两个引擎上各跑一遍（**18 条全绿**）：认领 / 重复认领冲突 /
+  不存在的 intent / 心跳续租（revision 与租约都要推进）/ 撤销要对上 revision /
+  撤销后心跳被围栏挡住 / 标记需要恢复 / 旧世代 daemon 被持锁者撤销 / 无 owner read 回 null。
+  **结论：这一对的端口面本来就一致**（不像技能那次一跑就照出 PG 缺一道屏障），
+  所以 D28b 的合一风险主要在事务原语本身，不在行为分叉。
+
+  **D28b 的形状已勘明（本轮起手后回退，未提交）**：`withOwnedTaskTx` 是
+  `assertTaskOwnerTx`（`ownedTaskExecution.ts` 里的中立 owner CAS 围栏）**逐字重复的一份**，
+  只是外面裹了 `dbTxSync`——D21 的去重没走完最后一步。把它改成中立事务原语会连锁拉动
+  `sqliteTaskExecutionEffect.ts`(1756 行 / 66 处同步调用)、`services/task.ts`、
+  `platform/persistence/sqlite/taskLifecycle.ts`、`legacySqliteReview.ts` 等**十余个文件**
+  一起转异步（实测一口气拉到 140+ 处类型错）。另有一处**现成的合一红利**：
+  `sqliteTerminalizeExecutionIntent.ts` 与 `effectQuiescence.ts` 的
+  `terminalizeTaskExecutionIntentsTx` 是同一函数的两份，而中立那份**更强**——它校验
+  terminalize 的行数与预期相等、不等就抛 `task-continuation-stale`，同步那份直接放过。
+  合一时按「好的那份」抬齐即可。这一刀建议**单独一个 PR 从下往上做**（先 owner 围栏去重，
+  再 effect store，最后调用方），不要和别的改动混在一起。
+
   ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
 
   上面两条勘察（D23b 卡在 bundle apply 的同步大事务、剩余 task-execution 对卡在 `withOwnedTaskTx`）

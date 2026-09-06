@@ -4022,6 +4022,13 @@ mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次�
 （`external three-file bundle …` 与 `direct body-only …`），都是整 90s 墙钟耗尽。重跑该分片即绿——
 再次印证是间歇竞态而非代码回归（该 commit 只删了零消费者的 legacy 工作组引擎，与本模块无交集）。
 
+**第五次实撞（2026-09-07，`e02e9edbe` ubuntu 分片 2/4）**：`direct body-only …` 一条，90s 墙钟耗尽，
+形态逐字相同。该 commit 只改了一条源码锁的指向（RFC-284 委托锁改指活着的 mcpRuntimeTestTransitions），
+与本模块零交集；其父 commit `b29c3ffac`（RFC-359 W4-D23c 技能目录合一）同样与 mission / automation
+路径无交集——D23c 动的是技能目录与 ACL 读面，本用例整条路径不经过它们。至此该形态已跨 **5 个不同
+commit、3 个操作系统 lane** 复现，作者各不相同，可以确定不是任何单次改动的回归。
+**它现在是 main 上最频繁的一条间歇红**，建议按上面那条嫌疑优先证实 / 证伪。
+
 **一条具体嫌疑（2026-09-06 读码得出，尚未证实）**：`commitAndHandle` 的去重逃生门只认
 **dispatched** 的自治 effect：
 
