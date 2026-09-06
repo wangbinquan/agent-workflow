@@ -74,49 +74,49 @@
       ],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:113",
-      "line": 113,
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#transaction:114",
+      "line": 114,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#updateAuthLoginPolicy",
       "status": "co-located-risk",
       "symbol": "updateAuthLoginPolicy",
       "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:204",
-      "line": 204,
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#transaction:211",
+      "line": 211,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#createPasswordLoginSession",
       "status": "clear",
       "symbol": "createPasswordLoginSession",
       "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#dbTxSync:57",
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#transaction:57",
       "line": 57,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#getAuthMethodDiscovery",
       "status": "clear",
       "symbol": "getAuthMethodDiscovery",
       "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#dbTxSync:108",
-      "line": 108,
+      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#transaction:109",
+      "line": 109,
       "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createLoginSession",
       "status": "clear",
       "symbol": "createLoginSession",
       "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
@@ -3918,7 +3918,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8a9ab8880b2a75c6ecc16cca11823662b96bf6ee54448626d37a7961f6a8d1f9",
+  "sourceDigest": "sha256:8491db5a8320eca35147c14753caba7e4583546f71f480acf2b1ef0d8256faa6",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
