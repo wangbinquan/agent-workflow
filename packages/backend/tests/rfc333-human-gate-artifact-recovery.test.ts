@@ -6,7 +6,6 @@ import { eq, sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
 import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { HumanGateOperationRecovery } from '@/modules/collaboration/application/recoverHumanGateOperations'
 import type {
   HumanGateArtifactStore,
