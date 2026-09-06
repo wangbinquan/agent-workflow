@@ -1672,7 +1672,7 @@ async function driveMessageTurn(input: {
   return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
 }
 
-type WakeItem =
+export type WakeItem =
   | Readonly<{
       kind: 'leader'
       reason: 'initial' | 'new-content' | 'gate-rejected' | 'wrap-up'
@@ -1682,7 +1682,7 @@ type WakeItem =
   | Readonly<{ kind: 'fc-initial'; memberId: string }>
   | Readonly<{ kind: 'fc-claim'; memberId: string; assignmentIds: readonly string[] }>
 
-interface InflightTurns {
+export interface InflightTurns {
   leaderRunning: boolean
   readonly runningAssignmentIds: Set<string>
   readonly messageTurnMemberIds: Set<string>
@@ -1690,12 +1690,12 @@ interface InflightTurns {
   readonly taskTurnMemberIds: Set<string>
 }
 
-interface WakeSet {
+export interface WakeSet {
   readonly items: readonly WakeItem[]
   readonly capExceeded: boolean
 }
 
-type WorkgroupOutcome =
+export type WorkgroupOutcome =
   | Readonly<{ kind: 'running' }>
   | Readonly<{ kind: 'done' }>
   | Readonly<{ kind: 'awaiting-gate' }>
@@ -1770,7 +1770,7 @@ function trailingNudgeCount(messages: readonly WorkgroupMessage[]): number {
   return count
 }
 
-function deriveWakeSet(snapshot: WorkgroupTurnsSnapshot, inflight: InflightTurns): WakeSet {
+export function deriveWakeSet(snapshot: WorkgroupTurnsSnapshot, inflight: InflightTurns): WakeSet {
   if (snapshot.state.gateStatus === 'awaiting_confirmation') {
     return { items: [], capExceeded: false }
   }
@@ -1923,7 +1923,7 @@ function deriveWakeSet(snapshot: WorkgroupTurnsSnapshot, inflight: InflightTurns
   return { items, capExceeded }
 }
 
-function decideWorkgroupOutcome(
+export function decideWorkgroupOutcome(
   snapshot: WorkgroupTurnsSnapshot,
   inflight: InflightTurns,
   wake: WakeSet,

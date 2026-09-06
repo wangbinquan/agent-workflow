@@ -26,15 +26,25 @@ import { ulid } from 'ulid'
 import type { WorkgroupAssignment, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
+// RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
+// 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
   deriveWakeSet,
-  isReadonlyAgentPermission,
-  type WakeInput,
   type WakeItem,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+// RFC-359 W4-D19c-tail：「只读成员」判据（edit 与 write 均显式 deny）合一后住在中立的
+// 回合持久化里，由它算出 `memberAgents[].readonly` 交给驱动。
+import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
 import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
 import { workgroupTaskState } from '../src/db/schema'
+
+/** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
+function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return deriveWakeSet(snapshot, inflight)
+}
 
 // ---------------------------------------------------------------------------
 // fixtures（形状照抄 rfc215-fc-dual-track.test.ts）
@@ -124,7 +134,7 @@ function input(overrides: Partial<WakeInput> = {}): WakeInput {
 }
 
 const claims = (items: readonly WakeItem[]) =>
-  items.filter((i): i is Extract<WakeItem, { kind: 'fc_claim' }> => i.kind === 'fc_claim')
+  items.filter((i): i is Extract<WakeItem, { kind: 'fc-claim' }> => i.kind === 'fc-claim')
 
 // ---------------------------------------------------------------------------
 // ① isReadonlyAgentPermission —— 保守判定矩阵
@@ -164,7 +174,7 @@ describe('isReadonlyAgentPermission — 只有显式 edit+write 双 deny 才算�
 describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', () => {
   test('只读成员不参与新认领：open 卡全部配给可写成员', () => {
     const cards = [asg(), asg(), asg(), asg()]
-    const w = deriveWakeSet(input({ assignments: cards, readonlyMemberIds: new Set(['m-a']) }))
+    const w = deriveWake(input({ assignments: cards, readonlyMemberIds: new Set(['m-a']) }))
     const got = claims(w.items)
     expect(got.length).toBeGreaterThan(0)
     expect(got.every((c) => c.memberId !== 'm-a')).toBe(true)
@@ -175,8 +185,8 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
   test('全员只读 ⇒ 回退不过滤（绝不 fc-deadlock）——行为与缺省逐字一致', () => {
     const cards = [asg(), asg()]
     const all = new Set(['m-a', 'm-b', 'm-c'])
-    const filtered = deriveWakeSet(input({ assignments: cards, readonlyMemberIds: all }))
-    const baseline = deriveWakeSet(input({ assignments: cards }))
+    const filtered = deriveWake(input({ assignments: cards, readonlyMemberIds: all }))
+    const baseline = deriveWake(input({ assignments: cards }))
     expect(claims(filtered.items)).toEqual(claims(baseline.items))
     expect(claims(filtered.items).length).toBeGreaterThan(0)
   })
@@ -185,7 +195,7 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
     // 2026-07-22 实测形态：coder/tester（可写）整程在批里，wake 时唯一空闲的
     // 是只读成员——旧实现按「idle 集过滤后为空」回退不过滤，写活被反复盲派。
     const cards = [asg(), asg(), asg()]
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         assignments: cards,
         readonlyMemberIds: new Set(['m-a']),
@@ -202,7 +212,7 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
 
   test('roster 全只读 + 部分忙 ⇒ 仍回退给空闲只读成员（deadlock 防线不受 roster 判定影响）', () => {
     const cards = [asg(), asg()]
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         assignments: cards,
         readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']),
@@ -222,7 +232,7 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
 
   test('恢复批（dispatched 集结）不过滤：只读 assignee 的既派卡照常恢复', () => {
     const card = asg({ status: 'dispatched', assigneeMemberId: 'm-a' })
-    const w = deriveWakeSet(input({ assignments: [card], readonlyMemberIds: new Set(['m-a']) }))
+    const w = deriveWake(input({ assignments: [card], readonlyMemberIds: new Set(['m-a']) }))
     const got = claims(w.items)
     expect(got.length).toBe(1)
     expect(got[0]?.memberId).toBe('m-a')
@@ -230,16 +240,16 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
   })
 
   test('fc_initial 首轮拆解不过滤：只读成员照常参与', () => {
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({ budgetUsed: 0, readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']) }),
     )
-    const inits = w.items.filter((i) => i.kind === 'fc_initial')
+    const inits = w.items.filter((i) => i.kind === 'fc-initial')
     expect(inits.length).toBe(3)
   })
 
   test('字段缺省 ⇒ 旧行为逐字不变（roster 序均分含全部成员）', () => {
     const cards = [asg(), asg(), asg()]
-    const w = deriveWakeSet(input({ assignments: cards }))
+    const w = deriveWake(input({ assignments: cards }))
     const members = claims(w.items).map((c) => c.memberId)
     expect(members).toEqual(['m-a', 'm-b', 'm-c'])
   })

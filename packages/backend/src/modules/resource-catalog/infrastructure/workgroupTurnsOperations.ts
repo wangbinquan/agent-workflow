@@ -86,7 +86,11 @@ function recordJson(value: string | null): Readonly<Record<string, unknown>> | n
   return Object.fromEntries(Object.entries(parsed))
 }
 
-function readonlyPermission(permission: unknown): boolean {
+/**
+ * 「只读成员」判据：edit 与 write 均显式 'deny'。合一前这条住在
+ * `legacy/workgroup/wake.ts` 的 `isReadonlyAgentPermission`；现在只有这一份。
+ */
+export function readonlyPermission(permission: unknown): boolean {
   if (typeof permission !== 'object' || permission === null || Array.isArray(permission)) {
     return false
   }

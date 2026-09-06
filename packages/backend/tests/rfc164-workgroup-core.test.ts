@@ -44,11 +44,23 @@ import {
   IllegalWorkgroupAssignmentTransition,
   WORKGROUP_ASSIGNMENT_TRANSITIONS,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
+// RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
+// 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
-  type WakeInput,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+
+/** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
+function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return deriveWakeSet(snapshot, inflight)
+}
+function decideOutcome(input: WakeInput, wake: ReturnType<typeof deriveWake>) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return decideWorkgroupOutcome(snapshot, inflight, wake)
+}
 
 // ---------------------------------------------------------------------------
 // fixtures
@@ -443,20 +455,20 @@ describe('RFC-164 core — rendered blocks', () => {
 
 describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
   test('initial: leader wakes once, nothing else', () => {
-    const w = deriveWakeSet(wakeInput())
+    const w = deriveWake(wakeInput())
     expect(w.items).toEqual([{ kind: 'leader', reason: 'initial' }])
   })
 
   test('dispatched agent assignment wakes immediately; human assignment does not', () => {
     const agentA = asg({ status: 'dispatched', assigneeMemberId: 'm-coder' })
     const humanA = asg({ status: 'dispatched', assigneeMemberId: 'm-pm' })
-    const w = deriveWakeSet(wakeInput({ assignments: [agentA, humanA], budgetUsed: 1 }))
+    const w = deriveWake(wakeInput({ assignments: [agentA, humanA], budgetUsed: 1 }))
     expect(w.items).toEqual([{ kind: 'assignment', assignmentId: agentA.id }])
   })
 
   test('batch semantics: leader does NOT re-wake while agent work is dispatched/running', () => {
     const running = asg({ status: 'running', assigneeMemberId: 'm-coder' })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         assignments: [running],
         messages: [msg({ kind: 'result', bodyMd: 'early result' })],
@@ -474,7 +486,7 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
   test('awaiting_human (clarify) and undelivered human assignments do NOT block the leader', () => {
     const parked = asg({ status: 'awaiting_human', assigneeMemberId: 'm-coder' })
     const human = asg({ status: 'dispatched', assigneeMemberId: 'm-pm' })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         assignments: [parked, human],
         messages: [msg({ kind: 'result', bodyMd: 'r1' })],
@@ -486,7 +498,7 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
 
   test('leader does not re-wake without new content (cursor consumed)', () => {
     const m1 = msg({ kind: 'result' })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         messages: [m1],
         cursors: new Map([['m-lead', m1.id]]),
@@ -503,10 +515,10 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
       bodyMd: '@coder ping',
     })
     // switch off → no message turn (leader may wake on new content instead)
-    const off = deriveWakeSet(wakeInput({ messages: [mention], budgetUsed: 1 }))
-    expect(off.items.some((i) => i.kind === 'message_turn')).toBe(false)
+    const off = deriveWake(wakeInput({ messages: [mention], budgetUsed: 1 }))
+    expect(off.items.some((i) => i.kind === 'message-turn')).toBe(false)
 
-    const on = deriveWakeSet(
+    const on = deriveWake(
       wakeInput({
         config: cfg({
           switches: { shareOutputs: true, directMessages: true, blackboard: false },
@@ -517,10 +529,10 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
         cursors: new Map([['m-lead', mention.id]]),
       }),
     )
-    expect(on.items).toEqual([{ kind: 'message_turn', memberId: 'm-coder' }])
+    expect(on.items).toEqual([{ kind: 'message-turn', memberId: 'm-coder' }])
 
     // busy member (active assignment) gets it at next injection, not a turn
-    const busy = deriveWakeSet(
+    const busy = deriveWake(
       wakeInput({
         config: cfg({
           switches: { shareOutputs: true, directMessages: true, blackboard: false },
@@ -536,11 +548,11 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
         },
       }),
     )
-    expect(busy.items.some((i) => i.kind === 'message_turn')).toBe(false)
+    expect(busy.items.some((i) => i.kind === 'message-turn')).toBe(false)
   })
 
   test('max_rounds suppresses the leader wake and reports capExceeded', () => {
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         messages: [msg({ kind: 'result' })],
         budgetUsed: 10, // == maxRounds
@@ -551,7 +563,7 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
   })
 
   test('gate awaiting confirmation freezes all wakes', () => {
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         assignments: [asg({ status: 'dispatched' })],
         gate: { declaredDone: true, awaitingConfirmation: true, rejected: false },
@@ -562,7 +574,7 @@ describe('RFC-164 core — deriveWakeSet (leader_worker)', () => {
   })
 
   test('gate rejection re-wakes the leader', () => {
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         budgetUsed: 3,
         gate: { declaredDone: false, awaitingConfirmation: false, rejected: true },
@@ -580,10 +592,10 @@ describe('RFC-164 core — deriveWakeSet (free_collab)', () => {
   })
 
   test('initial burst: ALL agent members wake in parallel (决策 #17); humans never', () => {
-    const w = deriveWakeSet(wakeInput({ config: fcCfg }))
+    const w = deriveWake(wakeInput({ config: fcCfg }))
     expect(w.items).toEqual([
-      { kind: 'fc_initial', memberId: 'm-lead' },
-      { kind: 'fc_initial', memberId: 'm-coder' },
+      { kind: 'fc-initial', memberId: 'm-lead' },
+      { kind: 'fc-initial', memberId: 'm-coder' },
     ])
   })
 
@@ -601,9 +613,9 @@ describe('RFC-164 core — deriveWakeSet (free_collab)', () => {
         taskTurnMemberIds: new Set(),
       },
     })
-    const wake = deriveWakeSet(input)
+    const wake = deriveWake(input)
     expect(wake).toEqual({ items: [], capExceeded: false })
-    expect(decideWorkgroupOutcome(input, wake)).toEqual({ kind: 'running' })
+    expect(decideOutcome(input, wake)).toEqual({ kind: 'running' })
   })
 
   // RFC-215 改写：原「一人一张」单卡配对由批量均分取代（design §2.2/§11——
@@ -612,16 +624,16 @@ describe('RFC-164 core — deriveWakeSet (free_collab)', () => {
     const t1 = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
     const t2 = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
     const t3 = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
-    const w = deriveWakeSet(wakeInput({ config: fcCfg, assignments: [t1, t2, t3], budgetUsed: 2 }))
+    const w = deriveWake(wakeInput({ config: fcCfg, assignments: [t1, t2, t3], budgetUsed: 2 }))
     expect(w.items).toEqual([
-      { kind: 'fc_claim', memberId: 'm-lead', assignmentIds: [t1.id, t2.id] },
-      { kind: 'fc_claim', memberId: 'm-coder', assignmentIds: [t3.id] },
+      { kind: 'fc-claim', memberId: 'm-lead', assignmentIds: [t1.id, t2.id] },
+      { kind: 'fc-claim', memberId: 'm-coder', assignmentIds: [t3.id] },
     ])
   })
 
   test('fc cap: member-run total suppresses further claims with capExceeded', () => {
     const open = asg({ status: 'open', assigneeMemberId: null })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       wakeInput({
         config: { ...fcCfg, maxRounds: 3 },
         assignments: [open],
@@ -636,8 +648,8 @@ describe('RFC-164 core — deriveWakeSet (free_collab)', () => {
 describe('RFC-164 core — decideWorkgroupOutcome', () => {
   test('anything in flight or wakeable → running', () => {
     const input = wakeInput()
-    const wake = deriveWakeSet(input)
-    expect(decideWorkgroupOutcome(input, wake)).toEqual({ kind: 'running' })
+    const wake = deriveWake(input)
+    expect(decideOutcome(input, wake)).toEqual({ kind: 'running' })
   })
 
   test('lw declaredDone: gate off → done; gate on → awaiting_gate', () => {
@@ -645,7 +657,7 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
       budgetUsed: 2,
       gate: { declaredDone: true, awaitingConfirmation: false, rejected: false },
     })
-    expect(decideWorkgroupOutcome(base, { items: [], capExceeded: false })).toEqual({
+    expect(decideOutcome(base, { items: [], capExceeded: false })).toEqual({
       kind: 'done',
     })
     const gated = wakeInput({
@@ -653,8 +665,8 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
       budgetUsed: 2,
       gate: { declaredDone: true, awaitingConfirmation: false, rejected: false },
     })
-    expect(decideWorkgroupOutcome(gated, { items: [], capExceeded: false })).toEqual({
-      kind: 'awaiting_gate',
+    expect(decideOutcome(gated, { items: [], capExceeded: false })).toEqual({
+      kind: 'awaiting-gate',
     })
   })
 
@@ -664,8 +676,8 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
       assignments: [asg({ status: 'awaiting_human' })],
       cursors: new Map([['m-lead', 'zzz']]),
     })
-    expect(decideWorkgroupOutcome(input, deriveWakeSet(input))).toEqual({
-      kind: 'awaiting_human',
+    expect(decideOutcome(input, deriveWake(input))).toEqual({
+      kind: 'awaiting-human',
       reason: 'clarify-or-delivery',
     })
   })
@@ -675,16 +687,15 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
   // spent. rfc207-human-derived-clarify.test.ts owns the full nudge→park ladder.
   test('leader idle stall nudges before parking', () => {
     const input = wakeInput({ budgetUsed: 2 })
-    expect(decideWorkgroupOutcome(input, { items: [], capExceeded: false })).toEqual({
+    expect(decideOutcome(input, { items: [], capExceeded: false })).toEqual({
       kind: 'leader-nudge',
-      nudgeCount: 0,
     })
   })
 
   test('cap exhaustion → failed max-rounds (both modes)', () => {
     const input = wakeInput({ budgetUsed: 10, messages: [msg({ kind: 'result' })] })
-    const wake = deriveWakeSet(input)
-    expect(decideWorkgroupOutcome(input, wake)).toEqual({ kind: 'failed', reason: 'max-rounds' })
+    const wake = deriveWake(input)
+    expect(decideOutcome(input, wake)).toEqual({ kind: 'failed', reason: 'max-rounds' })
   })
 
   test('fc: list drained → done; open-but-unclaimable → fc-deadlock', () => {
@@ -694,7 +705,7 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
       budgetUsed: 4,
       assignments: [asg({ status: 'done' }), asg({ status: 'failed' })],
     })
-    expect(decideWorkgroupOutcome(drained, { items: [], capExceeded: false })).toEqual({
+    expect(decideOutcome(drained, { items: [], capExceeded: false })).toEqual({
       kind: 'done',
     })
 
@@ -717,7 +728,7 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
       budgetUsed: 1,
       assignments: [asg({ status: 'open', assigneeMemberId: null })],
     })
-    expect(decideWorkgroupOutcome(stuck, deriveWakeSet(stuck))).toEqual({
+    expect(decideOutcome(stuck, deriveWake(stuck))).toEqual({
       kind: 'failed',
       reason: 'fc-deadlock',
     })

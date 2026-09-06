@@ -14,11 +14,25 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { WorkgroupMessage, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { WG_LEADER_IDLE_NUDGE_LIMIT } from '@agent-workflow/shared'
+// RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
+// 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
   decideWorkgroupOutcome,
-  WG_NUDGE_BODY,
-  type WakeInput,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+  type WakeSet,
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+
+/** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
+function decideOutcome(input: WakeInput, wake: WakeSet) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return decideWorkgroupOutcome(snapshot, inflight, wake)
+}
+
+// RFC-359 W4-D19c-tail：中立驱动把这段正文搬进了 `leaderNudge` 模板渲染器
+// （`workgroupSystemMessages.ts`），不再是常量。夹具只需要一条 kind='nudge' 的消息，
+// 正文取合一前的字面量即可——判据在消息的 kind 上，不在正文。
+const WG_NUDGE_BODY =
+  'Autonomous mode: you ended a round without dispatching work or declaring done. If the goal is complete, emit wg_decision done; otherwise dispatch the next assignment(s) or say what is blocking.'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -101,31 +115,31 @@ const EMPTY = { items: [], capExceeded: false }
 
 describe('RFC-187 §3-2 — continue-no-dispatch recovery (locked, must not regress)', () => {
   test('an idle leader is auto-nudged, bounded by the limit', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ config: cfg() }), EMPTY)
-    expect(out).toEqual({ kind: 'leader-nudge', nudgeCount: 0 })
+    const out = decideOutcome(wakeInput({ config: cfg() }), EMPTY)
+    expect(out).toEqual({ kind: 'leader-nudge' })
   })
 
   test('nudges are BOUNDED — at the limit it parks instead of nudging forever', () => {
-    const out = decideWorkgroupOutcome(
+    const out = decideOutcome(
       wakeInput({ config: cfg(), messages: nudge(WG_LEADER_IDLE_NUDGE_LIMIT) }),
       EMPTY,
     )
-    expect(out).toEqual({ kind: 'awaiting_human', reason: 'leader-idle' })
+    expect(out).toEqual({ kind: 'awaiting-human', reason: 'leader-idle' })
   })
 
   // RFC-207 §3.3 — a roster WITH a human gets the same treatment: the nudge is not a
   // substitute for the human, it is a cheap retry before spending the human's attention.
   test('a roster with a human member nudges first too (no autonomous/supervised split)', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ config: cfgWithHuman() }), EMPTY)
-    expect(out).toEqual({ kind: 'leader-nudge', nudgeCount: 0 })
+    const out = decideOutcome(wakeInput({ config: cfgWithHuman() }), EMPTY)
+    expect(out).toEqual({ kind: 'leader-nudge' })
   })
 
   test('a roster with a human member still parks once the nudge budget is spent', () => {
-    const out = decideWorkgroupOutcome(
+    const out = decideOutcome(
       wakeInput({ config: cfgWithHuman(), messages: nudge(WG_LEADER_IDLE_NUDGE_LIMIT) }),
       EMPTY,
     )
-    expect(out).toEqual({ kind: 'awaiting_human', reason: 'leader-idle' })
+    expect(out).toEqual({ kind: 'awaiting-human', reason: 'leader-idle' })
   })
 })
 

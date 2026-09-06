@@ -16,11 +16,19 @@ import type {
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
+// RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；夹具经
+// `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
   deriveWakeSet,
-  type WakeInput,
   type WakeItem,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+
+/** 旧夹具形状 → 中立驱动的两参调用。 */
+function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return deriveWakeSet(snapshot, inflight)
+}
 
 function fcCfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -121,15 +129,15 @@ function input(overrides: Partial<WakeInput> = {}): WakeInput {
     ...overrides,
   }
 }
-const claims = (items: readonly WakeItem[]) => items.filter((i) => i.kind === 'fc_claim')
-const msgTurns = (items: readonly WakeItem[]) => items.filter((i) => i.kind === 'message_turn')
+const claims = (items: readonly WakeItem[]) => items.filter((i) => i.kind === 'fc-claim')
+const msgTurns = (items: readonly WakeItem[]) => items.filter((i) => i.kind === 'message-turn')
 
 describe('RFC-215 — dual track: message turns never starve claims (S2 反转)', () => {
   test('ALL members in message turns + open cards ⇒ batches still dispatched', () => {
     const t1 = asg()
     const t2 = asg()
     const t3 = asg()
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         assignments: [t1, t2, t3],
         inFlight: {
@@ -142,16 +150,16 @@ describe('RFC-215 — dual track: message turns never starve claims (S2 反转)'
     )
     // v1 探针 S2：items=[] 恒 running、任务饿死。现在三张卡均分三批。
     expect(claims(w.items)).toEqual([
-      { kind: 'fc_claim', memberId: 'm-a', assignmentIds: [t1.id] },
-      { kind: 'fc_claim', memberId: 'm-b', assignmentIds: [t2.id] },
-      { kind: 'fc_claim', memberId: 'm-c', assignmentIds: [t3.id] },
+      { kind: 'fc-claim', memberId: 'm-a', assignmentIds: [t1.id] },
+      { kind: 'fc-claim', memberId: 'm-b', assignmentIds: [t2.id] },
+      { kind: 'fc-claim', memberId: 'm-c', assignmentIds: [t3.id] },
     ])
   })
 
   test('member deep in a task batch still gets its message turn (reverse direction)', () => {
     const card = asg({ status: 'running', assigneeMemberId: 'm-a' })
     const mention = msg({ authorMemberId: 'm-b', mentionMemberIds: ['m-a'] })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         assignments: [card],
         messages: [mention],
@@ -163,14 +171,14 @@ describe('RFC-215 — dual track: message turns never starve claims (S2 反转)'
         },
       }),
     )
-    expect(msgTurns(w.items)).toEqual([{ kind: 'message_turn', memberId: 'm-a' }])
+    expect(msgTurns(w.items)).toEqual([{ kind: 'message-turn', memberId: 'm-a' }])
     expect(claims(w.items)).toHaveLength(0) // busy on the task track — no second batch
   })
 
   test('same-track exclusivity: in-flight message turn not re-woken; task-busy member not re-batched', () => {
     const mention = msg({ authorMemberId: 'm-b', mentionMemberIds: ['m-a'] })
     const open = asg()
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         assignments: [open],
         messages: [mention],
@@ -186,7 +194,7 @@ describe('RFC-215 — dual track: message turns never starve claims (S2 反转)'
     // （双轨并行的本义）；m-b 任务轨在飞 ⇒ 批配对轮空 m-b。
     expect(msgTurns(w.items)).toHaveLength(0)
     expect(claims(w.items)).toEqual([
-      { kind: 'fc_claim', memberId: 'm-a', assignmentIds: [open.id] },
+      { kind: 'fc-claim', memberId: 'm-a', assignmentIds: [open.id] },
     ])
   })
 
@@ -194,15 +202,15 @@ describe('RFC-215 — dual track: message turns never starve claims (S2 反转)'
     const mention = msg({ authorMemberId: 'm-b', mentionMemberIds: ['m-a'] })
     const t1 = asg()
     const t2 = asg()
-    const w = deriveWakeSet(input({ messages: [mention], assignments: [t1, t2] }))
+    const w = deriveWake(input({ messages: [mention], assignments: [t1, t2] }))
     const aItems = w.items.filter(
-      (i) => (i.kind === 'fc_claim' || i.kind === 'message_turn') && i.memberId === 'm-a',
+      (i) => (i.kind === 'fc-claim' || i.kind === 'message-turn') && i.memberId === 'm-a',
     )
     // 双轨并行合法：m-a 一批 + 一个消息回合；但任务轨内只有一批（两张卡进同批或
     // 分给别人，绝不给 m-a 两个批 item）。
-    expect(aItems.some((i) => i.kind === 'fc_claim')).toBe(true)
-    expect(aItems.some((i) => i.kind === 'message_turn')).toBe(true)
-    expect(aItems.filter((i) => i.kind === 'fc_claim')).toHaveLength(1)
+    expect(aItems.some((i) => i.kind === 'fc-claim')).toBe(true)
+    expect(aItems.some((i) => i.kind === 'message-turn')).toBe(true)
+    expect(aItems.filter((i) => i.kind === 'fc-claim')).toHaveLength(1)
   })
 })
 
@@ -212,20 +220,20 @@ describe('RFC-215 — batching math (AC-2)', () => {
     const cfg2 = fcCfg({
       members: fcCfg().members.slice(0, 2), // m-a, m-b
     })
-    const w = deriveWakeSet(input({ config: cfg2, assignments: cards }))
+    const w = deriveWake(input({ config: cfg2, assignments: cards }))
     expect(claims(w.items)).toEqual([
-      { kind: 'fc_claim', memberId: 'm-a', assignmentIds: cards.slice(0, 4).map((c) => c.id) },
-      { kind: 'fc_claim', memberId: 'm-b', assignmentIds: cards.slice(4, 7).map((c) => c.id) },
+      { kind: 'fc-claim', memberId: 'm-a', assignmentIds: cards.slice(0, 4).map((c) => c.id) },
+      { kind: 'fc-claim', memberId: 'm-b', assignmentIds: cards.slice(4, 7).map((c) => c.id) },
     ])
   })
 
   test('11 cards / 2 idle ⇒ 5+5, one card left for the next pass (cap=5)', () => {
     const cards = Array.from({ length: 11 }, () => asg())
     const cfg2 = fcCfg({ members: fcCfg().members.slice(0, 2) })
-    const w = deriveWakeSet(input({ config: cfg2, assignments: cards }))
+    const w = deriveWake(input({ config: cfg2, assignments: cards }))
     const batches = claims(w.items)
-    expect(batches.map((b) => (b.kind === 'fc_claim' ? b.assignmentIds.length : 0))).toEqual([5, 5])
-    const claimed = new Set(batches.flatMap((b) => (b.kind === 'fc_claim' ? b.assignmentIds : [])))
+    expect(batches.map((b) => (b.kind === 'fc-claim' ? b.assignmentIds.length : 0))).toEqual([5, 5])
+    const claimed = new Set(batches.flatMap((b) => (b.kind === 'fc-claim' ? b.assignmentIds : [])))
     expect(claimed.size).toBe(10) // 第 11 张留清单
   })
 
@@ -241,17 +249,17 @@ describe('RFC-215 — batching math (AC-2)', () => {
       })),
     })
     const cards = [asg(), asg(), asg()]
-    const w = deriveWakeSet(input({ config: five, assignments: cards }))
+    const w = deriveWake(input({ config: five, assignments: cards }))
     const batches = claims(w.items)
     expect(batches).toHaveLength(3) // 空切片不产 item（多余成员本 pass 无批）
     for (const b of batches) {
-      if (b.kind === 'fc_claim') expect(b.assignmentIds).toHaveLength(1)
+      if (b.kind === 'fc-claim') expect(b.assignmentIds).toHaveLength(1)
     }
   })
 
   test('zero idle / zero open short-circuit (no division blowup, no items)', () => {
     // idle=0：全员任务轨忙
-    const busyAll = deriveWakeSet(
+    const busyAll = deriveWake(
       input({
         assignments: [asg()],
         inFlight: {
@@ -264,7 +272,7 @@ describe('RFC-215 — batching math (AC-2)', () => {
     )
     expect(claims(busyAll.items)).toHaveLength(0)
     // open=0：无卡
-    const noCards = deriveWakeSet(input({ assignments: [asg({ status: 'done' })] }))
+    const noCards = deriveWake(input({ assignments: [asg({ status: 'done' })] }))
     expect(claims(noCards.items)).toHaveLength(0)
   })
 })
@@ -277,17 +285,17 @@ describe('RFC-215 — recovery batches (AC-7 wake leg)', () => {
     const o1 = asg({ status: 'dispatched', assigneeMemberId: 'm-a' })
     const o2 = asg({ status: 'dispatched', assigneeMemberId: 'm-a' })
     const fresh = asg()
-    const w = deriveWakeSet(input({ assignments: [o1, o2, fresh] }))
+    const w = deriveWake(input({ assignments: [o1, o2, fresh] }))
     expect(claims(w.items)).toEqual([
-      { kind: 'fc_claim', memberId: 'm-a', assignmentIds: [o1.id, o2.id] },
+      { kind: 'fc-claim', memberId: 'm-a', assignmentIds: [o1.id, o2.id] },
       // m-a 已有恢复批不参与均分；新卡落给 m-b。
-      { kind: 'fc_claim', memberId: 'm-b', assignmentIds: [fresh.id] },
+      { kind: 'fc-claim', memberId: 'm-b', assignmentIds: [fresh.id] },
     ])
   })
 
   test('dispatched card WITH an in-flight run is NOT re-batched', () => {
     const driven = asg({ status: 'dispatched', assigneeMemberId: 'm-a' })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         assignments: [driven],
         inFlight: {
@@ -306,7 +314,7 @@ describe('RFC-215 — budget: batches outrank message turns at the cap (S3 反�
   test('1 slot left + 1 batch + mentions ⇒ batch takes the slot, message turn capped', () => {
     const mention = msg({ authorMemberId: 'm-b', mentionMemberIds: ['m-c'] })
     const open = asg()
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         config: fcCfg({ maxRounds: 6 }),
         budgetUsed: 5,
@@ -330,7 +338,7 @@ describe('RFC-215 — lw merged-busy semantics unchanged (AC-8)', () => {
   test('worker with an active assignment is NOT woken for a mention (pre-215 behavior)', () => {
     const card = asg({ status: 'running', assigneeMemberId: 'm-b', source: 'leader' })
     const mention = msg({ authorMemberId: 'm-a', mentionMemberIds: ['m-b'] })
-    const w = deriveWakeSet(
+    const w = deriveWake(
       input({
         config: lwCfg,
         budgetUsed: 1,
@@ -349,7 +357,7 @@ describe('RFC-215 — lw merged-busy semantics unchanged (AC-8)', () => {
 
   test('lw never produces fc_claim items', () => {
     const open = asg({ status: 'dispatched', assigneeMemberId: 'm-b', source: 'leader' })
-    const w = deriveWakeSet(input({ config: lwCfg, budgetUsed: 1, assignments: [open] }))
+    const w = deriveWake(input({ config: lwCfg, budgetUsed: 1, assignments: [open] }))
     expect(claims(w.items)).toHaveLength(0)
     expect(w.items.some((i) => i.kind === 'assignment')).toBe(true)
   })

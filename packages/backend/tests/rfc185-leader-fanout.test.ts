@@ -60,12 +60,18 @@ import {
   runWorkgroupTurns as runWorkgroupEngine,
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
 } from './helpers/workgroupTurns'
-import {
-  deriveWakeSet,
-  type WakeInput,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+// RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
+// 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
+import { deriveWakeSet } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 import { createLogger } from '../src/util/log'
 import { executeTurn } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution'
+
+/** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
+function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return deriveWakeSet(snapshot, inflight)
+}
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc185-fanout-test')
@@ -356,7 +362,7 @@ describe('RFC-185 — parseWgAssignmentsPort keeps same-member fan-out entries',
 describe('RFC-185 — wake set fans out; leader barrier is terminal-state only', () => {
   test('three dispatched assignments for the SAME member all wake concurrently', () => {
     const assignments = [asg(), asg(), asg()]
-    const wake = deriveWakeSet(wakeInput({ assignments }))
+    const wake = deriveWake(wakeInput({ assignments }))
     const woken = wake.items.filter((i) => i.kind === 'assignment')
     expect(woken.map((i) => (i.kind === 'assignment' ? i.assignmentId : ''))).toEqual(
       assignments.map((a) => a.id),
@@ -370,7 +376,7 @@ describe('RFC-185 — wake set fans out; leader barrier is terminal-state only',
       asg({ status: 'running' }),
       asg({ status: 'done' }),
     ]
-    const wake = deriveWakeSet(wakeInput({ ...freshContentForLeader(), assignments }))
+    const wake = deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
     expect(wake.items).toEqual([])
   })
 
@@ -380,7 +386,7 @@ describe('RFC-185 — wake set fans out; leader barrier is terminal-state only',
       asg({ status: 'failed' }),
       asg({ status: 'done' }),
     ]
-    const wake = deriveWakeSet(wakeInput({ ...freshContentForLeader(), assignments }))
+    const wake = deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
     expect(wake.items).toEqual([{ kind: 'leader', reason: 'new-content' }])
   })
 
@@ -390,7 +396,7 @@ describe('RFC-185 — wake set fans out; leader barrier is terminal-state only',
       asg({ status: 'done' }),
       asg({ status: 'done' }),
     ]
-    const wake = deriveWakeSet(wakeInput({ ...freshContentForLeader(), assignments }))
+    const wake = deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
     expect(wake.items).toEqual([{ kind: 'leader', reason: 'new-content' }])
   })
 })

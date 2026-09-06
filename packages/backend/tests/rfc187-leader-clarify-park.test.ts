@@ -12,12 +12,24 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { WorkgroupMessage, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
+// RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
+// 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
-  type WakeInput,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 import { deriveLeaderClarifyPark } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
+
+/** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
+function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return deriveWakeSet(snapshot, inflight)
+}
+function decideOutcome(input: WakeInput, wake: ReturnType<typeof deriveWake>) {
+  const { snapshot, inflight } = wakeSnapshotOf(input)
+  return decideWorkgroupOutcome(snapshot, inflight, wake)
+}
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -119,25 +131,25 @@ describe('RFC-187 F3 — deriveLeaderClarifyPark (session-keyed, Codex P0-1)', (
 
 describe('RFC-187 F3/F8 — decideWorkgroupOutcome surfaces leader-clarify', () => {
   test('leaderClarifyParked → awaiting_human reason leader-clarify', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ leaderClarifyParked: true }), {
+    const out = decideOutcome(wakeInput({ leaderClarifyParked: true }), {
       items: [],
       capExceeded: false,
     })
-    expect(out).toEqual({ kind: 'awaiting_human', reason: 'leader-clarify' })
+    expect(out).toEqual({ kind: 'awaiting-human', reason: 'leader-clarify' })
   })
 
   test('leader-clarify park BEATS max_rounds (a blocked leader is not a failure)', () => {
     // this is exactly probe B: without the park signal the same state returned
     // { failed, max-rounds }.
-    const out = decideWorkgroupOutcome(wakeInput({ leaderClarifyParked: true, budgetUsed: 10 }), {
+    const out = decideOutcome(wakeInput({ leaderClarifyParked: true, budgetUsed: 10 }), {
       items: [],
       capExceeded: true,
     })
-    expect(out).toEqual({ kind: 'awaiting_human', reason: 'leader-clarify' })
+    expect(out).toEqual({ kind: 'awaiting-human', reason: 'leader-clarify' })
   })
 
   test('without the park signal, the same empty state hits max_rounds (regression contrast)', () => {
-    const out = decideWorkgroupOutcome(wakeInput({ budgetUsed: 10 }), {
+    const out = decideOutcome(wakeInput({ budgetUsed: 10 }), {
       items: [],
       capExceeded: true,
     })
@@ -145,7 +157,7 @@ describe('RFC-187 F3/F8 — decideWorkgroupOutcome surfaces leader-clarify', () 
   })
 
   test('an in-flight leader still reports running (park only matters when idle)', () => {
-    const out = decideWorkgroupOutcome(
+    const out = decideOutcome(
       wakeInput({
         leaderClarifyParked: true,
         inFlight: {
@@ -162,10 +174,10 @@ describe('RFC-187 F3/F8 — decideWorkgroupOutcome surfaces leader-clarify', () 
 
 describe('RFC-187 F3 — deriveWakeSet does not re-drive a clarify-parked leader', () => {
   test('leaderClarifyParked suppresses the leader wake even on the initial round', () => {
-    const parked = deriveWakeSet(wakeInput({ leaderClarifyParked: true }))
+    const parked = deriveWake(wakeInput({ leaderClarifyParked: true }))
     expect(parked.items.filter((i) => i.kind === 'leader')).toHaveLength(0)
     // sanity: without the park the leader IS woken (initial round).
-    const notParked = deriveWakeSet(wakeInput({ leaderClarifyParked: false }))
+    const notParked = deriveWake(wakeInput({ leaderClarifyParked: false }))
     expect(notParked.items.filter((i) => i.kind === 'leader')).toHaveLength(1)
   })
 })
