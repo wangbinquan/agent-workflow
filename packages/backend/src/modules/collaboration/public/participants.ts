@@ -8,10 +8,7 @@ import {
   appendReviewCommentsChangedCommittedEventTx as appendReviewCommentsChangedCommittedEventTxInternal,
   appendReviewSelectionChangedCommittedEventTx as appendReviewSelectionChangedCommittedEventTxInternal,
 } from '../infrastructure/collaborationCommittedEventParticipant'
-import {
-  countWorkgroupClarifyAsks as countWorkgroupClarifyAsksInternal,
-  createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal,
-} from '../infrastructure/workgroupClarifyAskGate'
+import { createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal } from '../infrastructure/workgroupClarifyAskGate'
 
 export type { HumanGateOpenParticipantResult } from '../application/ports/humanGateOpenParticipant'
 export type {
@@ -69,6 +66,7 @@ export const appendReviewCommentsChangedCommittedEventTx =
   appendReviewCommentsChangedCommittedEventTxInternal
 // RFC-359 W1-T7e：工作组 asker 的反问许可（RFC-207 §3.7.2 唯一判定点），两个 provider 同一份。
 export const createWorkgroupClarifyAskGate = createWorkgroupClarifyAskGateInternal
-export const countWorkgroupClarifyAsks = countWorkgroupClarifyAsksInternal
+// RFC-359 W4-D19c-tail：`countWorkgroupClarifyAsks` 的唯一生产消费者是 legacy 工作组引擎的转发层，
+// 随该岛一并退役；计数本身仍在 gate 内部使用，不再对外开口（删除优于留一个零消费者的公共符号）。
 export const appendReviewSelectionChangedCommittedEventTx =
   appendReviewSelectionChangedCommittedEventTxInternal
