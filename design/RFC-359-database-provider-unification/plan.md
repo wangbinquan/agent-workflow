@@ -929,37 +929,37 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   住在 `platform/persistence/sqlite/` 路径下。合一形状因此是把它整体提为中立（换类型 + 挪目录，
   事务点走 `databaseSessionFor`），PG 那两份退役。
 
-  ### D23b 的实际拦路石：技能机器与**同步的** bundle-apply 引擎绑在一起（2026-09-06 实做后落档）
+  ### D23b ✅ 落地（2026-09-06/07）：先拆墙，再迁机器
 
-  D23b（把 legacy skill 机器迁到 `DatabaseSession`）整条做过一遍：`skillOperations` / `skillReserveOp` /
-  `skillDeleteOp` / `skillMigrateOp` / `skillVersionOp` / `skillOpRecoveryDriver` / `skillVersion` /
-  `skill` / `skillIdentityMigration` 全部换成中立事务，端口签名跟着放宽，`src` 侧 **typecheck 全绿**，
-  op 原语与 reserve / delete / recovery-driver / version-op 四个套件改完即绿（锁语义、ConflictError、
-  阶段推进、GC 逐条不变）。**但它落不了地**，原因是一条硬耦合：
+  D23b 一度判定阻塞——技能的两个提交面被 **bundle apply 的同步大事务**调用（`dbTxSync`），
+  body 里 await 不了，而 op 原语中立化后必须 await。**解法是先拆那堵墙**：
 
-  - 技能的两个提交面 `commitSkillReadyInTx` / `commitSkillVersionInTx` 被 **bundle apply 的大事务**
-    调用（`aggregateAdapters/legacyResourcePackageMutationParticipants.ts#bindApplyTx` → 
-    `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts:390` 的 `dbTxSync(db, (tx) => …)`）。
-  - 那笔大事务是**同步**的，body 里 await 不了；而 op 原语一旦中立化就必须 await
-    （`advancePhase` / `abandonOperation` 都在 `commitSkillVersionInTx` 里）。
-  - 于是要么把 bundle apply 的大事务也换成中立会话（连带它注入的 40 余个 `DbTxSync` 成员——
-    agent / mcp / workflow / workgroup 的提交面全在里面），要么在这个 SQLite 专属文件里加一条
-    「中立句柄 ↔ DbTxSync」的桥接强转。**后者是架构决定，不能默默加**（CLAUDE.md §RFC workflow
-    第 8 条：确有偏离要逐条列出并呈用户确认）。
+  1. **拆墙**：`legacyResourcePackageBundleApply.ts:390` 的大事务换成
+     `databaseSessionFor(db).transaction(...)`，边界一格未变（journal 的 prepared→applying CAS、
+     全部资源提交、journal committed 仍是同一笔），`.run()` 后读 `.changes` 换成中立的 `affectedRows()`。
+     链上其余**同步** `*InTx` 成员（agent / mcp / workflow / workgroup / template）暂时保留，
+     由 `bindApplyTx` 内一个具名的 `syncTx` 把中立句柄重新窄化给它们。
+     **这不是强转谎话**：SQLite 会话交出的事务句柄**就是 `DbClient` 本身**
+     （`createSqliteDatabaseSession`：`const tx = db as unknown as DatabaseTransaction`），
+     适配器只是把平台层**已经依赖的那条身份**在类型上说一遍，并带退役条件——两套 apply 引擎
+     合一时随文件一起消失，新增同步成员会被 `rfc359-sync-transaction-highwater` 账本挡下。
+  2. **迁机器**：`skillOperations` / `skillReserveOp` / `skillDeleteOp` / `skillMigrateOp` /
+     `skillVersionOp` / `skillOpRecoveryDriver` / `skillVersion` / `skill` / `skillIdentityMigration` /
+     `skillBootVerify` 全部改吃中立事务。两阶段提交的阶段边界、锁的生命周期、崩溃恢复方向判据、
+     隔离与 quarantine、发布阶梯的 swap/backup 顺序**逐条不变**；唯一冲突判别从写死的 SQLite
+     错误串换成引擎能力面（`engineOf(tx).classifyError`）。
+  3. **清重复件**：三处「只为同步路径存在」的副本按它们自己写明的退役条件删除——
+     `sqliteSkillVersionCommitParticipant.ts`、`sqliteMemoryMembershipParticipant.ts`、
+     `createSyncSkillRestoreMembership` / `SyncMemoryMembershipUnfuse`。
 
-  **结论**：D23b 与「合并两套 apply 引擎」（`legacyResourcePackageBundleApply` ↔
-  `postgresqlResourcePackageAtomicApply`，plan 里本来就记着 `ResourcePackageMaintenance` 卡在这上面）
-  是**同一刀**，不能分开落。下一步应当先就这两条路线取得裁决：
-  ① 先做 apply 引擎合一（大，但把技能、包维护两块债一起清掉）；
-  ② 或先在 SQLite 专属的 apply 文件里落一条**有署名、有退役条件**的桥接强转，让 D23b 先落地，
-     apply 引擎合一随后。
-  （桥接在 SQLite 上是**同一个对象**——`createSqliteDatabaseSession` 正是 `db as unknown as
-  DatabaseTransaction`——所以它不是新概念，只是把同一条身份反着写一次；但它仍是一处需要点名的偏离。）
+  **判据面**：技能与捆绑应用两侧 **322 条**用例全绿（崩溃恢复矩阵、身份迁移屏障、发布 staging 阶梯、
+  boot 重验、包应用重放都在内）。同步事务面账本 41 → 33 个文件、124 → 85 个调用点。
 
-  实做中另外照出一条**要提前防住的坑**：sync → async 的转换会让「忘了 await」**静默通过类型检查**——
-  端口签名一旦放宽成 `void | Promise<void>`，漏 await 的调用点 tsc 不报错，只在运行时表现为
-  「删除没删掉」（实撞：`deleteSkill` 漏 await 后 `getSkill` 仍返回行）。这一轮共找出 **13 处**
-  这样的调用点。合一 apply 引擎时要按同样的清单逐点核对，或先加一条禁止裸调用这些面的守卫。
+  **三次撞上「漏 await 静默通过类型检查」**（`docs/dev-gotchas.md` 刚记下的那条），无一例外表现为
+  「写好像没生效」而不是编译错：`deleteSkill` 漏 await ⇒ 删除没删掉；捆绑应用的**幂等尾**漏 await
+  ⇒ 发布完没 mark boot-verified；测试侧多处漏 await ⇒ 断言拿到 Promise。按 gotchas 记的办法
+  （按改成异步的导出名逐个 grep 调用点）全部找出。**D23c**（SQLite 装配切到这套机器、PG 那 3342 行
+  原生实现退役）是下一刀。
 
   ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
 
