@@ -3998,3 +3998,27 @@ Unable to create '…/repo/.git/refs/heads/agent-workflow/terminal-race.lock': F
 这正落在 **RFC-356（残留工作树回收 + 进程树归属）** 的刀口上：那份 RFC 的回收阶梯
 （`reclaimWorktreePath`：remove → 退避 rm → prune）需要把 **stale ref lock** 也算进要回收的
 残留物，否则「必然链」少堵一个口。判据：本条的错误签名 `cannot lock ref … .lock: File exists`。
+
+## development-automation 的 mission 偶发停在 `working`，把整条泵预算耗光（2026-09-06 三次实撞）
+
+`rfc310-pr3-journey.test.ts` 的显式泵（`pumpUntil`：反复 `automation.reconcile(missionId)` 直到
+mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次，跨两个操作系统的 lane：
+
+- `2896f345c` ubuntu 分片 1/4：`body+file launch materializes the body manifest`，1600 轮耗尽；
+- `2896f345c` / `2f639c07b` macOS 分片 1/4：`external three-file bundle → facts block …`，
+  先是 1600 轮、后是 90s 墙钟，两次都耗光；
+- 本机一次：整文件跑时 `body+file …` 把 90s 耗光。
+
+**为什么判它是产品侧的停顿、不是预算不够**：同一天量过收敛耗时——单跑这条 **73ms / 2 轮**，
+整文件跑时每条也都在 **110ms** 内收敛（把预算临时抬到 240s 后 7 条全绿，最慢一条 104ms）。
+健康时是百毫秒级，红的时候却把**任何**给定预算整个耗光，且 `status` 一路停在 `working`、
+`blockCode` 为 null、`reconcile` 本身不抛错（泵记录的 `lastError` 为空）。这不是「慢一点」，
+是**那一轮的 arm 再也没有推进 mission**（丢唤醒 / 竞态）；把预算调大只会更晚报红。
+
+**已排除**：与 RFC-359 W4-D27（任务执行资源快照合一）无关——给中立绑定加桩后确认，本用例
+整条路径**一次都没调到**那个绑定；且该形态在 D27 之前的 commit 上就已出现。
+
+**未决**：`modules/development-automation/application/missionReconciler.ts` 与
+`commands/launchMission.ts` 里 `status='working'` 的那几处推进点，需要找出哪一条在竞态下会
+丢掉推进（典型嫌疑：fire-and-forget 的 arm 完成回调与 `reconcile` 的读—判—写交错）。
+判据就是本条的签名：`pumpUntil exhausted … status=working blockCode=null`，且同用例单跑百毫秒即过。

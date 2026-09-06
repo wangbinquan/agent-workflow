@@ -132,11 +132,13 @@ function launchBody(
 async function pumpUntil(
   missionId: string,
   predicate: (mission: MissionRow) => boolean | Promise<boolean>,
-  // 预算是**墙钟**，不是轮数：adapter CLI 首跑要过 bun 编译，本机秒级，CI runner 满载时可以久得多。
-  // 按轮数算budget 会把「每轮更慢」误判成「等得更久」——2026-09-06 实撞两次：同一 commit 同一分片
-  // 内容，健康 lane 上这条 73ms 就过，满载 lane 上 1600 轮（≈40s）耗尽仍 status=working，而同 run
-  // 里另一个文件的用例同步慢了 2–4×。所以改成「等到墙钟 90s」，仍稳稳低于文件顶上的 120s harness
-  // 预算：真卡死照样红，只是晚一点；慢 runner 不再被判成 bug。
+  // 预算按**墙钟**给，不按轮数：轮数 budget 在慢机器上会连带变长，量不到「等了多久」。
+  //
+  // ⚠️ 这条预算耗尽 ≠「太慢」。2026-09-06 收敛计时实测：单跑 73ms / 2 轮，整文件跑每条也都在
+  // 110ms 内收敛；但同一天先后三次（本机一次、CI 两次、跨 ubuntu 与 macOS）出现**同一形态的红**
+  // ——`status=working` 一路不动，把当时给的预算（先是 1600 轮，后是 90s）整个耗光。既然健康时
+  // 是百毫秒级，耗光预算说明**任务停止推进了**（丢唤醒 / 竞态），不是慢；把预算调大只会更晚报红。
+  // 待查项已记进 docs/audit-backlog.md（development-automation mission 偶发停在 working）。
   budgetMs = 90_000,
 ): Promise<MissionRow> {
   let lastError: unknown = null

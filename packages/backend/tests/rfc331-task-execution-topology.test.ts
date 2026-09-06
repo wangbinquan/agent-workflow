@@ -43,7 +43,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
 ])
 
 const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
-  'packages/backend/src/cli/start.ts:@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots',
+  'packages/backend/src/cli/start.ts:@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots',
   'packages/backend/src/routes/tasks.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
