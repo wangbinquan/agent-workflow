@@ -908,23 +908,26 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   过程中照出并修好**五处**合一遗漏的真缺口（系统消息分类、收尾轮房间说明、澄清续跑复活、
   传输重试记账、房间消息单调 id），全部带判据。
 
-  ### D28 候选（勘察于 2026-09-06）：生命周期自动修复是目前最大的一处「一好一坏」
+  ### 生命周期修复这一对的勘察结论（2026-09-06，**订正**）
 
-  `TaskLifecycleAutoRepairCommand` 这一对（相似度 0.22）不是两种写法，是**两种能力**：
+  第一眼看上去是「一好一坏」：`TaskLifecycleAutoRepairCommand` 的 SQLite 侧是 65 行薄适配器，
+  套在 `platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行）+ `taskLifecycleRepair/options-*.ts`
+  （14 个规则族、2613 行）这套成熟机器上；PG 侧只有 198 行，且**只实现 `S4.kick-task`**，
+  别的选项一律抛 `postgresql-auto-repair-option-not-supported`。
 
-  - SQLite：65 行薄适配器，套在 `platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行）+
-    `taskLifecycleRepair/options-*.ts`（12 个规则族、2613 行）这套成熟机器上，按告警规则给出整份
-    修复选项目录（C1 / CR1 / R1 / R2 / S1–S6 / T3 / U1）。
-  - PostgreSQL：198 行原生实现，**只有一个** `S4.kick-task` 选项。也就是说 PG 上的诊断页除了
-    「踢一脚」之外无路可走，其余十一族告警在 PG 上没有任何可执行修复。
+  **对账之后不成立**：v1 里 `autoApplyEligible: true` 的选项**只有 S4.kick-task 一个**
+  （`options-S4.ts:30` 是全仓唯一一处），而 `runAutoRepairOnce` 只在「恰好一个 autoApplyEligible
+  且 available」时才自动施用。也就是说两边的**自动**修复能力**等价**，PG 不是缺能力，是把这唯一一条
+  重写了一遍。人工修复面（诊断页那条路）两边也都是全的：PG 有自己的
+  `postgresqlTaskRouteRepairOperations.ts`（1448 行），R1 / R2 / C1 / T1–T3 / U1 / S1–S6 全覆盖。
 
-  好消息是这套机器**天然就是中立的**：`taskLifecycleRepair.ts` 与全部 options 模块里
-  `dbTxSync` / `.all()` / `.get()` / `.run()` 各 0 处，用的全是 drizzle 的异步面，只是被类型
-  钉成了 `DbClient`、并住在 `platform/persistence/sqlite/` 路径下。合一的形状因此是
-  **把它整体提为中立**（重命名出 sqlite 目录 + 类型换成 `ProviderNeutralDatabase`，
-  事务点走 `databaseSessionFor`），PG 那 198 行整体退役——与 D19c 把 PG 提为基线的方向相反，
-  这次是 SQLite 侧才是那份成熟实现。验收面照 D19c 的方法论：先按端口把两侧行为逐条对照，
-  再让既有的修复用例在两个引擎上各跑一遍。
+  **所以这里的问题是重复实现，不是能力缺口**——排期上没有「PG 用户此刻用不了」的紧迫性，价值在于
+  「以后新增一个 autoApplyEligible 的选项不用写两遍、也不会只有一边生效」。真正的大头是那 1448 行
+  PG 路由修复与共享目录的重复（形态同 D23：一侧薄适配 + 成熟机器，另一侧原生重写）。
+  好消息是共享那套**天然中立**：`taskLifecycleRepair.ts` 与全部 options 模块里 `dbTxSync` /
+  `.all()` / `.get()` / `.run()` 各 0 处，用的全是 drizzle 异步面，只是被类型钉成 `DbClient`、
+  住在 `platform/persistence/sqlite/` 路径下。合一形状因此是把它整体提为中立（换类型 + 挪目录，
+  事务点走 `databaseSessionFor`），PG 那两份退役。
 
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
