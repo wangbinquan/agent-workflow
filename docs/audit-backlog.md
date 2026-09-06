@@ -4022,3 +4022,21 @@ mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次�
 `commands/launchMission.ts` 里 `status='working'` 的那几处推进点，需要找出哪一条在竞态下会
 丢掉推进（典型嫌疑：fire-and-forget 的 arm 完成回调与 `reconcile` 的读—判—写交错）。
 判据就是本条的签名：`pumpUntil exhausted … status=working blockCode=null`，且同用例单跑百毫秒即过。
+
+## 全部 skill 套件同进程跑时，两条会红成 `skill-not-found`（2026-09-06 实撞，先于任何本次改动）
+
+把 `tests/*skill*.test.ts` 一次性交给同一个 bun 进程跑，稳定红两条：
+
+- `skill-versioning.test.ts > lazy backfill + reconcile > a legacy skill then edited keeps legacy content as v1, edit as v2`
+- RFC-170 reserve op > `recovery ROLLFORWARD: crash after db-committed keeps the skill ready`
+
+两条的签名都是 `NotFoundError: skill '<ulid>' not found`（`getSkillById` 读不到刚建的行）。
+**单跑各自全绿**；两两组合也绿；要凑够一批才复现，说明是**跨文件的进程级状态**在串味
+（嫌疑：`legacy/skillBootVerify.ts` 的模块级 `bootVerifiedSet` / `bootReverifyActivated`，
+以及 `db/providerSchema.ts` 的全局 schema provider 选择——`describeEachProvider` 的 PG 腿会切它）。
+
+**与 RFC-359 无关**：去掉本次新增的 `rfc359-w4-d23a-skill-conformance.test.ts` 照红，加上也照红。
+CI 今天是绿的，因为分片把这些文件分到了不同 job；**分片一变就会暴露**，所以不能当作不存在。
+
+判据：上面两条的用例名 + `skill-not-found`；复现方式是
+`bun test $(ls tests/*.test.ts | grep -i skill)`。
