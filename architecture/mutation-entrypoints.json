@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1815,
+    "entries": 1809,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -19587,50 +19587,6 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts#cancelLeftovers",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts#cancelLeftovers",
-      "symbol": "cancelLeftovers",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts#runWorkgroupEngine",
-      "missingControls": [
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts#runWorkgroupEngine",
-      "symbol": "runWorkgroupEngine",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
         "fenceOrOcc": true,
         "transaction": true
       },
@@ -19706,31 +19662,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#settleCardAfterFailure",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#settleCardAfterFailure",
-      "symbol": "settleCardAfterFailure",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/state.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/state.ts#setDwState",
@@ -19793,77 +19724,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/state.ts#setPauseReason",
       "symbol": "setPauseReason",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts#settleBatchResults",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts#settleBatchResults",
-      "symbol": "settleBatchResults",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker.ts#openCompletionGate",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker.ts#openCompletionGate",
-      "symbol": "openCompletionGate",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts#executeTurn",
-      "missingControls": [
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts#executeTurn",
-      "symbol": "executeTurn",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -43326,7 +43186,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bfbb45e8e5aefd8d8dc6f4a85a61579a451211ac2c14240ecff248e1e0469cce",
+  "sourceDigest": "sha256:8a9ab8880b2a75c6ecc16cca11823662b96bf6ee54448626d37a7961f6a8d1f9",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43436,7 +43296,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 252,
+      "durableWriterSites": 250,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -43824,38 +43684,6 @@
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "createSqliteReviewRepairParticipant"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "dismissOpenClarifyParksForAutonomous",
-        "controlSubtype": "membership-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#359:nodeRuns",
-        "line": 359,
-        "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#dismissOpenClarifyParksForAutonomous",
-        "requiredBrandedProof": "AuthorizedWorkgroupTaskRoomCommand",
-        "revisionPredicate": "workgroup-config-revision-and-task-node-cas",
-        "symbol": "dismissOpenClarifyParksForAutonomous"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "stampWgRound",
-        "controlSubtype": "membership-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/rounds.ts",
-        "id": "task-authority:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/rounds.ts#143:nodeRuns",
-        "line": 143,
-        "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/rounds.ts#stampWgRound",
-        "requiredBrandedProof": "AuthorizedWorkgroupTaskRoomCommand",
-        "revisionPredicate": "workgroup-config-revision-and-task-node-cas",
-        "symbol": "stampWgRound"
       },
       {
         "allowedTables": [

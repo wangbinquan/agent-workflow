@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 861,
+    "consumers": 859,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1051,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20386,
-    "symbols": 981
+    "symbols": 980
   },
   "entries": [
     {
@@ -10315,47 +10315,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:6690635fd712c5ecae62"
-      ],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:countWorkgroupClarifyAsks",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#countWorkgroupClarifyAsks",
-      "productionConsumers": [
-        {
-          "context": "resource-catalog",
-          "edgeId": "import:6690635fd712c5ecae62",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:d01f7de4e40210d3e5095abaf2adac30dbb78ed987d828d74a0c72f35db02542",
-      "status": "target-context-current-surface",
-      "symbol": "countWorkgroupClarifyAsks",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
         "import:08146871eda985b6d0f6",
-        "import:203c772b8492e45e188a",
         "import:822a33be327729576443",
         "import:931ad944c16546e45a1d"
       ],
@@ -10375,12 +10335,6 @@
           "edgeId": "import:08146871eda985b6d0f6",
           "file": "packages/backend/src/cli/start.ts",
           "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
-          "edgeId": "import:203c772b8492e45e188a",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file"
         },
         {
           "context": "legacy",
@@ -161413,7 +161367,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bfbb45e8e5aefd8d8dc6f4a85a61579a451211ac2c14240ecff248e1e0469cce",
+  "sourceDigest": "sha256:8a9ab8880b2a75c6ecc16cca11823662b96bf6ee54448626d37a7961f6a8d1f9",
   "targetContexts": [
     "collaboration",
     "development-automation",

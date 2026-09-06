@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 38,
-    "transactionCallbacks": 320
+    "coLocatedCandidates": 37,
+    "transactionCallbacks": 319
   },
   "entries": [
     {
@@ -2621,20 +2621,6 @@
       "transactionCallee": "dbTxSync"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#dbTxSync:330",
-      "line": 330,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#dismissOpenClarifyParksForAutonomous",
-      "status": "co-located-risk",
-      "symbol": "dismissOpenClarifyParksForAutonomous",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "dbTxSync"
-    },
-    {
       "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/state.ts",
       "finalCriterion": "no-external-effect-observed",
@@ -3932,7 +3918,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bfbb45e8e5aefd8d8dc6f4a85a61579a451211ac2c14240ecff248e1e0469cce",
+  "sourceDigest": "sha256:8a9ab8880b2a75c6ecc16cca11823662b96bf6ee54448626d37a7961f6a8d1f9",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
