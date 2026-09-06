@@ -132,12 +132,16 @@ function launchBody(
 async function pumpUntil(
   missionId: string,
   predicate: (mission: MissionRow) => boolean | Promise<boolean>,
-  // 预算按最慢 arm 放：adapter CLI 首跑要过 bun 编译，秒级；本机 400×25ms ≈ 10s 够用，
-  // macOS CI runner 在四分片满载时首跑编译更慢（2026-09-05 两次单点红都卡在 status=working），放到 1600×25ms ≈ 40s。
-  rounds = 1600,
+  // 预算是**墙钟**，不是轮数：adapter CLI 首跑要过 bun 编译，本机秒级，CI runner 满载时可以久得多。
+  // 按轮数算budget 会把「每轮更慢」误判成「等得更久」——2026-09-06 实撞两次：同一 commit 同一分片
+  // 内容，健康 lane 上这条 73ms 就过，满载 lane 上 1600 轮（≈40s）耗尽仍 status=working，而同 run
+  // 里另一个文件的用例同步慢了 2–4×。所以改成「等到墙钟 90s」，仍稳稳低于文件顶上的 120s harness
+  // 预算：真卡死照样红，只是晚一点；慢 runner 不再被判成 bug。
+  budgetMs = 90_000,
 ): Promise<MissionRow> {
   let lastError: unknown = null
-  for (let i = 0; i < rounds; i += 1) {
+  const deadline = Date.now() + budgetMs
+  for (let i = 0; Date.now() < deadline; i += 1) {
     const mission = await fx.store.getMission(missionId)
     if (mission === null) throw new Error(`mission disappeared: ${missionId}`)
     if (await predicate(mission)) return mission
@@ -152,7 +156,7 @@ async function pumpUntil(
   }
   const last = await fx.store.getMission(missionId)
   throw new Error(
-    `pumpUntil exhausted: status=${last?.status ?? 'gone'} blockCode=${last?.blockCode ?? 'null'}` +
+    `pumpUntil exhausted after ${budgetMs}ms: status=${last?.status ?? 'gone'} blockCode=${last?.blockCode ?? 'null'}` +
       (lastError instanceof Error ? ` lastError=${lastError.message}` : ''),
   )
 }

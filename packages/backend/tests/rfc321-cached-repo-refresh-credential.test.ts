@@ -33,9 +33,13 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // process`）、afterEach 删掉夹具目录、被判超时的 body 继续跑到 `expect` 时抛成
 // 「Unhandled error between tests」——三行报错点名的全是 git，主语其实是「没声明预算」。
 // 定式见 docs/dev-gotchas.md §测试 / CI（「凡是真的建仓 / 真的拉子进程的用例，文件顶上写
-// setDefaultTimeout(60_000)」；先例 git-repo-cache / rfc199-start-task-workflow-race）。
+// setDefaultTimeout」；先例 git-repo-cache / rfc199-start-task-workflow-race）。
 // 这是墙钟允许量，不是对 refresh 变慢的容忍。
-setDefaultTimeout(60_000)
+//
+// 2026-09-06 把 60s 抬到 120s：同一 commit 的同一 run 里，ubuntu 分片 3.86s 过，而 macOS 分片 2/4 上
+// 同文件的另一条同步慢到 9.8s（绿时基线 2.4–4.6s）、这一条撞满 60s 判超时——是整台 runner 慢了
+// 2–4×，不是 refresh 变慢。仍然是墙钟允许量：真挂住照样红。
+setDefaultTimeout(120_000)
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
 const roots: string[] = []
