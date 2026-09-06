@@ -3,7 +3,8 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { agents, mcps, plugins, runtimes, skills } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type {
@@ -17,10 +18,9 @@ import {
   updateAgentPersistenceValues,
 } from './agentPersistence'
 import {
-  isPostgresqlUniqueViolation,
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -68,7 +68,7 @@ function assertBranchPortsDeclared(agent: Pick<CreateAgent, 'outputs' | 'branchP
 }
 
 async function assertRuntimeReference(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
+  readonly transaction: ResourceCatalogTransaction
   readonly name: string | null | undefined
   readonly previous?: string
 }): Promise<void> {
@@ -99,7 +99,7 @@ function unique(values: readonly string[]): string[] {
 }
 
 async function assertAgentResourceRows(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
+  readonly transaction: ResourceCatalogTransaction
   readonly mcpIds: readonly string[]
   readonly pluginIds: readonly string[]
   readonly skillRefs: readonly AgentSkillRef[]
@@ -187,7 +187,7 @@ function stringArray(raw: string): string[] {
 }
 
 async function assertAgentDependencyGraph(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   agentId: string,
   dependencyIds: readonly string[],
 ): Promise<void> {
@@ -224,7 +224,7 @@ async function assertAgentDependencyGraph(
 }
 
 async function assertAgentDefinition(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
+  readonly transaction: ResourceCatalogTransaction
   readonly agentId: string
   readonly definition: Pick<
     CreateAgent,
@@ -248,9 +248,21 @@ async function assertAgentDefinition(input: {
 }
 
 /** Native PostgreSQL writer for system-owned Digital Employee Agent templates. */
-export function createPostgresqlDigitalEmployeeAgentTemplateRepository(
-  db: PostgresqlDatabaseClient,
+export function createDigitalEmployeeAgentTemplateRepository(
+  db: ProviderNeutralDatabase,
 ): DigitalEmployeeAgentTemplateRepository {
+  // 驱动错误的形状是唯一容身 provider 差异的地方，经能力矩阵映射回本模块的闭合错误合同：
+  // PG 给约束名（`agents_owner_name_unique` / `agents_pkey`），SQLite 给 `UNIQUE constraint failed:`
+  // 之后的列清单（`agents.owner_user_id, agents.name` / `agents.id`）。
+  const engine = databaseSessionFor(db).engine
+  const isOwnerNameConflict = (error: unknown): boolean => {
+    const target = engine.uniqueViolationTarget(error)
+    return target !== undefined && /agents[._](?:owner|name)/i.test(target)
+  }
+  const isPrimaryKeyConflict = (error: unknown): boolean => {
+    const target = engine.uniqueViolationTarget(error)
+    return target !== undefined && /agents[._](?:pkey|id)\b/i.test(target)
+  }
   async function get(id: string): Promise<Agent | null> {
     const row = await db.select().from(agents).where(eq(agents.id, id)).get()
     return row === undefined ? null : agentFromPersistenceRow(row)
@@ -263,7 +275,7 @@ export function createPostgresqlDigitalEmployeeAgentTemplateRepository(
       input: Parameters<DigitalEmployeeAgentTemplateRepository['createBuiltin']>[0],
     ): Promise<void> {
       try {
-        await runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+        await runResourceCatalogTransaction(db, async (transaction) => {
           const existing = await transaction
             .select({ id: agents.id })
             .from(agents)
@@ -295,10 +307,10 @@ export function createPostgresqlDigitalEmployeeAgentTemplateRepository(
             .run()
         })
       } catch (error) {
-        if (isPostgresqlUniqueViolation(error, ['agents_owner_name_unique'])) {
+        if (isOwnerNameConflict(error)) {
           throw nameConflict(input.definition.name)
         }
-        if (isPostgresqlUniqueViolation(error, ['agents_pkey'])) throw occupied(input.id)
+        if (isPrimaryKeyConflict(error)) throw occupied(input.id)
         throw error
       }
     },
@@ -307,7 +319,7 @@ export function createPostgresqlDigitalEmployeeAgentTemplateRepository(
       input: Parameters<DigitalEmployeeAgentTemplateRepository['renameBuiltin']>[0],
     ): Promise<void> {
       try {
-        await runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+        await runResourceCatalogTransaction(db, async (transaction) => {
           const row = await transaction.select().from(agents).where(eq(agents.id, input.id)).get()
           const current = requireSystemBuiltin(input.id, row, input)
           if (current.name === input.newName) return
@@ -340,7 +352,7 @@ export function createPostgresqlDigitalEmployeeAgentTemplateRepository(
           if (changed === undefined) throw stale(input.id)
         })
       } catch (error) {
-        if (isPostgresqlUniqueViolation(error, ['agents_owner_name_unique'])) {
+        if (isOwnerNameConflict(error)) {
           throw nameConflict(input.newName)
         }
         throw error
@@ -350,7 +362,7 @@ export function createPostgresqlDigitalEmployeeAgentTemplateRepository(
     async updateBuiltin(
       input: Parameters<DigitalEmployeeAgentTemplateRepository['updateBuiltin']>[0],
     ): Promise<void> {
-      await runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+      await runResourceCatalogTransaction(db, async (transaction) => {
         const row = await transaction.select().from(agents).where(eq(agents.id, input.id)).get()
         const current = requireSystemBuiltin(input.id, row, input)
         const runtime =

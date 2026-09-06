@@ -159,7 +159,7 @@ import {
   composeAgentResourceIntegrity,
   composeDatabaseAgentResourceInventorySource,
 } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
 import {
   composeDigitalEmployeeWriterCutoverFor,
@@ -2246,7 +2246,7 @@ async function composeSqliteProviderSession(
 
   // RFC-310: business templates are platform resources, not schema data. Seed
   // them after DB admission so pure migrations remain free of resource rows.
-  const digitalEmployeeAgentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+  const digitalEmployeeAgentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
     db,
     composeDigitalEmployeeAgentTemplateCatalogParticipant,
   )

@@ -116,46 +116,43 @@ describe('RFC-345 provider-neutral Digital Employee Agent template catalog', () 
     }
   })
 
-  test('mints the public handle only through Digital Employee and binds native provider writers', () => {
+  test('岗位模版目录只由 Digital Employee 铸造句柄，写面是一份中立实现', () => {
     const publicParticipant = digitalEmployeeSource('public/participants.ts')
     const ownerFactory = digitalEmployeeSource('composition/agentTemplateCatalog.ts')
     const composition = resourceCatalogSource('composition/digitalEmployeeAgentTemplateCatalog.ts')
-    const sqlite = resourceCatalogSource(
-      'infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts',
-    )
-    const postgresql = resourceCatalogSource(
-      'infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts',
+    const repository = resourceCatalogSource(
+      'infrastructure/digitalEmployeeAgentTemplateCatalog.ts',
     )
 
     expect(publicParticipant).toContain(
       'readonly [digitalEmployeeAgentTemplateCatalogParticipantBrand]',
     )
     expect(ownerFactory).toContain('composeDigitalEmployeeAgentTemplateCatalogParticipant(')
-    expect(composition).toContain('composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(')
-    expect(composition).toContain(
-      'composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant(',
-    )
+    // RFC-359 W4-D22：装配只剩一份，两个 bootstrap 共用；provider 前缀的两份实现都已退役。
+    expect(composition).toContain('composeDigitalEmployeeAgentTemplateCatalogFor(')
     expect(composition).toContain('DigitalEmployeeAgentTemplateCatalogParticipantMint')
     expect(composition).toContain('return mint(')
     expect(composition).not.toMatch(
       /digital-employee\/(?:application|composition|infrastructure)|as unknown/,
     )
+    for (const retired of [
+      'infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts',
+      'infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts',
+    ]) {
+      expect(() => resourceCatalogSource(retired)).toThrow()
+    }
 
-    expect(sqlite).toContain("from './legacy/agent'")
-    expect(sqlite).toContain('ownerUserId: SYSTEM_USER_ID')
-    expect(sqlite).toContain('builtin: true')
-    expect(sqlite).not.toContain("from '@/services/")
-
-    expect(postgresql).toContain(
-      'runPostgresqlResourceCatalogTransaction(db, async (transaction) =>',
-    )
-    expect(postgresql).toContain("visibility: 'public', builtin: true")
-    expect(postgresql).toContain('eq(agents.ownerUserId, SYSTEM_USER_ID)')
-    expect(postgresql).toContain('eq(agents.builtin, true)')
-    expect(postgresql).toContain('eq(agents.updatedAt, input.expectedUpdatedAt)')
-    expect(postgresql).toContain('eq(agents.aclRevision, input.expectedAclRevision)')
-    expect(postgresql).not.toMatch(
-      /@\/services\/|\.\/legacy\/|createSqlite|\bDbClient\b|bun:sqlite|as unknown| as Postgresql/,
+    // builtin 模版的写面判据：系统 owner + builtin 双条件定位、更新走 updatedAt + aclRevision 双 OCC，
+    // 唯一冲突经能力矩阵映射（不认某一个方言的约束名）。
+    expect(repository).toContain('runResourceCatalogTransaction(db, async (transaction) =>')
+    expect(repository).toContain("visibility: 'public', builtin: true")
+    expect(repository).toContain('eq(agents.ownerUserId, SYSTEM_USER_ID)')
+    expect(repository).toContain('eq(agents.builtin, true)')
+    expect(repository).toContain('eq(agents.updatedAt, input.expectedUpdatedAt)')
+    expect(repository).toContain('eq(agents.aclRevision, input.expectedAclRevision)')
+    expect(repository).toContain('engine.uniqueViolationTarget(error)')
+    expect(repository).not.toMatch(
+      /@\/services\/|\.\/legacy\/|createSqlite|\bDbClient\b|PostgresqlDatabaseClient|bun:sqlite|as unknown/,
     )
   })
 })

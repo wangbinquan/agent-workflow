@@ -32,7 +32,7 @@ import {
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { buildDigitalEmployeeFixedPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { createApp } from '@/server'
 import {
   ensureDigitalEmployeeAgentTemplates,
@@ -755,7 +755,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     const db = createInMemoryDb(MIGRATIONS)
     expect(await listAgents(db)).toEqual([])
 
-    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
       db,
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )
@@ -808,7 +808,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     // of the exact tool revision, while the built-in repair Agent explicitly
     // declares that it can solve every problem emitted by that classifier.
     const catalog = await composeDigitalEmployeeBuiltinToolCatalog({
-      agentTemplates: composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      agentTemplates: composeDigitalEmployeeAgentTemplateCatalogFor(
         db,
         composeDigitalEmployeeAgentTemplateCatalogParticipant,
       ),

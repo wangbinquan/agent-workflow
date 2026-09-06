@@ -21,7 +21,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { agents as agentRows } from '@/db/schema'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { getAgentById, listAgents } from '@/services/agent'
 import {
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
@@ -32,7 +32,7 @@ import {
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function templateCatalog(db: ReturnType<typeof createInMemoryDb>) {
-  return composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+  return composeDigitalEmployeeAgentTemplateCatalogFor(
     db,
     composeDigitalEmployeeAgentTemplateCatalogParticipant,
   )

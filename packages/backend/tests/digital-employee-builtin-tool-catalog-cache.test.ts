@@ -5,7 +5,7 @@ import { createInMemoryDb, type DbClient } from '@/db/client'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { readPersistedDigitalEmployeeTypePackageDescriptorJsons } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
@@ -15,7 +15,7 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
   test('repeated catalog reads do not issue SQLite selects after composition', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await ensureDigitalEmployeeAgentTemplates(
-      composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      composeDigitalEmployeeAgentTemplateCatalogFor(
         db,
         composeDigitalEmployeeAgentTemplateCatalogParticipant,
       ),
@@ -35,7 +35,7 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
       },
     }) as DbClient
 
-    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
       countedDb,
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )

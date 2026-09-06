@@ -82,7 +82,7 @@ import {
   composeDatabaseAgentResourceInventorySource,
   type AgentResourceIntegrityComposition,
 } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import {
@@ -2444,7 +2444,7 @@ function composeSqliteApiRouteMounts(
     composeApplicationEventCenter(deps, deps.developmentDeliveryProvider)
   const digitalEmployeeAgentTemplates =
     deps.digitalEmployeeAgentTemplates ??
-    composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    composeDigitalEmployeeAgentTemplateCatalogFor(
       deps.db,
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )

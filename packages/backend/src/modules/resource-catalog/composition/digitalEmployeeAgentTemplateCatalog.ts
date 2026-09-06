@@ -1,12 +1,10 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createDigitalEmployeeAgentTemplateCatalogPersistence,
   type DigitalEmployeeAgentTemplateCatalogPersistencePort,
 } from '../application/agents/digitalEmployeeAgentTemplateCatalog'
-import { createPostgresqlDigitalEmployeeAgentTemplateRepository } from '../infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog'
-import { createSqliteDigitalEmployeeAgentTemplateRepository } from '../infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog'
+import { createDigitalEmployeeAgentTemplateRepository } from '../infrastructure/digitalEmployeeAgentTemplateCatalog'
 
 /**
  * Digital Employee owns the runtime brand and is therefore the only context
@@ -17,24 +15,14 @@ export type DigitalEmployeeAgentTemplateCatalogParticipantMint = (
   persistence: DigitalEmployeeAgentTemplateCatalogPersistencePort,
 ) => DigitalEmployeeAgentTemplateCatalogParticipant
 
-export function composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
-  db: DbClient,
+/** RFC-359 W4-D22 —— 岗位模版目录一份装配，两个 provider 共用。 */
+export function composeDigitalEmployeeAgentTemplateCatalogFor(
+  db: ProviderNeutralDatabase,
   mint: DigitalEmployeeAgentTemplateCatalogParticipantMint,
 ): DigitalEmployeeAgentTemplateCatalogParticipant {
   return mint(
     createDigitalEmployeeAgentTemplateCatalogPersistence(
-      createSqliteDigitalEmployeeAgentTemplateRepository(db),
-    ),
-  )
-}
-
-export function composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant(
-  db: PostgresqlDatabaseClient,
-  mint: DigitalEmployeeAgentTemplateCatalogParticipantMint,
-): DigitalEmployeeAgentTemplateCatalogParticipant {
-  return mint(
-    createDigitalEmployeeAgentTemplateCatalogPersistence(
-      createPostgresqlDigitalEmployeeAgentTemplateRepository(db),
+      createDigitalEmployeeAgentTemplateRepository(db),
     ),
   )
 }

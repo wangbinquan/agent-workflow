@@ -31,7 +31,7 @@ import {
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   digitalEmployeeAgentToolPresentation,
   ensureDigitalEmployeeAgentTemplates,
@@ -648,7 +648,7 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
   // tests/digital-employee-agent-template-reconcile.test.ts.
   test('v2 built-in IDs are create-or-converge and repair a drifted definition', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
       db,
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )

@@ -29,7 +29,7 @@ import {
 import { executionContractRefKey } from '@/modules/execution-contract/public/types'
 import { createProgramArtifactStore } from '@/modules/digital-employee/infrastructure/programArtifactStore'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
@@ -833,7 +833,7 @@ describe('platform execution contracts', () => {
 
   test('Agent compatibility requires both the output port and an explicit contract declaration', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
       db,
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )

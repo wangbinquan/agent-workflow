@@ -28,7 +28,7 @@ import {
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
@@ -158,7 +158,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
 
     try {
       await seedTestDefaultOpencodeRuntime(db)
-      const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
         db,
         composeDigitalEmployeeAgentTemplateCatalogParticipant,
       )

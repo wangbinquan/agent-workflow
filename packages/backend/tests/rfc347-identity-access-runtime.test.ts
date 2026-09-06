@@ -312,7 +312,6 @@ describe('RFC-347 exact production source locks', () => {
     expect(callPaths('buildActor(')).toEqual([
       'src/auth/actor.ts',
       'src/modules/memory/infrastructure/memoryCatalogOperations.ts',
-      'src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts',
     ])
   })
 

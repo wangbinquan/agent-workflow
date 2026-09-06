@@ -20,7 +20,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createUser } from '../src/services/users'
 import { createApp } from '../src/server'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition'
-import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '../src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { developmentEmployeeTypePackage } from '../src/modules/development-automation/composition/employeeTypePackage'
 import { ensureDigitalEmployeeAgentTemplates } from '../src/services/digitalEmployeeAgentTemplates'
@@ -39,7 +39,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     db = createInMemoryDb(MIGRATIONS)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc349-platform-tools-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const templates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    const templates = composeDigitalEmployeeAgentTemplateCatalogFor(
       db,
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )

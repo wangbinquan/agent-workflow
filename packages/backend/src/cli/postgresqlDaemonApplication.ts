@@ -74,7 +74,7 @@ import {
   composeWorkgroupTaskRoomActiveUsers,
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
-import { composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { composePostgresqlTaskExecutionResourceSnapshotFactory } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
@@ -560,11 +560,10 @@ export async function composePostgresqlDaemonApplication(
     db: input.db,
     resourceCatalog,
   })
-  const digitalEmployeeAgentTemplates =
-    composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant(
-      input.db,
-      composeDigitalEmployeeAgentTemplateCatalogParticipant,
-    )
+  const digitalEmployeeAgentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
+    input.db,
+    composeDigitalEmployeeAgentTemplateCatalogParticipant,
+  )
   const authorityFor = (actor: Actor) =>
     directOperationAuthority(identityAccess.directAuthority, actor)
   const oidcIdentities = composeOidcIdentityOperations({
