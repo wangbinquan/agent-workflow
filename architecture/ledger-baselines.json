@@ -398,8 +398,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1807,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1808,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D23b 收尾：意图应用的大事务改走中立会话后，普查把新的具名窄化助手 `syncMembers` 也算作一个写入入口（1807 → 1808）。它不写任何东西——只是把中立句柄的类型窄回 `DbTxSync` 交给链上还没迁完的同步成员，与 bundle apply 那一处同形，带同样的退役条件（那批成员迁完、两套 apply 引擎合一时随文件消失）。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -433,8 +436,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5562,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5563,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D23b 收尾：意图应用的大事务也改走中立会话，因此 `sqliteIntentApplyOperations.ts` 新增两条指向 `platform/persistence/databaseTransaction` 的边（`databaseSessionFor` / `DatabaseTransaction`）与一个具名窄化助手 `syncMembers`。这三格是**同一件事**的三种记法：把 bun:sqlite 专属的同步事务面换成两个 provider 共用的原语。窄化助手带退役条件——链上那批 `*InTx` 同步成员迁完、两套 apply 引擎合一时随文件一起消失。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -454,8 +460,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4964,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4965,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D23b 收尾：意图应用的大事务也改走中立会话，因此 `sqliteIntentApplyOperations.ts` 新增两条指向 `platform/persistence/databaseTransaction` 的边（`databaseSessionFor` / `DatabaseTransaction`）与一个具名窄化助手 `syncMembers`。这三格是**同一件事**的三种记法：把 bun:sqlite 专属的同步事务面换成两个 provider 共用的原语。窄化助手带退役条件——链上那批 `*InTx` 同步成员迁完、两套 apply 引擎合一时随文件一起消失。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -489,12 +498,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25331,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25332,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W4-D23b 收尾：意图应用的大事务也改走中立会话，因此 `sqliteIntentApplyOperations.ts` 新增两条指向 `platform/persistence/databaseTransaction` 的边（`databaseSessionFor` / `DatabaseTransaction`）与一个具名窄化助手 `syncMembers`。这三格是**同一件事**的三种记法：把 bun:sqlite 专属的同步事务面换成两个 provider 共用的原语。窄化助手带退役条件——链上那批 `*InTx` 同步成员迁完、两套 apply 引擎合一时随文件一起消失。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:720946387affc638669c81fb1614394c27321533004404d12ec40a7973ab9821",
+    "sourceDigest": "sha256:56877179b1b345fec65e1f91b443b2a5e951e30a3b7316ea7855dd5b9e694aeb",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -507,8 +519,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a21a87ba22cd4dcd70dc548b9c4424ef8ae33fe3",
-    "contentDigest": "sha256:b1c6b8c1c2622585dbbc851d89963a5164d85fb21c36901232cff67ae04776ce",
+    "currentSnapshotSha": "bd623e2475fd529fd8fba7e7e5bcd01c645d828c",
+    "contentDigest": "sha256:8e1821eb95b6768b378f1c8e7c0ebb1561937770951d8024c9dc1574b9f28640",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

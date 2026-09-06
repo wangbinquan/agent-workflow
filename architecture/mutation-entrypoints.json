@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1807,
+    "entries": 1808,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -14303,6 +14303,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLock",
       "symbol": "applyLock",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#syncMembers",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#syncMembers",
+      "symbol": "syncMembers",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -43138,7 +43162,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:720946387affc638669c81fb1614394c27321533004404d12ec40a7973ab9821",
+  "sourceDigest": "sha256:56877179b1b345fec65e1f91b443b2a5e951e30a3b7316ea7855dd5b9e694aeb",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1049,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20378,
+    "recursiveFields": 20379,
     "symbols": 979
   },
   "entries": [
@@ -99071,7 +99071,12 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:authorizeAndCommit.$return",
+          "fieldPath": "$method:authorizeAndCommit.$return.$variant:0",
+          "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:authorizeAndCommit.$return.$variant:1",
           "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
         }
       ],
@@ -99087,7 +99092,7 @@
             "import:b2d82ebf2a8487245032"
           ],
           "name": "authorizeAndCommit",
-          "signatureDigest": "sha256:a5579b7887693a380ff0366c8562daa6e1a2258efe5542cb80762c96072ee565"
+          "signatureDigest": "sha256:eab4d7768dbadf283e36bd083bad41960525d4a3165166ca0033bd61f59a9207"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#IntentApplyResourceParticipantInTx",
@@ -99102,7 +99107,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:c34ff1329dd106e0cc1742be8e87d523294c9a0c0334b89c0766b58b7163d862",
+      "signatureDigest": "sha256:84c2ebfa741776554c1d491bedec5fe696f94b98befd9e9dd00101e23fe00100",
       "status": "target-context-current-surface",
       "symbol": "IntentApplyResourceParticipantInTx",
       "transaction": "caller-tx",
@@ -161276,7 +161281,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:720946387affc638669c81fb1614394c27321533004404d12ec40a7973ab9821",
+  "sourceDigest": "sha256:56877179b1b345fec65e1f91b443b2a5e951e30a3b7316ea7855dd5b9e694aeb",
   "targetContexts": [
     "collaboration",
     "development-automation",
