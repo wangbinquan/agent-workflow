@@ -656,6 +656,13 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
 3. 提交前 `git diff --stat` 看一眼：**纯新增的文档批不该出现删除行**，出现了基本就是格式重排。
 4. markdown 表格单元格里出现 `|`（例如把三个路径缩写成 `a|b|c`），prettier 会把它当列分隔符、把那一行撑成
    多列并顺手改坏整张表的分隔行。表格里写路径就分开写，别用 `|` 缩写。
+5. **比重排更糟的是它会改坏正文**（2026-09-06 在 `STATE.md` 实撞）：这类文件里大量出现「反引号外的下划线 /
+   星号」——`node_runs`、`legacy/skill*`、`employee_*`、正则里的 `%` / `_`。prettier 按 markdown 强调语法
+   解释它们，于是 `node_runs 铸造` 被写成 `node*runs 铸造`、`legacy/skill*` 被写成 `legacy/skill\*`；
+   引用块（`>` 开头）里跨行的长句还会**丢掉行首的 `>`**，把一段引用劈成引用 + 正文两截。一次
+   `prettier --write STATE.md` 产出 18 行改动，其中只有 3 行是我自己的，其余全是这类损坏。
+   **CI 不查 ⇒ 这些损坏没有任何守卫会报**，只能靠不跑。已经跑了就 `git checkout -- <file>` 整份还原、
+   再用脚本重放自己那几处编辑（不要试图手工挑拣 diff）。
 
 ## 数据库驱动错误的分类器必须沿 `cause` 链、按结构化字段判——Bun.SQL 的 SQLSTATE 在 `errno`（2026-09-04 两次实撞）
 

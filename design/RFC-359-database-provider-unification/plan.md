@@ -747,8 +747,7 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   | 相似度 | 对 | SQLite / PG 规模（字符） |
   | --- | --- | --- |
   | 0.59 | TaskExecutionResourceSnapshots | 1512 / 2567 |
-  | 0.50 | HumanGateTaskLifecyclePersistence | 5856 / 5955 |
-  | 0.31 | TaskExecutionRuntimeParticipants | 5215 / 6082 |
+    | 0.31 | TaskExecutionRuntimeParticipants | 5215 / 6082 |
   | 0.26 | TaskExecutionEffectPersistence | 9821 / 28952 |
   | 0.22 | TaskLifecycleAutoRepairCommand | 2176 / 5988 |
   | 0.13 | TaskExecutionRecovery | 10139 / 19951 |
@@ -756,12 +755,40 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   | 0.08 | TaskArchiveMaintenanceCommand | 2133 / 21589 |
   | ≤0.04 | TaskRouteOperations / SourceTerminationParticipant / TerminalMaintenancePersistence / TaskRouteLaunchOperations / ChildExecutionLaunchOperations | 见普查 |
 
-  **`HumanGateTaskLifecyclePersistence` 动过一次、又还原了**（本次 session）：它的 PG 那份已经全部
-  建立在**已合一的中立原语**上（`transitionHumanGateTask` / `nodeRunLifecyclePersistence` /
-  `taskRuntimeLifecyclePersistence` / `assertTaskOwnerTx`），改名 + 换事务原语十分钟就走完；
-  **卡在它内部还 new 了 `PostgresqlHumanGateOpenParticipantInTx`**——那是 collaboration 侧的另一对
-  （695 / 820 行，相似度 0.62），不先把它合掉，这一对就只能停在半截。所以这两对是**同一刀**，
-  下次从 collaboration 的 `HumanGateOpenParticipant` 起手，再回来收 task-execution 这半。
+  **D25 ✅（human-gate 停靠原子合一，2026-09-06）**：上一轮把 `HumanGateTaskLifecyclePersistence`
+  动了一次又还原，卡点是它内部 new 了 `PostgresqlHumanGateOpenParticipantInTx`——collaboration 侧
+  的另一对（695 / 820 行）。这一刀按记录的顺序从 collaboration 起手，一次收掉**三对 + 一条 legacy 路**：
+
+  - **`humanGateOpenParticipant.ts`（新，中立）** 替代 `sqlite|postgresqlHumanGateOpenParticipant.ts`。
+    正典取 SQLite 那份的语义：逐点的陈旧原因文案、提交 / 完成的**幂等重放**、以及「提交要求工件全
+    `staged`、完成要求工件全 `finalized`」两条判据。关键发现是**这些语义早就有中立副本**——
+    `humanGateOperationJournal.ts`（`DatabaseHumanGateOperationJournal`）是 `SqliteHumanGateOperationStore`
+    的逐行异步移植，PG 那份参与者却自己内联了一套**更弱**的 commit / complete（不认幂等重放、
+    不校工件状态、只从 `prepared` 起跳）。合一直接用 journal，于是 PG 侧顺带补齐了这三条。
+    node run 的停靠改走 collaboration 自己声明的窄能力 `HumanGateNodeRunLifecycleParticipantInTx`
+    （由 task-execution 供给），不再 import 对方 infrastructure。
+  - **`humanGateTaskLifecyclePersistence.ts`（新，中立）** 替代两份 provider 实现。三处差异各取中立
+    原语：`withTaskExecutionSerializable`（不改任一引擎的隔离级别）、`assertTaskOwnerTx` /
+    `assertTaskOwnerlessTx`（围栏从**库外预读**挪进同一笔事务，两个引擎都不再有「读完到写之间被人
+    认领」的窗口）、`transitionHumanGateTask`（蓝本就是 SQLite 跑最久的那份）。
+  - **`clarifyQuestionSnapshotReader.ts`（新，中立）** 替代 `sqlite|postgresqlClarifyQuestionSnapshotReader.ts`
+    ——两份逐字同一条查询，只差取行姿势。
+  - **legacy 同步停靠路整条退役**：`sqliteTaskParkTransaction.ts` / `sqliteManualQuestionParkTransaction.ts` /
+    `composition/taskExecutionHumanGateAdapter.ts` / task-execution 侧的同步 `HumanGateOpenParticipant`
+    端口全删。`composition/humanGate.ts` 的 `parkPreparedHumanGate` /
+    `settleManualQuestionParkObligations`（legacy review / clarify 服务的入口）直接落到中立原子——
+    对账下来它与 `TaskParkTransaction` **逐条同判据**（同一个 owner 围栏、同一条 `transitionHumanGateTask`、
+    同样提交后发事件），本来就是同一份逻辑的第二次抄写。
+
+  又是「按端口数覆盖、不是按实现数」那条：RFC-333 的停靠套件（`rfc333-task-participants.test.ts`，
+  15 个 test）**全部直接 new SQLite 那几个类**，PG 侧只有装配被引用过。这批已改接中立端口后一次全绿，
+  说明两侧行为本来就该一致；新增 `rfc359-w4-d25-adapters.test.ts` 给**两个引擎**补齐停靠的核心判据
+  （门消费 + 任务跃迁 + 两族事件同笔落定 / 陈旧 taskRevision 整笔回滚 / 无义务时结算是 no-op /
+  带守卫的 CAS 正常落定），9 条两引擎各绿。
+
+  留债：`SqliteHumanGateOperationStore`（825 行）还活着，唯一消费者是
+  `sqliteManualQuestionOpenWriter.ts`（它与 `postgresqlManualQuestionOpenWriter.ts` 是下一对，
+  165 / 269 行）。把那一对合掉，这个与 journal 完全重复的同步 store 就能整份删除——**D26**。
 
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
