@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 864,
+    "consumers": 861,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1051,
@@ -102104,7 +102104,6 @@
       },
       "consumerEdgeIds": [
         "import:086cdcbd73a537b38be1",
-        "import:23496160ab69ca95f8df",
         "import:2437b8bc2b130eb18ddc",
         "import:48701b748499c8fe3294",
         "import:669e36ea8d1a61626da9",
@@ -102133,12 +102132,6 @@
           "edgeId": "import:086cdcbd73a537b38be1",
           "file": "packages/backend/src/modules/intent/application/ports/intentPersistence.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentPersistence.ts#$file"
-        },
-        {
-          "context": "task-execution",
-          "edgeId": "import:23496160ab69ca95f8df",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts#$file"
         },
         {
           "context": "integration",
@@ -103570,7 +103563,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:c90b36848c519e778359"
+        "import:302471dfa46f55c523f8"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -103597,25 +103590,25 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:c90b36848c519e778359"
+            "import:302471dfa46f55c523f8"
           ],
           "name": "loadAuthorized",
-          "signatureDigest": "sha256:7d0a39128c2848092c9eea9ce4e56405928648b17c933df7c4af89244cc09d38"
+          "signatureDigest": "sha256:e1bb878fdac20a43572de5746a1b571380825493c557a4c5dc313cb31b3c312f"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#TaskExecutionResourceSnapshotInTx",
       "productionConsumers": [
         {
           "context": "task-execution",
-          "edgeId": "import:c90b36848c519e778359",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts#$file"
+          "edgeId": "import:302471dfa46f55c523f8",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:174926a81d2a61cb6f79f22b35d277382fa00ce6995aac321cb4403208c0f899",
+      "signatureDigest": "sha256:a48794fcaa8a070f040a876eb473af57d04b42f07d5fcb5de6fcc7d4c4fc0d7b",
       "status": "target-context-current-surface",
       "symbol": "TaskExecutionResourceSnapshotInTx",
       "transaction": "caller-tx",
@@ -111699,7 +111692,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:02afa7fe6951cd9fea18",
         "import:2eca83b560488a3f0c27",
         "import:43255f578eedae8ef03e",
         "import:4aa235ff209007de7fd5",
@@ -111786,7 +111778,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:02afa7fe6951cd9fea18",
             "import:2eca83b560488a3f0c27",
             "import:43255f578eedae8ef03e",
             "import:4aa235ff209007de7fd5",
@@ -111900,12 +111891,6 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#FrozenTaskExecutionResourceSnapshot",
       "productionConsumers": [
-        {
-          "context": "task-execution",
-          "edgeId": "import:02afa7fe6951cd9fea18",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts#$file"
-        },
         {
           "context": "task-execution",
           "edgeId": "import:2eca83b560488a3f0c27",
@@ -116722,7 +116707,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:7d55002ef61cfc8afa59",
         "import:88575402b32a1882f384",
         "import:a11becd119c2cdfc4a65",
         "import:d9da9c702e7838715662"
@@ -116843,12 +116827,6 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#TaskExecutionResourceRequest",
       "productionConsumers": [
-        {
-          "context": "task-execution",
-          "edgeId": "import:7d55002ef61cfc8afa59",
-          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts#$file"
-        },
         {
           "context": "task-execution",
           "edgeId": "import:88575402b32a1882f384",
@@ -161395,7 +161373,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae45632e0c7604e66a37818f19d0e656d7573d8af9205b23fdb43e1758cf6234",
+  "sourceDigest": "sha256:597c78e6bbe7b9312f7e57a93aff9b4731648457ed4848a8ad834064fc006680",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -1441,29 +1441,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:48be2a03af0b1f738169",
-        "import:555b70202a51332812bd",
-        "import:58fbb2f48fd01a570ef9",
-        "import:79f5fd73197352a4569c",
-        "import:c741d0f4a402d5d467f4",
-        "import:ce9e4232f5297727977c",
-        "import:e815ec7bd43c1db961c8",
-        "import:f18bff88c5bdf3862d59",
-        "import:f473827726fb7eab6a98"
-      ],
-      "exportedSymbols": [
-        "legacyTaskExecutionResourceDependencies"
-      ],
-      "file": "packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts",
-      "id": "facade:packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:1db8cdd216f61ab44733"
       ],
       "exportedSymbols": [
@@ -1654,17 +1631,36 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0016225535d82ec291e1",
+        "import:01bcb3373a773cda4765",
+        "import:2ca09ec4280029fa3692",
+        "import:5a880a431f1f1b8f4da5",
+        "import:8f27e359eaf6b00ddae7",
+        "import:e82adae961f4a5cc5bef"
+      ],
+      "exportedSymbols": [
+        "taskExecutionResourceDependencies"
+      ],
+      "file": "packages/backend/src/services/execution/taskExecutionResourceDependencies.ts",
+      "id": "facade:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-implementation",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
         "import:1493e4f3e6294d025210",
         "import:30e93cbef192db502883",
         "import:33556546fea52cf8243b",
         "import:386f40988b7aa69baab2",
-        "import:3e6a255b3d7b5265ac8a",
         "import:45116fbd9857c2298ea6",
         "import:4aa235ff209007de7fd5",
         "import:4ea5d4c6c34895182685",
         "import:5c8d8df96c8bc7cdd1c9",
+        "import:78dff9bee9c7a1a9b7e2",
         "import:7cffc9c74bf8270026c5",
-        "import:8366954f96f1d19fdc5f",
         "import:9abd7b711f8c0d817850",
         "import:b412df37bd3eb12c5b3b",
         "import:d9da9c702e7838715662",
@@ -6803,5 +6799,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae45632e0c7604e66a37818f19d0e656d7573d8af9205b23fdb43e1758cf6234"
+  "sourceDigest": "sha256:597c78e6bbe7b9312f7e57a93aff9b4731648457ed4848a8ad834064fc006680"
 }

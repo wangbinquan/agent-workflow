@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1817,
+    "entries": 1815,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17957,28 +17957,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts#createLegacyTaskExecutionResourceSnapshotPorts",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts#createLegacyTaskExecutionResourceSnapshotPorts",
-      "symbol": "createLegacyTaskExecutionResourceSnapshotPorts",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -18490,16 +18468,16 @@
         "fenceOrOcc": true,
         "transaction": true
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlTaskExecutionResourceSnapshots.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlTaskExecutionResourceSnapshots.ts#createPostgresqlTaskExecutionResourceSnapshotReader",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceSnapshotPorts",
       "missingControls": [
         "audit",
         "authority",
         "event"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlTaskExecutionResourceSnapshots.ts#createPostgresqlTaskExecutionResourceSnapshotReader",
-      "symbol": "createPostgresqlTaskExecutionResourceSnapshotReader",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceSnapshotPorts",
+      "symbol": "createTaskExecutionResourceSnapshotPorts",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -28566,29 +28544,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts#createPostgresqlTaskExecutionResourceBinding",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts#createPostgresqlTaskExecutionResourceBinding",
-      "symbol": "createPostgresqlTaskExecutionResourceBinding",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": false,
@@ -29528,29 +29483,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts#createSqliteTaskExecutionResourceBinding",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots.ts#createSqliteTaskExecutionResourceBinding",
-      "symbol": "createSqliteTaskExecutionResourceBinding",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "request",
         "authorization": true,
         "event": false,
@@ -29991,6 +29923,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels",
       "symbol": "createTaskExecutionReadModels",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding",
+      "symbol": "createTaskExecutionResourceBinding",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -43371,7 +43326,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae45632e0c7604e66a37818f19d0e656d7573d8af9205b23fdb43e1758cf6234",
+  "sourceDigest": "sha256:597c78e6bbe7b9312f7e57a93aff9b4731648457ed4848a8ad834064fc006680",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
