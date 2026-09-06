@@ -2129,14 +2129,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7356486a524b19bde0e475d94735dae372ba21f91390eea9509646a88d5201c8",
+    "sourceDigest": "sha256:46d187a19188418a55ae2dad536c98f90b9a77a022dc19ea96b0e751b8ac0e0a",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "7526573e1cc7c0c837db38cf20c1c4584f18293c",
-    "contentDigest": "sha256:471260f5f7398b318376d8a6293545b85ccb9832059973c01b27fc1470649af3",
+    "currentSnapshotSha": "0efb194ee733a2c2a0d7c391eafb60b6d914400c",
+    "contentDigest": "sha256:3219b7bf4aecb0ea774f666f18636d537ec5147f7dc968a07b4a3347f5d7d8e6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

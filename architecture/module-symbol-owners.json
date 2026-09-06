@@ -83430,7 +83430,7 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#messageDraft",
       "removeAfterWave": null,
@@ -305897,5 +305897,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7356486a524b19bde0e475d94735dae372ba21f91390eea9509646a88d5201c8"
+  "sourceDigest": "sha256:46d187a19188418a55ae2dad536c98f90b9a77a022dc19ea96b0e751b8ac0e0a"
 }
