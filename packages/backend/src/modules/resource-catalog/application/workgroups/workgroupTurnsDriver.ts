@@ -520,6 +520,11 @@ async function executeHostTurn<T>(
   // 协议预算与「瞬时运行时故障」的重跑预算是**两份**，各记各的（与合一前 SQLite 同形）：
   // 换进程重跑一轮流中断，不该把模型的协议重试次数吃掉。
   let transientRetriesUsed = 0
+  // 但「不吃协议预算」不等于「不进账本」：每条新铸的 run 都要**自己占一格 retryIndex**（重试产生
+  // 按 retry_index 区分的独立 node_runs），并按 `wg-protocol-retry` 记账，好让轮次统计把它跳过。
+  // 采纳来的那条已经占住 retryBase，因此偏移从 1 起。
+  let freshMintOffset = adopted === undefined ? 0 : 1
+  let transientRetryPending = false
   let attempt = 0
   while (attempt <= maxProtocolRetries) {
     let run: WorkgroupTurnMintedRun
@@ -541,8 +546,8 @@ async function executeHostTurn<T>(
           runId,
           nodeId: spec.nodeId,
           status: 'pending',
-          cause: attempt === 0 ? spec.primaryCause : 'wg-protocol-retry',
-          retryIndex: retryBase + attempt,
+          cause: attempt === 0 && !transientRetryPending ? spec.primaryCause : 'wg-protocol-retry',
+          retryIndex: retryBase + freshMintOffset,
           shardKey: spec.shardKey,
           agentOverrideName: spec.agent.name,
           agentOverrideId: spec.agent.id,
@@ -553,10 +558,12 @@ async function executeHostTurn<T>(
       const minted = mintedRun(started, operationKey)
       if (minted === null) return { kind: 'lost' }
       run = minted
+      freshMintOffset += 1
       spec.registerMint?.(run.runId)
       spec.host.broadcastNodeStatus?.(run.runId, spec.nodeId, 'pending')
     }
     adopted = undefined
+    transientRetryPending = false
     lastRunId = run.runId
     // RFC-207 §3.7.2 — resolve ONCE per attempt and feed BOTH the protocol block (whether to
     // invite an ask-back) and clarifyEnabled (whether to accept one); split derivations invite
@@ -595,6 +602,7 @@ async function executeHostTurn<T>(
       if (isTransientRuntimeFailure(result.failureCode)) {
         if (transientRetriesUsed < DEFAULT_PROTOCOL_RETRY_BUDGET) {
           transientRetriesUsed += 1
+          transientRetryPending = true
           continue
         }
         return { kind: 'failed', runId: run.runId, message }

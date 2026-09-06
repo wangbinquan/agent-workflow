@@ -21,7 +21,6 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
-  type Agent,
   parseWgAssignmentsPort,
   parseWgMessagesPort,
   WG_MAX_ASSIGNMENTS_PER_TURN,
@@ -65,7 +64,6 @@ import {
 import { deriveWakeSet } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 import { createLogger } from '../src/util/log'
-import { executeTurn } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 function deriveWake(input: WakeInput) {
@@ -718,141 +716,92 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
     expect(requests[1]?.promptTemplate).not.toContain('Protocol errors')
   })
 
+  // RFC-359 W4-D19c-tail：这两条原本直接调 legacy 的 `executeTurn`——锁的是已经不在生产路径上的
+  // 那一份。改成走两个 provider 真正在跑的中立驱动：房间里给成员一条点名消息触发**消息回合**
+  // （消息回合是单发的，maxAttempts=1），断言逐条保留。
+  const mentionCoder = async (taskId: string): Promise<string> => {
+    const messageId = ulid()
+    await db.insert(workgroupMessages).values({
+      id: messageId,
+      taskId,
+      round: 0,
+      authorKind: 'member',
+      authorMemberId: 'm-lead',
+      kind: 'chat',
+      bodyMd: '@coder handle the directed message',
+      mentionsJson: JSON.stringify(['m-coder']),
+      triggerMessageId: null,
+      createdAt: Date.now(),
+    })
+    return messageId
+  }
+  const memberLedger = async (taskId: string): Promise<Array<[number, string | null]>> =>
+    (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      .filter((run) => run.nodeId === WG_MEMBER_NODE_ID)
+      // 按 retryIndex 排——同毫秒铸出的 ULID 之间没有稳定序。
+      .sort((a, b) => a.retryIndex - b.retryIndex)
+      .map((run) => [run.retryIndex, run.rerunCause])
+
   test('runtime stream retry is independent of the message-turn attempt budget', async () => {
-    const config = cfg()
+    const config = cfg({
+      switches: { shareOutputs: true, directMessages: true, blackboard: false },
+    })
     const { taskId } = await seedEngineTask(db, config)
-    const agent = {
-      id: CODER_AGENT_ID,
-      name: 'coder-a',
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: '',
-      schemaVersion: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    } as Agent
-    let calls = 0
+    await mentionCoder(taskId)
+    let memberCalls = 0
     const hooks: WorkgroupEngineHooks = {
-      runHostNode: async (): Promise<WorkgroupHostRunResult> => {
-        calls += 1
-        if (calls === 1) {
-          return {
+      runHostNode: (req): Promise<WorkgroupHostRunResult> => {
+        if (req.nodeId !== WG_MEMBER_NODE_ID) {
+          return Promise.resolve(doneLeader({ decision: { action: 'done', summary: 'wrapped' } }))
+        }
+        memberCalls += 1
+        if (memberCalls === 1) {
+          return Promise.resolve({
             status: 'failed',
             outputs: {},
             errorMessage: 'runtime stream persistence failed',
             failureCode: 'runtime-stream-interrupted',
-          }
+          })
         }
-        return { status: 'done', outputs: { wg_result: 'recovered' } }
+        return Promise.resolve({ status: 'done', outputs: { wg_result: 'recovered' } })
       },
     }
-    const outcome = await executeTurn(
-      { db, taskId, hooks },
-      {
-        nodeId: WG_MEMBER_NODE_ID,
-        agent,
-        role: 'worker',
-        config,
-        clarifyShardKey: 'm-coder',
-        // Message turns deliberately get no protocol retry. Transport retries
-        // are a separate budget and must therefore still recover this turn.
-        maxAttempts: 1,
-        clarifyForbiddenNotice: '',
-        mintRow: () => ({
-          cause: 'wg-message-turn',
-          retryIndex: 0,
-          overrides: {
-            shardKey: 'msg:m-coder:1',
-            agentOverrideName: agent.name,
-            agentOverrideId: agent.id,
-          },
-        }),
-        composePrompt: () => 'handle the directed message',
-        parse: (outputs) => ({ ok: true, value: outputs.wg_result ?? '' }),
-      },
-    )
-    expect(outcome.kind).toBe('done')
-    expect(calls).toBe(2)
-    const rows = await db
-      .select({ retryIndex: nodeRuns.retryIndex, cause: nodeRuns.rerunCause })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
-    expect(rows.map((row) => [row.retryIndex, row.cause])).toEqual([
+    await runWorkgroupEngine({ db, taskId, log, hooks })
+
+    // 消息回合不给协议重试（maxAttempts=1）。传输重试是**另一份**预算，因此这一轮仍然救得回来。
+    expect(memberCalls).toBe(2)
+    expect(await memberLedger(taskId)).toEqual([
       [0, 'wg-message-turn'],
       [1, 'wg-protocol-retry'],
     ])
   })
 
   test('runtime stream retries are bounded even for a single-shot message turn', async () => {
-    const config = cfg()
+    const config = cfg({
+      switches: { shareOutputs: true, directMessages: true, blackboard: false },
+    })
     const { taskId } = await seedEngineTask(db, config)
-    const agent = {
-      id: CODER_AGENT_ID,
-      name: 'coder-a',
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: '',
-      schemaVersion: 1,
-      createdAt: 0,
-      updatedAt: 0,
-    } as Agent
-    let calls = 0
+    await mentionCoder(taskId)
+    let memberCalls = 0
     const hooks: WorkgroupEngineHooks = {
-      runHostNode: async (): Promise<WorkgroupHostRunResult> => {
-        calls += 1
-        return {
+      runHostNode: (req): Promise<WorkgroupHostRunResult> => {
+        if (req.nodeId !== WG_MEMBER_NODE_ID) {
+          return Promise.resolve(doneLeader({ decision: { action: 'done', summary: 'wrapped' } }))
+        }
+        memberCalls += 1
+        return Promise.resolve({
           status: 'failed',
           outputs: {},
           errorMessage: 'runtime stream persistence failed',
           failureCode: 'runtime-stream-interrupted',
-        }
+        })
       },
     }
-    const outcome = await executeTurn(
-      { db, taskId, hooks },
-      {
-        nodeId: WG_MEMBER_NODE_ID,
-        agent,
-        role: 'worker',
-        config,
-        clarifyShardKey: 'm-coder',
-        maxAttempts: 1,
-        clarifyForbiddenNotice: '',
-        mintRow: () => ({
-          cause: 'wg-message-turn',
-          retryIndex: 0,
-          overrides: {
-            shardKey: 'msg:m-coder:bounded',
-            agentOverrideName: agent.name,
-            agentOverrideId: agent.id,
-          },
-        }),
-        composePrompt: () => 'handle the directed message',
-        parse: (outputs) => ({ ok: true, value: outputs.wg_result ?? '' }),
-      },
-    )
-    expect(outcome).toMatchObject({ kind: 'failed', retryable: true })
-    // Initial run + the shared retry budget: never an unbounded loop.
-    expect(calls).toBe(DEFAULT_PROTOCOL_RETRY_BUDGET + 1)
-    const rows = await db
-      .select({ retryIndex: nodeRuns.retryIndex, cause: nodeRuns.rerunCause })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
-    expect(rows.map((row) => [row.retryIndex, row.cause])).toEqual([
+    await runWorkgroupEngine({ db, taskId, log, hooks })
+
+    // 初次 + 共享的那份重试预算：永远不会变成无界重跑。
+    expect(memberCalls).toBe(DEFAULT_PROTOCOL_RETRY_BUDGET + 1)
+    expect(await memberLedger(taskId)).toEqual([
       [0, 'wg-message-turn'],
       [1, 'wg-protocol-retry'],
       [2, 'wg-protocol-retry'],

@@ -38,18 +38,20 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
     for (const source of sources) expect(source).not.toContain('defaultNodeRetries ?? 3')
   })
 
-  test('workgroup 引擎：协议重试 + fc 重开预算走共享常量（RFC-217 拆分后锚点）', () => {
-    // RFC-217 T5 把协议重试预算挪进 turnExecution.ts（executeTurn 的
-    // retryPolicy 单源），fc 重开预算判据在 lifecycle.ts settle 路径。
-    const turn = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts')
-    expect(turn).toContain('const WG_PROTOCOL_RETRIES = DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(turn).not.toContain('WG_PROTOCOL_RETRIES = 3')
+  test('workgroup 回合驱动：协议重试 + fc 重开预算走共享常量', () => {
+    // RFC-359 W4-D19c：两个 provider 合到同一条中立驱动，两个锚点都在它里面
+    // （合一前分居 legacy 的 turnExecution.ts 与 lifecycle.ts）。
+    const driver = SRC('modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts')
+    // 协议重试预算：每回合的上限允许被 spec 覆盖（消息回合是单发），兜底走共享常量。
+    expect(driver).toContain('spec.maxProtocolRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(driver).not.toContain('maxProtocolRetries ?? 3')
     // RFC-215：fc 重开预算从「按 shardKey 数 node_runs 行（priorRuns）」改为
     // workgroup_assignments.attempt_count 列（批量 shardKey 下行计数失效），
     // 判据仍必须走共享常量。
-    const lifecycle = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts')
-    expect(lifecycle).toContain('attemptCount < DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(lifecycle).not.toContain('attemptCount < 3')
+    expect(driver).toContain('attempts < DEFAULT_PROTOCOL_RETRY_BUDGET')
+    expect(driver).not.toContain('attempts < 3')
+    // 「换进程重跑」是**另一份**预算，也走同一个常量（合一前 SQLite 同形）。
+    expect(driver).toContain('transientRetriesUsed < DEFAULT_PROTOCOL_RETRY_BUDGET')
   })
 
   test('dynamicWorkflowRunner：生成尝试上限走共享常量', () => {

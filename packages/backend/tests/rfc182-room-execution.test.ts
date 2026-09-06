@@ -33,16 +33,19 @@ describe('RFC-182 — pending 帧源级锁', () => {
     expect(block).toContain('publishCommittedEventsAfterCommit(committedEventRefs)')
   })
 
-  test('broadcastPendingMint：runner 恒 1 定义、骨架恒 1 真 mint 调用（adopted 不重发）', () => {
-    // RFC-217 T3：四个 driver 的真 mint 收编进 executeTurn——广播点随之唯一
-    //（args.broadcastPendingMint 注入）。runner 里再出现调用点=有人绕开骨架。
-    // RFC-217 T3b：定义迁 messages.ts；骨架直连调用（唯一真 mint 广播点）。
-    const messages = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/messages.ts')
-    expect(messages).toContain('export function broadcastPendingMint(')
-    const skeleton = SRC(
-      'modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+  test('pending 帧：真 mint 恒 1 处广播，adopted 不重发', () => {
+    // RFC-217 T3：四个 driver 的真 mint 收编进同一段回合骨架——广播点随之唯一。
+    // RFC-359 W4-D19c：骨架合一进中立驱动，广播收成宿主的可选能力（host.broadcastNodeStatus），
+    // 由两个 bootstrap 接同一条生产广播。锚点随之移到驱动里的那一处**新铸**分支：
+    // 采纳既有 run 的分支不经过它，所以 adopted 不会重发一帧 pending。
+    const driver = SRC('modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts')
+    expect(
+      driver.split("broadcastNodeStatus?.(run.runId, spec.nodeId, 'pending')").length - 1,
+    ).toBe(1)
+    // 它必须待在新铸分支里：紧跟着 mint 的登记回调，而不是循环体开头。
+    expect(driver).toMatch(
+      /spec\.registerMint\?\.\(run\.runId\)\s*\n\s*spec\.host\.broadcastNodeStatus\?\./,
     )
-    expect(skeleton.split('broadcastPendingMint(taskId, runId, spec.nodeId)').length - 1).toBe(1)
   })
 })
 

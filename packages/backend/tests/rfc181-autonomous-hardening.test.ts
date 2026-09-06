@@ -62,10 +62,36 @@ function canTransitionAssignment(
   return WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS[from].includes(to)
 }
 
-import {
-  dismissOpenClarifyParksForAutonomous,
-  isTaskClarifySuppressed,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
+// RFC-359 W4-D19c-tail：这两条判据改指两个 provider 共用的端口
+// （`CollaborationRuntimeMechanics`）的 SQLite 实现——合一前 legacy workgroup 里另有一份同名副本，
+// 本文件是它最后的引用方。下面两个薄壳只把端口的入参对象翻回旧的位置参数形状，断言逐条原样保留。
+import { createSqliteCollaborationRuntimeMechanics } from '../src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+
+const isTaskClarifySuppressed = (
+  db: DbClient,
+  taskId: string,
+  nodeId?: string,
+  shardKey?: string | null,
+): Promise<boolean> =>
+  createSqliteCollaborationRuntimeMechanics(db).isTaskClarifySuppressed({
+    taskId,
+    ...(nodeId === undefined ? {} : { nodeId }),
+    ...(shardKey === undefined ? {} : { shardKey }),
+  })
+
+const dismissOpenClarifyParksForAutonomous = (
+  db: DbClient,
+  taskId: string,
+  mode: string,
+): ReturnType<
+  ReturnType<
+    typeof createSqliteCollaborationRuntimeMechanics
+  >['dismissOpenClarifyParksForAutonomous']
+> =>
+  createSqliteCollaborationRuntimeMechanics(db).dismissOpenClarifyParksForAutonomous({
+    taskId,
+    mode,
+  })
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -516,35 +542,23 @@ describe('RFC-181 C — 源级契约锁', () => {
     expect(scheduler.split("failureCode: 'clarify-forbidden'").length - 1).toBeGreaterThanOrEqual(2)
   })
 
-  test('workgroupRunner：leader/worker 均有 clarify-forbidden 重试分支（结构化路由）+ 三调用点传 clarifyEnabled', () => {
-    const runner = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts')
-    // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由（leader +
-    // worker 各一处）。RFC-145 棘轮：errorMessage 是人读面包屑，绝不再当机器键
-    // —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
-    // RFC-217 T3 —— 软拒分支收编进 executeTurn（唯一一处结构化路由）；各 driver
-    // 只提供角色化 notice。runner 里回潮出第二个分支/直连 runHostNode 即红。
-    const skeleton = SRC(
-      'modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
-    )
-    expect(skeleton.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(1)
-    expect(runner.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(0)
-    expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
-    // RFC-217 T3b：角色化 notice 随 driver 迁至策略/成员模块。
-    const lw = SRC(
-      'modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker.ts',
-    )
-    const member = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/memberTurns.ts')
-    const fc = SRC(
-      'modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts',
-    )
-    expect(lw).toContain('Ask-back is OFF')
-    expect(member).toContain('Ask-back is OFF')
-    expect(fc).toContain('Ask-back is OFF')
+  test('回合驱动：clarify-forbidden 唯一一处结构化路由 + 三份角色文案 + clarifyEnabled 解析一次', () => {
+    // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由。RFC-145 棘轮：
+    // errorMessage 是人读面包屑，绝不再当机器键 —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
+    // RFC-217 T3 —— 软拒分支收编进回合骨架（唯一一处结构化路由），各角色只提供文案。
+    // RFC-359 W4-D19c：骨架与三份文案合一进中立驱动，两个 provider 同一条；锚点随之全部指它。
+    const driver = SRC('modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts')
+    expect(driver.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(1)
+    expect(driver).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
+    // 三份角色化 notice（领队 / 派单 / 批量）都在，且都由骨架的同一个 spec 槽位喂进去。
+    expect(driver).toContain('CLARIFY_SUPPRESSED_LEADER')
+    expect(driver).toContain('CLARIFY_SUPPRESSED_ASSIGNMENT')
+    expect(driver).toContain('CLARIFY_SUPPRESSED_BATCH')
+    expect(driver.split('Ask-back is OFF').length - 1).toBe(1)
     // RFC-207 §3.7.2 resolve-once：clarifyEnabled 布线唯一存在于骨架（解析一次、
-    // 双喂 renderer + clarifyEnabled）；runner 不允许再出现直连调用点。
-    expect(skeleton.split('clarifyEnabled: ').length - 1).toBe(1)
-    expect(runner.split('clarifyEnabled: ').length - 1).toBe(0)
-    expect(runner.split('hooks.runHostNode(').length - 1).toBe(0)
+    // 双喂 renderer + clarifyEnabled）；宿主调用点也只有骨架那一处。
+    expect(driver.split('clarifyEnabled: ').length - 1).toBe(1)
+    expect(driver.split('spec.host.runHost(').length - 1).toBe(1)
   })
 
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {

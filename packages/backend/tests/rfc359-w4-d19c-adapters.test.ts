@@ -270,6 +270,47 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     expect(revived[0]?.nodeId).toBe(WORKGROUP_TURN_LEADER_NODE_ID)
     expect(revived[0]?.retryIndex).toBe(1)
   })
+
+  test('运行时流中断的重跑不吃协议预算，但必须自己进账本（两个引擎同一条转轨）', async () => {
+    const db = harness.db as unknown as ProviderNeutralDatabase
+    const taskId = await seedTask(db)
+    const { hooks, requests } = scriptedHost({
+      leader: [
+        // 流被打断不是模型的协议错误：整轮换个新进程重来，不贴重提示、不消耗协议预算。
+        {
+          status: 'failed',
+          outputs: {},
+          errorMessage: 'runtime stream persistence failed',
+          failureCode: 'runtime-stream-interrupted',
+        },
+        {
+          status: 'done',
+          outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'recovered' }) },
+        },
+      ],
+      member: [],
+    })
+
+    const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
+
+    expect(outcome.kind).toBe('ok')
+    expect(requests).toHaveLength(2)
+    // 换进程重来，不是「你上一轮答错了」——不能贴协议重提示。
+    expect(requests[1]?.promptTemplate).not.toContain('## Protocol errors in your previous reply')
+
+    // 重跑要**自己占一格 retryIndex**、并按 `wg-protocol-retry` 记账。两件事都是用户可见的：
+    // 前者是 node_run 的身份（design.md：重试产生按 retry_index 区分的独立 node_runs），撞号会让
+    // 血缘/采纳挑错行；后者是**轮次记账的豁免**——free_collab 的 roundBudget 逐条数成员 run、只跳过
+    // `wg-protocol-retry`，铸成主 cause 就等于一次流中断白吃掉一整轮，小队会莫名撞上 max_rounds。
+    // 按 retryIndex 排——同毫秒铸出的两条 ULID 之间没有稳定序，按 id 排会间歇性翻转。
+    const runs = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).sort(
+      (a, b) => a.retryIndex - b.retryIndex,
+    )
+    expect(runs.map((run) => [run.retryIndex, run.rerunCause])).toEqual([
+      [0, 'wg-leader-round'],
+      [1, 'wg-protocol-retry'],
+    ])
+  })
 })
 
 test('源码锁：回合只有一份实现与一份装配，legacy 薄壳与 provider 命名文件都已退役', async () => {
