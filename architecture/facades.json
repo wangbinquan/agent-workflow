@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 324,
-    "thinFacades": 73
+    "serviceFiles": 323,
+    "thinFacades": 72
   },
   "entries": [
     {
@@ -6706,20 +6706,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:4c1ab85a7290fbd433c3",
-        "import:d2b5bb78daf13a82f66b"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/workgroup/engine.ts",
-      "id": "facade:packages/backend/src/services/workgroup/engine.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/workgroup/engine.ts#$file",
-      "removeAfterWave": "W4-C",
-      "status": "thin-facade",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:138f29cb7f55e10d9600",
         "import:c2ecc6cdeae12eaf3f88"
       ],
@@ -6822,5 +6808,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b2ed8aee91b02bddd2c2f4acb03204d783ffc182ff79617997111724e58626a9"
+  "sourceDigest": "sha256:68e674f9230fd02acf91c0a83ebc0d9327ff15e18c4b5d338c938f9377347210"
 }

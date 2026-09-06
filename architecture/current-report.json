@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5046,
+    "architectureExceptions": 5053,
     "backgroundJobs": 362,
-    "crossContextImports": 5680,
-    "facades": 324,
+    "crossContextImports": 5687,
+    "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25514,
-    "mutationEntrypoints": 1823,
+    "moduleSymbolOwners": 25523,
+    "mutationEntrypoints": 1822,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 981,
     "transactionExternalEffects": 328
@@ -16,8 +16,13 @@
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1855,
+    "backendProductionFiles": 1854,
     "backendValueSccs": [
+      [
+        "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts",
+        "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupSystemMessages.ts",
+        "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -50,7 +55,7 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 284,
+    "inboundBoundaryEdges": 283,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -99,7 +104,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 216
+        "files": 217
       },
       {
         "context": "runtime-management",
@@ -119,7 +124,7 @@
       },
       {
         "context": "task-execution",
-        "files": 327
+        "files": 326
       }
     ],
     "moduleFiles": 1244,
@@ -148,6 +153,11 @@
     "outboundBoundaryEdges": 35,
     "repoValueSccs": [
       [
+        "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts",
+        "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupSystemMessages.ts",
+        "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts"
+      ],
+      [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
@@ -163,10 +173,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 324,
+    "serviceFiles": 323,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b2ed8aee91b02bddd2c2f4acb03204d783ffc182ff79617997111724e58626a9"
+  "sourceDigest": "sha256:68e674f9230fd02acf91c0a83ebc0d9327ff15e18c4b5d338c938f9377347210"
 }

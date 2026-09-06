@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 866,
+    "consumers": 868,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1051,
@@ -10354,7 +10354,9 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:08146871eda985b6d0f6",
         "import:203c772b8492e45e188a",
+        "import:822a33be327729576443",
         "import:931ad944c16546e45a1d"
       ],
       "context": "collaboration",
@@ -10369,10 +10371,22 @@
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate",
       "productionConsumers": [
         {
+          "context": "legacy",
+          "edgeId": "import:08146871eda985b6d0f6",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
           "context": "resource-catalog",
           "edgeId": "import:203c772b8492e45e188a",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:822a33be327729576443",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         },
         {
           "context": "legacy",
@@ -140696,7 +140710,7 @@
         "maxUnionVariants": 17
       },
       "consumerEdgeIds": [
-        "import:e7f15e232e63dff7a5d1"
+        "import:4c99bf7067d55ba52585"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -140750,7 +140764,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:e7f15e232e63dff7a5d1"
+            "import:4c99bf7067d55ba52585"
           ],
           "fieldPath": "$variant:0.kind",
           "type": "'mint-host-run'"
@@ -140762,7 +140776,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:e7f15e232e63dff7a5d1"
+            "import:4c99bf7067d55ba52585"
           ],
           "fieldPath": "$variant:0.operationKey",
           "type": "string"
@@ -140809,14 +140823,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:e7f15e232e63dff7a5d1"
+            "import:4c99bf7067d55ba52585"
           ],
           "fieldPath": "$variant:1.kind",
           "type": "'stamp-host-run-round'"
         },
         {
           "consumerEdgeIds": [
-            "import:e7f15e232e63dff7a5d1"
+            "import:4c99bf7067d55ba52585"
           ],
           "fieldPath": "$variant:1.operationKey",
           "type": "string"
@@ -140840,9 +140854,9 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:e7f15e232e63dff7a5d1",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#$file"
+          "edgeId": "import:4c99bf7067d55ba52585",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -140864,7 +140878,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:b16980b9906b1bfc8d03"
+        "import:9a1d09e2c4306fd57257"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -140873,42 +140887,42 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:apply.$parameter:input.operations",
           "type": "readonly WorkgroupHostLedgerOperation[]"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:apply.$parameter:input.taskId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:apply.$return.$variant:0.committed",
           "type": "true"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:apply.$return.$variant:0.mintedRuns",
           "type": "readonly WorkgroupHostLedgerMintReceipt[]"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:apply.$return.$variant:1.committed",
           "type": "false"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:apply.$return.$variant:1.conflictOperationKey",
           "type": "string"
@@ -140920,14 +140934,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:load.$return.$variant:0.hostRuns",
           "type": "readonly WorkgroupHostLedgerRun[]"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "fieldPath": "$method:load.$return.$variant:0.leaderClarifyParked",
           "type": "boolean"
@@ -140957,14 +140971,14 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "name": "apply",
           "signatureDigest": "sha256:867a58168fbc710964127c7cc75cf38a36a903373b7616b727d52308d8b42f2d"
         },
         {
           "consumerEdgeIds": [
-            "import:b16980b9906b1bfc8d03"
+            "import:9a1d09e2c4306fd57257"
           ],
           "name": "load",
           "signatureDigest": "sha256:68a84020b0f45f506302923077762457b3c453f6d8737ee8623a157173a26492"
@@ -140974,9 +140988,9 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:b16980b9906b1bfc8d03",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#$file"
+          "edgeId": "import:9a1d09e2c4306fd57257",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -143863,9 +143877,9 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:493791b91665d64475e5",
         "import:69e9416868331e176f57",
-        "import:774880dc2a0f2647cc6a"
+        "import:774880dc2a0f2647cc6a",
+        "import:7f40d2fd3b3ff76c003c"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -143899,8 +143913,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.host.$method:runHost.$parameter:request.agent",
           "type": "z.infer<typeof AgentSchema>"
@@ -143933,8 +143947,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.host.$method:runHost.$parameter:request.nodeRunId",
           "type": "string"
@@ -144040,8 +144054,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:debug.$parameter:fields.error",
           "type": "string"
@@ -144072,8 +144086,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:debug.$parameter:fields.taskId",
           "type": "string"
@@ -144109,8 +144123,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:error.$parameter:fields.error",
           "type": "string"
@@ -144141,8 +144155,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:error.$parameter:fields.taskId",
           "type": "string"
@@ -144178,8 +144192,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:info.$parameter:fields.error",
           "type": "string"
@@ -144210,8 +144224,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:info.$parameter:fields.taskId",
           "type": "string"
@@ -144247,8 +144261,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:warn.$parameter:fields.error",
           "type": "string"
@@ -144279,8 +144293,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:warn.$parameter:fields.taskId",
           "type": "string"
@@ -144304,16 +144318,16 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$parameter:input.taskId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$return.detail.message",
           "type": "string"
@@ -144334,8 +144348,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "fieldPath": "$method:drive.$return.detail.summary",
           "type": "string"
@@ -144410,8 +144424,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:493791b91665d64475e5",
-            "import:774880dc2a0f2647cc6a"
+            "import:774880dc2a0f2647cc6a",
+            "import:7f40d2fd3b3ff76c003c"
           ],
           "name": "error",
           "signatureDigest": "sha256:c8f24721aac13fd9fe2d46778deefdfc9f955fd559a5d4909ddd5c65ce33b4a6"
@@ -144447,12 +144461,6 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:493791b91665d64475e5",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#$file"
-        },
-        {
-          "context": "resource-catalog",
           "edgeId": "import:69e9416868331e176f57",
           "file": "packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts#$file"
@@ -144462,6 +144470,12 @@
           "edgeId": "import:774880dc2a0f2647cc6a",
           "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:7f40d2fd3b3ff76c003c",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161443,7 +161457,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b2ed8aee91b02bddd2c2f4acb03204d783ffc182ff79617997111724e58626a9",
+  "sourceDigest": "sha256:68e674f9230fd02acf91c0a83ebc0d9327ff15e18c4b5d338c938f9377347210",
   "targetContexts": [
     "collaboration",
     "development-automation",

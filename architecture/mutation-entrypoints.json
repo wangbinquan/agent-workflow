@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1823,
+    "entries": 1822,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20923,74 +20923,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#applyResourceCatalogOperation",
-      "missingControls": [
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#applyResourceCatalogOperation",
-      "symbol": "applyResourceCatalogOperation",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#createPostgresqlWorkgroupTurnsOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#createPostgresqlWorkgroupTurnsOperations",
-      "symbol": "createPostgresqlWorkgroupTurnsOperations",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#createPostgresqlWorkgroupTurnsPersistence",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#createPostgresqlWorkgroupTurnsPersistence",
-      "symbol": "createPostgresqlWorkgroupTurnsPersistence",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
@@ -21695,6 +21627,74 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#createWorkgroupTaskRoomQueries",
       "symbol": "createWorkgroupTaskRoomQueries",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#applyResourceCatalogOperation",
+      "missingControls": [
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#applyResourceCatalogOperation",
+      "symbol": "applyResourceCatalogOperation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#createWorkgroupTurnsPersistence",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#createWorkgroupTurnsPersistence",
+      "symbol": "createWorkgroupTurnsPersistence",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#createWorkgroupTurnsPersistenceOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#createWorkgroupTurnsPersistenceOperations",
+      "symbol": "createWorkgroupTurnsPersistenceOperations",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -29237,50 +29237,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts#applyOperation",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts#applyOperation",
-      "symbol": "applyOperation",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts#createPostgresqlWorkgroupHostLedgerParticipantInTx",
-      "missingControls": [
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts#createPostgresqlWorkgroupHostLedgerParticipantInTx",
-      "symbol": "createPostgresqlWorkgroupHostLedgerParticipantInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
@@ -29798,30 +29754,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#createSqliteTaskRouteOperations",
       "symbol": "createSqliteTaskRouteOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations.ts#createSqliteWorkgroupTurnsOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations.ts#createSqliteWorkgroupTurnsOperations",
-      "symbol": "createSqliteWorkgroupTurnsOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -30434,6 +30366,50 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
       "symbol": "transitionTerminalMaintenanceClaimTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#applyOperation",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#applyOperation",
+      "symbol": "applyOperation",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#createWorkgroupHostLedgerParticipantInTx",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#createWorkgroupHostLedgerParticipantInTx",
+      "symbol": "createWorkgroupHostLedgerParticipantInTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -43511,7 +43487,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b2ed8aee91b02bddd2c2f4acb03204d783ffc182ff79617997111724e58626a9",
+  "sourceDigest": "sha256:68e674f9230fd02acf91c0a83ebc0d9327ff15e18c4b5d338c938f9377347210",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -45836,22 +45812,6 @@
       },
       {
         "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "applyOperation",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts#113:nodeRuns",
-        "line": 113,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts#applyOperation",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "applyOperation"
-      },
-      {
-        "allowedTables": [
           "nodeRunEvents"
         ],
         "authorityKind": "worker-epoch",
@@ -47273,6 +47233,22 @@
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
         "symbol": "transitionTerminalMaintenanceClaimTx"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "applyOperation",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#113:nodeRuns",
+        "line": 113,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#applyOperation",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "applyOperation"
       },
       {
         "allowedTables": [
