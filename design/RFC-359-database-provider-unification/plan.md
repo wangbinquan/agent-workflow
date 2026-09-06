@@ -852,6 +852,33 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   文件照红。是跨文件的进程级状态串味（嫌疑：`skillBootVerify` 的模块级集合、
   `providerSchema` 的全局 provider 选择），CI 靠分片才没暴露。已记进 `docs/audit-backlog.md`。
 
+  **D19c-tail 进行中（2026-09-06 落了四刀）**：legacy workgroup engine 那一片生产零消费者，
+  但它的行为套件还锁着**已经没人跑**的那份实现。逐组重指到中立驱动，收干净才能删岛。
+
+  - **第一刀（唤醒集）**：`deriveWakeSet` / `decideWorkgroupOutcome` / `WakeSet` / `WakeItem` /
+    `WorkgroupOutcome` / `InflightTurns` 在中立驱动里本来就有、只是模块私有，按需导出；
+    「只读成员」判据在中立侧住在 `workgroupTurnsOperations.readonlyPermission`，一并导出。
+    新增 `tests/helpers/workgroupWake.ts` 把旧的 `WakeInput` 字面量翻成 `(snapshot, inflight)`
+    ——其中 `budgetUsed` 在中立侧是**从 hostRuns 推**的，适配器按模式合成恰好产出该预算的 host run。
+    八个套件 159 条全绿。只调了两处**命名差**（连字符拼写、`leader-nudge` 不再带 `nudgeCount`），
+    判据一条没动。
+  - **第二刀（领队反问停靠）**：`leaderClarifyParkedOf` 从宿主账本参与者里抽成具名导出，
+    RFC-187 F3 的五条改指它。生产行为一格未变——这一格 symbol-owner 增长是「把既有规则命名」的代价。
+  - **第三刀（派单卡转移表）**：两张表**逐字相同**，rfc164 全表遍历与 rfc181 的 A2 三条边直接改指
+    `WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS`。
+  - **第四刀（房间消息 / 回合账本）——照出一处真缺口**：RFC-274 要求系统署名的房间消息要么带
+    模板 key、要么显式声明 `localization: 'original'`；合一时中立驱动把**分类字段连同判据一起丢了**，
+    于是两个 provider 都少了这道关，平台手写的英文兜底文案可以直接落进房间且无从本地化。已补回
+    （目标种子那条正文是用户原文，显式标 original；其余 15 处本来就带模板 key），并由 rfc274 锁住三态。
+
+  **还剩九处引用**（收干净才能删岛）：`casAssignmentStatus` / `advanceMemberCursor` 这条写面、
+  `dismissOpenClarifyParksForAutonomous` / `isTaskClarifySuppressed` / `resolveWgClarifyAllowed`、
+  `executeTurn`、`decideAssignmentReconcile` / `isKilledClarifyContinuation`、
+  `isLeaderWrapUpContinuation` / `detectZeroDeltaDone` / `warnIfZeroDeltaDone`、
+  `resolveMessageTurnTrigger`。其中 `isLeaderWrapUpContinuation` 要留意：legacy 用 `>= maxRounds`、
+  中立用 `=== maxRounds` + `capExceeded` 两分支，是**两个不同问题**的答案（「这轮算不算收尾」vs
+  「还要不要叫醒领队」），改指时不能直接对拍。
+
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
   形态与任务房 / 回合完全同类，但深一个量级：**SQLite 侧是一层薄适配器，套在成熟的崩溃安全机器上**
