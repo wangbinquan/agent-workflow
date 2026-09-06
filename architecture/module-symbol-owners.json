@@ -6,7 +6,7 @@
     "moduleFiles": 1213,
     "productionFiles": 2600,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25224
+    "symbolsIncludingFileRoots": 25225
   },
   "entries": [
     {
@@ -31174,6 +31174,18 @@
     {
       "currentContext": "development-automation",
       "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/missionDeliveryChain.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/missionDeliveryChain.ts#occPatchWithRetry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "occPatchWithRetry",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/application/missionDeliveryChain.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/missionDeliveryChain.ts#redispatchDelivery",
@@ -32002,7 +32014,7 @@
     {
       "currentContext": "development-automation",
       "currentLayer": "application",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/development-automation/application/missionReconciler.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/missionReconciler.ts#recordOnMission",
       "removeAfterWave": null,
@@ -303388,5 +303400,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7326dfd66ca715a6dde74d866271e17f6eb61c47b7198e75577721e5752e001c"
+  "sourceDigest": "sha256:c79ab02a43d4825425070a2c182912fa580cb353f7a3956c9808468c46f0ee2f"
 }

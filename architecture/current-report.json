@@ -7,7 +7,7 @@
     "crossContextImports": 5513,
     "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25224,
+    "moduleSymbolOwners": 25225,
     "mutationEntrypoints": 1794,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 979,
@@ -18,6 +18,11 @@
     "appDepsConsumers": [],
     "backendProductionFiles": 1823,
     "backendValueSccs": [
+      [
+        "packages/backend/src/modules/development-automation/application/actionInvalidation.ts",
+        "packages/backend/src/modules/development-automation/application/agentActionOrchestrator.ts",
+        "packages/backend/src/modules/development-automation/application/missionReconciler.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -148,6 +153,11 @@
     "outboundBoundaryEdges": 35,
     "repoValueSccs": [
       [
+        "packages/backend/src/modules/development-automation/application/actionInvalidation.ts",
+        "packages/backend/src/modules/development-automation/application/agentActionOrchestrator.ts",
+        "packages/backend/src/modules/development-automation/application/missionReconciler.ts"
+      ],
+      [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
@@ -168,5 +178,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7326dfd66ca715a6dde74d866271e17f6eb61c47b7198e75577721e5752e001c"
+  "sourceDigest": "sha256:c79ab02a43d4825425070a2c182912fa580cb353f7a3956c9808468c46f0ee2f"
 }

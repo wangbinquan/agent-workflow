@@ -489,15 +489,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25224,
+      "baseline": 25225,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-310（2026-09-07 mission 停顿真因修复）：新增一个函数 `missionReconciler.recordOnMission` —— 「把刚产出的东西记回 mission 行」的 OCC 写回此前是 7 处「读一行后直接 occUpdate、不看返回值」的复制粘贴，并发下静默丢写，丢掉决策依据后 mission 永久停在 working。收成一处带重读重试的具名 helper，符号数 25223 → 25224（净减 7 处重复逻辑）。一次性豁免，下一个不增长的提交删除。"
+        "why": "RFC-310（2026-09-07 mission 停顿真因修复）：新增两个具名 helper —— `missionReconciler.recordOnMission` 与 `missionDeliveryChain.occPatchWithRetry`。「把刚产出的东西记回 mission 行」的 OCC 写回此前是 reconcile 路径上 13 处「读一行后直接 occUpdate、不看返回值」的复制粘贴，并发下静默丢写；丢掉决策依据后去重键不变 ⇒ 决策被去重 ⇒ handler 再也不跑 ⇒ mission 永久停在 working。收成两处带重读重试的具名 helper，符号数 25223 → 25225（净减 13 处重复逻辑）。一次性豁免，下一个不增长的提交删除。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7326dfd66ca715a6dde74d866271e17f6eb61c47b7198e75577721e5752e001c",
+    "sourceDigest": "sha256:c79ab02a43d4825425070a2c182912fa580cb353f7a3956c9808468c46f0ee2f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -510,8 +510,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e17f3138af5f14be0fc9ffc4274b02b77cd6599f",
-    "contentDigest": "sha256:73663309dea7cb21249cb343b3e758fef90cfff7c7a619b04f03b7cf88e75af4",
+    "currentSnapshotSha": "29067e3d3173aa7cc95feed2641f0f3eeb1e93da",
+    "contentDigest": "sha256:d19cce8a1ed9edf40923c416c0169e50be487e05f6aabfa6e893cb2b3222a786",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
