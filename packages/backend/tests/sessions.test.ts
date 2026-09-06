@@ -59,7 +59,7 @@ describe('sessionStore', () => {
 
   test('createLoginSession atomically stamps the authenticated user', async () => {
     const userId = await seedActiveUser(db)
-    const { token, session } = createLoginSession({
+    const { token, session } = await createLoginSession({
       db,
       userId,
       userAgent: 'oidc-test',

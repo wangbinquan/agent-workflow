@@ -56,7 +56,10 @@ describe('RFC-349 auth provider contract', () => {
       'utf8',
     )
     expect(sqlitePolicy).toContain('DbClient')
-    expect(sqlitePolicy).toContain('dbTxSync')
+    // RFC-359：这份实现仍然是 SQLite 专属的（句柄类型 `DbClient` 不变），但它的事务边界改走
+    // 中立原语——`dbTxSync` 是 bun:sqlite 独有的同步面，留着它等于把这条登录路径钉死在一个引擎上。
+    expect(sqlitePolicy).toContain('databaseSessionFor(')
+    expect(sqlitePolicy).not.toContain('dbTxSync')
   })
 
   test('SQLite bootstrap, password login and revocation share the Promise runtime', async () => {

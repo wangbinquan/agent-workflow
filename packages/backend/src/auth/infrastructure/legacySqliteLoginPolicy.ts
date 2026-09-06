@@ -13,7 +13,7 @@ import type {
 import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from './legacySqliteSessionStore'
 import type { DbClient } from '@/db/client'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 const GLOBAL_POLICY_ID = 'global'
@@ -50,16 +50,18 @@ export function getAuthLoginPolicy(db: DbClient): AuthLoginPolicy {
  * set from two individually valid states during a concurrent policy/provider
  * switch.
  */
-export function getAuthMethodDiscovery(
+export async function getAuthMethodDiscovery(
   db: DbClient,
   oidcRuntimeAvailable: boolean,
-): AuthMethodDiscovery {
-  return dbTxSync(db, (tx) => {
-    const policy = tx
-      .select()
-      .from(authLoginPolicy)
-      .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .get()
+): Promise<AuthMethodDiscovery> {
+  return await databaseSessionFor(db).transaction(async (tx) => {
+    const policy = (
+      await tx
+        .select()
+        .from(authLoginPolicy)
+        .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
+        .limit(1)
+    )[0]
     if (policy === undefined) return missingPolicy()
     if (policy.bootstrapCompletedAt === null) {
       return {
@@ -70,7 +72,7 @@ export function getAuthMethodDiscovery(
       }
     }
     const providers = oidcRuntimeAvailable
-      ? tx
+      ? await tx
           .select({
             slug: oidcProviders.slug,
             displayName: oidcProviders.displayName,
@@ -78,7 +80,6 @@ export function getAuthMethodDiscovery(
           })
           .from(oidcProviders)
           .where(eq(oidcProviders.enabled, true))
-          .all()
       : []
     return {
       mode: 'ready',
@@ -105,17 +106,19 @@ export function assertBootstrapComplete(db: DbClient): AuthLoginPolicy {
   return policy
 }
 
-export function updateAuthLoginPolicy(
+export async function updateAuthLoginPolicy(
   db: DbClient,
   patch: UpdateAuthLoginPolicyBody,
   now: number = Date.now(),
-): AuthLoginPolicy {
-  return dbTxSync(db, (tx) => {
-    const current = tx
-      .select()
-      .from(authLoginPolicy)
-      .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .get()
+): Promise<AuthLoginPolicy> {
+  return await databaseSessionFor(db).transaction(async (tx) => {
+    const current = (
+      await tx
+        .select()
+        .from(authLoginPolicy)
+        .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
+        .limit(1)
+    )[0]
     if (current === undefined) return missingPolicy()
     if (current.bootstrapCompletedAt === null) {
       throw new ConflictError(
@@ -126,12 +129,13 @@ export function updateAuthLoginPolicy(
     const passwordLoginEnabled = patch.passwordLoginEnabled ?? current.passwordLoginEnabled
     if (!passwordLoginEnabled) {
       const anyEnabledProvider =
-        tx
-          .select({ id: oidcProviders.id })
-          .from(oidcProviders)
-          .where(eq(oidcProviders.enabled, true))
-          .limit(1)
-          .get() !== undefined
+        (
+          await tx
+            .select({ id: oidcProviders.id })
+            .from(oidcProviders)
+            .where(eq(oidcProviders.enabled, true))
+            .limit(1)
+        )[0] !== undefined
       if (!anyEnabledProvider) {
         throw new ConflictError(
           'password-login-requires-enabled-oidc',
@@ -139,37 +143,39 @@ export function updateAuthLoginPolicy(
         )
       }
     }
-    tx.update(authLoginPolicy)
+    await tx
+      .update(authLoginPolicy)
       .set({
         passwordLoginEnabled,
         oidcDefaultRole: patch.oidcDefaultRole ?? current.oidcDefaultRole,
         updatedAt: now,
       })
       .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .run()
-    const updated = tx
-      .select()
-      .from(authLoginPolicy)
-      .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .get()
+    const updated = (
+      await tx
+        .select()
+        .from(authLoginPolicy)
+        .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
+        .limit(1)
+    )[0]
     return updated === undefined ? missingPolicy() : materialize(updated)
   })
 }
 
-export function setPasswordLoginEnabled(
+export async function setPasswordLoginEnabled(
   db: DbClient,
   enabled: boolean,
   now: number = Date.now(),
-): AuthLoginPolicy {
-  return updateAuthLoginPolicy(db, { passwordLoginEnabled: enabled }, now)
+): Promise<AuthLoginPolicy> {
+  return await updateAuthLoginPolicy(db, { passwordLoginEnabled: enabled }, now)
 }
 
-export function setOidcDefaultRole(
+export async function setOidcDefaultRole(
   db: DbClient,
   role: OidcDefaultRole,
   now: number = Date.now(),
-): AuthLoginPolicy {
-  return updateAuthLoginPolicy(db, { oidcDefaultRole: role }, now)
+): Promise<AuthLoginPolicy> {
+  return await updateAuthLoginPolicy(db, { oidcDefaultRole: role }, now)
 }
 
 export interface PreparedBootstrapAdmin extends Omit<CreateBootstrapAdminBody, 'password'> {
@@ -187,26 +193,29 @@ export interface CreatePasswordLoginSessionInput {
 
 /**
  * Password verification is intentionally performed before this function.
- * This synchronous transaction is the login/policy linearization point: a
- * concurrent policy-off or password/status change can never land a session.
+ * This transaction is the login/policy linearization point: a concurrent
+ * policy-off or password/status change can never land a session.
+ * RFC-359：从 bun:sqlite 独有的同步事务面搬到中立事务原语，边界一格未变。
  */
-export function createPasswordLoginSession(
+export async function createPasswordLoginSession(
   db: DbClient,
   input: CreatePasswordLoginSessionInput,
-): {
+): Promise<{
   token: string
   user: typeof users.$inferSelect
-} {
+}> {
   const now = input.now ?? Date.now()
   const ttlMs = input.ttlMs ?? SESSION_DEFAULT_TTL_MS
   const token = generateSessionToken()
   const sessionId = ulid()
-  return dbTxSync(db, (tx) => {
-    const policy = tx
-      .select()
-      .from(authLoginPolicy)
-      .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
-      .get()
+  return await databaseSessionFor(db).transaction(async (tx) => {
+    const policy = (
+      await tx
+        .select()
+        .from(authLoginPolicy)
+        .where(eq(authLoginPolicy.id, GLOBAL_POLICY_ID))
+        .limit(1)
+    )[0]
     if (policy === undefined) return missingPolicy()
     if (policy.bootstrapCompletedAt === null) {
       throw new ForbiddenError(
@@ -217,7 +226,7 @@ export function createPasswordLoginSession(
     if (!policy.passwordLoginEnabled) {
       throw new ForbiddenError('password-login-disabled', 'username and password login is disabled')
     }
-    const user = tx.select().from(users).where(eq(users.id, input.userId)).get()
+    const user = (await tx.select().from(users).where(eq(users.id, input.userId)).limit(1))[0]
     if (
       user === undefined ||
       user.status !== 'active' ||
@@ -226,19 +235,17 @@ export function createPasswordLoginSession(
     ) {
       throw new UnauthorizedError('invalid username or password')
     }
-    tx.insert(userSessions)
-      .values({
-        id: sessionId,
-        userId: user.id,
-        tokenHash: hashToken(token),
-        userAgent: input.userAgent ?? null,
-        createdAt: now,
-        lastUsedAt: now,
-        expiresAt: now + ttlMs,
-        revokedAt: null,
-      })
-      .run()
-    tx.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id)).run()
+    await tx.insert(userSessions).values({
+      id: sessionId,
+      userId: user.id,
+      tokenHash: hashToken(token),
+      userAgent: input.userAgent ?? null,
+      createdAt: now,
+      lastUsedAt: now,
+      expiresAt: now + ttlMs,
+      revokedAt: null,
+    })
+    await tx.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id))
     return { token, user: { ...user, lastLoginAt: now } }
   })
 }

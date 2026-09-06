@@ -8,7 +8,7 @@ import { ulid } from 'ulid'
 import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { userSessions, users } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { sha256Hex } from '@/util/hash'
 
@@ -103,11 +103,12 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
  * Keep this separate from createSession: callers such as password-change token
  * rotation mint credentials without representing a new login.
  */
-export function createLoginSession(input: CreateSessionInput): CreateSessionResult {
+export async function createLoginSession(input: CreateSessionInput): Promise<CreateSessionResult> {
   const { token, row, session } = prepareSession(input)
-  return dbTxSync(input.db, (tx) => {
-    tx.insert(userSessions).values(row).run()
-    tx.update(users).set({ lastLoginAt: session.createdAt }).where(eq(users.id, input.userId)).run()
+  // RFC-359：从 bun:sqlite 独有的同步事务面搬到中立事务原语，「一次提交」的边界一格未变。
+  return await databaseSessionFor(input.db).transaction(async (tx) => {
+    await tx.insert(userSessions).values(row)
+    await tx.update(users).set({ lastLoginAt: session.createdAt }).where(eq(users.id, input.userId))
     return { token, session }
   })
 }

@@ -233,7 +233,7 @@ describe('RFC-220 S8 — route-level OAuth-only chain', () => {
 
   test('configured regular-user preset applies only to newly auto-provisioned identities', async () => {
     const h = await buildHarness()
-    setOidcDefaultRole(h.db, 'user')
+    await setOidcDefaultRole(h.db, 'user')
     idpState.userinfoBody = { id: 84, login: 'configured-user' }
     const { state } = await startLogin(h)
     const response = await h.app.request(

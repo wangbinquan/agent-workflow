@@ -26,9 +26,10 @@ import { freezeAt } from './migration-freeze'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function expectCode(fn: () => unknown, code: string): void {
+// RFC-359：登录策略的写面搬到中立事务原语后是异步的，判据形状不变，只是要 await。
+async function expectCode(fn: () => unknown, code: string): Promise<void> {
   try {
-    fn()
+    await fn()
     throw new Error(`expected ${code}`)
   } catch (error) {
     if (!(error instanceof DomainError)) throw error
@@ -37,7 +38,7 @@ function expectCode(fn: () => unknown, code: string): void {
 }
 
 describe('RFC-221 migration 0110', () => {
-  test('fresh database starts with bootstrap required', () => {
+  test('fresh database starts with bootstrap required', async () => {
     const raw = new Database(':memory:')
     const db = drizzle(raw)
     migrate(db, { migrationsFolder: MIGRATIONS })
@@ -81,9 +82,9 @@ describe('RFC-221 migration 0110', () => {
 })
 
 describe('RFC-221 auth policy service', () => {
-  test('login discovery returns one internally consistent policy/provider snapshot', () => {
+  test('login discovery returns one internally consistent policy/provider snapshot', async () => {
     const fresh = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-    expect(getAuthMethodDiscovery(fresh, true)).toEqual({
+    expect(await getAuthMethodDiscovery(fresh, true)).toEqual({
       mode: 'bootstrap',
       providers: [],
       passwordLoginEnabled: false,
@@ -91,7 +92,7 @@ describe('RFC-221 auth policy service', () => {
     })
 
     const ready = createInMemoryDb(MIGRATIONS)
-    expect(getAuthMethodDiscovery(ready, true)).toEqual({
+    expect(await getAuthMethodDiscovery(ready, true)).toEqual({
       mode: 'ready',
       providers: [],
       passwordLoginEnabled: true,
@@ -118,14 +119,14 @@ describe('RFC-221 auth policy service', () => {
         schemaVersion: 1,
       })
       .run()
-    setPasswordLoginEnabled(ready, false)
-    expect(getAuthMethodDiscovery(ready, true)).toEqual({
+    await setPasswordLoginEnabled(ready, false)
+    expect(await getAuthMethodDiscovery(ready, true)).toEqual({
       mode: 'ready',
       providers: [{ slug: 'corp', displayName: 'Corporate SSO', iconUrl: null }],
       passwordLoginEnabled: false,
       daemonTokenEnabled: false,
     })
-    expect(getAuthMethodDiscovery(ready, false)).toEqual({
+    expect(await getAuthMethodDiscovery(ready, false)).toEqual({
       mode: 'ready',
       providers: [],
       passwordLoginEnabled: false,
@@ -180,9 +181,12 @@ describe('RFC-221 auth policy service', () => {
     expect(humans.filter((row) => row.id !== '__system__')).toHaveLength(1)
   })
 
-  test('password login cannot be disabled without an enabled provider', () => {
+  test('password login cannot be disabled without an enabled provider', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    expectCode(() => setPasswordLoginEnabled(db, false), 'password-login-requires-enabled-oidc')
+    await expectCode(
+      async () => await setPasswordLoginEnabled(db, false),
+      'password-login-requires-enabled-oidc',
+    )
     db.insert(oidcProviders)
       .values({
         id: 'provider-1',
@@ -203,16 +207,16 @@ describe('RFC-221 auth policy service', () => {
         schemaVersion: 1,
       })
       .run()
-    expect(setPasswordLoginEnabled(db, false).passwordLoginEnabled).toBe(false)
-    expect(setPasswordLoginEnabled(db, true).passwordLoginEnabled).toBe(true)
+    expect((await setPasswordLoginEnabled(db, false)).passwordLoginEnabled).toBe(false)
+    expect((await setPasswordLoginEnabled(db, true)).passwordLoginEnabled).toBe(true)
   })
 
-  test('OAuth/OIDC new-account preset is guest by default and configurable to user', () => {
+  test('OAuth/OIDC new-account preset is guest by default and configurable to user', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     expect(getAuthLoginPolicy(db).oidcDefaultRole).toBe('guest')
-    expect(setOidcDefaultRole(db, 'user', 200).oidcDefaultRole).toBe('user')
+    expect((await setOidcDefaultRole(db, 'user', 200)).oidcDefaultRole).toBe('user')
     expect(getAuthLoginPolicy(db)).toMatchObject({ oidcDefaultRole: 'user', updatedAt: 200 })
-    expect(setOidcDefaultRole(db, 'guest', 201).oidcDefaultRole).toBe('guest')
+    expect((await setOidcDefaultRole(db, 'guest', 201)).oidcDefaultRole).toBe('guest')
   })
 
   test('password-session commit rechecks policy and leaves zero side effects', async () => {
@@ -243,10 +247,10 @@ describe('RFC-221 auth policy service', () => {
         schemaVersion: 1,
       })
       .run()
-    setPasswordLoginEnabled(db, false)
-    expectCode(
-      () =>
-        createPasswordLoginSession(db, {
+    await setPasswordLoginEnabled(db, false)
+    await expectCode(
+      async () =>
+        await createPasswordLoginSession(db, {
           userId: user.id,
           verifiedPasswordHash: user.passwordHash!,
         }),
@@ -256,7 +260,7 @@ describe('RFC-221 auth policy service', () => {
     expect(db.select().from(users).where(eq(users.id, user.id)).get()?.lastLoginAt).toBeNull()
   })
 
-  test('historical in-memory fixtures are ready unless bootstrap is explicit', () => {
+  test('historical in-memory fixtures are ready unless bootstrap is explicit', async () => {
     const ready = createInMemoryDb(MIGRATIONS)
     const required = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
     expect(ready.select().from(authLoginPolicy).get()?.bootstrapCompletedAt).toBe(0)

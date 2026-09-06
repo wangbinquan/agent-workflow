@@ -25,8 +25,6 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
 /** `<相对 src 的路径>: <同步事务调用点数>`，按路径字典序。只降不升。 */
 export const SYNC_TRANSACTION_DEBT: readonly string[] = [
-  'auth/infrastructure/legacySqliteLoginPolicy.ts: 3',
-  'auth/infrastructure/legacySqliteSessionStore.ts: 1',
   'modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts: 1',
   'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts: 1',
   'modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts: 3',

@@ -128,7 +128,7 @@ describe('rfc312 默认授权覆盖 OIDC 自助建号', () => {
   test('**管理员把 OIDC 默认角色配成 user 时**，新账号必须拿到 users:presence', async () => {
     // 这就是设计门点名的真实故障：这条路径此前一条 grant 都不插，
     // 于是这类部署下新用户开着界面也不会被同事看到在线，而且完全没有报错。
-    setOidcDefaultRole(db, 'user')
+    await setOidcDefaultRole(db, 'user')
     const userId = await provisionViaOidc('s-user')
 
     const role = (
