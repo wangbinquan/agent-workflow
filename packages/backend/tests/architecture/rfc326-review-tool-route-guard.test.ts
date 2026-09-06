@@ -141,9 +141,9 @@ function mountedReviewRoutes(): string[] {
 
 describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both directions', () => {
   test('route composition fails explicitly when required read/context owners are absent', async () => {
-    expect(() => Reflect.apply(mountTaskRoutes, undefined, [new Hono(), { configPath: '' }])).toThrow(
-      'task-execution-read-models-not-composed',
-    )
+    expect(() =>
+      Reflect.apply(mountTaskRoutes, undefined, [new Hono(), { configPath: '' }]),
+    ).toThrow('task-execution-read-models-not-composed')
 
     expect(() => Reflect.apply(mountReviewRoutes, undefined, [new Hono(), undefined, ''])).toThrow(
       'collaboration-route-operations-not-composed',
@@ -197,14 +197,20 @@ describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both direct
       ['GET /api/reviews/pending-count', 'GET /api/reviews/gone'],
     )
     expect(drift.uncovered).toEqual(['GET /api/reviews/:id'])
-    expect(drift.staleExemptions).toEqual(['GET /api/reviews/gone', 'GET /api/reviews/pending-count'])
+    expect(drift.staleExemptions).toEqual([
+      'GET /api/reviews/gone',
+      'GET /api/reviews/pending-count',
+    ])
     expect(drift.unroutedTools).toEqual(['POST /api/reviews/:id/ghost'])
   })
 })
 
 describe('RFC-326 AC-34 — the RFC-247 plan no longer claims a complete gate surface it never had', () => {
   test('RFC-247 plan T18 carries the RFC-326 correction', () => {
-    const plan = readFileSync(resolve(REPO_ROOT, 'design', 'RFC-247-mcp-remote-access', 'plan.md'), 'utf8')
+    const plan = readFileSync(
+      resolve(REPO_ROOT, 'design', 'RFC-247-mcp-remote-access', 'plan.md'),
+      'utf8',
+    )
     const t18 = plan.slice(plan.indexOf('RFC-247-T18'), plan.indexOf('RFC-247-T19'))
     expect(t18.length).toBeGreaterThan(40)
     expect(t18).toContain('RFC-326')

@@ -107,8 +107,8 @@ const intentResourceDependencies = {
   stageManagedSkill,
   stageSkillVersion,
   commitSkillReadyInTx,
-  commitSkillVersionInTx: (tx, staged, commit) => {
-    void commitSkillVersionInTx(tx, staged as StagedSkillVersion, commit)
+  commitSkillVersionInTx: async (tx, staged, commit) => {
+    await commitSkillVersionInTx(tx, staged as StagedSkillVersion, commit)
   },
   prepareWorkflowSave,
   insertWorkflowInTx,

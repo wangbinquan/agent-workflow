@@ -20,6 +20,7 @@
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -68,7 +69,7 @@ const liveSkillMd = (appHome: string, skillId: string): string =>
 describe('① 四段各自可用，组合起来等于一次完整提交', () => {
   test('stage → commitInTx（外部事务）→ publish：live 内容与版本行都到位', async () => {
     const { db, appHome, skillId, initial } = await seedSkill()
-    const staged = stageSkillVersion(
+    const staged = await stageSkillVersion(
       db,
       { appHome },
       skillId,
@@ -80,15 +81,16 @@ describe('① 四段各自可用，组合起来等于一次完整提交', () => 
     expect(liveSkillMd(appHome, skillId)).toBe(initial)
 
     // 关键：第二段在**调用方自己的事务**里跑。
-    const created = dbTxSync(db, (tx) =>
-      commitSkillVersionInTx(tx, staged, { source: 'import', authorUserId: 'u1' }),
+    const created = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await commitSkillVersionInTx(tx, staged, { source: 'import', authorUserId: 'u1' }),
     )
     expect(created?.source).toBe('import')
 
-    publishStagedSkillVersion(db, { appHome }, staged)
+    await publishStagedSkillVersion(db, { appHome }, staged)
     expect(liveSkillMd(appHome, skillId)).toContain('NEXT')
     // ⚠️ 列表是新→旧序，别用 `.at(-1)` 当「最新」——按版本号取才不依赖排序方向。
-    const versions = listSkillVersions(db, { appHome }, skillId)
+    const versions = await listSkillVersions(db, { appHome }, skillId)
     const newest = versions.reduce((a, v) => (v.versionIndex > a.versionIndex ? v : a))
     expect(newest.source).toBe('import')
     expect(newest.versionIndex).toBe(staged.newVersion)
@@ -96,18 +98,19 @@ describe('① 四段各自可用，组合起来等于一次完整提交', () => 
 
   test("`source:'import'` 是新增的来源枚举 —— 包导入不冒充编辑器编辑", async () => {
     const { db, appHome, skillId } = await seedSkill()
-    const staged = stageSkillVersion(
+    const staged = await stageSkillVersion(
       db,
       { appHome },
       skillId,
       (dir) => writeFileSync(join(dir, 'SKILL.md'), '---\nname: helper\n---\n\nX\n'),
       { source: 'import', authorUserId: 'u1' },
     )
-    dbTxSync(db, (tx) =>
-      commitSkillVersionInTx(tx, staged, { source: 'import', authorUserId: 'u1' }),
+    await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await commitSkillVersionInTx(tx, staged, { source: 'import', authorUserId: 'u1' }),
     )
-    publishStagedSkillVersion(db, { appHome }, staged)
-    const sources = listSkillVersions(db, { appHome }, skillId).map((v) => v.source)
+    await publishStagedSkillVersion(db, { appHome }, staged)
+    const sources = (await listSkillVersions(db, { appHome }, skillId)).map((v) => v.source)
     expect(sources).toContain('import')
     expect(sources).not.toContain('editor')
   })
@@ -116,8 +119,8 @@ describe('① 四段各自可用，组合起来等于一次完整提交', () => 
 describe('② abort —— pre-commit 补偿是引擎能调用的一等公民', () => {
   test('暂存后放弃：候选目录清掉、live 不变、没有新版本行', async () => {
     const { db, appHome, skillId, initial } = await seedSkill()
-    const before = listSkillVersions(db, { appHome }, skillId).length
-    const staged = stageSkillVersion(
+    const before = (await listSkillVersions(db, { appHome }, skillId)).length
+    const staged = await stageSkillVersion(
       db,
       { appHome },
       skillId,
@@ -126,25 +129,25 @@ describe('② abort —— pre-commit 补偿是引擎能调用的一等公民', 
     )
     expect(existsSync(staged.versionDir)).toBe(true)
 
-    abortStagedSkillVersion(db, staged)
+    await abortStagedSkillVersion(db, staged)
 
     expect(existsSync(staged.versionDir)).toBe(false)
     expect(liveSkillMd(appHome, skillId)).toBe(initial)
-    expect(listSkillVersions(db, { appHome }, skillId)).toHaveLength(before)
+    expect(await listSkillVersions(db, { appHome }, skillId)).toHaveLength(before)
   })
 
   test('abort 之后该技能可以再次 stage —— op 锁真的被释放了', async () => {
     const { db, appHome, skillId } = await seedSkill()
-    const first = stageSkillVersion(
+    const first = await stageSkillVersion(
       db,
       { appHome },
       skillId,
       (dir) => writeFileSync(join(dir, 'SKILL.md'), '---\nname: helper\n---\n\n1\n'),
       { source: 'import', authorUserId: 'u1' },
     )
-    abortStagedSkillVersion(db, first)
+    await abortStagedSkillVersion(db, first)
     // 锁没释放的话这一步会 409-busy。
-    const second = stageSkillVersion(
+    const second = await stageSkillVersion(
       db,
       { appHome },
       skillId,
@@ -152,15 +155,15 @@ describe('② abort —— pre-commit 补偿是引擎能调用的一等公民', 
       { source: 'import', authorUserId: 'u1' },
     )
     expect(second.opId).not.toBeNull()
-    abortStagedSkillVersion(db, second)
+    await abortStagedSkillVersion(db, second)
   })
 })
 
 describe('③ 空写仍是 fence-only 的已暂存 op', () => {
   test('内容未变 ⇒ noop 有值、不写版本行，但**仍然**跑了事务内复核', async () => {
     const { db, appHome, skillId, initial } = await seedSkill()
-    const before = listSkillVersions(db, { appHome }, skillId).length
-    const staged = stageSkillVersion(
+    const before = (await listSkillVersions(db, { appHome }, skillId)).length
+    const staged = await stageSkillVersion(
       db,
       { appHome },
       skillId,
@@ -169,39 +172,42 @@ describe('③ 空写仍是 fence-only 的已暂存 op', () => {
     )
     expect(staged.noop).not.toBeNull()
 
-    const created = dbTxSync(db, (tx) =>
-      commitSkillVersionInTx(tx, staged, { source: 'editor', authorUserId: 'u1' }),
+    const created = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await commitSkillVersionInTx(tx, staged, { source: 'editor', authorUserId: 'u1' }),
     )
     expect(created).toBeNull() // 没有新版本行
-    expect(listSkillVersions(db, { appHome }, skillId)).toHaveLength(before)
+    expect(await listSkillVersions(db, { appHome }, skillId)).toHaveLength(before)
 
     // publish 对 noop 是 no-op，且不该炸。
-    expect(() => publishStagedSkillVersion(db, { appHome }, staged)).not.toThrow()
+    // publish 对 noop 是 no-op：不抛即可（它本来就返回 void）。
+    await expect(publishStagedSkillVersion(db, { appHome }, staged)).resolves.toBeUndefined()
     expect(liveSkillMd(appHome, skillId)).toBe(initial)
   })
 
   test('noop 的 token 复核**真的**会拒绝漂移（不是走个过场）', async () => {
     const { db, appHome, skillId } = await seedSkill()
-    const staged = stageSkillVersion(db, { appHome }, skillId, () => {}, {
+    const staged = await stageSkillVersion(db, { appHome }, skillId, () => {}, {
       source: 'editor',
       authorUserId: 'u1',
     })
     expect(staged.noop).not.toBeNull()
     // 给一个对不上的 skillId 复合前置条件 ⇒ 事务内必须拒。
-    expect(() =>
-      dbTxSync(db, (tx) =>
-        commitSkillVersionInTx(tx, staged, {
-          source: 'editor',
-          authorUserId: 'u1',
-          expectedSkillId: '01SOMEONE-ELSE',
-        }),
+    await expect(
+      databaseSessionFor(db).transaction(
+        async (tx) =>
+          await commitSkillVersionInTx(tx, staged, {
+            source: 'editor',
+            authorUserId: 'u1',
+            expectedSkillId: '01SOMEONE-ELSE',
+          }),
       ),
-    ).toThrow()
+    ).rejects.toThrow()
   })
 })
 
 describe('④ unmarkSkillBootVerified 不在 publish 段里（源码层）', () => {
-  test('publish 只负责发布；unmark 归调用方按批次统一做', () => {
+  test('publish 只负责发布；unmark 归调用方按批次统一做', async () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -215,15 +221,15 @@ describe('④ unmarkSkillBootVerified 不在 publish 段里（源码层）', () 
       ),
       'utf8',
     )
-    const start = src.indexOf('export function publishStagedSkillVersion')
+    const start = src.indexOf('export async function publishStagedSkillVersion')
     expect(start).toBeGreaterThan(0)
-    const end = src.indexOf('export function abortStagedSkillVersion')
+    const end = src.indexOf('export async function abortStagedSkillVersion')
     const body = src.slice(start, end)
     // publish 里 mark 回来（发布完就是已验证），但绝不 unmark。
     expect(body).toContain('markSkillBootVerified(')
     expect(body).not.toContain('unmarkSkillBootVerified(')
     // 单条组合路径仍在 DB 提交返回后立刻 unmark —— 既有行为逐字不变。
-    const combined = src.slice(src.indexOf('export function commitSkillVersion('))
+    const combined = src.slice(src.indexOf('export async function commitSkillVersion('))
     expect(combined).toContain('unmarkSkillBootVerified(staged.skillId)')
   })
 })

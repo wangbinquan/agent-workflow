@@ -95,18 +95,39 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:collaboration:commands:submitReviewDecision', removeAfterWave: 'W4' },
   { id: 'public:collaboration:events:COLLABORATION_COMMITTED_EVENT_REF', removeAfterWave: 'W4' },
   { id: 'public:collaboration:events:COLLABORATION_COMMITTED_SOURCE_REF', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:participants:CollaborationClarifyDraftEventPublisher', removeAfterWave: 'W4' },
+  {
+    id: 'public:collaboration:participants:CollaborationClarifyDraftEventPublisher',
+    removeAfterWave: 'W4',
+  },
   { id: 'public:collaboration:participants:CollaborationTaskQuestionView', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:participants:CollaborationTaskRuntimeOperations', removeAfterWave: 'W4' },
+  {
+    id: 'public:collaboration:participants:CollaborationTaskRuntimeOperations',
+    removeAfterWave: 'W4',
+  },
   { id: 'public:collaboration:participants:HumanGateOpenParticipantResult', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:participants:appendHumanGateDecisionCommittedEventTx', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:participants:appendQuestionDispatchCommittedEventTx', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:participants:appendReviewCommentsChangedCommittedEventTx', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:participants:appendReviewSelectionChangedCommittedEventTx', removeAfterWave: 'W4' },
+  {
+    id: 'public:collaboration:participants:appendHumanGateDecisionCommittedEventTx',
+    removeAfterWave: 'W4',
+  },
+  {
+    id: 'public:collaboration:participants:appendQuestionDispatchCommittedEventTx',
+    removeAfterWave: 'W4',
+  },
+  {
+    id: 'public:collaboration:participants:appendReviewCommentsChangedCommittedEventTx',
+    removeAfterWave: 'W4',
+  },
+  {
+    id: 'public:collaboration:participants:appendReviewSelectionChangedCommittedEventTx',
+    removeAfterWave: 'W4',
+  },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_CANDIDATE_LIMIT', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_CONTEXT_CHARS', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_DEFAULT_BUDGET_CHARS', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:queries:REVIEW_ANCHOR_MESSAGE_CANDIDATE_LIMIT', removeAfterWave: 'W4' },
+  {
+    id: 'public:collaboration:queries:REVIEW_ANCHOR_MESSAGE_CANDIDATE_LIMIT',
+    removeAfterWave: 'W4',
+  },
   { id: 'public:collaboration:queries:REVIEW_ANCHOR_SUGGESTION_LIMIT', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:buildReviewAnchorDocument', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:collaborationQuestionTaskId', removeAfterWave: 'W4' },
@@ -114,8 +135,14 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:collaboration:queries:filterReviewSummariesForActor', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:getCollaborationClarifyDirective', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:paragraphIdxAt', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:queries:resolveCollaborationClarifyTaskAccess', removeAfterWave: 'W4' },
-  { id: 'public:collaboration:queries:resolveCollaborationNodeRunTaskAccess', removeAfterWave: 'W4' },
+  {
+    id: 'public:collaboration:queries:resolveCollaborationClarifyTaskAccess',
+    removeAfterWave: 'W4',
+  },
+  {
+    id: 'public:collaboration:queries:resolveCollaborationNodeRunTaskAccess',
+    removeAfterWave: 'W4',
+  },
   { id: 'public:collaboration:queries:resolveReviewAccess', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:resolveReviewAnchor', removeAfterWave: 'W4' },
   { id: 'public:collaboration:queries:sectionPathAt', removeAfterWave: 'W4' },
@@ -128,24 +155,63 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:collaboration:types:ReviewAnchorHeading', removeAfterWave: 'W4' },
   { id: 'public:collaboration:types:ReviewDecisionCommandPort', removeAfterWave: 'W4' },
   { id: 'public:collaboration:types:ReviewGateOpenDocumentDraft', removeAfterWave: 'W4' },
-  { id: 'public:development-automation:operations:developmentAssignmentInputSchema', removeAfterWave: 'W4-E8' },
-  { id: 'public:development-automation:operations:developmentConfigCreateInputSchema', removeAfterWave: 'W4-E8' },
-  { id: 'public:development-automation:operations:developmentPolicyPreviewInputSchema', removeAfterWave: 'W4-E8' },
-  { id: 'public:development-automation:operations:developmentSelectionPreviewInputSchema', removeAfterWave: 'W4-E8' },
-  { id: 'public:development-automation:participants:DEVELOPMENT_PIPELINE_CLASSIFIER_DEFAULT_CATEGORIES_V2', removeAfterWave: 'W4-E8' },
-  { id: 'public:development-automation:participants:DevelopmentDigitalEmployeeAgentTemplateV2', removeAfterWave: 'W4-E8' },
-  { id: 'public:development-automation:types:encodeDevelopmentApprovalSubject', removeAfterWave: 'W4-E8' },
+  {
+    id: 'public:development-automation:operations:developmentAssignmentInputSchema',
+    removeAfterWave: 'W4-E8',
+  },
+  {
+    id: 'public:development-automation:operations:developmentConfigCreateInputSchema',
+    removeAfterWave: 'W4-E8',
+  },
+  {
+    id: 'public:development-automation:operations:developmentPolicyPreviewInputSchema',
+    removeAfterWave: 'W4-E8',
+  },
+  {
+    id: 'public:development-automation:operations:developmentSelectionPreviewInputSchema',
+    removeAfterWave: 'W4-E8',
+  },
+  {
+    id: 'public:development-automation:participants:DEVELOPMENT_PIPELINE_CLASSIFIER_DEFAULT_CATEGORIES_V2',
+    removeAfterWave: 'W4-E8',
+  },
+  {
+    id: 'public:development-automation:participants:DevelopmentDigitalEmployeeAgentTemplateV2',
+    removeAfterWave: 'W4-E8',
+  },
+  {
+    id: 'public:development-automation:types:encodeDevelopmentApprovalSubject',
+    removeAfterWave: 'W4-E8',
+  },
   { id: 'public:digital-employee:commands:DigitalEmployeeCommandPort', removeAfterWave: 'W4-E9' },
   { id: 'public:digital-employee:commands:EmployeeCaseCommandPort', removeAfterWave: 'W4-E9' },
-  { id: 'public:digital-employee:events:EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF', removeAfterWave: 'W4-E9' },
-  { id: 'public:digital-employee:events:EMPLOYEE_INVOCATION_RESULT_EVENT_REF', removeAfterWave: 'W4-E9' },
+  {
+    id: 'public:digital-employee:events:EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF',
+    removeAfterWave: 'W4-E9',
+  },
+  {
+    id: 'public:digital-employee:events:EMPLOYEE_INVOCATION_RESULT_EVENT_REF',
+    removeAfterWave: 'W4-E9',
+  },
   { id: 'public:digital-employee:events:EMPLOYEE_LIFECYCLE_SOURCE_REF', removeAfterWave: 'W4-E9' },
-  { id: 'public:digital-employee:events:EmployeeCaseProjectionInvalidated', removeAfterWave: 'W4-E9' },
-  { id: 'public:digital-employee:events:employeeCaseLifecycleObservation', removeAfterWave: 'W4-E9' },
-  { id: 'public:digital-employee:events:employeeInvocationResultObservation', removeAfterWave: 'W4-E9' },
+  {
+    id: 'public:digital-employee:events:EmployeeCaseProjectionInvalidated',
+    removeAfterWave: 'W4-E9',
+  },
+  {
+    id: 'public:digital-employee:events:employeeCaseLifecycleObservation',
+    removeAfterWave: 'W4-E9',
+  },
+  {
+    id: 'public:digital-employee:events:employeeInvocationResultObservation',
+    removeAfterWave: 'W4-E9',
+  },
   { id: 'public:digital-employee:queries:DigitalEmployeeQueryPort', removeAfterWave: 'W4-E9' },
   { id: 'public:digital-employee:queries:EmployeeCaseQueryPort', removeAfterWave: 'W4-E9' },
-  { id: 'public:digital-employee:participants:DigitalEmployeePlatformInventoryRow', removeAfterWave: 'W4-E9' },
+  {
+    id: 'public:digital-employee:participants:DigitalEmployeePlatformInventoryRow',
+    removeAfterWave: 'W4-E9',
+  },
   { id: 'public:digital-employee:types:EMPLOYEE_CASE_TERMINAL_KINDS', removeAfterWave: 'W4-E9' },
   { id: 'public:digital-employee:types:EmployeeCaseTerminalKind', removeAfterWave: 'W4-E9' },
   { id: 'public:digital-employee:types:EmployeeContextRef', removeAfterWave: 'W4-E9' },
@@ -155,19 +221,28 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:digital-employee:types:classifyTerminalKind', removeAfterWave: 'W4-E9' },
   { id: 'public:event-center:commands:EventObservationCommandPort', removeAfterWave: 'W4-E9' },
   { id: 'public:event-center:events:EventCenterProjectionInvalidated', removeAfterWave: 'W4-E9' },
-  { id: 'public:event-center:participants:EventObserverControlParticipant', removeAfterWave: 'W4-E9' },
+  {
+    id: 'public:event-center:participants:EventObserverControlParticipant',
+    removeAfterWave: 'W4-E9',
+  },
   { id: 'public:event-center:queries:EventCenterCatalogQueryPort', removeAfterWave: 'W4-E9' },
   { id: 'public:event-center:queries:EventCenterOperationsQueryPort', removeAfterWave: 'W4-E9' },
   { id: 'public:event-center:types:EventDeliveryStatusDocument', removeAfterWave: 'W4-E9' },
   { id: 'public:event-center:types:EventRecordAuditDocument', removeAfterWave: 'W4-E9' },
   { id: 'public:event-center:types:ObserverHealthDocument', removeAfterWave: 'W4-E9' },
-  { id: 'public:execution-contract:types:ExecutionContractAgentCandidateReceipt', removeAfterWave: 'W4-E9' },
+  {
+    id: 'public:execution-contract:types:ExecutionContractAgentCandidateReceipt',
+    removeAfterWave: 'W4-E9',
+  },
   { id: 'public:execution-contract:types:executionContractRefKey', removeAfterWave: 'W4-E9' },
   { id: 'public:execution-contract:types:executionContractRefSchema', removeAfterWave: 'W4-E9' },
   { id: 'public:identity-access:commands:SyncOidcProfile', removeAfterWave: 'W4-E0' },
   { id: 'public:identity-access:events:IdentityAccessEventSink', removeAfterWave: 'W4-E0' },
   { id: 'public:identity-access:operations:OidcIdentityOperations', removeAfterWave: 'W4-E0' },
-  { id: 'public:identity-access:operations:createIdentityUserOperations', removeAfterWave: 'W4-E0' },
+  {
+    id: 'public:identity-access:operations:createIdentityUserOperations',
+    removeAfterWave: 'W4-E0',
+  },
   { id: 'public:identity-access:queries:requireUserAccess', removeAfterWave: 'W4-E0' },
   { id: 'public:identity-access:types:UserAccessErrorKind', removeAfterWave: 'W4-E0' },
   { id: 'public:integration:events:CODE_HOST_EVENT_SOURCE_REF', removeAfterWave: 'W4-B' },
@@ -177,17 +252,44 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:integration:events:codeHostEventTypeRef', removeAfterWave: 'W4-B' },
   { id: 'public:integration:participants:DigitalEmployeeWorkStartPort', removeAfterWave: 'W4-B' },
   { id: 'public:source-control:commands:WorkspaceClaimFinalizationCommand', removeAfterWave: 'W5' },
-  { id: 'public:source-control:commands:OwnRepositoryTransportCredentialCommands', removeAfterWave: 'W5' },
-  { id: 'public:source-control:participants:RepositoryEndpointDiscoveryParticipant', removeAfterWave: 'W5' },
-  { id: 'public:source-control:participants:RepositoryTransportCredentialSelectionParticipant', removeAfterWave: 'W5' },
+  {
+    id: 'public:source-control:commands:OwnRepositoryTransportCredentialCommands',
+    removeAfterWave: 'W5',
+  },
+  {
+    id: 'public:source-control:participants:RepositoryEndpointDiscoveryParticipant',
+    removeAfterWave: 'W5',
+  },
+  {
+    id: 'public:source-control:participants:RepositoryTransportCredentialSelectionParticipant',
+    removeAfterWave: 'W5',
+  },
   { id: 'public:source-control:participants:WorkspaceExcludeParticipant', removeAfterWave: 'W5' },
-  { id: 'public:source-control:queries:OwnRepositoryTransportCredentialQueries', removeAfterWave: 'W5' },
-  { id: 'public:source-control:types:RepositoryTransportCredentialErrorKind', removeAfterWave: 'W5' },
-  { id: 'public:system-operations:operations:createDatabaseMigrationOperationDescriptors', removeAfterWave: 'W4-E7' },
-  { id: 'public:system-operations:operations:createSystemOperationDescriptors', removeAfterWave: 'W4-E7' },
-  { id: 'public:system-operations:types:activateLocalRestoreOptionsSchema', removeAfterWave: 'W4-E7' },
+  {
+    id: 'public:source-control:queries:OwnRepositoryTransportCredentialQueries',
+    removeAfterWave: 'W5',
+  },
+  {
+    id: 'public:source-control:types:RepositoryTransportCredentialErrorKind',
+    removeAfterWave: 'W5',
+  },
+  {
+    id: 'public:system-operations:operations:createDatabaseMigrationOperationDescriptors',
+    removeAfterWave: 'W4-E7',
+  },
+  {
+    id: 'public:system-operations:operations:createSystemOperationDescriptors',
+    removeAfterWave: 'W4-E7',
+  },
+  {
+    id: 'public:system-operations:types:activateLocalRestoreOptionsSchema',
+    removeAfterWave: 'W4-E7',
+  },
   { id: 'public:system-operations:types:backupResultViewSchema', removeAfterWave: 'W4-E7' },
-  { id: 'public:system-operations:types:cancelStagedRestoreResultSchema', removeAfterWave: 'W4-E7' },
+  {
+    id: 'public:system-operations:types:cancelStagedRestoreResultSchema',
+    removeAfterWave: 'W4-E7',
+  },
   { id: 'public:system-operations:types:localRestoreActivationSchema', removeAfterWave: 'W4-E7' },
   { id: 'public:system-operations:types:recoveryStatusViewSchema', removeAfterWave: 'W4-E7' },
   { id: 'public:system-operations:types:requestBackupInputSchema', removeAfterWave: 'W4-E7' },
@@ -199,8 +301,14 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:task-execution:commands:TaskCancellationCommand', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:commands:TaskDriveCoordinator', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:commands:TaskRouteMultipartFilePart', removeAfterWave: 'W4-E1' },
-  { id: 'public:task-execution:commands:WorkgroupTaskRoomHostRunSnapshot', removeAfterWave: 'W4-E1' },
-  { id: 'public:task-execution:commands:WorkgroupTaskRoomOpenSelfClarifyPark', removeAfterWave: 'W4-E1' },
+  {
+    id: 'public:task-execution:commands:WorkgroupTaskRoomHostRunSnapshot',
+    removeAfterWave: 'W4-E1',
+  },
+  {
+    id: 'public:task-execution:commands:WorkgroupTaskRoomOpenSelfClarifyPark',
+    removeAfterWave: 'W4-E1',
+  },
   { id: 'public:task-execution:commands:taskDriveSubmission', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:events:TASK_LIFECYCLE_SOURCE_REF', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:events:TASK_STATUS_CHANGED_EVENT_REF', removeAfterWave: 'W4-E1' },
@@ -266,7 +374,10 @@ const SURFACES = (readJson('architecture/public-surfaces.json').entries ??
 const PORTS = (readJson('architecture/cross-context-imports.json').requiredPorts ??
   []) as readonly RequiredPortLike[]
 
-function diff(observed: readonly string[], ledger: readonly string[]): {
+function diff(
+  observed: readonly string[],
+  ledger: readonly string[],
+): {
   unlisted: string[]
   stale: string[]
 } {
@@ -300,7 +411,10 @@ describe('RFC-294 review §C2 —— 零 consumer public symbol 账本', () => {
       deadRequiredPorts(PORTS),
       DEAD_REQUIRED_PORT_DEBT.map((entry) => entry.id),
     )
-    expect(unlisted, '新增了既无 provider 也无 consumer 的 required SPI：先接 consumer/provider 再声明').toEqual([])
+    expect(
+      unlisted,
+      '新增了既无 provider 也无 consumer 的 required SPI：先接 consumer/provider 再声明',
+    ).toEqual([])
     expect(stale, '死声明已被接线或删除：同批删掉账本条目').toEqual([])
   })
 
@@ -350,7 +464,9 @@ describe('RFC-294 review §C2 —— 负 fixture：判据自己咬得动', () =>
         {
           id: 'required:probe:Declared',
           providerAdapters: [],
-          consumerOwnerEntryIds: ['owner:packages/backend/src/modules/probe/application/x.ts#$file'],
+          consumerOwnerEntryIds: [
+            'owner:packages/backend/src/modules/probe/application/x.ts#$file',
+          ],
         },
       ]),
     ).toEqual(['required:probe:Dead'])

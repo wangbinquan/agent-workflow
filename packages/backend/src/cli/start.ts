@@ -319,11 +319,8 @@ import {
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { enforceLimits } from '@/services/limits'
 import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
-import { createSyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
-import {
-  composeSkillMemoryFusionParticipantFactory,
-  unfuseAboveVersionSync,
-} from '@/modules/memory/composition'
+import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
+import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
@@ -2333,8 +2330,10 @@ async function composeSqliteProviderSession(
     appHome: Paths.root,
     // RFC-353 T7：回滚该退回哪些记忆由 knowledge-evolution 裁定；resource-catalog 不能
     // import knowledge-evolution（RFC-294 目标边表无此反向边），所以在 bootstrap 装配。
-    restoreMembership: createSyncSkillRestoreMembership((tx, selector) =>
-      unfuseAboveVersionSync(tx, selector),
+    // RFC-359 W4-D23b：legacy 回滚路径已改吃中立事务，同步那条协调器随之退役——
+    // 两个 bootstrap 从此接同一个异步协调器（PG 一直用的就是它）。
+    restoreMembership: createAsyncSkillRestoreMembership(
+      composeSkillMemoryFusionParticipantFactory(),
     ),
   })
   const pluginCatalog = composePluginCatalog({

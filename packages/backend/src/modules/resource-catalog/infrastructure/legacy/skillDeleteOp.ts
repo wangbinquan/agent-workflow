@@ -17,9 +17,12 @@
 import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, skills } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import {
   abandonOperation,
   advancePhase,
@@ -38,7 +41,7 @@ import {
   skillRootAbs,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import {
-  findAgentsUsingManagedSkillInTx,
+  findAgentsUsingManagedSkill,
   matchesManagedSkillReference,
   type SkillReferencingAgentRow,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
@@ -78,19 +81,20 @@ export class SkillDeleteReferencedError extends Error {
  * for the duration (concurrent version-write/replace/etc. → busy 409). The row
  * DELETE and the phase='db-committed' advance share one tx (§6a ③).
  */
-export function deleteManagedSkillOp(
-  db: DbClient,
+export async function deleteManagedSkillOp(
+  db: ProviderNeutralDatabase,
   fsOpts: SkillOpFsOptions,
   skill: { id: string },
   hooks: SkillDeleteOpHooks = {},
   expected?: SkillDeleteFence,
-): void {
+): Promise<void> {
+  const session = databaseSessionFor(db)
   const root = skillRootAbs(fsOpts.appHome, skill.id)
 
   // ① intent (+lock) — durably record before any FS side effect.
-  const opId = dbTxSync(db, (tx) => {
-    if (expected !== undefined) assertDeleteFence(tx, skill.id, expected)
-    return beginOperation(tx, {
+  const opId = await session.transaction(async (tx) => {
+    if (expected !== undefined) await assertDeleteFence(tx, skill.id, expected)
+    return await beginOperation(tx, {
       skillId: skill.id,
       kind: 'delete',
       preconditionJson: JSON.stringify({ skillId: skill.id }),
@@ -107,20 +111,21 @@ export function deleteManagedSkillOp(
       mkdirSync(dirname(trash), { recursive: true })
       renameSync(root, trash)
     }
-    dbTxSync(db, (tx) =>
-      advancePhase(tx, opId, 'fs-staged', {
-        backupPath: relative(fsOpts.appHome, trash),
-      }),
+    await session.transaction(
+      async (tx) =>
+        await advancePhase(tx, opId, 'fs-staged', {
+          backupPath: relative(fsOpts.appHome, trash),
+        }),
     )
     hooks.afterPhase?.('fs-staged', skill.id)
 
     // ③ db-committed — DELETE row + advance phase, one tx.
-    dbTxSync(db, (tx) => {
-      if (expected !== undefined) assertDeleteFence(tx, skill.id, expected)
-      const refs = findAgentsUsingManagedSkillInTx(
+    await session.transaction(async (tx) => {
+      if (expected !== undefined) await assertDeleteFence(tx, skill.id, expected)
+      const refs = await findAgentsUsingManagedSkill(
         {
-          find: (skillId) =>
-            findAgentsReferencingIdInJsonColumnInTx(tx, {
+          find: async (skillId) =>
+            await findAgentsReferencingIdInJsonColumnInTx(tx, {
               column: agents.skills,
               id: skillId,
               matches: matchesManagedSkillReference,
@@ -129,15 +134,15 @@ export function deleteManagedSkillOp(
         skill.id,
       )
       if (refs.length > 0) throw new SkillDeleteReferencedError(refs)
-      tx.delete(skills).where(eq(skills.id, skill.id)).run()
-      advancePhase(tx, opId, 'db-committed')
+      await tx.delete(skills).where(eq(skills.id, skill.id))
+      await advancePhase(tx, opId, 'db-committed')
     })
     committed = true
     hooks.afterPhase?.('db-committed', skill.id)
 
     // done — drop the trash, release the lock.
     rmSync(trash, { recursive: true, force: true })
-    dbTxSync(db, (tx) => finishOperation(tx, opId))
+    await session.transaction(async (tx) => await finishOperation(tx, opId))
   } catch (err) {
     // Once DELETE + db-committed is durable, NEVER restore the root or retire the
     // evidence. The barrier owns roll-forward and keeps the lock until trash is
@@ -153,7 +158,7 @@ export function deleteManagedSkillOp(
           throw new Error(`delete rollback lost both root and trash for skill ${skill.id}`)
         }
         if (trashExists) renameSync(trash, root)
-        dbTxSync(db, (tx) => abandonOperation(tx, opId))
+        await session.transaction(async (tx) => await abandonOperation(tx, opId))
       } catch {
         // Preserve the active op + lock when rollback itself cannot be proven.
       }
@@ -162,18 +167,24 @@ export function deleteManagedSkillOp(
   }
 }
 
-function assertDeleteFence(tx: DbTxSync, skillId: string, expected: SkillDeleteFence): void {
-  const live = tx
-    .select({
-      id: skills.id,
-      contentVersion: skills.contentVersion,
-      metaRevision: skills.metaRevision,
-      ownerUserId: skills.ownerUserId,
-      aclRevision: skills.aclRevision,
-    })
-    .from(skills)
-    .where(eq(skills.id, skillId))
-    .get()
+async function assertDeleteFence(
+  tx: DatabaseTransaction,
+  skillId: string,
+  expected: SkillDeleteFence,
+): Promise<void> {
+  const live = (
+    await tx
+      .select({
+        id: skills.id,
+        contentVersion: skills.contentVersion,
+        metaRevision: skills.metaRevision,
+        ownerUserId: skills.ownerUserId,
+        aclRevision: skills.aclRevision,
+      })
+      .from(skills)
+      .where(eq(skills.id, skillId))
+      .limit(1)
+  )[0]
   if (
     live === undefined ||
     live.id !== expected.skillId ||

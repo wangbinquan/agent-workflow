@@ -38,7 +38,10 @@ import { agents, skills } from '@/db/schema'
 import { commitSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import {
   abandonOperation,
   advancePhase,
@@ -214,7 +217,7 @@ export async function createManagedSkillWithFiles(
   //    violation here means a concurrent create won the slot → 409, nothing written.
   let opId: string
   try {
-    opId = dbTxSync(db, (tx) => {
+    opId = await databaseSessionFor(db).transaction(async (tx) => {
       tx.insert(skills)
         .values({
           id,
@@ -249,23 +252,29 @@ export async function createManagedSkillWithFiles(
     const filesDir = join(skillDir, 'files')
     mkdirSync(filesDir, { recursive: true })
     produceFiles(filesDir)
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
+    )
 
     // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
     // skipOp: reserve already holds this skill's op lock — commitSkillVersion must
     // NOT open its own version-write op (it would self-conflict on the same lock).
-    commitSkillVersion(db, opts, id, () => {}, {
+    await commitSkillVersion(db, opts, id, () => {}, {
       source: 'initial',
       authorUserId: ownerUserId,
       skipOp: true,
     })
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-published'),
+    )
 
     // ④ db-committed: flip to 'ready' — the skill becomes visible now, atomically.
-    dbTxSync(db, (tx) => commitSkillReadyInTx(tx, { skillId: id, opId }))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await commitSkillReadyInTx(tx, { skillId: id, opId }),
+    )
     committed = true
     hooks.__afterDbCommitForTest?.()
-    dbTxSync(db, (tx) => finishOperation(tx, opId))
+    await databaseSessionFor(db).transaction(async (tx) => await finishOperation(tx, opId))
   } catch (err) {
     // ready + db-committed is authoritative. Never reverse it in-process:
     // preserve row/root/op/lock so the boot barrier can prove and roll forward.
@@ -286,7 +295,7 @@ export async function createManagedSkillWithFiles(
     } catch {
       /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
     }
-    dbTxSync(db, (tx) => {
+    await databaseSessionFor(db).transaction(async (tx) => {
       tx.delete(skills).where(eq(skills.id, id)).run()
       abandonOperation(tx, opId)
     })
@@ -302,9 +311,12 @@ export async function createManagedSkillWithFiles(
  *  apply transaction can flip MANY pre-staged skills visible atomically with
  *  the rest of the bundle (steps ①-③ run in the pipeline's pre-stage phase via
  *  stageManagedSkill; finishOperation/compensation stay with the caller). */
-export function commitSkillReadyInTx(tx: DbTxSync, p: { skillId: string; opId: string }): void {
-  tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, p.skillId)).run()
-  advancePhase(tx, p.opId, 'db-committed')
+export async function commitSkillReadyInTx(
+  tx: DatabaseTransaction,
+  p: { skillId: string; opId: string },
+): Promise<void> {
+  await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, p.skillId))
+  await advancePhase(tx, p.opId, 'db-committed')
 }
 
 /** RFC-234 (T6) — steps ①-③ of createManagedSkillWithFiles as a standalone
@@ -334,7 +346,7 @@ export async function stageManagedSkill(
   const now = Date.now()
   let opId: string
   try {
-    opId = dbTxSync(db, (tx) => {
+    opId = await databaseSessionFor(db).transaction(async (tx) => {
       tx.insert(skills)
         .values({
           id,
@@ -365,16 +377,20 @@ export async function stageManagedSkill(
     const filesDir = join(skillDir, 'files')
     mkdirSync(filesDir, { recursive: true })
     produceFiles(filesDir)
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
-    commitSkillVersion(db, opts, id, () => {}, {
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
+    )
+    await commitSkillVersion(db, opts, id, () => {}, {
       source: 'initial',
       authorUserId: ownerUserId,
       skipOp: true,
     })
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-published'),
+    )
     return { skillId: id, opId, skillDir }
   } catch (err) {
-    compensateManagedSkillStage(db, { skillId: id, opId, skillDir })
+    await compensateManagedSkillStage(db, { skillId: id, opId, skillDir })
     throw err
   }
 }
@@ -382,18 +398,18 @@ export async function stageManagedSkill(
 /** RFC-234 (T6) — discard a staged-but-never-published skill (bundle failure /
  *  boot convergence): files best-effort, then row + op in one tx (RFC-208
  *  ordering: a stranded lock is worse than a leftover dir). */
-export function compensateManagedSkillStage(
+export async function compensateManagedSkillStage(
   db: DbClient,
   p: { skillId: string; opId: string; skillDir: string },
-): void {
+): Promise<void> {
   try {
     rmSync(p.skillDir, { recursive: true, force: true })
   } catch {
     /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
   }
-  dbTxSync(db, (tx) => {
-    tx.delete(skills).where(eq(skills.id, p.skillId)).run()
-    abandonOperation(tx, p.opId)
+  await databaseSessionFor(db).transaction(async (tx) => {
+    await tx.delete(skills).where(eq(skills.id, p.skillId))
+    await abandonOperation(tx, p.opId)
   })
 }
 
@@ -489,7 +505,13 @@ export async function deleteSkill(
   const { deleteManagedSkillOp, SkillDeleteReferencedError } =
     await import('@/modules/resource-catalog/infrastructure/legacy/skillDeleteOp')
   try {
-    deleteManagedSkillOp(db, { appHome: opts.appHome }, { id: existing.id }, hooks, deleteFence)
+    await deleteManagedSkillOp(
+      db,
+      { appHome: opts.appHome },
+      { id: existing.id },
+      hooks,
+      deleteFence,
+    )
   } catch (error) {
     if (error instanceof SkillDeleteReferencedError) {
       // deleteManagedSkillOp has already proven its pre-commit rollback:
@@ -651,7 +673,7 @@ export async function writeSkillContent(
   // RFC-101: route through the single versioning funnel — archives the prior
   // files/ as a version, writes the new SKILL.md, bumps content_version, and
   // (when description changed) syncs the DB description in the same tx.
-  commitSkillVersion(
+  await commitSkillVersion(
     db,
     opts,
     skillId,
@@ -844,7 +866,7 @@ export async function writeSkillFile(
     )
   }
   // RFC-101: support-file writes version the whole files/ tree too.
-  commitSkillVersion(
+  await commitSkillVersion(
     db,
     opts,
     skillId,
@@ -901,7 +923,7 @@ export async function deleteSkillFile(
     )
   }
   // RFC-101: deletion versions the tree (the removal IS the change).
-  commitSkillVersion(
+  await commitSkillVersion(
     db,
     opts,
     skillId,

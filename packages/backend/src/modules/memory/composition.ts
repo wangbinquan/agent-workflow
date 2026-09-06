@@ -56,7 +56,6 @@ export const composePostgresqlMemoryCatalogOperations = composeMemoryCatalogOper
 // （RFC-349 的 provider-cutover 账本明写「只能缩不能涨」）。跨 context 的 provider 装配
 // 一律在 bootstrap / system-operation 根上完成，模块之间只交换 provider 中性的端口。
 // RFC-359 W4-D5：融合提交的成员关系写入面只剩中立的 `composeSkillMemoryFusionParticipantFactory`。
-export { unfuseAboveVersionSync } from './infrastructure/sqliteMemoryMembershipParticipant'
 
 export function composeMemoryDistillQueries(db: ProviderNeutralDatabase) {
   return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))

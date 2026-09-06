@@ -263,9 +263,7 @@ describe('RFC-329 AC-11 — every mounted route is either covered by a tool or o
       const required = [...new Set(paths.flatMap((p) => [...(routes.get(p) ?? [])]))]
       const { missing, extra } = permissionDrift(tool.permissions, required)
       if (missing.length > 0 || extra.length > 0) {
-        offenders.push(
-          `${tool.name}: missing=[${missing.join(',')}] extra=[${extra.join(',')}]`,
-        )
+        offenders.push(`${tool.name}: missing=[${missing.join(',')}] extra=[${extra.join(',')}]`)
       }
     }
     expect(
@@ -284,9 +282,9 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
     // /api/worktree-files/:id/*` — is the ROUTE TEMPLATE, not a prefix rule, and
     // whether it belongs on the ledger is settled by `staleExemptions`, which
     // requires every leaf to be a route that is actually mounted today.
-    expect(
-      exemptionLeaves().filter((leaf) => leaf.includes('**') || leaf.endsWith('...')),
-    ).toEqual([])
+    expect(exemptionLeaves().filter((leaf) => leaf.includes('**') || leaf.endsWith('...'))).toEqual(
+      [],
+    )
   })
 
   test('no leaf appears twice', () => {
@@ -307,7 +305,11 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
     const used = new Set(MCP_SURFACE_EXEMPTION_LEAVES.map((entry) => entry.group))
     // A reason whose last leaf was removed is a stale entry: it reads like the
     // exemption is still in force when nothing is exempt under it any more.
-    expect(Object.keys(EXEMPT_REASONS).filter((group) => !used.has(group)).sort()).toEqual([])
+    expect(
+      Object.keys(EXEMPT_REASONS)
+        .filter((group) => !used.has(group))
+        .sort(),
+    ).toEqual([])
   })
 
   test('the count the high-water ledger pins is the LEAF count, not a group count', () => {

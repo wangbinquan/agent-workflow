@@ -143,7 +143,4 @@ export interface FusionApplyCommand {
 // ---------------------------------------------------------------------------
 
 export type { SkillRestoreMembershipRequest } from '../application/skillRestoreMembership'
-export {
-  createAsyncSkillRestoreMembership,
-  createSyncSkillRestoreMembership,
-} from '../application/skillRestoreMembership'
+export { createAsyncSkillRestoreMembership } from '../application/skillRestoreMembership'

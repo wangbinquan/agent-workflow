@@ -179,7 +179,11 @@ describe('RFC-353 AC-4 写入面：融合适配器不再直写 resource-catalog 
       ),
       'utf-8',
     )
-    expect(legacy).toContain('assertSkillVersionCompositeFenceSync')
+    // RFC-359 W4-D23b：legacy 版本写入路径改吃中立事务后，复合前置条件的读面与
+    // 融合 apply 共用同一份异步实现（`skillVersionCommitParticipant#readSkillVersionCompositeLive`）——
+    // 那份 SQLite 专属的同步栅栏随之退役。
+    expect(legacy).toContain('readSkillVersionCompositeLive(tx, skillId)')
+    expect(legacy).toContain('skillVersionCompositeDrifted(')
     // 六项比对的字面量只应出现在 domain 那一份里。
     expect(legacy).not.toContain('live.aclRevision !== commit.expectedAclRevision')
   })

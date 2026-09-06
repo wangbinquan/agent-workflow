@@ -8,6 +8,7 @@
 //     releases; boot GCs orphan locks only after active-op recovery.
 
 import { describe, expect, test, beforeEach } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -33,8 +34,8 @@ describe('skillOperations primitives', () => {
     db = createInMemoryDb(MIGRATIONS)
   })
 
-  function begin(spec: Parameters<typeof beginOperation>[1]): string {
-    return dbTxSync(db, (tx) => beginOperation(tx, spec))
+  async function begin(spec: Parameters<typeof beginOperation>[1]): Promise<string> {
+    return await databaseSessionFor(db).transaction(async (tx) => await beginOperation(tx, spec))
   }
   function locksFor(skillId: string): number {
     return db
@@ -44,69 +45,70 @@ describe('skillOperations primitives', () => {
       .filter((l) => l.lockedSkillId === skillId).length
   }
 
-  test('beginOperation records intent + acquires a lock', () => {
+  test('beginOperation records intent + acquires a lock', async () => {
     const skillId = ulid()
-    const opId = begin({ skillId, kind: 'delete' })
-    const op = getActiveOp(db, skillId)
+    const opId = await begin({ skillId, kind: 'delete' })
+    const op = await getActiveOp(db, skillId)
     expect(op?.opId).toBe(opId)
     expect(op?.phase).toBe('intent')
     expect(op?.active).toBe(1)
     expect(locksFor(skillId)).toBe(1)
   })
 
-  test('a second op on a locked skill is rejected as busy (ConflictError)', () => {
+  test('a second op on a locked skill is rejected as busy (ConflictError)', async () => {
     const skillId = ulid()
-    begin({ skillId, kind: 'delete' })
-    expect(() => begin({ skillId, kind: 'version-write' })).toThrow(ConflictError)
+    await begin({ skillId, kind: 'delete' })
+    await expect(begin({ skillId, kind: 'version-write' })).rejects.toThrow(ConflictError)
     // The failed begin rolled back — still exactly one active op + one lock.
-    expect(listActiveOps(db).filter((o) => o.skillId === skillId)).toHaveLength(1)
+    expect((await listActiveOps(db)).filter((o) => o.skillId === skillId)).toHaveLength(1)
     expect(locksFor(skillId)).toBe(1)
   })
 
-  test('advancePhase moves the phase + persists a fingerprint patch', () => {
+  test('advancePhase moves the phase + persists a fingerprint patch', async () => {
     const skillId = ulid()
-    const opId = begin({ skillId, kind: 'version-write' })
-    dbTxSync(db, (tx) =>
-      advancePhase(tx, opId, 'fs-versioned', {
-        candidateFingerprint: 'sha256:abc',
-        targetVersion: 2,
-      }),
+    const opId = await begin({ skillId, kind: 'version-write' })
+    await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await advancePhase(tx, opId, 'fs-versioned', {
+          candidateFingerprint: 'sha256:abc',
+          targetVersion: 2,
+        }),
     )
-    const op = getActiveOp(db, skillId)
+    const op = await getActiveOp(db, skillId)
     expect(op?.phase).toBe('fs-versioned')
     expect(op?.candidateFingerprint).toBe('sha256:abc')
     expect(op?.targetVersion).toBe(2)
   })
 
-  test('advancePhase on an absent/inactive op throws ValidationError', () => {
-    expect(() => dbTxSync(db, (tx) => advancePhase(tx, ulid(), 'fs-staged'))).toThrow(
-      ValidationError,
-    )
+  test('advancePhase on an absent/inactive op throws ValidationError', async () => {
+    await expect(
+      databaseSessionFor(db).transaction(async (tx) => await advancePhase(tx, ulid(), 'fs-staged')),
+    ).rejects.toThrow(ValidationError)
   })
 
-  test('finishOperation → done + inactive + locks released', () => {
+  test('finishOperation → done + inactive + locks released', async () => {
     const skillId = ulid()
-    const opId = begin({ skillId, kind: 'reserve' })
-    dbTxSync(db, (tx) => finishOperation(tx, opId))
-    expect(getActiveOp(db, skillId)).toBeNull()
+    const opId = await begin({ skillId, kind: 'reserve' })
+    await databaseSessionFor(db).transaction(async (tx) => await finishOperation(tx, opId))
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(locksFor(skillId)).toBe(0)
     // A fresh op on the same skill now succeeds (lock freed).
-    expect(() => begin({ skillId, kind: 'delete' })).not.toThrow()
+    await expect(begin({ skillId, kind: 'delete' })).resolves.toBeDefined()
   })
 
-  test('abandonOperation (rollback) → inactive + locks released', () => {
+  test('abandonOperation (rollback) → inactive + locks released', async () => {
     const skillId = ulid()
-    const opId = begin({ skillId, kind: 'delete' })
-    dbTxSync(db, (tx) => abandonOperation(tx, opId))
-    expect(getActiveOp(db, skillId)).toBeNull()
+    const opId = await begin({ skillId, kind: 'delete' })
+    await databaseSessionFor(db).transaction(async (tx) => await abandonOperation(tx, opId))
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(locksFor(skillId)).toBe(0)
   })
 
-  test('gcOrphanLocks removes locks whose op is done, keeps active op locks', () => {
+  test('gcOrphanLocks removes locks whose op is done, keeps active op locks', async () => {
     const liveSkill = ulid()
     const doneSkill = ulid()
-    begin({ skillId: liveSkill, kind: 'delete' })
-    const doneOp = begin({ skillId: doneSkill, kind: 'reserve' })
+    await begin({ skillId: liveSkill, kind: 'delete' })
+    const doneOp = await begin({ skillId: doneSkill, kind: 'reserve' })
     // Simulate a crash that flipped the op inactive but left a stale lock behind
     // (bypassing finishOperation's same-tx release).
     db.update(skillOperations)
@@ -115,7 +117,7 @@ describe('skillOperations primitives', () => {
       .run()
     expect(locksFor(doneSkill)).toBe(1) // stale lock still present pre-GC
 
-    const removed = dbTxSync(db, (tx) => gcOrphanLocks(tx))
+    const removed = await databaseSessionFor(db).transaction(async (tx) => await gcOrphanLocks(tx))
     expect(removed).toBe(1)
     expect(locksFor(doneSkill)).toBe(0) // orphan GC'd
     expect(locksFor(liveSkill)).toBe(1) // active op's lock untouched

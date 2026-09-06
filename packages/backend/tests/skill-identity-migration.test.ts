@@ -6,6 +6,7 @@
 // best-effort reconciler deliberately cannot repair.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import {
   cpSync,
   existsSync,
@@ -71,14 +72,14 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     rmSync(appHome, { recursive: true, force: true })
   })
 
-  test('happy path migrates a multi-version root and is idempotent', () => {
+  test('happy path migrates a multi-version root and is idempotent', async () => {
     const row = seedLegacySkill(db, appHome, {
       id: 'skill-id-happy',
       name: 'happy',
       versions: 3,
     })
 
-    const first = runSkillIdentityMigrationBarrier(db, { appHome })
+    const first = await runSkillIdentityMigrationBarrier(db, { appHome })
     expect(first).toEqual({
       recoveredOperations: 0,
       removedHusks: 0,
@@ -113,7 +114,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       { versionIndex: 3, filesPath: skillVersionRelPath(row.id, 3) },
     ])
 
-    expect(runSkillIdentityMigrationBarrier(db, { appHome })).toEqual({
+    expect(await runSkillIdentityMigrationBarrier(db, { appHome })).toEqual({
       recoveredOperations: 0,
       removedHusks: 0,
       migratedSkills: 0,
@@ -123,13 +124,13 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
   })
 
   for (const crashPhase of ['intent', 'fs-moved', 'fs-staged', 'db-committed', 'done'] as const) {
-    test(`crash after ${crashPhase} is recoverable and re-entrant`, () => {
+    test(`crash after ${crashPhase} is recoverable and re-entrant`, async () => {
       const row = seedLegacySkill(db, appHome, {
         id: `skill-id-${crashPhase}`,
         name: `phase-${crashPhase}`,
         versions: 2,
       })
-      expect(() =>
+      await expect(
         runSkillIdentityMigrationBarrier(db, {
           appHome,
           hooks: {
@@ -138,9 +139,9 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
             },
           },
         }),
-      ).toThrow(`crash:${crashPhase}`)
+      ).rejects.toThrow(`crash:${crashPhase}`)
 
-      const active = getActiveOp(db, row.id)
+      const active = await getActiveOp(db, row.id)
       if (crashPhase === 'done') {
         expect(active).toBeNull()
         expect(lockCount(db)).toBe(0)
@@ -149,9 +150,9 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
         expect(lockCount(db)).toBe(1)
       }
 
-      const recovered = runSkillIdentityMigrationBarrier(db, { appHome })
+      const recovered = await runSkillIdentityMigrationBarrier(db, { appHome })
       expect(recovered.recoveredOperations).toBe(crashPhase === 'done' ? 0 : 1)
-      expect(getActiveOp(db, row.id)).toBeNull()
+      expect(await getActiveOp(db, row.id)).toBeNull()
       expect(lockCount(db)).toBe(0)
       expect(existsSync(skillRootAbs(appHome, row.id))).toBe(true)
       expect(existsSync(join(appHome, 'skills', row.name))).toBe(false)
@@ -161,7 +162,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     })
   }
 
-  test('same physical name/id path records intent, survives crash, and canonicalizes DB', () => {
+  test('same physical name/id path records intent, survives crash, and canonicalizes DB', async () => {
     const same = '11111111111111111111111111'
     seedLegacySkill(db, appHome, {
       id: same,
@@ -170,7 +171,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       managedPath: `skills/${same}/files/`,
     })
 
-    expect(() =>
+    await expect(
       runSkillIdentityMigrationBarrier(db, {
         appHome,
         hooks: {
@@ -179,11 +180,11 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
           },
         },
       }),
-    ).toThrow('same-path-crash')
-    expect(getActiveOp(db, same)?.phase).toBe('fs-staged')
+    ).rejects.toThrow('same-path-crash')
+    expect((await getActiveOp(db, same))?.phase).toBe('fs-staged')
     expect(existsSync(skillRootAbs(appHome, same))).toBe(true)
 
-    const report = runSkillIdentityMigrationBarrier(db, { appHome })
+    const report = await runSkillIdentityMigrationBarrier(db, { appHome })
     expect(report.recoveredOperations).toBe(1)
     expect(report.migratedSkills).toBe(1)
     expect(
@@ -192,7 +193,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     expect(lockCount(db)).toBe(0)
   })
 
-  test('all-row preflight rejects a later collision before an earlier row can rename', () => {
+  test('all-row preflight rejects a later collision before an earlier row can rename', async () => {
     const first = seedLegacySkill(db, appHome, {
       id: 'aaa-first-id',
       name: 'aaa-first-name',
@@ -205,20 +206,22 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     })
     writeTree(skillRootAbs(appHome, blocked.id), 'untracked-target')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/claim different roots/)
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
+      /claim different roots/,
+    )
     expect(existsSync(join(appHome, 'skills', first.name))).toBe(true)
     expect(existsSync(skillRootAbs(appHome, first.id))).toBe(false)
     expect(activeOperationCount(db)).toBe(0)
     expect(lockCount(db)).toBe(0)
   })
 
-  test('cross-occupied two-node name/id cycle refuses deterministically with zero mutation', () => {
+  test('cross-occupied two-node name/id cycle refuses deterministically with zero mutation', async () => {
     seedLegacySkill(db, appHome, { id: 'beta', name: 'alpha', versions: 1 })
     seedLegacySkill(db, appHome, { id: 'alpha', name: 'beta', versions: 1 })
     const alphaBefore = hashDir(join(appHome, 'skills', 'alpha'))
     const betaBefore = hashDir(join(appHome, 'skills', 'beta'))
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /physical-ownership|resolves to canonical root/,
     )
     expect(hashDir(join(appHome, 'skills', 'alpha'))).toBe(alphaBefore)
@@ -226,7 +229,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     expect(activeOperationCount(db)).toBe(0)
   })
 
-  test('fully canonical display-name alias is not an ownership path', () => {
+  test('fully canonical display-name alias is not an ownership path', async () => {
     const owner = seedCanonicalSkill(db, appHome, 'display-owner', {
       id: 'DISPLAY-OWNER-ID',
       name: 'owner display',
@@ -238,7 +241,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       name: owner.id.toLowerCase(),
     })
 
-    expect(runSkillIdentityMigrationBarrier(db, { appHome })).toMatchObject({
+    expect(await runSkillIdentityMigrationBarrier(db, { appHome })).toMatchObject({
       migratedSkills: 0,
       verifiedSkills: 2,
     })
@@ -250,7 +253,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     )
   })
 
-  test('canonical empty husk cleanup never removes another row display alias', () => {
+  test('canonical empty husk cleanup never removes another row display alias', async () => {
     const owner = seedCanonicalSkill(db, appHome, 'husk-alias-owner', {
       id: 'husk-owner-id',
       name: 'owner',
@@ -269,12 +272,12 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     mkdirSync(skillRootAbs(appHome, huskId), { recursive: true })
     const ownerHash = hashDir(skillRootAbs(appHome, owner.id))
 
-    expect(runSkillIdentityMigrationBarrier(db, { appHome }).removedHusks).toBe(1)
+    expect((await runSkillIdentityMigrationBarrier(db, { appHome })).removedHusks).toBe(1)
     expect(db.select().from(skills).where(eq(skills.id, huskId)).get()).toBeUndefined()
     expect(hashDir(skillRootAbs(appHome, owner.id))).toBe(ownerHash)
   })
 
-  test('noncanonical legacy alias of another canonical root fails before mutation', () => {
+  test('noncanonical legacy alias of another canonical root fails before mutation', async () => {
     const owner = seedCanonicalSkill(db, appHome, 'legacy-alias-owner', {
       id: 'legacy-owner-id',
       name: 'owner',
@@ -291,14 +294,14 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       .run()
     const ownerHash = hashDir(skillRootAbs(appHome, owner.id))
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /physical-ownership|resolves to canonical root/,
     )
     expect(hashDir(skillRootAbs(appHome, owner.id))).toBe(ownerHash)
     expect(activeOperationCount(db)).toBe(0)
   })
 
-  test('active legacy op cannot claim another row canonical root', () => {
+  test('active legacy op cannot claim another row canonical root', async () => {
     const owner = seedCanonicalSkill(db, appHome, 'active-alias-owner', {
       id: 'active-owner-id',
       name: 'owner',
@@ -315,24 +318,25 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       })
       .run()
     mkdirSync(skillRootAbs(appHome, targetId), { recursive: true })
-    const opId = dbTxSync(db, (tx) =>
-      beginOperation(tx, {
-        skillId: targetId,
-        kind: 'reserve',
-        preconditionJson: JSON.stringify({ name: owner.id }),
-      }),
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await beginOperation(tx, {
+          skillId: targetId,
+          kind: 'reserve',
+          preconditionJson: JSON.stringify({ name: owner.id }),
+        }),
     )
     const ownerHash = hashDir(skillRootAbs(appHome, owner.id))
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /targets canonical root|physical-ownership/,
     )
     expect(hashDir(skillRootAbs(appHome, owner.id))).toBe(ownerHash)
-    expect(getActiveOp(db, targetId)?.opId).toBe(opId)
+    expect((await getActiveOp(db, targetId))?.opId).toBe(opId)
     expect(lockCount(db)).toBe(1)
   })
 
-  test('active legacy op cannot coexist with a distinct canonical root for its row', () => {
+  test('active legacy op cannot coexist with a distinct canonical root for its row', async () => {
     const row = seedLegacySkill(db, appHome, {
       id: 'active-double-root-id',
       name: 'active-double-root-name',
@@ -343,48 +347,52 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     const legacyRoot = join(appHome, 'skills', row.name)
     const legacyHash = hashDir(legacyRoot)
     const canonicalHash = hashDir(canonicalRoot)
-    const opId = dbTxSync(db, (tx) =>
-      beginOperation(tx, {
-        skillId: row.id,
-        kind: 'version-write',
-        targetVersion: 2,
-        preconditionJson: JSON.stringify({ name: row.name }),
-      }),
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await beginOperation(tx, {
+          skillId: row.id,
+          kind: 'version-write',
+          targetVersion: 2,
+          preconditionJson: JSON.stringify({ name: row.name }),
+        }),
     )
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/claim different roots/)
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
+      /claim different roots/,
+    )
     expect(hashDir(legacyRoot)).toBe(legacyHash)
     expect(hashDir(canonicalRoot)).toBe(canonicalHash)
-    expect(getActiveOp(db, row.id)?.opId).toBe(opId)
+    expect((await getActiveOp(db, row.id))?.opId).toBe(opId)
     expect(lockCount(db)).toBe(1)
   })
 
   for (const kind of ['reserve', 'version-write', 'delete'] as const) {
-    test(`${kind} recovery rejects a payload from another path generation`, () => {
+    test(`${kind} recovery rejects a payload from another path generation`, async () => {
       const row = seedCanonicalSkill(db, appHome, `wrong-generation-${kind}`)
       if (kind === 'reserve') {
         db.update(skills).set({ reservationState: 'reserving' }).where(eq(skills.id, row.id)).run()
       }
-      const opId = dbTxSync(db, (tx) =>
-        beginOperation(tx, {
-          skillId: row.id,
-          kind,
-          targetVersion: kind === 'version-write' ? 2 : undefined,
-          preconditionJson: JSON.stringify({ name: 'wrong-legacy-generation' }),
-        }),
+      const opId = await databaseSessionFor(db).transaction(
+        async (tx) =>
+          await beginOperation(tx, {
+            skillId: row.id,
+            kind,
+            targetVersion: kind === 'version-write' ? 2 : undefined,
+            preconditionJson: JSON.stringify({ name: 'wrong-legacy-generation' }),
+          }),
       )
       const rootHash = hashDir(skillRootAbs(appHome, row.id))
 
-      expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+      await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
         /payload does not match its DB path generation/,
       )
       expect(hashDir(skillRootAbs(appHome, row.id))).toBe(rootHash)
-      expect(getActiveOp(db, row.id)?.opId).toBe(opId)
+      expect((await getActiveOp(db, row.id))?.opId).toBe(opId)
       expect(lockCount(db)).toBe(1)
     })
   }
 
-  test('migrate recovery binds legacyName to the immutable row generation', () => {
+  test('migrate recovery binds legacyName to the immutable row generation', async () => {
     const row = seedCanonicalSkill(db, appHome, 'wrong-generation-migrate')
     db.update(skills)
       .set({ managedPath: 'skills/wrong-legacy-generation/files' })
@@ -394,28 +402,29 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       .set({ filesPath: 'skills/wrong-legacy-generation/versions/v1/files' })
       .where(eq(skillVersions.skillId, row.id))
       .run()
-    const opId = dbTxSync(db, (tx) =>
-      beginOperation(tx, {
-        skillId: row.id,
-        kind: 'migrate',
-        candidateFingerprint: 'a'.repeat(64),
-        preconditionJson: JSON.stringify({
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await beginOperation(tx, {
           skillId: row.id,
-          legacyName: 'wrong-legacy-generation',
+          kind: 'migrate',
+          candidateFingerprint: 'a'.repeat(64),
+          preconditionJson: JSON.stringify({
+            skillId: row.id,
+            legacyName: 'wrong-legacy-generation',
+          }),
         }),
-      }),
     )
     const rootHash = hashDir(skillRootAbs(appHome, row.id))
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /disagrees with DB path authority/,
     )
     expect(hashDir(skillRootAbs(appHome, row.id))).toBe(rootHash)
-    expect(getActiveOp(db, row.id)?.opId).toBe(opId)
+    expect((await getActiveOp(db, row.id))?.opId).toBe(opId)
     expect(lockCount(db)).toBe(1)
   })
 
-  test('reserve fs-staged may contain the fully committed v1 publish window', () => {
+  test('reserve fs-staged may contain the fully committed v1 publish window', async () => {
     const id = 'reserve-fs-staged-v1'
     const files = skillFilesAbs(appHome, id)
     const version = skillVersionAbs(appHome, id, 1)
@@ -442,22 +451,25 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
         contentHash: hashDir(version),
       })
       .run()
-    const opId = dbTxSync(db, (tx) =>
-      beginOperation(tx, {
-        skillId: id,
-        kind: 'reserve',
-        preconditionJson: JSON.stringify({ skillId: id }),
-      }),
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await beginOperation(tx, {
+          skillId: id,
+          kind: 'reserve',
+          preconditionJson: JSON.stringify({ skillId: id }),
+        }),
     )
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
+    )
 
-    expect(runSkillIdentityMigrationBarrier(db, { appHome }).recoveredOperations).toBe(1)
+    expect((await runSkillIdentityMigrationBarrier(db, { appHome })).recoveredOperations).toBe(1)
     expect(db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
     expect(existsSync(skillRootAbs(appHome, id))).toBe(false)
     expect(lockCount(db)).toBe(0)
   })
 
-  test('missing root refuses unless it is the exact historical empty ZIP husk', () => {
+  test('missing root refuses unless it is the exact historical empty ZIP husk', async () => {
     const blocked = seedLegacySkill(db, appHome, {
       id: 'missing-authoritative',
       name: 'missing-authoritative-name',
@@ -465,7 +477,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       createRoot: false,
     })
     rmSync(join(appHome, 'skills', blocked.name), { recursive: true, force: true })
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /no recoverable filesystem directory/,
     )
     expect(
@@ -481,12 +493,12 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       versionState: 'legacy-unbackfilled',
       createRoot: false,
     })
-    const report = runSkillIdentityMigrationBarrier(db, { appHome })
+    const report = await runSkillIdentityMigrationBarrier(db, { appHome })
     expect(report.removedHusks).toBe(1)
     expect(db.select().from(skills).where(eq(skills.id, husk.id)).get()).toBeUndefined()
   })
 
-  test('recursively empty legacy husk is removed, but support bytes without SKILL.md survive', () => {
+  test('recursively empty legacy husk is removed, but support bytes without SKILL.md survive', async () => {
     const empty = seedLegacySkill(db, appHome, {
       id: 'empty-dir-husk',
       name: 'empty-dir-husk-name',
@@ -503,7 +515,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       supportOnly: true,
     })
 
-    const report = runSkillIdentityMigrationBarrier(db, { appHome })
+    const report = await runSkillIdentityMigrationBarrier(db, { appHome })
     expect(report.removedHusks).toBe(1)
     expect(db.select().from(skills).where(eq(skills.id, empty.id)).get()).toBeUndefined()
     expect(existsSync(join(appHome, 'skills', empty.name))).toBe(false)
@@ -512,7 +524,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     )
   })
 
-  test('a symlink root is evidence: husk sweep preserves it and migration refuses before rename', () => {
+  test('a symlink root is evidence: husk sweep preserves it and migration refuses before rename', async () => {
     const row = seedLegacySkill(db, appHome, {
       id: 'symlink-husk-id',
       name: 'symlink-husk-name',
@@ -526,20 +538,22 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     mkdirSync(dirname(legacyRoot), { recursive: true })
     symlinkSync(target, legacyRoot, 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/not a real directory/)
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
+      /not a real directory/,
+    )
     expect(db.select().from(skills).where(eq(skills.id, row.id)).get()).toBeDefined()
     expect(existsSync(legacyRoot)).toBe(true)
     expect(existsSync(skillRootAbs(appHome, row.id))).toBe(false)
   })
 
-  test('a symlinked skills root fails closed before recovery or filesystem mutation', () => {
+  test('a symlinked skills root fails closed before recovery or filesystem mutation', async () => {
     const skillsRoot = join(appHome, 'skills')
     const external = join(appHome, 'external-skills-target')
     rmSync(skillsRoot, { recursive: true, force: true })
     mkdirSync(external)
     symlinkSync(external, skillsRoot, 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /skills root is not a real directory/,
     )
     expect(readdirSync(external)).toEqual([])
@@ -547,14 +561,14 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     expect(lockCount(db)).toBe(0)
   })
 
-  test('a symlinked delete trash fails closed before recovery or filesystem mutation', () => {
+  test('a symlinked delete trash fails closed before recovery or filesystem mutation', async () => {
     const skillsRoot = join(appHome, 'skills')
     const external = join(appHome, 'external-trash-target')
     mkdirSync(skillsRoot, { recursive: true })
     mkdirSync(external)
     symlinkSync(external, join(skillsRoot, '.trash'), 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /skill delete trash is not a real directory/,
     )
     expect(readdirSync(external)).toEqual([])
@@ -562,12 +576,12 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     expect(lockCount(db)).toBe(0)
   })
 
-  test('a dangling legacy-name symlink remains evidence for a canonical row', () => {
+  test('a dangling legacy-name symlink remains evidence for a canonical row', async () => {
     const row = seedCanonicalSkill(db, appHome, 'dangling-legacy-link')
     const legacyRoot = join(appHome, 'skills', row.name)
     symlinkSync(join(appHome, 'missing-link-target'), legacyRoot, 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /unclaimed display-name directory/,
     )
     expect(lstatSync(legacyRoot).isSymbolicLink()).toBe(true)
@@ -578,7 +592,7 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
     expect(lockCount(db)).toBe(0)
   })
 
-  test('husk DB delete remains authoritative if empty-root cleanup faults', () => {
+  test('husk DB delete remains authoritative if empty-root cleanup faults', async () => {
     const row = seedLegacySkill(db, appHome, {
       id: 'husk-cleanup-fault-id',
       name: 'husk-cleanup-fault-name',
@@ -587,30 +601,30 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
       createFiles: false,
     })
     const legacyRoot = join(appHome, 'skills', row.name)
-    expect(() =>
+    await expect(
       runSkillIdentityMigrationBarrier(db, {
         appHome,
         __beforeHuskFsCleanupForTest: () => {
           throw new Error('husk-cleanup-fault')
         },
       }),
-    ).toThrow('husk-cleanup-fault')
+    ).rejects.toThrow('husk-cleanup-fault')
     expect(db.select().from(skills).where(eq(skills.id, row.id)).get()).toBeUndefined()
     expect(existsSync(legacyRoot)).toBe(true)
 
-    expect(runSkillIdentityMigrationBarrier(db, { appHome })).toMatchObject({
+    expect(await runSkillIdentityMigrationBarrier(db, { appHome })).toMatchObject({
       verifiedSkills: 0,
       migratedSkills: 0,
     })
   })
 
-  test('migration fingerprint drift fails closed and preserves active op plus lock', () => {
+  test('migration fingerprint drift fails closed and preserves active op plus lock', async () => {
     const row = seedLegacySkill(db, appHome, {
       id: 'fingerprint-id',
       name: 'fingerprint-name',
       versions: 1,
     })
-    expect(() =>
+    await expect(
       runSkillIdentityMigrationBarrier(db, {
         appHome,
         hooks: {
@@ -619,29 +633,31 @@ describe('RFC-223 PR-5 skill identity migration barrier', () => {
           },
         },
       }),
-    ).toThrow('crash-after-fs-staged')
+    ).rejects.toThrow('crash-after-fs-staged')
     writeFileSync(join(skillFilesAbs(appHome, row.id), 'tampered.txt'), 'drift')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /fingerprint|changed while its identity migration/i,
     )
-    expect(getActiveOp(db, row.id)?.phase).toBe('fs-staged')
+    expect((await getActiveOp(db, row.id))?.phase).toBe('fs-staged')
     expect(lockCount(db)).toBe(1)
   })
 
-  test('postcondition rejects exact protocol residue but ignores support files with similar names', () => {
+  test('postcondition rejects exact protocol residue but ignores support files with similar names', async () => {
     const row = seedLegacySkill(db, appHome, {
       id: 'residue-id',
       name: 'residue-name',
       versions: 1,
     })
-    runSkillIdentityMigrationBarrier(db, { appHome })
+    await runSkillIdentityMigrationBarrier(db, { appHome })
     const fake = `files.op-${ulid()}.staged-not-an-op`
     writeFileSync(join(skillFilesAbs(appHome, row.id), fake), 'user support file')
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).not.toThrow()
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).resolves.toBeDefined()
 
     mkdirSync(join(skillRootAbs(appHome, row.id), `files.op-${ulid()}.backup`))
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/operation residue/)
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
+      /operation residue/,
+    )
   })
 })
 
@@ -657,18 +673,18 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   for (const crashWindow of ['before-publish', 'between-renames'] as const) {
-    test(`${crashWindow} converges live from the committed target and clears exact residue`, () => {
+    test(`${crashWindow} converges live from the committed target and clears exact residue`, async () => {
       const row = seedCanonicalSkill(db, appHome, `version-${crashWindow}`)
-      const planted = plantCommittedVersionWrite(db, appHome, row.id)
+      const planted = await plantCommittedVersionWrite(db, appHome, row.id)
       if (crashWindow === 'between-renames') {
         renameSync(planted.filesDir, opBackupDir(planted.filesDir, planted.publishId))
       }
 
-      const report = runSkillIdentityMigrationBarrier(db, { appHome })
+      const report = await runSkillIdentityMigrationBarrier(db, { appHome })
       expect(report.recoveredOperations).toBe(1)
       expect(readFileSync(join(planted.filesDir, 'SKILL.md'), 'utf-8')).toContain('new-v2')
       expect(hashDir(planted.filesDir)).toBe(hashDir(planted.versionDir))
-      expect(getActiveOp(db, row.id)).toBeNull()
+      expect(await getActiveOp(db, row.id)).toBeNull()
       expect(lockCount(db)).toBe(0)
       expect(
         readdirSync(skillRootAbs(appHome, row.id)).filter((name) => name.startsWith('files.op-')),
@@ -676,26 +692,26 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
     })
   }
 
-  test('committed snapshot mismatch refuses and preserves recovery evidence', () => {
+  test('committed snapshot mismatch refuses and preserves recovery evidence', async () => {
     const row = seedCanonicalSkill(db, appHome, 'version-mismatch')
-    const planted = plantCommittedVersionWrite(db, appHome, row.id)
+    const planted = await plantCommittedVersionWrite(db, appHome, row.id)
     writeFileSync(join(planted.versionDir, 'tampered.txt'), 'tampered')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /does not match committed content hash/,
     )
-    expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')
+    expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
     expect(lockCount(db)).toBe(1)
     expect(existsSync(planted.staging)).toBe(true)
   })
 
-  test('non-current target or mismatched files_path cannot become canonical live', () => {
+  test('non-current target or mismatched files_path cannot become canonical live', async () => {
     for (const defect of ['non-current', 'wrong-path'] as const) {
       const isolatedHome = mkdtempSync(join(tmpdir(), `aw-version-authority-${defect}-`))
       const isolatedDb = createInMemoryDb(MIGRATIONS)
       try {
         const row = seedCanonicalSkill(isolatedDb, isolatedHome, defect)
-        plantCommittedVersionWrite(isolatedDb, isolatedHome, row.id)
+        await plantCommittedVersionWrite(isolatedDb, isolatedHome, row.id)
         if (defect === 'non-current') {
           isolatedDb.update(skills).set({ contentVersion: 1 }).where(eq(skills.id, row.id)).run()
         } else {
@@ -706,14 +722,14 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
             .run()
         }
 
-        expect(() =>
+        await expect(
           runSkillIdentityMigrationBarrier(isolatedDb, { appHome: isolatedHome }),
-        ).toThrow(
+        ).rejects.toThrow(
           defect === 'non-current'
             ? /disagrees with version authority/
             : /payload does not match its DB path generation/,
         )
-        expect(getActiveOp(isolatedDb, row.id)?.phase).toBe('db-committed')
+        expect((await getActiveOp(isolatedDb, row.id))?.phase).toBe('db-committed')
         expect(lockCount(isolatedDb)).toBe(1)
       } finally {
         rmSync(isolatedHome, { recursive: true, force: true })
@@ -721,36 +737,38 @@ describe('RFC-223 PR-5 committed version-write recovery', () => {
     }
   })
 
-  test('a fingerprint-matching candidate-root symlink is never published or retired', () => {
+  test('a fingerprint-matching candidate-root symlink is never published or retired', async () => {
     const row = seedCanonicalSkill(db, appHome, 'candidate-symlink')
-    const planted = plantCommittedVersionWrite(db, appHome, row.id)
+    const planted = await plantCommittedVersionWrite(db, appHome, row.id)
     const externalCandidate = join(appHome, 'external-version-candidate')
     cpSync(planted.versionDir, externalCandidate, { recursive: true })
     rmSync(planted.versionDir, { recursive: true, force: true })
     symlinkSync(externalCandidate, planted.versionDir, 'dir')
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(/not a real directory/)
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
+      /not a real directory/,
+    )
     expect(readFileSync(join(planted.filesDir, 'SKILL.md'), 'utf-8')).toContain('old-v1')
-    expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')
+    expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
     expect(lockCount(db)).toBe(1)
     expect(lstatSync(planted.versionDir).isSymbolicLink()).toBe(true)
   })
 
-  test('an intermediate versions symlink fails before hash/copy/remove', () => {
+  test('an intermediate versions symlink fails before hash/copy/remove', async () => {
     const row = seedCanonicalSkill(db, appHome, 'intermediate-symlink')
-    const planted = plantCommittedVersionWrite(db, appHome, row.id)
+    const planted = await plantCommittedVersionWrite(db, appHome, row.id)
     const versions = join(skillRootAbs(appHome, row.id), 'versions')
     const externalVersions = join(appHome, 'external-versions-tree')
     renameSync(versions, externalVersions)
     symlinkSync(externalVersions, versions, 'dir')
     const externalHash = hashDir(externalVersions)
 
-    expect(() => runSkillIdentityMigrationBarrier(db, { appHome })).toThrow(
+    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
       /path component is not a real directory/,
     )
     expect(hashDir(externalVersions)).toBe(externalHash)
     expect(readFileSync(join(planted.filesDir, 'SKILL.md'), 'utf-8')).toContain('old-v1')
-    expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')
+    expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
     expect(lockCount(db)).toBe(1)
   })
 })
@@ -846,16 +864,16 @@ function seedCanonicalSkill(
   return { id, name }
 }
 
-function plantCommittedVersionWrite(
+async function plantCommittedVersionWrite(
   db: DbClient,
   appHome: string,
   skillId: string,
-): {
+): Promise<{
   publishId: string
   filesDir: string
   staging: string
   versionDir: string
-} {
+}> {
   const publishId = ulid()
   const filesDir = skillFilesAbs(appHome, skillId)
   const staging = opStagedDir(filesDir, publishId)
@@ -863,19 +881,22 @@ function plantCommittedVersionWrite(
   writeTree(staging, 'new-v2')
   cpSync(staging, versionDir, { recursive: true })
   const hash = hashDir(versionDir)
-  const opId = dbTxSync(db, (tx) =>
-    beginOperation(tx, {
-      skillId,
-      kind: 'version-write',
-      targetVersion: 2,
-      stagingPath: relative(appHome, staging),
-      candidatePath: relative(appHome, versionDir),
-      preconditionJson: JSON.stringify({ skillId }),
-    }),
+  const opId = await databaseSessionFor(db).transaction(
+    async (tx) =>
+      await beginOperation(tx, {
+        skillId,
+        kind: 'version-write',
+        targetVersion: 2,
+        stagingPath: relative(appHome, staging),
+        candidatePath: relative(appHome, versionDir),
+        preconditionJson: JSON.stringify({ skillId }),
+      }),
   )
-  dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
-  dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
-  dbTxSync(db, (tx) => {
+  await databaseSessionFor(db).transaction(async (tx) => await advancePhase(tx, opId, 'fs-staged'))
+  await databaseSessionFor(db).transaction(
+    async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
+  )
+  await databaseSessionFor(db).transaction(async (tx) => {
     tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId)).run()
     tx.insert(skillVersions)
       .values({
@@ -888,7 +909,7 @@ function plantCommittedVersionWrite(
         contentHash: hash,
       })
       .run()
-    advancePhase(tx, opId, 'db-committed')
+    await advancePhase(tx, opId, 'db-committed')
   })
   return { publishId, filesDir, staging, versionDir }
 }

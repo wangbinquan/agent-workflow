@@ -268,13 +268,13 @@ function fusionWorkRoots(appHome: string): string[] {
 }
 
 describe('isValidFusionTransition', () => {
-  test('legal transitions', () => {
+  test('legal transitions', async () => {
     expect(isValidFusionTransition('running', 'awaiting_approval')).toBe(true)
     expect(isValidFusionTransition('awaiting_approval', 'applying')).toBe(true)
     expect(isValidFusionTransition('awaiting_approval', 'running')).toBe(true) // reject re-run
     expect(isValidFusionTransition('applying', 'done')).toBe(true)
   })
-  test('illegal transitions', () => {
+  test('illegal transitions', async () => {
     expect(isValidFusionTransition('done', 'running')).toBe(false)
     expect(isValidFusionTransition('running', 'done')).toBe(false) // must pass awaiting_approval
     expect(isValidFusionTransition('canceled', 'running')).toBe(false)
@@ -402,9 +402,9 @@ describe('launch → reconcile → approve', () => {
     const done = await approveFusion(h.deps, fusion.id, adminActor)
     expect(done.status).toBe('done')
     expect(done.appliedSkillVersion).toBe(2)
-    expect(getSkillVersionContent(h.db, fsOpts, createdSkill.id, 2).content.bodyMd).toContain(
-      'fused body',
-    )
+    expect(
+      (await getSkillVersionContent(h.db, fsOpts, createdSkill.id, 2)).content.bodyMd,
+    ).toContain('fused body')
     expect(statusOf(h.db, memA)).toBe('fused')
     expect(statusOf(h.db, memB)).toBe('approved')
     // live SKILL.md updated
@@ -706,7 +706,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   // (else the fusion owner writes into a skill they transferred away). The full
   // behavioral path needs a non-admin owner + manageable memory; this source lock
   // guarantees a refactor can't silently drop the recheck from either path.
-  test('approve + reject both re-check current skill ownership (source lock)', () => {
+  test('approve + reject both re-check current skill ownership (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,
@@ -736,7 +736,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   // claim tx (a managed transfer doesn't drift the token, so an out-of-tx check is
   // TOCTOU). Locks that claimFusionDecision authorises against the CURRENT owner
   // atomically with the status transition.
-  test('claimFusionDecision re-checks the current owner in-tx (source lock)', () => {
+  test('claimFusionDecision re-checks the current owner in-tx (source lock)', async () => {
     const adapter = readFileSync(
       pjoin(
         __dirname,
@@ -761,7 +761,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
 
   // RFC-170 T6 (Codex re-review F10): a null precondition token at create time
   // (skill vanished / unpublished) is rejected BEFORE any worktree/task is made.
-  test('createFusion rejects a null precondition token before side effects (source lock)', () => {
+  test('createFusion rejects a null precondition token before side effects (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,
@@ -798,7 +798,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     expect((await getFusion(h.deps, fusion.id))!.status).toBe('applying') // not canceled
   })
 
-  test('reconcile + reject-attach + cancel all write via casFusionStatus (source lock)', () => {
+  test('reconcile + reject-attach + cancel all write via casFusionStatus (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,
@@ -1033,7 +1033,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
     expect(code).toBe('fusion-skill-unversioned') // fail-closed, NOT empty/live seed
   })
 
-  test('seedFusionFromSnapshot verifies the token skillId around the copy (source lock)', () => {
+  test('seedFusionFromSnapshot verifies the token skillId around the copy (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,
@@ -1055,7 +1055,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
   // RFC-170 T6 (Codex re-review F11-deeper): the token is bound to the AUTHORIZED
   // skill row's immutable id, not a by-name re-read that a same-name recreate could
   // repoint to a different (private) skill B.
-  test('createFusion binds the token to the authorized skill id (source lock)', () => {
+  test('createFusion binds the token to the authorized skill id (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,
@@ -1214,7 +1214,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     }
   })
 
-  test('cancel claim captures currentTaskId in the CAS (source lock)', () => {
+  test('cancel claim captures currentTaskId in the CAS (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,
@@ -1247,7 +1247,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
   // RFC-170 T6 (Codex re-review F12-deeper): cancelFusionEngineTask RE-READS and
   // retries until the task is terminal — a state flip between read and cancel no
   // longer silently drops the cancel.
-  test('cancelFusionEngineTask retries until terminal, not read-once (source lock)', () => {
+  test('cancelFusionEngineTask retries until terminal, not read-once (source lock)', async () => {
     const src = readFileSync(
       pjoin(
         __dirname,

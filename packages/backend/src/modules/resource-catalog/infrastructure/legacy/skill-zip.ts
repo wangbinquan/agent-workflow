@@ -653,7 +653,7 @@ export async function commitSkillZipBuffer(
         // silent clobber). Replaces the old direct writeCandidate + updateManagedRow;
         // commitSkillVersion's setDescription keeps skills.description in sync + bumps
         // the version, and it archives the tree as an immutable snapshot.
-        commitSkillVersion(
+        await commitSkillVersion(
           db,
           opts,
           overwriteTarget.id,

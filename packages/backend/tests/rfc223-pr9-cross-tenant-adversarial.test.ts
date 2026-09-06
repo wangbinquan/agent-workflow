@@ -438,10 +438,10 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         status: 'done',
         appliedSkillVersion: 2,
       })
-      expect(getSkillVersionContent(db, fsOpts, skillA.id, 2).content.bodyMd).toContain(
+      expect((await getSkillVersionContent(db, fsOpts, skillA.id, 2)).content.bodyMd).toContain(
         'TENANT_A_FUSED',
       )
-      expect(getSkillVersionContent(db, fsOpts, skillB.id, 1).content.bodyMd).toContain(
+      expect((await getSkillVersionContent(db, fsOpts, skillB.id, 1)).content.bodyMd).toContain(
         'TENANT_B_SKILL',
       )
       expect(
@@ -455,7 +455,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           .get(),
       ).toEqual({ status: 'fused', skillId: skillA.id })
 
-      restoreSkillVersion(
+      await restoreSkillVersion(
         db,
         fsOpts,
         skillA.id,
@@ -474,7 +474,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           .where(eq(memories.id, memoryId))
           .get(),
       ).toEqual({ status: 'approved', skillId: null })
-      expect(getSkillVersionContent(db, fsOpts, skillB.id, 1).content.bodyMd).toContain(
+      expect((await getSkillVersionContent(db, fsOpts, skillB.id, 1)).content.bodyMd).toContain(
         'TENANT_B_SKILL',
       )
     } finally {

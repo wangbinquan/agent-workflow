@@ -232,42 +232,47 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
    */
   const CORPUS_SCAN_TIMEOUT_MS = 30_000
 
-  test('tests / scripts 下的账本形状常量，要么入基线、要么在具名豁免表里', () => {
-    const roots = [
-      'packages/backend/tests',
-      'packages/frontend/tests',
-      'packages/shared/tests',
-      'scripts',
-    ]
-    const registered = new Set(BASELINES.ledgers.map((l) => `${l.file}|${l.symbol}`))
-    const corpus = roots.flatMap((root) => listSourceFiles(resolve(REPO_ROOT, root)))
-    // 语料下限（T13）：本条是扫语料型判据，扫描根一旦失效它会永久静默地绿。
-    // 实测 500+ 个文件；下限取一个明显更低、但足以证明枚举没断的数。
-    expect(corpus.length, 'tests / scripts 的文件枚举断了，下面的缺席断言全部失去意义').toBeGreaterThan(
-      300,
-    )
-    const found: string[] = []
-    const unregistered: string[] = []
-    {
-      for (const file of corpus) {
-        const rel = portable(relative(REPO_ROOT, file))
-        for (const symbol of ledgerShapedSymbols(readFileSync(file, 'utf8'))) {
-          const key = `${rel}|${symbol}`
-          found.push(key)
-          if (registered.has(key)) continue
-          if (Object.prototype.hasOwnProperty.call(NOT_A_LEDGER, key)) continue
-          unregistered.push(key)
+  test(
+    'tests / scripts 下的账本形状常量，要么入基线、要么在具名豁免表里',
+    () => {
+      const roots = [
+        'packages/backend/tests',
+        'packages/frontend/tests',
+        'packages/shared/tests',
+        'scripts',
+      ]
+      const registered = new Set(BASELINES.ledgers.map((l) => `${l.file}|${l.symbol}`))
+      const corpus = roots.flatMap((root) => listSourceFiles(resolve(REPO_ROOT, root)))
+      // 语料下限（T13）：本条是扫语料型判据，扫描根一旦失效它会永久静默地绿。
+      // 实测 500+ 个文件；下限取一个明显更低、但足以证明枚举没断的数。
+      expect(
+        corpus.length,
+        'tests / scripts 的文件枚举断了，下面的缺席断言全部失去意义',
+      ).toBeGreaterThan(300)
+      const found: string[] = []
+      const unregistered: string[] = []
+      {
+        for (const file of corpus) {
+          const rel = portable(relative(REPO_ROOT, file))
+          for (const symbol of ledgerShapedSymbols(readFileSync(file, 'utf8'))) {
+            const key = `${rel}|${symbol}`
+            found.push(key)
+            if (registered.has(key)) continue
+            if (Object.prototype.hasOwnProperty.call(NOT_A_LEDGER, key)) continue
+            unregistered.push(key)
+          }
         }
       }
-    }
-    expect(found.length, '一处账本形状常量都没扫到——判据的被测面没了').toBeGreaterThan(20)
-    expect(
-      unregistered,
-      '这些豁免表没有进 architecture/ledger-baselines.json。' +
-        '「加一份新账本」是绕过整套高水位机制最省事的办法，必须留痕：' +
-        '要么给它钉一个只降不升的条目数，要么在 NOT_A_LEDGER 里写清它为什么不是账本。',
-    ).toEqual([])
-   }, CORPUS_SCAN_TIMEOUT_MS)
+      expect(found.length, '一处账本形状常量都没扫到——判据的被测面没了').toBeGreaterThan(20)
+      expect(
+        unregistered,
+        '这些豁免表没有进 architecture/ledger-baselines.json。' +
+          '「加一份新账本」是绕过整套高水位机制最省事的办法，必须留痕：' +
+          '要么给它钉一个只降不升的条目数，要么在 NOT_A_LEDGER 里写清它为什么不是账本。',
+      ).toEqual([])
+    },
+    CORPUS_SCAN_TIMEOUT_MS,
+  )
 
   test('豁免表逐条相等（删一条消红也会红）', () => {
     expect(Object.keys(NOT_A_LEDGER).sort()).toEqual([
@@ -352,8 +357,7 @@ describe('RFC-317 T17 —— 基线相对上一个 commit 只降不升', () => {
   test('历史比对确实跑了；跑不了时必须是两个**已知**原因之一，并把原因打出来', () => {
     if (PREVIOUS.kind !== 'ok') {
       console.warn(
-        `[RFC-317 T17] 未做历史比对，原因：${PREVIOUS.kind}。` +
-          '本轮只校验了「与源码逐字相等」。',
+        `[RFC-317 T17] 未做历史比对，原因：${PREVIOUS.kind}。` + '本轮只校验了「与源码逐字相等」。',
       )
     }
     // 'unparsable' 不在可接受之列——上一版是坏 JSON 说明有人把账本改烂了，那是红。
@@ -395,8 +399,7 @@ describe('RFC-317 T17 —— 基线相对上一个 commit 只降不升', () => {
       .filter(
         (ledger) =>
           ledger.allowGrowth !== undefined &&
-          (ledger.allowGrowth.why.trim().length < 20 ||
-            !/RFC-\d{3}/.test(ledger.allowGrowth.why)),
+          (ledger.allowGrowth.why.trim().length < 20 || !/RFC-\d{3}/.test(ledger.allowGrowth.why)),
       )
       .map((ledger) => ledger.id)
     expect(bad, 'allowGrowth.why 必须点名具体 RFC 并说明为什么加豁免比修问题更值得').toEqual([])
@@ -423,7 +426,7 @@ const FIXTURES: readonly Fixture[] = [
   },
   {
     name: '对象字面量（Record 形态的账本）',
-    source: "const L: Record<string, number> = { a: 1, b: 2 }\n",
+    source: 'const L: Record<string, number> = { a: 1, b: 2 }\n',
     symbol: 'L',
     count: 2,
   },
@@ -584,7 +587,8 @@ describe('RFC-317 T20 —— cruiser 规则与 KNOWN_VIOLATIONS 双向一致', (
    */
   const LEDGER_MARKER = /@ledger\s+KNOWN_VIOLATIONS/
 
-  const ruleNames = (): string[] => [...CONFIG.matchAll(/^\s*name: '([a-z0-9-]+)',$/gm)].map((m) => m[1]!)
+  const ruleNames = (): string[] =>
+    [...CONFIG.matchAll(/^\s*name: '([a-z0-9-]+)',$/gm)].map((m) => m[1]!)
 
   /**
    * 本规则块内、`from:` 之前的全部文字（注释 + comment 字段）。

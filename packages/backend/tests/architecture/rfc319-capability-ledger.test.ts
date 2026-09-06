@@ -37,12 +37,7 @@ const LEGACY_UNVERIFIED_AT_START = 141
 
 const FINDINGS = JSON.parse(
   readFileSync(
-    resolve(
-      REPO_ROOT,
-      'design',
-      'RFC-319-user-facing-e2e-coverage-hardening',
-      'findings.json',
-    ),
+    resolve(REPO_ROOT, 'design', 'RFC-319-user-facing-e2e-coverage-hardening', 'findings.json'),
     'utf8',
   ),
 ) as {
@@ -96,8 +91,17 @@ describe('RFC-319 R3 —— 语料非空（账本被清空 / 挪走时必须红�
     const RISK = new Set(['P1', 'P2', 'P3'])
     const bad: string[] = []
     for (const row of FINDINGS.rows) {
-      for (const key of ['id', 'domain', 'title', 'coverage', 'gapKind', 'risk', 'verdict'] as const) {
-        if (typeof row[key] !== 'string' || row[key].length === 0) bad.push(`${row.id}: ${key} 缺失`)
+      for (const key of [
+        'id',
+        'domain',
+        'title',
+        'coverage',
+        'gapKind',
+        'risk',
+        'verdict',
+      ] as const) {
+        if (typeof row[key] !== 'string' || row[key].length === 0)
+          bad.push(`${row.id}: ${key} 缺失`)
       }
       if (!COVERAGE.has(row.coverage)) bad.push(`${row.id}: coverage=${row.coverage}`)
       if (!GAP_KIND.has(row.gapKind)) bad.push(`${row.id}: gapKind=${row.gapKind}`)

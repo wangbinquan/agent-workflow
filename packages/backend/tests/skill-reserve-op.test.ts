@@ -4,6 +4,7 @@
 // finishes (the skill stays a complete, visible skill).
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -85,7 +86,7 @@ describe('RFC-170 reserve op', () => {
     const id = ulid()
     const skillDir = join(appHome, 'skills', 'half')
     // Plant a crashed reserve at fs-staged: reserving row + files on disk.
-    const opId = dbTxSync(db, (tx) => {
+    const opId = await databaseSessionFor(db).transaction(async (tx) => {
       tx.insert(skills)
         .values({
           id,
@@ -94,7 +95,7 @@ describe('RFC-170 reserve op', () => {
           reservationState: 'reserving',
         })
         .run()
-      return beginOperation(tx, {
+      return await beginOperation(tx, {
         skillId: id,
         kind: 'reserve',
         preconditionJson: JSON.stringify({ name: 'half' }),
@@ -103,9 +104,11 @@ describe('RFC-170 reserve op', () => {
     const { mkdirSync } = await import('node:fs')
     mkdirSync(join(skillDir, 'files'), { recursive: true })
     writeFileSync(join(skillDir, 'files', 'SKILL.md'), 'x', 'utf-8')
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
+    )
 
-    recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
+    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
 
     // Reserving row + files gone — the create never completed.
     expect(db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
@@ -114,7 +117,7 @@ describe('RFC-170 reserve op', () => {
 
   test('recovery ROLLFORWARD: crash after db-committed keeps the skill ready', async () => {
     const id = ulid()
-    const opId = dbTxSync(db, (tx) => {
+    const opId = await databaseSessionFor(db).transaction(async (tx) => {
       tx.insert(skills)
         .values({
           id,
@@ -123,21 +126,25 @@ describe('RFC-170 reserve op', () => {
           reservationState: 'reserving',
         })
         .run()
-      return beginOperation(tx, {
+      return await beginOperation(tx, {
         skillId: id,
         kind: 'reserve',
         preconditionJson: JSON.stringify({ name: 'done1' }),
       })
     })
     // Reached db-committed (ready set) but crashed before finishOperation.
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-published'))
-    dbTxSync(db, (tx) => {
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
+    )
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-published'),
+    )
+    await databaseSessionFor(db).transaction(async (tx) => {
       tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
-      advancePhase(tx, opId, 'db-committed')
+      await advancePhase(tx, opId, 'db-committed')
     })
 
-    recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
+    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
 
     // Skill stays ready + visible; the op finishes.
     expect(rowState(id)).toBe('ready')
@@ -166,11 +173,11 @@ describe('RFC-170 reserve op', () => {
     const row = db.select().from(skills).where(eq(skills.name, 'committed-create')).get()!
     expect(row.reservationState).toBe('ready')
     expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
-    expect(getActiveOp(db, row.id)?.phase).toBe('db-committed')
+    expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
     expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
 
-    runSkillIdentityMigrationBarrier(db, { appHome })
-    expect(getActiveOp(db, row.id)).toBeNull()
+    await runSkillIdentityMigrationBarrier(db, { appHome })
+    expect(await getActiveOp(db, row.id)).toBeNull()
     expect(db.select().from(skillOperationLocks).all()).toHaveLength(0)
     expect(await getSkill(db, 'committed-create')).not.toBeNull()
   })

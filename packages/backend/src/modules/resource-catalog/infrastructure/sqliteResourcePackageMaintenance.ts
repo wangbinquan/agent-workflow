@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { plugins, resourceBundleApplies, skillOperations, skills } from '@/db/schema'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
@@ -84,11 +85,11 @@ function errorValue(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
 
-function publishStagedVersion(
+async function publishStagedVersion(
   db: DbClient,
   appHome: string,
   artifact: LegacySkillVersionArtifact,
-): void {
+): Promise<void> {
   const staged = artifact.staged
   if (staged.noop !== null) return
   const filesDir = skillFilesAbs(appHome, staged.skillId)
@@ -114,16 +115,17 @@ function publishStagedVersion(
   }
   cleanupOpDirs(filesDir, staged.publishId)
   const opId = staged.opId
-  if (opId !== null) dbTxSync(db, (tx) => finishOperation(tx, opId))
+  if (opId !== null)
+    await databaseSessionFor(db).transaction(async (tx) => await finishOperation(tx, opId))
   markSkillBootVerified(staged.skillId)
 }
 
-function compensateArtifact(
+async function compensateArtifact(
   db: DbClient,
   appHome: string,
   pluginsDir: string,
   artifact: LegacyArtifact,
-): void {
+): Promise<void> {
   switch (artifact.kind) {
     case 'plugin-install':
       assertManagedPath(pluginsDir, artifact.generationDir)
@@ -136,9 +138,9 @@ function compensateArtifact(
         throw new Error('resource-package-skill-root-path-mismatch')
       }
       rmSync(skillDir, { recursive: true, force: true })
-      dbTxSync(db, (tx) => {
-        tx.delete(skills).where(eq(skills.id, artifact.skillId)).run()
-        abandonOperation(tx, artifact.opId)
+      await databaseSessionFor(db).transaction(async (tx) => {
+        await tx.delete(skills).where(eq(skills.id, artifact.skillId))
+        await abandonOperation(tx, artifact.opId)
       })
       return
     }
@@ -158,7 +160,8 @@ function compensateArtifact(
       cleanupOpDirs(filesDir, staged.publishId)
       rmSync(versionDir, { recursive: true, force: true })
       const opId = staged.opId
-      if (opId !== null) dbTxSync(db, (tx) => abandonOperation(tx, opId))
+      if (opId !== null)
+        await databaseSessionFor(db).transaction(async (tx) => await abandonOperation(tx, opId))
     }
   }
 }
@@ -174,7 +177,9 @@ async function rollForwardArtifacts(input: {
   for (const artifact of input.artifacts) {
     try {
       if (artifact.kind === 'skill-stage') {
-        dbTxSync(input.db, (tx) => finishOperation(tx, artifact.opId))
+        await databaseSessionFor(input.db).transaction(
+          async (tx) => await finishOperation(tx, artifact.opId),
+        )
         continue
       }
       if (artifact.kind === 'plugin-install') {
@@ -216,7 +221,7 @@ async function rollForwardArtifacts(input: {
   for (const artifact of pendingVersions) unmarkSkillBootVerified(artifact.staged.skillId)
   for (const artifact of pendingVersions) {
     try {
-      publishStagedVersion(input.db, input.appHome, artifact)
+      await publishStagedVersion(input.db, input.appHome, artifact)
     } catch (error) {
       failure ??= errorValue(error)
     }
@@ -282,7 +287,7 @@ export function createSqliteResourcePackageApplyArtifactRecovery(input: {
       let failure: Error | undefined
       for (const artifact of [...parseArtifacts(journal.preparedArtifactsJson)].reverse()) {
         try {
-          compensateArtifact(input.db, input.appHome, input.pluginsDir, artifact)
+          await compensateArtifact(input.db, input.appHome, input.pluginsDir, artifact)
         } catch (error) {
           failure ??= errorValue(error)
         }

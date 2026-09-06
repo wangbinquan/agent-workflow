@@ -15,7 +15,7 @@
 import { cpSync, mkdirSync, rmSync } from 'node:fs'
 import { relative } from 'node:path'
 import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { skills, skillVersions } from '@/db/schema'
 import type { SkillOperationRow } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import type {
@@ -37,12 +37,16 @@ import {
 import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 
 export const versionWriteRecoveryHandler: OpRecoveryHandler = {
-  rollbackFs: (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: DbClient) => {
+  rollbackFs: async (
+    fsOpts: SkillOpFsOptions,
+    op: SkillOperationRow,
+    db: ProviderNeutralDatabase,
+  ) => {
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
     const key = identity.legacyName ?? identity.skillId
     const staging = requireStagingOpPath(fsOpts.appHome, op.stagingPath, key, op)
     const candidate = requireCandidateOpPath(fsOpts.appHome, op.candidatePath, key, op)
-    assertVersionRow(db, fsOpts.appHome, key, candidate, op, false)
+    await assertVersionRow(db, fsOpts.appHome, key, candidate, op, false)
     const root = skillRootAbs(fsOpts.appHome, key)
     const filesDir = joinFilesRoot(fsOpts.appHome, key)
     assertRealDirectory(root, root, op, 'skill root')
@@ -64,12 +68,16 @@ export const versionWriteRecoveryHandler: OpRecoveryHandler = {
     cleanupOpDirs(filesDir, staging.publishId)
     if (candidateExists) rmSync(candidate, { recursive: true, force: true })
   },
-  rollForwardFs: (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: DbClient) => {
+  rollForwardFs: async (
+    fsOpts: SkillOpFsOptions,
+    op: SkillOperationRow,
+    db: ProviderNeutralDatabase,
+  ) => {
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
     const key = identity.legacyName ?? identity.skillId
     const staging = requireStagingOpPath(fsOpts.appHome, op.stagingPath, key, op)
     const candidate = requireCandidateOpPath(fsOpts.appHome, op.candidatePath, key, op)
-    const committed = assertVersionRow(db, fsOpts.appHome, key, candidate, op, true)
+    const committed = await assertVersionRow(db, fsOpts.appHome, key, candidate, op, true)
     const root = skillRootAbs(fsOpts.appHome, key)
     assertRealDirectory(root, root, op, 'skill root')
     assertRealDirectory(root, candidate, op, 'version candidate')
@@ -141,36 +149,43 @@ function joinFilesRoot(appHome: string, key: string): string {
   return `${skillRootAbs(appHome, key)}/files`
 }
 
-function assertVersionRow(
-  db: DbClient,
+async function assertVersionRow(
+  db: ProviderNeutralDatabase,
   appHome: string,
   key: string,
   candidate: string,
   op: SkillOperationRow,
   expected: boolean,
-): { contentHash: string } {
+): Promise<{ contentHash: string }> {
   if (op.targetVersion === null) {
     throw new Error(`version-write ${op.opId} has no target version`)
   }
-  const row = db
-    .select({
-      contentHash: skillVersions.contentHash,
-      filesPath: skillVersions.filesPath,
-    })
-    .from(skillVersions)
-    .where(
-      and(eq(skillVersions.skillId, op.skillId), eq(skillVersions.versionIndex, op.targetVersion)),
-    )
-    .get()
+  const row = (
+    await db
+      .select({
+        contentHash: skillVersions.contentHash,
+        filesPath: skillVersions.filesPath,
+      })
+      .from(skillVersions)
+      .where(
+        and(
+          eq(skillVersions.skillId, op.skillId),
+          eq(skillVersions.versionIndex, op.targetVersion),
+        ),
+      )
+      .limit(1)
+  )[0]
   if ((row !== undefined) !== expected) {
     throw new Error(`version-write ${op.opId} phase disagrees with target version authority`)
   }
   if (row === undefined) return { contentHash: '' }
-  const skill = db
-    .select({ contentVersion: skills.contentVersion })
-    .from(skills)
-    .where(eq(skills.id, op.skillId))
-    .get()
+  const skill = (
+    await db
+      .select({ contentVersion: skills.contentVersion })
+      .from(skills)
+      .where(eq(skills.id, op.skillId))
+      .limit(1)
+  )[0]
   if (skill?.contentVersion !== op.targetVersion) {
     throw new Error(`version-write ${op.opId} target is not the skill's current committed version`)
   }

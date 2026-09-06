@@ -24,7 +24,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { skills, skillVersions } from '@/db/schema'
 import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
@@ -128,7 +128,7 @@ interface BootVerifyOptions {
     skillId: string
     contentVersion: number
     verdict: 'verified' | 'quarantined'
-  }) => void
+  }) => void | Promise<void>
 }
 
 /**
@@ -137,32 +137,34 @@ interface BootVerifyOptions {
  * proof (real directories + regular files only), then match its recorded hash.
  * Passing marks the skill boot-verified; failing CAS-quarantines it fail-closed.
  */
-export function verifyManagedSnapshot(
+export async function verifyManagedSnapshot(
   db: DbClient,
   opts: BootVerifyOptions,
   skill: ReverifySkill,
-): VerifyOutcome {
+): Promise<VerifyOutcome> {
   let inspected = skill
   // A concurrent legitimate commit may advance contentVersion while the old
   // generation is being inspected. Retry from the fresh row; never quarantine
   // or unverify the new authoritative generation on an old verdict.
   for (let attempt = 0; attempt < 8; attempt++) {
-    const result = inspectManagedSnapshot(db, opts, inspected)
-    opts.__beforeFinalizeForTest?.({
+    const result = await inspectManagedSnapshot(db, opts, inspected)
+    await opts.__beforeFinalizeForTest?.({
       skillId: inspected.id,
       contentVersion: inspected.contentVersion,
       verdict: result.ok ? 'verified' : 'quarantined',
     })
     if (result.ok) {
-      const finalized = dbTxSync(db, (tx) => {
-        const current = tx
-          .select({
-            contentVersion: skills.contentVersion,
-            reservationState: skills.reservationState,
-          })
-          .from(skills)
-          .where(eq(skills.id, inspected.id))
-          .get()
+      const finalized = await databaseSessionFor(db).transaction(async (tx) => {
+        const current = (
+          await tx
+            .select({
+              contentVersion: skills.contentVersion,
+              reservationState: skills.reservationState,
+            })
+            .from(skills)
+            .where(eq(skills.id, inspected.id))
+            .limit(1)
+        )[0]
         if (
           current === undefined ||
           current.contentVersion !== inspected.contentVersion ||
@@ -170,12 +172,12 @@ export function verifyManagedSnapshot(
         ) {
           return false
         }
-        tx.update(skills)
+        await tx
+          .update(skills)
           .set({ versionState: 'snapshot-authoritative' })
           .where(
             and(eq(skills.id, inspected.id), eq(skills.contentVersion, inspected.contentVersion)),
           )
-          .run()
         return true
       })
       if (finalized) {
@@ -183,15 +185,17 @@ export function verifyManagedSnapshot(
         return 'verified'
       }
     } else {
-      const quarantined = dbTxSync(db, (tx) => {
-        const current = tx
-          .select({
-            contentVersion: skills.contentVersion,
-            reservationState: skills.reservationState,
-          })
-          .from(skills)
-          .where(eq(skills.id, inspected.id))
-          .get()
+      const quarantined = await databaseSessionFor(db).transaction(async (tx) => {
+        const current = (
+          await tx
+            .select({
+              contentVersion: skills.contentVersion,
+              reservationState: skills.reservationState,
+            })
+            .from(skills)
+            .where(eq(skills.id, inspected.id))
+            .limit(1)
+        )[0]
         if (
           current === undefined ||
           current.contentVersion !== inspected.contentVersion ||
@@ -199,12 +203,12 @@ export function verifyManagedSnapshot(
         ) {
           return false
         }
-        tx.update(skills)
+        await tx
+          .update(skills)
           .set({ versionState: 'quarantined' })
           .where(
             and(eq(skills.id, inspected.id), eq(skills.contentVersion, inspected.contentVersion)),
           )
-          .run()
         return true
       })
       if (quarantined) {
@@ -218,15 +222,17 @@ export function verifyManagedSnapshot(
       }
     }
 
-    const fresh = db
-      .select({
-        id: skills.id,
-        name: skills.name,
-        contentVersion: skills.contentVersion,
-      })
-      .from(skills)
-      .where(eq(skills.id, inspected.id))
-      .get()
+    const fresh = (
+      await db
+        .select({
+          id: skills.id,
+          name: skills.name,
+          contentVersion: skills.contentVersion,
+        })
+        .from(skills)
+        .where(eq(skills.id, inspected.id))
+        .limit(1)
+    )[0]
     if (fresh === undefined) return 'superseded'
     inspected = fresh
   }
@@ -238,23 +244,22 @@ export function verifyManagedSnapshot(
   return 'superseded'
 }
 
-function inspectManagedSnapshot(
+async function inspectManagedSnapshot(
   db: DbClient,
   opts: BootVerifyOptions,
   skill: ReverifySkill,
-): { ok: true } | { ok: false; reason: string } {
+): Promise<{ ok: true } | { ok: false; reason: string }> {
   const reject = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
   try {
     const root = skillRootAbs(opts.appHome, skill.id)
-    const versions = db
+    const versions = (await db
       .select({
         versionIndex: skillVersions.versionIndex,
         filesPath: skillVersions.filesPath,
         contentHash: skillVersions.contentHash,
       })
       .from(skillVersions)
-      .where(eq(skillVersions.skillId, skill.id))
-      .all() as Array<{
+      .where(eq(skillVersions.skillId, skill.id))) as Array<{
       versionIndex: number
       filesPath: string
       contentHash: string | null
@@ -330,12 +335,12 @@ function inspectManagedSnapshot(
  * No global barrier — a large legit tree is just "available later", never
  * quarantined for size.
  */
-export function runBootSnapshotReverify(
+export async function runBootSnapshotReverify(
   db: DbClient,
   opts: BootVerifyOptions,
-): { verified: number; quarantined: number } {
+): Promise<{ verified: number; quarantined: number }> {
   bootReverifyActivated = true
-  const rows = db
+  const rows = (await db
     .select({
       id: skills.id,
       name: skills.name,
@@ -351,8 +356,9 @@ export function runBootSnapshotReverify(
         'quarantined',
       ]),
     )
-    .orderBy(skills.id)
-    .all() as Array<ReverifySkill & { versionState: string; reservationState: string }>
+    .orderBy(skills.id)) as Array<
+    ReverifySkill & { versionState: string; reservationState: string }
+  >
   let verified = 0
   let quarantined = 0
   for (const r of rows) {
@@ -360,7 +366,7 @@ export function runBootSnapshotReverify(
       quarantined++ // op-recovery fail-closed on a never-published row — not ours to lift
       continue
     }
-    const outcome = verifyManagedSnapshot(db, opts, r)
+    const outcome = await verifyManagedSnapshot(db, opts, r)
     if (outcome === 'verified') {
       verified++
       if (r.versionState === 'quarantined') {

@@ -592,7 +592,7 @@ export async function restoreBackup(
         if (willMigrate || direction === 'same') {
           const { runSkillIdentityMigrationBarrier } =
             await import('@/services/skillIdentityMigration')
-          runSkillIdentityMigrationBarrier(db, { appHome })
+          await runSkillIdentityMigrationBarrier(db, { appHome })
         }
         // RFC-223 PR-4: SQL can recover committed fusion versions, while
         // in-flight legacy rows require decoding their launch-time token in

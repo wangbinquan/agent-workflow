@@ -19,7 +19,6 @@ import { dbTxSync } from '../src/db/txSync'
 import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
-import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 import {
   createManagedSkill,
   writeSkillContent,
@@ -241,7 +240,7 @@ describe('restore un-fuses memories fused after the target version', () => {
       now: Date.now(),
     })
 
-    const res = restoreSkillVersion(
+    const res = await restoreSkillVersion(
       h.db,
       h.fsOpts,
       skill.id,
@@ -255,7 +254,7 @@ describe('restore un-fuses memories fused after the target version', () => {
     expect(statusOf(h.db, fusedAtV1)).toBe('fused') // still in v1 content
   })
 
-  test('unfuseAboveVersionSync clears provenance', async () => {
+  test('unfuseAboveVersion 清掉 provenance（RFC-359 W4-D23b：同步那份已退役，改用中立参与者）', async () => {
     const m = insertApprovedGlobalMemory(h.db, 'm')
     await fuse(h.db, {
       memoryIds: [m],
@@ -266,8 +265,11 @@ describe('restore un-fuses memories fused after the target version', () => {
       userId: 'u',
       now: Date.now(),
     })
-    const unfused = dbTxSync(h.db, (tx) =>
-      unfuseAboveVersionSync(tx, { skillId: 'skill-lint', aboveVersion: 0 }),
+    const unfused = await databaseSessionFor(h.db).transaction(
+      async (tx) =>
+        await composeSkillMemoryFusionParticipantFactory()
+          .inTransaction(tx)
+          .unfuseAboveVersion({ skillId: 'skill-lint', aboveVersion: 0 }),
     )
     expect(unfused).toEqual([m])
     const row = h.db.select().from(memories).where(eqId(m)).all() as Array<{

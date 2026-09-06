@@ -102,7 +102,7 @@ export interface ResourcePackageMutationRuntime {
       workgroup: Set<string>
     }>,
   ): ResourcePackageApplyTx
-  rollForwardCommitted(log: Logger): void
+  rollForwardCommitted(log: Logger): void | Promise<void>
   broadcastCommitted(): void
 }
 
@@ -525,7 +525,7 @@ async function applyInner(
 
     // ── ④ 幂等尾 ─────────────────────────────────────────────────────────
     deps.faults?.afterTxBeforeRollForward?.()
-    mutationRuntime.rollForwardCommitted(log)
+    await mutationRuntime.rollForwardCommitted(log)
     mutationRuntime.broadcastCommitted()
     return receipt
   } catch (error) {
@@ -545,7 +545,7 @@ async function applyInner(
     for (const artifact of [...artifacts].reverse()) {
       try {
         deps.faults?.beforeArtifactCompensation?.(artifact)
-        compensateLegacyResourcePackageArtifact(
+        await compensateLegacyResourcePackageArtifact(
           db,
           artifact as ResourcePackageMutationArtifact,
           legacyResourcePackageMutationDependencies,
@@ -638,7 +638,7 @@ export async function convergeResourceBundleApplies(
         )
       ) {
         // 每一步自己吞异常并 log（publish 已经发生过时会「重放即无操作」）。
-        rollForwardLegacyResourcePackageArtifacts(
+        await rollForwardLegacyResourcePackageArtifacts(
           db,
           appHome,
           artifacts as ResourcePackageMutationArtifact[],
@@ -661,7 +661,7 @@ export async function convergeResourceBundleApplies(
     const artifacts = parseArtifacts(row.preparedArtifactsJson)
     for (const artifact of [...artifacts].reverse()) {
       try {
-        compensateLegacyResourcePackageArtifact(
+        await compensateLegacyResourcePackageArtifact(
           db,
           artifact as ResourcePackageMutationArtifact,
           legacyResourcePackageMutationDependencies,

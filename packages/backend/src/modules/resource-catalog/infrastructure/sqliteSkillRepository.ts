@@ -98,16 +98,16 @@ export function createSqliteSkillRepository(
       })
     },
     async listVersions(id) {
-      return listSkillVersions(db, fsOptions, id)
+      return await listSkillVersions(db, fsOptions, id)
     },
     async diffVersions(id, from, to) {
-      return diffSkillVersions(db, fsOptions, id, from, to)
+      return await diffSkillVersions(db, fsOptions, id, from, to)
     },
     async getVersionContent(id, version) {
-      return getSkillVersionContent(db, fsOptions, id, version)
+      return await getSkillVersionContent(db, fsOptions, id, version)
     },
     async restoreVersion(authority, current, version, input) {
-      const result = restoreSkillVersion(
+      const result = await restoreSkillVersion(
         db,
         fsOptions,
         current.id,

@@ -27,7 +27,8 @@ export interface SkillVersionCommitParticipantFactory {
   inTransaction(transaction: DatabaseTransaction): SkillVersionCommitParticipantInTx
 }
 
-async function readSkillVersionCompositeLive(
+/** RFC-359 W4-D23b：legacy 版本写入路径改吃中立事务后也用这一份，同步那份随之退役。 */
+export async function readSkillVersionCompositeLive(
   transaction: DatabaseTransaction,
   skillId: string,
 ): Promise<SkillVersionCompositeLive | null> {

@@ -8,6 +8,7 @@
 // → lock freed + counted; orphan locks GC'd last.
 
 import { describe, expect, test, beforeEach } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -47,59 +48,72 @@ describe('recoverSkillOperations — boot driver', () => {
       .all()
       .filter((l) => l.lockedSkillId === skillId).length
   }
-  function plant(
+  async function plant(
     skillId: string,
     kind: Parameters<typeof beginOperation>[1]['kind'],
     phase: string,
   ) {
-    const opId = dbTxSync(db, (tx) => beginOperation(tx, { skillId, kind }))
-    if (phase !== 'intent') dbTxSync(db, (tx) => advancePhase(tx, opId, phase as never))
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) => await beginOperation(tx, { skillId, kind }),
+    )
+    if (phase !== 'intent')
+      await databaseSessionFor(db).transaction(
+        async (tx) => await advancePhase(tx, opId, phase as never),
+      )
     return opId
   }
 
-  test('pre-db-committed op → rollbackFs called, op abandoned, lock freed', () => {
+  test('pre-db-committed op → rollbackFs called, op abandoned, lock freed', async () => {
     const skillId = seedSkill('rb')
-    const opId = plant(skillId, 'version-write', 'fs-staged')
+    const opId = await plant(skillId, 'version-write', 'fs-staged')
     const calls: string[] = []
     const registry: OpRecoveryRegistry = {
-      'version-write': { rollbackFs: (_f, op) => calls.push(`rb:${op.opId}`) },
+      'version-write': {
+        rollbackFs: (_f, op) => {
+          calls.push(`rb:${op.opId}`)
+        },
+      },
     }
-    const rep = recoverSkillOperations(db, FS, registry)
+    const rep = await recoverSkillOperations(db, FS, registry)
     expect(calls).toEqual([`rb:${opId}`])
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(locksFor(skillId)).toBe(0)
     expect(rep.rolledBack).toBe(1)
   })
 
-  test('≥ db-committed op → rollForwardFs called, op finished (done), lock freed', () => {
+  test('≥ db-committed op → rollForwardFs called, op finished (done), lock freed', async () => {
     const skillId = seedSkill('rf')
-    const opId = plant(skillId, 'version-write', 'db-committed')
+    const opId = await plant(skillId, 'version-write', 'db-committed')
     const calls: string[] = []
     const registry: OpRecoveryRegistry = {
-      'version-write': { rollForwardFs: (_f, op) => calls.push(`rf:${op.opId}`) },
+      'version-write': {
+        rollForwardFs: (_f, op) => {
+          calls.push(`rf:${op.opId}`)
+        },
+      },
     }
-    const rep = recoverSkillOperations(db, FS, registry)
+    const rep = await recoverSkillOperations(db, FS, registry)
     expect(calls).toEqual([`rf:${opId}`])
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(locksFor(skillId)).toBe(0)
     expect(rep.rolledForward).toBe(1)
   })
 
-  test('impossible (phase ∉ kind spine) → skill quarantined + op retired', () => {
+  test('impossible (phase ∉ kind spine) → skill quarantined + op retired', async () => {
     const skillId = seedSkill('qn')
     // delete's spine is intent/fs-staged/db-committed/done — fs-versioned is impossible.
-    plant(skillId, 'delete', 'fs-versioned')
-    const rep = recoverSkillOperations(db, FS, {})
+    await plant(skillId, 'delete', 'fs-versioned')
+    const rep = await recoverSkillOperations(db, FS, {})
     expect(rep.quarantined).toBe(1)
     const skill = db.select().from(skills).where(eq(skills.id, skillId)).get()
     expect(skill?.versionState).toBe('quarantined')
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(locksFor(skillId)).toBe(0)
   })
 
-  test('recoverDb contributes writes to the terminal tx', () => {
+  test('recoverDb contributes writes to the terminal tx', async () => {
     const skillId = seedSkill('dbwrite')
-    plant(skillId, 'version-write', 'db-committed')
+    await plant(skillId, 'version-write', 'db-committed')
     const dbCalls: string[] = []
     const registry: OpRecoveryRegistry = {
       'version-write': {
@@ -113,34 +127,34 @@ describe('recoverSkillOperations — boot driver', () => {
         },
       },
     }
-    recoverSkillOperations(db, FS, registry)
+    await recoverSkillOperations(db, FS, registry)
     expect(dbCalls).toEqual(['rollforward'])
     expect(db.select().from(skills).where(eq(skills.id, skillId)).get()?.description).toContain(
       'recovered:',
     )
   })
 
-  test('no handler for a kind → fail closed with active row + lock preserved', () => {
+  test('no handler for a kind → fail closed with active row + lock preserved', async () => {
     const skillId = seedSkill('nohand')
-    plant(skillId, 'reserve', 'fs-staged')
-    expect(() => recoverSkillOperations(db, FS, {})).toThrow(
+    await plant(skillId, 'reserve', 'fs-staged')
+    await expect(recoverSkillOperations(db, FS, {})).rejects.toThrow(
       /handler-missing.*active row and lock preserved/,
     )
     expect(locksFor(skillId)).toBe(1)
-    expect(getActiveOp(db, skillId)?.phase).toBe('fs-staged')
+    expect((await getActiveOp(db, skillId))?.phase).toBe('fs-staged')
   })
 
-  test('orphan locks (op already done) are GC-cleared after active recovery', () => {
+  test('orphan locks (op already done) are GC-cleared after active recovery', async () => {
     const skillId = seedSkill('orphan')
     // A lock whose op is inactive — simulate a crash that left it behind.
     db.insert(skillOperationLocks).values({ lockedSkillId: skillId, opId: ulid() }).run()
-    const rep = recoverSkillOperations(db, FS, {})
+    const rep = await recoverSkillOperations(db, FS, {})
     expect(rep.orphanLocksCleared).toBe(1)
     expect(locksFor(skillId)).toBe(0)
   })
 
-  test('empty (no active ops) → clean no-op report', () => {
-    const rep = recoverSkillOperations(db, FS, {})
+  test('empty (no active ops) → clean no-op report', async () => {
+    const rep = await recoverSkillOperations(db, FS, {})
     expect(rep).toMatchObject({ total: 0, rolledBack: 0, rolledForward: 0, quarantined: 0 })
   })
 })

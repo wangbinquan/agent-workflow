@@ -25,6 +25,8 @@ import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { DbTxSync } from '@/db/txSync'
 import { agents, mcps, plugins, skillOperations, skills, workflows, workgroups } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
@@ -256,8 +258,9 @@ export interface LegacyIntentApplyResourceDependencies {
     },
     produce: (filesDir: string) => void,
   ) => Promise<{ readonly skillId: string; readonly opId: string; readonly skillDir: string }>
+  // RFC-359 W4-D23b：技能版本机器迁到中立事务原语后这些面变成异步；端口签名跟着放宽。
   readonly stageSkillVersion: (
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     options: { readonly appHome: string },
     skillId: string,
     produce: (stagingDir: string) => void,
@@ -267,13 +270,13 @@ export interface LegacyIntentApplyResourceDependencies {
       readonly expectedOwnerUserId: string
       readonly setDescription: string
     },
-  ) => LegacyIntentStagedSkillVersion
+  ) => Promise<LegacyIntentStagedSkillVersion>
   readonly commitSkillReadyInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     input: { readonly skillId: string; readonly opId: string },
-  ) => void
+  ) => void | Promise<void>
   readonly commitSkillVersionInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     staged: LegacyIntentStagedSkillVersion,
     commit: {
       readonly source: 'editor'
@@ -281,7 +284,7 @@ export interface LegacyIntentApplyResourceDependencies {
       readonly expectedOwnerUserId: string
       readonly setDescription: string
     },
-  ) => void
+  ) => void | Promise<void>
 
   readonly prepareWorkflowSave: (
     db: DbClient,
@@ -1040,7 +1043,7 @@ export function createLegacyIntentApplyResourceSession(
       }
       if (prepared.kind === 'skill-update') {
         const payload = skillPayload(prepared.plan)
-        const staged = dependencies.stageSkillVersion(
+        const staged = await dependencies.stageSkillVersion(
           db,
           { appHome },
           plan.resourceId,

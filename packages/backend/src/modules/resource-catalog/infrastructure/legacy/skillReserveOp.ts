@@ -13,7 +13,7 @@
 import { rmSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import { skills } from '@/db/schema'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { SkillOperationRow } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import type {
   OpRecoveryHandler,
@@ -35,13 +35,17 @@ export const reserveRecoveryHandler: OpRecoveryHandler = {
         : legacySkillRootAbs(fsOpts.appHome, identity.legacyName)
     rmSync(root, { recursive: true, force: true })
   },
-  recoverDb: (tx: DbTxSync, op: SkillOperationRow, dir: 'rollback' | 'rollforward') => {
+  recoverDb: async (
+    tx: DatabaseTransaction,
+    op: SkillOperationRow,
+    dir: 'rollback' | 'rollforward',
+  ) => {
     if (dir === 'rollback') {
       // Drop the reserving row (the create never completed).
-      tx.delete(skills).where(eq(skills.id, op.skillId)).run()
+      await tx.delete(skills).where(eq(skills.id, op.skillId))
     } else {
       // 'ready' should already be set in the db-committed tx; make sure of it.
-      tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, op.skillId)).run()
+      await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, op.skillId))
     }
   },
 }

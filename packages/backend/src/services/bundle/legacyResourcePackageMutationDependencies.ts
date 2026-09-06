@@ -124,8 +124,9 @@ export const legacyResourcePackageMutationDependencies = Object.freeze({
     stageSkillVersion(db, options, skillId, produce, commit as never),
   abortStagedSkillVersion: (db, staged) =>
     abortStagedSkillVersion(db, staged as StagedSkillVersion),
-  commitSkillVersionInTx: (tx, staged, commit) =>
-    commitSkillVersionInTx(tx, staged as StagedSkillVersion, commit as never),
+  commitSkillVersionInTx: async (tx, staged, commit) => {
+    await commitSkillVersionInTx(tx, staged as StagedSkillVersion, commit as never)
+  },
   publishStagedSkillVersion: (db, options, staged) =>
     publishStagedSkillVersion(db, options, staged as StagedSkillVersion),
   unmarkSkillBootVerified,
@@ -195,8 +196,9 @@ const createLegacyResourcePackageMutationRuntime: ResourcePackageMutationRuntime
       (tx, operations) => adapter.assertUpdateTargetsOwnedInTx(tx, operations)
     const bindApplyTx: ResourcePackageMutationRuntime['bindApplyTx'] = (tx, bundleCreatedNames) =>
       adapter.bindApplyTx(tx, { currentAuthority, bundleCreatedNames })
-    const rollForwardCommitted: ResourcePackageMutationRuntime['rollForwardCommitted'] = (log) =>
-      adapter.rollForwardCommitted(log)
+    const rollForwardCommitted: ResourcePackageMutationRuntime['rollForwardCommitted'] = async (
+      log,
+    ) => await adapter.rollForwardCommitted(log)
     const runtime: ResourcePackageMutationRuntime = Object.freeze({
       provider,
       prestage,

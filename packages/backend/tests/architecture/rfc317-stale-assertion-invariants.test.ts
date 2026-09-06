@@ -169,7 +169,10 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
   test('⓪ 语料下限——扫描器还活着', () => {
     // 全部规则都是「扫一遍源码、断言没有 X」的形态，语料一旦为空就会全绿。
     // 实测 929 个文件；钉一个明显低于它、但足以证明枚举没断的下限。
-    expect(CORPUS.length, 'backend + shared 的生产源文件枚举断了，下面的缺席断言全部失去意义').toBeGreaterThan(700)
+    expect(
+      CORPUS.length,
+      'backend + shared 的生产源文件枚举断了，下面的缺席断言全部失去意义',
+    ).toBeGreaterThan(700)
   })
 
   test('① 注释里**列出成员**的 ACL 花名册必须与 ACL_RESOURCE_TYPES 逐项相等', () => {
@@ -220,12 +223,12 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
   test('② 注释里写出的「N 张表有 builtin 列」必须等于 schema 里的真实列数', () => {
     // 派生端：db/schema.ts 里 `builtin` 列的实际张数。RFC-304/309 给
     // capability_templates 加了第三列之后，五处手抄仍说两张（findings ACL-05）。
-    const schema = readFileSync(
-      resolve(REPO_ROOT, 'packages/backend/src/db/schema.ts'),
-      'utf8',
-    )
+    const schema = readFileSync(resolve(REPO_ROOT, 'packages/backend/src/db/schema.ts'), 'utf8')
     const actual = [...schema.matchAll(/builtin:\s*integer\('builtin'/g)].length
-    expect(actual, 'db/schema.ts 里应当能数到 builtin 列；数不到说明本规则的派生端断了').toBeGreaterThan(0)
+    expect(
+      actual,
+      'db/schema.ts 里应当能数到 builtin 列；数不到说明本规则的派生端断了',
+    ).toBeGreaterThan(0)
 
     const patterns = [
       /([一两二三四五六七八九十]{1,2})\s*张表[^。\n]{0,40}?builtin/gu,
@@ -292,7 +295,9 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
           if (hit === null) continue
           // 归属**只看这一块**；块内没写 RFC 号才回落到文件头那块
           // （头注释通常是「RFC-060 PR-A —— …」，而将来时那句不重复 RFC 号）。
-          const inBlock = [...new Set([...block.matchAll(/RFC-(\d{3})/g)].map((m) => `RFC-${m[1]!}`))]
+          const inBlock = [
+            ...new Set([...block.matchAll(/RFC-(\d{3})/g)].map((m) => `RFC-${m[1]!}`)),
+          ]
           const scope = inBlock.length > 0 ? inBlock : headerRfcs
           const done = scope.filter((rfc) => /^\**Done/.test(rfcStatus.get(rfc) ?? ''))
           if (done.length === 0) continue
@@ -356,9 +361,7 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
   test('⑥ 自称「唯一注册表」的表，必须真的没有表外同类实现', () => {
     // 派生端：backend src 里 `setInterval(` 的站点数 vs 消费 DAEMON_CADENCE 的文件数。
     // findings TP-12：表头自称唯一，实际至少六个循环各带自己的周期字面量。
-    const cadence = CORPUS.find(
-      (u) => u.path === 'packages/backend/src/services/daemonCadence.ts',
-    )
+    const cadence = CORPUS.find((u) => u.path === 'packages/backend/src/services/daemonCadence.ts')
     expect(cadence, '派生端文件不存在：services/daemonCadence.ts').toBeDefined()
 
     const intervalSites = CORPUS.filter(

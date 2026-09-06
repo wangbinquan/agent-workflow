@@ -5,13 +5,14 @@
 // T7 之后注入的是 knowledge-evolution 铸的协调器：判据（退回哪些）归 KE，
 // 写入归 memory，resource-catalog 只看到「给事务与回滚目标，还我 id」。
 //
-// 测试给的就是生产装配的同一份（`createSyncSkillRestoreMembership` + memory 的同步核心），
-// 不是 stub——否则这些用例会退化成「只验技能版本、不验记忆状态」。
+// 测试给的就是生产装配的同一份，不是 stub——否则这些用例会退化成「只验技能版本、不验记忆状态」。
+// RFC-359 W4-D23b：legacy 回滚路径改吃中立事务后，三个 bootstrap 接的都是**异步**协调器，
+// 这里跟着换成同一个。
 
-import { createSyncSkillRestoreMembership } from '../../src/modules/knowledge-evolution/public/participants'
-import { unfuseAboveVersionSync } from '../../src/modules/memory/composition'
-import type { DbTxSync } from '../../src/db/txSync'
+import { createAsyncSkillRestoreMembership } from '../../src/modules/knowledge-evolution/public/participants'
+import { composeSkillMemoryFusionParticipantFactory } from '../../src/modules/memory/composition'
+import type { DatabaseTransaction } from '../../src/platform/persistence/databaseTransaction'
 
-export const TEST_SKILL_RESTORE_MEMBERSHIP = createSyncSkillRestoreMembership<DbTxSync>(
-  (tx, selector) => unfuseAboveVersionSync(tx, selector),
+export const TEST_SKILL_RESTORE_MEMBERSHIP = createAsyncSkillRestoreMembership<DatabaseTransaction>(
+  composeSkillMemoryFusionParticipantFactory(),
 )

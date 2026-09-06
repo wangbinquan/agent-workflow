@@ -96,9 +96,7 @@ export function handWrittenPhasePredicates(
   opts: { readonly applyOwners?: boolean } = {},
 ): string[] {
   const hits: string[] = []
-  const owners = new Set(
-    (opts.applyOwners ?? true) ? PHASE_OWNERS.map((entry) => entry.file) : [],
-  )
+  const owners = new Set((opts.applyOwners ?? true) ? PHASE_OWNERS.map((entry) => entry.file) : [])
   for (const unit of units) {
     if (owners.has(unit.path)) continue
     const scanBody = (body: ts.Node, label: string): void => {

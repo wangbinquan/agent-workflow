@@ -42,7 +42,7 @@ export interface SkillIdentityMigrationReport {
   verifiedVersions: number
 }
 
-export function runSkillIdentityMigrationBarrier(
+export async function runSkillIdentityMigrationBarrier(
   db: DbClient,
   opts: {
     appHome: string
@@ -50,25 +50,25 @@ export function runSkillIdentityMigrationBarrier(
     /** Test-only fault seam after husk DB deletion, before empty-root cleanup. */
     __beforeHuskFsCleanupForTest?: (skillId: string) => void
   },
-): SkillIdentityMigrationReport {
+): Promise<SkillIdentityMigrationReport> {
   // This barrier is the filesystem identity boundary, so validate its parents
   // before recovery is allowed to rename anything. A symlinked skills/ or
   // .trash/ would otherwise redirect migrate/delete operations outside appHome.
   ensureSkillFilesystemBoundary(opts.appHome)
   const initialRows = loadIdentityRows(db)
-  const initialActive = listActiveOps(db)
+  const initialActive = await listActiveOps(db)
   preflightPhysicalOwnershipGraph(db, initialRows, initialActive, opts.appHome)
   assertRecoveryPreconditions(db, initialActive, opts.appHome)
 
   // Legacy reserve/delete/version-write operations must settle while their
   // name-keyed directories still exist. A missing handler throws and preserves
   // both the active row and lock; it must never degrade into "release and boot".
-  const recovered = recoverSkillOperations(
+  const recovered = await recoverSkillOperations(
     db,
     { appHome: opts.appHome },
     SKILL_OP_RECOVERY_REGISTRY,
   )
-  assertNoActiveOperations(db)
+  await assertNoActiveOperations(db)
   preflightPhysicalOwnershipGraph(db, loadIdentityRows(db), [], opts.appHome)
   const removedHusks = sweepMissingLegacyHusks(db, opts.appHome, opts.__beforeHuskFsCleanupForTest)
 
@@ -133,11 +133,11 @@ export function runSkillIdentityMigrationBarrier(
 
   let migratedSkills = 0
   for (const row of plans) {
-    migrateSkillIdentityOp(db, { appHome: opts.appHome }, row, opts.hooks)
+    await migrateSkillIdentityOp(db, { appHome: opts.appHome }, row, opts.hooks)
     migratedSkills++
   }
 
-  const verified = assertSkillIdentityPostcondition(db, opts.appHome)
+  const verified = await assertSkillIdentityPostcondition(db, opts.appHome)
   return {
     recoveredOperations: recovered.total,
     removedHusks,
@@ -147,11 +147,11 @@ export function runSkillIdentityMigrationBarrier(
   }
 }
 
-export function assertSkillIdentityPostcondition(
+export async function assertSkillIdentityPostcondition(
   db: DbClient,
   appHome: string,
-): { skills: number; versions: number } {
-  assertNoActiveOperations(db)
+): Promise<{ skills: number; versions: number }> {
+  await assertNoActiveOperations(db)
   const locks = db.select().from(skillOperationLocks).all()
   if (locks.length > 0) {
     throw new ValidationError(
@@ -439,8 +439,8 @@ function dirHasNoContent(root: string): boolean {
   return true
 }
 
-function assertNoActiveOperations(db: DbClient): void {
-  const active = listActiveOps(db)
+async function assertNoActiveOperations(db: DbClient): Promise<void> {
+  const active = await listActiveOps(db)
   if (active.length > 0) {
     throw new ValidationError(
       'skill-migration-active-operation',

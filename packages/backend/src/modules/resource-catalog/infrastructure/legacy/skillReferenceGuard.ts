@@ -32,10 +32,6 @@ export interface SkillReferenceLookup {
   find(skillId: string): Promise<readonly SkillReferencingAgentRow[]>
 }
 
-export interface SkillReferenceLookupInTransaction {
-  find(skillId: string): readonly SkillReferencingAgentRow[]
-}
-
 export async function findAgentsUsingManagedSkill(
   lookup: SkillReferenceLookup,
   skillId: string,
@@ -43,9 +39,5 @@ export async function findAgentsUsingManagedSkill(
   return [...(await lookup.find(skillId))]
 }
 
-export function findAgentsUsingManagedSkillInTx(
-  lookup: SkillReferenceLookupInTransaction,
-  skillId: string,
-): SkillReferencingAgentRow[] {
-  return [...lookup.find(skillId)]
-}
+// RFC-359 W4-D23b：事务内的查引用改走中立事务原语后与上面这条**完全同形**（都是异步 lookup），
+// 于是原来的 `findAgentsUsingManagedSkillInTx` / `SkillReferenceLookupInTransaction` 一并删除。

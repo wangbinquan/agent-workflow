@@ -253,8 +253,7 @@ const CORE_DISPATCHES: readonly DispatchSite[] = CORE_FILES.flatMap((rel) => {
  *
  * **每条必须写清兜底行为**——说不出兜底做什么，就说明作者没想过新种类会走到哪。
  */
-const FAIL_CLOSED_DISPATCHES: Readonly<Record<string, { fallthrough: string; why: string }>> = {
-}
+const FAIL_CLOSED_DISPATCHES: Readonly<Record<string, { fallthrough: string; why: string }>> = {}
 
 const siteKey = (site: DispatchSite): string => `${site.file}#${site.fn}@${site.discriminant}`
 

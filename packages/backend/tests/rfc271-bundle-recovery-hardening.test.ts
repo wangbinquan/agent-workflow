@@ -188,7 +188,7 @@ describe('committed skill-update tail is replay-safe', () => {
     expect(isSkillBootVerified(created.id)).toBe(true)
 
     const imported = deps.db.select().from(skills).where(eq(skills.id, created.id)).get()!
-    commitSkillVersion(
+    await commitSkillVersion(
       deps.db,
       { appHome: deps.appHome },
       created.id,

@@ -173,7 +173,8 @@ export function handCopiedStatusListSites(
         const values = stringElements(node)
         const replaced = values === null ? undefined : REPLACED_SET_KEYS.get(setKey(values))
         if (replaced !== undefined) {
-          const line = unit.source.getLineAndCharacterOfPosition(node.getStart(unit.source)).line + 1
+          const line =
+            unit.source.getLineAndCharacterOfPosition(node.getStart(unit.source)).line + 1
           hits.push(`${unit.path}:${line} 应改 import ${replaced}`)
         }
       }

@@ -10,13 +10,12 @@ export function createSqliteSkillCatalogBootAdapter(input: {
   readonly appHome: string
 }): SkillCatalogBootAdapter {
   return Object.freeze({
-    runIdentityMigrationBarrier: () =>
-      Promise.resolve(Object.freeze(runSkillIdentityMigrationBarrier(input.db, input))),
+    runIdentityMigrationBarrier: async () =>
+      Object.freeze(await runSkillIdentityMigrationBarrier(input.db, input)),
     activateAvailabilityGate: () => activateBootReverify(),
-    reconcileLiveFiles: () => Promise.resolve(reconcileSkillLiveFiles(input.db, input)),
-    backfillLegacyVersions: () =>
-      Promise.resolve(Object.freeze(backfillLegacySkillVersions(input.db, input))),
-    reverifySnapshots: () =>
-      Promise.resolve(Object.freeze(runBootSnapshotReverify(input.db, input))),
+    reconcileLiveFiles: async () => await reconcileSkillLiveFiles(input.db, input),
+    backfillLegacyVersions: async () =>
+      Object.freeze(await backfillLegacySkillVersions(input.db, input)),
+    reverifySnapshots: async () => Object.freeze(await runBootSnapshotReverify(input.db, input)),
   })
 }

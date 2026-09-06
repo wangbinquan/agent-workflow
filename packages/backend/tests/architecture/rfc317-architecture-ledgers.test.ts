@@ -206,9 +206,10 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
       }
       if (!/RFC-317/.test(resolvedIn)) bad.push(`${finding.findingId}: resolvedIn 未点名 RFC`)
     }
-    expect(bad, 'resolvedIn 必须写成「RFC-317 T<n>」且 T<n> 在本 RFC 的 plan.md 里真实存在').toEqual(
-      [],
-    )
+    expect(
+      bad,
+      'resolvedIn 必须写成「RFC-317 T<n>」且 T<n> 在本 RFC 的 plan.md 里真实存在',
+    ).toEqual([])
   })
 })
 

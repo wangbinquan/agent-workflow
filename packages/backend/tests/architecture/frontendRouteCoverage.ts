@@ -150,8 +150,6 @@ export function buildRouteCoverage(input: RouteCoverageInput): RouteCoverageRepo
     total: input.routes.length,
     documentLoaded: documentLoaded.sort(),
     uncovered: uncovered.sort(),
-    mentionedButNeverLoaded: uncovered
-      .filter((p) => staticallyMentioned(input.e2eDir, p))
-      .sort(),
+    mentionedButNeverLoaded: uncovered.filter((p) => staticallyMentioned(input.e2eDir, p)).sort(),
   }
 }

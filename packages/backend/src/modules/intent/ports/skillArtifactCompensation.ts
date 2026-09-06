@@ -21,7 +21,7 @@ export interface SqliteSkillArtifactCompensation {
   /** 补偿一个未提交的技能暂存（建/改技能的 staging 目录与候选行）。 */
   compensateManagedSkillStage(db: DbClient, artifact: { readonly [k: string]: unknown }): void
   /** 丢弃一个已 stage 未提交的技能版本。 */
-  abortStagedSkillVersion(db: DbClient, staged: unknown): void
+  abortStagedSkillVersion(db: DbClient, staged: unknown): void | Promise<void>
   /** 把一个已提交的技能版本发布成 live files/。 */
   publishStagedSkillVersion(
     db: DbClient,

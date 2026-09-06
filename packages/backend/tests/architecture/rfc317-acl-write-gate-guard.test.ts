@@ -136,7 +136,8 @@ const CAPABILITY_TEMPLATE_ACL_METHODS = ['load', 'canView', 'read', 'update'] as
 function hasExactCapabilityTemplateAclDelegation(path: string, text: string): boolean {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const ownerAliases = new Map<string, ts.Node>()
-  const aclBindings: { readonly binding: ts.ObjectLiteralExpression; readonly scope: ts.Node }[] = []
+  const aclBindings: { readonly binding: ts.ObjectLiteralExpression; readonly scope: ts.Node }[] =
+    []
 
   const enclosingFunction = (node: ts.Node): ts.Node | undefined => {
     let current = node.parent
@@ -209,7 +210,8 @@ const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
   }
 })
 
-const CONFIG_OPERATION_SOURCE = 'packages/backend/src/modules/development-automation/composition/configOperations.ts'
+const CONFIG_OPERATION_SOURCE =
+  'packages/backend/src/modules/development-automation/composition/configOperations.ts'
 const AGENT_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts'
 const MCP_OPERATION_SOURCE =
@@ -304,9 +306,7 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
   })
 
   test('Capability Template 的 ACL endpoint 只委托同一个 required owner', () => {
-    const source = SOURCES.find(
-      (candidate) => candidate.rel === CAPABILITY_TEMPLATE_ROUTE,
-    )
+    const source = SOURCES.find((candidate) => candidate.rel === CAPABILITY_TEMPLATE_ROUTE)
     expect(source?.exactCapabilityTemplateAclDelegate).toBe(true)
     expect(CAPABILITY_TEMPLATE_OPERATION_GATES).toEqual(
       new Set(['requireResourceEdit', 'requireResourceGovern']),
@@ -410,7 +410,13 @@ describe('RFC-317 T14 —— matcher 自证：调用名提取的边界', () => {
       '  return c.json(await deps.store.listThings())\n' +
       '})\n'
     const names = calledIdentifierNames('probe.ts', fabricated)
-    for (const expected of ['get', 'loadVisibleThing', 'requireResourceGovern', 'json', 'listThings'])
+    for (const expected of [
+      'get',
+      'loadVisibleThing',
+      'requireResourceGovern',
+      'json',
+      'listThings',
+    ])
       expect(names.has(expected), `没提取到 ${expected}`).toBe(true)
   })
 

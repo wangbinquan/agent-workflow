@@ -29,12 +29,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import {
-  drizzleTableSymbols,
-  packageSrcUnits,
-  sourceUnit,
-  tableOwnershipCrossings,
-} from './census'
+import { drizzleTableSymbols, packageSrcUnits, sourceUnit, tableOwnershipCrossings } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -81,8 +76,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table: 'developmentAdapterDefinitionRevisions',
     owner: 'development-automation',
     file,
-    why:
-      'Integration 的 provider adapter 仍直接持久化 Development Automation 拥有的适配器修订表；这只是精确存量，不是业务层可复制的访问方式。',
+    why: 'Integration 的 provider adapter 仍直接持久化 Development Automation 拥有的适配器修订表；这只是精确存量，不是业务层可复制的访问方式。',
     removeWhen:
       'RFC-294 W4-E8 将定义修订持久化收回 Development Automation，并让 Integration 只消费 owner-owned public port。',
   })),
@@ -93,8 +87,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table: 'developmentAdapterDefinitions',
     owner: 'development-automation',
     file,
-    why:
-      'Integration 的 provider adapter 仍直接持久化 Development Automation 拥有的适配器定义表；它与 revisions 必须作为同一 owner contract 收口。',
+    why: 'Integration 的 provider adapter 仍直接持久化 Development Automation 拥有的适配器定义表；它与 revisions 必须作为同一 owner contract 收口。',
     removeWhen:
       'RFC-294 W4-E8 将定义存储收回 Development Automation，并让 Integration 只消费 owner-owned public port。',
   })),
@@ -107,8 +100,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table,
     owner: 'development-automation',
     file: 'digital-employee/infrastructure/writerCutoverPersistence.ts',
-    why:
-      'Digital Employee 的 writer cutover infrastructure 仍跨 context 操作 Development Automation 的 mission lifecycle 表；调用点已被精确钉住。',
+    why: 'Digital Employee 的 writer cutover infrastructure 仍跨 context 操作 Development Automation 的 mission lifecycle 表；调用点已被精确钉住。',
     removeWhen:
       'RFC-294 W4-E9 把 writer cutover 收敛为 Development Automation owner-owned command，Digital Employee 只传 closed request。',
   })),
@@ -116,8 +108,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table: 'employeeApprovalSagas',
     owner: 'digital-employee',
     file: 'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
-    why:
-      'Development Automation 的工作项 persistence 仍读取 Digital Employee 拥有的审批 saga；这是 provider adapter 的精确跨表存量。',
+    why: 'Development Automation 的工作项 persistence 仍读取 Digital Employee 拥有的审批 saga；这是 provider adapter 的精确跨表存量。',
     removeWhen:
       'RFC-294 W4-E9 由 Digital Employee 暴露 closed approval query，Development Automation 不再引用 foreign table。',
   },
@@ -128,8 +119,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table: 'employeeCaseWorkspaces',
     owner: 'digital-employee',
     file,
-    why:
-      'Development Automation 的 workspace persistence（RFC-359 已合一为单文件）仍共享 Digital Employee workspace 表；所有站点均为精确 infrastructure 存量。',
+    why: 'Development Automation 的 workspace persistence（RFC-359 已合一为单文件）仍共享 Digital Employee workspace 表；所有站点均为精确 infrastructure 存量。',
     removeWhen:
       'RFC-294 W4-E9 落地 Digital Employee owner-owned EmployeeWorkspaceStorePort，外域只消费 closed operations。',
   })),
@@ -137,8 +127,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table: 'employeeChangeCandidates',
     owner: 'digital-employee',
     file: 'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
-    why:
-      'Development Automation 的平台工作项 persistence 仍读取 Digital Employee 变更候选表以生成发布工作项。',
+    why: 'Development Automation 的平台工作项 persistence 仍读取 Digital Employee 变更候选表以生成发布工作项。',
     removeWhen:
       'RFC-294 W4-E9 由 Digital Employee 提供 closed change-candidate projection，删除 foreign table import。',
   },
@@ -149,8 +138,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     table: 'employeeRoundWorkspaceStates',
     owner: 'digital-employee',
     file,
-    why:
-      'Development Automation 的 workspace persistence（RFC-359 已合一为单文件）仍共享 Digital Employee round workspace 状态表；所有站点均被逐文件钉住。',
+    why: 'Development Automation 的 workspace persistence（RFC-359 已合一为单文件）仍共享 Digital Employee round workspace 状态表；所有站点均被逐文件钉住。',
     removeWhen:
       'RFC-294 W4-E9 将 round workspace persistence 收回 Digital Employee owner port，删除跨 context 表访问。',
   })),

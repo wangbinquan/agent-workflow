@@ -10,10 +10,7 @@
 // 现在两侧都收到 KE 铸的协调器：RC 只认识一个「给我事务、还我一组 id」的窄端口，
 // 既不认识 memory，也不必知道 aboveVersion 是怎么算出来的。
 
-import type {
-  MemoryMembershipParticipantInTx,
-  MemoryMembershipUnfuseSelector,
-} from '../../memory/public/participants'
+import type { MemoryMembershipParticipantInTx } from '../../memory/public/participants'
 import { memoriesToUnfuseOnRestore } from '../domain/skillRestore'
 
 /** 回滚请求：调用方只说「哪个技能回到第几版」。 */
@@ -22,26 +19,9 @@ export interface SkillRestoreMembershipRequest {
   readonly targetVersion: number
 }
 
-/** memory 的同步写入面（SQLite：`apply` / `commitSkillVersion` 跑在同步事务回调里）。 */
-export interface SyncMemoryMembershipUnfuse<TTx> {
-  (tx: TTx, selector: MemoryMembershipUnfuseSelector): string[]
-}
+// RFC-359 W4-D23b：legacy 的同步回滚路径已改吃中立事务，`SyncMemoryMembershipUnfuse` 与
+// `createSyncSkillRestoreMembership` 随之退役——三个 bootstrap 接的都是下面这一个异步协调器。
 
-/**
- * SQLite 侧的协调器：拿到已开好的同步事务，按 KE 的判据退回记忆，返回被退回的 id。
- * 顺序由 memory domain 单一裁定（字典序），这里不再排一次。
- */
-export function createSyncSkillRestoreMembership<TTx>(unfuse: SyncMemoryMembershipUnfuse<TTx>): {
-  unfuseForRestore(tx: TTx, request: SkillRestoreMembershipRequest): string[]
-} {
-  return Object.freeze({
-    unfuseForRestore(tx: TTx, request: SkillRestoreMembershipRequest): string[] {
-      return unfuse(tx, memoriesToUnfuseOnRestore(request))
-    },
-  })
-}
-
-/** PostgreSQL 侧的协调器：`prepareRestore` 本来就是 async，直接吃 memory 的 tx-bound participant。 */
 export function createAsyncSkillRestoreMembership<TTx>(memory: {
   inTransaction(transaction: TTx): MemoryMembershipParticipantInTx
 }): {

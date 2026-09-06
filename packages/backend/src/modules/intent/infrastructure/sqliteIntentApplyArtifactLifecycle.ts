@@ -13,11 +13,11 @@ export interface SqliteIntentApplyArtifactLifecycle {
   rollForward(artifacts: readonly IntentJournalArtifact[], log: Logger): Promise<boolean>
 }
 
-function compensate(
+async function compensate(
   rc: SqliteSkillArtifactCompensation,
   db: DbClient,
   artifact: IntentJournalArtifact,
-): void {
+): Promise<void> {
   switch (artifact.kind) {
     case 'legacy-plugin-install-untracked':
       // Historical rows did not record a generation path. Installer GC owns
@@ -27,10 +27,10 @@ function compensate(
       rmSync(artifact.generationDir, { recursive: true, force: true })
       return
     case 'skill-stage':
-      rc.compensateManagedSkillStage(db, artifact)
+      await rc.compensateManagedSkillStage(db, artifact)
       return
     case 'skill-version-stage': {
-      rc.abortStagedSkillVersion(db, artifact.staged)
+      await rc.abortStagedSkillVersion(db, artifact.staged)
       if (artifact.staged.opId === null) return
       const operation = rc.loadSkillOperationState(db, artifact.staged.opId)
       if (operation === undefined || operation.active === 1) {
@@ -42,13 +42,13 @@ function compensate(
   }
 }
 
-function rollForward(
+async function rollForward(
   rc: SqliteSkillArtifactCompensation,
   db: DbClient,
   appHome: string,
   artifacts: readonly IntentJournalArtifact[],
   log: Logger,
-): boolean {
+): Promise<boolean> {
   let complete = true
   const skillVersionStages = artifacts.flatMap((artifact) =>
     artifact.kind === 'skill-version-stage' ? [artifact.staged] : [],
@@ -85,7 +85,7 @@ function rollForward(
   for (const staged of pendingSkillVersions) rc.unmarkSkillBootVerified(staged.skillId)
   for (const staged of pendingSkillVersions) {
     try {
-      rc.publishStagedSkillVersion(db, { appHome }, staged)
+      await rc.publishStagedSkillVersion(db, { appHome }, staged)
     } catch (error) {
       complete = false
       log.warn('intent-skill-publish-replayed-or-failed', {
@@ -127,10 +127,10 @@ export function createSqliteIntentApplyArtifactLifecycle(input: {
 }): SqliteIntentApplyArtifactLifecycle {
   return Object.freeze({
     async compensate(artifact: IntentJournalArtifact) {
-      compensate(input.skillArtifacts, input.db, artifact)
+      await compensate(input.skillArtifacts, input.db, artifact)
     },
     async rollForward(artifacts: readonly IntentJournalArtifact[], log: Logger) {
-      return rollForward(input.skillArtifacts, input.db, input.appHome, artifacts, log)
+      return await rollForward(input.skillArtifacts, input.db, input.appHome, artifacts, log)
     },
   })
 }

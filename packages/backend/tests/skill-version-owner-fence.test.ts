@@ -64,17 +64,17 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
   test('owner transferred since authorization (expectedOwnerUserId drift) → 409', async () => {
     // Owner transferred A → B out-of-band (a transfer landing in the save's await gap).
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
-    expect(() =>
+    await expect(
       commitSkillVersion(db, fsOpts, skillId, editBody('b1'), {
         source: 'editor',
         authorUserId: 'A',
         expectedOwnerUserId: 'A', // the owner the (now demoted) actor was authorized against
       }),
-    ).toThrow(ConflictError)
+    ).rejects.toThrow(ConflictError)
   })
 
-  test('owner unchanged since authorization → commit succeeds', () => {
-    const v = commitSkillVersion(db, fsOpts, skillId, editBody('b1'), {
+  test('owner unchanged since authorization → commit succeeds', async () => {
+    const v = await commitSkillVersion(db, fsOpts, skillId, editBody('b1'), {
       source: 'editor',
       authorUserId: 'A',
       expectedOwnerUserId: 'A', // matches the current owner
@@ -86,19 +86,19 @@ describe('RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence'
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     // Same body as v1 ⇒ the write is a no-op; the owner-drift guard must still 409
     // (the no-op short-circuit shares the same fence helper).
-    expect(() =>
+    await expect(
       commitSkillVersion(db, fsOpts, skillId, editBody('b0'), {
         source: 'editor',
         authorUserId: 'A',
         expectedOwnerUserId: 'A',
       }),
-    ).toThrow(ConflictError)
+    ).rejects.toThrow(ConflictError)
   })
 
   test('no expectedOwnerUserId → funnel stays unfenced (backward compatible)', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
     // A legacy / system caller that does not opt into the owner fence still commits.
-    const v = commitSkillVersion(db, fsOpts, skillId, editBody('b2'), {
+    const v = await commitSkillVersion(db, fsOpts, skillId, editBody('b2'), {
       source: 'editor',
       authorUserId: 'A',
     })
@@ -198,7 +198,7 @@ describe('RFC-170 (4th-review [high]) — secondary-writer owner-fence wiring (f
 
   test('restoreSkillVersion: owner transferred after authorization → 409', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
-    expect(() =>
+    await expect(
       restoreSkillVersion(
         db,
         fsOpts,
@@ -209,12 +209,12 @@ describe('RFC-170 (4th-review [high]) — secondary-writer owner-fence wiring (f
         undefined,
         'A',
       ),
-    ).toThrow(ConflictError)
+    ).rejects.toThrow(ConflictError)
   })
 
   test('owner unchanged → file write + restore succeed under the fence', async () => {
     await writeSkillFile(db, fsOpts, skillId, 'templates/c.txt', 'ccc', 'A', 'A')
-    const restored = restoreSkillVersion(
+    const restored = await restoreSkillVersion(
       db,
       fsOpts,
       skillId,

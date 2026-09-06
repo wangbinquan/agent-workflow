@@ -6,6 +6,7 @@
 // canonical live before freeing the lock).
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import {
   cpSync,
   existsSync,
@@ -66,8 +67,8 @@ describe('RFC-170 T7② — version-write op', () => {
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-  test('a normal commit opens+closes a version-write op (no active op, lock freed after)', () => {
-    commitSkillVersion(
+  test('a normal commit opens+closes a version-write op (no active op, lock freed after)', async () => {
+    await commitSkillVersion(
       db,
       fsOpts,
       skillId,
@@ -76,24 +77,28 @@ describe('RFC-170 T7② — version-write op', () => {
       },
       { source: 'editor', authorUserId: 'u' },
     )
-    expect(getActiveOp(db, skillId)).toBeNull()
+    expect(await getActiveOp(db, skillId)).toBeNull()
   })
 
-  test('a held lock makes a concurrent commit busy (409)', () => {
+  test('a held lock makes a concurrent commit busy (409)', async () => {
     // Someone else holds the skill's op lock.
-    dbTxSync(db, (tx) => beginOperation(tx, { skillId, kind: 'delete' }))
-    expect(() =>
+    await databaseSessionFor(db).transaction(
+      async (tx) => await beginOperation(tx, { skillId, kind: 'delete' }),
+    )
+    await expect(
       commitSkillVersion(db, fsOpts, skillId, () => {}, {
         source: 'editor',
         authorUserId: 'u',
       }),
-    ).toThrow(ConflictError)
+    ).rejects.toThrow(ConflictError)
   })
 
-  test('skipOp bypasses the lock — a caller holding the op can still commit', () => {
+  test('skipOp bypasses the lock — a caller holding the op can still commit', async () => {
     // Reserve-style: caller holds the lock, then commits v-next with skipOp.
-    dbTxSync(db, (tx) => beginOperation(tx, { skillId, kind: 'reserve' }))
-    expect(() =>
+    await databaseSessionFor(db).transaction(
+      async (tx) => await beginOperation(tx, { skillId, kind: 'reserve' }),
+    )
+    await expect(
       commitSkillVersion(
         db,
         fsOpts,
@@ -103,36 +108,39 @@ describe('RFC-170 T7② — version-write op', () => {
         },
         { source: 'editor', authorUserId: 'u', skipOp: true },
       ),
-    ).not.toThrow()
+    ).resolves.toBeDefined()
   })
 
-  test('recovery ROLLBACK: crash pre-db-committed discards staged + orphan version dir', () => {
+  test('recovery ROLLBACK: crash pre-db-committed discards staged + orphan version dir', async () => {
     const publishId = ulid()
     const staging = opStagedDir(skillFilesAbs(appHome, skillId), publishId)
     const versionDir = skillVersionAbs(appHome, skillId, 2)
     mkdirSync(staging, { recursive: true })
     mkdirSync(versionDir, { recursive: true })
-    const opId = dbTxSync(db, (tx) =>
-      beginOperation(tx, {
-        skillId,
-        kind: 'version-write',
-        targetVersion: 2,
-        stagingPath: staging,
-        candidatePath: versionDir,
-        preconditionJson: JSON.stringify({ skillId }),
-      }),
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await beginOperation(tx, {
+          skillId,
+          kind: 'version-write',
+          targetVersion: 2,
+          stagingPath: staging,
+          candidatePath: versionDir,
+          preconditionJson: JSON.stringify({ skillId }),
+        }),
     )
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
+    )
 
-    recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
+    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
 
     expect(existsSync(staging)).toBe(false) // staged discarded
     expect(existsSync(versionDir)).toBe(false) // orphan version dir discarded
-    expect(getActiveOp(db, skillId)).toBeNull() // lock freed
+    expect(await getActiveOp(db, skillId)).toBeNull() // lock freed
   })
 
-  test('pre-commit cleanup fault preserves op/lock until recovery proves cleanup', () => {
-    expect(() =>
+  test('pre-commit cleanup fault preserves op/lock until recovery proves cleanup', async () => {
+    await expect(
       commitSkillVersion(
         db,
         fsOpts,
@@ -148,8 +156,8 @@ describe('RFC-170 T7② — version-write op', () => {
           },
         },
       ),
-    ).toThrow('producer-fault')
-    expect(getActiveOp(db, skillId)?.phase).toBe('intent')
+    ).rejects.toThrow('producer-fault')
+    expect((await getActiveOp(db, skillId))?.phase).toBe('intent')
     expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
@@ -157,8 +165,8 @@ describe('RFC-170 T7② — version-write op', () => {
       ),
     ).toBe(true)
 
-    recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
-    expect(getActiveOp(db, skillId)).toBeNull()
+    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(db.select().from(skillOperationLocks).all()).toHaveLength(0)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
@@ -167,7 +175,7 @@ describe('RFC-170 T7② — version-write op', () => {
     ).toBe(false)
   })
 
-  test('recovery ROLLFORWARD: crash post-db-committed publishes live then frees the lock', () => {
+  test('recovery ROLLFORWARD: crash post-db-committed publishes live then frees the lock', async () => {
     const publishId = ulid()
     const filesDir = skillFilesAbs(appHome, skillId)
     const staging = opStagedDir(filesDir, publishId)
@@ -176,19 +184,24 @@ describe('RFC-170 T7② — version-write op', () => {
     writeFileSync(join(staging, 'SKILL.md'), '---\nname: foo\n---\nrecovered-v2', 'utf-8')
     cpSync(staging, versionDir, { recursive: true })
     const contentHash = hashDir(versionDir)
-    const opId = dbTxSync(db, (tx) =>
-      beginOperation(tx, {
-        skillId,
-        kind: 'version-write',
-        targetVersion: 2,
-        stagingPath: staging,
-        candidatePath: versionDir,
-        preconditionJson: JSON.stringify({ skillId }),
-      }),
+    const opId = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await beginOperation(tx, {
+          skillId,
+          kind: 'version-write',
+          targetVersion: 2,
+          stagingPath: staging,
+          candidatePath: versionDir,
+          preconditionJson: JSON.stringify({ skillId }),
+        }),
     )
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
-    dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-versioned'))
-    dbTxSync(db, (tx) => {
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
+    )
+    await databaseSessionFor(db).transaction(
+      async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
+    )
+    await databaseSessionFor(db).transaction(async (tx) => {
       tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId)).run()
       tx.insert(skillVersions)
         .values({
@@ -201,19 +214,19 @@ describe('RFC-170 T7② — version-write op', () => {
           contentHash,
         })
         .run()
-      advancePhase(tx, opId, 'db-committed')
+      await advancePhase(tx, opId, 'db-committed')
     })
 
-    recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
+    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
 
-    expect(getActiveOp(db, skillId)).toBeNull() // lock freed, op finished
+    expect(await getActiveOp(db, skillId)).toBeNull() // lock freed, op finished
     expect(existsSync(staging)).toBe(false) // leftover staged cleaned
     expect(readFileSync(join(filesDir, 'SKILL.md'), 'utf-8')).toContain('recovered-v2')
   })
 
-  test('a vanished staged tree cannot no-op publish old live as the new authority', () => {
+  test('a vanished staged tree cannot no-op publish old live as the new authority', async () => {
     expect(isSkillBootVerified(skillId)).toBe(true)
-    expect(() =>
+    await expect(
       commitSkillVersion(
         db,
         fsOpts,
@@ -236,24 +249,24 @@ describe('RFC-170 T7② — version-write op', () => {
           },
         },
       ),
-    ).toThrow(/live publish does not match committed content hash/)
-    expect(getActiveOp(db, skillId)?.phase).toBe('db-committed')
+    ).rejects.toThrow(/live publish does not match committed content hash/)
+    expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
     expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
       'body0',
     )
 
-    recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
-    expect(getActiveOp(db, skillId)).toBeNull()
+    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
+    expect(await getActiveOp(db, skillId)).toBeNull()
     expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
       'new-v2',
     )
   })
 
-  test('a post-DB-commit fault preserves op/lock and hides the old admission', () => {
+  test('a post-DB-commit fault preserves op/lock and hides the old admission', async () => {
     expect(isSkillBootVerified(skillId)).toBe(true)
-    expect(() =>
+    await expect(
       commitSkillVersion(
         db,
         fsOpts,
@@ -269,8 +282,8 @@ describe('RFC-170 T7② — version-write op', () => {
           },
         },
       ),
-    ).toThrow('post-commit-fault')
-    expect(getActiveOp(db, skillId)?.phase).toBe('db-committed')
+    ).rejects.toThrow('post-commit-fault')
+    expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
     expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(

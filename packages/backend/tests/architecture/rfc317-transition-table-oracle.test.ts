@@ -78,10 +78,13 @@ const NODE_EVENT_KINDS: readonly NodeRunTransitionEvent['kind'][] = [
 function targetForNodeEvent(kind: NodeRunTransitionEvent['kind']): NodeRunStatus | null {
   for (const from of NODE_RUN_STATUS) {
     try {
-      return nextNodeRunStatus(from as NodeRunStatus, {
-        kind,
-        reason: 'probe',
-      } as NodeRunTransitionEvent)
+      return nextNodeRunStatus(
+        from as NodeRunStatus,
+        {
+          kind,
+          reason: 'probe',
+        } as NodeRunTransitionEvent,
+      )
     } catch {
       // 这个来源不合法，换下一个
     }

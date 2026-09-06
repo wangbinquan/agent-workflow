@@ -3,10 +3,12 @@
 import { closeSync, fsyncSync, lstatSync, openSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { skills, skillVersions } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { fingerprintTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
   legacySkillRootAbs,
@@ -38,42 +40,44 @@ interface MigratePrecondition {
   legacyName: string
 }
 
-export function migrateSkillIdentityOp(
-  db: DbClient,
+export async function migrateSkillIdentityOp(
+  db: ProviderNeutralDatabase,
   fsOpts: SkillOpFsOptions,
   skill: { id: string; name: string },
   hooks: SkillIdentityMigrationHooks = {},
-): void {
+): Promise<void> {
+  const session = databaseSessionFor(db)
   const oldRoot = legacySkillRootAbs(fsOpts.appHome, skill.name)
   const newRoot = skillRootAbs(fsOpts.appHome, skill.id)
   const samePath = oldRoot === newRoot || pathsShareEntry(oldRoot, newRoot)
   const fingerprint = requireMigrationRoot(oldRoot, newRoot, 'legacy', null)
-  const opId = dbTxSync(db, (tx) =>
-    beginOperation(tx, {
-      skillId: skill.id,
-      kind: 'migrate',
-      candidateFingerprint: fingerprint,
-      preconditionJson: JSON.stringify({
+  const opId = await session.transaction(
+    async (tx) =>
+      await beginOperation(tx, {
         skillId: skill.id,
-        legacyName: skill.name,
-      } satisfies MigratePrecondition),
-    }),
+        kind: 'migrate',
+        candidateFingerprint: fingerprint,
+        preconditionJson: JSON.stringify({
+          skillId: skill.id,
+          legacyName: skill.name,
+        } satisfies MigratePrecondition),
+      }),
   )
   hooks.afterPhase?.('intent', skill.id)
 
   if (!samePath) renameAndSyncParent(oldRoot, newRoot)
   requireMigrationRoot(oldRoot, newRoot, 'canonical', fingerprint)
   hooks.afterPhase?.('fs-moved', skill.id)
-  dbTxSync(db, (tx) => advancePhase(tx, opId, 'fs-staged'))
+  await session.transaction(async (tx) => await advancePhase(tx, opId, 'fs-staged'))
   hooks.afterPhase?.('fs-staged', skill.id)
 
-  dbTxSync(db, (tx) => {
-    writeCanonicalPaths(tx, skill.id)
-    advancePhase(tx, opId, 'db-committed')
+  await session.transaction(async (tx) => {
+    await writeCanonicalPaths(tx, skill.id)
+    await advancePhase(tx, opId, 'db-committed')
   })
   hooks.afterPhase?.('db-committed', skill.id)
 
-  dbTxSync(db, (tx) => finishOperation(tx, opId))
+  await session.transaction(async (tx) => await finishOperation(tx, opId))
   hooks.afterPhase?.('done', skill.id)
 }
 
@@ -105,28 +109,27 @@ export const migrateRecoveryHandler: OpRecoveryHandler = {
     const newRoot = skillRootAbs(fsOpts.appHome, identity.skillId)
     requireMigrationRoot(oldRoot, newRoot, 'canonical', op.candidateFingerprint)
   },
-  recoverDb: (tx, op, dir) => {
-    if (dir === 'rollforward') writeCanonicalPaths(tx, op.skillId)
+  recoverDb: async (tx, op, dir) => {
+    if (dir === 'rollforward') await writeCanonicalPaths(tx, op.skillId)
   },
 }
 
-function writeCanonicalPaths(tx: DbTxSync, skillId: string): void {
-  const rows = tx
+async function writeCanonicalPaths(tx: DatabaseTransaction, skillId: string): Promise<void> {
+  const rows = await tx
     .select({ versionIndex: skillVersions.versionIndex })
     .from(skillVersions)
     .where(eq(skillVersions.skillId, skillId))
-    .all()
-  tx.update(skills)
+  await tx
+    .update(skills)
     .set({ managedPath: skillFilesRel(skillId) })
     .where(eq(skills.id, skillId))
-    .run()
   for (const row of rows) {
-    tx.update(skillVersions)
+    await tx
+      .update(skillVersions)
       .set({ filesPath: skillVersionRelPath(skillId, row.versionIndex) })
       .where(
         and(eq(skillVersions.skillId, skillId), eq(skillVersions.versionIndex, row.versionIndex)),
       )
-      .run()
   }
 }
 

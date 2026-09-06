@@ -33,21 +33,13 @@ import {
   memoriesToMarkFused,
   memoriesToUnfuseAbove,
 } from '../src/modules/memory/domain/fusionMembership'
-import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const SQLITE_ADAPTER = resolve(
-  import.meta.dir,
-  '..',
-  'src',
-  'modules',
-  'memory',
-  'infrastructure',
-  'sqliteMemoryMembershipParticipant.ts',
-)
-const POSTGRESQL_ADAPTER = resolve(
+// RFC-359 W4-D23b：SQLite 那份同步适配器随 legacy 技能回滚路径改吃中立事务一并退役——
+// 融合 / 解融合从此只有这一份，两个 provider 共用。
+const NEUTRAL_ADAPTER = resolve(
   import.meta.dir,
   '..',
   'src',
@@ -100,7 +92,7 @@ const OUT_OF_ORDER: readonly SeedRow[] = [
 ]
 
 describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
-  test('只选中「本技能 + 已融合 + 融入版本 > 目标版本」的行', () => {
+  test('只选中「本技能 + 已融合 + 融入版本 > 目标版本」的行', async () => {
     const rows = [
       { id: 'm_a', status: 'fused', fusedIntoSkillId: 'skl_1', fusedIntoSkillVersion: 1 },
       { id: 'm_b', status: 'fused', fusedIntoSkillId: 'skl_1', fusedIntoSkillVersion: 2 },
@@ -111,7 +103,7 @@ describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
     expect(memoriesToUnfuseAbove(rows, { skillId: 'skl_1', aboveVersion: 1 })).toEqual(['m_b'])
   })
 
-  test('边界是严格大于：等于目标版本的不退（融进目标版本的知识仍在技能里）', () => {
+  test('边界是严格大于：等于目标版本的不退（融进目标版本的知识仍在技能里）', async () => {
     const rows = [
       { id: 'm_eq', status: 'fused', fusedIntoSkillId: 'skl_1', fusedIntoSkillVersion: 2 },
       { id: 'm_gt', status: 'fused', fusedIntoSkillId: 'skl_1', fusedIntoSkillVersion: 3 },
@@ -119,7 +111,7 @@ describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
     expect(memoriesToUnfuseAbove(rows, { skillId: 'skl_1', aboveVersion: 2 })).toEqual(['m_gt'])
   })
 
-  test('返回顺序是确定的字典序，与入参顺序无关', () => {
+  test('返回顺序是确定的字典序，与入参顺序无关', async () => {
     const forward = [
       { id: 'm_a', status: 'fused', fusedIntoSkillId: 's', fusedIntoSkillVersion: 5 },
       { id: 'm_b', status: 'fused', fusedIntoSkillId: 's', fusedIntoSkillVersion: 5 },
@@ -133,7 +125,7 @@ describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
     ).toEqual(['m_a', 'm_b'])
   })
 
-  test('解融合会把 provenance 清空——清哪几列由一份 stamp 决定', () => {
+  test('解融合会把 provenance 清空——清哪几列由一份 stamp 决定', async () => {
     expect(fusedProvenanceStamp(null)).toEqual({
       status: 'approved',
       fusedIntoSkillId: null,
@@ -145,7 +137,7 @@ describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
     })
   })
 
-  test('融合会把同一组列写满——两个 provider 不许各写各的', () => {
+  test('融合会把同一组列写满——两个 provider 不许各写各的', async () => {
     expect(
       fusedProvenanceStamp({
         skillId: 'skl_1',
@@ -168,7 +160,7 @@ describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
 })
 
 describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
-  test('乱序落库时返回的仍是确定顺序（今天按插入顺序返回 ⇒ 本条先红）', () => {
+  test('乱序落库时返回的仍是确定顺序（今天按插入顺序返回 ⇒ 本条先红）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seed(db, OUT_OF_ORDER)
     const expected = memoriesToUnfuseAbove(
@@ -180,14 +172,17 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
       })),
       { skillId: 'skl_1', aboveVersion: 1 },
     )
-    const actual = dbTxSync(db, (tx) =>
-      unfuseAboveVersionSync(tx, { skillId: 'skl_1', aboveVersion: 1 }),
+    const actual = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await composeSkillMemoryFusionParticipantFactory()
+          .inTransaction(tx)
+          .unfuseAboveVersion({ skillId: 'skl_1', aboveVersion: 1 }),
     )
     expect(expected).toEqual(['m_b', 'm_c', 'm_d'])
     expect(actual).toEqual(expected)
   })
 
-  test('全矩阵等价：真库选中的集合与顺序都等于纯函数的裁定', () => {
+  test('全矩阵等价：真库选中的集合与顺序都等于纯函数的裁定', async () => {
     // 覆盖：别的技能 / 未融合 / 版本为 null / 等于目标版本 / 大于目标版本，且乱序落库。
     const matrix: readonly SeedRow[] = [
       { id: 'm_z', status: 'fused', skillId: 'skl_1', version: 5 },
@@ -211,17 +206,25 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
       })),
       { skillId: 'skl_1', aboveVersion: 2 },
     )
-    const actual = dbTxSync(db, (tx) =>
-      unfuseAboveVersionSync(tx, { skillId: 'skl_1', aboveVersion: 2 }),
+    const actual = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await composeSkillMemoryFusionParticipantFactory()
+          .inTransaction(tx)
+          .unfuseAboveVersion({ skillId: 'skl_1', aboveVersion: 2 }),
     )
     expect(expected).toEqual(['m_v', 'm_z'])
     expect(actual).toEqual(expected)
   })
 
-  test('被选中的行状态与 provenance 真的按 stamp 清空了', () => {
+  test('被选中的行状态与 provenance 真的按 stamp 清空了', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seed(db, OUT_OF_ORDER)
-    dbTxSync(db, (tx) => unfuseAboveVersionSync(tx, { skillId: 'skl_1', aboveVersion: 1 }))
+    await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await composeSkillMemoryFusionParticipantFactory()
+          .inTransaction(tx)
+          .unfuseAboveVersion({ skillId: 'skl_1', aboveVersion: 1 }),
+    )
     const rows = db.select().from(memories).all()
     const byId = new Map(rows.map((r) => [r.id, r]))
     for (const id of ['m_b', 'm_c', 'm_d']) {
@@ -238,12 +241,12 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
 })
 
 describe('RFC-353 T1 — 顺序只有一个来源', () => {
-  test('两个适配器都 import domain 判据，且不自带第二个 .sort()', () => {
+  test('唯一的适配器 import domain 判据，且不自带第二个 .sort()', async () => {
     // 只锁**顺序**与**判据来源**，不禁止 SQL 里出现 WHERE：
     // 选中规则留在 SQL 才用得上索引，它与纯函数的等价性由上面那组真库行为测试锁死
     // （同一批行、同一个 selector，真库结果必须逐字等于纯函数结果），
     // 那比文本匹配强——文本能绕过，行为不能。
-    for (const file of [SQLITE_ADAPTER, POSTGRESQL_ADAPTER]) {
+    for (const file of [NEUTRAL_ADAPTER]) {
       const source = readFileSync(file, 'utf8')
       const body = source
         .split('\n')
@@ -264,7 +267,7 @@ describe('RFC-353 T1 — 顺序只有一个来源', () => {
 })
 
 describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
-  test('只有 approved 的候选会被标记，其余静静跳过（那是真实分支）', () => {
+  test('只有 approved 的候选会被标记，其余静静跳过（那是真实分支）', async () => {
     // 候选是在融合**发起时**选定的；审批之间记忆可能被归档、被别的融合吃掉、被人工改状态。
     // 所以「跳过非 approved」不是防御性代码，是每天都会走到的分支。
     const candidates = [
@@ -276,7 +279,7 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
     expect(memoriesToMarkFused(candidates, ['m_a', 'm_b', 'm_c', 'm_d'])).toEqual(['m_a', 'm_d'])
   })
 
-  test('没被这次融合选中的记忆不会被顺手标记', () => {
+  test('没被这次融合选中的记忆不会被顺手标记', async () => {
     const candidates = [
       { id: 'm_a', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
       { id: 'm_z', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
@@ -284,7 +287,7 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
     expect(memoriesToMarkFused(candidates, ['m_a'])).toEqual(['m_a'])
   })
 
-  test('返回顺序与解融合同源，都是字典序', () => {
+  test('返回顺序与解融合同源，都是字典序', async () => {
     const candidates = [
       { id: 'm_z', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
       { id: 'm_a', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
@@ -345,7 +348,7 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
 })
 
 describe('RFC-353 T6 — fusion 适配器不再直写 memories', () => {
-  test('fusion 仓库里对 memories 的写入为 0', () => {
+  test('fusion 仓库里对 memories 的写入为 0', async () => {
     // AC-4 的机器判据（写侧）。读仍然有——`repairProvenance` 要读 `skill_versions` 才能
     // 发现孤儿 fusion 行、`loadSkillAccess` 要读 `skills` 做授权——那部分按 owner 转交登记，
     // 不在本刀。写侧必须归零：跨聚合**写**才是 design §638 给 KE 的禁止清单第一条。

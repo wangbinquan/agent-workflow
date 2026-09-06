@@ -66,7 +66,7 @@ function importsSharedFencing(text: string): boolean {
  */
 const NON_PRODUCERS: Readonly<Record<string, string>> = {
   'packages/backend/src/services/runner.ts':
-    '消费/校验侧：`injectedMemoryBlock?.includes(\'<aw-input \')` 是在断言注入块**确实带上了**围栏（配合 envelopeNonce 长度判断），不是在产出围栏。真正的产出走 memoryInject 的共享内核路径。',
+    "消费/校验侧：`injectedMemoryBlock?.includes('<aw-input ')` 是在断言注入块**确实带上了**围栏（配合 envelopeNonce 长度判断），不是在产出围栏。真正的产出走 memoryInject 的共享内核路径。",
 }
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -168,9 +168,9 @@ describe('RFC-317 T40 自变异 —— 判据的三条边界', () => {
       '只匹配符号名的话，一个什么都不做的同名假货就能让判据变绿——而「就地再造一个' +
         '同名的、更弱的实现」正是 CC-02 的形态本身',
     ).toBe(false)
-    expect(
-      importsSharedFencing(`import { fenceUntrusted } from '@agent-workflow/shared'\n`),
-    ).toBe(true)
+    expect(importsSharedFencing(`import { fenceUntrusted } from '@agent-workflow/shared'\n`)).toBe(
+      true,
+    )
   })
 
   test('`<workflow-output` 刻意不在标记集里（它是解析侧的词，会淹没违规集）', () => {

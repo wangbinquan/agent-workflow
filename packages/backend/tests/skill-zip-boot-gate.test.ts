@@ -224,7 +224,7 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     ).toBe(true)
   })
 
-  test('the pre-fix bare-insert path is gone from the importer source', () => {
+  test('the pre-fix bare-insert path is gone from the importer source', async () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -256,7 +256,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     resetSkillBootVerifyForTest()
   })
 
-  test('husk (no files, no versions) is deleted; healthy legacy is promoted; reserving is untouched', () => {
+  test('husk (no files, no versions) is deleted; healthy legacy is promoted; reserving is untouched', async () => {
     // ① husk: what the pre-fix zip failure path left behind — row without files.
     insertBareRow(h.db, 'husk')
     // ② healthy legacy: pre-RFC-101 skill — row + live files, no version rows.
@@ -267,7 +267,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     // ③ reserving: an in-flight create's row — the sweep must never touch it.
     insertBareRow(h.db, 'mid-create', { reservationState: 'reserving' })
 
-    const r = backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
+    const r = await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
     expect(r.husksRemoved).toBe(1)
     expect(r.backfilled).toBe(1)
 
@@ -284,7 +284,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     expect(reserving.versionState).toBe('legacy-unbackfilled')
   })
 
-  test('a legacy row with support files but no SKILL.md is NOT deleted (Codex P1)', () => {
+  test('a legacy row with support files but no SKILL.md is NOT deleted (Codex P1)', async () => {
     // Same DB shape as a husk, but the dir still has recoverable content —
     // e.g. a pre-RFC-101 skill whose main file was lost. Deleting it would
     // destroy the support files + the resource identity; the sweep must leave
@@ -294,7 +294,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     mkdirSync(woundedFiles, { recursive: true })
     writeFileSync(join(woundedFiles, 'reference.md'), '# still valuable', 'utf-8')
 
-    const r = backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
+    const r = await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
     expect(r.husksRemoved).toBe(0)
     expect(r.backfilled).toBe(0)
     expect(mustRow(h.db, 'wounded').versionState).toBe('legacy-unbackfilled')
@@ -303,7 +303,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
 
   test('after the sweep the freed name can be re-imported via zip (end-to-end heal)', async () => {
     insertBareRow(h.db, 'reclaim')
-    backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
+    await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
     activateBootReverifyForTest()
 
     const buf = buildZip({ 'reclaim/SKILL.md': skillMd('reclaim', 'fresh') })
@@ -343,7 +343,7 @@ describe('quarantine recovery via boot rescan', () => {
     h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
     resetSkillBootVerifyForTest()
 
-    runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
+    await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
     expect(mustRow(h.db, 'quar').versionState).toBe('snapshot-authoritative')
     expect(await getSkill(h.db, 'quar')).not.toBeNull()
   })
@@ -368,7 +368,7 @@ describe('quarantine recovery via boot rescan', () => {
       .run()
     resetSkillBootVerifyForTest()
 
-    runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
+    await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
     const row = mustRow(h.db, 'frozen')
     expect(row.versionState).toBe('quarantined')
     expect(isSkillBootVerified(id)).toBe(false) // never enters the injectable set
@@ -391,7 +391,7 @@ describe('quarantine recovery via boot rescan', () => {
     )
     resetSkillBootVerifyForTest()
 
-    runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
+    await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
     expect(mustRow(h.db, 'rot').versionState).toBe('quarantined')
     expect(await getSkill(h.db, 'rot')).toBeNull()
   })

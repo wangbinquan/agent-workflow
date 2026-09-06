@@ -17,10 +17,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { memoriesToUnfuseOnRestore } from '@/modules/knowledge-evolution/domain/skillRestore'
-import {
-  createAsyncSkillRestoreMembership,
-  createSyncSkillRestoreMembership,
-} from '@/modules/knowledge-evolution/public/participants'
+import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 
 const SRC = join(import.meta.dir, '..', 'src')
 const read = (...parts: string[]): string => readFileSync(join(SRC, ...parts), 'utf-8')
@@ -55,17 +52,7 @@ describe('RFC-353 T7 回滚判据：只此一份，且严格大于 target', () =
 })
 
 describe('RFC-353 T7 协调器：两个 provider 走同一条判据', () => {
-  test('同步版把判据算好再交给 memory 的写入面，并原样带回 id', () => {
-    const seen: unknown[] = []
-    const coordinator = createSyncSkillRestoreMembership<string>((tx, selector) => {
-      seen.push({ tx, selector })
-      return ['m_b', 'm_a']
-    })
-    const ids = coordinator.unfuseForRestore('TX', { skillId: 'skl_1', targetVersion: 2 })
-    expect(seen).toEqual([{ tx: 'TX', selector: { skillId: 'skl_1', aboveVersion: 2 } }])
-    // 顺序归 memory domain 单一裁定，协调器不再排一次。
-    expect(ids).toEqual(['m_b', 'm_a'])
-  })
+  // RFC-359 W4-D23b：同步版协调器已退役（legacy 回滚路径改吃中立事务），只剩异步这一条。
 
   test('异步版把同一个 selector 交给 memory 的 tx-bound participant', async () => {
     const seen: unknown[] = []
@@ -103,9 +90,11 @@ describe('RFC-353 T7 装配面：resource-catalog 不认识 memory，也不认�
     expect(source).not.toContain('modules/knowledge-evolution')
   })
 
+  // RFC-359 W4-D23b：legacy 回滚路径改吃中立事务后，三个 bootstrap 接的是**同一个**异步协调器
+  // ——同步那条（`createSyncSkillRestoreMembership`）随之退役。
   test.each([
-    ['cli/start.ts', ['cli', 'start.ts'], 'createSyncSkillRestoreMembership'],
-    ['server.ts', ['server.ts'], 'createSyncSkillRestoreMembership'],
+    ['cli/start.ts', ['cli', 'start.ts'], 'createAsyncSkillRestoreMembership'],
+    ['server.ts', ['server.ts'], 'createAsyncSkillRestoreMembership'],
     [
       'cli/postgresqlDaemonApplication.ts',
       ['cli', 'postgresqlDaemonApplication.ts'],

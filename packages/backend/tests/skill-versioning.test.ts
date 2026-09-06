@@ -67,19 +67,19 @@ describe('memoriesToUnfuseOnRestore', () => {
     { id: 'c', fusedIntoSkillVersion: 5 },
     { id: 'd', fusedIntoSkillVersion: null },
   ]
-  test('restoring to N un-fuses only memories fused at version > N', () => {
+  test('restoring to N un-fuses only memories fused at version > N', async () => {
     expect(memoriesToUnfuseOnRestore(fused, 3).sort()).toEqual(['c'])
     expect(memoriesToUnfuseOnRestore(fused, 1).sort()).toEqual(['a', 'b', 'c'])
     expect(memoriesToUnfuseOnRestore(fused, 5)).toEqual([])
   })
-  test('null fusedIntoSkillVersion is never un-fused', () => {
+  test('null fusedIntoSkillVersion is never un-fused', async () => {
     expect(memoriesToUnfuseOnRestore([{ id: 'd', fusedIntoSkillVersion: null }], 0)).toEqual([])
   })
 })
 
 describe('gitStyleDirDiff', () => {
   const text = (content: string): TreeEntry => ({ kind: 'text', content })
-  test('emits diff --git headers per changed file; skips identical', () => {
+  test('emits diff --git headers per changed file; skips identical', async () => {
     const a = new Map<string, TreeEntry>([
       ['SKILL.md', text('one\ntwo\n')],
       ['keep.md', text('same\n')],
@@ -99,13 +99,13 @@ describe('gitStyleDirDiff', () => {
     expect(diff).toContain('+++ /dev/null') // removed file
     expect(diff).not.toContain('keep.md') // unchanged file omitted
   })
-  test('binary changes are noted, not patched', () => {
+  test('binary changes are noted, not patched', async () => {
     const a = new Map<string, TreeEntry>([['img', { kind: 'binary', hash: 'h1' }]])
     const b = new Map<string, TreeEntry>([['img', { kind: 'binary', hash: 'h2' }]])
     const diff = gitStyleDirDiff(a, b)
     expect(diff).toContain('Binary files a/img and b/img differ')
   })
-  test('identical binary is omitted', () => {
+  test('identical binary is omitted', async () => {
     const a = new Map<string, TreeEntry>([['img', { kind: 'binary', hash: 'h1' }]])
     const b = new Map<string, TreeEntry>([['img', { kind: 'binary', hash: 'h1' }]])
     expect(gitStyleDirDiff(a, b)).toBe('')
@@ -113,7 +113,7 @@ describe('gitStyleDirDiff', () => {
 })
 
 describe('hashDir', () => {
-  test('is deterministic and content-sensitive', () => {
+  test('is deterministic and content-sensitive', async () => {
     const h = build()
     try {
       const d = join(h.fsOpts.appHome, 'x')
@@ -147,7 +147,7 @@ describe('skill versioning funnel', () => {
     })
     const skill = await getSkill(h.db, 'lint')
     expect(skill?.contentVersion).toBe(1)
-    const versions = listSkillVersions(h.db, h.fsOpts, created.id)
+    const versions = await listSkillVersions(h.db, h.fsOpts, created.id)
     expect(versions).toHaveLength(1)
     expect(versions[0]?.versionIndex).toBe(1)
     expect(versions[0]?.source).toBe('initial')
@@ -167,15 +167,15 @@ describe('skill versioning funnel', () => {
     await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'v2 body' }, 'user-1')
     const skill = await getSkill(h.db, 'lint')
     expect(skill?.contentVersion).toBe(2)
-    const versions = listSkillVersions(h.db, h.fsOpts, created.id)
+    const versions = await listSkillVersions(h.db, h.fsOpts, created.id)
     expect(versions.map((v) => v.versionIndex)).toEqual([2, 1]) // newest first
     expect(versions[0]?.source).toBe('editor')
     expect(versions[0]?.authorUserId).toBe('user-1')
     // v1 snapshot still holds the original body
-    expect(getSkillVersionContent(h.db, h.fsOpts, created.id, 1).content.bodyMd).toContain(
+    expect((await getSkillVersionContent(h.db, h.fsOpts, created.id, 1)).content.bodyMd).toContain(
       'v1 body',
     )
-    expect(getSkillVersionContent(h.db, h.fsOpts, created.id, 2).content.bodyMd).toContain(
+    expect((await getSkillVersionContent(h.db, h.fsOpts, created.id, 2)).content.bodyMd).toContain(
       'v2 body',
     )
     expect(liveSkillMd(h, created.id)).toContain('v2 body')
@@ -190,7 +190,7 @@ describe('skill versioning funnel', () => {
     })
     // re-save identical content
     await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'stable', description: 'd' }, 'u')
-    expect(listSkillVersions(h.db, h.fsOpts, created.id)).toHaveLength(1)
+    expect(await listSkillVersions(h.db, h.fsOpts, created.id)).toHaveLength(1)
     expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(1)
   })
 
@@ -203,7 +203,7 @@ describe('skill versioning funnel', () => {
     })
     await writeSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'ref content', 'u')
     expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(2)
-    const v2 = getSkillVersionContent(h.db, h.fsOpts, created.id, 2)
+    const v2 = await getSkillVersionContent(h.db, h.fsOpts, created.id, 2)
     expect(v2.files.some((f) => f.path === 'references/x.md')).toBe(true)
     // delete it
     await deleteSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'u')
@@ -225,7 +225,7 @@ describe('skill versioning funnel', () => {
       frontmatterExtra: {},
     })
     await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'alpha\nbeta' }, 'u')
-    const { diff } = diffSkillVersions(h.db, h.fsOpts, created.id, 1, 2)
+    const { diff } = await diffSkillVersions(h.db, h.fsOpts, created.id, 1, 2)
     expect(diff).toContain('diff --git a/SKILL.md b/SKILL.md')
     expect(diff).toContain('+beta')
   })
@@ -239,7 +239,7 @@ describe('skill versioning funnel', () => {
     })
     await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'changed' }, 'u')
     expect(liveSkillMd(h, created.id)).toContain('changed')
-    const { version } = restoreSkillVersion(
+    const { version } = await restoreSkillVersion(
       h.db,
       h.fsOpts,
       created.id,
@@ -267,7 +267,7 @@ describe('skill versioning funnel', () => {
     })
     let code: string | undefined
     try {
-      commitSkillVersion(h.db, h.fsOpts, created.id, () => {}, {
+      await commitSkillVersion(h.db, h.fsOpts, created.id, () => {}, {
         source: 'editor',
         authorUserId: 'u',
         expectedVersion: 99,
@@ -310,17 +310,23 @@ describe('lazy backfill + reconcile', () => {
     return id
   }
 
-  test('ensureInitialSkillVersion backfills v1 from current files on first access', () => {
+  test('ensureInitialSkillVersion backfills v1 from current files on first access', async () => {
     const id = seedLegacySkill('legacy', 'legacy body')
-    expect(listSkillVersions(h.db, h.fsOpts, id)).toHaveLength(1)
-    expect(getSkillVersionContent(h.db, h.fsOpts, id, 1).content.bodyMd).toContain('legacy body')
+    expect(await listSkillVersions(h.db, h.fsOpts, id)).toHaveLength(1)
+    expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
+      'legacy body',
+    )
   })
 
   test('a legacy skill then edited keeps legacy content as v1, edit as v2', async () => {
     const id = seedLegacySkill('legacy', 'legacy body')
     await writeSkillContent(h.db, h.fsOpts, id, { bodyMd: 'edited body' }, 'u')
-    expect(getSkillVersionContent(h.db, h.fsOpts, id, 1).content.bodyMd).toContain('legacy body')
-    expect(getSkillVersionContent(h.db, h.fsOpts, id, 2).content.bodyMd).toContain('edited body')
+    expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
+      'legacy body',
+    )
+    expect((await getSkillVersionContent(h.db, h.fsOpts, id, 2)).content.bodyMd).toContain(
+      'edited body',
+    )
   })
 
   test('reconcileSkillLiveFiles restores live files/ ONLY when it is lost entirely', async () => {
@@ -334,12 +340,12 @@ describe('lazy backfill + reconcile', () => {
     // Live present but DIFFERENT (e.g. an out-of-funnel ZIP overwrite): must NOT
     // be clobbered by the snapshot (Codex P1 — that would lose the write).
     writeFileSync(join(filesDir, 'SKILL.md'), 'EXTERNAL EDIT', 'utf-8')
-    reconcileSkillLiveFiles(h.db, h.fsOpts)
+    await reconcileSkillLiveFiles(h.db, h.fsOpts)
     expect(liveSkillMd(h, created.id)).toContain('EXTERNAL EDIT') // preserved
 
     // Live lost entirely (files/ deleted): restored from the current snapshot.
     rmSync(filesDir, { recursive: true, force: true })
-    reconcileSkillLiveFiles(h.db, h.fsOpts)
+    await reconcileSkillLiveFiles(h.db, h.fsOpts)
     expect(liveSkillMd(h, created.id)).toContain('good')
   })
 })
@@ -347,7 +353,7 @@ describe('lazy backfill + reconcile', () => {
 // --- source-text guard: SKILL.md writes funnel through commitSkillVersion ---
 
 describe('write-path single funnel (source guard)', () => {
-  test('skill.ts no longer writes SKILL.md outside commitSkillVersion', () => {
+  test('skill.ts no longer writes SKILL.md outside commitSkillVersion', async () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -365,6 +371,6 @@ describe('write-path single funnel (source guard)', () => {
     // closures handed to commitSkillVersion — never a direct write to the live
     // root's SKILL.md (which would bypass versioning).
     expect(src).not.toContain("writeFileSync(join(root, 'SKILL.md')")
-    expect(src).toContain('commitSkillVersion(')
+    expect(src).toContain('await commitSkillVersion(')
   })
 })

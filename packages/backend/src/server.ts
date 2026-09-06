@@ -419,7 +419,7 @@ import {
   composeSqliteWebhookIngressPersistence,
   type WebhookIngressPersistence,
 } from '@/modules/integration/composition/webhookIngress'
-import { createSyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
+import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
@@ -457,10 +457,7 @@ import { composeAgentActionExecution } from '@/modules/task-execution/compositio
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import {
-  composeSkillMemoryFusionParticipantFactory,
-  unfuseAboveVersionSync,
-} from '@/modules/memory/composition'
+import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
@@ -2059,8 +2056,10 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     db: effectiveDeps.db,
     appHome: Paths.root,
     // RFC-353 T7：同 `cli/start.ts`——回滚的成员关系判据归 knowledge-evolution，bootstrap 装配。
-    restoreMembership: createSyncSkillRestoreMembership((tx, selector) =>
-      unfuseAboveVersionSync(tx, selector),
+    // RFC-359 W4-D23b：legacy 回滚路径已改吃中立事务，同步那条协调器随之退役——
+    // 两个 bootstrap 从此接同一个异步协调器（PG 一直用的就是它）。
+    restoreMembership: createAsyncSkillRestoreMembership(
+      composeSkillMemoryFusionParticipantFactory(),
     ),
   })
   const workflowCatalog = composeDatabaseWorkflowCatalog({

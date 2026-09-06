@@ -24,9 +24,11 @@
 // its lock are preserved so a newer binary can recover it without lost evidence.
 
 import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import { dbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { skills } from '@/db/schema'
 import { createLogger } from '@/util/log'
 import {
@@ -48,11 +50,23 @@ const log = createLogger('skill-op-recovery')
  *  the driver's terminal tx (e.g. version-write rollforward re-INSERTing v1). */
 export interface OpRecoveryHandler {
   /** Undo the half-done work (phase < db-committed). FS-side, non-transactional. */
-  rollbackFs?: (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: DbClient) => void
+  rollbackFs?: (
+    fsOpts: SkillOpFsOptions,
+    op: SkillOperationRow,
+    db: ProviderNeutralDatabase,
+  ) => void | Promise<void>
   /** Complete the publish (phase ≥ db-committed). FS-side, non-transactional. */
-  rollForwardFs?: (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: DbClient) => void
+  rollForwardFs?: (
+    fsOpts: SkillOpFsOptions,
+    op: SkillOperationRow,
+    db: ProviderNeutralDatabase,
+  ) => void | Promise<void>
   /** Optional DB writes contributed to the terminal tx (both directions). */
-  recoverDb?: (tx: DbTxSync, op: SkillOperationRow, dir: 'rollback' | 'rollforward') => void
+  recoverDb?: (
+    tx: DatabaseTransaction,
+    op: SkillOperationRow,
+    dir: 'rollback' | 'rollforward',
+  ) => void | Promise<void>
 }
 
 // Tests deliberately pass partial registries to prove the fail-closed branch.
@@ -76,12 +90,13 @@ export interface RecoveryReport {
  * Recover all active skill operations. Returns a report (also logged). Idempotent:
  * a second run over the already-terminal state is a no-op (no active ops left).
  */
-export function recoverSkillOperations(
-  db: DbClient,
+export async function recoverSkillOperations(
+  db: ProviderNeutralDatabase,
   fsOpts: SkillOpFsOptions,
   registry: OpRecoveryRegistry,
-): RecoveryReport {
-  const active = listActiveOps(db)
+): Promise<RecoveryReport> {
+  const session = databaseSessionFor(db)
+  const active = await listActiveOps(db)
   const report: RecoveryReport = {
     total: active.length,
     rolledBack: 0,
@@ -97,7 +112,7 @@ export function recoverSkillOperations(
 
     if (dir === 'noop') {
       // An active row at a terminal phase is itself an inconsistency — retire it.
-      dbTxSync(db, (tx) => abandonOperation(tx, op.opId))
+      await session.transaction(async (tx) => await abandonOperation(tx, op.opId))
       continue
     }
 
@@ -109,7 +124,7 @@ export function recoverSkillOperations(
         kind: op.kind,
         phase: op.phase,
       })
-      quarantineSkill(db, op)
+      await quarantineSkill(db, op)
       continue
     }
 
@@ -132,19 +147,19 @@ export function recoverSkillOperations(
           `(op ${op.opId}, phase ${op.phase}); active row and lock preserved`,
       )
     }
-    fsFn?.(fsOpts, op, db)
+    await fsFn?.(fsOpts, op, db)
 
-    dbTxSync(db, (tx) => {
-      handler.recoverDb?.(tx, op, dir)
-      if (dir === 'rollback') abandonOperation(tx, op.opId)
-      else finishOperation(tx, op.opId)
+    await session.transaction(async (tx) => {
+      await handler.recoverDb?.(tx, op, dir)
+      if (dir === 'rollback') await abandonOperation(tx, op.opId)
+      else await finishOperation(tx, op.opId)
     })
     if (dir === 'rollback') report.rolledBack++
     else report.rolledForward++
   }
 
   // Locks were held through every active-op recovery; clean orphans last.
-  report.orphanLocksCleared = dbTxSync(db, (tx) => gcOrphanLocks(tx))
+  report.orphanLocksCleared = await session.transaction(async (tx) => await gcOrphanLocks(tx))
   if (report.total > 0 || report.orphanLocksCleared > 0) {
     log.info('skill operations recovered', { ...report })
   }
@@ -153,9 +168,9 @@ export function recoverSkillOperations(
 
 /** Mark a managed skill quarantined (version_state) + retire the impossible op.
  *  External skills have no snapshot authority — retire the op only. */
-function quarantineSkill(db: DbClient, op: SkillOperationRow): void {
-  dbTxSync(db, (tx) => {
-    tx.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, op.skillId)).run()
-    abandonOperation(tx, op.opId)
+async function quarantineSkill(db: ProviderNeutralDatabase, op: SkillOperationRow): Promise<void> {
+  await databaseSessionFor(db).transaction(async (tx) => {
+    await tx.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, op.skillId))
+    await abandonOperation(tx, op.opId)
   })
 }

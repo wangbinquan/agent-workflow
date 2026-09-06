@@ -50,7 +50,10 @@ function staticRoutes(): string[] {
 function focusRingSweptRoutes(): string[] {
   const source = repoFile('e2e/focus-ring-clip.spec.ts')
   const at = source.indexOf('const ROUTES = [')
-  expect(at, 'focus-ring spec 里找不到 `const ROUTES = [` ⇒ 这条守卫失去了锚点，改锚点而不是删断言').toBeGreaterThan(0)
+  expect(
+    at,
+    'focus-ring spec 里找不到 `const ROUTES = [` ⇒ 这条守卫失去了锚点，改锚点而不是删断言',
+  ).toBeGreaterThan(0)
   const block = source.slice(at)
   return [...block.slice(0, block.indexOf(']')).matchAll(/'([^']+)'/g)].map((m) => m[1]!)
 }

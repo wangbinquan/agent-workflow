@@ -37,11 +37,11 @@ describe('commitSkillVersion atomic publish', () => {
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-  test('a version commit publishes the new live tree and leaves NO op-scoped/staging siblings', () => {
+  test('a version commit publishes the new live tree and leaves NO op-scoped/staging siblings', async () => {
     const skillDir = join(appHome, 'skills', skillId)
     const filesDir = join(skillDir, 'files')
 
-    commitSkillVersion(
+    await commitSkillVersion(
       db,
       fsOpts,
       skillId,
@@ -61,7 +61,7 @@ describe('commitSkillVersion atomic publish', () => {
     expect(entries.some((e) => e.includes('.op-') || e.startsWith('.staging-'))).toBe(false)
   })
 
-  test('source uses swapInStaged, not the old non-atomic cpSync(staging → filesDir)', () => {
+  test('source uses swapInStaged, not the old non-atomic cpSync(staging → filesDir)', async () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,

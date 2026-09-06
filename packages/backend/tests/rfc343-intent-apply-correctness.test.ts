@@ -3,6 +3,7 @@
 // complete artifact oracle, corruption fail-closed, and committed roll-forward.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -152,7 +153,7 @@ describe('session apply lock identity', () => {
 })
 
 describe('versioned journal artifact codec', () => {
-  test('round-trips the complete skill-version publish oracle', () => {
+  test('round-trips the complete skill-version publish oracle', async () => {
     const artifacts: IntentJournalArtifactV1[] = [
       { kind: 'skill-version-stage', staged: stagedFixture() },
     ]
@@ -161,7 +162,7 @@ describe('versioned journal artifact codec', () => {
     expect(decodeIntentJournalArtifacts(encoded)).toEqual(artifacts)
   })
 
-  test('rejects malformed envelopes and the lossy legacy skill-version shape', () => {
+  test('rejects malformed envelopes and the lossy legacy skill-version shape', async () => {
     expect(() => decodeIntentJournalArtifacts('{not-json')).toThrow(/not valid JSON/)
     expect(() =>
       decodeIntentJournalArtifacts(
@@ -182,7 +183,7 @@ describe('versioned journal artifact codec', () => {
     ).toThrow(/legacy skill-version-stage artifact is incomplete/)
   })
 
-  test('rejects a V1 artifact when any required publish-oracle field is removed', () => {
+  test('rejects a V1 artifact when any required publish-oracle field is removed', async () => {
     const envelope = JSON.parse(
       encodeIntentJournalArtifacts([{ kind: 'skill-version-stage', staged: stagedFixture() }]),
     ) as { artifacts: Array<{ staged: Record<string, unknown> }> }
@@ -192,7 +193,7 @@ describe('versioned journal artifact codec', () => {
     )
   })
 
-  test('keeps pre-generation legacy plugin rows readable without inventing a path', () => {
+  test('keeps pre-generation legacy plugin rows readable without inventing a path', async () => {
     expect(
       decodeIntentJournalArtifacts(JSON.stringify([{ kind: 'plugin-install', pluginId: 'p1' }])),
     ).toEqual([{ kind: 'legacy-plugin-install-untracked', pluginId: 'p1' }])
@@ -239,7 +240,7 @@ describe('committed skill-version convergence', () => {
         )
       },
     )
-    const staged = stageSkillVersion(
+    const staged = await stageSkillVersion(
       db,
       { appHome },
       skill.id,
@@ -256,13 +257,14 @@ describe('committed skill-version convergence', () => {
         expectedOwnerUserId: OWNER_ID,
       },
     )
-    dbTxSync(db, (tx) =>
-      commitSkillVersionInTx(tx, staged, {
-        source: 'editor',
-        authorUserId: OWNER_ID,
-        expectedVersion: skill.contentVersion,
-        expectedOwnerUserId: OWNER_ID,
-      }),
+    await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await commitSkillVersionInTx(tx, staged, {
+          source: 'editor',
+          authorUserId: OWNER_ID,
+          expectedVersion: skill.contentVersion,
+          expectedOwnerUserId: OWNER_ID,
+        }),
     )
     const journalId = await seedJournal(
       'committed',

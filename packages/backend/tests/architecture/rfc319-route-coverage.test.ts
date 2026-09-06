@@ -95,7 +95,9 @@ describe.skipIf(JOURNAL_DIR === null)('RFC-319 R2 —— 全量跑后的逐条�
     expect(journal.files, 'journal 为空时这条对账毫无意义，必须先红').toBeGreaterThan(0)
     const hit = buildHitReport(declared, journal)
     const documentLoads = hit.unresolved
-      .filter((k) => k.startsWith('GET /') && !k.includes(' /api/') && !k.startsWith('GET /assets/'))
+      .filter(
+        (k) => k.startsWith('GET /') && !k.includes(' /api/') && !k.startsWith('GET /assets/'),
+      )
       .map((k) => k.slice(4).split('?')[0]!)
     expect(
       documentLoads.length,

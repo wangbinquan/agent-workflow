@@ -7,6 +7,11 @@
 // dependency port so infrastructure never imports the compatibility service layer in reverse.
 
 import { eq } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
@@ -264,12 +269,12 @@ export interface LegacyResourcePackageMutationAdapter {
     operations: readonly ResourcePackageMutationOperation[],
   ): void
   bindApplyTx(
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     input: ResourcePackageMutationCommitContext & {
       readonly currentAuthority: () => ResourcePackageApplyTx['currentAuthority']
     },
   ): ResourcePackageApplyTx
-  rollForwardCommitted(log: Logger): void
+  rollForwardCommitted(log: Logger): void | Promise<void>
   broadcastCommitted(): void
 }
 
@@ -409,30 +414,34 @@ export interface LegacyResourcePackageMutationDependencies {
     db: DbClient,
     stage: { readonly skillId: string; readonly opId: string; readonly skillDir: string },
   ) => void
+  // RFC-359 W4-D23b：技能版本机器迁到中立事务原语后这些面变成异步；端口签名跟着放宽。
   readonly commitSkillReadyInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     input: { readonly skillId: string; readonly opId: string },
-  ) => void
+  ) => void | Promise<void>
   readonly stageSkillVersion: (
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     options: { readonly appHome: string },
     skillId: string,
     produce: (stagingDir: string) => void,
     commit: Readonly<Record<string, unknown>>,
-  ) => LegacyStagedSkillVersion
-  readonly abortStagedSkillVersion: (db: DbClient, staged: LegacyStagedSkillVersion) => void
+  ) => Promise<LegacyStagedSkillVersion>
+  readonly abortStagedSkillVersion: (
+    db: ProviderNeutralDatabase,
+    staged: LegacyStagedSkillVersion,
+  ) => void | Promise<void>
   readonly commitSkillVersionInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     staged: LegacyStagedSkillVersion,
     commit: Readonly<Record<string, unknown>>,
-  ) => void
+  ) => void | Promise<void>
   readonly publishStagedSkillVersion: (
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     options: { readonly appHome: string },
     staged: LegacyStagedSkillVersion,
-  ) => void
+  ) => void | Promise<void>
   readonly unmarkSkillBootVerified: (skillId: string) => void
-  readonly finishOperation: (tx: DbTxSync, opId: string) => void
+  readonly finishOperation: (tx: DatabaseTransaction, opId: string) => void | Promise<void>
   readonly prepareWorkflowSave: (
     db: DbClient,
     id: string,
@@ -842,7 +851,7 @@ export function createLegacyResourcePackageMutationAdapter(
         return
       }
       if (internal.kind === 'skill-update') {
-        const staged = dependencies.stageSkillVersion(
+        const staged = await dependencies.stageSkillVersion(
           db,
           { appHome },
           internal.op.resourceId,
@@ -883,24 +892,28 @@ export function createLegacyResourcePackageMutationAdapter(
       }
     },
     bindApplyTx(tx, input) {
-      const applyPrepared = (prepared: PreparedResourcePackageMutation): void => {
+      // RFC-359 W4-D23b：技能的两个提交面已经是中立异步的，其余 `*InTx` 成员还是同步 SQLite 面。
+      // 中立句柄在 SQLite 上**就是** `DbClient`（见 `createSqliteDatabaseSession`），窄化只是把这条
+      // 已有身份说一遍；等其余成员迁完、两套 apply 引擎合一时随之消失。
+      const syncTx = tx as unknown as DbTxSync
+      const applyPrepared = async (prepared: PreparedResourcePackageMutation): Promise<void> => {
         switch (prepared.kind) {
           case 'agent-create':
-            dependencies.commitAgentCreateInTx(tx, prepared.prepared)
+            dependencies.commitAgentCreateInTx(syncTx, prepared.prepared)
             return
           case 'agent-update':
-            dependencies.commitAgentUpdateInTx(tx, prepared.prepared)
+            dependencies.commitAgentUpdateInTx(syncTx, prepared.prepared)
             return
           case 'mcp-create':
-            dependencies.commitMcpCreateInTx(tx, prepared.prepared)
+            dependencies.commitMcpCreateInTx(syncTx, prepared.prepared)
             return
           case 'mcp-update':
-            dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
+            dependencies.commitMcpUpdateInTx(syncTx, prepared.prepared)
             return
           case 'plugin-create': {
             const install = pluginInstalls.get(prepared.op.opId)
             if (install === undefined) throw new Error('plugin install result missing')
-            dependencies.commitPluginCreateInTx(tx, {
+            dependencies.commitPluginCreateInTx(syncTx, {
               id: prepared.op.resourceId,
               parsed: prepared.parsed as never,
               initialAcl: dependencies.initialPrivateResourceAcl(actor.user.id),
@@ -912,14 +925,14 @@ export function createLegacyResourcePackageMutationAdapter(
           case 'plugin-update': {
             const install = pluginInstalls.get(prepared.op.opId)
             if (install === undefined) throw new Error('plugin install result missing')
-            const captured = selectPluginRowInTx(tx, prepared.op.resourceId)
+            const captured = selectPluginRowInTx(syncTx, prepared.op.resourceId)
             const payload = prepared.captured as {
               spec: string
               options?: Record<string, unknown>
               description?: string
               enabled?: boolean
             }
-            dependencies.commitPluginPublishInTx(tx, captured, {
+            dependencies.commitPluginPublishInTx(syncTx, captured, {
               spec: payload.spec,
               optionsJson: JSON.stringify(payload.options ?? {}),
               description: payload.description ?? captured.description,
@@ -935,13 +948,16 @@ export function createLegacyResourcePackageMutationAdapter(
           case 'skill-create': {
             const stage = skillStages.get(prepared.op.opId)
             if (stage === undefined) throw new Error('skill stage missing')
-            dependencies.commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
+            await dependencies.commitSkillReadyInTx(syncTx, {
+              skillId: stage.skillId,
+              opId: stage.opId,
+            })
             return
           }
           case 'skill-update': {
             const staged = skillVersionStages.get(prepared.op.opId)
             if (staged === undefined) throw new Error('skill version stage missing')
-            dependencies.commitSkillVersionInTx(tx, staged, {
+            await dependencies.commitSkillVersionInTx(syncTx, staged, {
               source: 'import',
               authorUserId: actor.user.id,
               setDescription: skillPayload(prepared.op).description,
@@ -949,7 +965,7 @@ export function createLegacyResourcePackageMutationAdapter(
             return
           }
           case 'workflow-create': {
-            dependencies.assertRefsUsableInTx(tx, actor, [
+            dependencies.assertRefsUsableInTx(syncTx, actor, [
               {
                 type: 'agent',
                 domain: 'id',
@@ -976,7 +992,7 @@ export function createLegacyResourcePackageMutationAdapter(
             ])
             const payload = prepared.op.payload as { name: string; description: string }
             createdWorkflowRows.push(
-              dependencies.insertWorkflowInTx(tx, {
+              dependencies.insertWorkflowInTx(syncTx, {
                 scriptPrincipal: { kind: 'actor', actor },
                 id: prepared.op.resourceId,
                 name: payload.name,
@@ -990,24 +1006,26 @@ export function createLegacyResourcePackageMutationAdapter(
             return
           }
           case 'workflow-update': {
-            const result = dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
+            const result = dependencies.commitWorkflowSaveInTx(syncTx, prepared.prepared)
             if (!result.committed && result.receipt.outcome !== 'already-current') {
               throw new ConflictError('bundle-baseline-stale', 'workflow save did not commit')
             }
             return
           }
           case 'workgroup-create':
-            createdWorkgroups.push(dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared))
+            createdWorkgroups.push(
+              dependencies.commitWorkgroupCreateInTx(syncTx, prepared.prepared),
+            )
             return
           case 'workgroup-update': {
-            const result = dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
+            const result = dependencies.commitWorkgroupSaveInTx(syncTx, prepared.prepared)
             if (!result.committed && result.receipt.outcome !== 'already-current') {
               throw new ConflictError('bundle-baseline-stale', 'workgroup save did not commit')
             }
             return
           }
           case 'capability-template':
-            dependencies.commitTemplateInTx(tx, prepared.prepared)
+            dependencies.commitTemplateInTx(syncTx, prepared.prepared)
         }
       }
       const commitCapability = <K extends ResourcePackageMutationReceipt['resourceType']>(
@@ -1055,8 +1073,8 @@ export function createLegacyResourcePackageMutationAdapter(
         audit: createResourcePackageAuditInTx((_receipt) => {}),
       })
     },
-    rollForwardCommitted(log) {
-      rollForwardSkillTails(
+    async rollForwardCommitted(log) {
+      await rollForwardSkillTails(
         db,
         appHome,
         {
@@ -1086,14 +1104,14 @@ export function createLegacyResourcePackageMutationAdapter(
   }
 }
 
-export function rollForwardLegacyResourcePackageArtifacts(
+export async function rollForwardLegacyResourcePackageArtifacts(
   db: DbClient,
   appHome: string,
   artifacts: readonly ResourcePackageMutationArtifact[],
   log: Logger,
   dependencies: LegacyResourcePackageMutationDependencies,
-): void {
-  rollForwardSkillTails(
+): Promise<void> {
+  await rollForwardSkillTails(
     db,
     appHome,
     {
@@ -1109,17 +1127,17 @@ export function rollForwardLegacyResourcePackageArtifacts(
   )
 }
 
-export function compensateLegacyResourcePackageArtifact(
+export async function compensateLegacyResourcePackageArtifact(
   db: DbClient,
   artifact: ResourcePackageMutationArtifact,
   dependencies: LegacyResourcePackageMutationDependencies,
-): void {
+): Promise<void> {
   switch (artifact.kind) {
     case 'skill-stage':
-      dependencies.compensateManagedSkillStage(db, artifact)
+      await dependencies.compensateManagedSkillStage(db, artifact)
       return
     case 'skill-version-stage':
-      dependencies.abortStagedSkillVersion(db, artifact.staged)
+      await dependencies.abortStagedSkillVersion(db, artifact.staged)
       return
     case 'plugin-install':
       rmSync(artifact.generationDir, { recursive: true, force: true })
@@ -1181,7 +1199,7 @@ function selectPluginRowInTx(tx: DbTxSync, id: string): typeof plugins.$inferSel
   return row
 }
 
-function rollForwardSkillTails(
+async function rollForwardSkillTails(
   db: DbClient,
   appHome: string,
   state: {
@@ -1190,18 +1208,20 @@ function rollForwardSkillTails(
   },
   log: Logger,
   dependencies: LegacyResourcePackageMutationDependencies,
-): void {
+): Promise<void> {
   const pendingSkillVersions: LegacyStagedSkillVersion[] = []
   for (const staged of state.skillVersionStages) {
     if (staged.opId === null) {
       pendingSkillVersions.push(staged)
       continue
     }
-    const operation = db
-      .select({ active: skillOperations.active, phase: skillOperations.phase })
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, staged.opId))
-      .get()
+    const operation = (
+      await db
+        .select({ active: skillOperations.active, phase: skillOperations.phase })
+        .from(skillOperations)
+        .where(eq(skillOperations.opId, staged.opId))
+        .limit(1)
+    )[0]
     if (operation?.active === 1) {
       pendingSkillVersions.push(staged)
       continue
@@ -1220,7 +1240,7 @@ function rollForwardSkillTails(
   }
   for (const staged of pendingSkillVersions) {
     try {
-      dependencies.publishStagedSkillVersion(db, { appHome }, staged)
+      await dependencies.publishStagedSkillVersion(db, { appHome }, staged)
     } catch (error) {
       log.warn('bundle-skill-publish-replayed-or-failed', {
         skillId: staged.skillId,
@@ -1230,7 +1250,9 @@ function rollForwardSkillTails(
   }
   for (const stage of state.skillStages) {
     try {
-      dbTxSync(db, (tx) => dependencies.finishOperation(tx, stage.opId))
+      await databaseSessionFor(db).transaction(
+        async (tx) => await dependencies.finishOperation(tx, stage.opId),
+      )
     } catch (error) {
       log.warn('bundle-skill-finish-replayed-or-failed', {
         skillId: stage.skillId,

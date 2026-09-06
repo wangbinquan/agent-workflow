@@ -210,7 +210,7 @@ const FIXTURES: readonly Fixture[] = [
     source:
       "const files = readdirSync('/src')\n" +
       "test('x', () => {\n" +
-      "  const hits = files.map((f) => readFileSync(f))\n" +
+      '  const hits = files.map((f) => readFileSync(f))\n' +
       "  const filtered = hits.filter((t) => t.includes('const x = 1'))\n" +
       '  expect(filtered).toEqual([])\n' +
       '})\n',
@@ -298,10 +298,9 @@ describe('RFC-317 T21 —— 判据自变异：把 fixture 喂回同一份判据
   for (const fixture of FIXTURES) {
     test(`negativeFixtureAssertions / assertsAbsence：${fixture.name}`, () => {
       const unit = sourceUnit('probe.test.ts', fixture.source)
-      expect(
-        negativeFixtureAssertions(unit).length,
-        `${fixture.name} —— 负 fixture 条数`,
-      ).toBe(fixture.fixtures)
+      expect(negativeFixtureAssertions(unit).length, `${fixture.name} —— 负 fixture 条数`).toBe(
+        fixture.fixtures,
+      )
       expect(assertsAbsence(unit), `${fixture.name} —— 是否断言「不存在」`).toBe(fixture.absence)
     })
   }
