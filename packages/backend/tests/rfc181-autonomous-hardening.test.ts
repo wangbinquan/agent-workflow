@@ -51,8 +51,18 @@ import {
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
+import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
+import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+
+// RFC-359 W4-D19c-tail：转移表改指生产那份（与合一前逐字相同）。
+function canTransitionAssignment(
+  from: WorkgroupAssignmentStatus,
+  to: WorkgroupAssignmentStatus,
+): boolean {
+  return WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS[from].includes(to)
+}
+
 import {
-  canTransitionAssignment,
   dismissOpenClarifyParksForAutonomous,
   isTaskClarifySuppressed,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'

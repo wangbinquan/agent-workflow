@@ -13,6 +13,9 @@ import { tasks, workflows, workgroupAssignments, workgroupMemberCursors } from '
 import {
   advanceMemberCursor,
   casAssignmentStatus,
+  // RFC-359 W4-D19c-tail 待收：`casAssignmentStatus` 这条写面还只有 legacy 一份，
+  // 它抛的具名错误跟着它留在这里，随该写面归位一并改指。
+  IllegalWorkgroupAssignmentTransition,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
 import {
   CLARIFY_FORMAT_EXAMPLE,
@@ -38,12 +41,8 @@ import {
   renderMessagesBlock,
   renderRosterBlock,
 } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
-import {
-  assertAssignmentTransition,
-  canTransitionAssignment,
-  IllegalWorkgroupAssignmentTransition,
-  WORKGROUP_ASSIGNMENT_TRANSITIONS,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
+import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
+import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
@@ -51,6 +50,26 @@ import {
   deriveWakeSet,
 } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
+
+// RFC-359 W4-D19c-tail：转移表改指生产那份（`WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS`，与合一前
+// 的表逐字相同）。谓词与断言器在中立侧是表上的内联检查（`workgroupTurnsOperations.ts` 的
+// `assertAssignmentTransition`，越界抛 `illegal workgroup assignment transition <from> -> <to>`），
+// 这里按同一条规则就地表达，判据不变。
+const WORKGROUP_ASSIGNMENT_TRANSITIONS = WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS
+function canTransitionAssignment(
+  from: WorkgroupAssignmentStatus,
+  to: WorkgroupAssignmentStatus,
+): boolean {
+  return WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS[from].includes(to)
+}
+function assertAssignmentTransition(
+  from: WorkgroupAssignmentStatus,
+  to: WorkgroupAssignmentStatus,
+): void {
+  if (!canTransitionAssignment(from, to)) {
+    throw new Error(`illegal workgroup assignment transition ${from} -> ${to}`)
+  }
+}
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 function deriveWake(input: WakeInput) {
@@ -180,7 +199,7 @@ describe('RFC-164 core — assignment lifecycle matrix', () => {
           expect(() => assertAssignmentTransition(from, to)).not.toThrow()
         } else {
           expect(() => assertAssignmentTransition(from, to)).toThrow(
-            IllegalWorkgroupAssignmentTransition,
+            `illegal workgroup assignment transition ${from} -> ${to}`,
           )
         }
       }
