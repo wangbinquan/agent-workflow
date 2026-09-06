@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5687,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D19c（回合引擎合一）：中立驱动接管了 legacy engine 的提示词 / 系统消息 / 重试判据，文件因此长出这些同类既有边；SQLite bootstrap 也第一次直接装配回合操作。要消掉它们只能把回合再按 provider 拆回两份，与本 RFC 目标正相反。下一次重采若不再增长即退役这条豁免。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5053,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D19c（回合引擎合一）：中立驱动接管了 legacy engine 的提示词 / 系统消息 / 重试判据，文件因此长出这些同类既有边；SQLite bootstrap 也第一次直接装配回合操作。要消掉它们只能把回合再按 provider 拆回两份，与本 RFC 目标正相反。下一次重采若不再增长即退役这条豁免。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -489,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25523,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W4-D19c（回合引擎合一）：中立驱动接管了 legacy engine 的提示词 / 系统消息 / 重试判据，文件因此长出这些同类既有边；SQLite bootstrap 也第一次直接装配回合操作。要消掉它们只能把回合再按 provider 拆回两份，与本 RFC 目标正相反。下一次重采若不再增长即退役这条豁免。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -509,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "678dcbafc52bcab281ae029c33b60617c01d8707",
-    "contentDigest": "sha256:1beda151bfc4f9b775108128fb522eef4c392ecf6ef1c5c62eb5583aa41ef6ba",
+    "currentSnapshotSha": "c2ccedc414b3174416f8434ba33ad783bb55bf26",
+    "contentDigest": "sha256:c64493dbcea2588d242d740c98689f32fa904488b39f3887f0929dcc748ce4fa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
