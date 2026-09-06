@@ -1027,12 +1027,21 @@ async function commitAndHandle(
   })
   if (!inserted.created) {
     // T83 crash matrix 抓出的恢复缺陷：链自治 effect（commit/push/mr-ensure/
-    // trigger/rerun/reply）在 dispatched 悬挂时，cells/guards 都没变 ⇒ 决策被
-    // 去重吞 ⇒ handler 永不重放 ⇒ 卡死。悬挂自治 effect 存在时照常执行
-    // handler——重放按 idempotencyKey 撞回同一行、intent digest 对拍后幂等。
+    // trigger/rerun/reply）悬挂时，cells/guards 都没变 ⇒ 决策被去重吞 ⇒ handler
+    // 永不重放 ⇒ 卡死。悬挂自治 effect 存在时照常执行 handler——重放按
+    // idempotencyKey 撞回同一行、intent digest 对拍后幂等。
+    //
+    // **`prepared` 与 `dispatched` 都算悬挂**（2026-09-07 修）：`claimDeliveryEffect` 的
+    // 预留与派发标记是**两笔事务**，中间进程死或输掉 OCC，行就停在 `prepared`。此前这里
+    // 只认 `dispatched`，于是那条 effect 永远等不到派发，mission 停在 `working`、
+    // `blockCode` 为 null、reconcile 也不抛错——`rfc310-pr3-journey` 跨 5 个 commit、
+    // 3 个 OS lane 复现 6 次的那条停顿就是它（journey 里路由的 fire-and-forget reconcile
+    // 与显式泵并发，正是这个窗口偶发的来源）。
+    // 放行 `prepared` 与放行 `dispatched` 同样安全，而且更早：什么都还没发出去，
+    // 重放走的是同一条 `claimDeliveryEffect`（撞回同一行 → digest 对拍 → 派发 → 执行）。
     const hangingSelfSettled = (await deps.store.listUnsettledEffects(mission.id)).some(
       (e) =>
-        e.state === 'dispatched' &&
+        (e.state === 'dispatched' || e.state === 'prepared') &&
         (DELIVERY_EFFECT_KINDS.has(e.effectKind) ||
           PIPELINE_EFFECT_KINDS.has(e.effectKind) ||
           MR_CARE_EFFECT_KINDS.has(e.effectKind)),

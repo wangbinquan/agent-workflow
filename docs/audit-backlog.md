@@ -4022,6 +4022,17 @@ mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次�
 （`external three-file bundle …` 与 `direct body-only …`），都是整 90s 墙钟耗尽。重跑该分片即绿——
 再次印证是间歇竞态而非代码回归（该 commit 只删了零消费者的 legacy 工作组引擎，与本模块无交集）。
 
+> **✅ 已定位并修复（2026-09-07，见 `missionReconciler.ts` 的 `hangingSelfSettled`）。**
+> 下面那条「一条具体嫌疑」**证实了**：`claimDeliveryEffect` 的预留与派发标记是**两笔事务**，
+> 中间进程死或输掉 OCC，行就停在 `prepared`；而逃生门只认 `dispatched`，于是决策被去重、
+> handler 不跑、那条 effect 永远等不到派发。journey 测试里路由的 fire-and-forget reconcile
+> 与显式泵**并发**，正是这个窗口偶发的来源——这解释了为什么它只在负载高的 CI 上间歇红、
+> 本机单跑 5/5 全绿。修复是让逃生门同时认 `prepared`（放行它比放行 `dispatched` 更早也更安全：
+> 什么都还没发出去，重放走同一条 `claimDeliveryEffect`，撞回同一行、digest 对拍后派发）。
+> 回归锁：`rfc310-pr7b-crash-matrix.test.ts` 的「commit prepared（决策已在、尚未 dispatched）
+> → 下一轮不许被去重吞」——用一次性错误注入精确构造那个后态，先红后绿。
+> 下面的历史记录保留，作为「同一形态跨多少 commit / lane 复现过」的证据链。
+
 **第五次实撞（2026-09-07，`e02e9edbe` ubuntu 分片 2/4）**：`direct body-only …` 一条，90s 墙钟耗尽，
 形态逐字相同。该 commit 只改了一条源码锁的指向（RFC-284 委托锁改指活着的 mcpRuntimeTestTransitions），
 与本模块零交集；其父 commit `b29c3ffac`（RFC-359 W4-D23c 技能目录合一）同样与 mission / automation

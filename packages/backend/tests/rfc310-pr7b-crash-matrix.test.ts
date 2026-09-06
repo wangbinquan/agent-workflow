@@ -298,6 +298,64 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
     expect(ensures).toHaveLength(1)
   })
 
+  // 悬挂 effect 的**第二个**窗口：`prepared`（已预留、markEffectDispatched 之前就死）。
+  //
+  // 由来：`rfc310-pr3-journey` 的 mission stall 在 2026-09-06/07 跨 5 个 commit、3 个 OS lane
+  // 红了 6 次（docs/audit-backlog.md 有完整签名），形态永远是 status 停在 `working`、
+  // `blockCode` 为 null、reconcile 不抛错、把**任何**预算耗光。根因在 `commitAndHandle` 的
+  // 去重逃生门只认 `state === 'dispatched'`，而 `listUnsettledEffects` 返回的是
+  // `prepared ∪ dispatched`：一条停在 `prepared` 的自治 effect 同时满足①被 projectGuards 的
+  // filter 排除、不改 guards；②不改 cells；③不满足 `dispatched` ⇒ decisionInputDigest 不变
+  // ⇒ 决策被去重 ⇒ handleDecision 不跑 ⇒ 那条 effect 永远等不到派发。
+  //
+  // 这个窗口在生产里由「预留与派发是**两笔事务**、中间进程死或输掉 OCC」打开——journey 测试
+  // 里路由的 fire-and-forget reconcile 与显式泵并发，正是它偶发的来源。这里用一次性错误注入
+  // 精确构造那个持久化后态（决策行已在 + effect 停在 prepared），不靠卡时序。
+  test('commit prepared（决策已在、尚未 dispatched）→ 下一轮不许被去重吞', async () => {
+    const { fx, policyId } = await fixtureWithNeverPolicy()
+    const { missionId } = await seedDeliveredMission(fx, policyId)
+    const commits: unknown[] = []
+    const pushes: unknown[] = []
+    const ensures: unknown[] = []
+    const ports = {
+      attemptContext: createAttemptContextStore(fx.evidence),
+      candidateDelivery: goodDelivery(commits, pushes),
+      repoRemote: { resolve: () => ({ remoteUrl: '/tmp/remote.git', defaultBranch: 'main' }) },
+      mrEffects: goodMr(ensures),
+    }
+
+    // 第一轮：markEffectDispatched 抛一次 —— 预留已提交、派发标记没提交，进程就此中断。
+    const crashDeps = fx.deps(ports)
+    let dispatchFaultArmed = true
+    const realStore = crashDeps.store
+    const faultingStore: typeof realStore = {
+      ...realStore,
+      markEffectDispatched: async (id: string, now: number) => {
+        if (dispatchFaultArmed) {
+          dispatchFaultArmed = false
+          throw new Error('simulated crash between prepare and dispatch')
+        }
+        return await realStore.markEffectDispatched(id, now)
+      },
+    }
+    await expect(
+      runMissionReconcile({ ...crashDeps, store: faultingStore }, missionId),
+    ).rejects.toThrow('simulated crash')
+
+    const hanging = await fx.store.listUnsettledEffects(missionId)
+    expect(hanging).toHaveLength(1)
+    expect(hanging[0]).toMatchObject({ effectKind: 'candidate-commit', state: 'prepared' })
+
+    // 第二轮：cells/guards 一个没变 ⇒ decisionInputDigest 不变 ⇒ 决策撞回同一行。
+    // 逃生门若只认 dispatched，这一轮就是 `deduped`、effect 原地不动、mission 永远停在
+    // working —— 那正是线上那条停顿。修复后必须重放并把它推进掉。
+    const restarted = fx.deps(ports)
+    const r1 = await runMissionReconcile(restarted, missionId)
+    expect(r1).not.toMatchObject({ kind: 'deduped' })
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
+    expect(commits).toHaveLength(1)
+  })
+
   test('mr-ensure confirmed → crash before claim/cells → restart adopts the same MR (no duplicate)', async () => {
     const { fx, policyId } = await fixtureWithNeverPolicy()
     const { missionId } = await seedDeliveredMission(fx, policyId)
