@@ -22,7 +22,6 @@ import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
-import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
@@ -195,7 +194,6 @@ function settleShape(settled: {
 
 async function prepareOpenOperation(input: {
   db: ReturnType<typeof createInMemoryDb>
-  store: SqliteHumanGateOperationStore
   taskId: string
 }) {
   const askingNodeRunId = `${input.taskId}-asking`
@@ -263,8 +261,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
     })
     const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
-    const operations = new SqliteHumanGateOperationStore()
-    const opening = await prepareOpenOperation({ db, store: operations, taskId })
+    const opening = await prepareOpenOperation({ db, taskId })
     const prepared = opening.prepared
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
       prepared,
@@ -336,8 +333,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
     })
     const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
-    const operations = new SqliteHumanGateOperationStore()
-    const opening = await prepareOpenOperation({ db, store: operations, taskId })
+    const opening = await prepareOpenOperation({ db, taskId })
     const prepared = opening.prepared
     db.run(sql`
       CREATE TRIGGER rfc333_fail_task_park

@@ -1,22 +1,15 @@
-// SQLite-only transaction participant retained below infrastructure.  The
-// application-facing port is Promise based and never exposes this scope.
+// human-gate 操作日志的共享形状（租约常量 / 工件声明与快照 / begin 的回答）。
+//
+// RFC-359 W4-D26：此前这里还声明着一份 `DbTxSync` 版的 `HumanGateOperationTransactionStore`
+// 接口，唯一实现 `SqliteHumanGateOperationStore` 已随手工提问写面合一而退役；事务内日志的
+// 唯一契约现在是 `humanGateOperationJournal.ts` 的 `HumanGateOperationJournal`（中立 + 异步）。
 
-import type { DbTxSync } from '@/db/txSync'
-import type { CanonicalHumanGateRequest } from '../domain/canonicalGateRequest'
 import type {
   HumanGateArtifactState,
   HumanGateOperationSnapshot,
 } from '../domain/humanGateOperation'
 
 export const DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS = 30_000
-
-export interface BeginHumanGateOperationTxInput {
-  readonly tx: DbTxSync
-  readonly operationId: string
-  readonly request: CanonicalHumanGateRequest
-  readonly idempotencyKey: string
-  readonly now: number
-}
 
 export type BegunHumanGateOperation = Readonly<{
   operation: HumanGateOperationSnapshot
@@ -37,89 +30,4 @@ export interface HumanGateArtifactSnapshot extends HumanGateArtifactDeclaration 
   readonly state: HumanGateArtifactState
   readonly receiptJson: string | null
   readonly updatedAt: number
-}
-
-export interface HumanGateOperationTransactionStore {
-  beginTx(input: BeginHumanGateOperationTxInput): BegunHumanGateOperation
-  findByIdempotencyTx(input: {
-    readonly tx: DbTxSync
-    readonly taskId: string
-    readonly gateKind: CanonicalHumanGateRequest['gateKind']
-    readonly operationKind: CanonicalHumanGateRequest['operationKind']
-    readonly idempotencyKey: string
-  }): HumanGateOperationSnapshot | null
-  latestGateRevisionTx(input: {
-    readonly tx: DbTxSync
-    readonly gateKind: CanonicalHumanGateRequest['gateKind']
-    readonly gateRef: string
-  }): number
-  getTx(tx: DbTxSync, operationId: string): HumanGateOperationSnapshot | null
-  listArtifactsTx(tx: DbTxSync, operationId: string): readonly HumanGateArtifactSnapshot[]
-  claimRecoveryBatchTx(input: {
-    readonly tx: DbTxSync
-    readonly now: number
-    readonly leaseMs: number
-    readonly limit: number
-  }): readonly HumanGateOperationSnapshot[]
-  renewRecoveryClaimTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-    readonly now: number
-    readonly leaseMs: number
-  }): HumanGateOperationSnapshot
-  markPreparedTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-    readonly manifestJson: string
-    readonly now: number
-  }): HumanGateOperationSnapshot
-  commitTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-    readonly receiptJson: string
-    readonly now: number
-  }): HumanGateOperationSnapshot
-  completeTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-    readonly now: number
-  }): HumanGateOperationSnapshot
-  markCleanupPendingTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-    readonly now: number
-  }): HumanGateOperationSnapshot
-  deleteCleanupArtifactsTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-  }): void
-  completeCleanupTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly expectedClaimEpoch: number
-    readonly failureJson: string
-    readonly now: number
-  }): HumanGateOperationSnapshot
-  declareArtifactsTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly artifacts: readonly HumanGateArtifactDeclaration[]
-    readonly now: number
-  }): void
-  transitionArtifactTx(input: {
-    readonly tx: DbTxSync
-    readonly operationId: string
-    readonly artifactKey: string
-    readonly from: HumanGateArtifactState
-    readonly to: HumanGateArtifactState
-    readonly receiptJson?: string | null
-    readonly expectedClaimEpoch?: number
-    readonly now: number
-  }): void
 }

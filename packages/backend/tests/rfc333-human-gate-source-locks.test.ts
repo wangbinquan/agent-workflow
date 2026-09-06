@@ -275,12 +275,13 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(createCalls.filter((candidate) => candidate.name === 'dbTxSync')).toHaveLength(0)
     expect(create).not.toContain('insert(taskQuestions)')
 
+    // RFC-359 W4-D26：写面只剩一份中立实现，记账走中立 journal（不再各写一套）。
     const creation = read(
-      'packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/manualQuestionOpenWriter.ts',
     )
-    expect(creation).toContain('this.operations.beginTx({')
+    expect(creation).toContain('this.journal.beginTx({')
     expect(creation).toContain('tx.insert(taskQuestions).values(question).run()')
-    expect(creation).toContain('this.operations.markPreparedTx({')
+    expect(creation).toContain('this.journal.markPreparedTx({')
 
     const engine = read(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
@@ -291,10 +292,11 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(engine).toContain("reason: 'active-clarify-released-before-review'")
     expect(engine).toContain('task review outcome yielded to a durable manual question')
 
-    const operationStore = read(
-      'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOperationStore.ts',
+    // 「有意等待任务 owner 的 manual-question 操作不被恢复认领」这条判据现在只在中立 journal 里。
+    const journal = read(
+      'packages/backend/src/modules/collaboration/infrastructure/humanGateOperationJournal.ts',
     )
-    expect(operationStore).toContain(
+    expect(journal).toContain(
       "ne(collaborationGateOperations.operationKind, 'manual-question-open')",
     )
   })

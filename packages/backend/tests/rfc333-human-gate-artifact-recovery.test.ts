@@ -16,7 +16,7 @@ import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from '@/modules/collaboration/appli
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import { FsHumanGateArtifactStore } from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { MIGRATIONS } from './migration-freeze'
@@ -66,30 +66,30 @@ function openRequest(manifestDigest = 'source-v1'): CanonicalHumanGateRequest {
   }
 }
 
-function prepareReviewOperation(input: {
+async function prepareReviewOperation(input: {
   db: ReturnType<typeof createInMemoryDb>
-  operations: SqliteHumanGateOperationStore
+  operations: DatabaseHumanGateOperationJournal
   artifacts: FsHumanGateArtifactStore
   operationId: string
   idempotencyKey: string
   body: string
   finalPath?: string
-}): PlannedReviewArtifact {
+}): Promise<PlannedReviewArtifact> {
   const plan = input.artifacts.planReviewArtifact({
     operationId: input.operationId,
     artifactKey: 'doc:0001',
     finalPath: input.finalPath ?? 'runs/task-333/review/node-a/answer/v1-item-0001.md',
     body: input.body,
   })
-  dbTxSync(input.db, (tx) => {
-    input.operations.beginTx({
+  await databaseSessionFor(input.db).transaction(async (tx) => {
+    await input.operations.beginTx({
       tx,
       operationId: input.operationId,
       request: openRequest(),
       idempotencyKey: input.idempotencyKey,
       now: NOW,
     })
-    input.operations.declareArtifactsTx({
+    await input.operations.declareArtifactsTx({
       tx,
       operationId: input.operationId,
       artifacts: [plan],
@@ -97,8 +97,8 @@ function prepareReviewOperation(input: {
     })
   })
   const receiptJson = input.artifacts.stageReviewArtifact(plan, input.body)
-  dbTxSync(input.db, (tx) => {
-    input.operations.transitionArtifactTx({
+  await databaseSessionFor(input.db).transaction(async (tx) => {
+    await input.operations.transitionArtifactTx({
       tx,
       operationId: input.operationId,
       artifactKey: plan.artifactKey,
@@ -107,7 +107,7 @@ function prepareReviewOperation(input: {
       receiptJson,
       now: NOW + 2,
     })
-    input.operations.markPreparedTx({
+    await input.operations.markPreparedTx({
       tx,
       operationId: input.operationId,
       expectedClaimEpoch: 1,
@@ -122,13 +122,13 @@ function prepareReviewOperation(input: {
   return plan
 }
 
-function commitPrepared(input: {
+async function commitPrepared(input: {
   db: ReturnType<typeof createInMemoryDb>
-  operations: SqliteHumanGateOperationStore
+  operations: DatabaseHumanGateOperationJournal
   operationId: string
-}): void {
-  dbTxSync(input.db, (tx) => {
-    input.operations.commitTx({
+}): Promise<void> {
+  await databaseSessionFor(input.db).transaction(async (tx) => {
+    await input.operations.commitTx({
       tx,
       operationId: input.operationId,
       expectedClaimEpoch: 1,
@@ -143,10 +143,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
-    const operations = new SqliteHumanGateOperationStore()
+    const operations = new DatabaseHumanGateOperationJournal()
     const artifacts = new FsHumanGateArtifactStore(appHome)
     const body = '# reviewed\n\ncomplete body\n'
-    const plan = prepareReviewOperation({
+    const plan = await prepareReviewOperation({
       db,
       operations,
       artifacts,
@@ -154,7 +154,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       idempotencyKey: 'open-committed',
       body,
     })
-    commitPrepared({ db, operations, operationId: 'operation-committed' })
+    await commitPrepared({ db, operations, operationId: 'operation-committed' })
 
     expect(existsSync(absolute(appHome, plan.finalPath))).toBe(false)
     expect(await new DatabaseCommittedReviewArtifactReader(db, appHome).read(plan.finalPath)).toBe(
@@ -200,10 +200,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
-    const operations = new SqliteHumanGateOperationStore()
+    const operations = new DatabaseHumanGateOperationJournal()
     const realArtifacts = new FsHumanGateArtifactStore(appHome)
     const body = '# retryable\n'
-    const plan = prepareReviewOperation({
+    const plan = await prepareReviewOperation({
       db,
       operations,
       artifacts: realArtifacts,
@@ -211,7 +211,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       idempotencyKey: 'open-retry',
       body,
     })
-    commitPrepared({ db, operations, operationId: 'operation-retry' })
+    await commitPrepared({ db, operations, operationId: 'operation-retry' })
 
     let failFinalize = true
     const faultingArtifacts: HumanGateArtifactStore = {
@@ -263,9 +263,9 @@ describe('RFC-333 T4 review artifact recovery', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
-    const operations = new SqliteHumanGateOperationStore()
+    const operations = new DatabaseHumanGateOperationJournal()
     const artifacts = new FsHumanGateArtifactStore(appHome)
-    const plan = prepareReviewOperation({
+    const plan = await prepareReviewOperation({
       db,
       operations,
       artifacts,
@@ -305,27 +305,27 @@ describe('RFC-333 T4 review artifact recovery', () => {
         .all(),
     ).toEqual([])
 
-    expect(
-      dbTxSync(db, (tx) =>
-        operations.beginTx({
+    const reopened = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await operations.beginTx({
           tx,
           operationId: 'operation-new-source',
           request: openRequest('source-v2'),
           idempotencyKey: 'open-new-source',
           now: NOW + 100_000,
         }),
-      ).replayed,
-    ).toBe(false)
+    )
+    expect(reopened.replayed).toBe(false)
   })
 
   test('retains incomplete preparing work with a fenced recovery epoch', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
-    const operations = new SqliteHumanGateOperationStore()
+    const operations = new DatabaseHumanGateOperationJournal()
     const artifacts = new FsHumanGateArtifactStore(appHome)
-    dbTxSync(db, (tx) => {
-      operations.beginTx({
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await operations.beginTx({
         tx,
         operationId: 'operation-preparing',
         request: openRequest(),

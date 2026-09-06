@@ -3,7 +3,6 @@
 
 import {
   GitWorkspaceRollbackSnapshotInspector,
-  SqliteHumanGateOperationStore,
   canonicalHumanGateRequestHash,
   canonicalHumanGateValueJson,
   createCollaborationCommandContext as createCollaborationCommandContextInternal,
@@ -46,9 +45,6 @@ export const humanGateComposition = {
   decodeReviewDecisionReceipt,
   encodeReviewDecisionManifest,
   encodeReviewDecisionReceipt,
-  createHumanGateOperationStore() {
-    return new SqliteHumanGateOperationStore()
-  },
   prepareWorkspaceRollbackPlan(
     input: Omit<Parameters<typeof prepareWorkspaceRollbackPlanInternal>[0], 'inspector'>,
   ) {
@@ -69,9 +65,6 @@ export const humanGateComposition = {
   },
 }
 
-export type HumanGateOperationStoreBridge = ReturnType<
-  typeof humanGateComposition.createHumanGateOperationStore
->
 export type ClarifyDecisionManifestBridge = ReturnType<
   typeof humanGateComposition.decodeClarifyDecisionManifest
 >

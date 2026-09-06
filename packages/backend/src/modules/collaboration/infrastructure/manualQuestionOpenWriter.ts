@@ -1,13 +1,22 @@
-// RFC-333 T7 — persist the manual question and its durable park obligation together.
+// RFC-359 W4-D26 —— 手工提问的开启写面：一份实现，两个引擎共用。
+//
+// 合一前 `sqliteManualQuestionOpenWriter.ts` 走 `SqliteHumanGateOperationStore` 的
+// `beginTx` / `markPreparedTx` 记账，`postgresqlManualQuestionOpenWriter.ts` 把这两步**内联重写**
+// 成裸 INSERT + UPDATE：不查幂等键回放、claimEpoch 恒写 1、也不比 requestHash。正典取 SQLite 的
+// 记账语义，而它早有中立副本 `DatabaseHumanGateOperationJournal`——直接用，PG 侧顺带补齐这三条。
+//
+// 事务用中立 `serializable`：SQLite 是 BEGIN IMMEDIATE（本来就全库独占），PG 抬到 SERIALIZABLE 并按
+// 40001 重放，与合一前两侧各自的隔离级别逐字相同。
 
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskQuestions, tasks } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import type { HumanGateOperationTransactionStore } from './humanGateOperationTransactionStore'
 import type {
   CreateManualQuestionOpenInput,
   CreatedManualQuestionOpen,
@@ -23,13 +32,13 @@ import {
   type ManualQuestionOpenManifest,
   type ManualQuestionProjection,
 } from '../domain/manualQuestionOpen'
-import { appendHumanGateOpenedCommittedEventTx } from './collaborationCommittedEventParticipant'
-import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { appendHumanGateOpenedCommittedEvent } from './collaborationCommittedEvents'
+import type { HumanGateOperationJournal } from './humanGateOperationJournal'
 
-export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter {
+export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWriter {
   constructor(
-    private readonly db: DbClient,
-    private readonly operations: HumanGateOperationTransactionStore,
+    private readonly db: ProviderNeutralDatabase,
+    private readonly journal: HumanGateOperationJournal,
   ) {}
 
   async create(input: CreateManualQuestionOpenInput): Promise<CreatedManualQuestionOpen> {
@@ -37,15 +46,14 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
     const operationId = ulid(at)
     const questionId = ulid(at)
     const originNodeRunId = ulid(at)
-    const created = dbTxSync(this.db, (tx) => {
-      const task = tx
-        .select({
-          status: tasks.status,
-          lifecycleEventRevision: tasks.lifecycleEventRevision,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, input.taskId))
-        .get()
+    const created = await databaseSessionFor(this.db).serializable(async (tx) => {
+      const task = (
+        await tx
+          .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })
+          .from(tasks)
+          .where(eq(tasks.id, input.taskId))
+          .limit(1)
+      )[0]
       if (task === undefined) {
         throw new ConflictError('task-not-found', `task ${input.taskId} not found`)
       }
@@ -101,10 +109,7 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
         kind: 'manual-question-open',
         gateRef,
         sourceSnapshotDigest,
-        nodeProjectionDigest: manualQuestionProjectionDigest({
-          sourceSnapshotDigest,
-          question,
-        }),
+        nodeProjectionDigest: manualQuestionProjectionDigest({ sourceSnapshotDigest, question }),
         committedEventRef: `manual-question-open:${operationId}`,
         question,
       }
@@ -124,7 +129,7 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
           targetNodeId: input.targetNodeId,
         },
       }
-      const begun = this.operations.beginTx({
+      const begun = await this.journal.beginTx({
         tx,
         operationId,
         request,
@@ -132,15 +137,15 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
         now: at,
       })
       if (begun.replayed) throw new Error('fresh manual-question identity unexpectedly replayed')
-      tx.insert(taskQuestions).values(question).run()
-      const operation = this.operations.markPreparedTx({
+      await tx.insert(taskQuestions).values(question).run()
+      const operation = await this.journal.markPreparedTx({
         tx,
         operationId,
         expectedClaimEpoch: begun.operation.claimEpoch,
         manifestJson,
         now: at,
       })
-      const eventRef = appendHumanGateOpenedCommittedEventTx(tx, {
+      const eventRef = await appendHumanGateOpenedCommittedEvent(tx, {
         family: 'questions',
         gate: {
           taskId: input.taskId,

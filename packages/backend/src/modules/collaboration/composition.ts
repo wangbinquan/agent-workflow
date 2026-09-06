@@ -78,4 +78,3 @@ export {
   encodeReviewDecisionReceipt,
 } from './domain/reviewDecision'
 export { GitWorkspaceRollbackSnapshotInspector } from './infrastructure/gitWorkspaceRollbackSnapshotInspector'
-export { SqliteHumanGateOperationStore } from './infrastructure/sqliteHumanGateOperationStore'

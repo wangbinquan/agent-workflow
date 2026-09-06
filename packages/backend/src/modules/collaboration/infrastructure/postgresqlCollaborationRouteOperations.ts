@@ -83,7 +83,8 @@ import {
 } from '../domain/collaborationCommittedEvent'
 import { buildReviewAnchorDocument, resolveReviewAnchor } from '../domain/reviewAnchor'
 import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
-import { PostgresqlManualQuestionOpenWriter } from './postgresqlManualQuestionOpenWriter'
+import { DatabaseManualQuestionOpenWriter } from './manualQuestionOpenWriter'
+import { DatabaseHumanGateOperationJournal } from './humanGateOperationJournal'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
@@ -1432,7 +1433,7 @@ async function createPostgresqlManualQuestion(
     )
   }
   await assertPostgresqlManualTarget(db, input.taskId, input.targetNodeId)
-  const created = await new PostgresqlManualQuestionOpenWriter(db).create({
+  const created = await new DatabaseManualQuestionOpenWriter(db, new DatabaseHumanGateOperationJournal()).create({
     taskId: input.taskId,
     title,
     body,
