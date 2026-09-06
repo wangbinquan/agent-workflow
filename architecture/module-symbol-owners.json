@@ -6,7 +6,7 @@
     "moduleFiles": 1231,
     "productionFiles": 2618,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25435
+    "symbolsIncludingFileRoots": 25438
   },
   "entries": [
     {
@@ -83096,6 +83096,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#decideAssignmentReconcile",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "decideAssignmentReconcile",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#decideWorkgroupOutcome",
       "removeAfterWave": null,
       "status": "current-module",
@@ -83348,6 +83360,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#isKilledClarifyContinuation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isKilledClarifyContinuation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#isLeaderWrapUpContinuation",
       "removeAfterWave": null,
       "status": "current-module",
@@ -83568,6 +83592,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "RejectedTurn",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#reviveKilledClarifyContinuations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "reviveKilledClarifyContinuations",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -142387,7 +142423,7 @@
       "file": "packages/backend/src/modules/task-execution/public/commands.ts",
       "id": "owner:packages/backend/src/modules/task-execution/public/commands.ts#WorkgroupHostLedgerMintOperation",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:eacf73b6bbd2eca54f6c86664ed97c171d808d55a40127962790368782f9b69b",
+      "signatureDigest": "sha256:3d792f7928e09c3c5cece92edcb241c756f3148e4f2a49beef452f3d164d1f2e",
       "status": "current-module",
       "symbol": "WorkgroupHostLedgerMintOperation",
       "targetContext": "task-execution",
@@ -178156,18 +178192,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/nodeRunMint.ts",
-      "id": "owner:packages/backend/src/services/nodeRunMint.ts#CLARIFY_RERUN_CAUSES",
-      "removeAfterWave": "W4",
-      "status": "legacy-target",
-      "symbol": "CLARIFY_RERUN_CAUSES",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/nodeRunMint.ts",
       "id": "owner:packages/backend/src/services/nodeRunMint.ts#configBackedBinary",
@@ -178235,18 +178259,6 @@
       "status": "legacy-target",
       "symbol": "generateEnvelopeNonce",
       "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/nodeRunMint.ts",
-      "id": "owner:packages/backend/src/services/nodeRunMint.ts#isClarifyRerunCause",
-      "removeAfterWave": "W4",
-      "status": "legacy-target",
-      "symbol": "isClarifyRerunCause",
-      "targetContext": "collaboration",
       "targetLayer": "application"
     },
     {
@@ -300414,6 +300426,18 @@
       "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/task-questions.ts",
+      "id": "owner:packages/shared/src/task-questions.ts#CLARIFY_RERUN_CAUSES",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CLARIFY_RERUN_CAUSES",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/task-questions.ts",
       "id": "owner:packages/shared/src/task-questions.ts#deriveQuestionPhase",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -300454,6 +300478,18 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "HandlerRunView",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/task-questions.ts",
+      "id": "owner:packages/shared/src/task-questions.ts#isClarifyRerunCause",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "isClarifyRerunCause",
       "targetContext": "shared-contracts",
       "targetLayer": "contracts"
     },
@@ -305921,5 +305957,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:615baf5ebdcd724eb936102d82f4b5cf88f08194e5b832b7e3c5405ce80a82fb"
+  "sourceDigest": "sha256:76d48f9eaa3b489251db6fbf1c086203239828a015b42e4246298bff1b5befe8"
 }

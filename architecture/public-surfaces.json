@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1051,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20382,
+    "recursiveFields": 20386,
     "symbols": 981
   },
   "entries": [
@@ -140394,7 +140394,7 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 15
+        "maxUnionVariants": 17
       },
       "consumerEdgeIds": [
         "import:6c7d31a2b35f1f02dbd9"
@@ -140448,6 +140448,16 @@
           "consumerEdgeIds": [],
           "fieldPath": "cause.$variant:4",
           "type": "'wg-gate'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "cause.$variant:5",
+          "type": "'clarify-answer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "cause.$variant:6",
+          "type": "'cross-clarify-questioner-rerun'"
         },
         {
           "consumerEdgeIds": [
@@ -140545,7 +140555,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:eacf73b6bbd2eca54f6c86664ed97c171d808d55a40127962790368782f9b69b",
+      "signatureDigest": "sha256:3d792f7928e09c3c5cece92edcb241c756f3148e4f2a49beef452f3d164d1f2e",
       "status": "target-context-current-surface",
       "symbol": "WorkgroupHostLedgerMintOperation",
       "transaction": "own-tx",
@@ -140622,8 +140632,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 17
+        "maxTransitiveLeafFields": 26,
+        "maxUnionVariants": 19
       },
       "consumerEdgeIds": [
         "import:4c99bf7067d55ba52585"
@@ -140677,6 +140687,16 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.cause.$variant:4",
           "type": "'wg-gate'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.cause.$variant:5",
+          "type": "'clarify-answer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.cause.$variant:6",
+          "type": "'cross-clarify-questioner-rerun'"
         },
         {
           "consumerEdgeIds": [
@@ -143488,7 +143508,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c5ca3d9502b7d45f2227"
+          ],
           "fieldPath": "$method:debug.$parameter:fields.revived",
           "type": "number"
         },
@@ -143555,7 +143577,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c5ca3d9502b7d45f2227"
+          ],
           "fieldPath": "$method:error.$parameter:fields.revived",
           "type": "number"
         },
@@ -143622,7 +143646,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c5ca3d9502b7d45f2227"
+          ],
           "fieldPath": "$method:info.$parameter:fields.revived",
           "type": "number"
         },
@@ -143689,7 +143715,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c5ca3d9502b7d45f2227"
+          ],
           "fieldPath": "$method:warn.$parameter:fields.revived",
           "type": "number"
         },
@@ -143751,7 +143779,9 @@
           "signatureDigest": "sha256:c8f24721aac13fd9fe2d46778deefdfc9f955fd559a5d4909ddd5c65ce33b4a6"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c5ca3d9502b7d45f2227"
+          ],
           "name": "info",
           "signatureDigest": "sha256:b5028ce496945eb51307c3b498ee0d431e280a0c42d69fda14a7a706afcdfdd5"
         },
@@ -143984,7 +144014,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:774880dc2a0f2647cc6a"
+          ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:debug.$parameter:fields.revived",
           "type": "number"
         },
@@ -144053,7 +144085,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:774880dc2a0f2647cc6a"
+          ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:error.$parameter:fields.revived",
           "type": "number"
         },
@@ -144122,7 +144156,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:774880dc2a0f2647cc6a"
+          ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:info.$parameter:fields.revived",
           "type": "number"
         },
@@ -144191,7 +144227,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:774880dc2a0f2647cc6a"
+          ],
           "fieldPath": "$method:drive.$parameter:input.log.$method:warn.$parameter:fields.revived",
           "type": "number"
         },
@@ -144354,7 +144392,9 @@
           "signatureDigest": "sha256:70dbc26c855af006f3030c0359a16967983f1879cb63a41b0deed9b142b7f1f1"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:774880dc2a0f2647cc6a"
+          ],
           "name": "info",
           "signatureDigest": "sha256:b5028ce496945eb51307c3b498ee0d431e280a0c42d69fda14a7a706afcdfdd5"
         },
@@ -161373,7 +161413,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:615baf5ebdcd724eb936102d82f4b5cf88f08194e5b832b7e3c5405ce80a82fb",
+  "sourceDigest": "sha256:76d48f9eaa3b489251db6fbf1c086203239828a015b42e4246298bff1b5befe8",
   "targetContexts": [
     "collaboration",
     "development-automation",

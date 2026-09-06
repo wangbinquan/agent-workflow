@@ -2792,7 +2792,6 @@
         "import:e917571bc230c6555d85"
       ],
       "exportedSymbols": [
-        "CLARIFY_RERUN_CAUSES",
         "FrozenRuntime",
         "MintInheritSource",
         "MintNodeRunArgs",
@@ -2806,7 +2805,6 @@
         "frozenRuntimeOfSession",
         "frozenRuntimeOfSessionWith",
         "generateEnvelopeNonce",
-        "isClarifyRerunCause",
         "loadRunEnvelopeNonce",
         "mintNodeRun",
         "mintNodeRunTx",
@@ -6799,5 +6797,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:615baf5ebdcd724eb936102d82f4b5cf88f08194e5b832b7e3c5405ce80a82fb"
+  "sourceDigest": "sha256:76d48f9eaa3b489251db6fbf1c086203239828a015b42e4246298bff1b5befe8"
 }

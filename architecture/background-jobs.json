@@ -509,9 +509,9 @@
     {
       "callee": "registerMint",
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:555",
+      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:556",
       "kind": "register-call",
-      "line": 555,
+      "line": 556,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#executeHostTurn",
       "removeAfterWave": "W6/W9",
       "symbol": "executeHostTurn",
@@ -5454,9 +5454,9 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 362,
+    "entries": 363,
     "executionLocal": 51,
-    "longRunning": 82,
+    "longRunning": 83,
     "managed": 11,
     "periodic": 218
   },
@@ -7346,6 +7346,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#renderWgClarifyBlock",
       "phase": "unknown",
       "symbol": "renderWgClarifyBlock",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#decideAssignmentReconcile",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#decideAssignmentReconcile",
+      "phase": "unknown",
+      "symbol": "decideAssignmentReconcile",
       "targetContext": "resource-catalog"
     },
     {
@@ -13451,5 +13472,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:615baf5ebdcd724eb936102d82f4b5cf88f08194e5b832b7e3c5405ce80a82fb"
+  "sourceDigest": "sha256:76d48f9eaa3b489251db6fbf1c086203239828a015b42e4246298bff1b5befe8"
 }
