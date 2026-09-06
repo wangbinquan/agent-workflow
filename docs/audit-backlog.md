@@ -4039,6 +4039,17 @@ mission 到达谓词）在 2026-09-06 一天里以**同一形态**红了三次�
 > `uploadPlacementRef`、`currentActionRunId` 置位与清位、`awaiting-information` ×2），
 > 全部改走 `recordOnMission`（修订漂移重读重试；epoch 冲突不重试——那是 cancel/handover
 > 有意让在途 continuation 过期）。
+> **第二刀把同一族扫干净（同轮）**：reconcile 路径上同形态的「读一行 → 无校验 OCC 写回」共
+> **13 处**，全部收进 `recordOnMission` / `occPatchWithRetry`——除最初那 7 处外还有
+> `blockMission`（丢了 mission 就不会被标 blocked）、`missionDeliveryChain` 的 `occPatch` /
+> `tryStatus`（`deliverySourceBranch` / `uploadPublicationRef` / `mrClaimId` / 发布状态）、
+> `agentActionOrchestrator` 的 `persistActionCells`（`requirementBundleRef`，与
+> `repositoryFactsRef` 同等致命）/ `blockMissionDirect` / `clearCurrentAction`、
+> `actionInvalidation`、以及 fence 的 handoff-pending 收口。
+> **仍留未改的只有命令处理器**（`missionHandover` / `confirmNoChange` / `reopenMission` /
+> `cutover`）：它们由 HTTP 路由驱动、结果直接回给调用方，丢补丁的表现不是静默停顿；
+> 是否一并收进重试留作独立一项，别和 reconcile 路径混谈。
+>
 > 回归锁：`rfc310-pr2-reconciler.test.ts` 的「并发挤掉的事实写回必须重试落库」，
 > 用「第一次 occUpdate 必冲突」精确构造竞态，先红（`repositoryFactsRef` 为 null）后绿。
 > 验证：复现负载下连跑 24 次全绿（此前 1/6 必红）。

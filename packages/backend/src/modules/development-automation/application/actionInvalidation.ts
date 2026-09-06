@@ -11,6 +11,7 @@
 // 幂等：无 in-flight attempt 时是 no-op（返回 false）。
 
 import type { MissionRow, MissionPersistence } from './ports/missionStore'
+import { recordOnMission } from './missionReconciler'
 import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
 export interface InvalidateActionDeps {
@@ -59,9 +60,8 @@ export async function invalidateInFlightAction(
     }),
     now,
   })
-  const fresh = await deps.store.getMission(mission.id)
-  if (fresh !== null && fresh.currentActionRunId === actionRunId) {
-    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
-  }
+  await recordOnMission(deps, mission.id, (fresh) =>
+    fresh.currentActionRunId === actionRunId ? { currentActionRunId: null } : null,
+  )
   return true
 }

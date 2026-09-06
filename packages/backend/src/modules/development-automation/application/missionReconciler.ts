@@ -567,10 +567,10 @@ async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<Re
     return { kind: 'fence-settled', result: 'canceled' }
   }
   // handoff-pending
-  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+  await recordOnMission(deps, fresh.id, () => ({
     automationMode: 'tracking-only',
     transitionFence: 'none',
-  })
+  }))
   return { kind: 'fence-settled', result: 'tracking-only' }
 }
 
@@ -1125,8 +1125,8 @@ export async function stepFailureDetail(
  * epoch 冲突不重试：epoch+1 是 cancel/handover/resume 有意让在途 continuation 过期，
  * 这时候把旧产物记回去才是错的。
  */
-async function recordOnMission(
-  deps: ReconcileDeps,
+export async function recordOnMission(
+  deps: { readonly store: Pick<MissionPersistence, 'getMission' | 'occUpdate'> },
   missionId: string,
   build: (fresh: MissionRow) => Parameters<MissionPersistence['occUpdate']>[3] | null,
   attempts = 8,
@@ -1149,19 +1149,15 @@ async function blockMission(
   code: string,
   detail: string | null,
 ): Promise<void> {
-  const mission = await deps.store.getMission(missionId)
-  if (mission === null) return
-  const verdict = checkMissionTransition({
-    from: mission.status,
-    to: 'blocked',
-    fence: mission.transitionFence,
-  })
-  if (!verdict.ok) return
-  await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
-    status: 'blocked',
-    blockCode: code,
-    blockDetail: detail,
-    currentActionRunId: null,
+  await recordOnMission(deps, missionId, (mission) => {
+    const verdict = checkMissionTransition({
+      from: mission.status,
+      to: 'blocked',
+      fence: mission.transitionFence,
+    })
+    return verdict.ok
+      ? { status: 'blocked', blockCode: code, blockDetail: detail, currentActionRunId: null }
+      : null
   })
 }
 

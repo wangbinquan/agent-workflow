@@ -50,7 +50,7 @@ import { parseAgentFrame } from '../engine/envelope/parseAgentFrame'
 import { runCapabilitySemanticValidator } from '../engine/envelope/semanticValidators'
 import { publishConflictRepair } from './conflictRepairDelivery'
 import type { MissionRow, MissionPersistence } from './ports/missionStore'
-import type { ReconcileDeps } from './missionReconciler'
+import { recordOnMission, type ReconcileDeps } from './missionReconciler'
 
 /** 预算硬上限（policy 级配置接线归 PR-5；先取保守常量并入 pre-state 冻结）。 */
 export const ATTEMPT_WORKSPACE_BUDGET = {
@@ -781,10 +781,9 @@ async function settleRunAndBlock(
 }
 
 async function clearCurrentAction(store: MissionPersistence, mission: MissionRow): Promise<void> {
-  const fresh = await store.getMission(mission.id)
-  if (fresh !== null && fresh.currentActionRunId !== null) {
-    await store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
-  }
+  await recordOnMission({ store }, mission.id, (fresh) =>
+    fresh.currentActionRunId === null ? null : { currentActionRunId: null },
+  )
 }
 
 async function blockMissionDirect(
@@ -793,20 +792,11 @@ async function blockMissionDirect(
   code: string,
   detail: string | null,
 ): Promise<void> {
-  const fresh = await deps.store.getMission(missionId)
-  if (fresh === null) return
-  if (fresh.status !== 'blocked') {
-    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-      status: 'blocked',
-      blockCode: code,
-      blockDetail: detail,
-    })
-  } else {
-    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-      blockCode: code,
-      blockDetail: detail,
-    })
-  }
+  await recordOnMission(deps, missionId, (fresh) =>
+    fresh.status === 'blocked'
+      ? { blockCode: code, blockDetail: detail }
+      : { status: 'blocked', blockCode: code, blockDetail: detail },
+  )
 }
 
 async function persistActionCells(
@@ -833,9 +823,7 @@ async function persistActionCells(
     digest: canonicalDigest(merged as unknown as CanonicalJsonValue),
     now,
   })
-  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-    requirementBundleRef: snapshotId,
-  })
+  await recordOnMission(deps, fresh.id, () => ({ requirementBundleRef: snapshotId }))
 }
 
 /**

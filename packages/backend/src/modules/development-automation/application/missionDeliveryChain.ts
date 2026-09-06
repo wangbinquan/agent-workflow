@@ -285,14 +285,39 @@ export async function claimDeliveryEffect(
   return { disposition: 'execute', effectId: effect.id }
 }
 
+/**
+ * 「把刚产出的东西记到 mission 行上」的 OCC 补丁：修订漂移就**重读重试**
+ * （与 `missionReconciler.recordOnMission` 同一条判据，见那里的长注释）。
+ *
+ * 2026-09-07：此前这两个 helper 都是「读一行后直接 `occUpdate`、不看返回值」——并发写手
+ * 在两步之间 bump 一次 revision，补丁就静默丢失。丢的是 `deliverySourceBranch` /
+ * `uploadPublicationRef` / `mrClaimId` / 状态这类**决策依据**，丢掉之后 mission 看起来
+ * 仍处在「还没做那件事」，而决策去重键一个字节没变 ⇒ 下一轮被去重 ⇒ handler 再也不跑。
+ * epoch 冲突不重试：那是 cancel/handover 有意让在途工作过期。
+ */
+async function occPatchWithRetry(
+  deps: DeliveryChainDeps,
+  missionId: string,
+  build: (fresh: MissionRow) => Parameters<MissionPersistence['occUpdate']>[3] | null,
+  attempts = 8,
+): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const fresh = await deps.store.getMission(missionId)
+    if (fresh === null) return
+    const patch = build(fresh)
+    if (patch === null) return
+    const result = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, patch)
+    if (result.ok) return
+    if (result.code !== 'revision-conflict') return
+  }
+}
+
 async function occPatch(
   deps: DeliveryChainDeps,
   missionId: string,
   patch: Parameters<MissionPersistence['occUpdate']>[3],
 ): Promise<void> {
-  const fresh = await deps.store.getMission(missionId)
-  if (fresh === null) return
-  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, patch)
+  await occPatchWithRetry(deps, missionId, () => patch)
 }
 
 async function tryStatus(
@@ -300,15 +325,15 @@ async function tryStatus(
   missionId: string,
   to: 'publishing' | 'watching',
 ): Promise<void> {
-  const fresh = await deps.store.getMission(missionId)
-  if (fresh === null || fresh.status === to) return
-  const verdict = checkMissionTransition({
-    from: fresh.status,
-    to,
-    fence: fresh.transitionFence,
+  await occPatchWithRetry(deps, missionId, (fresh) => {
+    if (fresh.status === to) return null
+    const verdict = checkMissionTransition({
+      from: fresh.status,
+      to,
+      fence: fresh.transitionFence,
+    })
+    return verdict.ok ? { status: to } : null
   })
-  if (!verdict.ok) return
-  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { status: to })
 }
 
 // ----------------------------------------------------------------- arm 1/3：
