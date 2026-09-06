@@ -716,6 +716,16 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   `executeTurn` / `casAssignmentStatus`…），要逐个判定「中立驱动里的对应判据是哪一个、要不要导出、
   断言怎么改写」。`state` / `launch` / `constants` / `askerKey` 四个文件仍有真实生产消费者，不在退役范围内。
 
+  **D22 ✅（数字员工岗位模版目录合一）**：此前 SQLite 是套在 legacy Agent 写面（`legacy/agent.ts`）上的
+  59 行薄壳、PostgreSQL 是 390 行原生实现。正典取 PG 那份——它本来就是**按 builtin 模版语义**写的
+  （系统 owner + builtin 双条件定位、`visibility:'public'` + `builtin:true` 落库、改名与更新过
+  updatedAt + aclRevision 双 OCC），而 SQLite 那条借道普通 Agent 写面、带着一整套面向用户输入的
+  ACL / 闭包校验——模版定义是代码自有、由 daemon 铸造的，那套校验既不适用也拦不住什么。合一顺带把
+  `legacy/agent.ts` 从这条链上摘掉。provider 差异只剩驱动错误的形状，经能力矩阵 `uniqueViolationTarget`
+  映射回闭合错误合同。两个 provider 文件删除；rfc345 边界锁与 rfc347 委派臂账本改指中立实现。
+  `rfc359-w4-d22-adapters.test.ts` 两引擎各跑建 builtin 的三列落值 / 重复 id 与同名冲突 / 双 OCC 围栏 /
+  非系统 builtin 的行按 id 被占用拒绝。
+
   **剩余 provider 对的形态普查（决定后续排序）**：把 resource-catalog 里剩下的成对文件按
   「SQLite 是不是 legacy 薄壳」分两类——
   - **对称对（机械可合，无行为风险）**：`PackageResourceRows`（230 / 220 行，无 legacy import）、
