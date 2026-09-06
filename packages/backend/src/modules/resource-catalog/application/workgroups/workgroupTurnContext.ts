@@ -315,7 +315,7 @@ export {
   renderWgProtocolBlock,
   wgHostRolePorts,
   type WorkgroupProtocolRole,
-} from '../../../application/workgroups/workgroupProtocol'
+} from './workgroupProtocol'
 
 export function renderMessagesBlock(
   config: WorkgroupRuntimeConfig,

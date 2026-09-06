@@ -1,23 +1,22 @@
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { WorkgroupHostLedgerParticipantInTx } from '../public/commands'
-import { createPostgresqlWorkgroupHostLedgerParticipantInTx } from '../infrastructure/postgresqlWorkgroupHostLedgerParticipant'
-import type { PostgresqlTaskExecutionTransaction } from '../infrastructure/postgresqlTaskLifecycleTransaction'
+import { createWorkgroupHostLedgerParticipantInTx } from '../infrastructure/workgroupHostLedgerParticipant'
 import type { WorkgroupTaskRoomClarifyParticipantFactory } from './workgroupTaskRoomTask'
 
-export interface PostgresqlWorkgroupHostLedgerParticipantFactory {
-  inTransaction(transaction: PostgresqlTaskExecutionTransaction): WorkgroupHostLedgerParticipantInTx
+export interface WorkgroupHostLedgerParticipantFactory {
+  inTransaction(transaction: DatabaseTransaction): WorkgroupHostLedgerParticipantInTx
 }
 
 /**
- * PostgreSQL cross-context composition seam.  The Resource Catalog owner
- * reserves the transaction and receives only TaskExecution's closed host
- * ledger participant for that exact transaction.
+ * 跨上下文装配接缝（RFC-359 W4-D19c 起两个 provider 共用）。Resource Catalog 那一侧预留事务，
+ * 只拿到 TaskExecution 为**那一笔**事务闭合的宿主账本参与者。
  */
-export function composePostgresqlWorkgroupHostLedgerParticipantFactory(input: {
+export function composeWorkgroupHostLedgerParticipantFactory(input: {
   readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
-}): PostgresqlWorkgroupHostLedgerParticipantFactory {
+}): WorkgroupHostLedgerParticipantFactory {
   return Object.freeze({
-    inTransaction: (transaction: PostgresqlTaskExecutionTransaction) =>
-      createPostgresqlWorkgroupHostLedgerParticipantInTx(
+    inTransaction: (transaction: DatabaseTransaction) =>
+      createWorkgroupHostLedgerParticipantInTx(
         transaction,
         input.collaboration.inTransaction(transaction),
       ),

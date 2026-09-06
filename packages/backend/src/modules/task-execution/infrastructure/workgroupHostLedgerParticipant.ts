@@ -9,7 +9,7 @@ import type {
   WorkgroupTaskRoomClarifyParticipantInTx,
 } from '../public/commands'
 import { WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID } from '../public/commands'
-import type { PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 
 class WorkgroupHostLedgerConflict extends Error {
@@ -20,7 +20,7 @@ class WorkgroupHostLedgerConflict extends Error {
 }
 
 async function loadSnapshot(
-  transaction: PostgresqlTaskExecutionTransaction,
+  transaction: DatabaseTransaction,
   clarify: WorkgroupTaskRoomClarifyParticipantInTx,
   taskId: string,
 ): Promise<WorkgroupHostLedgerSnapshot | null> {
@@ -75,7 +75,7 @@ async function loadSnapshot(
 }
 
 async function applyOperation(
-  transaction: PostgresqlTaskExecutionTransaction,
+  transaction: DatabaseTransaction,
   taskId: string,
   operation: WorkgroupHostLedgerOperation,
 ): Promise<WorkgroupHostLedgerMintReceipt | null> {
@@ -130,8 +130,8 @@ async function applyOperation(
 }
 
 /** Bind TaskExecution host-ledger mechanics to one caller-reserved PG transaction. */
-export function createPostgresqlWorkgroupHostLedgerParticipantInTx(
-  transaction: PostgresqlTaskExecutionTransaction,
+export function createWorkgroupHostLedgerParticipantInTx(
+  transaction: DatabaseTransaction,
   clarify: WorkgroupTaskRoomClarifyParticipantInTx,
 ): WorkgroupHostLedgerParticipantInTx {
   return Object.freeze({

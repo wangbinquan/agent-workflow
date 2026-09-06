@@ -175,8 +175,10 @@ describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', ()
       }
     }
     walk('packages/backend/src')
+    // RFC-359 W4-D19c：定义点搬到中立回合驱动（两个 provider 共用）；legacy 那份只剩一行 re-export，
+    // 不再包含这段字面量，所以它从清单里消失是**收敛**，不是漏扫。
     expect(offenders).toEqual([
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+      'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
     ])
   })
 })
@@ -327,9 +329,9 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
       'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
       'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts',
-      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
     ])
   })
 })

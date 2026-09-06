@@ -21,7 +21,7 @@ import type { RuntimeRegistryOperations } from '@/services/runtimeRegistry'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
-import { createSqliteWorkgroupTurnsOperations } from './sqliteWorkgroupTurnsOperations'
+import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
 import { createSqliteChildExecutionLaunchOperations } from './sqliteChildExecutionLaunchOperations'
 
 /**
@@ -35,6 +35,8 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly runtimeRegistry: RuntimeRegistryOperations
+  /** RFC-359 W4-D19c：工作组回合操作，由 bootstrap 用 `composeWorkgroupTurnsOperations` 装好交进来。 */
+  readonly workgroupTurns: WorkgroupTurnsOperations
   readonly dynamicWorkflow?: Readonly<{
     readonly persistence: DynamicWorkflowPersistence
     readonly validationContext: DynamicWorkflowValidationContextSource
@@ -66,7 +68,10 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
           runtimeRegistry: input.runtimeRegistry,
           taskDagCollaboration: createTaskDagCollaborationOperations(input.db),
           collaborationRuntime: input.collaborationRuntime,
-          workgroupTurns: createSqliteWorkgroupTurnsOperations(input.db),
+          // RFC-359 W4-D19c：回合走两个 provider 共用的中立驱动（此前 SQLite 走 legacy engine）。
+          // 装配由 bootstrap 交进来——infrastructure 自己 import composition 会把 bootstrap 的
+          // 职责下沉一层（RFC-328 的「装配唯一入口」守卫盯的就是这条）。
+          workgroupTurns: input.workgroupTurns,
           childLaunch: createSqliteChildExecutionLaunchOperations(input.db),
           ...(input.dynamicWorkflow === undefined
             ? {}

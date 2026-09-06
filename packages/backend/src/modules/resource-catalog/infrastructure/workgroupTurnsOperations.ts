@@ -19,7 +19,8 @@ import type {
   WorkgroupHostLedgerParticipantInTx,
   WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS,
   WORKGROUP_TURN_GATE_TRANSITIONS,
@@ -37,23 +38,21 @@ import {
 } from '../application/workgroups/workgroupTurnsDriver'
 import { agentFromPersistenceRow } from './agentPersistence'
 import {
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
 const ROSTER_CARD_PROMPT_BUDGET = 240
 const ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET = 2_400
 const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
 
-export interface PostgresqlWorkgroupHostLedgerParticipantFactory {
-  inTransaction(
-    transaction: PostgresqlResourceCatalogTransaction,
-  ): WorkgroupHostLedgerParticipantInTx
+export interface WorkgroupHostLedgerParticipantFactory {
+  inTransaction(transaction: ResourceCatalogTransaction): WorkgroupHostLedgerParticipantInTx
 }
 
-export interface PostgresqlWorkgroupTurnsDependencies {
-  readonly db: PostgresqlDatabaseClient
-  readonly hostLedgerFactory: PostgresqlWorkgroupHostLedgerParticipantFactory
+export interface WorkgroupTurnsDependencies {
+  readonly db: ProviderNeutralDatabase
+  readonly hostLedgerFactory: WorkgroupHostLedgerParticipantFactory
   /** RFC-359 T7e：反问许可判定（RFC-207 §3.7.2 唯一判定点）——RC 自有端口，bootstrap 用 collaboration 的实现接上。 */
   readonly clarifyAskGate: WorkgroupClarifyAllowedPort
 }
@@ -137,7 +136,7 @@ function assignmentFromRow(row: typeof workgroupAssignments.$inferSelect): Workg
 }
 
 async function loadSnapshot(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   hostLedger: WorkgroupHostLedgerParticipantInTx,
   taskId: string,
 ): Promise<WorkgroupTurnsSnapshot | null> {
@@ -250,7 +249,7 @@ async function loadSnapshot(
 }
 
 async function insertMessage(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   taskId: string,
   message: WorkgroupTurnMessageDraft,
 ): Promise<void> {
@@ -322,11 +321,18 @@ function isHostLedgerOperation(
   return operation.kind === 'mint-host-run' || operation.kind === 'stamp-host-run-round'
 }
 
+/**
+ * 应用一条目录侧的账本操作；返回被**幂等跳过**的操作键（目前只有标题去重撞车的建卡），其余返回 null。
+ * 跳过要报给调用方：合一前 SQLite 在写事务里当场往房间贴一条「N 条重复任务被丢弃」的系统消息，
+ * 而并发的成员回合各拿同一份快照，去重只可能在提交这一刻定论（RFC-359 W4-D19c）。
+ */
 async function applyResourceCatalogOperation(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   taskId: string,
   operation: WorkgroupTurnResourceCatalogOperation,
-): Promise<void> {
+): Promise<string | null> {
+  // 成员游标的「只前进不后退」要按方言取 GREATEST / max（能力矩阵 `greatest`）。
+  const engine = engineOf(transaction)
   const now = Date.now()
   if (operation.kind === 'ensure-task-state') {
     await transaction
@@ -342,7 +348,7 @@ async function applyResourceCatalogOperation(
       })
       .onConflictDoNothing({ target: workgroupTaskState.taskId })
       .run()
-    return
+    return null
   }
   if (operation.kind === 'seed-goal-if-empty') {
     const existing = await transaction
@@ -352,7 +358,7 @@ async function applyResourceCatalogOperation(
       .limit(1)
       .get()
     if (existing === undefined) await insertMessage(transaction, taskId, operation.message)
-    return
+    return null
   }
   if (operation.kind === 'transition-assignment') {
     assertAssignmentTransition(operation)
@@ -382,7 +388,7 @@ async function applyResourceCatalogOperation(
       .returning({ id: workgroupAssignments.id })
       .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
-    return
+    return null
   }
   if (operation.kind === 'repoint-assignment-run') {
     const changed = await transaction
@@ -398,7 +404,7 @@ async function applyResourceCatalogOperation(
       .returning({ id: workgroupAssignments.id })
       .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
-    return
+    return null
   }
   if (operation.kind === 'create-assignment') {
     if (operation.assignment.dedupKey !== null) {
@@ -414,13 +420,14 @@ async function applyResourceCatalogOperation(
         )
         .limit(1)
         .get()
-      if (occupied !== undefined) return
+      // 撞上还没取消的同名卡：这一条被丢弃，把键报给调用方去贴系统消息。
+      if (occupied !== undefined) return operation.operationKey
     }
     await transaction
       .insert(workgroupAssignments)
       .values({ ...operation.assignment, taskId })
       .run()
-    return
+    return null
   }
   if (operation.kind === 'create-message') {
     if (operation.message.kind === 'dispatch' && operation.message.assignmentId !== null) {
@@ -434,10 +441,10 @@ async function applyResourceCatalogOperation(
           ),
         )
         .get()
-      if (assignment === undefined) return
+      if (assignment === undefined) return null
     }
     await insertMessage(transaction, taskId, operation.message)
-    return
+    return null
   }
   if (operation.kind === 'advance-member-cursor') {
     await transaction
@@ -451,12 +458,15 @@ async function applyResourceCatalogOperation(
       .onConflictDoUpdate({
         target: [workgroupMemberCursors.taskId, workgroupMemberCursors.memberId],
         set: {
-          lastConsumedMessageId: sql`GREATEST(${workgroupMemberCursors.lastConsumedMessageId}, excluded.last_consumed_message_id)`,
+          lastConsumedMessageId: engine.greatest(
+            workgroupMemberCursors.lastConsumedMessageId,
+            sql`excluded.last_consumed_message_id`,
+          ),
           updatedAt: now,
         },
       })
       .run()
-    return
+    return null
   }
   if (operation.kind === 'transition-gate') {
     assertGateTransition(operation)
@@ -472,7 +482,7 @@ async function applyResourceCatalogOperation(
       .returning({ taskId: workgroupTaskState.taskId })
       .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
-    return
+    return null
   }
   if (operation.kind === 'set-pause-reason') {
     const changed = await transaction
@@ -482,7 +492,7 @@ async function applyResourceCatalogOperation(
       .returning({ taskId: workgroupTaskState.taskId })
       .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
-    return
+    return null
   }
   if (operation.kind === 'set-dynamic-workflow-state') {
     const changed = await transaction
@@ -495,7 +505,7 @@ async function applyResourceCatalogOperation(
       .returning({ taskId: workgroupTaskState.taskId })
       .all()
     if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
-    return
+    return null
   }
   const changed = await transaction
     .update(workgroupTaskState)
@@ -504,16 +514,16 @@ async function applyResourceCatalogOperation(
     .returning({ taskId: workgroupTaskState.taskId })
     .all()
   if (changed.length !== 1) throw new WorkgroupLedgerConflict(operation.operationKey)
+  return null
 }
-
-function createPostgresqlWorkgroupTurnsPersistence(
-  dependencies: PostgresqlWorkgroupTurnsDependencies,
+function createWorkgroupTurnsPersistence(
+  dependencies: WorkgroupTurnsDependencies,
 ): WorkgroupTurnsPersistencePort {
   return Object.freeze({
     clarifyAllowed: (input: WorkgroupClarifyAllowedInput) =>
       dependencies.clarifyAskGate.allowed(input),
     async load(taskId: string): Promise<WorkgroupTurnsSnapshot | null> {
-      return await runPostgresqlResourceCatalogTransaction(
+      return await runResourceCatalogTransaction(
         dependencies.db,
         async (transaction) =>
           await loadSnapshot(
@@ -527,28 +537,31 @@ function createPostgresqlWorkgroupTurnsPersistence(
       input: Parameters<WorkgroupTurnsPersistencePort['commit']>[0],
     ): Promise<WorkgroupTurnsLedgerCommitReceipt> {
       try {
-        return await runPostgresqlResourceCatalogTransaction(
-          dependencies.db,
-          async (transaction) => {
-            const hostLedger = dependencies.hostLedgerFactory.inTransaction(transaction)
-            const mintedRuns: WorkgroupTurnMintedRun[] = []
-            for (const operation of input.operations) {
-              if (isHostLedgerOperation(operation)) {
-                const receipt = await hostLedger.apply({
-                  taskId: input.taskId,
-                  operations: [operation],
-                })
-                if (!receipt.committed) {
-                  throw new WorkgroupLedgerConflict(receipt.conflictOperationKey)
-                }
-                mintedRuns.push(...receipt.mintedRuns)
-                continue
+        return await runResourceCatalogTransaction(dependencies.db, async (transaction) => {
+          const hostLedger = dependencies.hostLedgerFactory.inTransaction(transaction)
+          const mintedRuns: WorkgroupTurnMintedRun[] = []
+          const skippedOperationKeys: string[] = []
+          for (const operation of input.operations) {
+            if (isHostLedgerOperation(operation)) {
+              const receipt = await hostLedger.apply({
+                taskId: input.taskId,
+                operations: [operation],
+              })
+              if (!receipt.committed) {
+                throw new WorkgroupLedgerConflict(receipt.conflictOperationKey)
               }
-              await applyResourceCatalogOperation(transaction, input.taskId, operation)
+              mintedRuns.push(...receipt.mintedRuns)
+              continue
             }
-            return { committed: true, mintedRuns }
-          },
-        )
+            const skipped = await applyResourceCatalogOperation(
+              transaction,
+              input.taskId,
+              operation,
+            )
+            if (skipped !== null) skippedOperationKeys.push(skipped)
+          }
+          return { committed: true, mintedRuns, skippedOperationKeys }
+        })
       } catch (error) {
         if (error instanceof WorkgroupLedgerConflict) {
           return { committed: false, conflictOperationKey: error.operationKey }
@@ -560,8 +573,8 @@ function createPostgresqlWorkgroupTurnsPersistence(
 }
 
 /** Real PostgreSQL Resource Catalog owner for the TaskExecution consumer port. */
-export function createPostgresqlWorkgroupTurnsOperations(
-  dependencies: PostgresqlWorkgroupTurnsDependencies,
+export function createWorkgroupTurnsPersistenceOperations(
+  dependencies: WorkgroupTurnsDependencies,
 ): WorkgroupTurnsOperations {
-  return createWorkgroupTurnsOperations(createPostgresqlWorkgroupTurnsPersistence(dependencies))
+  return createWorkgroupTurnsOperations(createWorkgroupTurnsPersistence(dependencies))
 }

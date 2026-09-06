@@ -131,7 +131,7 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     'WorkgroupHostLedgerParticipantInTx',
     'WorkgroupTurnsOperations',
   ].map((symbol) => ({
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts',
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
     specifier: '@/modules/task-execution/public/commands',
     symbol,
     edgeKind: 'type' as const,
@@ -662,7 +662,7 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
             `,
           ),
           sourceUnit(
-            'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts',
+            'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
             `
               import type {
                 WorkgroupHostLedgerParticipantInTx,
@@ -707,7 +707,7 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
           `,
         ),
         sourceUnit(
-          'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts',
+          'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
           "import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/queries'\n",
         ),
         sourceUnit(
@@ -735,7 +735,7 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
       'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
       'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
       'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
-      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts|@/modules/task-execution/public/queries',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts|@/modules/task-execution/public/queries',
     ])
     expect(violations.flatMap((edge) => edge.importedSymbols)).toContain('TaskRecoveryOperations')
   })

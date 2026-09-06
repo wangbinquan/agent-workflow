@@ -22,6 +22,7 @@ import type {
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import { composeTestWorkgroupTurns } from './helpers/workgroupTurns'
 import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
@@ -164,6 +165,7 @@ describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
         persistence: createSqliteTaskExecutionPersistence(sqlite),
         runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(sqlite),
         runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
+        workgroupTurns: composeTestWorkgroupTurns(sqlite),
         repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
       }),
     })

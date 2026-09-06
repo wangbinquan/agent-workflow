@@ -102,7 +102,6 @@ import {
   composeWorkgroupTaskRoomActiveUsers,
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
-import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
@@ -358,6 +357,10 @@ import { composeSqliteCollaborationRouteOperations } from '@/modules/collaborati
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/sqliteTaskCatalogSources'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
@@ -1820,6 +1823,13 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       : composeTaskExecutionRuntime({
           participants: createSqliteTaskExecutionRuntimeParticipants({
             db: deps.db,
+            workgroupTurns: composeWorkgroupTurnsOperations(
+              deps.db,
+              composeWorkgroupHostLedgerParticipantFactory({
+                collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+              }),
+              createWorkgroupClarifyAskGate(deps.db),
+            ),
             memoryInjectionQueries,
             collaborationRuntime: createSqliteCollaborationRuntimeMechanics(deps.db),
             persistence: taskExecutionPersistence,

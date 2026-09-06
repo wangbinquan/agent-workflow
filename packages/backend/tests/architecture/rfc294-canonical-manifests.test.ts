@@ -379,7 +379,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/workflowLaunchInputs.ts',
       'packages/backend/src/services/workgroup/askerKey.ts',
       'packages/backend/src/services/workgroup/constants.ts',
-      'packages/backend/src/services/workgroup/engine.ts',
       'packages/backend/src/services/workgroup/launch.ts',
       'packages/backend/src/services/workgroup/state.ts',
       'packages/backend/src/services/workgroups.ts',

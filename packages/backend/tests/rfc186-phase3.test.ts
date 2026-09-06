@@ -88,10 +88,9 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'context.ts',
+        'application',
+        'workgroups',
+        'workgroupTurnContext.ts',
       ),
       'utf8',
     )

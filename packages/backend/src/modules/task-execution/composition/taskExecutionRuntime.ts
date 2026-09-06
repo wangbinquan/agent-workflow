@@ -14,8 +14,8 @@ export {
 } from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
 export { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
 export {
-  composePostgresqlWorkgroupHostLedgerParticipantFactory,
-  type PostgresqlWorkgroupHostLedgerParticipantFactory,
+  composeWorkgroupHostLedgerParticipantFactory,
+  type WorkgroupHostLedgerParticipantFactory,
 } from './workgroupHostLedger'
 export {
   composePostgresqlNodeRunLifecycleParticipantFactory,

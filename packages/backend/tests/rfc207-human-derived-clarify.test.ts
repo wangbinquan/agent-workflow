@@ -22,7 +22,7 @@ import {
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { renderWgProtocolBlock } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 import {
   decideWorkgroupOutcome,

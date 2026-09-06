@@ -61,7 +61,7 @@ import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/serv
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createUser } from '../src/services/users'
 import { nodeRuns } from '../src/db/schema'
-import type { WorkgroupHostRunResult } from '../src/services/workgroup/engine'
+import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,

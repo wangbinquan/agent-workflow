@@ -4194,3 +4194,41 @@ node_runs.status）、架构锁（`rfc217-architecture-locks` 的房间表写点
 
 **做法**：加过 `allowGrowth` 之后，下一个提交要么是带重采的下一刀，要么在推之前先跑一次
 `bun run architecture:write --snapshot-sha HEAD` 把过期条目清掉再提交；不要在两者之间插纯文档提交。
+
+### `trackedFiles` 语料的守卫：新测试在 `git add` 之前不在语料里——本地绿，提交之后才红
+
+`route-error-code-coverage.test.ts` 这类「棘轮」守卫用 `trackedFiles(<glob>)` 取语料，也就是
+**git 已跟踪**的文件。新写的测试在 `git add` 之前不在语料里，于是：
+
+- 本地跑：新测试点名的错误码**没被算作已覆盖**，「baseline 只缩不涨」满绿；
+- 提交之后 CI 跑：文件已跟踪，那些码变成已覆盖，守卫要求把它们从 baseline 里删掉 —— 红。
+
+2026-09-06 实撞（288a8f888 把 main 推红）：D19b 的双引擎房间测试点名了
+`workgroup-message-invalid` / `workgroup-task-not-found`，本地全批绿、CI 两个分片红。
+
+**做法**：一刀里如果**新增了测试文件**，跑本地批次之前先 `git add` 那几个新文件（不提交也行，
+入了 index 就进语料），再跑守卫；或者干脆把这类守卫放到 `git add` 之后再跑一遍。
+
+### 把多份源码拼起来再用一条正则找 import 块 —— 正文里的一个词就能让它误判
+
+守卫常写成「把 adapter / commands / queries 三份源码 `join('\n')`，再
+`match(/import \{[\s\S]*?\} from '@\/db\/schema'/g)` 取出 schema 导入块，断言里面没有外域表名」。
+`[\s\S]*?` 虽然是非贪婪，但它只保证「到**下一个** `} from '@/db/schema'` 为止」——拼接之后，
+**A 文件 schema 导入之后的任意一个 `import {`** 会一路吞到 **B 文件的 schema 导入**，把 A 的整段正文
+（函数体、注释）都算进「导入块」。正文里出现一次 `tasks` 这个词（哪怕只是中文注释里的
+「不得 import `tasks`」）就当场红。
+
+2026-09-06 实撞（rfc345 房间边界锁）。**做法**：逐文件取自己的块，并把跨行的 `[\s\S]` 换成
+不跨越 `}` 的 `[^}]`：
+
+    const schemaImportsOf = (src: string) =>
+      src.match(/import \{[^}]*\} from '@\/db\/schema'/gu)?.join('\n') ?? ''
+    const schemaImports = [adapter, commands, queries].map(schemaImportsOf).join('\n')
+
+### 删掉一整片实现之后，「语料下限」类守卫会红 —— 那是收敛，不是回归
+
+`expect(sites.length).toBeGreaterThanOrEqual(40)` 这类下限的用意只有一个：**别把语料抽空导致假绿**。
+删掉一片实现（2026-09-06：legacy 任务房 1749 行）会连带删掉它那几个站点，下限就撞穿了。
+
+**做法**：把下限调到新的真实值之下并在注释里写清「哪一刀、删了什么、为什么这不是回归」。
+不要为了让它绿而去恢复实现，也不要把下限删掉——下限没了，假绿的口子就回来了。

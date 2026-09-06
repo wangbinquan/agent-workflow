@@ -69,9 +69,7 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
   })
 
   test('workgroup host ledger delegates Collaboration projection on the reserved transaction', () => {
-    const adapter = read(
-      'modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts',
-    )
+    const adapter = read('modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts')
     const composition = read('modules/task-execution/composition/workgroupHostLedger.ts')
 
     expect(adapter).toContain('WorkgroupTaskRoomClarifyParticipantInTx')

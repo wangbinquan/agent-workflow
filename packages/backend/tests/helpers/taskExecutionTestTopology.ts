@@ -16,7 +16,10 @@ import { createSqliteTaskExecutionResourceBinding } from '../../src/services/exe
 import { runGit } from '../../src/util/git'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
-import { createSqliteWorkgroupTurnsOperations } from '../../src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations'
+import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/public/participants'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'
+import { composeWorkgroupHostLedgerParticipantFactory } from '../../src/modules/task-execution/composition/workgroupHostLedger'
 import { createSqliteChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations'
 import { composeSqliteDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
@@ -74,6 +77,13 @@ export function composeTaskExecutionTestRuntime(
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createSqliteCollaborationRuntimeMechanics(db),
       persistence,
+      workgroupTurns: composeWorkgroupTurnsOperations(
+        db,
+        composeWorkgroupHostLedgerParticipantFactory({
+          collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+        }),
+        createWorkgroupClarifyAskGate(db),
+      ),
       runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(db),
       runtimeRegistry: composeSqliteRuntimeRegistryOperations(db),
       dynamicWorkflow: {
@@ -201,6 +211,13 @@ export function runTaskWithRealTestTopology(
       memoryInjectionQueries,
       collaborationRuntime: createSqliteCollaborationRuntimeMechanics(options.db),
       persistence,
+      workgroupTurns: composeWorkgroupTurnsOperations(
+        options.db,
+        composeWorkgroupHostLedgerParticipantFactory({
+          collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+        }),
+        createWorkgroupClarifyAskGate(options.db),
+      ),
       runtimeSessionLeases,
       runtimeRegistry,
       dynamicWorkflow,
@@ -219,7 +236,15 @@ export function runTaskWithRealTestTopology(
         options.taskDagCollaboration ?? createTaskDagCollaborationOperations(options.db),
       collaborationRuntime:
         options.collaborationRuntime ?? createSqliteCollaborationRuntimeMechanics(options.db),
-      workgroupTurns: options.workgroupTurns ?? createSqliteWorkgroupTurnsOperations(options.db),
+      workgroupTurns:
+        options.workgroupTurns ??
+        composeWorkgroupTurnsOperations(
+          options.db,
+          composeWorkgroupHostLedgerParticipantFactory({
+            collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+          }),
+          createWorkgroupClarifyAskGate(options.db),
+        ),
       childLaunch: options.childLaunch ?? createSqliteChildExecutionLaunchOperations(options.db),
       dynamicWorkflow,
       processConcurrencyScope: options.processConcurrencyScope ?? options.db,

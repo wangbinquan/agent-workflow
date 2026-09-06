@@ -48,7 +48,7 @@ import {
 } from '@agent-workflow/shared'
 import type { EngineDbState } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/state'
 import { roundMode } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/rounds'
-import { memberDisplayName } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+import { memberDisplayName } from '@/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import { postMessage } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/messages'
 import { resolveMessageRound } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/rounds'
 

@@ -77,7 +77,7 @@ import {
 import { composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { composePostgresqlTaskExecutionResourceSnapshotFactory } from '@/modules/resource-catalog/composition/taskExecution'
-import { composePostgresqlWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
   composePostgresqlResourcePackageCatalog,
@@ -98,7 +98,7 @@ import { createPostgresqlTaskExecutionCatalogSourceFactory } from '@/modules/tas
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createPostgresqlTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePostgresqlNodeRunLifecycleParticipantFactory } from '@/modules/task-execution/composition/nodeRunLifecycle'
-import { composePostgresqlWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
+import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
   DefaultTaskDriveCoordinator,
@@ -758,9 +758,9 @@ export async function composePostgresqlDaemonApplication(
   })
   collaborationContext = boundCollaborationContext
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
-  const workgroupTurns = composePostgresqlWorkgroupTurnsOperations(
+  const workgroupTurns = composeWorkgroupTurnsOperations(
     input.db,
-    composePostgresqlWorkgroupHostLedgerParticipantFactory({
+    composeWorkgroupHostLedgerParticipantFactory({
       collaboration: workgroupClarify,
     }),
     // RFC-359 W1-T7e：反问许可（预算 / 已问次数 / stop 指令）与 SQLite 同一份判定。

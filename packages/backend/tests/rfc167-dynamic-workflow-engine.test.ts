@@ -68,7 +68,7 @@ import {
 import { createUser } from '../src/services/users'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
-import type { WorkgroupHostRunResult } from '../src/services/workgroup/engine'
+import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,

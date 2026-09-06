@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { decideAssignmentReconcile } from '../src/services/workgroup/engine'
+import { decideAssignmentReconcile } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/engine'
 
 describe('RFC-186 PR-2 — decideAssignmentReconcile', () => {
   test('interrupted before the worker run was minted → re-dispatch', () => {
@@ -78,8 +78,11 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
     )
     expect(turnsDriver).not.toContain('advanceMemberCursor(')
     // The provider-neutral ledger has one cursor operation constructor plus
-    // four exact call sites (assignment, missing-agent, message and leader).
-    expect((turnsDriver.match(/cursorOperation\(/g) ?? []).length).toBe(5)
+    // five exact call sites (assignment, missing-agent, message, leader, and —
+    // RFC-359 W4-D19c — the leader turn whose bounded clarify-forbidden retries
+    // ran out: it consumes the input and continues instead of failing the task,
+    // which is the fourth advance this test's header已经描述过、但中立驱动此前漏了的那条).
+    expect((turnsDriver.match(/cursorOperation\(/g) ?? []).length).toBe(6)
     expect(turnsDriver).toContain('const outcome = await executeHostTurn<')
     expect(turnsDriver).toContain('`leader-cursor:${outcome.runId}`')
   })

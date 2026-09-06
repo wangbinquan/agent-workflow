@@ -38,7 +38,7 @@ import {
 } from '../src/db/schema'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
-import { renderWgProtocolBlock } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
@@ -52,12 +52,14 @@ import {
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
+import type {
+  WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
+  WorkgroupTurnHostResult as WorkgroupHostRunResult,
+} from '../src/modules/task-execution/public/commands'
 import {
-  runWorkgroupEngine,
-  type WorkgroupEngineHooks,
-  type WorkgroupHostRunRequest,
-  type WorkgroupHostRunResult,
-} from '../src/services/workgroup/engine'
+  runWorkgroupTurns as runWorkgroupEngine,
+  type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
+} from './helpers/workgroupTurns'
 import {
   deriveWakeSet,
   type WakeInput,

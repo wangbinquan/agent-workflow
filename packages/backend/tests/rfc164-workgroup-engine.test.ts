@@ -57,12 +57,14 @@ import {
   WG_MEMBER_NODE_ID,
   WORKGROUP_HOST_WORKFLOW_ID,
 } from '../src/services/workgroup/launch'
+import type {
+  WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
+  WorkgroupTurnHostResult as WorkgroupHostRunResult,
+} from '../src/modules/task-execution/public/commands'
 import {
-  runWorkgroupEngine,
-  type WorkgroupEngineHooks,
-  type WorkgroupHostRunRequest,
-  type WorkgroupHostRunResult,
-} from '../src/services/workgroup/engine'
+  runWorkgroupTurns as runWorkgroupEngine,
+  type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
+} from './helpers/workgroupTurns'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createLogger } from '../src/util/log'
 

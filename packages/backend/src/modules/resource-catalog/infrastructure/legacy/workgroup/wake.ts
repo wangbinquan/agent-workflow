@@ -15,7 +15,7 @@ import {
   WG_FC_CLAIM_BATCH_LIMIT,
   WG_LEADER_IDLE_NUDGE_LIMIT,
 } from '@agent-workflow/shared'
-import { sliceMessagesAfter } from './context'
+import { sliceMessagesAfter } from '@/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 
 export interface WakeInput {
   config: WorkgroupRuntimeConfig

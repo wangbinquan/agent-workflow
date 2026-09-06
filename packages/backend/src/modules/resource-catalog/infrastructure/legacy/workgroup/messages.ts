@@ -20,10 +20,10 @@ import {
   roundMode,
   type RoundedWorkgroupMode,
 } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/rounds'
-import { memberDisplayName } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+import { memberDisplayName } from '@/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import type { WgMessageItem, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { workgroupMessages } from '@/db/schema'
-import { buildSystemMessage } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/systemMessages'
+import { buildSystemMessage } from '@/modules/resource-catalog/application/workgroups/workgroupSystemMessages'
 
 const nextMessageId = monotonicFactory()
 

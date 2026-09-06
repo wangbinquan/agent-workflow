@@ -1,21 +1,21 @@
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { WorkgroupClarifyAllowedPort } from '../application/workgroups/workgroupTurnsDriver'
 import {
-  createPostgresqlWorkgroupTurnsOperations,
-  type PostgresqlWorkgroupHostLedgerParticipantFactory,
-} from '../infrastructure/postgresqlWorkgroupTurnsOperations'
+  createWorkgroupTurnsPersistenceOperations,
+  type WorkgroupHostLedgerParticipantFactory,
+} from '../infrastructure/workgroupTurnsOperations'
 
 /**
- * Cross-context composition owns the TaskExecution factory dependency while
- * the Resource Catalog adapter reserves and shares each PostgreSQL transaction.
+ * RFC-359 W4-D19c —— 工作组回合一份装配（此前 SQLite 走 legacy engine、PG 走这条中立驱动）。
+ * 跨上下文的装配持有 TaskExecution 的宿主账本工厂，Resource Catalog 的适配器负责预留并共享事务。
  */
-export function composePostgresqlWorkgroupTurnsOperations(
-  db: PostgresqlDatabaseClient,
-  hostLedgerFactory: PostgresqlWorkgroupHostLedgerParticipantFactory,
+export function composeWorkgroupTurnsOperations(
+  db: ProviderNeutralDatabase,
+  hostLedgerFactory: WorkgroupHostLedgerParticipantFactory,
   clarifyAskGate: WorkgroupClarifyAllowedPort,
 ): WorkgroupTurnsOperations {
-  return createPostgresqlWorkgroupTurnsOperations({
+  return createWorkgroupTurnsPersistenceOperations({
     db,
     hostLedgerFactory: {
       inTransaction: (transaction) => hostLedgerFactory.inTransaction(transaction),

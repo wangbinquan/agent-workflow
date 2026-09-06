@@ -1,5 +1,7 @@
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
+  fenceUntrusted,
+  isTransientRuntimeFailure,
   WG_FC_CLAIM_BATCH_LIMIT,
   WG_LEADER_IDLE_NUDGE_LIMIT,
   WG_PORT_ASSIGNMENTS,
@@ -46,6 +48,14 @@ import {
   type WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
 import { renderWgProtocolBlock, wgHostRolePorts } from './workgroupProtocol'
+import { buildSystemMessage } from './workgroupSystemMessages'
+import type { WorkgroupSystemTemplate } from '@agent-workflow/shared'
+import {
+  composeLeaderPrompt,
+  composeMemberPrompt,
+  followupForFailure,
+  wgFollowupNotice,
+} from './workgroupTurnPrompts'
 
 type WorkgroupTurnsDriveOutcome = Awaited<ReturnType<WorkgroupTurnsOperations['drive']>>
 
@@ -256,7 +266,15 @@ export interface WorkgroupTurnsLedgerCommit {
 export type WorkgroupTurnMintedRun = WorkgroupHostLedgerMintReceipt
 
 export type WorkgroupTurnsLedgerCommitReceipt =
-  | Readonly<{ committed: true; mintedRuns: readonly WorkgroupTurnMintedRun[] }>
+  | Readonly<{
+      committed: true
+      mintedRuns: readonly WorkgroupTurnMintedRun[]
+      /**
+       * 提交时被**幂等跳过**的操作键（目前只有标题去重撞车的建卡）。并发的成员回合各拿同一份快照，
+       * 「这一条是不是重复」只可能在提交这一刻定论，所以要报回来让驱动往房间贴系统消息。
+       */
+      skippedOperationKeys?: readonly string[]
+    }>
   | Readonly<{ committed: false; conflictOperationKey: string }>
 
 export interface WorkgroupClarifyAllowedInput {
@@ -297,6 +315,7 @@ type HostTurnOutcome<T> =
   | Readonly<{ kind: 'canceled'; runId: string }>
   | Readonly<{ kind: 'failed'; runId: string; message: string }>
   | Readonly<{ kind: 'protocol-exhausted'; runId: string; errors: readonly string[] }>
+  | Readonly<{ kind: 'clarify-forbidden-exhausted'; runId: string; message: string }>
   | Readonly<{ kind: 'lost' }>
 
 interface HostTurnSpec<T> {
@@ -318,6 +337,11 @@ interface HostTurnSpec<T> {
   readonly registerMint?: (runId: string) => void
   /** RFC-215 §6.2：fc 任务批 run 的卡数（wg_task_results 逐卡数组端口）；消息/指派回合不带。 */
   readonly batchCount?: number
+  /**
+   * RFC-181 C —— 反问被硬压制（`clarify-forbidden`）时贴的角色化提示。空串表示这条路不可达
+   * （单发回合 maxAttempts=1，只会走耗尽支）。
+   */
+  readonly clarifyForbiddenNotice?: string
 }
 
 function maxMessageId(messages: readonly WorkgroupMessage[]): string {
@@ -385,6 +409,18 @@ function messageDraft(input: {
   readonly assignmentId?: string | null
   readonly triggerMessageId?: string | null
 }): WorkgroupTurnMessageDraft {
+  // 带模板的系统消息，正文一律由**模板渲染器**产出，不由调用点各写一句：
+  // 房间里那条消息的英文兜底文案是用户可见的产品文案，合一前 SQLite 全走
+  // `buildSystemMessage`，而中立驱动在 17 处各手写了一份、逐条与它不同
+  // （例如「free-collab converged — N task(s) done」被写成「free_collab converged (N)」）。
+  // 从这里统一取，就再也回不到两份（RFC-359 W4-D19c）。
+  const rendered =
+    input.templateKey === undefined
+      ? null
+      : buildSystemMessage({
+          key: input.templateKey,
+          params: input.templateParams ?? {},
+        } as WorkgroupSystemTemplate)
   return Object.freeze({
     id: ulid(),
     round: input.round,
@@ -392,7 +428,7 @@ function messageDraft(input: {
     authorMemberId: input.authorMemberId ?? null,
     authorUserId: null,
     kind: input.kind,
-    bodyMd: input.bodyMd,
+    bodyMd: rendered?.bodyMd ?? input.bodyMd,
     templateKey: input.templateKey ?? null,
     templateParams: input.templateParams ?? null,
     mentionMemberIds: Object.freeze([...(input.mentionMemberIds ?? [])]),
@@ -439,56 +475,6 @@ function assignmentDraft(input: {
   })
 }
 
-function visibleMessages(
-  snapshot: WorkgroupTurnsSnapshot,
-  memberId: string,
-): readonly WorkgroupMessage[] {
-  const cursor = snapshot.cursors.get(memberId) ?? ''
-  const switches = resolveWorkgroupSwitches(snapshot.config.mode, snapshot.config.switches)
-  return snapshot.messages.filter((message) => {
-    if (message.id <= cursor || message.authorMemberId === memberId) return false
-    if (snapshot.config.leaderMemberId === memberId) return true
-    if (message.mentionMemberIds.includes(memberId)) return switches.directMessages
-    if (message.kind === 'result' || message.kind === 'delivery') return switches.shareOutputs
-    return switches.blackboard
-  })
-}
-
-function composePrompt(
-  snapshot: WorkgroupTurnsSnapshot,
-  memberId: string,
-  assignments: readonly WorkgroupAssignment[],
-  addendum?: string,
-): string {
-  const projection = memberAgent(snapshot, memberId)
-  const roster = snapshot.config.members
-    .map((member) => {
-      const card = snapshot.memberAgents.find(
-        (entry) => entry.memberId === member.id,
-      )?.capabilityCard
-      return `- @${member.displayName}: ${member.roleDesc}${card ? `\n  ${card}` : ''}`
-    })
-    .join('\n')
-  const room = visibleMessages(snapshot, memberId)
-    .map((message) => `- ${message.authorMemberId ?? message.authorKind}: ${message.bodyMd}`)
-    .join('\n')
-  const cards = assignments
-    .map((assignment, index) => `### Task ${index + 1}: ${assignment.title}\n${assignment.briefMd}`)
-    .join('\n\n')
-  return [
-    `# ${snapshot.config.workgroupName}`,
-    snapshot.config.instructions,
-    `## Goal\n${snapshot.config.goal}`,
-    `## Your identity\n@${memberName(snapshot.config, memberId)} (${projection?.agent.name ?? 'missing agent'})`,
-    `## Roster\n${roster}`,
-    room.length > 0 ? `## New room activity\n${room}` : '## New room activity\n(none)',
-    cards.length > 0 ? `## Assigned work\n${cards}` : '',
-    addendum ?? '',
-  ]
-    .filter((section) => section.length > 0)
-    .join('\n\n')
-}
-
 async function commit(
   persistence: WorkgroupTurnsPersistencePort,
   taskId: string,
@@ -514,7 +500,11 @@ async function executeHostTurn<T>(
   let lastRunId = adopted?.id ?? ''
   const retryBase = adopted?.retryIndex ?? 0
   const maxProtocolRetries = spec.maxProtocolRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
-  for (let attempt = 0; attempt <= maxProtocolRetries; attempt++) {
+  // 协议预算与「瞬时运行时故障」的重跑预算是**两份**，各记各的（与合一前 SQLite 同形）：
+  // 换进程重跑一轮流中断，不该把模型的协议重试次数吃掉。
+  let transientRetriesUsed = 0
+  let attempt = 0
+  while (attempt <= maxProtocolRetries) {
     let run: WorkgroupTurnMintedRun
     if (adopted !== undefined && attempt === 0) {
       const prepared = await commit(persistence, spec.taskId, spec.firstStartOperations(adopted.id))
@@ -581,14 +571,35 @@ async function executeHostTurn<T>(
     if (result.status === 'canceled') return { kind: 'canceled', runId: run.runId }
     if (result.status === 'awaiting') return { kind: 'awaiting', runId: run.runId }
     if (result.status === 'failed') {
-      if (result.processUnreaped === true || attempt === maxProtocolRetries) {
-        return {
-          kind: 'failed',
-          runId: run.runId,
-          message: result.errorMessage ?? 'workgroup host run failed',
+      const message = result.errorMessage ?? 'workgroup host run failed'
+      if (result.processUnreaped === true) return { kind: 'failed', runId: run.runId, message }
+      // ① 运行时瞬时故障（流中断等）不是模型的协议错误：整轮换个新进程重跑，**不消耗**协议预算、
+      //    也不贴任何提示。单独一份预算，与合一前 SQLite 逐条同形。
+      if (isTransientRuntimeFailure(result.failureCode)) {
+        if (transientRetriesUsed < DEFAULT_PROTOCOL_RETRY_BUDGET) {
+          transientRetriesUsed += 1
+          continue
         }
+        return { kind: 'failed', runId: run.runId, message }
       }
-      errorNotice = result.errorMessage ?? result.failureCode ?? 'workgroup host run failed'
+      // ② RFC-181 C —— 反问被硬压制是可重试的协议轻推，提示按角色措辞；耗尽由调用方收场
+      //    （领队：丢弃继续；成员：卡片浮成 failed）。
+      if (result.failureCode === 'clarify-forbidden') {
+        if (attempt < maxProtocolRetries) {
+          errorNotice = spec.clarifyForbiddenNotice ?? ''
+          attempt += 1
+          continue
+        }
+        return { kind: 'clarify-forbidden-exhausted', runId: run.runId, message }
+      }
+      // ③ RFC-186 §2.2 —— 其余失败走**同一张** FOLLOWUP_POLICY 表：表里列出的码是模型的协议
+      //    失误（换一轮 + 按原因裁剪的提示），其余是结构性失败、直接报出去。
+      const followup = followupForFailure(result.failureCode)
+      if (attempt >= maxProtocolRetries || !followup.retry) {
+        return { kind: 'failed', runId: run.runId, message }
+      }
+      errorNotice = wgFollowupNotice(followup.reason)
+      attempt += 1
       continue
     }
     const parsed = spec.parse(result.outputs)
@@ -597,6 +608,7 @@ async function executeHostTurn<T>(
       return { kind: 'protocol-exhausted', runId: run.runId, errors: parsed.errors }
     }
     errorNotice = parsed.errors.map((error) => `- ${error}`).join('\n')
+    attempt += 1
   }
   return { kind: 'failed', runId: lastRunId, message: 'workgroup turn retry budget exhausted' }
 }
@@ -689,6 +701,44 @@ function memberOutputMessageOperations(input: {
   return operations
 }
 
+/**
+ * 提交回执里被跳过的建卡（标题去重撞车）→ 往房间补一条系统告警。
+ *
+ * 为什么要在提交之后再补一笔：并发的成员回合各拿同一份快照，两个人同时提同名任务时，两边算出来的
+ * 「重复条数」都是 0，只有提交这一刻才知道谁被丢了。合一前 SQLite 的写路径是顺序的、在写事务里当场
+ * 就贴了这条消息（`duplicateTasksDropped`）；这里保住同一条用户可见行为。
+ */
+async function postDroppedDuplicateNotice(input: {
+  readonly persistence: WorkgroupTurnsPersistencePort
+  readonly snapshot: WorkgroupTurnsSnapshot
+  readonly memberId: string
+  readonly round: number
+  readonly keyPrefix: string
+  readonly receipt: WorkgroupTurnsLedgerCommitReceipt
+}): Promise<void> {
+  if (!input.receipt.committed) return
+  const dropped = (input.receipt.skippedOperationKeys ?? []).filter((key) =>
+    key.startsWith(`${input.keyPrefix}:task:`),
+  ).length
+  if (dropped === 0) return
+  await commit(input.persistence, input.snapshot.taskId, [
+    createMessage(
+      `${input.keyPrefix}:tasks-add-dropped`,
+      messageDraft({
+        round: input.round,
+        authorKind: 'system',
+        kind: 'system',
+        bodyMd: `${dropped} duplicate task(s) from @${memberName(input.snapshot.config, input.memberId)} dropped (title dedup)`,
+        templateKey: 'duplicateTasksDropped',
+        templateParams: {
+          count: dropped,
+          member: memberName(input.snapshot.config, input.memberId),
+        },
+      }),
+    ),
+  ])
+}
+
 function tasksAddOperations(input: {
   readonly snapshot: WorkgroupTurnsSnapshot
   readonly memberId: string
@@ -716,18 +766,13 @@ function tasksAddOperations(input: {
       ),
     ]
   }
-  const occupied = new Set(
-    input.snapshot.assignments
-      .filter((assignment) => assignment.status !== 'canceled' && assignment.dedupKey !== null)
-      .map((assignment) => assignment.dedupKey)
-      .filter((key): key is string => key !== null),
-  )
+  // 去重**只在提交时**定论（`applyResourceCatalogOperation` 的 dedupKey 撞车检查）：并发的成员回合
+  // 各拿同一份快照，在这里预判会漏掉对方刚落的卡；同一份载荷里的两条同名也由那一步接住（同一笔事务
+  // 里第一条已经落库）。被丢的条数由回执带回来，`postDroppedDuplicateNotice` 补系统消息。
   const operations: WorkgroupTurnLedgerOperation[] = []
   let index = 0
   for (const item of parsed.value) {
     const dedupKey = normalizeWgTaskTitle(item.title)
-    if (occupied.has(dedupKey)) continue
-    occupied.add(dedupKey)
     const assignment = assignmentDraft({
       round: input.round,
       source: 'self_claim',
@@ -801,6 +846,8 @@ function assignmentFailureOperations(input: {
   readonly keyPrefix: string
   readonly effectiveAttemptCount?: number
   readonly protocolViolation?: boolean
+  /** 成员**自报**失败（批回合的 `status:"failed"` 条目）时点名是谁报的——与合一前 SQLite 同一条模板。 */
+  readonly reportedByMemberId?: string | null
 }): readonly WorkgroupTurnLedgerOperation[] {
   const operations: WorkgroupTurnLedgerOperation[] = [
     transitionAssignment({
@@ -815,13 +862,21 @@ function assignmentFailureOperations(input: {
         round: input.assignment.round,
         authorKind: 'system',
         kind: 'system',
-        bodyMd:
-          input.protocolViolation === true
-            ? `assignment '${input.assignment.title}' violated the output protocol: ${input.detail}`
-            : `assignment '${input.assignment.title}' failed: ${input.detail}`,
+        bodyMd: `assignment '${input.assignment.title}' failed: ${input.detail}`,
         templateKey:
-          input.protocolViolation === true ? 'assignmentProtocolViolation' : 'assignmentFailed',
-        templateParams: { title: input.assignment.title, detail: input.detail },
+          input.protocolViolation === true
+            ? 'assignmentProtocolViolation'
+            : input.reportedByMemberId !== undefined
+              ? 'assignmentReportedFailed'
+              : 'assignmentFailed',
+        templateParams:
+          input.reportedByMemberId === undefined || input.protocolViolation === true
+            ? { title: input.assignment.title, detail: input.detail }
+            : {
+                title: input.assignment.title,
+                member: memberName(input.snapshot.config, input.reportedByMemberId ?? ''),
+                detail: input.detail,
+              },
         assignmentId: input.assignment.id,
       }),
     ),
@@ -892,9 +947,11 @@ async function driveAssignmentTurn(input: {
         nodeRunId: runId,
       },
     ],
-    prompt: (_nonce, errorNotice) =>
-      composePrompt(input.snapshot, memberId, [input.assignment]) +
-      (errorNotice === null ? '' : `\n\n## Protocol correction\n${errorNotice}`),
+    clarifyForbiddenNotice: CLARIFY_SUPPRESSED_ASSIGNMENT,
+    prompt: (nonce, errorNotice) =>
+      composeMemberPrompt(input.snapshot, memberId, [input.assignment], nonce, {
+        singleCard: true,
+      }) + (errorNotice === null ? '' : composeProtocolErrorReprompt(nonce, errorNotice)),
     parse: (outputs) => {
       const errors: string[] = []
       const resultRaw = outputs[WG_PORT_RESULT]
@@ -943,8 +1000,14 @@ async function driveAssignmentTurn(input: {
     ])
     return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
   }
-  if (outcome.kind === 'failed' || outcome.kind === 'protocol-exhausted') {
-    const detail = outcome.kind === 'failed' ? outcome.message : outcome.errors.join('; ')
+  if (
+    outcome.kind === 'failed' ||
+    outcome.kind === 'clarify-forbidden-exhausted' ||
+    outcome.kind === 'protocol-exhausted'
+  ) {
+    // RFC-181 C —— 被压制的反问耗尽后与普通失败同路：卡面浮出 failed，绝不 park。
+    const detail =
+      outcome.kind === 'protocol-exhausted' ? outcome.errors.join('; ') : outcome.message
     const receipt = await commit(
       input.persistence,
       input.snapshot.taskId,
@@ -1008,6 +1071,14 @@ async function driveAssignmentTurn(input: {
     )
   }
   const receipt = await commit(input.persistence, input.snapshot.taskId, operations)
+  await postDroppedDuplicateNotice({
+    persistence: input.persistence,
+    snapshot: input.snapshot,
+    memberId: memberId,
+    round: input.assignment.round,
+    keyPrefix: `assignment-tasks-add:${outcome.runId}`,
+    receipt,
+  })
   return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
 }
 
@@ -1109,6 +1180,7 @@ function batchSettleOperations(input: {
           detail: item.detail ?? item.summary,
           keyPrefix: `${input.keyPrefix}:reported-failed:${card.id}`,
           effectiveAttemptCount: card.attemptCount + (card.status === 'open' ? 1 : 0),
+          reportedByMemberId: card.assigneeMemberId,
         }),
       )
     }
@@ -1210,16 +1282,21 @@ async function driveBatchTurn(input: {
         assignmentId: card.id,
         nodeRunId: runId,
       })),
-    prompt: (_nonce, errorNotice) =>
-      composePrompt(input.snapshot, input.memberId, cards) +
-      (errorNotice === null ? '' : `\n\n## Protocol correction\n${errorNotice}`),
+    clarifyForbiddenNotice: CLARIFY_SUPPRESSED_BATCH,
+    prompt: (nonce, errorNotice) =>
+      composeMemberPrompt(input.snapshot, input.memberId, cards, nonce) +
+      (errorNotice === null ? '' : composeProtocolErrorReprompt(nonce, errorNotice)),
     parse: (outputs) => {
       const errors: string[] = []
       const resultsRaw = outputs[WG_PORT_TASK_RESULTS]
       const results =
         resultsRaw === undefined ? null : parseWgTaskResultsPort(resultsRaw, cards.length)
       if (results === null) {
-        errors.push(`missing required port ${WG_PORT_TASK_RESULTS}`)
+        // 端口名要点清楚：批 run 用的是 wg_task_results，不是单卡的 wg_result——模型最常见的
+        // 误发就是这一条，光说「缺端口」不足以让它改对（文案与合一前 SQLite 逐字相同）。
+        errors.push(
+          `missing required port ${WG_PORT_TASK_RESULTS} (this batch run does NOT use ${WG_PORT_RESULT})`,
+        )
         lastReported = []
         lastMissing = cards.map((_card, index) => index + 1)
       } else if (!results.ok) {
@@ -1231,7 +1308,9 @@ async function driveBatchTurn(input: {
         lastMissing = results.missing
         if (results.missing.length > 0) {
           errors.push(
-            `${WG_PORT_TASK_RESULTS}: missing ${results.missing.map((index) => `Task ${index}`).join(', ')}`,
+            `${WG_PORT_TASK_RESULTS}: missing entries for ${results.missing
+              .map((index) => `Task ${index}`)
+              .join(', ')} — EVERY task in the batch must be reported exactly once`,
           )
         }
       }
@@ -1271,7 +1350,8 @@ async function driveBatchTurn(input: {
     )
     return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
   }
-  if (outcome.kind === 'failed') {
+  if (outcome.kind === 'failed' || outcome.kind === 'clarify-forbidden-exhausted') {
+    // RFC-181 C —— 被压制的反问耗尽后与整轮失败同路：批里每张卡浮出 failed，绝不 park。
     const operations: WorkgroupTurnLedgerOperation[] = [
       createMessage(
         `batch-failed:${outcome.runId}`,
@@ -1374,6 +1454,14 @@ async function driveBatchTurn(input: {
     )
   }
   const receipt = await commit(input.persistence, input.snapshot.taskId, operations)
+  await postDroppedDuplicateNotice({
+    persistence: input.persistence,
+    snapshot: input.snapshot,
+    memberId: input.memberId,
+    round: cards[0]?.round ?? 0,
+    keyPrefix: `batch-tasks-add:${outcome.runId}`,
+    receipt,
+  })
   return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
 }
 
@@ -1468,15 +1556,9 @@ async function driveMessageTurn(input: {
     maxProtocolRetries: 0,
     firstStartOperations: () => stamp,
     retryStartOperations: () => [],
-    prompt: () =>
-      composePrompt(
-        input.snapshot,
-        input.memberId,
-        [],
-        input.initial
-          ? '## Initial planning turn\nBreak the group goal into concrete tasks with wg_tasks_add; check the blackboard first to avoid duplicates.'
-          : undefined,
-      ),
+    prompt: (nonce) =>
+      composeMemberPrompt(input.snapshot, input.memberId, null, nonce) +
+      (input.initial ? `\n\n${FC_INITIAL_PLANNING_BLOCK}` : ''),
     parse: (outputs) => {
       const raw = outputs[WG_PORT_MESSAGES]
       const messages: ReturnType<typeof parseWgMessagesPort> =
@@ -1501,8 +1583,14 @@ async function driveMessageTurn(input: {
       boundary.maxId,
     ),
   ]
-  if (outcome.kind === 'failed' || outcome.kind === 'protocol-exhausted') {
-    const detail = outcome.kind === 'failed' ? outcome.message : outcome.errors.join('; ')
+  if (
+    outcome.kind === 'failed' ||
+    outcome.kind === 'clarify-forbidden-exhausted' ||
+    outcome.kind === 'protocol-exhausted'
+  ) {
+    // RFC-181 C —— 被压制的反问耗尽后与普通失败同路：卡面浮出 failed，绝不 park。
+    const detail =
+      outcome.kind === 'protocol-exhausted' ? outcome.errors.join('; ') : outcome.message
     operations.push(
       createMessage(
         `message-failed:${outcome.runId}`,
@@ -1567,6 +1655,14 @@ async function driveMessageTurn(input: {
     )
   }
   const receipt = await commit(input.persistence, input.snapshot.taskId, operations)
+  await postDroppedDuplicateNotice({
+    persistence: input.persistence,
+    snapshot: input.snapshot,
+    memberId: input.memberId,
+    round: round,
+    keyPrefix: `message-tasks-add:${outcome.runId}`,
+    receipt,
+  })
   return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
 }
 
@@ -2083,14 +2179,19 @@ async function openCompletionGate(input: {
     input.snapshot.state.gateStatus === 'idle' ||
     input.snapshot.state.gateStatus === 'rejected'
   ) {
+    // leader_worker 在 wg_decision 那一步就已经把闸门推到 declared（连同领队给的收敛说明）；
+    // 走到这里还在 idle 的只有 free_collab——它是机械收敛、没有领队回合能推这一步，所以要在这里
+    // 补上它自己的说明。合一前中立驱动把 `summary` 原样传成快照里的旧值（fc 恒为 null），
+    // 于是房间与确认端点上都拿不到「收敛了什么」。
+    const declaredSummary =
+      input.snapshot.state.gateSummary ??
+      (input.snapshot.config.mode === 'free_collab' ? FREE_COLLAB_CONVERGED_SUMMARY : null)
     operations.push({
       kind: 'transition-gate',
       operationKey: `gate-declare:${runId}`,
       from: [input.snapshot.state.gateStatus],
       to: 'declared',
-      ...(input.snapshot.state.gateSummary === null
-        ? {}
-        : { summary: input.snapshot.state.gateSummary }),
+      ...(declaredSummary === null ? {} : { summary: declaredSummary }),
     })
   }
   operations.push(
@@ -2273,6 +2374,51 @@ async function finalizeDone(input: {
  * Provider-neutral workgroup turn loop. All durable reads and transitions are
  * expressed through the closed ledger port; providers own transactionality.
  */
+/**
+ * RFC-217 G6 单一定义点 —— 协议出错后的重提示块。
+ *
+ * 文案与围栏形态与合一前 SQLite 的 `turnExecution.composeProtocolErrorReprompt` 逐字相同：
+ * 错误正文进 untrusted 围栏（带 envelope nonce），末尾一句「重发一个正确的信封」。合一时中立驱动
+ * 一度写成了另一套更短的 `## Protocol correction`——那是 agent 实际看到的提示词，属用户可见行为，
+ * 正典取合一前 SQLite 这一份（RFC-359 W4-D19c）。
+ */
+/** fc 首轮规划的附加块——与合一前 SQLite 的 `memberTurns.fcAddendum` 逐字相同。 */
+const FC_INITIAL_PLANNING_BLOCK = [
+  '## Initial planning turn',
+  '',
+  'The shared task list is empty. Break the group goal into concrete',
+  'tasks (wg_tasks_add) — check the blackboard first to avoid duplicating',
+  'what teammates already proposed. You may also record findings via',
+  'wg_result.',
+].join('\n')
+
+/** 触顶那一轮的领队块——与合一前 SQLite 的 `leaderWorker` 逐字相同。 */
+const LEADER_WRAP_UP_BLOCK =
+  '\n\n## FINAL round — the round cap has been reached\n\nThis is your LAST turn. Do NOT dispatch new work (there are no rounds left to run it). ' +
+  'Aggregate the completed results and emit `wg_decision` with action `done`. Any `wg_assignments` you emit now will be ignored.'
+
+/**
+ * RFC-181 C —— 反问被硬压制时的角色化提示，三份文案与合一前 SQLite 逐字相同
+ * （leaderWorker / memberTurns / freeCollab 各一份，差别只在末尾让它继续发哪个端口）。
+ */
+const CLARIFY_SUPPRESSED_PREFIX =
+  '- Ask-back is OFF in this autonomous group. Do NOT emit <workflow-clarify>.\n' +
+  '  Proceed with your best judgment and emit '
+const CLARIFY_SUPPRESSED_LEADER = `${CLARIFY_SUPPRESSED_PREFIX}wg_decision / wg_assignments as usual.`
+const CLARIFY_SUPPRESSED_ASSIGNMENT = `${CLARIFY_SUPPRESSED_PREFIX}wg_result as usual.`
+const CLARIFY_SUPPRESSED_BATCH = `${CLARIFY_SUPPRESSED_PREFIX}wg_task_results as usual.`
+
+/** fc 机械收敛时闸门上写的说明——与合一前 SQLite 逐字相同。 */
+const FREE_COLLAB_CONVERGED_SUMMARY = 'free-collab converged'
+
+export function composeProtocolErrorReprompt(envelopeNonce: string, errorNotice: string): string {
+  return `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
+    'protocol-error',
+    errorNotice,
+    envelopeNonce,
+  )}\n\nRe-emit a CORRECT envelope.`
+}
+
 export function createWorkgroupTurnsOperations(
   persistence: WorkgroupTurnsPersistencePort,
 ): WorkgroupTurnsOperations {
@@ -2643,14 +2789,11 @@ async function driveLeaderTurn(input: {
     registerMint: input.registerMint,
     firstStartOperations: () => stamp,
     retryStartOperations: () => [],
+    clarifyForbiddenNotice: CLARIFY_SUPPRESSED_LEADER,
     prompt: (nonce, errorNotice) =>
-      composePrompt(input.snapshot, leaderId, []) +
-      (input.wrapUp
-        ? '\n\n## FINAL round\nAggregate completed work, declare done, and do not dispatch.'
-        : '') +
-      (errorNotice === null
-        ? ''
-        : `\n\n## Protocol correction\n${errorNotice}\nUse nonce ${nonce}.`),
+      composeLeaderPrompt(input.snapshot, nonce) +
+      (input.wrapUp ? LEADER_WRAP_UP_BLOCK : '') +
+      (errorNotice === null ? '' : composeProtocolErrorReprompt(nonce, errorNotice)),
     parse: (outputs) => {
       const errors: string[] = []
       const decisionRaw = outputs[WG_PORT_DECISION]
@@ -2707,6 +2850,18 @@ async function driveLeaderTurn(input: {
     return { kind: 'terminal', outcome: { kind: 'canceled' } }
   }
   if (outcome.kind === 'awaiting') return { kind: 'progress' }
+  if (outcome.kind === 'clarify-forbidden-exhausted') {
+    // RFC-181 C —— 领队被压制到耗尽：推掉游标、丢弃这一轮继续跑，不失败任务
+    // （与合一前 SQLite 的 leaderWorker 同形：`advanceMemberCursor` 后 return）。
+    const receipt = await commit(input.persistence, input.snapshot.taskId, [
+      cursorOperation(
+        `leader-clarify-suppressed:${outcome.runId}`,
+        leaderId,
+        maxMessageId(input.snapshot.messages),
+      ),
+    ])
+    return receipt.committed ? { kind: 'progress' } : { kind: 'lost' }
+  }
   if (outcome.kind === 'failed' || outcome.kind === 'protocol-exhausted') {
     const detail =
       outcome.kind === 'failed' ? outcome.message : `protocol: ${outcome.errors.join('; ')}`

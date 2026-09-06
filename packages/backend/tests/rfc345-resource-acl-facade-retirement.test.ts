@@ -261,7 +261,6 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
   facade('services/workgroup/constants.ts'),
   facade('services/workgroup/context.ts'),
   facade('services/workgroup/dwActions.ts', false),
-  facade('services/workgroup/engine.ts'),
   facade('services/workgroup/hooks.ts'),
   facade('services/workgroup/launch.ts'),
   facade('services/workgroup/lifecycle.ts'),
@@ -587,13 +586,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['WG_LEADER_NODE_ID', 'WG_MEMBER_NODE_ID'],
     'workgroup question dispatch node identities',
     REMOVE_OWNERS.collaborationQuestions,
-  ),
-  edge(
-    'services/workgroup/engine.ts',
-    'modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations.ts',
-    ['runWorkgroupEngine'],
-    'SQLite workgroup turn execution',
-    REMOVE_OWNERS.workgroupTurns,
   ),
   edge(
     'services/workgroup/launch.ts',

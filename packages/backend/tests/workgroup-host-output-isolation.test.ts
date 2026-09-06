@@ -38,7 +38,7 @@ import { runNode } from './helpers/runner'
 import {
   renderWgProtocolBlock,
   wgHostRolePorts,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+} from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import type { Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

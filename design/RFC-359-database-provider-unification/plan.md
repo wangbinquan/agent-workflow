@@ -648,34 +648,37 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   rfc294 preflight 的能力债清单四条并成两条、rfc349 协作运行时锁改指中立工厂。
   `rfc359-w4-d19a-adapters.test.ts` 两引擎各跑反问投影（按 asker 聚合 + 非空 shardKey 的 stop 指令）、
   未决自问的 CAS 关闭与重放幂等、无主围栏的四种 owner 状态 + 源码锁。
-  **D19b ⛔ 已实现但未落地——需要用户先裁一个产品决策（任务房的「继续执行」语义不是持久化差异）**
+  **D19b ✅（任务房本体合一：一份房间给两个引擎，「恢复执行」按部署形态注入 —— 采纳方案 2）**：
+  三份中立房间文件（`workgroupTaskRoom{,Commands,Queries}.ts`）+ 一份装配 `composeWorkgroupTaskRoom`，
+  两个 bootstrap 装同一份；`composeWorkgroupTaskRoomActiveUsers` / `composeWorkgroupTaskRoomDynamicWorkflow`
+  把此前只在 PG daemon 里内联的两段判据（在岗用户过滤、动态工作流三层复核 + 另存为）提成共用装配。
+  四个 provider 文件删除。**PostgreSQL 房间路径由此第一次拿到行为覆盖。**
 
-  按计划做了完整实现（三份中立房间文件 + 一份装配 + 两个 bootstrap 切过去 + 两引擎行为测试，
-  产物留在 scratchpad），双引擎房间测试本身四条全绿（房间聚合读 / 可见性 404 / 发言写入 + 广播 /
-  终态拒绝）——**PostgreSQL 房间路径的第一份行为覆盖**。但受影响批次抓到 6 条真行为回归，全部指向同一处：
+  **合一时抓到、并按「合一前 SQLite 行为为准」修掉的差异**（这正是本 RFC 要根除的形态——两份实现各自演进）：
+  1. 「恢复执行」的两件事按**部署形态**（不是按数据库）注入 `WorkgroupTaskRoomContinuationDriver`：
+     `assertResumable`（单进程查工作树 → 工作树被 GC 回收就 410，闸门 / holder / 消息随事务整体回滚、
+     决策保持可重试；多进程空操作）与 `driveAfterCommit`（单进程就地认领已准入的意图并驱动，
+     即 `wakeHumanGateContinuation`；多进程交给 daemon 的 `human-gate-continuation` worker）。
+     两处调用次序照抄合一前：预检排在合法性复核**之后**（提案不再通过当前池校验仍是 409，工作树没了才 410）、
+     写入之前；驱动排在提交与广播之后。rfc164 的 410 与 rfc167 的原子换挡 / 相位复位因此全部照旧。
+  2. `continueTask` 的意图类别改回 `gate-continuation`、载荷收回 `{v,event}` 两键。这一类里还住着 RFC-333
+     人工门的富载荷，驱动链会 `decodeHumanGateContinuationPayload` 解它，多一个键就当场
+     `invalid-human-gate-continuation-payload`；两键形态才被 `isLegacyTaskGateContinuationPayload` 识别成
+     「由准入方自己驱动」而跳过那几步。合一前的 PG 房间写的是 `kind:'resume'`——**没有任何人认领它**。
+  3. 加成员时解析不到的 agent 引用错误码回归 `acl-missing-refs`（合一版一度是 `workgroup-config-agent-missing`）。
+  4. 遣散最后一个人类成员后的补跑（`continueIfStillParked`：立刻一次 + 2.5s 后一次）。引擎可能带着遣散前的
+     快照慢一拍才把任务提交成 `awaiting_human`，那一拍落在配置更新事务之后，任务会永远停在等一个不存在的人。
 
-  - `rfc164-workgroup-room`「confirm 恢复失败时 gate、holder 与消息全部保持可重试」：期望 410，切换后得到 200。
-  - `rfc167-dynamic-workflow-engine` 5 条：dw-confirm 的快照替换 + `phase=executing` 原子落地、
-    holder 关闭、reject 的相位复位「骑在 resume 的 CAS 上」，切换后都不成立。
+  **收尾（同批）**：legacy 那四个动作文件（`taskActions` / `dwActions` / `room` / `configActions`，1749 行）
+  生产零消费者，删除；6 个测试消费者改接中立房间（三个纯派生函数的改从 `application/workgroups/workgroupRoomProjection.ts`
+  导入；徽章两套走新的 `tests/helpers/workgroupTaskRoom.ts` 装配；rfc223 引用围栏的 `beforeWriteTransaction`
+  接缝随「事务外预检 + 事务内复核」一起退役，留下同一条用户可见行为的断言）。
+  九把按文件名点名的清单锁改指中立实现，rfc217 G5 的模式分支棘轮把中立房间纳入扫描面。
+  `rfc359-w4-d19b-adapters.test.ts` 两引擎各跑房间聚合读 / 可见性 404 / 发言写入 + 广播 / 终态拒绝 + 源码锁。
 
-  **根因不是数据库**：legacy 的 SQLite 房间在请求内**同步**恢复任务——
-  `taskActions.confirmGate` 走 `resumeTaskWithAtomicSideEffects(db, taskId, deps, (tx, transition) => …)`，
-  把闸门关闭 / holder 关闭 / 消息写入放进**恢复自己的那笔事务**，恢复失败则整体回滚并以 410 打回，
-  任务不会被搁浅（这几条锁正是 Codex P1「no stranding」审计的产物）。中立房间（PG 形状）走的是目标架构的
-  **意图模型**：`participant.continueTask` 把任务置 `pending` 并提交继续意图，由 daemon 异步接手，
-  请求同步返回 200，失败只能事后经任务状态浮现。PG daemon 是多进程、受理请求的进程未必持有该任务，
-  **无法**在请求内同步恢复；所以这是「daemon 在不在同一个进程里」的部署形态差异，不是 provider 差异。
-
-  **需要用户裁的决策**（三选一，都会改用户可见行为或工作量分布）：
-  1. **统一到意图模型**：confirm 一律返回 200，恢复失败改由任务状态 + daemon 重试浮现；
-     rfc164 / rfc167 的期望随之改写，前端「确认后立刻看到失败」的交互要重新设计。
-  2. **给房间注入 `resume` 端口**：单进程部署（SQLite 单二进制）注入同步 resume 并保留 410，
-     多进程 daemon 注入「提交意图」。一份房间实现、一处按**部署形态**（不是按数据库）分叉。
-  3. **先做「继续执行语义统一」再回来合房间**：把同步恢复的原子性保证在意图模型里补齐
-     （例如意图提交后由本进程 daemon 同步驱动一次并回传结果），代价最大但两种部署形态语义完全一致。
-
-  在用户裁定前 D19b 不落地：现状是 SQLite 房间保留 legacy 同步恢复（行为更强、有 13 个套件盯着），
-  PG 房间保留意图模型。
+  **两处守卫脆弱点同批修掉**：路由错误码守卫的语料用 `trackedFiles`，新测试在 `git add` 之前不在语料里
+  ——本地绿、提交之后才红（288a8f888 把 main 推红即此）；rfc345 的 schema 导入扫描在三份源码**拼接**后
+  贪婪匹配，正文里出现「tasks」这个词（哪怕只是注释）就被误判成导入了 tasks 表，改为逐文件取块。
 
   **剩余 provider 对的形态普查（决定后续排序）**：把 resource-catalog 里剩下的成对文件按
   「SQLite 是不是 legacy 薄壳」分两类——
@@ -718,9 +721,17 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   | task-execution 十对（TaskRouteOperations 292 / 2048、TaskRouteLaunchOperations 92 / 1362、TerminalMaintenancePersistence 33 / 543、TaskOwnershipPersistence 43 / 444、TaskArchiveMaintenanceCommand 66 / 746、ChildExecutionLaunchOperations 87 / 770、TaskExecutionEffectPersistence 369 / 1007、TaskExecutionRecovery 393 / 674、TaskLifecycleAutoRepairCommand 65 / 198、TaskExecutionResourceSnapshots 40 / 69） | — | — |
 
   **这一类的共同问题**：两侧不是同一份逻辑的两种写法，而是**两套实现**；哪一份是正典要先裁。
-  D19b 已经实证了代价——任务房照 PG 形状合完，双引擎测试全绿，却撞出 6 条用户可见的行为回归
-  （confirm 恢复失败从 410 变 200），根因是「daemon 是否与 API 同进程」的部署形态差异。
-  **做法建议**：逐对先出「形态勘察 + 覆盖对比 + 行为差异清单」，呈用户裁定后再动手；不要按文件数排优先级。
+
+  **D19b 给出了这一类的做法模板（已实证）**：照 PG 形状合完、双引擎测试全绿，仍撞出 4 条用户可见的
+  行为差异（confirm 恢复失败从 410 变 200、继续意图类别写成没人认领的 `resume`、加成员的错误码变了、
+  遣散人类成员后的补跑丢了）。处置不是回退，而是：
+  1. **正典恒取合一前 SQLite 的行为**（它有 13 个套件盯着，PG 侧那条路几乎无覆盖）；
+  2. 差异若源自**部署形态**（daemon 是否与 API 同进程）而非数据库，就抽成一个注入端口，两个 bootstrap
+     各注入自己的实现——不要在实现里按 provider 分叉；
+  3. 合完立刻跑「引用了这些路径的全部测试」（`scripts/tests-referencing.sh`），逐条把红归因成
+     「锁的是文件名」还是「锁的是行为」；后者一律按 ①修回去。
+
+  **做法建议**：逐对先出「形态勘察 + 覆盖对比 + 行为差异清单」，按上面三条处置；不要按文件数排优先级。
 
   ### 乙类：同一判据的两种写法——端口已是异步，卡在**逐对的语义判断**上
 

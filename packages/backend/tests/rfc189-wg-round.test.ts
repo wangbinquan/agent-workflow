@@ -26,12 +26,14 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
+import type {
+  WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
+  WorkgroupTurnHostResult as WorkgroupHostRunResult,
+} from '../src/modules/task-execution/public/commands'
 import {
-  runWorkgroupEngine,
-  type WorkgroupEngineHooks,
-  type WorkgroupHostRunRequest,
-  type WorkgroupHostRunResult,
-} from '../src/services/workgroup/engine'
+  runWorkgroupTurns as runWorkgroupEngine,
+  type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
+} from './helpers/workgroupTurns'
 import { buildWorkgroupHostSnapshot } from '../src/services/workgroup/launch'
 import { createLogger } from '../src/util/log'
 

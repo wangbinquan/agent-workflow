@@ -12,7 +12,7 @@ import { buildRoomMessageRow } from '../src/modules/resource-catalog/infrastruct
 import {
   buildSystemMessage,
   parseStoredSystemTemplate,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/systemMessages'
+} from '../src/modules/resource-catalog/application/workgroups/workgroupSystemMessages'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

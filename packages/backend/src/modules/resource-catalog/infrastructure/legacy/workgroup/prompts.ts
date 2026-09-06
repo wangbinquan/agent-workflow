@@ -15,7 +15,7 @@ import {
   renderMessagesBlock,
   renderRosterBlock,
   selectMemberSlices,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 
 export function composeLeaderPrompt(state: EngineDbState, envelopeNonce = ''): string {
   const { config } = state

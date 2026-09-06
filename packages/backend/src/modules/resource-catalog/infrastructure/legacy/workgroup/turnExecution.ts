@@ -22,7 +22,6 @@
 import type { Agent, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
-  fenceUntrusted,
   followupPolicyForFailure,
   isTransientRuntimeFailure,
   type EnvelopeFollowupReason,
@@ -37,7 +36,7 @@ import {
   renderWgProtocolBlock,
   wgHostRolePorts,
   type WorkgroupProtocolRole,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import type {
   WorkgroupEngineHooks,
   WorkgroupHostRunResult,
@@ -119,14 +118,10 @@ export function wgFollowupNotice(reason: EnvelopeFollowupReason): string {
   }
 }
 
-/** G6 single definition point — the protocol-error reprompt block. */
-export function composeProtocolErrorReprompt(envelopeNonce: string, errorNotice: string): string {
-  return `\n\n## Protocol errors in your previous reply\n\n${fenceUntrusted(
-    'protocol-error',
-    errorNotice,
-    envelopeNonce,
-  )}\n\nRe-emit a CORRECT envelope.`
-}
+// RFC-359 W4-D19c —— G6 的单一定义点搬到中立驱动（两个 provider 共用同一份重提示块）。
+// 这里只再导出一次，给尚未退役的 legacy 回合面用；legacy 引擎退役时连这行一起删。
+import { composeProtocolErrorReprompt } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+export { composeProtocolErrorReprompt }
 
 export interface TurnMintRow {
   cause: RerunCause

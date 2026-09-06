@@ -44,7 +44,7 @@ import {
   resolveMessageTurnTriggerId,
   rosterDisplayNames,
   type WorkgroupProtocolRole,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import {
   persistWgMessages,
   postAssignmentMessage,

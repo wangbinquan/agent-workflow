@@ -42,7 +42,7 @@ import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
 } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
-import { parseStoredTemplateMetadata } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/systemMessages'
+import { parseStoredTemplateMetadata } from '@/modules/resource-catalog/application/workgroups/workgroupSystemMessages'
 
 export type WorkgroupGateStatus =
   | 'idle'

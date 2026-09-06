@@ -14,8 +14,11 @@ import { FOLLOWUP_POLICY, type FailureCode, type FollowupFailureCode } from '@ag
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { followupForFailure, wgFollowupNotice } from '../src/services/workgroup/engine'
-import { renderWgProtocolBlock } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+import {
+  followupForFailure,
+  wgFollowupNotice,
+} from '../src/modules/resource-catalog/application/workgroups/workgroupTurnPrompts'
+import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
 // Every narrow envelope failure in the shared policy table is retryable in the

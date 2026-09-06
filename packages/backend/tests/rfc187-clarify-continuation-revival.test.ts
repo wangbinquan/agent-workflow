@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { isKilledClarifyContinuation } from '../src/services/workgroup/engine'
+import { isKilledClarifyContinuation } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/engine'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 

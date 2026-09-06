@@ -146,7 +146,7 @@ test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配�
   expect(driver).toContain('batchCount: cards.length,')
   expect(driver).not.toContain('## Workgroup output protocol')
   const adapter = readFileSync(
-    resolve(root, 'modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts'),
+    resolve(root, 'modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts'),
     'utf8',
   )
   expect(adapter).toContain('dependencies.clarifyAskGate.allowed(input)')

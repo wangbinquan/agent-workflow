@@ -37,7 +37,7 @@ import {
   renderLeaderLedger,
   renderMessagesBlock,
   renderRosterBlock,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+} from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import {
   assertAssignmentTransition,
   canTransitionAssignment,

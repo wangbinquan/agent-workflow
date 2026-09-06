@@ -1,6 +1,10 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
+import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
@@ -1890,6 +1894,13 @@ async function composeSqliteProviderSession(
       runtime: {
         memoryInjectionQueries,
         collaborationRuntime: createSqliteCollaborationRuntimeMechanics(db),
+        workgroupTurns: composeWorkgroupTurnsOperations(
+          db,
+          composeWorkgroupHostLedgerParticipantFactory({
+            collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+          }),
+          createWorkgroupClarifyAskGate(db),
+        ),
         runtimeSessionLeases,
         runtimeRegistry,
         identityAccess: Object.freeze({

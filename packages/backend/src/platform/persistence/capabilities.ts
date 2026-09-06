@@ -85,6 +85,13 @@ export interface EngineCapabilities {
    */
   reclaimScrubbedStorage(db: DatabaseTransaction): Promise<void>
 
+  /**
+   * 两个值里取大的那个。PG 是 `GREATEST(a, b)`，SQLite 是 `MAX(a, b)`——同一个语义、两个关键字，
+   * 而且 SQLite 的 `MAX` 在**多参数**形态下才是标量函数（单参数是聚合），所以只能这样分方言写。
+   * 典型用途：`onConflictDoUpdate` 里让游标只前进不后退（`MAX(旧值, excluded.新值)`）。
+   */
+  greatest(left: SQLWrapper, right: SQLWrapper): SQL
+
   /** `ORDER BY col ASC`，按 SQLite 的 NULL 落位（NULL 最前）。 */
   ascNullsFirst(column: SQLWrapper): SQL
   /** `ORDER BY col DESC`，按 SQLite 的 NULL 落位（NULL 最后）。 */
@@ -213,6 +220,7 @@ export function createSqliteCapabilities(): EngineCapabilities {
       // 单进程单写者；跨进程协调由 daemon 级 flock 承担。
     },
     indexHint: (indexName) => sql`INDEXED BY ${sql.identifier(indexName)}`,
+    greatest: (left, right) => sql`max(${left}, ${right})`,
     async reclaimScrubbedStorage(db) {
       await db.run(sql`PRAGMA secure_delete = ON`)
       await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
@@ -291,6 +299,7 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
       await tx.run(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
     },
     indexHint: () => sql``,
+    greatest: (left, right) => sql`greatest(${left}, ${right})`,
     async reclaimScrubbedStorage() {
       // PostgreSQL 由 autovacuum 回收页面；凭据单元格是事务内改写的，daemon 侧不做 VACUUM。
     },
