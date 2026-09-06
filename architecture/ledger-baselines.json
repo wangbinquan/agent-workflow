@@ -483,7 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25433,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。 RFC-359 W4-D19c-tail 第二刀（2026-09-06，25432 → 25433）：`workgroupHostLedgerParticipant.ts` 把内联的「领队反问停靠」判据抽成具名导出 `leaderClarifyParkedOf`，好让 RFC-187 F3 的断言锁生产那条、而不是已退役的 legacy strategies。生产行为一格未变；涨的这一格是**把一条既有规则命名**的代价。（记在 why 里而不是 allowGrowth：涨已经落在 14b552d58 上，一次性豁免只能与涨同笔，补在后一笔会被 T17 判成过期。）"
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -500,7 +500,7 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0f1deeb42c1ff1f16ffc83c0f15f405744a6b32a",
+    "currentSnapshotSha": "7526573e1cc7c0c837db38cf20c1c4584f18293c",
     "contentDigest": "sha256:c15b77bd6bb3a21437f8403fc950ce3ecce592152ca940f1fdb5998d8223b504",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
