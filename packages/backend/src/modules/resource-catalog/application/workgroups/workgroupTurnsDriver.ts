@@ -2328,6 +2328,26 @@ export async function warnIfZeroDelta(input: {
   })
 }
 
+/**
+ * RFC-186 —— daemon 崩溃后，一张还停在 `running` 的派单卡该怎么收：看它那条执行 run 的最终状态。
+ *
+ * - run 压根没铸出来（`undefined`）⇒ 重派：这轮什么都没发生。
+ * - run 已 `done`（产出并合回）⇒ 直接结卡：活是耐久的。
+ * - run 还 `pending` / `running` ⇒ 不动：仍有活着的驱动方持有它（新引擎本不该看到这种）。
+ * - `interrupted` / `failed` / `canceled` ⇒ 重派，让它干净地重跑一次。
+ *
+ * RFC-359 W4-D19c-tail：合一前这条在 `legacy/workgroup/engine.ts` 有具名形态，中立驱动接手时
+ * 写成了内联条件；抽回具名，供锁。
+ */
+export function decideAssignmentReconcile(
+  latestWorkerRunStatus: string | undefined,
+): 'done' | 'redispatch' | 'none' {
+  if (latestWorkerRunStatus === undefined) return 'redispatch'
+  if (latestWorkerRunStatus === 'done') return 'done'
+  if (latestWorkerRunStatus === 'pending' || latestWorkerRunStatus === 'running') return 'none'
+  return 'redispatch'
+}
+
 async function reconcileRunningAssignments(
   persistence: WorkgroupTurnsPersistencePort,
   snapshot: WorkgroupTurnsSnapshot,
@@ -2343,13 +2363,14 @@ async function reconcileRunningAssignments(
       (run) => run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID && run.shardKey === assignment.id,
     )
     const latest = direct ?? byShard[byShard.length - 1]
-    if (latest?.status === 'pending' || latest?.status === 'running') continue
+    const verdict = decideAssignmentReconcile(latest?.status)
+    if (verdict === 'none') continue
     operations.push(
       transitionAssignment({
         key: `reconcile-running:${assignment.id}`,
         assignmentId: assignment.id,
         from: 'running',
-        to: latest?.status === 'done' ? 'done' : 'dispatched',
+        to: verdict === 'done' ? 'done' : 'dispatched',
       }),
     )
   }

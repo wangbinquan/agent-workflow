@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { decideAssignmentReconcile } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/engine'
+import { decideAssignmentReconcile } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 describe('RFC-186 PR-2 — decideAssignmentReconcile', () => {
   test('interrupted before the worker run was minted → re-dispatch', () => {
