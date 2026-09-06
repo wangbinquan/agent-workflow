@@ -4261,3 +4261,27 @@ RFC-359 W4-D19c 实撞：工作组回合有 13 个「SQLite 行为套件」，�
 
 提交时反过来：`git commit -- <pathspec>` 要**两端都给**（新路径要 add，旧路径要让 commit 看见它已删除），
 所以那一份清单用 `sed 's/^...//; s/ -> /\n/'` 把重命名拆成两行。
+
+### 合一换掉事务原语之后，测试里「数事务次数」的插桩点会失灵——而重试本身还在
+
+统一事务原语（`DatabaseSession`）在 SQLite 上用 `db.run(sql'BEGIN IMMEDIATE')` 开事务，**不是**
+drizzle 的 `db.transaction(...)`。任何靠 `Proxy` 拦 `db.transaction` 来数「整笔事务被重试了几次」的
+用例，在把某个写手迁到统一原语之后会读到 0 次——**不是重试没了**（`createSqliteDatabaseSession`
+里包着 `retrySqliteWrite`，判据与迁移前逐字相同），是插桩点挪了位置。
+
+2026-09-06 实撞（RFC-359 W4-D24 把运行时会话租约迁过去）：
+`runner > a transient SQLITE_BUSY session-lease claim retries the whole transaction` 红在
+`transactionAttempts === 0`。修法是把 `Proxy` 从 `transaction` 挪到 `run`，按 SQL 文本认
+`BEGIN IMMEDIATE`。**别**把断言改成 `>= 0` 或删掉——那会把这条回归防护一起丢掉。
+
+### macOS 后端分片的「pump 超时」类红：先看同一 run 的 ubuntu 分片
+
+macOS runner 跑 3800+ 后端用例时负载很重，`pumpUntil exhausted` / 60s 超时这类红经常只在 macOS 的
+某一个分片出现。判它是不是真 bug 的最快证据是**同一个 run 里 ubuntu 分片的同一条用例**：
+
+    JID=$(gh run view <run> --json jobs --jq '.jobs[] | select(.name=="Backend tests (ubuntu-latest shard 1/4)") | .databaseId')
+    gh api "repos/<owner>/<repo>/actions/jobs/$JID/logs" | grep -a "<用例名>"
+
+2026-09-06 实撞：`rfc310 pr3 journey` 在 macOS 分片 55s 耗尽 pump 预算，同一 run 的 ubuntu 分片
+**75ms 通过**、本地整文件 1.79s。700 倍的差距不可能来自代码，判为 runner 负载，`gh run rerun --failed`
+后转绿。反过来说：**如果 ubuntu 那边也红，就不许当 flaky 处理**。
