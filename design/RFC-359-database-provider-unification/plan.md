@@ -786,9 +786,22 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   （门消费 + 任务跃迁 + 两族事件同笔落定 / 陈旧 taskRevision 整笔回滚 / 无义务时结算是 no-op /
   带守卫的 CAS 正常落定），9 条两引擎各绿。
 
-  留债：`SqliteHumanGateOperationStore`（825 行）还活着，唯一消费者是
-  `sqliteManualQuestionOpenWriter.ts`（它与 `postgresqlManualQuestionOpenWriter.ts` 是下一对，
-  165 / 269 行）。把那一对合掉，这个与 journal 完全重复的同步 store 就能整份删除——**D26**。
+  留债当场清掉了 —— 见下面的 D26。
+
+  **D26 ✅（手工提问写面合一 + 同步 gate 操作 store 退役，2026-09-06）**：
+  `sqlite|postgresqlManualQuestionOpenWriter.ts`（165 / 269 行）并成一份中立实现。又是同一形态：
+  PG 那份把 journal 的 `beginTx` / `markPreparedTx` **内联重写**成裸 INSERT + UPDATE，少了三条
+  ——不查幂等键回放、`claimEpoch` 恒写 1、不比 `requestHash`。合一改用中立 journal 后一并补齐。
+
+  写面是 `SqliteHumanGateOperationStore` 的最后一个消费者，于是那 825 行**整份删除**；
+  `humanGateOperationTransactionStore.ts` 只留共享形状（租约常量 / 工件声明与快照 / begin 的回答），
+  同步接口与 `services/humanGateComposition` 的 `createHumanGateOperationStore` 桥（零消费者）
+  一起退役，rfc349 provider 具名依赖账本销一条。
+
+  测试的处置同样按「覆盖跟着端口走」：`rfc333-human-gate-operation-store.test.ts` 锁的五条 store
+  判据，其实早已被**双引擎**的 `rfc359-t1-human-gate-journal.test.ts` 逐条接管（同名五条 + 恢复
+  认领排序一条），所以该文件只留与引擎无关的规范化请求断言；`rfc333-human-gate-artifact-recovery.test.ts`
+  的夹具改用中立 journal。新增 `rfc359-w4-d26-adapters.test.ts` 九条两引擎各绿。
 
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
