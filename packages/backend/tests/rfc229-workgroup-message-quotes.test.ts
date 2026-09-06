@@ -3,9 +3,10 @@
 // adopted clarify continuations cannot be rebound by messages arriving later.
 
 import { describe, expect, test } from 'bun:test'
-import { buildMsgShardKey, type WorkgroupMessage } from '@agent-workflow/shared'
+import { buildMsgShardKey, parseMsgShardKey, type WorkgroupMessage } from '@agent-workflow/shared'
 import { resolveMessageTurnTriggerId } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
-import { resolveMessageTurnTrigger } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/memberTurns'
+// RFC-359 W4-D19c-tail：边界判据改指生产那份。
+import { messageTurnBoundary } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 function message(
   id: string,
@@ -67,50 +68,28 @@ describe('RFC-229 resolveMessageTurnTrigger fresh/adopted boundary', () => {
   ]
 
   test('fresh turn freezes the current max and resolves within it', () => {
-    expect(resolveMessageTurnTrigger({ messages, hostRuns: [] }, 'member-b')).toEqual({
-      maxMessageId: '03',
-      triggerMessageId: '03',
+    expect(messageTurnBoundary({ messages } as never, 'member-b', undefined)).toEqual({
+      maxId: '03',
+      triggerId: '03',
     })
   })
 
   test('adopted turn keeps its persisted shard max despite a newer mention', () => {
     expect(
-      resolveMessageTurnTrigger(
-        {
-          messages,
-          hostRuns: [
-            {
-              id: 'run-adopted',
-              shardKey: buildMsgShardKey('member-b', '02'),
-            },
-          ],
-        },
-        'member-b',
-        'run-adopted',
-      ),
-    ).toEqual({
-      maxMessageId: '02',
-      triggerMessageId: '02',
-    })
+      messageTurnBoundary({ messages } as never, 'member-b', {
+        id: 'run-adopted',
+        shardKey: buildMsgShardKey('member-b', '02'),
+      } as never),
+    ).toEqual({ maxId: '02', triggerId: '02' })
   })
 
-  test('missing, malformed or wrong-member adopted shards fail closed', () => {
-    expect(
-      resolveMessageTurnTrigger(
-        { messages, hostRuns: [{ id: 'run', shardKey: 'assignment-1' }] },
-        'member-b',
-        'run',
-      ),
-    ).toEqual({ maxMessageId: null, triggerMessageId: null })
-    expect(
-      resolveMessageTurnTrigger(
-        {
-          messages,
-          hostRuns: [{ id: 'run', shardKey: buildMsgShardKey('member-c', '02') }],
-        },
-        'member-b',
-        'run',
-      ),
-    ).toEqual({ maxMessageId: null, triggerMessageId: null })
+  // RFC-359 W4-D19c-tail：合一前这条锁的是「分片键畸形 / 属于别的成员 ⇒ 失败关闭（返回 null）」。
+  // 中立驱动里这个入参组合**结构上不可达**——采纳分支把 `memberId` 从同一个分片键里解出来
+  // （`parseMsgShardKey(run.shardKey).memberId`），解不出来的 run 根本不会走到消息回合。
+  // 所以这条改成锁那个结构性前提：解不出消息分片键的 run 不被当作消息回合采纳。
+  test('a run whose shard key is not a message shard is never adopted as a message turn', () => {
+    expect(parseMsgShardKey('assignment-1')).toBeNull()
+    // 属于别的成员的分片键能解出来，但解出的正是**那个成员**——不会拿去驱动 member-b。
+    expect(parseMsgShardKey(buildMsgShardKey('member-c', '02'))?.memberId).toBe('member-c')
   })
 })

@@ -1493,7 +1493,17 @@ interface MessageTurnValue {
   readonly tasksAddRaw: string | undefined
 }
 
-function messageTurnBoundary(
+/**
+ * 一次消息回合的边界：这一轮看到哪条为止（`maxId`），以及是哪条 @ 触发的（`triggerId`）。
+ *
+ * 采纳既有 run 时 `maxId` 取该 run 分片键里冻结的那个上限——RFC-229：采纳的回合必须停在它当初
+ * 冻结的水位，否则会把之后新到的消息一并算进这一轮。
+ *
+ * RFC-359 W4-D19c-tail：合一前 legacy 的 `resolveMessageTurnTrigger` 在「分片键畸形 / 属于别的
+ * 成员」时返回 null 走**失败关闭**。这条在中立驱动里结构上不可达——采纳分支的 `memberId` 就是从
+ * 同一个分片键里解出来的（`parseMsgShardKey(run.shardKey).memberId`），解不出来根本不会进这里。
+ */
+export function messageTurnBoundary(
   snapshot: WorkgroupTurnsSnapshot,
   memberId: string,
   adoptedRun: WorkgroupTurnHostRun | undefined,
