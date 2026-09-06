@@ -961,6 +961,28 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   「删除没删掉」（实撞：`deleteSkill` 漏 await 后 `getSkill` 仍返回行）。这一轮共找出 **13 处**
   这样的调用点。合一 apply 引擎时要按同样的清单逐点核对，或先加一条禁止裸调用这些面的守卫。
 
+  ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
+
+  上面两条勘察（D23b 卡在 bundle apply 的同步大事务、剩余 task-execution 对卡在 `withOwnedTaskTx`）
+  指向同一个根：**bun:sqlite 独有的同步事务面**。已按调用点清点并上了高水位账本
+  （`tests/architecture/rfc359-sync-transaction-highwater.test.ts`，注册进 `ledger-baselines.json`
+  与 `guard-manifest.json`）：
+
+  | 上下文 | 调用点 |
+  | --- | --- |
+  | modules/resource-catalog | 52 |
+  | modules/task-execution | 20 |
+  | platform | 18 |
+  | modules/intent | 13 |
+  | modules/collaboration | 8 |
+  | services | 4 |
+  | auth | 4 |
+  | **合计** | **129（43 个文件）** |
+
+  中立原语**早就有**（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），
+  所以剩下的不是设计问题而是迁移量。账本让这件事从此可计数、可防守：新增一个同步调用点就红，
+  收敛了也要改账本——每一次减少都留下一次有署名的记录。
+
   ### Skill 聚合的勘察结论（W4-D23，尚未动手；这是剩余最大的一块）
 
   形态与任务房 / 回合完全同类，但深一个量级：**SQLite 侧是一层薄适配器，套在成熟的崩溃安全机器上**
