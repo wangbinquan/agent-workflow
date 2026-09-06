@@ -55493,8 +55493,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:create.$parameter:record.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -55528,8 +55527,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:listSummaries.$parameter:filter.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -55721,8 +55719,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -56304,8 +56301,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof TaskStatusSchema>"
@@ -58185,8 +58181,7 @@
         {
           "consumerEdgeIds": [
             "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:create.$parameter:record.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -58221,8 +58216,7 @@
         {
           "consumerEdgeIds": [
             "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:listSummaries.$parameter:filter.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -58417,8 +58411,7 @@
         {
           "consumerEdgeIds": [
             "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -59027,8 +59020,7 @@
         {
           "consumerEdgeIds": [
             "import:3cdf8922f68715adb097",
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof TaskStatusSchema>"
@@ -59945,8 +59937,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:create.$parameter:record.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -59980,8 +59971,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:listSummaries.$parameter:filter.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -60173,8 +60163,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -61390,8 +61379,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:create.$parameter:record.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -61425,8 +61413,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:listSummaries.$parameter:filter.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -61618,8 +61605,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -62838,8 +62824,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:create.$parameter:record.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -62873,8 +62858,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:listSummaries.$parameter:filter.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -63066,8 +63050,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:persistence.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -65183,8 +65166,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:create.$parameter:record.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -65218,8 +65200,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:listSummaries.$parameter:filter.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -65411,8 +65392,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.persistence.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof FusionStatusSchema>"
@@ -65994,8 +65974,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:84c141fe35dcc5e097b6",
-            "import:a1a49dee8c1f4b59cfc7"
+            "import:84c141fe35dcc5e097b6"
           ],
           "fieldPath": "$call.$parameter:deps.operations.tasks.$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof TaskStatusSchema>"
@@ -141739,7 +141718,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:90da900de8ae57a55ab3"
+        "import:a37e72ffad52c1951c3b"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -141748,28 +141727,28 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:90da900de8ae57a55ab3"
+            "import:a37e72ffad52c1951c3b"
           ],
           "fieldPath": "correlationRef",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:90da900de8ae57a55ab3"
+            "import:a37e72ffad52c1951c3b"
           ],
           "fieldPath": "eventGroupId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:90da900de8ae57a55ab3"
+            "import:a37e72ffad52c1951c3b"
           ],
           "fieldPath": "eventGroupOrdinal",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:90da900de8ae57a55ab3"
+            "import:a37e72ffad52c1951c3b"
           ],
           "fieldPath": "operationRef",
           "type": "string"
@@ -141788,9 +141767,9 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:90da900de8ae57a55ab3",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#$file"
+          "edgeId": "import:a37e72ffad52c1951c3b",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -142080,7 +142059,7 @@
         "maxUnionVariants": 57
       },
       "consumerEdgeIds": [
-        "import:d3a6a444580e906ae73b"
+        "import:efa62281df79b7c6ef08"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -142139,28 +142118,28 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$parameter:input.identity.correlationRef",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$parameter:input.identity.eventGroupId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$parameter:input.identity.eventGroupOrdinal",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$parameter:input.identity.operationRef",
           "type": "string"
@@ -142172,7 +142151,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$parameter:input.taskId",
           "type": "string"
@@ -142189,14 +142168,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$return.$variant:0.eventRef.$variant:0.aggregate.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$return.$variant:0.eventRef.$variant:0.aggregate.kind",
           "type": "(typeof COMMITTED_EVENT_AGGREGATE_KINDS)[number]"
@@ -142213,14 +142192,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$return.$variant:0.eventRef.$variant:0.eventGroupId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:continueTask.$return.$variant:0.eventRef.$variant:0.eventGroupOrdinal",
           "type": "number"
@@ -142256,7 +142235,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:efa62281df79b7c6ef08"
+          ],
           "fieldPath": "$method:continueTask.$return.$variant:0.intentId",
           "type": "string"
         },
@@ -142272,7 +142253,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:dismissOpenClarifyParksForAutonomous.$parameter:input.taskId",
           "type": "string"
@@ -142339,28 +142320,28 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$parameter:input.identity.correlationRef",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$parameter:input.identity.eventGroupId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$parameter:input.identity.eventGroupOrdinal",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$parameter:input.identity.operationRef",
           "type": "string"
@@ -142372,7 +142353,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$parameter:input.taskId",
           "type": "string"
@@ -142384,14 +142365,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$return.$variant:0.eventRef.$variant:0.aggregate.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$return.$variant:0.eventRef.$variant:0.aggregate.kind",
           "type": "(typeof COMMITTED_EVENT_AGGREGATE_KINDS)[number]"
@@ -142408,14 +142389,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$return.$variant:0.eventRef.$variant:0.eventGroupId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:failTask.$return.$variant:0.eventRef.$variant:0.eventGroupOrdinal",
           "type": "number"
@@ -142497,14 +142478,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:listVisibleActive.$parameter:authority.user.displayName",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:listVisibleActive.$parameter:authority.user.id",
           "type": "string"
@@ -142551,7 +142532,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:listVisibleActive.$parameter:authority.userId",
           "type": "string"
@@ -142568,14 +142549,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:load.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:load.$return.$variant:0.name",
           "type": "string"
@@ -142592,7 +142573,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:load.$return.$variant:0.status",
           "type": "z.infer<typeof TaskStatusSchema>"
@@ -142679,14 +142660,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:loadVisible.$parameter:authority.user.displayName",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:loadVisible.$parameter:authority.user.id",
           "type": "string"
@@ -142733,7 +142714,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:loadVisible.$parameter:authority.userId",
           "type": "string"
@@ -142745,14 +142726,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:loadVisible.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:loadVisible.$return.$variant:0.name",
           "type": "string"
@@ -142769,7 +142750,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:loadVisible.$return.$variant:0.status",
           "type": "z.infer<typeof TaskStatusSchema>"
@@ -142831,7 +142812,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "fieldPath": "$method:replaceConfig.$parameter:input.taskId",
           "type": "string"
@@ -142879,7 +142860,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "name": "listHostRuns",
           "signatureDigest": "sha256:08b14d8870e5a94cac49f95c9e4f4432c16be668b1053aa18ed61a9937236063"
@@ -142901,7 +142882,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d3a6a444580e906ae73b"
+            "import:efa62281df79b7c6ef08"
           ],
           "name": "loadVisible",
           "signatureDigest": "sha256:7db0870d6abe91a155f8d7e9f4f4ee4cd8466d0a8990cb023ddc890a6f934e2a"
@@ -142916,9 +142897,9 @@
       "productionConsumers": [
         {
           "context": "resource-catalog",
-          "edgeId": "import:d3a6a444580e906ae73b",
-          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#$file"
+          "edgeId": "import:efa62281df79b7c6ef08",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161462,7 +161443,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559",
+  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f",
   "targetContexts": [
     "collaboration",
     "development-automation",

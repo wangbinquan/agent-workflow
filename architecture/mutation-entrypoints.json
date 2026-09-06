@@ -20996,171 +20996,6 @@
     },
     {
       "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#ConfirmSchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#ConfirmSchema",
-      "symbol": "ConfirmSchema",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#createPostgresqlWorkgroupTaskRoomTransactionRunner",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#createPostgresqlWorkgroupTaskRoomTransactionRunner",
-      "symbol": "createPostgresqlWorkgroupTaskRoomTransactionRunner",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#DeliverSchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#DeliverSchema",
-      "symbol": "DeliverSchema",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#SaveAsWorkflowSchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#SaveAsWorkflowSchema",
-      "symbol": "SaveAsWorkflowSchema",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#transitionAssignment",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#transitionAssignment",
-      "symbol": "transitionAssignment",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts#createPostgresqlWorkgroupTaskRoomQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts#createPostgresqlWorkgroupTaskRoomQueries",
-      "symbol": "createPostgresqlWorkgroupTaskRoomQueries",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
@@ -21612,30 +21447,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts#createSqliteWorkgroupTaskRoomDriver",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts#createSqliteWorkgroupTaskRoomDriver",
-      "symbol": "createSqliteWorkgroupTaskRoomDriver",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
@@ -21767,6 +21578,196 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupRepository.ts#createWorkgroupRepository",
       "symbol": "createWorkgroupRepository",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#ConfirmSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#ConfirmSchema",
+      "symbol": "ConfirmSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#createWorkgroupTaskRoomTransactionRunner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#createWorkgroupTaskRoomTransactionRunner",
+      "symbol": "createWorkgroupTaskRoomTransactionRunner",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#DeliverSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#DeliverSchema",
+      "symbol": "DeliverSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#SaveAsWorkflowSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#SaveAsWorkflowSchema",
+      "symbol": "SaveAsWorkflowSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#transitionAssignment",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts#transitionAssignment",
+      "symbol": "transitionAssignment",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#AdmittedContinuation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#AdmittedContinuation",
+      "symbol": "AdmittedContinuation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#createWorkgroupTaskRoomQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#createWorkgroupTaskRoomQueries",
+      "symbol": "createWorkgroupTaskRoomQueries",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -43583,7 +43584,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559",
+  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -47403,8 +47404,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#300:tasks",
-        "line": 300,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#312:tasks",
+        "line": 312,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -47803,8 +47804,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3481:tasks",
-        "line": 3481,
+        "id": "task-authority:packages/backend/src/services/task.ts#3482:tasks",
+        "line": 3482,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -47819,8 +47820,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3606:taskExecutionIntents",
-        "line": 3606,
+        "id": "task-authority:packages/backend/src/services/task.ts#3607:taskExecutionIntents",
+        "line": 3607,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -47835,8 +47836,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3663:tasks",
-        "line": 3663,
+        "id": "task-authority:packages/backend/src/services/task.ts#3664:tasks",
+        "line": 3664,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -47851,8 +47852,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4292:tasks",
-        "line": 4292,
+        "id": "task-authority:packages/backend/src/services/task.ts#4293:tasks",
+        "line": 4293,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -47867,8 +47868,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5922:tasks",
-        "line": 5922,
+        "id": "task-authority:packages/backend/src/services/task.ts#5971:tasks",
+        "line": 5971,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

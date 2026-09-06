@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5733,
+      "baseline": 5741,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5095,
+      "baseline": 5103,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25543,
+      "baseline": 25542,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559",
+    "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "370f0d14c7dc10d4196c5f267b7268172b528d91",
-    "contentDigest": "sha256:d420f4aa024fbb6f4aceaa70bfbab3eeb456846af34dc93ed0db6294a2ccb8c2",
+    "currentSnapshotSha": "bdb5214f31b3c047ffdfba1b6654e549324e1600",
+    "contentDigest": "sha256:c73e97673e4b1e4430de50b914a2de8905b45b0ee80882a53f151ddcbbbfb040",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

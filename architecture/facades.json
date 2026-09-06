@@ -1731,6 +1731,7 @@
         "import:9956ea83b75b72c96069",
         "import:b09b83ab867dab5261ea",
         "import:d332b424b409118c6bbd",
+        "import:e5c904c89f9aedea7d19",
         "import:fe663f8e52bc4c04641e"
       ],
       "exportedSymbols": [
@@ -2901,6 +2902,7 @@
         "import:2b2d2d9f00f975732ace",
         "import:685e672ce99d6e4eec52",
         "import:7a1c1471fd64f9545158",
+        "import:c0d63379327c1e3691a3",
         "import:ee67eabc272206d3d912",
         "import:fbe249de1bfb4c5d1d0e"
       ],
@@ -5739,6 +5741,7 @@
         "cleanupMaterializedSpace",
         "commitMaterializedSpace",
         "composeHumanGateContinuationDriver",
+        "composeWorkgroupTaskRoomContinuationDriver",
         "computeWorkflowSyncPreview",
         "finalizeCanceledTaskWithoutDriver",
         "getNodeRunEvents",
@@ -6832,5 +6835,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559"
+  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f"
 }

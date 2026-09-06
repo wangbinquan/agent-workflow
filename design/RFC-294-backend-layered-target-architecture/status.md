@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1860 |
+| backend production TS 文件 | 1859 |
 | `services/` 文件 | 324 |
-| `modules/**` 文件 / 非空 context | 1249 / 17 |
+| `modules/**` 文件 / 非空 context | 1248 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5095 |
+| `architectureExceptions` | 5103 |
 | `backgroundJobs` | 362 |
-| `crossContextImports` | 5733 |
+| `crossContextImports` | 5741 |
 | `facades` | 324 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25543 |
+| `moduleSymbolOwners` | 25542 |
 | `mutationEntrypoints` | 1826 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 981 |
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | task-execution / infrastructure | 125 |
-| resource-catalog / infrastructure | 123 |
+| resource-catalog / infrastructure | 122 |
 | task-execution / application | 87 |
 | task-execution / composition | 58 |
 | collaboration / infrastructure | 57 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3454 |
-| legacy-inbound | 1445 |
+| legacy-outbound | 3456 |
+| legacy-inbound | 1451 |
 | infrastructure-external | 312 |
 | offered-consumption | 169 |
 | off-dag-offered | 94 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3454 |
-| legacy-inbound | 1445 |
+| legacy-outbound | 3456 |
+| legacy-inbound | 1451 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 91 |
 | no-circular | 6 |
@@ -228,10 +228,10 @@
 | removeAfterWave | 数量 |
 | --- | --- |
 | W9 | 2658 |
-| W4-E1 | 859 |
-| W4-C | 412 |
+| W4-E1 | 861 |
+| W4-C | 417 |
 | W4-E0 | 227 |
-| W4 | 211 |
+| W4 | 212 |
 | W4-B | 188 |
 | W5 | 149 |
 | W4-E8 | 114 |

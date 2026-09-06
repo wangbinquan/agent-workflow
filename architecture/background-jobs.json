@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:449",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:450",
       "kind": "register-call",
-      "line": 449,
+      "line": 450,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlDaemonApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlDaemonApplication",
@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3083",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3109",
       "kind": "register-call",
-      "line": 3083,
+      "line": 3109,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1312",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1320",
       "kind": "register-call",
-      "line": 1312,
+      "line": 1320,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2877",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2903",
       "kind": "register-call",
-      "line": 2877,
+      "line": 2903,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3143",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3169",
       "kind": "register-call",
-      "line": 3143,
+      "line": 3169,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createComposedApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createComposedApp",
@@ -12884,7 +12884,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:399",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:400",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12898,7 +12898,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:399",
+      "symbol": "$setTimeout:400",
       "targetContext": "task-execution"
     },
     {
@@ -12907,7 +12907,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5693",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5742",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12921,7 +12921,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5693",
+      "symbol": "$setTimeout:5742",
       "targetContext": "task-execution"
     },
     {
@@ -13451,5 +13451,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559"
+  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f"
 }

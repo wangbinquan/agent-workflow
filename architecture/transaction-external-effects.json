@@ -2758,118 +2758,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:122",
-      "line": 122,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:209",
-      "line": 209,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:304",
-      "line": 304,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:427",
-      "line": 427,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:45",
-      "line": 45,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "co-located-risk",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:455",
-      "line": 455,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "co-located-risk",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#withTransaction:765",
-      "line": 765,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts#createPostgresqlWorkgroupTaskRoomCommands",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomCommands",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts#withTransaction:102",
-      "line": 102,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts#createPostgresqlWorkgroupTaskRoomQueries",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomQueries",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts#withTransaction:25",
-      "line": 25,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomQueries.ts#createPostgresqlWorkgroupTaskRoomQueries",
-      "status": "clear",
-      "symbol": "createPostgresqlWorkgroupTaskRoomQueries",
-      "targetContext": "resource-catalog",
-      "transactionCallee": "withTransaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts#dbTxSync:161",
@@ -2951,6 +2839,118 @@
       "symbol": "createSqliteResourcePackageApplyJournalPort",
       "targetContext": "resource-catalog",
       "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:137",
+      "line": 137,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:228",
+      "line": 228,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:331",
+      "line": 331,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:461",
+      "line": 461,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [
+        "push"
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:489",
+      "line": 489,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "co-located-risk",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [
+        "push"
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:56",
+      "line": 56,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "co-located-risk",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:800",
+      "line": 800,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#createWorkgroupTaskRoomCommands",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomCommands",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#withTransaction:100",
+      "line": 100,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#createWorkgroupTaskRoomQueries",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomQueries",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#withTransaction:25",
+      "line": 25,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts#createWorkgroupTaskRoomQueries",
+      "status": "clear",
+      "symbol": "createWorkgroupTaskRoomQueries",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "withTransaction"
     },
     {
       "effectTokens": [
@@ -3994,8 +3994,8 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:3317",
-      "line": 3317,
+      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:3318",
+      "line": 3318,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
       "status": "co-located-risk",
       "symbol": "startTaskImpl",
@@ -4006,8 +4006,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:5977",
-      "line": 5977,
+      "id": "tx:packages/backend/src/services/task.ts#dbTxSync:6026",
+      "line": 6026,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
       "status": "clear",
       "symbol": "runDeferredRepoPreparation",
@@ -4042,7 +4042,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e06c753fff1c44d1bd8d97e4c5bf2c86314a3a84956b2deb977862b82023b559",
+  "sourceDigest": "sha256:412e10f1f9b21301bbc9815614174d8e37173112e5c52bd463640af53a332d3f",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -5173,9 +5173,9 @@
         "effectKind": "workspace-prepare",
         "file": "packages/backend/src/services/task.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/task.ts#5598:workspace-prepare",
+        "id": "task-effect:packages/backend/src/services/task.ts#5647:workspace-prepare",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 5598,
+        "line": 5647,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "recoveryClass": "local-probe-or-actor",
