@@ -169,35 +169,36 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(park).toBeLessThan(finalize)
 
     const participant = declaredFunction(
-      'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
-      'projectReviewGateOpenTx',
+      'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
+      'projectReviewGateOpen',
     )
     expect(participant).toContain('nodeRunMint.mint({')
-    expect(participant).toContain('tx.insert(docVersions)')
-    expect(participant).toContain('tx.insert(nodeRunEvents)')
+    expect(participant).toContain('.insert(docVersions)')
+    expect(participant).toContain('.insert(nodeRunEvents)')
 
     const parkCommand = read(
       'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
     )
     expect(parkCommand).toContain('return await persistence.parkPrepared({')
-    const sqliteLifecycle = read(
+    // RFC-359 W4-D25：停靠原子只剩一份，两个引擎共用；顺序判据照旧——先消费门、再跃迁任务、
+    // 最后在提交后发事件。
+    const lifecycle = read(
+      'packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
+    )
+    expect(lifecycle.indexOf('consumePreparedGateTx({')).toBeLessThan(
+      lifecycle.indexOf('transitionHumanGateTask(tx, {'),
+    )
+    expect(lifecycle.indexOf('transitionHumanGateTask(tx, {')).toBeLessThan(
+      lifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
+    )
+    for (const retired of [
       'packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
-    )
-    expect(sqliteLifecycle.indexOf('consumePreparedGateTx({')).toBeLessThan(
-      sqliteLifecycle.indexOf('this.lifecycle.transitionTx({'),
-    )
-    expect(sqliteLifecycle.indexOf('this.lifecycle.transitionTx({')).toBeLessThan(
-      sqliteLifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
-    )
-    const postgresqlLifecycle = read(
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
-    )
-    expect(postgresqlLifecycle.indexOf('consumePreparedGateTx({')).toBeLessThan(
-      postgresqlLifecycle.indexOf('transitionHumanGateTask(tx, {'),
-    )
-    expect(postgresqlLifecycle.indexOf('transitionHumanGateTask(tx, {')).toBeLessThan(
-      postgresqlLifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
-    )
+      'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOpenParticipant.ts',
+    ]) {
+      expect(() => read(retired)).toThrow()
+    }
   })
 
   test('T7 clarify target: complete preparation precedes one TaskParkTx and committed projection', () => {
@@ -227,25 +228,24 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(create).not.toContain('broadcastCrossCreated(')
 
     const participant = declaredFunction(
-      'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
-      'projectClarifyGateOpenTx',
+      'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
+      'projectClarifyGateOpen',
     )
     expect(participant).toContain('nodeRunMint.mint({')
-    expect(participant).toContain('tx.insert(clarifyRounds)')
-    expect(participant).toContain('tx.insert(taskQuestions)')
-    expect(participant).toContain('tx.insert(nodeRunEvents)')
+    expect(participant).toContain('.insert(clarifyRounds)')
+    expect(participant).toContain('.insert(taskQuestions)')
+    expect(participant).toContain('.insert(nodeRunEvents)')
     expect(
       countNamedCalls(
-        'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
-        'appendHumanGateOpenedCommittedEventTx',
+        'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
+        'appendHumanGateOpenedCommittedEvent',
       ),
     ).toBe(2)
-    for (const file of [
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
-    ]) {
-      expect(read(file)).toContain('publishCommittedEventsAfterCommit(result.eventRefs)')
-    }
+    expect(
+      read(
+        'packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
+      ),
+    ).toContain('publishCommittedEventsAfterCommit(result.eventRefs)')
   })
 
   test('T7 new rounds project eager questions while historical lazy reconciliation remains', () => {
@@ -256,9 +256,9 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       'packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts',
     )
     const participant = read(
-      'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
     )
-    expect(participant).toContain('tx.insert(taskQuestions)')
+    expect(participant).toContain('.insert(taskQuestions)')
     expect(seal).toContain('reconcileRoundEntriesTx(tx, {')
     expect(questions).toContain('export async function reconcileRoundEntriesTx(')
   })

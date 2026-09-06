@@ -21,27 +21,18 @@ import {
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
-import { composeTaskExecutionHumanGateAdapter } from '@/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
-import { SqliteClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader'
+import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { GateContinuationEffectStep } from '@/modules/task-execution/infrastructure/sqliteGateContinuationEffectStep'
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
-import { TaskParkTransaction } from '@/modules/task-execution/infrastructure/sqliteTaskParkTransaction'
-import {
-  ManualQuestionParkRequired,
-  ManualQuestionParkTransaction,
-} from '@/modules/task-execution/infrastructure/sqliteManualQuestionParkTransaction'
+import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
 import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
-import { LegacyHumanGateTaskLifecycle } from '@/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle'
-import {
-  assertNoManualQuestionParkObligationTx,
-  bindTaskDecisionParticipantInTx,
-} from '@/modules/task-execution/composition/humanGate'
+import { bindTaskDecisionParticipantInTx } from '@/modules/task-execution/composition/humanGate'
 import {
   humanGateNodeProjectionFence,
   type HumanGateNodeProjectionMember,
@@ -50,7 +41,6 @@ import {
   encodeLineageSlotPath,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
-import { trySetTaskStatus } from '@/services/lifecycle'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_788_969_900_000
@@ -191,6 +181,18 @@ function submitDecision(
   })
 }
 
+/**
+ * 合一前 `ManualQuestionParkTransaction.settle` 的回答形状是 `{consumed, parked}`；中立端口回答的是
+ * `{parked, taskRevision, operationIds, eventRefs}`。这些断言锁的是**结算判据**（认领了几条义务、
+ * 有没有停靠），所以在这里折回旧形状，逐条断言原样保留。
+ */
+function settleShape(settled: {
+  readonly parked: boolean
+  readonly operationIds: readonly string[]
+}): { consumed: number; parked: boolean } {
+  return { consumed: settled.operationIds.length, parked: settled.parked }
+}
+
 async function prepareOpenOperation(input: {
   db: ReturnType<typeof createInMemoryDb>
   store: SqliteHumanGateOperationStore
@@ -210,7 +212,7 @@ async function prepareOpenOperation(input: {
     .run()
   const result = await new ClarifyGateOpenPreparation(
     new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
-    new SqliteClarifyQuestionSnapshotReader(input.db),
+    new DatabaseClarifyQuestionSnapshotReader(input.db),
   ).prepare({
     taskId: input.taskId,
     kind: 'self',
@@ -264,18 +266,20 @@ describe('RFC-333 T5 TaskParkTx', () => {
     const operations = new SqliteHumanGateOperationStore()
     const opening = await prepareOpenOperation({ db, store: operations, taskId })
     const prepared = opening.prepared
-    const parked = await new TaskParkTransaction(
-      module.ownership,
-      composeTaskExecutionHumanGateAdapter(),
-      new LegacyHumanGateTaskLifecycle(),
-    ).park({ db, token: claimed.token, prepared, now: NOW + 2 })
+    const parked = await new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
+      prepared,
+      token: claimed.token,
+      now: NOW + 2,
+    })
 
-    expect(parked).toEqual({
+    expect(parked).toMatchObject({
       taskRevision: 2,
       gateRevision: 1,
       nodeProjectionDigest: opening.manifest.nodeProjectionDigest,
       committedEventRef: opening.manifest.committedEventRef,
     })
+    // 停靠一次要发两条已提交事件：任务生命周期一条 + collaboration 开门一条。
+    expect(parked.eventRefs).toHaveLength(2)
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
@@ -342,14 +346,9 @@ describe('RFC-333 T5 TaskParkTx', () => {
     `)
 
     await expect(
-      new TaskParkTransaction(
-        module.ownership,
-        composeTaskExecutionHumanGateAdapter(),
-        new LegacyHumanGateTaskLifecycle(),
-      ).park({
-        db,
-        token: claimed.token,
+      new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
         prepared,
+        token: claimed.token,
         now: NOW + 2,
       }),
     ).rejects.toThrow()
@@ -479,11 +478,9 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
 
-    const settled = await new ManualQuestionParkTransaction(
-      module.ownership,
-      composeTaskExecutionHumanGateAdapter(),
-      new LegacyHumanGateTaskLifecycle(),
-    ).settle({ db, taskId, token: claimed.token, now: NOW + 20 })
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+      .settleManualQuestionParks({ taskId, token: claimed.token, now: NOW + 20 })
+      .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
       status: 'awaiting_human',
@@ -507,12 +504,9 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       .set({ dispatchedAt: NOW + 11, dispatchedBy: 'user-rfc333' })
       .where(eq(taskQuestions.id, created.questionId))
       .run()
-    const module = createTaskExecutionTestModule('daemon-rfc333-manual-ownerless')
-    const settled = await new ManualQuestionParkTransaction(
-      module.ownership,
-      composeTaskExecutionHumanGateAdapter(),
-      new LegacyHumanGateTaskLifecycle(),
-    ).settle({ db, taskId, now: NOW + 20 })
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+      .settleManualQuestionParks({ taskId, now: NOW + 20 })
+      .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: false })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
     expect(
@@ -537,12 +531,9 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       .set({ autoDispatchDeferredAt: NOW + 11 })
       .where(eq(taskQuestions.id, created.questionId))
       .run()
-    const module = createTaskExecutionTestModule('daemon-rfc333-manual-auto-deferred')
-    const settled = await new ManualQuestionParkTransaction(
-      module.ownership,
-      composeTaskExecutionHumanGateAdapter(),
-      new LegacyHumanGateTaskLifecycle(),
-    ).settle({ db, taskId, now: NOW + 20 })
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+      .settleManualQuestionParks({ taskId, now: NOW + 20 })
+      .then(settleShape)
 
     expect(settled).toEqual({ consumed: 1, parked: false })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
@@ -564,12 +555,9 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       .set({ status: 'running', lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 3` })
       .where(eq(tasks.id, taskId))
       .run()
-    const module = createTaskExecutionTestModule('daemon-rfc333-manual-rebase')
-    const settled = await new ManualQuestionParkTransaction(
-      module.ownership,
-      composeTaskExecutionHumanGateAdapter(),
-      new LegacyHumanGateTaskLifecycle(),
-    ).settle({ db, taskId, now: NOW + 30 })
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+      .settleManualQuestionParks({ taskId, now: NOW + 30 })
+      .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
       status: 'awaiting_human',
@@ -589,25 +577,16 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     const taskId = 'task-333-manual-done-fence'
     seedTask(db, taskId, 'running')
     await createManual(db, taskId)
-    let caught: unknown = null
-    try {
-      await trySetTaskStatus({
-        db,
-        taskId,
-        to: 'done',
-        allowedFrom: ['running'],
-        reason: 'rfc333-manual-done-fence',
-        onTransitionTx: (tx) =>
-          assertNoManualQuestionParkObligationTx(
-            tx,
-            taskId,
-            composeTaskExecutionHumanGateAdapter(),
-          ),
-      })
-    } catch (error) {
-      caught = error
-    }
-    expect(caught).toBeInstanceOf(ManualQuestionParkRequired)
+    const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+    ).trySetWhenNoManualQuestionParks({
+      taskId,
+      to: 'done',
+      allowedFrom: ['running'],
+      reason: 'rfc333-manual-done-fence',
+      now: NOW + 40,
+    })
+    expect(outcome).toEqual({ kind: 'manual-question-pending' })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
   })
 })

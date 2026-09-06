@@ -1,8 +1,4 @@
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
-export type {
-  HumanGateOpenParticipant,
-  HumanGateOpenParticipantResult,
-} from '../application/ports/humanGateOpenParticipant'
 /**
  * Consumer-owned workspace contract for one Digital Employee Reaction.
  * The implementation may live in source-control or an employee type package;

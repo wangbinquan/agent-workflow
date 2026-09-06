@@ -228,11 +228,10 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
  * still fails both this exact inventory and the RFC-349 provider guard.
  */
 const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
-  'collaboration/infrastructure/postgresqlHumanGateOpenParticipant: packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
+  'collaboration/infrastructure/humanGateOpenParticipant: packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
+  'collaboration/infrastructure/humanGateOperationJournal: packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
   'collaboration/infrastructure/sqliteClarifyContinuationConvergence: packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
-  'collaboration/infrastructure/sqliteHumanGateOpenParticipant: packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
   'collaboration/infrastructure/humanGateOperationPersistence: packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
-  'collaboration/infrastructure/sqliteHumanGateOperationStore: packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
   'collaboration/infrastructure/taskDagCollaborationOperations: packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
   'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/composition/triggerExecution.ts',
   'resource-catalog/application/resourceDefaults: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',

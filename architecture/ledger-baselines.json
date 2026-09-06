@@ -321,8 +321,8 @@
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 45,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。"
+      "baseline": 43,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。"
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -363,8 +363,8 @@
       "id": "rfc328-cross-context-provider-bridge-debt",
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "baseline": 14,
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。"
+      "baseline": 13,
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
       "id": "rfc294-capability-compatibility-debt",

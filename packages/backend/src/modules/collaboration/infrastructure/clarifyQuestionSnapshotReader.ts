@@ -1,13 +1,17 @@
+// RFC-359 W4-D25 —— clarify 准备用的问题快照读面：一份实现，两个引擎共用。
+// 合一前两份逐字同一条查询，只差取行姿势（SQLite `.get()` / PG `.limit(1)` 取首行）。
+
 import { and, eq } from 'drizzle-orm'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskQuestions } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   ClarifyQuestionSnapshot,
   ClarifyQuestionSnapshotReader,
 } from '../application/ports/clarifyQuestionSnapshotReader'
 
-export class PostgresqlClarifyQuestionSnapshotReader implements ClarifyQuestionSnapshotReader {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DatabaseClarifyQuestionSnapshotReader implements ClarifyQuestionSnapshotReader {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async find(
     input: Parameters<ClarifyQuestionSnapshotReader['find']>[0],

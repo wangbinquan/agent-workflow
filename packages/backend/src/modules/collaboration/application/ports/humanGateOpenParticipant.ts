@@ -32,6 +32,23 @@ export interface HumanGateNodeRunMintParticipantInTx<Result extends string | Pro
   mint(input: HumanGateNodeRunMintInput): Result
 }
 
+/**
+ * RFC-359 W4-D25 —— 同样窄的 node-run 停靠能力：把一条既有 run 从其唯一合法源状态 CAS 到
+ * 停靠态。Task Execution 供给实现，collaboration 仍然拿不到任何 DB 句柄。
+ */
+export interface HumanGateNodeRunLifecycleParticipantInTx {
+  set(input: {
+    readonly nodeRunId: string
+    readonly to: 'awaiting_review' | 'awaiting_human'
+    readonly allowedFrom: readonly ('pending' | 'running')[]
+    readonly extra?: Readonly<{
+      startedAt?: number | null
+      consumedUpstreamRunsJson?: string | null
+    }>
+    readonly reason?: string
+  }): Promise<{ readonly from: string; readonly to: string }>
+}
+
 export interface HumanGateOpenParticipantResult {
   readonly gate: HumanGateIdentity
   readonly gateRevision: number
@@ -45,15 +62,17 @@ export interface HumanGateOpenParticipantInTx {
     readonly prepared: PreparedHumanGateRef
     readonly taskRevision: number
     readonly now: number
-  }): HumanGateOpenParticipantResult
-  listPreparedManualQuestionParksTx(taskId: string): readonly string[]
+  }): Promise<HumanGateOpenParticipantResult>
+  listPreparedManualQuestionParksTx(taskId: string): Promise<readonly string[]>
   consumeManualQuestionParkTx(input: {
     readonly operationId: string
     readonly taskId: string
     readonly now: number
-  }): Readonly<{
-    outstanding: boolean
-    nodeProjectionDigest: string
-    committedEventRef: string
-  }>
+  }): Promise<
+    Readonly<{
+      outstanding: boolean
+      nodeProjectionDigest: string
+      committedEventRef: string
+    }>
+  >
 }

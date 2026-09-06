@@ -20,7 +20,7 @@ import type { TaskFeedbackStore } from '../application/ports/taskFeedbackStore'
 import type { CollaborationTaskAccessPort } from '../application/ports/collaborationTaskAccess'
 import type { ClarifyDirectiveStore } from '../application/ports/clarifyDirectiveStore'
 import { FsHumanGateArtifactStore } from '../infrastructure/fsHumanGateArtifactStore'
-import { SqliteClarifyQuestionSnapshotReader } from '../infrastructure/sqliteClarifyQuestionSnapshotReader'
+import { DatabaseClarifyQuestionSnapshotReader } from '../infrastructure/clarifyQuestionSnapshotReader'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGateOperationPersistence'
 import { SqliteHumanGateOperationStore } from '../infrastructure/sqliteHumanGateOperationStore'
@@ -29,7 +29,6 @@ import { DatabaseCommittedReviewArtifactReader } from '../infrastructure/committ
 import { DrizzleReviewNodeReviewerStore } from '../infrastructure/reviewNodeReviewerStore'
 import { createReviewTaskAccessPort } from '../infrastructure/reviewTaskAccess'
 import { DrizzleTaskFeedbackStore } from '../infrastructure/taskFeedbackStore'
-import { PostgresqlClarifyQuestionSnapshotReader } from '../infrastructure/postgresqlClarifyQuestionSnapshotReader'
 import { PostgresqlManualQuestionOpenWriter } from '../infrastructure/postgresqlManualQuestionOpenWriter'
 import { createCollaborationTaskAccessPort } from '../infrastructure/collaborationTaskAccess'
 import { createSqliteClarifyDirectiveStore } from '../infrastructure/sqliteClarifyDirectiveStore'
@@ -71,7 +70,7 @@ export function createCollaborationCommandContext(
     reviewTaskAccess: input.reviewTaskAccess ?? createReviewTaskAccessPort(input.db),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
-      clarifyQuestions: new SqliteClarifyQuestionSnapshotReader(input.db),
+      clarifyQuestions: new DatabaseClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new SqliteManualQuestionOpenWriter(input.db, operationTransactions),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),
@@ -100,7 +99,7 @@ export function createPostgresqlCollaborationCommandContext(
     reviewTaskAccess: input.reviewTaskAccess ?? createReviewTaskAccessPort(input.db),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
-      clarifyQuestions: new PostgresqlClarifyQuestionSnapshotReader(input.db),
+      clarifyQuestions: new DatabaseClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new PostgresqlManualQuestionOpenWriter(input.db),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),

@@ -1,8 +1,17 @@
-// RFC-333 — collaboration's offered participant for an owned TaskParkTx.
+// RFC-359 W4-D25 —— human-gate 开启参与者：一份实现，两个引擎共用。
+//
+// 合一前这里是两份：`sqliteHumanGateOpenParticipant.ts`（RFC-333，`DbTxSync` 同步、经
+// `SqliteHumanGateOperationStore` 记账）与 `postgresqlHumanGateOpenParticipant.ts`（RFC-349，
+// 自己内联了一套更弱的 commit / complete）。正典取 SQLite 那份的**语义**：逐点的陈旧原因文案、
+// 提交与完成的幂等重放、以及「提交要求工件全 staged / 完成要求工件全 finalized」两条判据——它们
+// 在中立记账 `DatabaseHumanGateOperationJournal` 里已经逐行照搬，这里直接用，不再另写一套。
+//
+// 事务是中立的 `DatabaseTransaction`：调用方（task-execution 的 park 原子）在
+// `withTaskExecutionSerializable` 体内把它交进来，本文件只做 collaboration 自己的投影与记账。
 
-import type { DbTxSync } from '@/db/txSync'
-import { and, asc, eq, inArray } from 'drizzle-orm'
 import { SYSTEM_DECIDER } from '@agent-workflow/shared'
+import { and, asc, eq, inArray } from 'drizzle-orm'
+
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -12,14 +21,15 @@ import {
   reviewComments,
   taskQuestions,
 } from '@/db/schema'
-import { transitionNodeRunStatusTx } from '@/services/lifecycle'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type {
+  HumanGateNodeRunLifecycleParticipantInTx,
   HumanGateNodeRunMintParticipantInTx,
   HumanGateOpenParticipantInTx,
   HumanGateOpenParticipantResult,
 } from '../application/ports/humanGateOpenParticipant'
-import type { HumanGateOperationTransactionStore } from './humanGateOperationTransactionStore'
 import { HumanGateOperationError } from '../domain/humanGateOperation'
 import {
   decodeClarifyGateOpenManifest,
@@ -30,8 +40,8 @@ import {
   type ManualQuestionOpenManifest,
 } from '../domain/manualQuestionOpen'
 import { decodeReviewGateOpenManifest, type ReviewGateOpenManifest } from '../domain/reviewGateOpen'
-import { appendHumanGateOpenedCommittedEventTx } from './collaborationCommittedEventParticipant'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
+import { appendHumanGateOpenedCommittedEvent } from './collaborationCommittedEvents'
+import type { HumanGateOperationJournal } from './humanGateOperationJournal'
 
 interface PreparedOpenManifest {
   readonly schemaVersion: 1
@@ -78,21 +88,50 @@ function decodePreparedOpenManifest(raw: string): PreparedOpenManifest {
   return value as PreparedOpenManifest
 }
 
-/** The collaboration-owned review projection applied inside TaskParkTx. */
-function projectReviewGateOpenTx(
-  tx: DbTxSync,
-  nodeRunMint: HumanGateNodeRunMintParticipantInTx<string>,
+/**
+ * 停靠一条既有 node run。正典是合一前 SQLite 的那条（走共享转移表的事务内 CAS）；这里改用
+ * task-execution 提供的生命周期参与者，是为了不让 collaboration 直接 import 对方的 infrastructure。
+ * 两者判据一致：调用点在这之前已经逐字校过该行的 status，所以 `allowedFrom` 只有一个合法源。
+ */
+async function parkGateNodeRun(
+  nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
+  input: {
+    readonly nodeRunId: string
+    readonly allowedFrom: 'pending' | 'running'
+    readonly event: 'park-review' | 'park-human'
+    readonly extra: Readonly<{ startedAt: number | null; consumedUpstreamRunsJson?: string | null }>
+  },
+): Promise<void> {
+  await nodeRunLifecycle.set({
+    nodeRunId: input.nodeRunId,
+    to: input.event === 'park-review' ? 'awaiting_review' : 'awaiting_human',
+    allowedFrom: [input.allowedFrom],
+    extra: input.extra,
+    reason: input.event,
+  })
+}
+
+/** The collaboration-owned review projection applied inside the park transaction. */
+async function projectReviewGateOpen(
+  tx: DatabaseTransaction,
+  nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
+  nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   manifest: ReviewGateOpenManifest,
-): void {
+): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
-    if (tx.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.id, node.id)).get()) {
+    const existing = await tx
+      .select({ id: nodeRuns.id })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, node.id))
+      .limit(1)
+    if (existing[0] !== undefined) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
         `review-open node projection '${node.id}' already exists`,
       )
     }
-    nodeRunMint.mint({
+    await nodeRunMint.mint({
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -107,25 +146,27 @@ function projectReviewGateOpenTx(
       },
     })
   } else {
-    const existing = tx
-      .select({
-        id: nodeRuns.id,
-        taskId: nodeRuns.taskId,
-        nodeId: nodeRuns.nodeId,
-        iteration: nodeRuns.iteration,
-        reviewIteration: nodeRuns.reviewIteration,
-        status: nodeRuns.status,
-        consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-      })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.id, node.id),
-          eq(nodeRuns.taskId, node.taskId),
-          eq(nodeRuns.nodeId, node.nodeId),
-        ),
-      )
-      .get()
+    const existing = (
+      await tx
+        .select({
+          id: nodeRuns.id,
+          taskId: nodeRuns.taskId,
+          nodeId: nodeRuns.nodeId,
+          iteration: nodeRuns.iteration,
+          reviewIteration: nodeRuns.reviewIteration,
+          status: nodeRuns.status,
+          consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
+        })
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.id, node.id),
+            eq(nodeRuns.taskId, node.taskId),
+            eq(nodeRuns.nodeId, node.nodeId),
+          ),
+        )
+        .limit(1)
+    )[0]
     const expectedStatus = node.mode === 'reuse-pending' ? 'pending' : 'awaiting_review'
     if (
       existing === undefined ||
@@ -141,10 +182,10 @@ function projectReviewGateOpenTx(
       )
     }
     if (node.mode === 'reuse-pending') {
-      transitionNodeRunStatusTx({
-        tx,
+      await parkGateNodeRun(nodeRunLifecycle, {
         nodeRunId: node.id,
-        event: { kind: 'park-review' },
+        allowedFrom: 'pending',
+        event: 'park-review',
         extra: {
           startedAt: node.startedAt,
           consumedUpstreamRunsJson: node.consumedUpstreamRunsJson,
@@ -152,17 +193,18 @@ function projectReviewGateOpenTx(
       })
     } else {
       const sourcePortName = manifest.documents[0]!.sourcePortName
-      const currentPendingIds = tx
-        .select({ id: docVersions.id })
-        .from(docVersions)
-        .where(
-          and(
-            eq(docVersions.reviewNodeRunId, node.id),
-            eq(docVersions.sourcePortName, sourcePortName),
-            eq(docVersions.decision, 'pending'),
-          ),
-        )
-        .all()
+      const currentPendingIds = (
+        await tx
+          .select({ id: docVersions.id })
+          .from(docVersions)
+          .where(
+            and(
+              eq(docVersions.reviewNodeRunId, node.id),
+              eq(docVersions.sourcePortName, sourcePortName),
+              eq(docVersions.decision, 'pending'),
+            ),
+          )
+      )
         .map((document) => document.id)
         .sort()
       if (
@@ -177,10 +219,12 @@ function projectReviewGateOpenTx(
         )
       }
       if (currentPendingIds.length > 0) {
-        tx.delete(reviewComments)
+        await tx
+          .delete(reviewComments)
           .where(inArray(reviewComments.docVersionId, currentPendingIds))
           .run()
-        tx.update(docVersions)
+        await tx
+          .update(docVersions)
           .set({
             decision: 'superseded',
             decisionReason: 'upstream-refreshed',
@@ -190,7 +234,8 @@ function projectReviewGateOpenTx(
           .where(inArray(docVersions.id, currentPendingIds))
           .run()
       }
-      tx.update(nodeRuns)
+      await tx
+        .update(nodeRuns)
         .set({ consumedUpstreamRunsJson: node.consumedUpstreamRunsJson })
         .where(eq(nodeRuns.id, node.id))
         .run()
@@ -198,7 +243,8 @@ function projectReviewGateOpenTx(
   }
 
   for (const document of manifest.documents) {
-    tx.insert(docVersions)
+    await tx
+      .insert(docVersions)
       .values({
         id: document.id,
         taskId: document.taskId,
@@ -226,7 +272,8 @@ function projectReviewGateOpenTx(
       })
       .run()
   }
-  tx.insert(nodeRunEvents)
+  await tx
+    .insert(nodeRunEvents)
     .values({
       nodeRunId: node.id,
       ts: node.startedAt,
@@ -242,20 +289,26 @@ function projectReviewGateOpenTx(
 }
 
 /** The collaboration-owned clarify node + round + eager question projection. */
-export function projectClarifyGateOpenTx(
-  tx: DbTxSync,
-  nodeRunMint: HumanGateNodeRunMintParticipantInTx<string>,
+export async function projectClarifyGateOpen(
+  tx: DatabaseTransaction,
+  nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
+  nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   manifest: ClarifyGateOpenManifest,
-): void {
+): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
-    if (tx.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.id, node.id)).get()) {
+    const existing = await tx
+      .select({ id: nodeRuns.id })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, node.id))
+      .limit(1)
+    if (existing[0] !== undefined) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
         `clarify-open node projection '${node.id}' already exists`,
       )
     }
-    nodeRunMint.mint({
+    await nodeRunMint.mint({
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -270,19 +323,21 @@ export function projectClarifyGateOpenTx(
       },
     })
   } else {
-    const existing = tx
-      .select({
-        taskId: nodeRuns.taskId,
-        nodeId: nodeRuns.nodeId,
-        status: nodeRuns.status,
-        iteration: nodeRuns.iteration,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
-        shardKey: nodeRuns.shardKey,
-        startedAt: nodeRuns.startedAt,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, node.id))
-      .get()
+    const existing = (
+      await tx
+        .select({
+          taskId: nodeRuns.taskId,
+          nodeId: nodeRuns.nodeId,
+          status: nodeRuns.status,
+          iteration: nodeRuns.iteration,
+          parentNodeRunId: nodeRuns.parentNodeRunId,
+          shardKey: nodeRuns.shardKey,
+          startedAt: nodeRuns.startedAt,
+        })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, node.id))
+        .limit(1)
+    )[0]
     const expectedStatus =
       node.mode === 'reuse-pending'
         ? 'pending'
@@ -305,49 +360,51 @@ export function projectClarifyGateOpenTx(
       )
     }
     if (node.mode === 'reuse-pending' || node.mode === 'reuse-running') {
-      transitionNodeRunStatusTx({
-        tx,
+      await parkGateNodeRun(nodeRunLifecycle, {
         nodeRunId: node.id,
-        event: { kind: 'park-human' },
+        allowedFrom: node.mode === 'reuse-pending' ? 'pending' : 'running',
+        event: 'park-human',
         extra: { startedAt: node.startedAt },
       })
     }
   }
 
-  if (
-    tx
-      .select({ id: clarifyRounds.id })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, manifest.round.id))
-      .get()
-  ) {
+  const round = await tx
+    .select({ id: clarifyRounds.id })
+    .from(clarifyRounds)
+    .where(eq(clarifyRounds.id, manifest.round.id))
+    .limit(1)
+  if (round[0] !== undefined) {
     throw new HumanGateOperationError(
       'human-gate-operation-stale',
       `clarify-open round projection '${manifest.round.id}' already exists`,
     )
   }
-  tx.insert(clarifyRounds).values(manifest.round).run()
+  await tx.insert(clarifyRounds).values(manifest.round).run()
 
   for (const question of manifest.questions) {
     if (question.mode === 'insert') {
-      const conflict = tx
-        .select({ id: taskQuestions.id })
-        .from(taskQuestions)
-        .where(
-          and(
-            eq(taskQuestions.originNodeRunId, question.originNodeRunId),
-            eq(taskQuestions.questionId, question.questionId),
-            eq(taskQuestions.roleKind, question.roleKind),
-          ),
-        )
-        .get()
+      const conflict = (
+        await tx
+          .select({ id: taskQuestions.id })
+          .from(taskQuestions)
+          .where(
+            and(
+              eq(taskQuestions.originNodeRunId, question.originNodeRunId),
+              eq(taskQuestions.questionId, question.questionId),
+              eq(taskQuestions.roleKind, question.roleKind),
+            ),
+          )
+          .limit(1)
+      )[0]
       if (conflict !== undefined) {
         throw new HumanGateOperationError(
           'human-gate-operation-stale',
           `clarify-open question projection '${question.questionId}' appeared before park`,
         )
       }
-      tx.insert(taskQuestions)
+      await tx
+        .insert(taskQuestions)
         .values({
           id: question.id,
           taskId: question.taskId,
@@ -382,7 +439,9 @@ export function projectClarifyGateOpenTx(
         .run()
       continue
     }
-    const existing = tx.select().from(taskQuestions).where(eq(taskQuestions.id, question.id)).get()
+    const existing = (
+      await tx.select().from(taskQuestions).where(eq(taskQuestions.id, question.id)).limit(1)
+    )[0]
     if (
       existing === undefined ||
       existing.taskId !== question.taskId ||
@@ -402,7 +461,8 @@ export function projectClarifyGateOpenTx(
         `clarify-open existing question projection '${question.questionId}' changed before park`,
       )
     }
-    tx.update(taskQuestions)
+    await tx
+      .update(taskQuestions)
       .set({
         questionTitle: question.questionTitle,
         defaultTargetNodeId: question.defaultTargetNodeId,
@@ -411,7 +471,8 @@ export function projectClarifyGateOpenTx(
       .where(eq(taskQuestions.id, question.id))
       .run()
   }
-  tx.insert(nodeRunEvents)
+  await tx
+    .insert(nodeRunEvents)
     .values({
       nodeRunId: node.id,
       ts: manifest.round.createdAt,
@@ -428,12 +489,14 @@ export function projectClarifyGateOpenTx(
     .run()
 }
 
-function manualQuestionStillOutstanding(
-  tx: DbTxSync,
+async function manualQuestionStillOutstanding(
+  tx: DatabaseTransaction,
   manifest: ManualQuestionOpenManifest,
-): boolean {
+): Promise<boolean> {
   const expected = manifest.question
-  const row = tx.select().from(taskQuestions).where(eq(taskQuestions.id, expected.id)).get()
+  const row = (
+    await tx.select().from(taskQuestions).where(eq(taskQuestions.id, expected.id)).limit(1)
+  )[0]
   if (row === undefined) return false
   if (
     row.taskId !== expected.taskId ||
@@ -462,15 +525,16 @@ function manualQuestionStillOutstanding(
   )
 }
 
-export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticipantInTx {
+export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenParticipantInTx {
   constructor(
-    private readonly tx: DbTxSync,
-    private readonly operations: HumanGateOperationTransactionStore,
-    private readonly nodeRunMint: HumanGateNodeRunMintParticipantInTx<string>,
+    private readonly tx: DatabaseTransaction,
+    private readonly journal: HumanGateOperationJournal,
+    private readonly nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
+    private readonly nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   ) {}
 
-  listPreparedManualQuestionParksTx(taskId: string): readonly string[] {
-    return this.tx
+  async listPreparedManualQuestionParksTx(taskId: string): Promise<readonly string[]> {
+    const rows = await this.tx
       .select({ id: collaborationGateOperations.id })
       .from(collaborationGateOperations)
       .where(
@@ -482,20 +546,21 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
         ),
       )
       .orderBy(asc(collaborationGateOperations.createdAt), asc(collaborationGateOperations.id))
-      .all()
-      .map((operation) => operation.id)
+    return rows.map((operation) => operation.id)
   }
 
-  consumeManualQuestionParkTx(input: {
+  async consumeManualQuestionParkTx(input: {
     readonly operationId: string
     readonly taskId: string
     readonly now: number
-  }): Readonly<{
-    outstanding: boolean
-    nodeProjectionDigest: string
-    committedEventRef: string
-  }> {
-    const operation = this.operations.getTx(this.tx, input.operationId)
+  }): Promise<
+    Readonly<{
+      outstanding: boolean
+      nodeProjectionDigest: string
+      committedEventRef: string
+    }>
+  > {
+    const operation = await this.journal.getTx(this.tx, input.operationId)
     if (
       operation === null ||
       operation.state !== 'prepared' ||
@@ -513,14 +578,14 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
     if (
       manifest.question.taskId !== operation.taskId ||
       manifest.gateRef !== operation.gateRef ||
-      this.operations.listArtifactsTx(this.tx, operation.id).length !== 0
+      (await this.journal.listArtifactsTx(this.tx, operation.id)).length !== 0
     ) {
       throw new HumanGateOperationError(
         'human-gate-operation-manifest-invalid',
         'manual-question operation identity or artifact set changed',
       )
     }
-    const outstanding = manualQuestionStillOutstanding(this.tx, manifest)
+    const outstanding = await manualQuestionStillOutstanding(this.tx, manifest)
     const receiptJson = JSON.stringify({
       v: 1,
       operationId: operation.id,
@@ -530,14 +595,14 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
       acceptedAt: input.now,
       outstanding,
     })
-    const committed = this.operations.commitTx({
+    const committed = await this.journal.commitTx({
       tx: this.tx,
       operationId: operation.id,
       expectedClaimEpoch: operation.claimEpoch,
       receiptJson,
       now: input.now,
     })
-    this.operations.completeTx({
+    await this.journal.completeTx({
       tx: this.tx,
       operationId: operation.id,
       expectedClaimEpoch: committed.claimEpoch,
@@ -550,10 +615,10 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
     }
   }
 
-  consumePreparedGateTx(
+  async consumePreparedGateTx(
     input: Parameters<HumanGateOpenParticipantInTx['consumePreparedGateTx']>[0],
-  ): HumanGateOpenParticipantResult {
-    const operation = this.operations.getTx(this.tx, input.prepared.operationId)
+  ): Promise<HumanGateOpenParticipantResult> {
+    const operation = await this.journal.getTx(this.tx, input.prepared.operationId)
     if (
       operation === null ||
       operation.state !== 'prepared' ||
@@ -576,7 +641,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
         'prepared human-gate manifest gate identity changed',
       )
     }
-    const artifacts = this.operations.listArtifactsTx(this.tx, operation.id)
+    const artifacts = await this.journal.listArtifactsTx(this.tx, operation.id)
     if (artifacts.some((artifact) => artifact.state !== 'staged')) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
@@ -612,8 +677,8 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
           )
         }
       }
-      projectReviewGateOpenTx(this.tx, this.nodeRunMint, reviewManifest)
-      collaborationEventRef = appendHumanGateOpenedCommittedEventTx(this.tx, {
+      await projectReviewGateOpen(this.tx, this.nodeRunMint, this.nodeRunLifecycle, reviewManifest)
+      collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {
         family: 'review',
         gate: {
           taskId: operation.taskId,
@@ -641,8 +706,13 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
           'clarify-open operation identity or artifact set changed',
         )
       }
-      projectClarifyGateOpenTx(this.tx, this.nodeRunMint, clarifyManifest)
-      collaborationEventRef = appendHumanGateOpenedCommittedEventTx(this.tx, {
+      await projectClarifyGateOpen(
+        this.tx,
+        this.nodeRunMint,
+        this.nodeRunLifecycle,
+        clarifyManifest,
+      )
+      collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {
         family: 'clarify',
         gate: {
           taskId: operation.taskId,
@@ -666,7 +736,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
       committedEventRef: manifest.committedEventRef,
       acceptedAt: input.now,
     })
-    const committed = this.operations.commitTx({
+    const committed = await this.journal.commitTx({
       tx: this.tx,
       operationId: operation.id,
       expectedClaimEpoch: operation.claimEpoch,
@@ -674,7 +744,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
       now: input.now,
     })
     if (manifest.kind === 'clarify-open') {
-      this.operations.completeTx({
+      await this.journal.completeTx({
         tx: this.tx,
         operationId: operation.id,
         expectedClaimEpoch: operation.claimEpoch,

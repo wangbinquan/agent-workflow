@@ -17,8 +17,7 @@ import { DrizzleGateContinuationEffectPersistence } from '../infrastructure/gate
 import { DrizzleTaskExecutionIntentTerminalPersistence } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { PostgresqlTaskExecutionRecoveryPersistence } from '../infrastructure/postgresqlTaskExecutionRecovery'
 import { SqliteTaskExecutionRecoveryPersistence } from '../infrastructure/sqliteTaskExecutionRecoveryPersistence'
-import { PostgresqlHumanGateTaskLifecyclePersistence } from '../infrastructure/postgresqlHumanGateTaskLifecyclePersistence'
-import { SqliteHumanGateTaskLifecyclePersistence } from '../infrastructure/sqliteHumanGateTaskLifecyclePersistence'
+import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'
 import { DrizzleTaskEngineApplicationPersistence } from '../infrastructure/taskEngineApplicationPersistence'
 import { DrizzleGateContinuationPreDrivePersistence } from '../infrastructure/gateContinuationPreDrivePersistence'
 import { DrizzleSchedulerCompletionPersistence } from '../infrastructure/schedulerCompletionPersistence'
@@ -183,7 +182,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
     recovery: new SqliteTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
-    humanGateLifecycle: new SqliteHumanGateTaskLifecyclePersistence(db),
+    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createSqliteRecoveryAdministration(db),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
@@ -216,7 +215,7 @@ export function createPostgresqlTaskExecutionPersistence(
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
     recovery: new PostgresqlTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
-    humanGateLifecycle: new PostgresqlHumanGateTaskLifecyclePersistence(db),
+    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createPostgresqlRecoveryAdministration(db),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),

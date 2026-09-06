@@ -1,7 +1,6 @@
 // RFC-333 — collaboration composition root. Legacy callers enter through one
 // temporary service bridge until their constructors receive these dependencies.
 
-export { composeTaskExecutionHumanGateAdapter } from './composition/taskExecutionHumanGateAdapter'
 // RFC-359 W4-B3：实现只有一份；provider 具名导出只做绑定（bootstrap 收敛后一并删）。
 export {
   createCollaborationTaskAccessPort,

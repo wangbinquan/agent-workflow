@@ -2522,7 +2522,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/sqliteHumanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpenTx|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
+    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
     )
   ) {
@@ -2575,7 +2575,7 @@ function classifyTaskExecutionAuthority(input: {
   // would make the ledger blind to future adapters, so every family below is
   // deliberately named.
   if (
-    /modules\/collaboration\/infrastructure\/(?:legacySqliteClarify\/seal|legacySqliteReview|postgresqlCollaborationRuntimeMechanics|(?:postgresql|sqlite)HumanGateOpenParticipant|(?:postgresql|sqlite)ReviewRepairParticipant)/.test(
+    /modules\/collaboration\/infrastructure\/(?:legacySqliteClarify\/seal|legacySqliteReview|postgresqlCollaborationRuntimeMechanics|humanGateOpenParticipant|(?:postgresql|sqlite)ReviewRepairParticipant)/.test(
       value,
     )
   ) {
@@ -2718,7 +2718,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskExecutionEffectPersistence|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)|nodeRunMintParticipant|humanGateTaskTransition|workspaceRollbackEffect|nodeRunLifecycleTransition|ownedTaskExecution|wrapperRunPersistence|nodeRunRuntimePersistence|schedulerCompletionPersistence|runtimeSessionCapturePersistence|gateContinuationPreDrivePersistence|mergeStateLifecyclePersistence|taskEngineApplicationPersistence|nodeExecutionPersistence|nodeRunLifecyclePersistence|workgroupHostLedgerParticipant|runtimeSessionLeaseOperations)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskExecutionEffectPersistence|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)|nodeRunMintParticipant|humanGateTaskTransition|workspaceRollbackEffect|nodeRunLifecycleTransition|ownedTaskExecution|wrapperRunPersistence|nodeRunRuntimePersistence|schedulerCompletionPersistence|runtimeSessionCapturePersistence|gateContinuationPreDrivePersistence|mergeStateLifecyclePersistence|taskEngineApplicationPersistence|nodeExecutionPersistence|nodeRunLifecyclePersistence|workgroupHostLedgerParticipant|runtimeSessionLeaseOperations|humanGateTaskLifecyclePersistence)/.test(
       value,
     )
   ) {

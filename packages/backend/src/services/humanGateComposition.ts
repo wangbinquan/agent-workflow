@@ -6,7 +6,6 @@ import {
   SqliteHumanGateOperationStore,
   canonicalHumanGateRequestHash,
   canonicalHumanGateValueJson,
-  composeTaskExecutionHumanGateAdapter as composeTaskExecutionHumanGateAdapterInternal,
   createCollaborationCommandContext as createCollaborationCommandContextInternal,
   decodeClarifyDecisionManifest,
   decodeClarifyDecisionReceipt,
@@ -30,7 +29,6 @@ import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInter
 
 export const humanGateComposition = {
   createCollaborationCommandContext: createCollaborationCommandContextInternal,
-  composeTaskExecutionHumanGateAdapter: composeTaskExecutionHumanGateAdapterInternal,
   canonicalHumanGateRequestHash,
   canonicalHumanGateValueJson,
   deriveHumanGateCompatibilityKey,
@@ -65,12 +63,9 @@ export const humanGateComposition = {
     return bindTaskDecisionParticipantInTxInternal(tx)
   },
   parkPreparedHumanGate(
-    input: Omit<Parameters<typeof parkPreparedHumanGateInternal>[0], 'humanGates'>,
+    input: Parameters<typeof parkPreparedHumanGateInternal>[0],
   ): ReturnType<typeof parkPreparedHumanGateInternal> {
-    return parkPreparedHumanGateInternal({
-      ...input,
-      humanGates: composeTaskExecutionHumanGateAdapterInternal(),
-    })
+    return parkPreparedHumanGateInternal(input)
   },
 }
 

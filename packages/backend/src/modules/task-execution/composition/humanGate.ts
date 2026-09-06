@@ -1,5 +1,11 @@
 // RFC-333 — module-internal composition helpers. Public participants expose
 // only the bound purpose-specific interface, never the raw SQLite transaction.
+//
+// RFC-359 W4-D25：停靠原子不再有 provider 分叉，也不再有「legacy 同步一份 / RFC-349 一份」两条路。
+// `parkPreparedHumanGate` / `settleManualQuestionParkObligations` 直接落到中立的
+// `DatabaseHumanGateTaskLifecyclePersistence`——它与此前 SQLite 的 `TaskParkTransaction` /
+// `ManualQuestionParkTransaction` 逐条同判据（同一个 owner 围栏、同一条 `transitionHumanGateTask`、
+// 同样提交后发事件），只是两个引擎共用同一份。
 
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
@@ -9,20 +15,18 @@ import {
   type TaskDecisionParticipantInTx,
 } from '../infrastructure/sqliteTaskDecisionParticipant'
 import {
-  TaskParkTransaction,
+  parkTaskAtHumanGate,
   type ParkTaskAtHumanGateResult,
-} from '../infrastructure/sqliteTaskParkTransaction'
+} from '../application/parkTaskAtHumanGate'
 import {
   ManualQuestionParkRequired,
-  ManualQuestionParkTransaction,
-  assertNoManualQuestionParkObligationTx as assertNoManualQuestionParkObligationTxInternal,
+  settleManualQuestionParkObligations as settleManualQuestionParkObligationsInternal,
   type ManualQuestionParkSettleResult,
-} from '../infrastructure/sqliteManualQuestionParkTransaction'
+} from '../application/parkManualQuestions'
 import type { TaskExecutionEffectStore } from '../infrastructure/taskExecutionEffectTransactionStore'
-import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import { assertTaskExecutionContext } from '../application/taskExecutionContext'
-import { taskExecutionModule } from '../composition'
+import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'
 import { LegacyHumanGateTaskLifecycle } from '../infrastructure/legacyHumanGateTaskLifecycle'
 
 const humanGateTaskLifecycle = new LegacyHumanGateTaskLifecycle()
@@ -36,32 +40,22 @@ export function bindTaskDecisionParticipantInTx(
 
 export async function parkPreparedHumanGate(input: {
   readonly db: DbClient
-  readonly humanGates: HumanGateOpenParticipant
   readonly prepared: PreparedHumanGateRef
   readonly executionContext?: TaskExecutionContextRef
   readonly now?: number
 }): Promise<ParkTaskAtHumanGateResult> {
-  const transaction = new TaskParkTransaction(
-    taskExecutionModule.ownership,
-    input.humanGates,
-    humanGateTaskLifecycle,
-  )
-  const now = input.now ?? Date.now()
-  if (input.executionContext === undefined) {
-    return await transaction.parkOwnerless({ db: input.db, prepared: input.prepared, now })
+  if (input.executionContext !== undefined) {
+    assertTaskExecutionContext(input.executionContext, input.prepared.taskId)
   }
-  assertTaskExecutionContext(input.executionContext, input.prepared.taskId)
-  return await transaction.park({
-    db: input.db,
-    token: input.executionContext.token,
+  return await parkTaskAtHumanGate(new DatabaseHumanGateTaskLifecyclePersistence(input.db), {
     prepared: input.prepared,
-    now,
+    ...(input.executionContext === undefined ? {} : { token: input.executionContext.token }),
+    ...(input.now === undefined ? {} : { now: input.now }),
   })
 }
 
 export async function settleManualQuestionParkObligations(input: {
   readonly db: DbClient
-  readonly humanGates: HumanGateOpenParticipant
   readonly taskId: string
   readonly executionContext?: TaskExecutionContextRef
   readonly now?: number
@@ -69,24 +63,14 @@ export async function settleManualQuestionParkObligations(input: {
   if (input.executionContext !== undefined) {
     assertTaskExecutionContext(input.executionContext, input.taskId)
   }
-  return await new ManualQuestionParkTransaction(
-    taskExecutionModule.ownership,
-    input.humanGates,
-    humanGateTaskLifecycle,
-  ).settle({
-    db: input.db,
-    taskId: input.taskId,
-    ...(input.executionContext === undefined ? {} : { token: input.executionContext.token }),
-    now: input.now ?? Date.now(),
-  })
-}
-
-export function assertNoManualQuestionParkObligationTx(
-  tx: DbTxSync,
-  taskId: string,
-  humanGates: HumanGateOpenParticipant,
-): void {
-  assertNoManualQuestionParkObligationTxInternal(tx, taskId, humanGates)
+  return await settleManualQuestionParkObligationsInternal(
+    new DatabaseHumanGateTaskLifecyclePersistence(input.db),
+    {
+      taskId: input.taskId,
+      ...(input.executionContext === undefined ? {} : { token: input.executionContext.token }),
+      ...(input.now === undefined ? {} : { now: input.now }),
+    },
+  )
 }
 
 export { ManualQuestionParkRequired }
