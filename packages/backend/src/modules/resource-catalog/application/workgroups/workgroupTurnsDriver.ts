@@ -2119,6 +2119,23 @@ async function driveWakeItem(input: {
   })
 }
 
+/**
+ * RFC-187 §3-7 —— 采纳一个既有领队 run 时，它算不算**收尾轮**（带 FINAL 指令、禁止新派单）。
+ *
+ * 注意这与「要不要叫醒领队开一轮收尾」是两个问题：叫醒那边用 `=== maxRounds`（只给一轮宽限，
+ * 超了就 capExceeded 转停人），这里用 `>= maxRounds`——宽限轮自己也计数，采纳它时当然仍是收尾。
+ *
+ * RFC-359 W4-D19c-tail：合一前这条在 `legacy/workgroup/strategies/leaderWorker.ts` 有具名形态，
+ * 中立驱动接手时写成了内联条件；抽回具名，供锁。
+ */
+export function isLeaderWrapUpContinuation(snapshot: WorkgroupTurnsSnapshot): boolean {
+  return (
+    snapshot.config.mode === 'leader_worker' &&
+    roundBudget(snapshot) >= snapshot.config.maxRounds &&
+    hasSalvageableWork(snapshot)
+  )
+}
+
 async function driveAdoptedRun(input: {
   readonly persistence: WorkgroupTurnsPersistencePort
   readonly snapshot: WorkgroupTurnsSnapshot
@@ -2132,9 +2149,7 @@ async function driveAdoptedRun(input: {
       snapshot: input.snapshot,
       host: input.host,
       adoptedRun: input.run,
-      wrapUp:
-        roundBudget(input.snapshot) >= input.snapshot.config.maxRounds &&
-        hasSalvageableWork(input.snapshot),
+      wrapUp: isLeaderWrapUpContinuation(input.snapshot),
       registerMint: input.registerMint,
     })
   }
@@ -2264,7 +2279,19 @@ async function openCompletionGate(input: {
   return true
 }
 
-async function warnIfZeroDelta(input: {
+/**
+ * RFC-187 §4 —— 收场时「零 canonical 增量却有完成的卡」是可疑的：产物做出来了却没并回 canonical
+ * （探针 A：fan-out 的写手写到了自己 iso 之外，merge-back 什么都没并）。`doneAssignmentCount` 保证
+ * 「确实有完成的活」才提示——纯协调型小队正常收场为零文件，只该拿到一条不阻断的提醒。
+ *
+ * RFC-359 W4-D19c-tail：合一前这条判据在 `legacy/workgroup/strategies/leaderWorker.ts` 里有具名
+ * 形态（`detectZeroDeltaDone`），中立驱动接手时写成了内联条件；抽回具名，供锁。
+ */
+export function detectZeroDeltaDone(filesChanged: number, doneAssignmentCount: number): boolean {
+  return filesChanged === 0 && doneAssignmentCount > 0
+}
+
+export async function warnIfZeroDelta(input: {
   readonly persistence: WorkgroupTurnsPersistencePort
   readonly snapshot: WorkgroupTurnsSnapshot
   readonly host: WorkgroupTurnHostOperations
@@ -2281,7 +2308,7 @@ async function warnIfZeroDelta(input: {
   } catch {
     return
   }
-  if (changed !== 0) return
+  if (!detectZeroDeltaDone(changed, doneCount)) return
   await commit(input.persistence, input.snapshot.taskId, [
     createMessage(
       `zero-delta:${ulid()}`,
@@ -2748,6 +2775,8 @@ interface LeaderTurnValue {
     readonly title: string
     readonly brief: string
   }[]
+  /** RFC-187 §3-7：收尾轮把新派单丢掉了，房间要留一条说明。 */
+  readonly wrapUpDroppedDispatch: boolean
   readonly messages: readonly { readonly to: string | null; readonly body: string }[]
 }
 
@@ -2874,6 +2903,10 @@ async function driveLeaderTurn(input: {
           action: decision.value.action,
           summary: decision.value.summary,
           assignments: input.wrapUp ? [] : assignments.value,
+          // RFC-187 §3-7：收尾轮丢掉的新派单要在房间里留一条说明（合一前 SQLite 的
+          // `wrapUpDroppedDispatch` → `roundCapDispatchIgnored`）。中立驱动接手时只保留了
+          // 「丢」、丢了「说明」，房间里于是静默少掉一批卡——两个 provider 都是。补回。
+          wrapUpDroppedDispatch: input.wrapUp && assignments.value.length > 0,
           messages: messages.value,
         },
       }
@@ -2919,6 +2952,21 @@ async function driveLeaderTurn(input: {
       keyPrefix: `leader:${outcome.runId}`,
     }),
   ]
+  if (outcome.value.wrapUpDroppedDispatch) {
+    operations.push(
+      createMessage(
+        `leader-wrapup-dispatch-dropped:${outcome.runId}`,
+        messageDraft({
+          round,
+          authorKind: 'system',
+          kind: 'system',
+          bodyMd: 'new dispatches were ignored: the round cap has been reached',
+          templateKey: 'roundCapDispatchIgnored',
+          templateParams: {},
+        }),
+      ),
+    )
+  }
   let dispatchIndex = 0
   for (const dispatch of outcome.value.assignments) {
     const member = input.snapshot.config.members.find(

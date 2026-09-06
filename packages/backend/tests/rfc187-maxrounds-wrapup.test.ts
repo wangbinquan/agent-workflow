@@ -21,7 +21,10 @@ import {
   deriveWakeSet,
 } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
-import { isLeaderWrapUpContinuation } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
+// RFC-359 W4-D19c-tail：判据改指生产那份。注意它与「要不要叫醒领队开收尾轮」是两个问题：
+// 叫醒那边用 `=== maxRounds`（只给一轮宽限），这里是「采纳既有 run 时算不算收尾」，用 `>=`
+// ——宽限轮自己也计数。两个分支在中立驱动里都在，抽名的是后者。
+import { isLeaderWrapUpContinuation } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 function deriveWake(input: WakeInput) {
@@ -207,42 +210,36 @@ describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', (
 })
 
 describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)', () => {
-  // RFC-217 T3b：wrap-up 逻辑分居 engine（wake item 路由）与 leaderWorker
-  //（directive/drop）——锁面并读两处。
-  const RUNNER = [['engine.ts'], ['strategies', 'leaderWorker.ts']]
-    .map((parts) =>
-      readFileSync(
-        resolve(
-          import.meta.dir,
-          '..',
-          'src',
-          'modules',
-          'resource-catalog',
-          'infrastructure',
-          'legacy',
-          'workgroup',
-          ...parts,
-        ),
-        'utf8',
-      ),
-    )
-    .join('\n')
+  // RFC-359 W4-D19c-tail：锁面改指生产那份（中立回合驱动）。合一前 wrap-up 逻辑分居 legacy 的
+  // engine（wake item 路由）与 leaderWorker（directive/drop），现在都在这一份里。
+  const RUNNER = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'application',
+      'workgroups',
+      'workgroupTurnsDriver.ts',
+    ),
+    'utf8',
+  )
 
   test('the wrap-up round injects a forced "declare done, do not dispatch" directive', () => {
     expect(RUNNER).toContain('FINAL round — the round cap has been reached')
-    // threaded from the wake item...
-    expect(RUNNER).toContain("item.reason === 'wrap-up'")
-    // ...AND re-derived on the adopted (clarify-answer) path — see the Codex
-    // impl-gate P1 lock below.
-    expect(RUNNER).toContain(
-      'driveLeaderTurn(args, state, row.id, isLeaderWrapUpContinuation(state))',
-    )
+    // 从 wake item 线程进来的那条…
+    expect(RUNNER).toContain("wrapUp: input.item.reason === 'wrap-up'")
+    // …以及采纳（澄清回答）路径上重新推导的那条。
+    expect(RUNNER).toContain('wrapUp: isLeaderWrapUpContinuation(input.snapshot)')
   })
 
   test('new dispatch on a wrap-up round is DROPPED (not dispatched, not errored)', () => {
-    // dropping (vs erroring) keeps a `done` decision landing — graceful, no hard fail.
-    expect(RUNNER).toMatch(/wrapUp && dispatches\.ok && dispatches\.value\.length > 0/)
-    expect(RUNNER).toContain('wrapUpDroppedDispatch = true')
+    // 丢弃（而不是报错）让 `done` 决定仍能落地——优雅降级，不硬失败。
+    expect(RUNNER).toContain('assignments: input.wrapUp ? [] : assignments.value')
+    // 丢了还要在房间里说明白：RFC-359 W4-D19c-tail 补回的那条。
+    expect(RUNNER).toContain('wrapUpDroppedDispatch')
+    expect(RUNNER).toContain("templateKey: 'roundCapDispatchIgnored'")
   })
 })
 

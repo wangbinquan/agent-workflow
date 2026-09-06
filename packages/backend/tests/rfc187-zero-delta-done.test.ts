@@ -8,10 +8,11 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+// RFC-359 W4-D19c-tail：判据改指生产那份（中立回合驱动）。
 import {
   detectZeroDeltaDone,
-  warnIfZeroDeltaDone,
-} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
+  warnIfZeroDelta,
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 describe('RFC-187 §4 — detectZeroDeltaDone', () => {
   test('zero files + completed work = suspect (probe A shape)', () => {
@@ -32,23 +33,33 @@ describe('RFC-187 §4 — detectZeroDeltaDone', () => {
 describe('RFC-187 §4 — source locks', () => {
   test('RFC-274 discussion output skips the hook before any git work; files preserves it', async () => {
     let calls = 0
-    const args = {
-      hooks: {
-        getCanonicalFilesChanged: async () => {
-          calls += 1
-          return 1
-        },
+    const host = {
+      getCanonicalFilesChanged: async () => {
+        calls += 1
+        return 1
       },
     }
-    const state = {
+    const snapshot = {
+      taskId: 't1',
       config: { mode: 'leader_worker', outputContract: 'discussion' },
       assignments: [{ status: 'done' }],
+      messages: [],
     }
-    await warnIfZeroDeltaDone(args as never, state as never)
+    const log = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+    const persistence = { commit: async () => ({ committed: true, mintedRuns: [] }) }
+    const call = async (): Promise<void> => {
+      await warnIfZeroDelta({
+        persistence: persistence as never,
+        snapshot: snapshot as never,
+        host: host as never,
+        log: log as never,
+      })
+    }
+    await call()
     expect(calls).toBe(0)
 
-    state.config.outputContract = 'files'
-    await warnIfZeroDeltaDone(args as never, state as never)
+    snapshot.config.outputContract = 'files'
+    await call()
     expect(calls).toBe(1)
   })
 
