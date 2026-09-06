@@ -1433,7 +1433,10 @@ async function createPostgresqlManualQuestion(
     )
   }
   await assertPostgresqlManualTarget(db, input.taskId, input.targetNodeId)
-  const created = await new DatabaseManualQuestionOpenWriter(db, new DatabaseHumanGateOperationJournal()).create({
+  const created = await new DatabaseManualQuestionOpenWriter(
+    db,
+    new DatabaseHumanGateOperationJournal(),
+  ).create({
     taskId: input.taskId,
     title,
     body,
