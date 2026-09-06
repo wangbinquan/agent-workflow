@@ -50,7 +50,8 @@ import { parseAgentFrame } from '../engine/envelope/parseAgentFrame'
 import { runCapabilitySemanticValidator } from '../engine/envelope/semanticValidators'
 import { publishConflictRepair } from './conflictRepairDelivery'
 import type { MissionRow, MissionPersistence } from './ports/missionStore'
-import { recordOnMission, type ReconcileDeps } from './missionReconciler'
+import type { ReconcileDeps } from './missionReconciler'
+import { recordOnMission } from './missionRecord'
 
 /** 预算硬上限（policy 级配置接线归 PR-5；先取保守常量并入 pre-state 冻结）。 */
 export const ATTEMPT_WORKSPACE_BUDGET = {

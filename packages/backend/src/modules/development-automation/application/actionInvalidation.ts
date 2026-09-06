@@ -11,7 +11,7 @@
 // 幂等：无 in-flight attempt 时是 no-op（返回 false）。
 
 import type { MissionRow, MissionPersistence } from './ports/missionStore'
-import { recordOnMission } from './missionReconciler'
+import { recordOnMission } from './missionRecord'
 import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
 export interface InvalidateActionDeps {

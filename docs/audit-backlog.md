@@ -1753,6 +1753,17 @@ VACUUM / 换索引 / 改表都能变),把它当契约等于把 provider 实现�
 同族已修:`ORDER BY x DESC` 在 SQLite 是 NULLS LAST、PostgreSQL 是 NULLS FIRST,SQL 逐字相同、
 结果相反——RFC-349 已加 `platform/persistence/postgresqlNullOrdering.ts` 显式写死并带 parity 守卫。
 
+- ⏳ **同族再撞（2026-09-07，`89e17efbe` 的 `Backend tests (macos-latest shard 4/4)`）**：
+  `rfc210-refresh-recency-self-renewal.test.ts` 的 `touchRecency:false …` 以 **5018.86ms** 红，
+  伴 `a beforeEach/afterEach hook timed out`，根因日志是对着**临时本机 git HTTP 远端**
+  （`http://127.0.0.1:49415/…/remote.git`）的真 clone 抛 `repo-clone-failed`，
+  `status: 400`、`stderr` **为空**——不是 git 报错，是那个临时 HTTP 服务还没起好 / 已被拆掉。
+  与下面这条同族（hosted runner 上真 clone 贴上限 / 抢跑），且只在 CI 的 `RUN_GIT_NETWORK=1`
+  下才跑，本机默认跑不到；本机显式跑该用例 3/3 全绿。**归属排除**：owning commit 只动了
+  技能目录 / mission reconciler / 任务归属三处，与 gitRepoCache、临时 git HTTP fixture 零交集。
+  处置同下条：需要 owner 判定是给 clone 的 fixture 加「远端已就绪」的确定性等待锚点，
+  而不是抬超时（抬了会掩盖真挂起）。
+
 - ⏳ **`startTask URL mode (RFC-024) > cold launch clones URL, persists repoUrl, does not write recent_repos` 在 hosted macOS runner 上红**（2026-09-03 观测，`f81a9a41b` 的 `Backend tests (macos-latest shard 3/4)`）：以 **30011.45ms** 撞上该文件 30s 预算,日志同时打了 `killed 1 dangling process` 与一处 `rmSync(tmpDir)` 后抛 `DomainError`(带 git stderr)——**真 `git clone` 子进程没跑完就被超时杀了**,与本文件已登记的「hosted runner 上贴上限」家族同形(RFC-227 Seatbelt 5015ms、local-gate-runner 100ms 窗口)。**归属排除**:同 run 的 owning commit 只有三处运行时改动,且逐处可证等价——`provider === 'sqlite'` → `storage === 'embedded-file'`(sqlite⇒embedded-file、postgresql⇒external-server,真值表相同)、`classifyRetryable` 两侧同函数(`postgresqlRetryableCode` 只是 `postgresqlSerializationFailureCode` 的一层包装)、`booleanLiteral` 同字面量;其余 15 个文件全是把内联 `'sqlite' | 'postgresql'` 换成 import 同名类型别名,**零运行时影响**。本机 `RUN_GIT_NETWORK=1` 下该文件整体 5.01s。**未擅自放宽预算**:一次观测不足以给别人的用例抬上限,而且它跑的是真 clone、抬上限会掩盖真挂起;需要 RFC-024 的 owner 判定是给 clone 加确定性等待锚点(而非固定超时),还是标记为环境敏感。同 run 里 `macos shard 1/4` 那条 RFC-322 棘轮(5058.92ms 撞 bun 默认 5000ms)已按 RFC-227 先例加显式 30s 上限就地修掉。
 
 ## Webhook 权限面（RFC-260 评审门 F-9 登记，2026-08-06）
