@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:2f76c805a10bb57a37f01acfc710ad12406753ee66bca57cec99bb58b8b345cc`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:aebc259b37870e4448b691b71f3aeb55f040161df792c61246bc6ead367c6120`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1853 |
+| backend production TS 文件 | 1852 |
 | `services/` 文件 | 323 |
-| `modules/**` 文件 / 非空 context | 1243 / 17 |
+| `modules/**` 文件 / 非空 context | 1242 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 362 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 283 / 35 |
+| RFC-317 boundary census（inbound / outbound） | 281 / 35 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -32,11 +32,11 @@
 | `ambientWiring` | 494 |
 | `architectureExceptions` | 5051 |
 | `backgroundJobs` | 362 |
-| `crossContextImports` | 5684 |
+| `crossContextImports` | 5680 |
 | `facades` | 323 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25519 |
-| `mutationEntrypoints` | 1821 |
+| `moduleSymbolOwners` | 25514 |
+| `mutationEntrypoints` | 1819 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 981 |
 | `transactionExternalEffects` | 328 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 124 |
+| task-execution / infrastructure | 123 |
 | resource-catalog / infrastructure | 115 |
 | task-execution / application | 87 |
 | task-execution / composition | 58 |
@@ -202,11 +202,11 @@
 | --- | --- |
 | legacy-outbound | 3399 |
 | legacy-inbound | 1457 |
-| infrastructure-external | 308 |
+| infrastructure-external | 307 |
 | offered-consumption | 169 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 90 |
-| provider-mirror | 79 |
+| provider-mirror | 76 |
 | authority-type-only | 58 |
 | required-implementation | 27 |
 | external-layer-debt | 3 |
