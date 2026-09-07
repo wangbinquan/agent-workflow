@@ -363,8 +363,8 @@
       "id": "rfc359-w5-bare-transaction",
       "file": "packages/backend/tests/architecture/rfc359-w5-t18-bare-transaction.test.ts",
       "symbol": "BARE_TRANSACTION_DEBT",
-      "baseline": 1,
-      "why": "RFC-359 W5「防复辟」波次。事务原语之外直调 `db.transaction(` 的存量。bun:sqlite 的同步包装器在第一个 await 处就 COMMIT，所以一个事务体没法同时跑两个引擎——新写的必须走 `databaseSessionFor(db).transaction(...)`。含 `intentSqlPersistence.ts` 的 27 处 `this.runner.transaction`：那是本仓第二套并行的中立事务抽象，按债计入（豁免它等于给「再开一套」发许可证），随 IntentSqlProgramRunner 合一自然清零。"
+      "baseline": 0,
+      "why": "RFC-359 W12：事务原语之外的裸驱动 transaction 调用归零。按 TypeScript 接收者类型辨认数据库句柄，生成器 runner 的 27 处调用已在 W7 使用中立原语，不能继续误记为驱动调用；内存变异覆盖改名、属性、嵌套依赖、泛型、可选链和字符串索引。"
     },
     {
       "id": "rfc359-w5-composition-root-placeholder",
@@ -847,10 +847,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 982,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 W11：T22（禁止 legacy → 模块内部 import）的正解是把 `appendTaskCreatedCommittedEvent` 与 `setNodeRunStatusInTransaction` 提升为 `modules/task-execution/public/participants` 的正规公共合同，而不是把 T22 账本调大。公共面净 +2 正是这次「内部 import 换成公共合同」的账面体现，方向与 RFC-294 一致。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "36c3d0adf5cc02cc7017487b4c11e68b53036f27",
-    "contentDigest": "sha256:b8e517d5b11963c6ea5fbdca684ec582de53cbf1c63f1598376d8a3b06fde695",
+    "currentSnapshotSha": "b5347f30bd8785e78870a4eb7bb1116d7ae6bebe",
+    "contentDigest": "sha256:4a5b54447abda35f40dc4f8a0cd98ee6d1e0820551e6b9db0396c8d29613772a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

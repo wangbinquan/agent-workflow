@@ -603,7 +603,10 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   edge(
     'services/workgroup/state.ts',
     'services/task.ts',
-    ['insertWorkgroupTaskStateTx', 'setDwStateTx'],
+    // RFC-359 W11 减账：`insertWorkgroupTaskStateTx` 的签名钉在 `DbTxSync` 上，而 `services/task.ts`
+    // 那笔任务铸造事务已改走中立原语，唯一调用点就地内联成一条 awaited INSERT，import 随之消失。
+    // 剩 `setDwStateTx` 一个符号。
+    ['setDwStateTx'],
     'task workgroup state initialization',
     REMOVE_OWNERS.taskExecutionPersistence,
   ),

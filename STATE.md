@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 接续（2026-09-08）**：裸驱动事务守卫改为按 TypeScript 接收者类型识别，
+> `BARE_TRANSACTION_DEBT` 1 文件 / 27 处 → 0（此前把已走中立原语的生成器 runner 误算为债）。
+> 同步修正 W11 带出的两条源码账本漂移；当前仍为 In Progress，继续清组合根与真实残余分叉。
+> 验收与 CI 证据见 RFC-359 `plan.md` §0c。
+
 > 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
 > **进度（2026-09-07，W7 成对适配器收尾）**：本波按 W5 的成对账本逐对收 W4 的剩余部分。
 > **合一 11 对**（RealtimeStore / ResourceLimitPersistence / ClarifyDirectiveStore / Review·ClarifyRepairParticipant /
