@@ -1512,6 +1512,34 @@ CI 上（macOS shard 4/4）真的超了。abort 在 `fan` 这行 node_run 插入
 **规矩**：扫全源码树的守卫里，局部 helper 避开 `scan` / `walk` / `read` 这类与文件顶层
 语料读取函数同名的名字。看到 T14 报「没有负 fixture」而你明明写了，先查同名遮蔽，别急着补 fixture。
 
+## `bunx tsc --noEmit` 在**仓库根**是空操作：打印帮助、退出 0、一个文件都不检查（2026-09-07 实撞）
+
+仓库根**没有 tsconfig**。于是在根目录跑 `bunx tsc --noEmit`，tsc 找不到工程、把它当成「没给输入文件」，
+**打印版本号和用法然后 exit 0**：
+
+```
+$ bunx tsc --noEmit
+Version 5.9.3
+tsc: The TypeScript Compiler - Version 5.9.3
+$ echo $?
+0
+```
+
+看起来和「类型全绿」一模一样——退出码 0、无报错输出。实撞：一个 session 中途几次在根目录跑它、
+每次都当成绿，改到 `packages/backend` 下重跑，当场照出 **7 个真错**。
+
+**正确写法**（二选一）：
+
+```
+cd packages/backend && bunx tsc --noEmit     # 或
+bunx tsc --noEmit -p packages/backend
+```
+
+**为什么这条特别毒**：它同时骗过人和骗过自动化——没有报错行可以 grep，退出码也是 0，
+**任何「跑完看有没有输出」的判断都会判成通过**。凡是要求「收尾跑 tsc」的流程（含派给
+subagent 的指令），都要把工作目录或 `-p` 写进指令里，不能只写命令名；收到「tsc 零错误」的
+汇报时，先问一句**在哪跑的**。
+
 ## git / 多人协作（共享工作树）
 
 - **`git commit -- <路径>` 提交的是「工作树」内容，不是 index —— 你精心 `git add` 的那一版会被静默忽略**（2026-08-25 实撞，同一个坑连着把 main 弄红两次）。
