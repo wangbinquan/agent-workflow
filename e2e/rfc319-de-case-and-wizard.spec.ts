@@ -36,6 +36,7 @@ import { join } from 'node:path'
 
 import { developmentEmployeeTypePackage } from '../packages/backend/src/modules/development-automation/composition/employeeTypePackage'
 import { initGitRepo, querySqlite, repoRemoteUrl, runSqlite } from './command'
+import { waitForEmployeeCaseUrl } from './employee-case-url'
 import { startDaemon, type DaemonHandle } from './harness'
 
 /** 内置 development 类型包的**当前**引用，从生产 descriptor 派生（同 p1 spec）。 */
@@ -775,8 +776,7 @@ test('RFC-319 DE-25: 发起被拒时报错、已 staged 的上传被逐个删干
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-confirm')).toHaveAttribute('aria-current', 'step')
   await page.getByTestId('wizard-launch').click()
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
-  const caseId = page.url().split('/').at(-1)!
+  const caseId = await waitForEmployeeCaseUrl(page)
 
   const claimed = querySqlite<{ original_name: string; state: string; claimed_by_case_id: string }>(
     dbPath(daemon),

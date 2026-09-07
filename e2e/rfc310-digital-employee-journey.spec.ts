@@ -11,6 +11,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 
+import { waitForEmployeeCaseUrl } from './employee-case-url'
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
 
 test.describe.configure({ mode: 'serial' })
@@ -1050,8 +1051,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
     uploads: [{ targetPath: 'docs/acceptance.md' }],
   })
 
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+(?:\?tab=overview)?$/)
-  const caseId = new URL(page.url()).pathname.split('/').at(-1)!
+  const caseId = await waitForEmployeeCaseUrl(page)
   launchedCaseId = caseId
   const runtimeCase = await requestJson<{
     capabilityActivation: {

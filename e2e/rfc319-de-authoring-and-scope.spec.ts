@@ -80,6 +80,7 @@ import { join } from 'node:path'
 
 import { developmentEmployeeTypePackage } from '../packages/backend/src/modules/development-automation/composition/employeeTypePackage'
 import { initGitRepo, querySqlite, repoRemoteUrl, runSqlite } from './command'
+import { waitForEmployeeCaseUrl } from './employee-case-url'
 import { startDaemon, type DaemonHandle } from './harness'
 
 /**
@@ -1166,8 +1167,7 @@ test('RFC-319 DE-X4: 上传文件的落点二选一、两个入库文件撞路�
     { placement: 'temporary', targetPath: null },
   ])
 
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
-  const caseId = page.url().split('/').at(-1)!
+  const caseId = await waitForEmployeeCaseUrl(page)
   const claimed = querySqlite<{ original_name: string; state: string }>(
     dbPath(),
     `SELECT original_name, state FROM employee_input_uploads
@@ -1279,8 +1279,7 @@ test('RFC-319 DE-X5: 仓库组范围的员工只能选组内仓库，任务范�
     '本次选择的仓库没有随 launch 上行 ⇒ 任务会落到别的仓库上（或者根本没有仓库）',
   ).toEqual({ repositoryId: repoBeta.id })
 
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
-  const caseId = page.url().split('/').at(-1)!
+  const caseId = await waitForEmployeeCaseUrl(page)
   const [context] = querySqlite<{ state_json: string }>(
     dbPath(),
     `SELECT state_json FROM employee_context_records WHERE case_id = '${caseId}'`,

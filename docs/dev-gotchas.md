@@ -4399,3 +4399,42 @@ macOS runner 跑 3800+ 后端用例时负载很重，`pumpUntil exhausted` / 60s
 2026-09-06 实撞：`rfc310 pr3 journey` 在 macOS 分片 55s 耗尽 pump 预算，同一 run 的 ubuntu 分片
 **75ms 通过**、本地整文件 1.79s。700 倍的差距不可能来自代码，判为 runner 负载，`gh run rerun --failed`
 后转绿。反过来说：**如果 ubuntu 那边也红，就不许当 flaky 处理**。
+
+## 路由挂载后「把默认 search 参数规范化进 URL」⇒ e2e 里用 `$` 锚死裸路径的 `waitForURL` 是竞态（2026-09-07 实撞，主干红）
+
+`page.waitForURL(/…\/[0-9A-Z]+$/)` 看着人畜无害，但只要目标路由在挂载后把一个默认 search
+参数**规范化进 URL**，这条断言就变成了一次赌博：
+
+    // packages/frontend/src/routes/employee-cases.$caseId.tsx:552-558
+    useEffect(() => {
+      if (search.tab !== undefined) return
+      void navigate({ replace: true, search: (p) => withEmployeeCaseDetailTab(p, 'overview') })
+    }, [navigate, search.tab])
+
+launch 之后 URL 有先后两个形态：`/tasks/employee-cases/{id}`（落地瞬间，只存在一次 effect
+flush）→ `/tasks/employee-cases/{id}?tab=overview`（`replace` 掉前者，此后稳定）。用 `$` 锚死
+裸路径 = 赌 Playwright 恰好在那次 flush 之前采样到 URL；**赌输就永远等不到**——形态 1 已经被
+replace 掉、不会再出现，只能挂满 30s 超时。满载 runner 更容易赌输。
+
+实红两次、都挂在 `DE-X1`：`1aaae33a6`（2026-09-06）与 `a5d387ac0`（2026-09-07）的
+`Playwright e2e (macos-latest shard 2/3)`。这两笔的改动分别是**账本 JSON** 和**纯文档**，与被测
+路径毫无关系——这正是它难归因的地方：先按「docs-only 不可能引起 e2e 红」排除自己，再去比对
+**同一条用例的历史**，才看得出是潜伏竞态而不是本次回归。
+
+**同一个坑有第二半，更隐蔽**：`page.url()` 是在 `waitForURL` 返回**之后**才读的。即便等到的是
+形态 1，规范化也可能就落在这两步之间，于是
+
+    const caseId = page.url().split('/').at(-1)!   // → "01M1WW1…YMV?tab=overview"
+
+这个带着 `?tab=overview` 的 id 会被原样拼进 SQL（`WHERE case_id = '…'` 查不到行）或接口路径，
+报出来的错和真正的原因隔着十万八千里。
+
+**规矩**：
+
+- 等 URL 一律**接受规范化之后的形态**（`(?:\?tab=overview)?$`），或者干脆按 `url.pathname` 写
+  谓词——`waitForURL((url) => /^\/x\/[0-9A-Z]+$/.test(url.pathname))` 天然不受 query 影响。
+- id 一律从 `new URL(page.url()).pathname` 取，别对整个 URL 做 `split('/')`。
+- **加这类规范化 effect 时，要把仓里所有等这条路由的 `waitForURL` 一起改掉。** 本次四处漏网，
+  正是 `07c7d37b4`（2026-08-28）加规范化时只就地修了 rfc310 那一处、漏掉其余四处留下的，潜伏
+  了十天才随 runner 负载显形。收口做法见 `e2e/employee-case-url.ts`：把「等 URL + 取 id」抽成
+  一个 helper，规范化形态只写一遍，下次再加 tab 也只有一处要改。

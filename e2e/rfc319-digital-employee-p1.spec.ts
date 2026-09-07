@@ -25,6 +25,7 @@ import { join } from 'node:path'
 
 import { developmentEmployeeTypePackage } from '../packages/backend/src/modules/development-automation/composition/employeeTypePackage'
 import { initGitRepo, querySqlite, repoRemoteUrl, runSqlite } from './command'
+import { waitForEmployeeCaseUrl } from './employee-case-url'
 import { startDaemon, type DaemonHandle } from './harness'
 
 /**
@@ -676,8 +677,7 @@ test('DE-X1：任务向导把「先评审方案」打开后随 launch 请求上�
     executionOptions: { 'review-implementation-plan': true },
   })
 
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
-  const caseId = page.url().split('/').at(-1)!
+  const caseId = await waitForEmployeeCaseUrl(page)
   const runtimeMap = page.getByTestId('employee-toolbox-responsibility-map')
   await expect(runtimeMap).toBeVisible()
   // 案例页上必须出现那张评审门禁卡。请求体对了、冻结闭包却没带上它，等于开关
