@@ -35,10 +35,12 @@ import { join } from 'node:path'
 import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { Config, TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
-  taskExecutionModule,
+  assertTerminalMaintenanceClaimTx,
+  createTerminalMaintenanceStore,
+  transitionTerminalMaintenanceClaimTx,
   TaskExecutionError,
   type RecoverableTerminalMaintenanceClaim,
 } from '@/services/taskExecutionParticipants'
@@ -121,13 +123,13 @@ function parseWorkspaceGcCleanupPlan(value: string): WorkspaceGcCleanupPlanV1 | 
   }
 }
 
-function ensureWorkspaceGcClaim(
+async function ensureWorkspaceGcClaim(
   db: DbClient,
   plan: WorkspaceGcCleanupPlanV1,
   now: number,
-): RecoverableTerminalMaintenanceClaim {
-  const existing = taskExecutionModule.terminalMaintenance.listRecoverable({
-    db,
+): Promise<RecoverableTerminalMaintenanceClaim> {
+  const terminalMaintenance = createTerminalMaintenanceStore(db)
+  const existing = await terminalMaintenance.listRecoverable({
     operation: 'workspace-gc',
     rootTaskId: plan.taskId,
   })
@@ -149,10 +151,9 @@ function ensureWorkspaceGcClaim(
     return current
   }
 
-  const members = taskExecutionModule.terminalMaintenance.snapshotMembers(db, [plan.taskId])
+  const members = await terminalMaintenance.snapshotMembers([plan.taskId])
   const cleanupPlanJson = JSON.stringify(plan)
-  const claim = taskExecutionModule.terminalMaintenance.claim({
-    db,
+  const claim = await terminalMaintenance.claim({
     rootTaskId: plan.taskId,
     operation: 'workspace-gc',
     members,
@@ -224,13 +225,13 @@ async function resumeWorkspaceGcClaim(
   if (plan === null || plan.taskId !== item.rootTaskId) {
     throw new Error(`workspace maintenance claim '${item.claim.claimId}' has an invalid plan`)
   }
+  const terminalMaintenance = createTerminalMaintenanceStore(db)
   let claim = item.claim
   let state = item.state
   let removed = false
 
   if (state === 'recovery-required') {
-    claim = taskExecutionModule.terminalMaintenance.transition({
-      db,
+    claim = await terminalMaintenance.transition({
       claim,
       to: 'claimed',
       now,
@@ -253,8 +254,7 @@ async function resumeWorkspaceGcClaim(
         }
       }
     }
-    claim = taskExecutionModule.terminalMaintenance.transition({
-      db,
+    claim = await terminalMaintenance.transition({
       claim,
       to: 'io-complete',
       now,
@@ -263,13 +263,17 @@ async function resumeWorkspaceGcClaim(
   }
 
   if (state === 'io-complete') {
-    claim = dbTxSync(db, (tx) => {
-      taskExecutionModule.terminalMaintenance.assertClaimTx({
-        tx,
-        claim,
+    // The transaction body may be replayed whole (writer-contention BUSY on
+    // SQLite, serialization failure on PostgreSQL), so it fences against the
+    // claim as it stands *before* the transaction and never against a revision
+    // one of its own attempts produced.
+    const claimBeforeFinalize = claim
+    claim = await databaseSessionFor(db).transaction(async (tx) => {
+      await assertTerminalMaintenanceClaimTx(tx, {
+        claim: claimBeforeFinalize,
         expectedState: 'io-complete',
       })
-      const task = tx
+      const task = await tx
         .select({
           workspacePruningAt: tasks.workspacePruningAt,
           workspacePrunedAt: tasks.workspacePrunedAt,
@@ -285,7 +289,7 @@ async function resumeWorkspaceGcClaim(
       }
       if (plan.kind === 'workspace-prune') {
         if (task.workspacePrunedAt === null) {
-          const finalized = tx
+          const finalized = await tx
             .update(tasks)
             .set({ workspacePrunedAt: now })
             .where(
@@ -305,14 +309,14 @@ async function resumeWorkspaceGcClaim(
           }
         }
       } else {
-        tx.update(tasks)
+        await tx
+          .update(tasks)
           .set({ workspacePruningAt: null })
           .where(and(eq(tasks.id, plan.taskId), isNull(tasks.workspacePrunedAt)))
           .run()
       }
-      return taskExecutionModule.terminalMaintenance.transitionTx({
-        tx,
-        claim,
+      return await transitionTerminalMaintenanceClaimTx(tx, {
+        claim: claimBeforeFinalize,
         to: 'db-finalized',
         now,
       })
@@ -321,7 +325,7 @@ async function resumeWorkspaceGcClaim(
   }
 
   if (state === 'db-finalized' || state === 'cleanup-pending') {
-    taskExecutionModule.terminalMaintenance.complete({ db, claim, now })
+    await terminalMaintenance.complete({ claim, now })
   }
   return { removed }
 }
@@ -370,8 +374,7 @@ export async function finishClaimedWorkspacePrune(
   try {
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
     if (t === undefined) return { kind: 'already-pruned' }
-    const existing = taskExecutionModule.terminalMaintenance.listRecoverable({
-      db,
+    const existing = await createTerminalMaintenanceStore(db).listRecoverable({
       operation: 'workspace-gc',
       rootTaskId: taskId,
     })
@@ -382,7 +385,7 @@ export async function finishClaimedWorkspacePrune(
     ) {
       return { kind: 'not-claimed' }
     }
-    const item = ensureWorkspaceGcClaim(db, { v: 1, kind: 'workspace-prune', taskId }, now)
+    const item = await ensureWorkspaceGcClaim(db, { v: 1, kind: 'workspace-prune', taskId }, now)
     const result = await resumeWorkspaceGcClaim(db, item, now)
     return result.removed ? { kind: 'removed' } : { kind: 'finalized-missing' }
   } catch (err) {
@@ -415,8 +418,7 @@ export async function recoverInterruptedWorkspaceGc(
   now: number = Date.now(),
 ): Promise<WorkspaceGcRecoveryResult> {
   const result: WorkspaceGcRecoveryResult = { completed: [], failed: [], skipped: 0 }
-  const items = taskExecutionModule.terminalMaintenance.listRecoverable({
-    db,
+  const items = await createTerminalMaintenanceStore(db).listRecoverable({
     operation: 'workspace-gc',
   })
   for (const item of items) {
@@ -989,8 +991,7 @@ export async function runIsoWorktreeGc(
     // RFC-165 (D1): row-anchored + revivable → take the transient claim.
     // Tombstoned or row-less containers delete without ceremony.
     if (t !== undefined && t.workspacePrunedAt === null) {
-      const existing = taskExecutionModule.terminalMaintenance.listRecoverable({
-        db,
+      const existing = await createTerminalMaintenanceStore(db).listRecoverable({
         operation: 'workspace-gc',
         rootTaskId: taskId,
       })
@@ -1015,7 +1016,7 @@ export async function runIsoWorktreeGc(
           .returning({ id: tasks.id })
         if (claimed.length !== 1) continue
         try {
-          item = ensureWorkspaceGcClaim(
+          item = await ensureWorkspaceGcClaim(
             db,
             { v: 1, kind: 'iso-container', taskId, containerRoot },
             claimStamp,

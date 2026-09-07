@@ -25,13 +25,18 @@ import { ulid } from 'ulid'
 import type { BundleOp } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 
 /**
  * RFC-359 W4-D23 —— 大事务已经改走中立事务原语，但这条捆绑应用链上还有一批**同步**的
  * `*InTx` 成员（agent / mcp / workflow / workgroup / template 的提交面）没迁完。
+ *
+ * RFC-359 W7 —— 四笔 **journal 事务**（① claim / ② recordArtifact / ③ settleFailed /
+ * ⑤ 收敛 CAS）也迁完了，本文件不再有 `dbTxSync` 调用点；`sqliteMembers` 只剩下
+ * `claimInTx` / `revalidateInTx` / `finalizeInTx` 与那批 `*InTx` 成员在用。
+ * 行为锁在 `tests/rfc359-w7-sync-transaction-cutover.test.ts`（双引擎）。
  *
  * 把中立句柄重新窄化给它们**不是强转谎话**：SQLite 会话交出的事务句柄**就是 `DbClient` 本身**
  * （`createSqliteDatabaseSession`：`const tx = db as unknown as DatabaseTransaction`，显式
@@ -91,7 +96,12 @@ export interface ResourcePackageMutationRuntime {
     prepared: PreparedPackageMutation,
     input: {
       readonly readSkillFile: (ref: string) => Uint8Array
-      readonly recordArtifact: (artifact: BundleArtifact) => void
+      /**
+       * I14 record-before-act：实现**必须** await 它再动手做副作用。契约写成
+       * `Promise<void>`（不是 `void | Promise<void>`）就是为了让漏掉的 await
+       * 在类型层与 `no-floating-promises` 门下都暴露出来。
+       */
+      readonly recordArtifact: (artifact: BundleArtifact) => Promise<void>
     },
   ): Promise<void>
   assertUpdateTargetsOwnedInTx(tx: DbTxSync, operations: readonly LoweredOp[]): void
@@ -249,27 +259,27 @@ async function applyInner(
   // ── ① claim ────────────────────────────────────────────────────────────
   // 顺序是承重的（I2）：duplicate 查询**先于**任何业务校验。排在后面的话，一次
   // 已 committed 的重放会因为此后状态变化而报错，而不是返回原 receipt。
-  const replay = dbTxSync(db, (tx) => {
-    const existing = tx
-      .select()
-      .from(resourceBundleApplies)
-      .where(and(eq(resourceBundleApplies.scope, scope), eq(resourceBundleApplies.key, key)))
-      .get()
+  const replay = await databaseSessionFor(db).transaction(async (tx) => {
+    const existing = (
+      await tx
+        .select()
+        .from(resourceBundleApplies)
+        .where(and(eq(resourceBundleApplies.scope, scope), eq(resourceBundleApplies.key, key)))
+        .limit(1)
+    )[0]
     if (existing !== undefined) return existing
-    provider.claimInTx?.(tx)
+    provider.claimInTx?.(sqliteMembers(tx))
     const now = Date.now()
-    tx.insert(resourceBundleApplies)
-      .values({
-        id: journalId,
-        scope,
-        key,
-        actorUserId: actor.user.id,
-        state: 'prepared',
-        preparedArtifactsJson: '[]',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+    await tx.insert(resourceBundleApplies).values({
+      id: journalId,
+      scope,
+      key,
+      actorUserId: actor.user.id,
+      state: 'prepared',
+      preparedArtifactsJson: '[]',
+      createdAt: now,
+      updatedAt: now,
+    })
     return null
   })
 
@@ -280,18 +290,22 @@ async function applyInner(
   ACTIVE_BUNDLE_APPLIES.add(journalId)
 
   const artifacts: BundleArtifact[] = []
-  const recordArtifact = (artifact: BundleArtifact): void => {
+  // I14 record-before-act：这一笔**必须**在副作用（npm 安装 / 技能暂存）之前落库，所以
+  // 它是 `Promise<void>` 而不是 `void | Promise<void>`——联合里混进 `void`，调用方漏掉
+  // await 就成了合法写法，连 `no-floating-promises` 都不再报（`docs/dev-gotchas.md`）。
+  const recordArtifact = async (artifact: BundleArtifact): Promise<void> => {
     artifacts.push(artifact)
-    dbTxSync(db, (tx) => {
-      tx.update(resourceBundleApplies)
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await tx
+        .update(resourceBundleApplies)
         .set({ preparedArtifactsJson: JSON.stringify(artifacts), updatedAt: Date.now() })
         .where(eq(resourceBundleApplies.id, journalId))
-        .run()
     })
   }
-  const settleFailed = (error: unknown): void => {
-    dbTxSync(db, (tx) => {
-      tx.update(resourceBundleApplies)
+  const settleFailed = async (error: unknown): Promise<void> => {
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await tx
+        .update(resourceBundleApplies)
         .set({
           state: 'failed',
           error:
@@ -301,7 +315,6 @@ async function applyInner(
           updatedAt: Date.now(),
         })
         .where(eq(resourceBundleApplies.id, journalId))
-        .run()
     })
   }
 
@@ -400,7 +413,7 @@ async function applyInner(
     for (const item of preparedOps) {
       await mutationRuntime.prestage(item, {
         readSkillFile: provider.readSkillFile,
-        recordArtifact: (artifact) => recordArtifact(artifact),
+        recordArtifact: async (artifact) => await recordArtifact(artifact),
       })
     }
 
@@ -559,7 +572,7 @@ async function applyInner(
       }
     }
     if (compensated) {
-      settleFailed(error)
+      await settleFailed(error)
     } else {
       // I9 的**对称条款**（收敛器那一侧早就这么做了，这一侧漏了）：补偿没做干净就
       // **不终态化**。标 failed 会让收敛器（它显式跳过 failed 行）再也不重试这些
@@ -682,16 +695,22 @@ export async function convergeResourceBundleApplies(
       log.warn('bundle-converge-left-retryable', { journalId: row.id })
       continue
     }
-    const cas = dbTxSync(db, (tx) =>
-      tx
-        .update(resourceBundleApplies)
-        .set({ state: 'failed', error: 'converged: crashed before commit', updatedAt: Date.now() })
-        .where(
-          and(eq(resourceBundleApplies.id, row.id), eq(resourceBundleApplies.state, row.state)),
-        )
-        .run(),
+    const cas = await databaseSessionFor(db).transaction(
+      async (tx) =>
+        await tx
+          .update(resourceBundleApplies)
+          .set({
+            state: 'failed',
+            error: 'converged: crashed before commit',
+            updatedAt: Date.now(),
+          })
+          .where(
+            and(eq(resourceBundleApplies.id, row.id), eq(resourceBundleApplies.state, row.state)),
+          ),
     )
-    if ((cas as unknown as { changes?: number }).changes === 1) failed += 1
+    // CAS 的判据是「恰好一行」：`affectedRows` 在两个引擎上都读 `changes`，缺失按 0 计，
+    // 于是判据缺失时失败得大声（`platform/persistence/databaseTransaction.ts`）。
+    if (affectedRows(cas) === 1) failed += 1
   }
   return { failed, rolledForward }
 }

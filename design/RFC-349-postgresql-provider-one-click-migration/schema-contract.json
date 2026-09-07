@@ -2,7 +2,7 @@
   "activeTableCount": 178,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+  "digest": "sha256:9aabfa484e39f2fa45bfbd7e67a0cffe0b92ead58ebdfa69e14855ec80036b4e",
   "sourceProjection": "sqlite",
   "sourceTableCount": 184,
   "tables": [
@@ -931,7 +931,18 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"auth_login_policy\".\"oidc_default_role\" IN ('guest', 'user')",
+          "name": "auth_login_policy_oidc_default_role_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"auth_login_policy\".\"id\" = 'global'",
+          "name": "auth_login_policy_id_fixed"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -1790,7 +1801,13 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"capability_templates\".\"visibility\" IN ('public','private')",
+          "name": "capability_templates_visibility_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -2303,7 +2320,28 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"clarify_rounds\".\"kind\" IN ('self', 'cross')",
+          "name": "clarify_rounds_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"clarify_rounds\".\"directive\" IS NULL OR \"clarify_rounds\".\"directive\" IN ('continue', 'stop')",
+          "name": "clarify_rounds_directive_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"clarify_rounds\".\"status\" IN ('awaiting_human', 'answered', 'canceled', 'abandoned')",
+          "name": "clarify_rounds_status_enum"
+        },
+        {
+          "columns": [],
+          "expression": "(\"clarify_rounds\".\"kind\" = 'self' AND \"clarify_rounds\".\"status\" != 'abandoned') OR (\"clarify_rounds\".\"kind\" = 'cross' AND \"clarify_rounds\".\"status\" != 'canceled')",
+          "name": "clarify_rounds_kind_shape"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -2905,7 +2943,8 @@
         {
           "columns": [
             "target_consumer_node_id",
-            "status"
+            "loop_iter",
+            "iteration"
           ],
           "name": "idx_clarify_rounds_target_consumer",
           "unique": false,
@@ -2934,7 +2973,23 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_ai_attempts\".\"rerun_seq\" >= 0",
+          "name": "code_ai_attempts_rerun_seq_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_ai_attempts\".\"attempt_seq\" >= 0",
+          "name": "code_ai_attempts_attempt_seq_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_ai_attempts\".\"status\" IN ('claimed','running','validated','failed','interrupted')",
+          "name": "code_ai_attempts_status_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -3607,7 +3662,18 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_findings\".\"anchor_kind\" IN ('mr','issue','pipeline','platform')",
+          "name": "code_findings_anchor_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_findings\".\"lifecycle\" IN ('active','disappeared','reappeared')",
+          "name": "code_findings_lifecycle_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -4425,7 +4491,33 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_host_connections\".\"provider\" IN ('gitlab', 'github')",
+          "name": "code_host_connections_provider_enum"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"code_host_connections\".\"repository_url_prefixes_json\")",
+          "name": "code_host_connections_repository_url_prefixes_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"code_host_connections\".\"transport_mappings_json\")",
+          "name": "code_host_connections_transport_mappings_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "length(\"code_host_connections\".\"connection_generation\") BETWEEN 1 AND 128",
+          "name": "code_host_connections_connection_generation_length"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_host_connections\".\"reject_unauthorized\" IN (0, 1)",
+          "name": "code_host_connections_reject_unauthorized_boolean"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -5079,7 +5171,18 @@
           "root-digest"
         ]
       },
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_publish_intents\".\"epoch\" >= 1",
+          "name": "code_publish_intents_epoch_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_publish_intents\".\"state\" IN ('pending','settled','compensated','abandoned')",
+          "name": "code_publish_intents_state_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -5315,7 +5418,23 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_round_stages\".\"stage_seq\" >= 0",
+          "name": "code_round_stages_stage_seq_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_round_stages\".\"stage_kind\" IN ('program','script','ai','invoke')",
+          "name": "code_round_stages_stage_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_round_stages\".\"status\" IN ('pending','running','done','failed','skipped','inherited')",
+          "name": "code_round_stages_status_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -5991,7 +6110,28 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_work_items\".\"anchor_kind\" IN ('mr','issue','pipeline','platform')",
+          "name": "code_work_items_anchor_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_work_items\".\"status\" IN ('idle','queued','running','awaiting','settled','failed','superseding','handed_off','closing','closed')",
+          "name": "code_work_items_status_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_work_items\".\"epoch\" >= 1",
+          "name": "code_work_items_epoch_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_work_items\".\"publishing_epoch\" IS NULL OR \"code_work_items\".\"publishing_epoch\" >= 1",
+          "name": "code_work_items_publishing_epoch_positive"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -6644,7 +6784,7 @@
         {
           "columns": [
             "work_item_id",
-            "created_at"
+            "\"code_work_observations\".\"created_at\" DESC"
           ],
           "name": "idx_code_work_observations_item",
           "unique": false,
@@ -6688,7 +6828,23 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"code_work_rounds\".\"round_seq\" >= 1",
+          "name": "code_work_rounds_round_seq_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_work_rounds\".\"epoch\" >= 1",
+          "name": "code_work_rounds_epoch_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"code_work_rounds\".\"outcome\" IS NULL OR \"code_work_rounds\".\"outcome\" IN ('published','awaiting','failed','canceled','superseded')",
+          "name": "code_work_rounds_outcome_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -7022,6 +7178,16 @@
           "columns": [],
           "expression": "\"collaboration_gate_artifacts\".\"receipt_json\" IS NULL OR json_valid(\"collaboration_gate_artifacts\".\"receipt_json\")",
           "name": "collaboration_gate_artifacts_receipt_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"collaboration_gate_artifacts\".\"artifact_kind\" = 'review-doc'",
+          "name": "collaboration_gate_artifacts_artifact_kind_fixed"
+        },
+        {
+          "columns": [],
+          "expression": "\"collaboration_gate_artifacts\".\"state\" IN ('declared','staged','consumed','finalized','cleanup_pending')",
+          "name": "collaboration_gate_artifacts_state_enum"
         }
       ],
       "columns": [
@@ -7362,6 +7528,21 @@
           "columns": [],
           "expression": "\"collaboration_gate_operations\".\"state\" <> 'failed' OR \"collaboration_gate_operations\".\"failure_json\" IS NOT NULL",
           "name": "collaboration_gate_operations_failed_shape"
+        },
+        {
+          "columns": [],
+          "expression": "\"collaboration_gate_operations\".\"gate_kind\" IN ('review','clarify','questions')",
+          "name": "collaboration_gate_operations_gate_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"collaboration_gate_operations\".\"operation_kind\" IN ('open','decide','manual-question-open','legacy-seed')",
+          "name": "collaboration_gate_operations_operation_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"collaboration_gate_operations\".\"state\" IN ('preparing','prepared','committed','cleanup_pending','completed','failed')",
+          "name": "collaboration_gate_operations_state_enum"
         }
       ],
       "columns": [
@@ -19272,7 +19453,13 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"employee_case_members\".\"role\" IN ('collaborator', 'observer')",
+          "name": "employee_case_members_role_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -28550,6 +28737,16 @@
           "name": "idx_event_type_source",
           "unique": false,
           "where": null
+        },
+        {
+          "columns": [
+            "catalog_visibility",
+            "event_type_id",
+            "revision"
+          ],
+          "name": "idx_event_type_catalog_visibility",
+          "unique": false,
+          "where": null
         }
       ],
       "migrationKey": [
@@ -28576,7 +28773,13 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"fusions\".\"status\" IN ('running','awaiting_approval','applying','done','rejected','canceled','failed')",
+          "name": "fusions_status_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -29384,7 +29587,13 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"intent_draft_resolutions\".\"reason\" IN ('superseded','discarded')",
+          "name": "intent_draft_resolutions_reason_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -31044,7 +31253,18 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"intent_working_set_changes\".\"mode\" IN ('after-current','interrupt')",
+          "name": "intent_working_set_changes_mode_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"intent_working_set_changes\".\"state\" IN ('queued','applying','applied','failed','canceled')",
+          "name": "intent_working_set_changes_state_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -32102,7 +32322,53 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"maintenance_runs\".\"job_class\" IN ('cleanup','recovery','checkpoint')",
+          "name": "maintenance_runs_job_class_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"maintenance_runs\".\"state\" IN ('pending','running','deferred','succeeded','failed')",
+          "name": "maintenance_runs_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"maintenance_runs\".\"payload_json\")",
+          "name": "maintenance_runs_payload_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"maintenance_runs\".\"cursor_version\" > 0",
+          "name": "maintenance_runs_cursor_version_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"maintenance_runs\".\"cursor_json\" IS NULL OR json_valid(\"maintenance_runs\".\"cursor_json\")",
+          "name": "maintenance_runs_cursor_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"maintenance_runs\".\"attempt\" >= 0",
+          "name": "maintenance_runs_attempt_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"maintenance_runs\".\"slice_no\" >= 0",
+          "name": "maintenance_runs_slice_no_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"maintenance_runs\".\"counters_json\")",
+          "name": "maintenance_runs_counters_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "(\"maintenance_runs\".\"state\" = 'running' AND \"maintenance_runs\".\"lease_token\" IS NOT NULL AND \"maintenance_runs\".\"lease_expires_at\" IS NOT NULL) OR (\"maintenance_runs\".\"state\" <> 'running')",
+          "name": "maintenance_runs_state_shape"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -35628,7 +35894,43 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"memories\".\"scope_type\" IN ('agent','workflow','repo','repo_group','global')",
+          "name": "memories_scope_type_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"memories\".\"status\" IN ('candidate','approved','archived','superseded','rejected','fused')",
+          "name": "memories_status_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"memories\".\"source_kind\" IN ('clarify','review','feedback','manual')",
+          "name": "memories_source_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"memories\".\"distill_action\" IS NULL OR \"memories\".\"distill_action\" IN ('new','update_of','duplicate_of','conflict_with')",
+          "name": "memories_distill_action_enum"
+        },
+        {
+          "columns": [],
+          "expression": "(\"memories\".\"scope_type\" = 'global' AND \"memories\".\"scope_id\" IS NULL) OR (\"memories\".\"scope_type\" != 'global' AND \"memories\".\"scope_id\" IS NOT NULL)",
+          "name": "memories_scope_type_shape"
+        },
+        {
+          "columns": [],
+          "expression": "(\"memories\".\"status\" = 'fused') = (\"memories\".\"fused_into_skill\" IS NOT NULL)",
+          "name": "memories_fused_into_skill_shape"
+        },
+        {
+          "columns": [],
+          "expression": "(\"memories\".\"status\" = 'fused') = (\"memories\".\"fused_into_skill_id\" IS NOT NULL)",
+          "name": "memories_fused_into_skill_id_shape"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -36449,7 +36751,18 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"memory_distill_jobs\".\"source_kind\" IN ('clarify','review','feedback')",
+          "name": "memory_distill_jobs_source_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"memory_distill_jobs\".\"status\" IN ('pending','running','done','failed','canceled')",
+          "name": "memory_distill_jobs_status_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -40791,7 +41104,18 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"repo_capability_config\".\"enabled\" IN (0, 1)",
+          "name": "repo_capability_config_enabled_boolean"
+        },
+        {
+          "columns": [],
+          "expression": "\"repo_capability_config\".\"readiness\" IN ('disabled','misconfigured','ready')",
+          "name": "repo_capability_config_readiness_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -41105,7 +41429,18 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"repo_group_nodes\".\"attachment_kind\" IS NULL OR \"repo_group_nodes\".\"attachment_kind\" IN ('repo','group')",
+          "name": "repo_group_nodes_attachment_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "(\"repo_group_nodes\".\"attachment_kind\" IS NULL AND \"repo_group_nodes\".\"cached_repo_id\" IS NULL AND \"repo_group_nodes\".\"child_group_id\" IS NULL AND \"repo_group_nodes\".\"ref\" = '' AND \"repo_group_nodes\".\"subdir\" = '' AND \"repo_group_nodes\".\"readonly\" = 0) OR (\"repo_group_nodes\".\"attachment_kind\" = 'repo' AND \"repo_group_nodes\".\"cached_repo_id\" IS NOT NULL AND \"repo_group_nodes\".\"child_group_id\" IS NULL) OR (\"repo_group_nodes\".\"attachment_kind\" = 'group' AND \"repo_group_nodes\".\"child_group_id\" IS NOT NULL AND \"repo_group_nodes\".\"cached_repo_id\" IS NULL AND \"repo_group_nodes\".\"ref\" = '' AND \"repo_group_nodes\".\"subdir\" = '')",
+          "name": "repo_group_nodes_attachment_kind_shape"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -41321,6 +41656,15 @@
           "name": "idx_rgn_child_group",
           "unique": false,
           "where": null
+        },
+        {
+          "columns": [
+            "group_id",
+            "lower(\"repo_group_nodes\".\"path\")"
+          ],
+          "name": "idx_rgn_path_ci",
+          "unique": true,
+          "where": null
         }
       ],
       "migrationKey": [
@@ -41344,7 +41688,16 @@
       },
       "schemaSymbol": "repoGroupNodes",
       "sourceTable": "repo_group_nodes",
-      "unique": []
+      "unique": [
+        {
+          "columns": [
+            "group_id",
+            "lower(\"repo_group_nodes\".\"path\")"
+          ],
+          "expression": null,
+          "name": "idx_rgn_path_ci"
+        }
+      ]
     },
     {
       "checks": [],
@@ -41519,7 +41872,16 @@
       "disposition": "KEEP",
       "foreignKeys": [],
       "id": "repo_groups",
-      "indexes": [],
+      "indexes": [
+        {
+          "columns": [
+            "lower(\"repo_groups\".\"name\")"
+          ],
+          "name": "idx_repo_groups_name_ci",
+          "unique": true,
+          "where": null
+        }
+      ],
       "migrationKey": [
         "id"
       ],
@@ -41539,7 +41901,15 @@
       },
       "schemaSymbol": "repoGroups",
       "sourceTable": "repo_groups",
-      "unique": []
+      "unique": [
+        {
+          "columns": [
+            "lower(\"repo_groups\".\"name\")"
+          ],
+          "expression": null,
+          "name": "idx_repo_groups_name_ci"
+        }
+      ]
     },
     {
       "checks": [],
@@ -41865,6 +42235,36 @@
           "columns": [],
           "expression": "length(\"repository_transport_connections\".\"connection_generation\") BETWEEN 1 AND 128",
           "name": "repository_transport_connections_generation_length"
+        },
+        {
+          "columns": [],
+          "expression": "\"repository_transport_connections\".\"provider\" IN ('gitlab', 'github')",
+          "name": "repository_transport_connections_provider_enum"
+        },
+        {
+          "columns": [],
+          "expression": "length(\"repository_transport_connections\".\"endpoint_binding_digest\") = 64 AND \"repository_transport_connections\".\"endpoint_binding_digest\" NOT GLOB '*[^0-9a-f]*'",
+          "name": "repository_transport_connections_endpoint_binding_digest_length"
+        },
+        {
+          "columns": [],
+          "expression": "\"repository_transport_connections\".\"reject_unauthorized\" IN (0, 1)",
+          "name": "repository_transport_connections_reject_unauthorized_boolean"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"repository_transport_connections\".\"transport_mappings_json\")",
+          "name": "repository_transport_connections_transport_mappings_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"repository_transport_connections\".\"allowed_http_base_urls_json\")",
+          "name": "repository_transport_connections_allowed_http_base_urls_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"repository_transport_connections\".\"credential_revision\" > 0",
+          "name": "repository_transport_connections_credential_revision_positive"
         }
       ],
       "columns": [
@@ -42438,7 +42838,13 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"resource_grants\".\"level\" IN ('read', 'write')",
+          "name": "resource_grants_level_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -44346,7 +44752,18 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"skill_operations\".\"kind\" IN ('reserve', 'migrate', 'delete', 'version-write')",
+          "name": "skill_operations_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"skill_operations\".\"active\" IN (0, 1)",
+          "name": "skill_operations_active_boolean"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -45776,6 +46193,31 @@
           "columns": [],
           "expression": "\"task_execution_effect_attempts\".\"epoch\" > 0",
           "name": "task_execution_attempts_epoch_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effect_attempts\".\"state\" IN ('prepared','acting','succeeded','failed-not-applied','retry-authorized','recovery-required','outcome-unknown')",
+          "name": "task_execution_effect_attempts_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effect_attempts\".\"recovery_descriptor_json\" IS NULL OR json_valid(\"task_execution_effect_attempts\".\"recovery_descriptor_json\")",
+          "name": "task_execution_effect_attempts_recovery_descriptor_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effect_attempts\".\"application_evidence\" IS NULL OR \"task_execution_effect_attempts\".\"application_evidence\" IN ('applied','definitely-not-applied','ambiguous')",
+          "name": "task_execution_effect_attempts_application_evidence_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effect_attempts\".\"retry_authority\" IN ('none','probe','convergent','transport-policy')",
+          "name": "task_execution_effect_attempts_retry_authority_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effect_attempts\".\"receipt_json\" IS NULL OR json_valid(\"task_execution_effect_attempts\".\"receipt_json\")",
+          "name": "task_execution_effect_attempts_receipt_json_json_valid"
         }
       ],
       "columns": [
@@ -46466,6 +46908,31 @@
           "columns": [],
           "expression": "\"task_execution_effects\".\"operation_generation\" >= 0",
           "name": "task_execution_effects_generation_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effects\".\"kind\" IN ('workspace-prepare','workspace-rollback','isolation-create','isolation-merge','repository','process','workspace-cleanup','code-host-mutation','outbound-mutation')",
+          "name": "task_execution_effects_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"task_execution_effects\".\"slot_path_json\")",
+          "name": "task_execution_effects_slot_path_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effects\".\"state\" IN ('open','succeeded','failed','outcome-unknown')",
+          "name": "task_execution_effects_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effects\".\"last_attempt_no\" >= 0",
+          "name": "task_execution_effects_last_attempt_no_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_effects\".\"receipt_json\" IS NULL OR json_valid(\"task_execution_effects\".\"receipt_json\")",
+          "name": "task_execution_effects_receipt_json_json_valid"
         }
       ],
       "columns": [
@@ -46988,6 +47455,41 @@
           "columns": [],
           "expression": "\"task_execution_intents\".\"operation_generation\" >= 0",
           "name": "task_execution_intents_generation_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_intents\".\"kind\" IN ('launch','resume','retry-repository-preparation','retry-node','sync-workflow','gate-continuation','recovery')",
+          "name": "task_execution_intents_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_intents\".\"state\" IN ('pending','claimed','completed','canceled','failed')",
+          "name": "task_execution_intents_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_intents\".\"source\" IN ('rest','mcp','scheduler','auto','boot','internal')",
+          "name": "task_execution_intents_source_enum"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"task_execution_intents\".\"payload_json\")",
+          "name": "task_execution_intents_payload_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"task_execution_intents\".\"slot_path_json\")",
+          "name": "task_execution_intents_slot_path_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_intents\".\"authorization_scope_json\" IS NULL OR json_valid(\"task_execution_intents\".\"authorization_scope_json\")",
+          "name": "task_execution_intents_authorization_scope_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_intents\".\"claimed_epoch\" IS NULL OR \"task_execution_intents\".\"claimed_epoch\" > 0",
+          "name": "task_execution_intents_claimed_epoch_positive"
         }
       ],
       "columns": [
@@ -47507,8 +48009,38 @@
         },
         {
           "columns": [],
-          "expression": "( (\"task_execution_lineage_operation_records\".\"record_kind\" = 'generation-watermark' AND \"task_execution_lineage_operation_records\".\"highest_settled_generation\" IS NOT NULL AND \"task_execution_lineage_operation_records\".\"operation_generation\" IS NULL AND \"task_execution_lineage_operation_records\".\"decision_state\" IS NULL) OR (\"task_execution_lineage_operation_records\".\"record_kind\" = 'replay-decision' AND \"task_execution_lineage_operation_records\".\"operation_generation\" IS NOT NULL AND \"task_execution_lineage_operation_records\".\"highest_settled_generation\" IS NULL AND \"task_execution_lineage_operation_records\".\"decision_state\" IS NOT NULL) )",
+          "expression": "( (\"task_execution_lineage_operation_records\".\"record_kind\" = 'generation-watermark' AND \"task_execution_lineage_operation_records\".\"highest_settled_generation\" IS NOT NULL AND \"task_execution_lineage_operation_records\".\"highest_settled_generation\" >= 0 AND \"task_execution_lineage_operation_records\".\"operation_generation\" IS NULL AND \"task_execution_lineage_operation_records\".\"decision_state\" IS NULL) OR (\"task_execution_lineage_operation_records\".\"record_kind\" = 'replay-decision' AND \"task_execution_lineage_operation_records\".\"operation_generation\" IS NOT NULL AND \"task_execution_lineage_operation_records\".\"operation_generation\" >= 0 AND \"task_execution_lineage_operation_records\".\"highest_settled_generation\" IS NULL AND \"task_execution_lineage_operation_records\".\"decision_state\" IS NOT NULL) )",
           "name": "task_execution_lineage_record_shape"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_lineage_operation_records\".\"record_kind\" IN ('generation-watermark','replay-decision')",
+          "name": "task_execution_lineage_operation_records_record_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"task_execution_lineage_operation_records\".\"slot_path_json\")",
+          "name": "task_execution_lineage_operation_records_slot_path_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_lineage_operation_records\".\"provider_coordinate_json\" IS NULL OR json_valid(\"task_execution_lineage_operation_records\".\"provider_coordinate_json\")",
+          "name": "task_execution_lineage_operation_records_provider_coordinate_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_lineage_operation_records\".\"decision_state\" IS NULL OR \"task_execution_lineage_operation_records\".\"decision_state\" IN ('requires-actor','actor-replay-authorized','actor-replay-authorized-suspended','consumed')",
+          "name": "task_execution_lineage_operation_records_decision_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_lineage_operation_records\".\"authorization_scope_json\" IS NULL OR json_valid(\"task_execution_lineage_operation_records\".\"authorization_scope_json\")",
+          "name": "task_execution_lineage_operation_records_authorization_scope_json_json_valid"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_lineage_operation_records\".\"compacted\" IN (0,1)",
+          "name": "task_execution_lineage_operation_records_compacted_boolean"
         }
       ],
       "columns": [
@@ -48186,6 +48718,21 @@
           "columns": [],
           "expression": "\"task_execution_maintenance_claims\".\"revision\" > 0",
           "name": "task_execution_maintenance_revision_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_maintenance_claims\".\"operation\" IN ('archive','delete','retention','workspace-gc','repair-metadata')",
+          "name": "task_execution_maintenance_claims_operation_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_maintenance_claims\".\"state\" IN ('claimed','io-complete','db-finalized','cleanup-pending','completed','recovery-required')",
+          "name": "task_execution_maintenance_claims_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "json_valid(\"task_execution_maintenance_claims\".\"cleanup_plan_json\")",
+          "name": "task_execution_maintenance_claims_cleanup_plan_json_json_valid"
         }
       ],
       "columns": [
@@ -48682,6 +49229,11 @@
           "columns": [],
           "expression": "\"task_execution_owners\".\"revision\" > 0",
           "name": "task_execution_owners_revision_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"task_execution_owners\".\"state\" IN ('claimed','revoked','released','recovery-required')",
+          "name": "task_execution_owners_state_enum"
         }
       ],
       "columns": [
@@ -50600,7 +51152,17 @@
         }
       ],
       "id": "task_space_nodes",
-      "indexes": [],
+      "indexes": [
+        {
+          "columns": [
+            "task_id",
+            "lower(\"task_space_nodes\".\"node_path\")"
+          ],
+          "name": "idx_task_space_nodes_path_ci",
+          "unique": true,
+          "where": null
+        }
+      ],
       "migrationKey": [
         "task_id",
         "node_path"
@@ -50622,10 +51184,45 @@
       },
       "schemaSymbol": "taskSpaceNodes",
       "sourceTable": "task_space_nodes",
-      "unique": []
+      "unique": [
+        {
+          "columns": [
+            "task_id",
+            "lower(\"task_space_nodes\".\"node_path\")"
+          ],
+          "expression": null,
+          "name": "idx_task_space_nodes_path_ci"
+        }
+      ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"tasks\".\"workspace_prune_cause\" IS NULL OR ( \"tasks\".\"workspace_prune_cause\" = 'webhook-terminal' AND \"tasks\".\"workspace_pruning_at\" IS NOT NULL )",
+          "name": "tasks_workspace_pruning_at_shape"
+        },
+        {
+          "columns": [],
+          "expression": "\"tasks\".\"source_termination_launch_rev\" IS NULL OR \"tasks\".\"source_termination_launch_rev\" >= 0",
+          "name": "tasks_source_termination_launch_rev_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"tasks\".\"source_termination_fence\" IS NULL OR \"tasks\".\"source_termination_fence\" IN ('closed','merged')",
+          "name": "tasks_source_termination_fence_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"tasks\".\"source_termination_effect_rev\" IS NULL OR \"tasks\".\"source_termination_effect_rev\" >= 1",
+          "name": "tasks_source_termination_effect_rev_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"tasks\".\"launch_origin\" IN ('manual', 'scheduled', 'webhook', 'api', 'event')",
+          "name": "tasks_launch_origin_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -52226,6 +52823,50 @@
           "name": "idx_tasks_source_termination",
           "unique": false,
           "where": null
+        },
+        {
+          "columns": [
+            "id"
+          ],
+          "name": "idx_tasks_root_missing",
+          "unique": false,
+          "where": "\"tasks\".\"root_task_id\" is null"
+        },
+        {
+          "columns": [
+            "root_task_id",
+            "started_at"
+          ],
+          "name": "idx_tasks_root_started",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
+            "status",
+            "parent_task_id",
+            "finished_at"
+          ],
+          "name": "idx_tasks_status_parent_finished",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
+            "status",
+            "workgroup_id"
+          ],
+          "name": "idx_tasks_status_workgroup",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
+            "workgroup_id"
+          ],
+          "name": "idx_tasks_workgroup",
+          "unique": false,
+          "where": null
         }
       ],
       "migrationKey": [
@@ -53698,7 +54339,33 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"user_repository_transport_credentials\".\"provider\" IN ('gitlab', 'github')",
+          "name": "user_repository_transport_credentials_provider_enum"
+        },
+        {
+          "columns": [],
+          "expression": "length(\"user_repository_transport_credentials\".\"connection_generation\") BETWEEN 1 AND 128",
+          "name": "user_repository_transport_credentials_connection_generation_length"
+        },
+        {
+          "columns": [],
+          "expression": "length(\"user_repository_transport_credentials\".\"endpoint_binding_digest\") = 64 AND \"user_repository_transport_credentials\".\"endpoint_binding_digest\" NOT GLOB '*[^0-9a-f]*'",
+          "name": "user_repository_transport_credentials_endpoint_binding_digest_length"
+        },
+        {
+          "columns": [],
+          "expression": "length(\"user_repository_transport_credentials\".\"token_hint\") = 4",
+          "name": "user_repository_transport_credentials_token_hint_length"
+        },
+        {
+          "columns": [],
+          "expression": "\"user_repository_transport_credentials\".\"credential_revision\" > 0",
+          "name": "user_repository_transport_credentials_credential_revision_positive"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -54953,7 +55620,18 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"webhook_deliveries\".\"mr_stream_revision\" IS NULL OR \"webhook_deliveries\".\"mr_stream_revision\" >= 1",
+          "name": "webhook_deliveries_mr_stream_revision_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_deliveries\".\"mr_state_after\" IS NULL OR \"webhook_deliveries\".\"mr_state_after\" IN ('open','closed','merged')",
+          "name": "webhook_deliveries_mr_state_after_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -55398,6 +56076,14 @@
           "name": "idx_webhook_deliveries_repo_time",
           "unique": false,
           "where": null
+        },
+        {
+          "columns": [
+            "received_at"
+          ],
+          "name": "idx_webhook_deliveries_body_retention",
+          "unique": false,
+          "where": "\"webhook_deliveries\".\"body_json\" IS NOT NULL"
         }
       ],
       "migrationKey": [
@@ -55697,7 +56383,33 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_effects\".\"revision\" >= 1",
+          "name": "webhook_mr_control_effects_revision_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_effects\".\"observed_event_type\" IN ('mr_opened','mr_closed','mr_merged')",
+          "name": "webhook_mr_control_effects_observed_event_type_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_effects\".\"kind\" IN ('fence-closed','fence-merged','clear-closed')",
+          "name": "webhook_mr_control_effects_kind_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_effects\".\"status\" IN ('pending','leased','waiting-launches','retryable','succeeded')",
+          "name": "webhook_mr_control_effects_status_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_effects\".\"attempt_count\" >= 0",
+          "name": "webhook_mr_control_effects_attempt_count_nonnegative"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -56111,7 +56823,23 @@
       ]
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_targets\".\"fence_outcome\" IN ('fenced-closed','fenced-merged','cleared-closed','unchanged')",
+          "name": "webhook_mr_control_targets_fence_outcome_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_targets\".\"cancel_outcome\" IN ('canceled','already-terminal','not-applicable')",
+          "name": "webhook_mr_control_targets_cancel_outcome_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_control_targets\".\"release_outcome\" IN ('pending','no-active-owner','released','unreaped')",
+          "name": "webhook_mr_control_targets_release_outcome_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -56331,7 +57059,18 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_launch_guards\".\"launch_revision\" >= 0",
+          "name": "webhook_mr_launch_guards_launch_revision_nonnegative"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_launch_guards\".\"status\" IN ( 'reserved','launching','revoking-terminal','task-committed', 'launch-settled','aborted-terminal','failed' )",
+          "name": "webhook_mr_launch_guards_status_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -56471,7 +57210,7 @@
             "postgresql": "text",
             "sqlite": "text"
           },
-          "uniqueName": null
+          "uniqueName": "webhook_mr_launch_guards_fire_id_unique"
         },
         {
           "defaultKind": "none",
@@ -56702,7 +57441,23 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_stream_states\".\"state\" IN ('open','closed','merged')",
+          "name": "webhook_mr_stream_states_state_enum"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_stream_states\".\"revision\" >= 1",
+          "name": "webhook_mr_stream_states_revision_positive"
+        },
+        {
+          "columns": [],
+          "expression": "\"webhook_mr_stream_states\".\"last_terminal_revision\" IS NULL OR \"webhook_mr_stream_states\".\"last_terminal_revision\" >= 1",
+          "name": "webhook_mr_stream_states_last_terminal_revision_positive"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -57392,7 +58147,13 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"webhook_triggers\".\"cancel_on_mr_terminal\" IN (0, 1)",
+          "name": "webhook_triggers_cancel_on_mr_terminal_boolean"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",
@@ -58202,7 +58963,16 @@
       "disposition": "KEEP",
       "foreignKeys": [],
       "id": "workflows",
-      "indexes": [],
+      "indexes": [
+        {
+          "columns": [
+            "name"
+          ],
+          "name": "idx_workflows_builtin_name",
+          "unique": true,
+          "where": "\"workflows\".\"builtin\" = 1"
+        }
+      ],
       "migrationKey": [
         "id"
       ],
@@ -58222,7 +58992,15 @@
       },
       "schemaSymbol": "workflows",
       "sourceTable": "workflows",
-      "unique": []
+      "unique": [
+        {
+          "columns": [
+            "name"
+          ],
+          "expression": "\"workflows\".\"builtin\" = 1",
+          "name": "idx_workflows_builtin_name"
+        }
+      ]
     },
     {
       "checks": [],
@@ -59601,7 +60379,13 @@
       "unique": []
     },
     {
-      "checks": [],
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"workgroups\".\"output_contract\" IN ('files', 'discussion')",
+          "name": "workgroups_output_contract_enum"
+        }
+      ],
       "columns": [
         {
           "defaultKind": "none",

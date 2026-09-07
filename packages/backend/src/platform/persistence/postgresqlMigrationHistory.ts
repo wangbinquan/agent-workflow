@@ -142,13 +142,23 @@ export async function verifyPostgresqlMigrationHistory(input: {
     )
   }
   const expected = expectedJournal(input.plan)
-  if (
-    baseline !== renderPostgresqlBaselineSql(input.plan) ||
-    JSON.stringify(actual) !== JSON.stringify(expected)
-  ) {
+  const baselineDrifted = baseline !== renderPostgresqlBaselineSql(input.plan)
+  const journalDrifted = JSON.stringify(actual) !== JSON.stringify(expected)
+  if (baselineDrifted || journalDrifted) {
+    // 这条错误几乎只有一个成因：改了 `db/schema.ts`（drizzle 声明是 PostgreSQL DDL 的唯一
+    // 来源）却没重生成盘上的基线。它在测试的 `beforeAll` 里抛，于是**全仓每个
+    // `describeEachProvider` 用例的 PG 分支一起死**——2026-09-07 实撞：多个并发作业各自
+    // 排查了很久，因为消息只说「不匹配」，既没说是哪一半漂了，也没说该跑什么。
+    // 所以这里把「哪半边」与「怎么修」直接写进消息；`rfc349-postgresql-migration-history`
+    // 里有断言锁住这两点，别把它改回一句笼统的话。
+    const drifted = [baselineDrifted ? 'baseline SQL' : null, journalDrifted ? 'journal' : null]
+      .filter((part): part is string => part !== null)
+      .join(' + ')
     throw new PostgresqlMigrationHistoryError(
       'postgresql-migration-history-drift',
-      'PostgreSQL migration history does not match this binary schema plan',
+      `PostgreSQL migration history does not match this binary schema plan (${drifted} drifted). ` +
+        'If you just changed db/schema.ts, regenerate the on-disk history with ' +
+        '`bun run db:rfc349-postgresql-schema`.',
     )
   }
   return Object.freeze({

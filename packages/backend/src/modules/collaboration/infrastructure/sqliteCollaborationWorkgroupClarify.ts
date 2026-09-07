@@ -8,17 +8,17 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRuns, tasks, workgroupAssignments } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
-import { setNodeRunStatusTx } from '@/services/lifecycle'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { setNodeRunStatusTx } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import type {
   CollaborationAutonomousDismissalInput,
   CollaborationAutonomousDismissalResult,
   CollaborationClarifySuppressionInput,
 } from '../application/ports/collaborationRuntimeMechanics'
-import { createSqliteClarifyDirectiveStore } from './sqliteClarifyDirectiveStore'
+import { createClarifyDirectiveStore } from './clarifyDirectiveStore'
 
 const WG_LEADER_NODE_ID = '__wg_leader__'
 
@@ -29,26 +29,32 @@ function canRequeueAssignment(
   return from === 'awaiting_human' && (to === 'open' || to === 'dispatched')
 }
 
-function countClarifyAsks(db: DbClient, taskId: string, askerKey: string): number {
-  return db
+async function countClarifyAsks(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  askerKey: string,
+): Promise<number> {
+  const rows = await db
     .select({ nodeId: clarifyRounds.askingNodeId, shardKey: clarifyRounds.askingShardKey })
     .from(clarifyRounds)
     .where(and(eq(clarifyRounds.kind, 'self'), eq(clarifyRounds.taskId, taskId)))
-    .all()
-    .filter((row) => wgClarifyAskerKey(row.nodeId, row.shardKey, WG_LEADER_NODE_ID) === askerKey)
-    .length
+  return rows.filter(
+    (row) => wgClarifyAskerKey(row.nodeId, row.shardKey, WG_LEADER_NODE_ID) === askerKey,
+  ).length
 }
 
-/** Collaboration-owned SQLite implementation of the live ask-back policy. */
-export async function isSqliteTaskClarifySuppressed(
-  db: DbClient,
+/** 实时反问许可（预算 / 已问次数 / stop 指令）：一份实现，两个 provider 共用。 */
+export async function isTaskClarifySuppressed(
+  db: ProviderNeutralDatabase,
   input: CollaborationClarifySuppressionInput,
 ): Promise<boolean> {
-  const row = db
-    .select({ config: tasks.workgroupConfigJson })
-    .from(tasks)
-    .where(eq(tasks.id, input.taskId))
-    .get()
+  const row = (
+    await db
+      .select({ config: tasks.workgroupConfigJson })
+      .from(tasks)
+      .where(eq(tasks.id, input.taskId))
+      .limit(1)
+  )[0]
   if (row?.config === null || row?.config === undefined) return false
   try {
     const parsed = JSON.parse(row.config) as { members?: unknown; clarifyBudget?: number }
@@ -62,13 +68,13 @@ export async function isSqliteTaskClarifySuppressed(
     const budget = resolveClarifyBudget({ clarifyBudget: parsed.clarifyBudget })
     if (budget <= 0) return true
     const askerKey = wgClarifyAskerKey(input.nodeId, input.shardKey ?? null, WG_LEADER_NODE_ID)
-    const directive = await createSqliteClarifyDirectiveStore(db).get({
+    const directive = await createClarifyDirectiveStore(db).get({
       taskId: input.taskId,
       nodeId: input.nodeId,
       shardKey: askerKey,
     })
     if (directive?.directive === 'stop') return true
-    return countClarifyAsks(db, input.taskId, askerKey) >= budget
+    return (await countClarifyAsks(db, input.taskId, askerKey)) >= budget
   } catch {
     return false
   }
@@ -76,20 +82,22 @@ export async function isSqliteTaskClarifySuppressed(
 
 /**
  * Atomically closes every open self-clarify park and requeues its workgroup
- * assignment. Broadcasts are emitted only after the SQLite transaction lands.
+ * assignment. Broadcasts are emitted only after the transaction lands.
  */
-export async function dismissSqliteOpenClarifyParksForAutonomous(
-  db: DbClient,
+export async function dismissOpenClarifyParksForAutonomous(
+  db: ProviderNeutralDatabase,
   input: CollaborationAutonomousDismissalInput,
 ): Promise<CollaborationAutonomousDismissalResult> {
   const resolvedMode =
     input.mode ??
-    (() => {
-      const row = db
-        .select({ config: tasks.workgroupConfigJson })
-        .from(tasks)
-        .where(eq(tasks.id, input.taskId))
-        .get()
+    (await (async () => {
+      const row = (
+        await db
+          .select({ config: tasks.workgroupConfigJson })
+          .from(tasks)
+          .where(eq(tasks.id, input.taskId))
+          .limit(1)
+      )[0]
       if (row?.config === null || row?.config === undefined) return 'leader_worker'
       try {
         const parsed = JSON.parse(row.config) as { mode?: unknown }
@@ -97,13 +105,13 @@ export async function dismissSqliteOpenClarifyParksForAutonomous(
       } catch {
         return 'leader_worker'
       }
-    })()
+    })())
 
-  const result = dbTxSync(db, (tx) => {
+  const result = await databaseSessionFor(db).transaction(async (tx) => {
     let dismissedSessionCount = 0
     const dismissedSessions: Array<{ nodeRunId: string; nodeId: string }> = []
     const requeuedAssignments: Array<{ id: string; to: WorkgroupAssignmentStatus }> = []
-    const open = tx
+    const open = await tx
       .select({
         id: clarifyRounds.id,
         nodeRunId: clarifyRounds.intermediaryNodeRunId,
@@ -118,17 +126,18 @@ export async function dismissSqliteOpenClarifyParksForAutonomous(
           eq(clarifyRounds.status, 'awaiting_human'),
         ),
       )
-      .all()
 
     for (const round of open) {
       dismissedSessionCount += 1
-      const parked = tx
-        .select({ status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, round.nodeRunId))
-        .get()
+      const parked = (
+        await tx
+          .select({ status: nodeRuns.status })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, round.nodeRunId))
+          .limit(1)
+      )[0]
       if (parked?.status === 'awaiting_human') {
-        setNodeRunStatusTx({
+        await setNodeRunStatusTx({
           tx,
           nodeRunId: round.nodeRunId,
           to: 'canceled',
@@ -141,10 +150,10 @@ export async function dismissSqliteOpenClarifyParksForAutonomous(
         })
         dismissedSessions.push({ nodeRunId: round.nodeRunId, nodeId: round.nodeId })
       }
-      tx.update(clarifyRounds)
+      await tx
+        .update(clarifyRounds)
         .set({ status: 'canceled' })
         .where(and(eq(clarifyRounds.id, round.id), eq(clarifyRounds.status, 'awaiting_human')))
-        .run()
 
       const shard = round.shardKey
       if (shard === null || parseMsgShardKey(shard) !== null) continue
@@ -154,7 +163,7 @@ export async function dismissSqliteOpenClarifyParksForAutonomous(
       if (!canRequeueAssignment('awaiting_human', to)) {
         throw new Error(`illegal workgroup assignment transition awaiting_human -> ${to}`)
       }
-      const requeued = tx
+      const requeued = await tx
         .update(workgroupAssignments)
         .set({
           status: to,
@@ -170,7 +179,6 @@ export async function dismissSqliteOpenClarifyParksForAutonomous(
           ),
         )
         .returning({ id: workgroupAssignments.id })
-        .all()
       for (const assignment of requeued) requeuedAssignments.push({ id: assignment.id, to })
     }
 

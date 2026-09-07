@@ -4208,3 +4208,70 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 
 **判据**：本条的签名是该用例找不到 `maintenance-worker-state` 且 DOM 停在
 `maintenance-status-loading`。
+
+## 守卫目录**之外**的账本仍在棘轮网外（RFC-359 W7 收口时实测，13 处）
+
+`rfc317-ledger-highwater.test.ts` 的 T72（「新账本必须入网」）本轮把收网口径从**判据 A（名字命中
+账本词汇）** 扩成 **A ∪ B**，B 是结构判据：`tests/architecture/` 里被 `toEqual` / `toStrictEqual`
+等值断言、且声明后不再被就地改动的顶层集合常量，**与名字无关**。理由是判据 A 是一张词汇表，
+而词汇表自己会漏词——RFC-317 T73 曾因 `ALLOWANCES` 不在表里而漏掉整份账本，RFC-359 W5 新建的
+一批账本（`SQLITE_ONLY_PROTECTIONS` / `PROVIDER_RUNTIME_UNEXERCISED` / `COVERAGE_PARITY_LEDGER` /
+`DUAL_ENGINE_PREDICATE_GAPS` …）同样一个都不命中。
+
+**判据 B 只作用于 `tests/architecture/`**，所以守卫目录**之外**的账本目前仍只被判据 A 覆盖，
+而它们的名字恰好也不命中词汇表。实测 13 处（判据：被等值断言 + 文件本身会扫仓）：
+
+- `tests/scheduler-audit-s10-async-transaction-decorative.test.ts` — `EXPECTED_ASYNC_TX_SITES`、`RAW_TRANSACTION_SITES`
+- `tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts` — `NON_STATUS_UPDATE_TASKS_SNAPSHOT`
+- `tests/rfc310-architecture-lock.test.ts` — `COMPOSITION_CONSUMERS`、`REQUIRED_PORTS_CONSUMERS`
+- `tests/rfc321-repository-publication-ratchet.test.ts` — `CALL_SITE_SUBJECTS`（文件名里就写着 ratchet，本身却没被棘轮盯住）
+- `tests/rfc287-t1-scheduler-source-lock-inventory.test.ts` — `SCHEDULER_SOURCE_LOCK_FILES`
+- `tests/rfc199-workflow-writer-inventory.test.ts` — `EXPECTED_WRITERS`
+- `tests/test-suite-policy.test.ts` — `REQUIRED_GATE_ACTIVATIONS`
+- `packages/frontend/tests/rfc317-dead-class-invariants.test.ts` — `UNDEFINED_CLASS_SNAPSHOT`
+- `packages/frontend/tests/tab-callsite-contract.test.ts` — `TRUE_TAB_CALLSITES`
+- `packages/frontend/tests/overlay-ux-inventory.test.ts` — `OVERLAY_FAMILY_OWNERS`
+- `packages/shared/tests/rfc317-port-codec-single-source.test.ts` — `CODEC_SITE_EXCEPTIONS`
+
+**为什么本轮不扩面**：这些文件同时是普通测试，直接把判据 B 套上去会把大批夹具误判成账本
+（实测：不加「被等值断言」这一条约束，守卫目录内未登记常量从 23 个涨到 143 个）。要收口的话，
+正解不是继续往词汇表加词，而是给这批文件也补一条结构判据——例如按「文件本身枚举源码」判定，
+但那个探测器本身又是一张词汇表（`readdirSync` / `listSourceFiles` / …），会漏掉用别的方式扫仓的
+文件（实测漏掉 `rfc359-w5-t19g`，它经 `migrateSqlite` 取证）。**没有想清楚之前不要硬上**。
+
+**判据**：本条的签名是上面 13 个 `<文件>|<常量>` 不在 `architecture/ledger-baselines.json` 里、
+也不在 `NOT_A_LEDGER` 里。
+
+## PostgreSQL 连接池饥饿会**挂死**：并发扇出宽于 `poolMax` 时排队的查询永不返回（RFC-359 W6 实撞）
+
+`/api/overview` 的 `Promise.all` 一次发 **13 条** count 查询。用 `poolMax: 4` 的 harness 稳定复现：
+其中一条**永远拿不到连接**，一直挂到池的 idle timeout 才以 `ERR_POSTGRES_IDLE_TIMEOUT` 抛出——
+把 `idleTimeoutMs` 从 30s 调到 10min，挂死时间跟着变成 10min（**错误文案里的时长是设置值，
+不是实际等待**，这一点容易误导排查）。`poolMax: 16` 下同一段代码 12/12 轮全绿、每轮 4ms。
+
+**为什么是生产风险**：默认 `poolMax=16`（`packages/shared/src/schemas/config.ts:51`）而 overview
+扇出 13，**只剩 3 的余量**；schema 允许把它配到 **1**；而且平台侧**没有任何「取连接超时」上界**——
+拿不到连接的请求不是快速失败，是挂到 idle timeout。任何一个比 `poolMax` 宽的并发扇出都会踩中。
+
+**处置方向**（未实施）：① 给取连接加一个显式上界并快速失败，错误里报**实际等待时长**；
+② 给并发扇出加一个不超过 `poolMax` 的并发闸；③ 校验 `poolMax` 下限不得小于仓内最宽的扇出。
+W6 只把 harness 的 `poolMax` 从 4 改成 16（与生产默认一致），那是**挪出雷区、不是修复**。
+
+**判据**：本条的签名是并发扇出宽于 `poolMax` 时出现 `ERR_POSTGRES_IDLE_TIMEOUT`，且挂死时长
+恰好等于 `idleTimeoutMs` 的配置值。
+
+## 任务列表的子任务补齐是**无界读**：一页 20 行取回 21,061 行（RFC-359 W6 实测，两个引擎相同）
+
+`select parent_task_id, id from tasks where parent_task_id in (<本页 20 个 root>)` 把这 20 个 root
+的**全部** 19,980 个子任务搬回内存，**只为算「有没有子任务 / 有几个」**。两个引擎完全一样，
+不是 provider 分叉。
+
+**为什么一直没被发现**：`rfc311-perf-guards` 的语料**全是 root、没有子任务**，那条查询取回 0 行。
+是 W6 给 `rfc244-task-operations-benchmark` 换成「取回行数」判据后当场抓到的——
+**按毫秒验收看不出来，按取回行数一眼就看出来**。
+
+**正解**：下推成 `group by` 计数或 `exists`，结构目标 **1084 行**。
+现状由 `ROWS_FETCHED_RATCHET = 21_100` 的只降不升棘轮钉住（`rfc244-task-operations-benchmark.test.ts`），
+改完把棘轮降到结构目标并删掉那段注释。
+
+**判据**：本条的签名是 20 行一页的任务列表取回行数 > 2 万。

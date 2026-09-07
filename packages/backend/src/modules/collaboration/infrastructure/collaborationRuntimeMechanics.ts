@@ -1,12 +1,30 @@
-import type { DbClient } from '@/db/client'
+// RFC-359 W7 —— collaboration 的运行期机制（`CollaborationRuntimeMechanics`）：
+// **一份实现，两个 provider 共用**。
+//
+// 合一前这一对是本文件（81 行纯转发，逐方法打到 `legacySqlite*` 的实现上）与
+// `postgresqlCollaborationRuntimeMechanics.ts`（1747 行把同一批语义用原生 drizzle 重写了一遍）。
+// 9 个方法一一对应、**没有能力缺口**；正典是被转发的那批实现——它们的写事务已经跑在
+// `databaseSessionFor` / `withTaskExecutionWrite` 上（RFC-359 W1-T2a/b/c 合一决定 / 派发 /
+// 快速澄清三条命令链路时就是这么做的），本刀补上剩下的三处 bun:sqlite 独有面：
+//   · `sqliteCollaborationWorkgroupClarify.ts` 的 `dbTxSync` + 同步 `setNodeRunStatusTx`；
+//   · `legacySqliteClarify/service.ts` 的两处同步 `.get()` 与短路 stop 的同步 `withOwnedTaskTx`；
+//   · `legacySqliteReview.ts` 里那一处 defensive park 的同步 `transitionNodeRunStatus`。
+//
+// 合一顺带抹平的实测差异（2026-09-07 双引擎对拍）：PG 那份把 cross-clarify 短路的诊断标签写成
+// `'cross-clarify-stop'`，SQLite 侧是 `'cross-clarify-persistent-stop'`；统一取后者。
+//
+// 保留惰性 import：评审 / 澄清域经 `services/humanGateComposition` 绕回 collaboration 的
+// composition barrel，静态 import 会形成值环。
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
 import {
-  dismissSqliteOpenClarifyParksForAutonomous,
-  isSqliteTaskClarifySuppressed,
+  dismissOpenClarifyParksForAutonomous,
+  isTaskClarifySuppressed,
 } from './sqliteCollaborationWorkgroupClarify'
 
-export function createSqliteCollaborationRuntimeMechanics(
-  db: DbClient,
+export function createCollaborationRuntimeMechanics(
+  db: ProviderNeutralDatabase,
 ): CollaborationRuntimeMechanics {
   return Object.freeze({
     async dispatchReviewNode(input) {
@@ -74,8 +92,8 @@ export function createSqliteCollaborationRuntimeMechanics(
       const { buildClarifyQueueContext } = await import('./legacySqliteClarify/queue')
       return buildClarifyQueueContext({ db, ...input })
     },
-    isTaskClarifySuppressed: (input) => isSqliteTaskClarifySuppressed(db, input),
+    isTaskClarifySuppressed: (input) => isTaskClarifySuppressed(db, input),
     dismissOpenClarifyParksForAutonomous: (input) =>
-      dismissSqliteOpenClarifyParksForAutonomous(db, input),
+      dismissOpenClarifyParksForAutonomous(db, input),
   } satisfies CollaborationRuntimeMechanics)
 }

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 856,
+    "consumers": 853,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1050,
+    "methods": 1063,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20381,
-    "symbols": 978
+    "recursiveFields": 20496,
+    "symbols": 982
   },
   "entries": [
     {
@@ -99111,7 +99111,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:80e3fd6229a994ecdbe6"
+        "import:ee9f8232a6df167b6457"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -99163,7 +99163,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:80e3fd6229a994ecdbe6"
+            "import:ee9f8232a6df167b6457"
           ],
           "name": "loadVisible",
           "signatureDigest": "sha256:998c613de61b905bdfaca8e1f7e0f34844cbf69e53c5154f20c7db7245d166fc"
@@ -99173,9 +99173,9 @@
       "productionConsumers": [
         {
           "context": "intent",
-          "edgeId": "import:80e3fd6229a994ecdbe6",
-          "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentSqlProgramRunner.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentSqlProgramRunner.ts#$file"
+          "edgeId": "import:ee9f8232a6df167b6457",
+          "file": "packages/backend/src/modules/intent/infrastructure/intentSqlProgramRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlProgramRunner.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -99197,8 +99197,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:123e05566ee4ca7ff629",
-        "import:20a60b6a89dc1bfde836"
+        "import:123e05566ee4ca7ff629"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -99236,12 +99235,6 @@
           "edgeId": "import:123e05566ee4ca7ff629",
           "file": "packages/backend/src/modules/intent/infrastructure/intentSqlProgram.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlProgram.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:20a60b6a89dc1bfde836",
-          "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -99267,7 +99260,6 @@
       "consumerEdgeIds": [
         "import:249cfa02dd6777ebec21",
         "import:287b2bc50f2f3db6a86e",
-        "import:3bbfd7a522d1d197d89b",
         "import:8ffbbe67ef8fcb167ee6",
         "import:9542f8a3d39a0e33b4a0"
       ],
@@ -99324,12 +99316,6 @@
           "edgeId": "import:287b2bc50f2f3db6a86e",
           "file": "packages/backend/src/modules/intent/infrastructure/intentSqlProgram.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlProgram.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:3bbfd7a522d1d197d89b",
-          "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts#$file"
         },
         {
           "context": "intent",
@@ -101966,7 +101952,6 @@
         "import:93a496890562d0d68db2",
         "import:a7869069fdaf3d810f3b",
         "import:b1e3426a3850d35d6f34",
-        "import:b50774499b7216ca827b",
         "import:c44892f461465161319e",
         "import:cf05431d12871ab59909",
         "import:ec4db4214639dda6fcb0",
@@ -102024,12 +102009,6 @@
           "edgeId": "import:b1e3426a3850d35d6f34",
           "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:b50774499b7216ca827b",
-          "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts#$file"
         },
         {
           "context": "legacy",
@@ -135910,120 +135889,79 @@
         "maxTransitiveLeafFields": 63,
         "maxUnionVariants": 32
       },
-      "consumerEdgeIds": [
-        "import:80a6656947cab18c5d3a",
-        "import:d83ccf7a62e17966b7b3"
-      ],
+      "consumerEdgeIds": [],
       "context": "task-execution",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "commands",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.cause",
           "type": "'clarify-deferred-answer'"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.expectedStatus",
           "type": "'awaiting_human'"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.finishedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.correlationRef",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.eventGroupId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.eventGroupOrdinal",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.operationRef",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.nodeId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.nodeRunId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.occurredAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.status",
           "type": "'done'"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$parameter:input.taskId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.kind",
           "type": "(typeof COMMITTED_EVENT_AGGREGATE_KINDS)[number]"
         },
@@ -136038,16 +135976,12 @@
           "type": "Exclude<CommittedEventCutoverMode, 'legacy'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.eventGroupId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.eventGroupOrdinal",
           "type": "number"
         },
@@ -136057,9 +135991,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.family",
           "type": "(typeof COMMITTED_EVENT_FAMILIES)[number]"
         },
@@ -136069,9 +136001,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:completeClarifyNode.$return.$variant:0.producer",
           "type": "(typeof COMMITTED_EVENT_PRODUCERS)[number]"
         },
@@ -136086,9 +136016,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$parameter:input.allowedFrom",
           "type": "readonly NodeRunStatus[]"
         },
@@ -136178,10 +136106,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$parameter:input.extra.reviewIteration",
           "type": "number"
         },
@@ -136261,41 +136186,27 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$parameter:input.nodeRunId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$parameter:input.reason",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$parameter:input.to",
           "type": "z.infer<typeof NodeRunStatusSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$return.from",
           "type": "z.infer<typeof NodeRunStatusSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:set.$return.to",
           "type": "z.infer<typeof NodeRunStatusSchema>"
         }
@@ -136308,36 +136219,18 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "name": "completeClarifyNode",
           "signatureDigest": "sha256:c9a3a4124f21a4fdf3c9709b4b1bdb2617c8f821a781c1aaa37b1a860f7b9497"
         },
         {
-          "consumerEdgeIds": [
-            "import:80a6656947cab18c5d3a",
-            "import:d83ccf7a62e17966b7b3"
-          ],
+          "consumerEdgeIds": [],
           "name": "set",
           "signatureDigest": "sha256:13713c87043d89f7bff32f042ea17a1a831e50feaa5b6ea1025ee02010ee397a"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#NodeRunLifecycleParticipantInTx",
-      "productionConsumers": [
-        {
-          "context": "collaboration",
-          "edgeId": "import:80a6656947cab18c5d3a",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:d83ccf7a62e17966b7b3",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -139592,6 +139485,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:783f6e0f3d355ee0e704",
         "import:8560dbf0705aecf7cb91",
         "import:92d3f50261db6473c22b",
         "import:9b02fcd413b316fbfdf6"
@@ -139633,6 +139527,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:783f6e0f3d355ee0e704",
             "import:8560dbf0705aecf7cb91",
             "import:92d3f50261db6473c22b",
             "import:9b02fcd413b316fbfdf6"
@@ -139647,6 +139542,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
       "productionConsumers": [
+        {
+          "context": "collaboration",
+          "edgeId": "import:783f6e0f3d355ee0e704",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:8560dbf0705aecf7cb91",
@@ -144978,8 +144879,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:699df452edcac2266438",
-        "import:ab79ae9ba6a535a0623d"
+        "import:699df452edcac2266438"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -145023,8 +144923,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:699df452edcac2266438",
-            "import:ab79ae9ba6a535a0623d"
+            "import:699df452edcac2266438"
           ],
           "fieldPath": "$call.$return.$variant:0.token.taskId",
           "type": "string"
@@ -145052,12 +144951,6 @@
           "edgeId": "import:699df452edcac2266438",
           "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:ab79ae9ba6a535a0623d",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -145824,6 +145717,45 @@
       "signatureDigest": "sha256:9a1a170e563693767f8e5701972ea47ba406340ece4d2905a9515cdef2331ef6",
       "status": "target-context-current-surface",
       "symbol": "assertTaskExecutionContext",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:assertTerminalMaintenanceClaimTx",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#assertTerminalMaintenanceClaimTx",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:c5eeb82255ffaef6c2d2c2a418f0dfe6821733dd7ba813345241ae039aa81b36",
+      "status": "target-context-current-surface",
+      "symbol": "assertTerminalMaintenanceClaimTx",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -149021,6 +148953,372 @@
       "signatureDigest": "sha256:ef6719acb415c9094dbc51e2cef962c409b57718db0b1e0481c82264521f6bdc",
       "status": "target-context-current-surface",
       "symbol": "createTaskExecutionContext",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 58,
+        "maxUnionVariants": 30
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:db",
+          "type": "ConstructorParameters<typeof DrizzleTerminalMaintenancePersistence>[0]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.cleanupPlanJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.members",
+          "type": "readonly MaintenanceMemberSnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$parameter:input.rootTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:claim.$return.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.claim.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:complete.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$parameter:input.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$parameter:input.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$parameter:input.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$parameter:input.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$parameter:input.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$parameter:input.rootTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:listRecoverable.$return",
+          "type": "readonly RecoverableTerminalMaintenanceClaim[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:snapshotMembers.$parameter:taskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:snapshotMembers.$return",
+          "type": "readonly MaintenanceMemberSnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:snapshotTree.$parameter:rootTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:snapshotTree.$return",
+          "type": "readonly MaintenanceMemberSnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.claim.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.releaseMembers",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$parameter:input.to",
+          "type": "(typeof TERMINAL_MAINTENANCE_STATES)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:transition.$return.revision",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:createTerminalMaintenanceStore",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:15286cd2139af684080845fcd1f7534349e9608aeca1daec01b0fc1e090fa156"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "claim",
+          "signatureDigest": "sha256:22ec689556959671d0c780931c5fe23770e0e3cfd54ce9b1fb31d7e957427168"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "complete",
+          "signatureDigest": "sha256:9939eac8a196fef8bd2bf5284ef4ddde61aa23f3ae16ce8f5228706b754c485b"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "listRecoverable",
+          "signatureDigest": "sha256:8f7742272e3813850957e340690da3e7a8dbb83cff7c3d819094740450caf008"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "snapshotMembers",
+          "signatureDigest": "sha256:412504df9a1fa6a138a837cd124e2b28ee4c5baf25d5fbabb9c46cb3ef5e81d1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "snapshotTree",
+          "signatureDigest": "sha256:e6b633e67f2669419d7feff8e20f1b60e96738c30b623ead2e825ecc47f70978"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "transition",
+          "signatureDigest": "sha256:203d6308277abf4e6183b8e568921c8ee4cfaff161a03155e96d8576a3c5d191"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createTerminalMaintenanceStore",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:15286cd2139af684080845fcd1f7534349e9608aeca1daec01b0fc1e090fa156",
+      "status": "target-context-current-surface",
+      "symbol": "createTerminalMaintenanceStore",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -154781,7 +155079,9 @@
         }
       ],
       "publicTypeConsumerIds": [
-        "public:task-execution:participants:RecoverableTerminalMaintenanceClaim"
+        "public:task-execution:participants:RecoverableTerminalMaintenanceClaim",
+        "public:task-execution:participants:TerminalMaintenanceStore",
+        "public:task-execution:participants:createTerminalMaintenanceStore"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -154856,7 +155156,9 @@
       ],
       "publicTypeConsumerIds": [
         "public:task-execution:participants:RecoverableTerminalMaintenanceClaim",
-        "public:task-execution:participants:TerminalMaintenanceClaim"
+        "public:task-execution:participants:TerminalMaintenanceClaim",
+        "public:task-execution:participants:TerminalMaintenanceStore",
+        "public:task-execution:participants:createTerminalMaintenanceStore"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -154909,12 +155211,412 @@
           "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TerminalMaintenanceStore",
+        "public:task-execution:participants:createTerminalMaintenanceStore"
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:fdbc8984aba70adee1ea6d7dd8a01d1c5fd1e6f3950ee6c2a680ff6672d48bef",
       "status": "target-context-current-surface",
       "symbol": "TerminalMaintenanceState",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 57,
+        "maxUnionVariants": 30
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.cleanupPlanJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.members",
+          "type": "readonly MaintenanceMemberSnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$parameter:input.rootTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:claim.$return.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.claim.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:complete.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$parameter:input.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$parameter:input.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$parameter:input.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$parameter:input.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$parameter:input.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$parameter:input.rootTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listRecoverable.$return",
+          "type": "readonly RecoverableTerminalMaintenanceClaim[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshotMembers.$parameter:taskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshotMembers.$return",
+          "type": "readonly MaintenanceMemberSnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshotTree.$parameter:rootTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshotTree.$return",
+          "type": "readonly MaintenanceMemberSnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.claim.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.releaseMembers",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$parameter:input.to",
+          "type": "(typeof TERMINAL_MAINTENANCE_STATES)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.claimId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.memberSetDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.operation.$variant:0",
+          "type": "'archive'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.operation.$variant:1",
+          "type": "'delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.operation.$variant:2",
+          "type": "'retention'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.operation.$variant:3",
+          "type": "'workspace-gc'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.operation.$variant:4",
+          "type": "'repair-metadata'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:transition.$return.revision",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TerminalMaintenanceStore",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "claim",
+          "signatureDigest": "sha256:22ec689556959671d0c780931c5fe23770e0e3cfd54ce9b1fb31d7e957427168"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "complete",
+          "signatureDigest": "sha256:9939eac8a196fef8bd2bf5284ef4ddde61aa23f3ae16ce8f5228706b754c485b"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "listRecoverable",
+          "signatureDigest": "sha256:8f7742272e3813850957e340690da3e7a8dbb83cff7c3d819094740450caf008"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "snapshotMembers",
+          "signatureDigest": "sha256:412504df9a1fa6a138a837cd124e2b28ee4c5baf25d5fbabb9c46cb3ef5e81d1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "snapshotTree",
+          "signatureDigest": "sha256:e6b633e67f2669419d7feff8e20f1b60e96738c30b623ead2e825ecc47f70978"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "transition",
+          "signatureDigest": "sha256:203d6308277abf4e6183b8e568921c8ee4cfaff161a03155e96d8576a3c5d191"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#TerminalMaintenanceStore",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:createTerminalMaintenanceStore"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8a769266a0213bcdbe5b0bbb27bac7c5b9184225375acfe05509752e7f5c7291",
+      "status": "target-context-current-surface",
+      "symbol": "TerminalMaintenanceStore",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:transitionTerminalMaintenanceClaimTx",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#transitionTerminalMaintenanceClaimTx",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:9f9b12fa3ae49abd569cb7a857a53d76a85ac8c555ffc85e8cbd41e1794a24f4",
+      "status": "target-context-current-surface",
+      "symbol": "transitionTerminalMaintenanceClaimTx",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -155464,7 +156166,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:2a6b2ce4041c5c732558",
         "import:a2bde85a15db7720cf96"
       ],
       "context": "task-execution",
@@ -155484,7 +156185,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$parameter:frame.iteration",
@@ -155507,7 +156207,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$parameter:read.$return.$variant:0.id",
@@ -155515,7 +156214,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$parameter:read.$return.$variant:0.iteration",
@@ -155523,7 +156221,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$parameter:read.$return.$variant:0.nodeId",
@@ -155556,7 +156253,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$return.lookup.$return.$variant:0.id",
@@ -155564,7 +156260,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$return.lookup.$return.$variant:0.iteration",
@@ -155572,7 +156267,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$return.lookup.$return.$variant:0.nodeId",
@@ -155585,7 +156279,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2a6b2ce4041c5c732558",
             "import:a2bde85a15db7720cf96"
           ],
           "fieldPath": "$call.$return.rows",
@@ -155604,12 +156297,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
       "productionConsumers": [
-        {
-          "context": "collaboration",
-          "edgeId": "import:2a6b2ce4041c5c732558",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file"
-        },
         {
           "context": "collaboration",
           "edgeId": "import:a2bde85a15db7720cf96",
@@ -155899,8 +156586,7 @@
         "maxUnionVariants": 15
       },
       "consumerEdgeIds": [
-        "import:11b302232665bbbaf928",
-        "import:61806c90fd9c8bf0291b"
+        "import:11b302232665bbbaf928"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -155924,24 +156610,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.containerRowById.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.containerRowById.$return.$variant:0.iteration",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.containerRowById.$return.$variant:0.nodeId",
           "type": "string"
@@ -155963,32 +156646,28 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.frame.iteration",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.parents",
           "type": "ReadonlyMap<string, string>"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.sourceNodeId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$parameter:args.targetNodeId",
           "type": "string"
@@ -156005,8 +156684,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$return.$variant:0.frame.iteration",
           "type": "number"
@@ -156018,16 +156696,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$return.$variant:0.ok",
           "type": "true"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928",
-            "import:61806c90fd9c8bf0291b"
+            "import:11b302232665bbbaf928"
           ],
           "fieldPath": "$call.$return.$variant:1.ok",
           "type": "false"
@@ -156075,12 +156751,6 @@
           "edgeId": "import:11b302232665bbbaf928",
           "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:61806c90fd9c8bf0291b",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161247,7 +161917,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:62e7d483da01877f1b6c1b1105756b6e081fbeba4e148ad9b88f28293ee539b8",
+  "sourceDigest": "sha256:55f876a7b5e58416c1a424ca5b741dc0e466612c9c9db0173a562b434b50ef08",
   "targetContexts": [
     "collaboration",
     "development-automation",

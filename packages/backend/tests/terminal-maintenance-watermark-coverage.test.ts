@@ -38,7 +38,7 @@ import {
 } from '@/modules/task-execution/domain/executionIntent'
 import { createVerifiedStopProof } from '@/modules/task-execution/domain/ownership'
 import { retainedWatermarkCoversSettledEffect } from '@/modules/task-execution/domain/terminalMaintenance'
-import { SqliteTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/sqliteTerminalMaintenancePersistence'
+import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -167,14 +167,10 @@ function settledTwoGenerationTask(taskId: string): {
   return { database, module }
 }
 
-function claimWorkspaceGc(
-  database: DbClient,
-  module: ReturnType<typeof createTaskExecutionTestModule>,
-  taskId: string,
-): void {
-  const members = module.terminalMaintenance.snapshotTree(database, taskId)
-  module.terminalMaintenance.claim({
-    db: database,
+async function claimWorkspaceGc(database: DbClient, taskId: string): Promise<void> {
+  const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(database)
+  const members = await terminalMaintenance.snapshotTree(taskId)
+  await terminalMaintenance.claim({
     rootTaskId: taskId,
     operation: 'workspace-gc',
     members,
@@ -184,17 +180,17 @@ function claimWorkspaceGc(
 }
 
 describe('terminal maintenance retained-watermark coverage', () => {
-  test('a family that settled two generations with different requests can still be claimed', () => {
+  test('a family that settled two generations with different requests can still be claimed', async () => {
     const taskId = 'task-two-generation-family'
-    const { database, module } = settledTwoGenerationTask(taskId)
-    expect(() => claimWorkspaceGc(database, module, taskId)).not.toThrow()
+    const { database } = settledTwoGenerationTask(taskId)
+    await expect(claimWorkspaceGc(database, taskId)).resolves.toBeUndefined()
   })
 
-  test('coverage is still refused when the retained watermark is gone', () => {
+  test('coverage is still refused when the retained watermark is gone', async () => {
     const taskId = 'task-watermark-erased'
-    const { database, module } = settledTwoGenerationTask(taskId)
+    const { database } = settledTwoGenerationTask(taskId)
     database.delete(taskExecutionLineageOperationRecords).run()
-    expect(() => claimWorkspaceGc(database, module, taskId)).toThrow(
+    await expect(claimWorkspaceGc(database, taskId)).rejects.toThrow(
       /lacks a complete retained watermark/,
     )
   })
@@ -223,7 +219,7 @@ describe('terminal maintenance retained-watermark coverage', () => {
 
       const command = createWorkspaceMaintenanceCommand({
         store: new DrizzleWorkspaceMaintenanceStore(database),
-        terminalMaintenance: new SqliteTerminalMaintenancePersistence(database),
+        terminalMaintenance: new DrizzleTerminalMaintenancePersistence(database),
         filesystem: createNodeWorkspaceMaintenanceFilesystem({
           appHome,
           isMaterializingTask: () => false,
@@ -301,10 +297,9 @@ describe('retained watermark coverage rule', () => {
       'task-execution',
       'infrastructure',
     )
-    for (const file of [
-      'sqliteTerminalMaintenance.ts',
-      'postgresqlTerminalMaintenancePersistence.ts',
-    ]) {
+    // 合一后（RFC-359 W7）终态维护只剩一份中立实现：SQLite 侧的归档 / 删除 / workspace-GC
+    // 也走它，`sqliteTerminalMaintenance.ts` 已整体退役。规则仍必须从领域读，不许在适配器里重推。
+    for (const file of ['terminalMaintenancePersistence.ts']) {
       const source = readFileSync(resolve(root, file), 'utf8')
       expect(source, file).toContain('retainedWatermarkCoversSettledEffect(effect, watermark)')
       expect(source, file).not.toContain('watermark.requestHash !== effect.requestHash')

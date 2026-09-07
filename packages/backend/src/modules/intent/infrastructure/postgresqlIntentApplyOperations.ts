@@ -6,7 +6,10 @@ import type { IntentWorkflowGraphValidationPort } from '../application/ports/int
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
-import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
+import {
+  INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
+  INTENT_APPLY_DIAGNOSTICS,
+} from '../application/journalConvergence'
 import {
   appliedEntryOf,
   assertIntentApplyBaselineFresh,
@@ -378,7 +381,7 @@ export function createPostgresqlIntentApplyOperations(
         await dependencies.db
           .update(intentApplyJournal)
           .set({
-            error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
+            error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
             updatedAt: now(),
           })
           .where(eq(intentApplyJournal.id, journalId))
@@ -430,7 +433,17 @@ export function createPostgresqlIntentApplyOperations(
         }
       }
       if (compensationErrors.length === 0) await settleFailed(error)
-      else await keepRetryable(error, compensationErrors)
+      else {
+        // RFC-359 W7 抬齐②: a non-terminal row is only half the record — the other
+        // half is the word operators grep for. SQLite has always logged this;
+        // without it the same failure simply has no name on a PostgreSQL
+        // deployment. Same constant, same payload shape, so both greps match.
+        await keepRetryable(error, compensationErrors)
+        log.warn(INTENT_APPLY_DIAGNOSTICS.applyLeftRetryable, {
+          journalId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      }
       throw error
     } finally {
       active.delete(journalId)
@@ -522,7 +535,7 @@ export function createPostgresqlIntentApplyOperations(
         await dependencies.db
           .update(intentApplyJournal)
           .set({
-            error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
+            error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
             updatedAt: now(),
           })
           .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')))

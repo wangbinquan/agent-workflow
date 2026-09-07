@@ -11,8 +11,7 @@ import { SqliteTaskOwnershipPersistence } from '../infrastructure/sqliteTaskOwne
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { SqliteTaskExecutionEffectPersistence } from '../infrastructure/sqliteTaskExecutionEffectPersistence'
 import { PostgresqlTaskExecutionEffectPersistence } from '../infrastructure/postgresqlTaskExecutionEffectPersistence'
-import { PostgresqlTerminalMaintenancePersistence } from '../infrastructure/postgresqlTerminalMaintenancePersistence'
-import { SqliteTerminalMaintenancePersistence } from '../infrastructure/sqliteTerminalMaintenancePersistence'
+import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
 import { DrizzleGateContinuationEffectPersistence } from '../infrastructure/gateContinuationEffectPersistence'
 import { DrizzleTaskExecutionIntentTerminalPersistence } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { PostgresqlTaskExecutionRecoveryPersistence } from '../infrastructure/postgresqlTaskExecutionRecovery'
@@ -166,7 +165,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     ownership: new SqliteTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
-    terminalMaintenance: new SqliteTerminalMaintenancePersistence(db),
+    terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
     gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
     gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
@@ -199,7 +198,7 @@ export function createPostgresqlTaskExecutionPersistence(
     ownership: new PostgresqlTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
-    terminalMaintenance: new PostgresqlTerminalMaintenancePersistence(db),
+    terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
     gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
     gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
     scheduler: new DrizzleSchedulerCompletionPersistence(db),

@@ -3223,7 +3223,7 @@ CREATE INDEX "idx_clarify_rounds_asking" ON "agent_workflow"."clarify_rounds" ("
 CREATE INDEX "idx_clarify_rounds_intermediary" ON "agent_workflow"."clarify_rounds" ("intermediary_node_id", "loop_iter", "iteration");
 
 -- index: clarify_rounds:index:idx_clarify_rounds_target_consumer
-CREATE INDEX "idx_clarify_rounds_target_consumer" ON "agent_workflow"."clarify_rounds" ("target_consumer_node_id", "status");
+CREATE INDEX "idx_clarify_rounds_target_consumer" ON "agent_workflow"."clarify_rounds" ("target_consumer_node_id", "loop_iter", "iteration");
 
 -- index: code_ai_attempts:index:uniq_code_ai_attempts_identity
 CREATE UNIQUE INDEX "uniq_code_ai_attempts_identity" ON "agent_workflow"."code_ai_attempts" ("round_id", "stage_name", "shard_key", "rerun_seq", "attempt_seq");
@@ -3624,6 +3624,9 @@ CREATE INDEX "idx_event_subscriptions_audit" ON "agent_workflow"."event_subscrip
 -- index: event_type_catalog:index:idx_event_type_source
 CREATE INDEX "idx_event_type_source" ON "agent_workflow"."event_type_catalog" ("source_id", "source_revision", "state");
 
+-- index: event_type_catalog:index:idx_event_type_catalog_visibility
+CREATE INDEX "idx_event_type_catalog_visibility" ON "agent_workflow"."event_type_catalog" ("catalog_visibility", "event_type_id", "revision");
+
 -- index: fusions:index:idx_fusions_skill
 CREATE INDEX "idx_fusions_skill" ON "agent_workflow"."fusions" ("skill_id");
 
@@ -3858,6 +3861,12 @@ CREATE INDEX "idx_rgn_cached_repo" ON "agent_workflow"."repo_group_nodes" ("cach
 -- index: repo_group_nodes:index:idx_rgn_child_group
 CREATE INDEX "idx_rgn_child_group" ON "agent_workflow"."repo_group_nodes" ("child_group_id");
 
+-- index: repo_group_nodes:index:idx_rgn_path_ci
+CREATE UNIQUE INDEX "idx_rgn_path_ci" ON "agent_workflow"."repo_group_nodes" ("group_id", lower("path"));
+
+-- index: repo_groups:index:idx_repo_groups_name_ci
+CREATE UNIQUE INDEX "idx_repo_groups_name_ci" ON "agent_workflow"."repo_groups" (lower("name"));
+
 -- index: repository_employee_assignments:index:repository_employee_assignments_scope_unique
 CREATE UNIQUE INDEX "repository_employee_assignments_scope_unique" ON "agent_workflow"."repository_employee_assignments" ("scope_kind", COALESCE("scope_ref", ''));
 
@@ -3996,6 +4005,9 @@ CREATE INDEX "idx_task_repos_cached_repo_id" ON "agent_workflow"."task_repos" ("
 -- index: task_repos:index:idx_task_repos_cached_repo_task
 CREATE INDEX "idx_task_repos_cached_repo_task" ON "agent_workflow"."task_repos" ("cached_repo_id", "task_id");
 
+-- index: task_space_nodes:index:idx_task_space_nodes_path_ci
+CREATE UNIQUE INDEX "idx_task_space_nodes_path_ci" ON "agent_workflow"."task_space_nodes" ("task_id", lower("node_path"));
+
 -- index: tasks:index:idx_tasks_live
 CREATE INDEX "idx_tasks_live" ON "agent_workflow"."tasks" ("id") WHERE "deleted_at" is null;
 
@@ -4046,6 +4058,21 @@ CREATE UNIQUE INDEX "idx_tasks_event_delivery_unique" ON "agent_workflow"."tasks
 
 -- index: tasks:index:idx_tasks_source_termination
 CREATE INDEX "idx_tasks_source_termination" ON "agent_workflow"."tasks" ("source_termination_binding", "source_termination_launch_rev");
+
+-- index: tasks:index:idx_tasks_root_missing
+CREATE INDEX "idx_tasks_root_missing" ON "agent_workflow"."tasks" ("id") WHERE "root_task_id" is null;
+
+-- index: tasks:index:idx_tasks_root_started
+CREATE INDEX "idx_tasks_root_started" ON "agent_workflow"."tasks" ("root_task_id", "started_at");
+
+-- index: tasks:index:idx_tasks_status_parent_finished
+CREATE INDEX "idx_tasks_status_parent_finished" ON "agent_workflow"."tasks" ("status", "parent_task_id", "finished_at");
+
+-- index: tasks:index:idx_tasks_status_workgroup
+CREATE INDEX "idx_tasks_status_workgroup" ON "agent_workflow"."tasks" ("status", "workgroup_id");
+
+-- index: tasks:index:idx_tasks_workgroup
+CREATE INDEX "idx_tasks_workgroup" ON "agent_workflow"."tasks" ("workgroup_id");
 
 -- index: token_audit:index:idx_token_audit_user_created
 CREATE INDEX "idx_token_audit_user_created" ON "agent_workflow"."token_audit" ("user_id", "created_at");
@@ -4119,6 +4146,9 @@ CREATE INDEX "idx_webhook_deliveries_event_time" ON "agent_workflow"."webhook_de
 -- index: webhook_deliveries:index:idx_webhook_deliveries_repo_time
 CREATE INDEX "idx_webhook_deliveries_repo_time" ON "agent_workflow"."webhook_deliveries" ("repo_path", "received_at");
 
+-- index: webhook_deliveries:index:idx_webhook_deliveries_body_retention
+CREATE INDEX "idx_webhook_deliveries_body_retention" ON "agent_workflow"."webhook_deliveries" ("received_at") WHERE "body_json" IS NOT NULL;
+
 -- index: webhook_endpoints:index:idx_webhook_endpoints_url_token
 CREATE UNIQUE INDEX "idx_webhook_endpoints_url_token" ON "agent_workflow"."webhook_endpoints" ("url_token");
 
@@ -4161,6 +4191,9 @@ CREATE INDEX "idx_webhook_triggers_endpoint_enabled" ON "agent_workflow"."webhoo
 -- index: webhook_triggers:index:idx_webhook_triggers_owner
 CREATE INDEX "idx_webhook_triggers_owner" ON "agent_workflow"."webhook_triggers" ("owner_user_id");
 
+-- index: workflows:index:idx_workflows_builtin_name
+CREATE UNIQUE INDEX "idx_workflows_builtin_name" ON "agent_workflow"."workflows" ("name") WHERE "builtin" = TRUE;
+
 -- index: workgroup_assignments:index:idx_wg_assign_task
 CREATE INDEX "idx_wg_assign_task" ON "agent_workflow"."workgroup_assignments" ("task_id", "status");
 
@@ -4179,11 +4212,32 @@ CREATE UNIQUE INDEX "workgroups_owner_name_unique" ON "agent_workflow"."workgrou
 -- constraint: action_template_revisions:fk:action_template_revisions_template_id_action_templates_id_fk
 ALTER TABLE "agent_workflow"."action_template_revisions" ADD CONSTRAINT "action_template_revisions_template_id_action_templates_id_fk" FOREIGN KEY ("template_id") REFERENCES "agent_workflow"."action_templates" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
 
+-- constraint: auth_login_policy:check:auth_login_policy_oidc_default_role_enum
+ALTER TABLE "agent_workflow"."auth_login_policy" ADD CONSTRAINT "auth_login_policy_oidc_default_role_enum" CHECK ("oidc_default_role" IN ('guest', 'user'));
+
+-- constraint: auth_login_policy:check:auth_login_policy_id_fixed
+ALTER TABLE "agent_workflow"."auth_login_policy" ADD CONSTRAINT "auth_login_policy_id_fixed" CHECK ("id" = 'global');
+
 -- constraint: automation_policy_revisions:fk:automation_policy_revisions_policy_id_automation_policies_id_fk
 ALTER TABLE "agent_workflow"."automation_policy_revisions" ADD CONSTRAINT "automation_policy_revisions_policy_id_automation_policies_id_fk" FOREIGN KEY ("policy_id") REFERENCES "agent_workflow"."automation_policies" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
 
 -- constraint: cached_repos:unique:cached_repos_url_hash_unique
 ALTER TABLE "agent_workflow"."cached_repos" ADD CONSTRAINT "cached_repos_url_hash_unique" UNIQUE ("url_hash");
+
+-- constraint: capability_templates:check:capability_templates_visibility_enum
+ALTER TABLE "agent_workflow"."capability_templates" ADD CONSTRAINT "capability_templates_visibility_enum" CHECK ("visibility" IN ('public','private'));
+
+-- constraint: clarify_rounds:check:clarify_rounds_kind_enum
+ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_kind_enum" CHECK ("kind" IN ('self', 'cross'));
+
+-- constraint: clarify_rounds:check:clarify_rounds_directive_enum
+ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_directive_enum" CHECK ("directive" IS NULL OR "directive" IN ('continue', 'stop'));
+
+-- constraint: clarify_rounds:check:clarify_rounds_status_enum
+ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_status_enum" CHECK ("status" IN ('awaiting_human', 'answered', 'canceled', 'abandoned'));
+
+-- constraint: clarify_rounds:check:clarify_rounds_kind_shape
+ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_kind_shape" CHECK (("kind" = 'self' AND "status" != 'abandoned') OR ("kind" = 'cross' AND "status" != 'canceled'));
 
 -- constraint: clarify_rounds:fk:clarify_rounds_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4194,11 +4248,77 @@ ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_ask
 -- constraint: clarify_rounds:fk:clarify_rounds_intermediary_node_run_id_node_runs_id_fk
 ALTER TABLE "agent_workflow"."clarify_rounds" ADD CONSTRAINT "clarify_rounds_intermediary_node_run_id_node_runs_id_fk" FOREIGN KEY ("intermediary_node_run_id") REFERENCES "agent_workflow"."node_runs" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
+-- constraint: code_ai_attempts:check:code_ai_attempts_rerun_seq_nonnegative
+ALTER TABLE "agent_workflow"."code_ai_attempts" ADD CONSTRAINT "code_ai_attempts_rerun_seq_nonnegative" CHECK ("rerun_seq" >= 0);
+
+-- constraint: code_ai_attempts:check:code_ai_attempts_attempt_seq_nonnegative
+ALTER TABLE "agent_workflow"."code_ai_attempts" ADD CONSTRAINT "code_ai_attempts_attempt_seq_nonnegative" CHECK ("attempt_seq" >= 0);
+
+-- constraint: code_ai_attempts:check:code_ai_attempts_status_enum
+ALTER TABLE "agent_workflow"."code_ai_attempts" ADD CONSTRAINT "code_ai_attempts_status_enum" CHECK ("status" IN ('claimed','running','validated','failed','interrupted'));
+
+-- constraint: code_findings:check:code_findings_anchor_kind_enum
+ALTER TABLE "agent_workflow"."code_findings" ADD CONSTRAINT "code_findings_anchor_kind_enum" CHECK ("anchor_kind" IN ('mr','issue','pipeline','platform'));
+
+-- constraint: code_findings:check:code_findings_lifecycle_enum
+ALTER TABLE "agent_workflow"."code_findings" ADD CONSTRAINT "code_findings_lifecycle_enum" CHECK ("lifecycle" IN ('active','disappeared','reappeared'));
+
+-- constraint: code_host_connections:check:code_host_connections_provider_enum
+ALTER TABLE "agent_workflow"."code_host_connections" ADD CONSTRAINT "code_host_connections_provider_enum" CHECK ("provider" IN ('gitlab', 'github'));
+
+-- constraint: code_host_connections:check:code_host_connections_repository_url_prefixes_json_json_valid
+ALTER TABLE "agent_workflow"."code_host_connections" ADD CONSTRAINT "code_host_connections_repository_url_prefixes_json_json_valid" CHECK (json_valid("repository_url_prefixes_json"));
+
+-- constraint: code_host_connections:check:code_host_connections_transport_mappings_json_json_valid
+ALTER TABLE "agent_workflow"."code_host_connections" ADD CONSTRAINT "code_host_connections_transport_mappings_json_json_valid" CHECK (json_valid("transport_mappings_json"));
+
+-- constraint: code_host_connections:check:code_host_connections_connection_generation_length
+ALTER TABLE "agent_workflow"."code_host_connections" ADD CONSTRAINT "code_host_connections_connection_generation_length" CHECK (length("connection_generation") BETWEEN 1 AND 128);
+
+-- constraint: code_host_connections:check:code_host_connections_reject_unauthorized_boolean
+ALTER TABLE "agent_workflow"."code_host_connections" ADD CONSTRAINT "code_host_connections_reject_unauthorized_boolean" CHECK ("reject_unauthorized" IN (FALSE, TRUE));
+
+-- constraint: code_round_stages:check:code_round_stages_stage_seq_nonnegative
+ALTER TABLE "agent_workflow"."code_round_stages" ADD CONSTRAINT "code_round_stages_stage_seq_nonnegative" CHECK ("stage_seq" >= 0);
+
+-- constraint: code_round_stages:check:code_round_stages_stage_kind_enum
+ALTER TABLE "agent_workflow"."code_round_stages" ADD CONSTRAINT "code_round_stages_stage_kind_enum" CHECK ("stage_kind" IN ('program','script','ai','invoke'));
+
+-- constraint: code_round_stages:check:code_round_stages_status_enum
+ALTER TABLE "agent_workflow"."code_round_stages" ADD CONSTRAINT "code_round_stages_status_enum" CHECK ("status" IN ('pending','running','done','failed','skipped','inherited'));
+
+-- constraint: code_work_items:check:code_work_items_anchor_kind_enum
+ALTER TABLE "agent_workflow"."code_work_items" ADD CONSTRAINT "code_work_items_anchor_kind_enum" CHECK ("anchor_kind" IN ('mr','issue','pipeline','platform'));
+
+-- constraint: code_work_items:check:code_work_items_status_enum
+ALTER TABLE "agent_workflow"."code_work_items" ADD CONSTRAINT "code_work_items_status_enum" CHECK ("status" IN ('idle','queued','running','awaiting','settled','failed','superseding','handed_off','closing','closed'));
+
+-- constraint: code_work_items:check:code_work_items_epoch_positive
+ALTER TABLE "agent_workflow"."code_work_items" ADD CONSTRAINT "code_work_items_epoch_positive" CHECK ("epoch" >= 1);
+
+-- constraint: code_work_items:check:code_work_items_publishing_epoch_positive
+ALTER TABLE "agent_workflow"."code_work_items" ADD CONSTRAINT "code_work_items_publishing_epoch_positive" CHECK ("publishing_epoch" IS NULL OR "publishing_epoch" >= 1);
+
+-- constraint: code_work_rounds:check:code_work_rounds_round_seq_positive
+ALTER TABLE "agent_workflow"."code_work_rounds" ADD CONSTRAINT "code_work_rounds_round_seq_positive" CHECK ("round_seq" >= 1);
+
+-- constraint: code_work_rounds:check:code_work_rounds_epoch_positive
+ALTER TABLE "agent_workflow"."code_work_rounds" ADD CONSTRAINT "code_work_rounds_epoch_positive" CHECK ("epoch" >= 1);
+
+-- constraint: code_work_rounds:check:code_work_rounds_outcome_enum
+ALTER TABLE "agent_workflow"."code_work_rounds" ADD CONSTRAINT "code_work_rounds_outcome_enum" CHECK ("outcome" IS NULL OR "outcome" IN ('published','awaiting','failed','canceled','superseded'));
+
 -- constraint: collaboration_gate_artifacts:check:collaboration_gate_artifacts_byte_size_nonnegative
 ALTER TABLE "agent_workflow"."collaboration_gate_artifacts" ADD CONSTRAINT "collaboration_gate_artifacts_byte_size_nonnegative" CHECK ("byte_size" >= 0);
 
 -- constraint: collaboration_gate_artifacts:check:collaboration_gate_artifacts_receipt_json_valid
 ALTER TABLE "agent_workflow"."collaboration_gate_artifacts" ADD CONSTRAINT "collaboration_gate_artifacts_receipt_json_valid" CHECK ("receipt_json" IS NULL OR json_valid("receipt_json"));
+
+-- constraint: collaboration_gate_artifacts:check:collaboration_gate_artifacts_artifact_kind_fixed
+ALTER TABLE "agent_workflow"."collaboration_gate_artifacts" ADD CONSTRAINT "collaboration_gate_artifacts_artifact_kind_fixed" CHECK ("artifact_kind" = 'review-doc');
+
+-- constraint: collaboration_gate_artifacts:check:collaboration_gate_artifacts_state_enum
+ALTER TABLE "agent_workflow"."collaboration_gate_artifacts" ADD CONSTRAINT "collaboration_gate_artifacts_state_enum" CHECK ("state" IN ('declared','staged','consumed','finalized','cleanup_pending'));
 
 -- constraint: collaboration_gate_artifacts:fk:collaboration_gate_artifacts_operation_id_collaboration_gate_operations_id_fk
 ALTER TABLE "agent_workflow"."collaboration_gate_artifacts" ADD CONSTRAINT "collaboration_gate_artifacts_operation_id_collabor_4d082f595e5b" FOREIGN KEY ("operation_id") REFERENCES "agent_workflow"."collaboration_gate_operations" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4235,6 +4355,15 @@ ALTER TABLE "agent_workflow"."collaboration_gate_operations" ADD CONSTRAINT "col
 
 -- constraint: collaboration_gate_operations:check:collaboration_gate_operations_failed_shape
 ALTER TABLE "agent_workflow"."collaboration_gate_operations" ADD CONSTRAINT "collaboration_gate_operations_failed_shape" CHECK ("state" <> 'failed' OR "failure_json" IS NOT NULL);
+
+-- constraint: collaboration_gate_operations:check:collaboration_gate_operations_gate_kind_enum
+ALTER TABLE "agent_workflow"."collaboration_gate_operations" ADD CONSTRAINT "collaboration_gate_operations_gate_kind_enum" CHECK ("gate_kind" IN ('review','clarify','questions'));
+
+-- constraint: collaboration_gate_operations:check:collaboration_gate_operations_operation_kind_enum
+ALTER TABLE "agent_workflow"."collaboration_gate_operations" ADD CONSTRAINT "collaboration_gate_operations_operation_kind_enum" CHECK ("operation_kind" IN ('open','decide','manual-question-open','legacy-seed'));
+
+-- constraint: collaboration_gate_operations:check:collaboration_gate_operations_state_enum
+ALTER TABLE "agent_workflow"."collaboration_gate_operations" ADD CONSTRAINT "collaboration_gate_operations_state_enum" CHECK ("state" IN ('preparing','prepared','committed','cleanup_pending','completed','failed'));
 
 -- constraint: collaboration_gate_operations:fk:collaboration_gate_operations_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."collaboration_gate_operations" ADD CONSTRAINT "collaboration_gate_operations_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4371,6 +4500,9 @@ ALTER TABLE "agent_workflow"."employee_case_event_origins" ADD CONSTRAINT "emplo
 -- constraint: employee_case_inbox:fk:employee_case_inbox_case_id_employee_cases_id_fk
 ALTER TABLE "agent_workflow"."employee_case_inbox" ADD CONSTRAINT "employee_case_inbox_case_id_employee_cases_id_fk" FOREIGN KEY ("case_id") REFERENCES "agent_workflow"."employee_cases" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
 
+-- constraint: employee_case_members:check:employee_case_members_role_enum
+ALTER TABLE "agent_workflow"."employee_case_members" ADD CONSTRAINT "employee_case_members_role_enum" CHECK ("role" IN ('collaborator', 'observer'));
+
 -- constraint: employee_case_members:fk:employee_case_members_case_id_employee_cases_id_fk
 ALTER TABLE "agent_workflow"."employee_case_members" ADD CONSTRAINT "employee_case_members_case_id_employee_cases_id_fk" FOREIGN KEY ("case_id") REFERENCES "agent_workflow"."employee_cases" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
@@ -4455,8 +4587,14 @@ ALTER TABLE "agent_workflow"."event_deliveries" ADD CONSTRAINT "event_deliveries
 -- constraint: event_deliveries:fk:event_deliveries_subscription_id_event_subscriptions_id_fk
 ALTER TABLE "agent_workflow"."event_deliveries" ADD CONSTRAINT "event_deliveries_subscription_id_event_subscriptions_id_fk" FOREIGN KEY ("subscription_id") REFERENCES "agent_workflow"."event_subscriptions" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
 
+-- constraint: fusions:check:fusions_status_enum
+ALTER TABLE "agent_workflow"."fusions" ADD CONSTRAINT "fusions_status_enum" CHECK ("status" IN ('running','awaiting_approval','applying','done','rejected','canceled','failed'));
+
 -- constraint: intent_apply_journal:fk:intent_apply_journal_session_id_intent_sessions_id_fk
 ALTER TABLE "agent_workflow"."intent_apply_journal" ADD CONSTRAINT "intent_apply_journal_session_id_intent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "agent_workflow"."intent_sessions" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- constraint: intent_draft_resolutions:check:intent_draft_resolutions_reason_enum
+ALTER TABLE "agent_workflow"."intent_draft_resolutions" ADD CONSTRAINT "intent_draft_resolutions_reason_enum" CHECK ("reason" IN ('superseded','discarded'));
 
 -- constraint: intent_draft_resolutions:fk:intent_draft_resolutions_draft_id_intent_drafts_id_fk
 ALTER TABLE "agent_workflow"."intent_draft_resolutions" ADD CONSTRAINT "intent_draft_resolutions_draft_id_intent_drafts_id_fk" FOREIGN KEY ("draft_id") REFERENCES "agent_workflow"."intent_drafts" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4473,6 +4611,12 @@ ALTER TABLE "agent_workflow"."intent_turn_events" ADD CONSTRAINT "intent_turn_ev
 -- constraint: intent_turns:fk:intent_turns_session_id_intent_sessions_id_fk
 ALTER TABLE "agent_workflow"."intent_turns" ADD CONSTRAINT "intent_turns_session_id_intent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "agent_workflow"."intent_sessions" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
+-- constraint: intent_working_set_changes:check:intent_working_set_changes_mode_enum
+ALTER TABLE "agent_workflow"."intent_working_set_changes" ADD CONSTRAINT "intent_working_set_changes_mode_enum" CHECK ("mode" IN ('after-current','interrupt'));
+
+-- constraint: intent_working_set_changes:check:intent_working_set_changes_state_enum
+ALTER TABLE "agent_workflow"."intent_working_set_changes" ADD CONSTRAINT "intent_working_set_changes_state_enum" CHECK ("state" IN ('queued','applying','applied','failed','canceled'));
+
 -- constraint: intent_working_set_changes:fk:intent_working_set_changes_session_id_intent_sessions_id_fk
 ALTER TABLE "agent_workflow"."intent_working_set_changes" ADD CONSTRAINT "intent_working_set_changes_session_id_intent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "agent_workflow"."intent_sessions" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
@@ -4481,6 +4625,33 @@ ALTER TABLE "agent_workflow"."legacy_code_work_item_links" ADD CONSTRAINT "legac
 
 -- constraint: lifecycle_alerts:fk:lifecycle_alerts_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."lifecycle_alerts" ADD CONSTRAINT "lifecycle_alerts_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- constraint: maintenance_runs:check:maintenance_runs_job_class_enum
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_job_class_enum" CHECK ("job_class" IN ('cleanup','recovery','checkpoint'));
+
+-- constraint: maintenance_runs:check:maintenance_runs_state_enum
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_state_enum" CHECK ("state" IN ('pending','running','deferred','succeeded','failed'));
+
+-- constraint: maintenance_runs:check:maintenance_runs_payload_json_json_valid
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_payload_json_json_valid" CHECK (json_valid("payload_json"));
+
+-- constraint: maintenance_runs:check:maintenance_runs_cursor_version_positive
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_cursor_version_positive" CHECK ("cursor_version" > 0);
+
+-- constraint: maintenance_runs:check:maintenance_runs_cursor_json_json_valid
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_cursor_json_json_valid" CHECK ("cursor_json" IS NULL OR json_valid("cursor_json"));
+
+-- constraint: maintenance_runs:check:maintenance_runs_attempt_nonnegative
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_attempt_nonnegative" CHECK ("attempt" >= 0);
+
+-- constraint: maintenance_runs:check:maintenance_runs_slice_no_nonnegative
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_slice_no_nonnegative" CHECK ("slice_no" >= 0);
+
+-- constraint: maintenance_runs:check:maintenance_runs_counters_json_json_valid
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_counters_json_json_valid" CHECK (json_valid("counters_json"));
+
+-- constraint: maintenance_runs:check:maintenance_runs_state_shape
+ALTER TABLE "agent_workflow"."maintenance_runs" ADD CONSTRAINT "maintenance_runs_state_shape" CHECK (("state" = 'running' AND "lease_token" IS NOT NULL AND "lease_expires_at" IS NOT NULL) OR ("state" <> 'running'));
 
 -- constraint: mcp_probes:unique:mcp_probes_mcp_id_unique
 ALTER TABLE "agent_workflow"."mcp_probes" ADD CONSTRAINT "mcp_probes_mcp_id_unique" UNIQUE ("mcp_id");
@@ -4548,8 +4719,35 @@ ALTER TABLE "agent_workflow"."mcp_runtime_test_turns" ADD CONSTRAINT "mcp_runtim
 -- constraint: mcp_runtime_test_turns:fk:mcp_runtime_test_turns_session_id_mcp_runtime_test_sessions_id_fk
 ALTER TABLE "agent_workflow"."mcp_runtime_test_turns" ADD CONSTRAINT "mcp_runtime_test_turns_session_id_mcp_runtime_test_f98966f21820" FOREIGN KEY ("session_id") REFERENCES "agent_workflow"."mcp_runtime_test_sessions" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
+-- constraint: memories:check:memories_scope_type_enum
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_scope_type_enum" CHECK ("scope_type" IN ('agent','workflow','repo','repo_group','global'));
+
+-- constraint: memories:check:memories_status_enum
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_status_enum" CHECK ("status" IN ('candidate','approved','archived','superseded','rejected','fused'));
+
+-- constraint: memories:check:memories_source_kind_enum
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_source_kind_enum" CHECK ("source_kind" IN ('clarify','review','feedback','manual'));
+
+-- constraint: memories:check:memories_distill_action_enum
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_distill_action_enum" CHECK ("distill_action" IS NULL OR "distill_action" IN ('new','update_of','duplicate_of','conflict_with'));
+
+-- constraint: memories:check:memories_scope_type_shape
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_scope_type_shape" CHECK (("scope_type" = 'global' AND "scope_id" IS NULL) OR ("scope_type" != 'global' AND "scope_id" IS NOT NULL));
+
+-- constraint: memories:check:memories_fused_into_skill_shape
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_fused_into_skill_shape" CHECK (("status" = 'fused') = ("fused_into_skill" IS NOT NULL));
+
+-- constraint: memories:check:memories_fused_into_skill_id_shape
+ALTER TABLE "agent_workflow"."memories" ADD CONSTRAINT "memories_fused_into_skill_id_shape" CHECK (("status" = 'fused') = ("fused_into_skill_id" IS NOT NULL));
+
 -- constraint: memory_distill_events:fk:memory_distill_events_distill_job_id_memory_distill_jobs_id_fk
 ALTER TABLE "agent_workflow"."memory_distill_events" ADD CONSTRAINT "memory_distill_events_distill_job_id_memory_distill_jobs_id_fk" FOREIGN KEY ("distill_job_id") REFERENCES "agent_workflow"."memory_distill_jobs" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- constraint: memory_distill_jobs:check:memory_distill_jobs_source_kind_enum
+ALTER TABLE "agent_workflow"."memory_distill_jobs" ADD CONSTRAINT "memory_distill_jobs_source_kind_enum" CHECK ("source_kind" IN ('clarify','review','feedback'));
+
+-- constraint: memory_distill_jobs:check:memory_distill_jobs_status_enum
+ALTER TABLE "agent_workflow"."memory_distill_jobs" ADD CONSTRAINT "memory_distill_jobs_status_enum" CHECK ("status" IN ('pending','running','done','failed','canceled'));
 
 -- constraint: memory_scope_move_events:check:memory_scope_move_events_actor_source
 ALTER TABLE "agent_workflow"."memory_scope_move_events" ADD CONSTRAINT "memory_scope_move_events_actor_source" CHECK ("actor_source" IN ('session','pat','daemon','cli','system'));
@@ -4581,6 +4779,18 @@ ALTER TABLE "agent_workflow"."node_runs" ADD CONSTRAINT "node_runs_task_id_tasks
 -- constraint: oidc_providers:unique:oidc_providers_slug_unique
 ALTER TABLE "agent_workflow"."oidc_providers" ADD CONSTRAINT "oidc_providers_slug_unique" UNIQUE ("slug");
 
+-- constraint: repo_capability_config:check:repo_capability_config_enabled_boolean
+ALTER TABLE "agent_workflow"."repo_capability_config" ADD CONSTRAINT "repo_capability_config_enabled_boolean" CHECK ("enabled" IN (FALSE, TRUE));
+
+-- constraint: repo_capability_config:check:repo_capability_config_readiness_enum
+ALTER TABLE "agent_workflow"."repo_capability_config" ADD CONSTRAINT "repo_capability_config_readiness_enum" CHECK ("readiness" IN ('disabled','misconfigured','ready'));
+
+-- constraint: repo_group_nodes:check:repo_group_nodes_attachment_kind_enum
+ALTER TABLE "agent_workflow"."repo_group_nodes" ADD CONSTRAINT "repo_group_nodes_attachment_kind_enum" CHECK ("attachment_kind" IS NULL OR "attachment_kind" IN ('repo','group'));
+
+-- constraint: repo_group_nodes:check:repo_group_nodes_attachment_kind_shape
+ALTER TABLE "agent_workflow"."repo_group_nodes" ADD CONSTRAINT "repo_group_nodes_attachment_kind_shape" CHECK (("attachment_kind" IS NULL AND "cached_repo_id" IS NULL AND "child_group_id" IS NULL AND "ref" = '' AND "subdir" = '' AND "readonly" = FALSE) OR ("attachment_kind" = 'repo' AND "cached_repo_id" IS NOT NULL AND "child_group_id" IS NULL) OR ("attachment_kind" = 'group' AND "child_group_id" IS NOT NULL AND "cached_repo_id" IS NULL AND "ref" = '' AND "subdir" = ''));
+
 -- constraint: repo_group_nodes:fk:repo_group_nodes_group_id_repo_groups_id_fk
 ALTER TABLE "agent_workflow"."repo_group_nodes" ADD CONSTRAINT "repo_group_nodes_group_id_repo_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "agent_workflow"."repo_groups" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
@@ -4589,6 +4799,27 @@ ALTER TABLE "agent_workflow"."repo_group_nodes" ADD CONSTRAINT "repo_group_nodes
 
 -- constraint: repository_transport_connections:check:repository_transport_connections_generation_length
 ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_generation_length" CHECK (length("connection_generation") BETWEEN 1 AND 128);
+
+-- constraint: repository_transport_connections:check:repository_transport_connections_provider_enum
+ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_provider_enum" CHECK ("provider" IN ('gitlab', 'github'));
+
+-- constraint: repository_transport_connections:check:repository_transport_connections_endpoint_binding_digest_length
+ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_endpoint_binding_digest_length" CHECK (length("endpoint_binding_digest") = 64 AND "endpoint_binding_digest" !~ '[^0-9a-f]');
+
+-- constraint: repository_transport_connections:check:repository_transport_connections_reject_unauthorized_boolean
+ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_reject_unauthorized_boolean" CHECK ("reject_unauthorized" IN (FALSE, TRUE));
+
+-- constraint: repository_transport_connections:check:repository_transport_connections_transport_mappings_json_json_valid
+ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_transport_mapping_f206b7ad8ac6" CHECK (json_valid("transport_mappings_json"));
+
+-- constraint: repository_transport_connections:check:repository_transport_connections_allowed_http_base_urls_json_json_valid
+ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_allowed_http_base_a6c2ede35fec" CHECK (json_valid("allowed_http_base_urls_json"));
+
+-- constraint: repository_transport_connections:check:repository_transport_connections_credential_revision_positive
+ALTER TABLE "agent_workflow"."repository_transport_connections" ADD CONSTRAINT "repository_transport_connections_credential_revision_positive" CHECK ("credential_revision" > 0);
+
+-- constraint: resource_grants:check:resource_grants_level_enum
+ALTER TABLE "agent_workflow"."resource_grants" ADD CONSTRAINT "resource_grants_level_enum" CHECK ("level" IN ('read', 'write'));
 
 -- constraint: resource_grants:fk:resource_grants_user_id_users_id_fk
 ALTER TABLE "agent_workflow"."resource_grants" ADD CONSTRAINT "resource_grants_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "agent_workflow"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4623,6 +4854,12 @@ ALTER TABLE "agent_workflow"."runtime_session_leases" ADD CONSTRAINT "runtime_se
 -- constraint: runtimes:unique:runtimes_name_unique
 ALTER TABLE "agent_workflow"."runtimes" ADD CONSTRAINT "runtimes_name_unique" UNIQUE ("name");
 
+-- constraint: skill_operations:check:skill_operations_kind_enum
+ALTER TABLE "agent_workflow"."skill_operations" ADD CONSTRAINT "skill_operations_kind_enum" CHECK ("kind" IN ('reserve', 'migrate', 'delete', 'version-write'));
+
+-- constraint: skill_operations:check:skill_operations_active_boolean
+ALTER TABLE "agent_workflow"."skill_operations" ADD CONSTRAINT "skill_operations_active_boolean" CHECK ("active" IN (0, 1));
+
 -- constraint: skill_versions:fk:skill_versions_skill_id_skills_id_fk
 ALTER TABLE "agent_workflow"."skill_versions" ADD CONSTRAINT "skill_versions_skill_id_skills_id_fk" FOREIGN KEY ("skill_id") REFERENCES "agent_workflow"."skills" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
@@ -4637,6 +4874,21 @@ ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "ta
 
 -- constraint: task_execution_effect_attempts:check:task_execution_attempts_epoch_positive
 ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_attempts_epoch_positive" CHECK ("epoch" > 0);
+
+-- constraint: task_execution_effect_attempts:check:task_execution_effect_attempts_state_enum
+ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_effect_attempts_state_enum" CHECK ("state" IN ('prepared','acting','succeeded','failed-not-applied','retry-authorized','recovery-required','outcome-unknown'));
+
+-- constraint: task_execution_effect_attempts:check:task_execution_effect_attempts_recovery_descriptor_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_effect_attempts_recovery_descriptor_b6637ae59321" CHECK ("recovery_descriptor_json" IS NULL OR json_valid("recovery_descriptor_json"));
+
+-- constraint: task_execution_effect_attempts:check:task_execution_effect_attempts_application_evidence_enum
+ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_effect_attempts_application_evidence_enum" CHECK ("application_evidence" IS NULL OR "application_evidence" IN ('applied','definitely-not-applied','ambiguous'));
+
+-- constraint: task_execution_effect_attempts:check:task_execution_effect_attempts_retry_authority_enum
+ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_effect_attempts_retry_authority_enum" CHECK ("retry_authority" IN ('none','probe','convergent','transport-policy'));
+
+-- constraint: task_execution_effect_attempts:check:task_execution_effect_attempts_receipt_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_effect_attempts_receipt_json_json_valid" CHECK ("receipt_json" IS NULL OR json_valid("receipt_json"));
 
 -- constraint: task_execution_effect_attempts:fk:task_execution_effect_attempts_effect_id_task_execution_effects_id_fk
 ALTER TABLE "agent_workflow"."task_execution_effect_attempts" ADD CONSTRAINT "task_execution_effect_attempts_effect_id_task_exec_dd101cf90ddf" FOREIGN KEY ("effect_id") REFERENCES "agent_workflow"."task_execution_effects" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4653,6 +4905,21 @@ ALTER TABLE "agent_workflow"."task_execution_effect_fences" ADD CONSTRAINT "task
 -- constraint: task_execution_effects:check:task_execution_effects_generation_nonnegative
 ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_generation_nonnegative" CHECK ("operation_generation" >= 0);
 
+-- constraint: task_execution_effects:check:task_execution_effects_kind_enum
+ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_kind_enum" CHECK ("kind" IN ('workspace-prepare','workspace-rollback','isolation-create','isolation-merge','repository','process','workspace-cleanup','code-host-mutation','outbound-mutation'));
+
+-- constraint: task_execution_effects:check:task_execution_effects_slot_path_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_slot_path_json_json_valid" CHECK (json_valid("slot_path_json"));
+
+-- constraint: task_execution_effects:check:task_execution_effects_state_enum
+ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_state_enum" CHECK ("state" IN ('open','succeeded','failed','outcome-unknown'));
+
+-- constraint: task_execution_effects:check:task_execution_effects_last_attempt_no_nonnegative
+ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_last_attempt_no_nonnegative" CHECK ("last_attempt_no" >= 0);
+
+-- constraint: task_execution_effects:check:task_execution_effects_receipt_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_receipt_json_json_valid" CHECK ("receipt_json" IS NULL OR json_valid("receipt_json"));
+
 -- constraint: task_execution_effects:fk:task_execution_effects_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execution_effects_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
@@ -4665,6 +4932,27 @@ ALTER TABLE "agent_workflow"."task_execution_effects" ADD CONSTRAINT "task_execu
 -- constraint: task_execution_intents:check:task_execution_intents_generation_nonnegative
 ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_generation_nonnegative" CHECK ("operation_generation" >= 0);
 
+-- constraint: task_execution_intents:check:task_execution_intents_kind_enum
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_kind_enum" CHECK ("kind" IN ('launch','resume','retry-repository-preparation','retry-node','sync-workflow','gate-continuation','recovery'));
+
+-- constraint: task_execution_intents:check:task_execution_intents_state_enum
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_state_enum" CHECK ("state" IN ('pending','claimed','completed','canceled','failed'));
+
+-- constraint: task_execution_intents:check:task_execution_intents_source_enum
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_source_enum" CHECK ("source" IN ('rest','mcp','scheduler','auto','boot','internal'));
+
+-- constraint: task_execution_intents:check:task_execution_intents_payload_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_payload_json_json_valid" CHECK (json_valid("payload_json"));
+
+-- constraint: task_execution_intents:check:task_execution_intents_slot_path_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_slot_path_json_json_valid" CHECK (json_valid("slot_path_json"));
+
+-- constraint: task_execution_intents:check:task_execution_intents_authorization_scope_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_authorization_scope_json_json_valid" CHECK ("authorization_scope_json" IS NULL OR json_valid("authorization_scope_json"));
+
+-- constraint: task_execution_intents:check:task_execution_intents_claimed_epoch_positive
+ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_claimed_epoch_positive" CHECK ("claimed_epoch" IS NULL OR "claimed_epoch" > 0);
+
 -- constraint: task_execution_intents:fk:task_execution_intents_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execution_intents_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
@@ -4672,10 +4960,37 @@ ALTER TABLE "agent_workflow"."task_execution_intents" ADD CONSTRAINT "task_execu
 ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_revision_positive" CHECK ("record_revision" > 0);
 
 -- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_record_shape
-ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_record_shape" CHECK (( ("record_kind" = 'generation-watermark' AND "highest_settled_generation" IS NOT NULL AND "operation_generation" IS NULL AND "decision_state" IS NULL) OR ("record_kind" = 'replay-decision' AND "operation_generation" IS NOT NULL AND "highest_settled_generation" IS NULL AND "decision_state" IS NOT NULL) ));
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_record_shape" CHECK (( ("record_kind" = 'generation-watermark' AND "highest_settled_generation" IS NOT NULL AND "highest_settled_generation" >= 0 AND "operation_generation" IS NULL AND "decision_state" IS NULL) OR ("record_kind" = 'replay-decision' AND "operation_generation" IS NOT NULL AND "operation_generation" >= 0 AND "highest_settled_generation" IS NULL AND "decision_state" IS NOT NULL) ));
+
+-- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_operation_records_record_kind_enum
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_operation_records_record_kind_enum" CHECK ("record_kind" IN ('generation-watermark','replay-decision'));
+
+-- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_operation_records_slot_path_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_operation_records_slot_path_04d81e0989c1" CHECK (json_valid("slot_path_json"));
+
+-- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_operation_records_provider_coordinate_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_operation_records_provider__8f954ecf2705" CHECK ("provider_coordinate_json" IS NULL OR json_valid("provider_coordinate_json"));
+
+-- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_operation_records_decision_state_enum
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_operation_records_decision_state_enum" CHECK ("decision_state" IS NULL OR "decision_state" IN ('requires-actor','actor-replay-authorized','actor-replay-authorized-suspended','consumed'));
+
+-- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_operation_records_authorization_scope_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_operation_records_authoriza_3b209f2e7950" CHECK ("authorization_scope_json" IS NULL OR json_valid("authorization_scope_json"));
+
+-- constraint: task_execution_lineage_operation_records:check:task_execution_lineage_operation_records_compacted_boolean
+ALTER TABLE "agent_workflow"."task_execution_lineage_operation_records" ADD CONSTRAINT "task_execution_lineage_operation_records_compacted_boolean" CHECK ("compacted" IN (FALSE, TRUE));
 
 -- constraint: task_execution_maintenance_claims:check:task_execution_maintenance_revision_positive
 ALTER TABLE "agent_workflow"."task_execution_maintenance_claims" ADD CONSTRAINT "task_execution_maintenance_revision_positive" CHECK ("revision" > 0);
+
+-- constraint: task_execution_maintenance_claims:check:task_execution_maintenance_claims_operation_enum
+ALTER TABLE "agent_workflow"."task_execution_maintenance_claims" ADD CONSTRAINT "task_execution_maintenance_claims_operation_enum" CHECK ("operation" IN ('archive','delete','retention','workspace-gc','repair-metadata'));
+
+-- constraint: task_execution_maintenance_claims:check:task_execution_maintenance_claims_state_enum
+ALTER TABLE "agent_workflow"."task_execution_maintenance_claims" ADD CONSTRAINT "task_execution_maintenance_claims_state_enum" CHECK ("state" IN ('claimed','io-complete','db-finalized','cleanup-pending','completed','recovery-required'));
+
+-- constraint: task_execution_maintenance_claims:check:task_execution_maintenance_claims_cleanup_plan_json_json_valid
+ALTER TABLE "agent_workflow"."task_execution_maintenance_claims" ADD CONSTRAINT "task_execution_maintenance_claims_cleanup_plan_json_json_valid" CHECK (json_valid("cleanup_plan_json"));
 
 -- constraint: task_execution_maintenance_members:fk:task_execution_maintenance_members_claim_id_task_execution_maintenance_claims_id_fk
 ALTER TABLE "agent_workflow"."task_execution_maintenance_members" ADD CONSTRAINT "task_execution_maintenance_members_claim_id_task_e_f62fa5a702b6" FOREIGN KEY ("claim_id") REFERENCES "agent_workflow"."task_execution_maintenance_claims" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4685,6 +5000,9 @@ ALTER TABLE "agent_workflow"."task_execution_owners" ADD CONSTRAINT "task_execut
 
 -- constraint: task_execution_owners:check:task_execution_owners_revision_positive
 ALTER TABLE "agent_workflow"."task_execution_owners" ADD CONSTRAINT "task_execution_owners_revision_positive" CHECK ("revision" > 0);
+
+-- constraint: task_execution_owners:check:task_execution_owners_state_enum
+ALTER TABLE "agent_workflow"."task_execution_owners" ADD CONSTRAINT "task_execution_owners_state_enum" CHECK ("state" IN ('claimed','revoked','released','recovery-required'));
 
 -- constraint: task_execution_owners:fk:task_execution_owners_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."task_execution_owners" ADD CONSTRAINT "task_execution_owners_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4700,6 +5018,21 @@ ALTER TABLE "agent_workflow"."task_repos" ADD CONSTRAINT "task_repos_task_id_tas
 
 -- constraint: task_space_nodes:fk:task_space_nodes_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."task_space_nodes" ADD CONSTRAINT "task_space_nodes_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- constraint: tasks:check:tasks_workspace_pruning_at_shape
+ALTER TABLE "agent_workflow"."tasks" ADD CONSTRAINT "tasks_workspace_pruning_at_shape" CHECK ("workspace_prune_cause" IS NULL OR ( "workspace_prune_cause" = 'webhook-terminal' AND "workspace_pruning_at" IS NOT NULL ));
+
+-- constraint: tasks:check:tasks_source_termination_launch_rev_nonnegative
+ALTER TABLE "agent_workflow"."tasks" ADD CONSTRAINT "tasks_source_termination_launch_rev_nonnegative" CHECK ("source_termination_launch_rev" IS NULL OR "source_termination_launch_rev" >= 0);
+
+-- constraint: tasks:check:tasks_source_termination_fence_enum
+ALTER TABLE "agent_workflow"."tasks" ADD CONSTRAINT "tasks_source_termination_fence_enum" CHECK ("source_termination_fence" IS NULL OR "source_termination_fence" IN ('closed','merged'));
+
+-- constraint: tasks:check:tasks_source_termination_effect_rev_positive
+ALTER TABLE "agent_workflow"."tasks" ADD CONSTRAINT "tasks_source_termination_effect_rev_positive" CHECK ("source_termination_effect_rev" IS NULL OR "source_termination_effect_rev" >= 1);
+
+-- constraint: tasks:check:tasks_launch_origin_enum
+ALTER TABLE "agent_workflow"."tasks" ADD CONSTRAINT "tasks_launch_origin_enum" CHECK ("launch_origin" IN ('manual', 'scheduled', 'webhook', 'api', 'event'));
 
 -- constraint: tasks:fk:tasks_parent_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."tasks" ADD CONSTRAINT "tasks_parent_task_id_tasks_id_fk" FOREIGN KEY ("parent_task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4718,6 +5051,21 @@ ALTER TABLE "agent_workflow"."user_pats" ADD CONSTRAINT "user_pats_user_id_users
 
 -- constraint: user_permission_grants:fk:user_permission_grants_user_id_users_id_fk
 ALTER TABLE "agent_workflow"."user_permission_grants" ADD CONSTRAINT "user_permission_grants_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "agent_workflow"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- constraint: user_repository_transport_credentials:check:user_repository_transport_credentials_provider_enum
+ALTER TABLE "agent_workflow"."user_repository_transport_credentials" ADD CONSTRAINT "user_repository_transport_credentials_provider_enum" CHECK ("provider" IN ('gitlab', 'github'));
+
+-- constraint: user_repository_transport_credentials:check:user_repository_transport_credentials_connection_generation_length
+ALTER TABLE "agent_workflow"."user_repository_transport_credentials" ADD CONSTRAINT "user_repository_transport_credentials_connection_g_d30f9cf6cee1" CHECK (length("connection_generation") BETWEEN 1 AND 128);
+
+-- constraint: user_repository_transport_credentials:check:user_repository_transport_credentials_endpoint_binding_digest_length
+ALTER TABLE "agent_workflow"."user_repository_transport_credentials" ADD CONSTRAINT "user_repository_transport_credentials_endpoint_bin_922fb9d99af5" CHECK (length("endpoint_binding_digest") = 64 AND "endpoint_binding_digest" !~ '[^0-9a-f]');
+
+-- constraint: user_repository_transport_credentials:check:user_repository_transport_credentials_token_hint_length
+ALTER TABLE "agent_workflow"."user_repository_transport_credentials" ADD CONSTRAINT "user_repository_transport_credentials_token_hint_length" CHECK (length("token_hint") = 4);
+
+-- constraint: user_repository_transport_credentials:check:user_repository_transport_credentials_credential_revision_positive
+ALTER TABLE "agent_workflow"."user_repository_transport_credentials" ADD CONSTRAINT "user_repository_transport_credentials_credential_r_6bc21533b5c9" CHECK ("credential_revision" > 0);
 
 -- constraint: user_repository_transport_credentials:fk:user_repository_transport_credentials_user_id_users_id_fk
 ALTER TABLE "agent_workflow"."user_repository_transport_credentials" ADD CONSTRAINT "user_repository_transport_credentials_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "agent_workflow"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
@@ -4740,11 +5088,62 @@ ALTER TABLE "agent_workflow"."users" ADD CONSTRAINT "users_email_unique" UNIQUE 
 -- constraint: verification_profile_revisions:fk:verification_profile_revisions_profile_id_verification_profiles_id_fk
 ALTER TABLE "agent_workflow"."verification_profile_revisions" ADD CONSTRAINT "verification_profile_revisions_profile_id_verifica_e654c156f61c" FOREIGN KEY ("profile_id") REFERENCES "agent_workflow"."verification_profiles" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
 
+-- constraint: webhook_deliveries:check:webhook_deliveries_mr_stream_revision_positive
+ALTER TABLE "agent_workflow"."webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_mr_stream_revision_positive" CHECK ("mr_stream_revision" IS NULL OR "mr_stream_revision" >= 1);
+
+-- constraint: webhook_deliveries:check:webhook_deliveries_mr_state_after_enum
+ALTER TABLE "agent_workflow"."webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_mr_state_after_enum" CHECK ("mr_state_after" IS NULL OR "mr_state_after" IN ('open','closed','merged'));
+
+-- constraint: webhook_mr_control_effects:check:webhook_mr_control_effects_revision_positive
+ALTER TABLE "agent_workflow"."webhook_mr_control_effects" ADD CONSTRAINT "webhook_mr_control_effects_revision_positive" CHECK ("revision" >= 1);
+
+-- constraint: webhook_mr_control_effects:check:webhook_mr_control_effects_observed_event_type_enum
+ALTER TABLE "agent_workflow"."webhook_mr_control_effects" ADD CONSTRAINT "webhook_mr_control_effects_observed_event_type_enum" CHECK ("observed_event_type" IN ('mr_opened','mr_closed','mr_merged'));
+
+-- constraint: webhook_mr_control_effects:check:webhook_mr_control_effects_kind_enum
+ALTER TABLE "agent_workflow"."webhook_mr_control_effects" ADD CONSTRAINT "webhook_mr_control_effects_kind_enum" CHECK ("kind" IN ('fence-closed','fence-merged','clear-closed'));
+
+-- constraint: webhook_mr_control_effects:check:webhook_mr_control_effects_status_enum
+ALTER TABLE "agent_workflow"."webhook_mr_control_effects" ADD CONSTRAINT "webhook_mr_control_effects_status_enum" CHECK ("status" IN ('pending','leased','waiting-launches','retryable','succeeded'));
+
+-- constraint: webhook_mr_control_effects:check:webhook_mr_control_effects_attempt_count_nonnegative
+ALTER TABLE "agent_workflow"."webhook_mr_control_effects" ADD CONSTRAINT "webhook_mr_control_effects_attempt_count_nonnegative" CHECK ("attempt_count" >= 0);
+
+-- constraint: webhook_mr_control_targets:check:webhook_mr_control_targets_fence_outcome_enum
+ALTER TABLE "agent_workflow"."webhook_mr_control_targets" ADD CONSTRAINT "webhook_mr_control_targets_fence_outcome_enum" CHECK ("fence_outcome" IN ('fenced-closed','fenced-merged','cleared-closed','unchanged'));
+
+-- constraint: webhook_mr_control_targets:check:webhook_mr_control_targets_cancel_outcome_enum
+ALTER TABLE "agent_workflow"."webhook_mr_control_targets" ADD CONSTRAINT "webhook_mr_control_targets_cancel_outcome_enum" CHECK ("cancel_outcome" IN ('canceled','already-terminal','not-applicable'));
+
+-- constraint: webhook_mr_control_targets:check:webhook_mr_control_targets_release_outcome_enum
+ALTER TABLE "agent_workflow"."webhook_mr_control_targets" ADD CONSTRAINT "webhook_mr_control_targets_release_outcome_enum" CHECK ("release_outcome" IN ('pending','no-active-owner','released','unreaped'));
+
+-- constraint: webhook_mr_launch_guards:unique:webhook_mr_launch_guards_fire_id_unique
+ALTER TABLE "agent_workflow"."webhook_mr_launch_guards" ADD CONSTRAINT "webhook_mr_launch_guards_fire_id_unique" UNIQUE ("fire_id");
+
+-- constraint: webhook_mr_launch_guards:check:webhook_mr_launch_guards_launch_revision_nonnegative
+ALTER TABLE "agent_workflow"."webhook_mr_launch_guards" ADD CONSTRAINT "webhook_mr_launch_guards_launch_revision_nonnegative" CHECK ("launch_revision" >= 0);
+
+-- constraint: webhook_mr_launch_guards:check:webhook_mr_launch_guards_status_enum
+ALTER TABLE "agent_workflow"."webhook_mr_launch_guards" ADD CONSTRAINT "webhook_mr_launch_guards_status_enum" CHECK ("status" IN ( 'reserved','launching','revoking-terminal','task-committed', 'launch-settled','aborted-terminal','failed' ));
+
+-- constraint: webhook_mr_stream_states:check:webhook_mr_stream_states_state_enum
+ALTER TABLE "agent_workflow"."webhook_mr_stream_states" ADD CONSTRAINT "webhook_mr_stream_states_state_enum" CHECK ("state" IN ('open','closed','merged'));
+
+-- constraint: webhook_mr_stream_states:check:webhook_mr_stream_states_revision_positive
+ALTER TABLE "agent_workflow"."webhook_mr_stream_states" ADD CONSTRAINT "webhook_mr_stream_states_revision_positive" CHECK ("revision" >= 1);
+
+-- constraint: webhook_mr_stream_states:check:webhook_mr_stream_states_last_terminal_revision_positive
+ALTER TABLE "agent_workflow"."webhook_mr_stream_states" ADD CONSTRAINT "webhook_mr_stream_states_last_terminal_revision_positive" CHECK ("last_terminal_revision" IS NULL OR "last_terminal_revision" >= 1);
+
 -- constraint: webhook_trigger_fires:fk:webhook_trigger_fires_trigger_id_webhook_triggers_id_fk
 ALTER TABLE "agent_workflow"."webhook_trigger_fires" ADD CONSTRAINT "webhook_trigger_fires_trigger_id_webhook_triggers_id_fk" FOREIGN KEY ("trigger_id") REFERENCES "agent_workflow"."webhook_triggers" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
 -- constraint: webhook_trigger_streams:fk:webhook_trigger_streams_trigger_id_webhook_triggers_id_fk
 ALTER TABLE "agent_workflow"."webhook_trigger_streams" ADD CONSTRAINT "webhook_trigger_streams_trigger_id_webhook_triggers_id_fk" FOREIGN KEY ("trigger_id") REFERENCES "agent_workflow"."webhook_triggers" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
+
+-- constraint: webhook_triggers:check:webhook_triggers_cancel_on_mr_terminal_boolean
+ALTER TABLE "agent_workflow"."webhook_triggers" ADD CONSTRAINT "webhook_triggers_cancel_on_mr_terminal_boolean" CHECK ("cancel_on_mr_terminal" IN (FALSE, TRUE));
 
 -- constraint: webhook_triggers:fk:webhook_triggers_endpoint_id_webhook_endpoints_id_fk
 ALTER TABLE "agent_workflow"."webhook_triggers" ADD CONSTRAINT "webhook_triggers_endpoint_id_webhook_endpoints_id_fk" FOREIGN KEY ("endpoint_id") REFERENCES "agent_workflow"."webhook_endpoints" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;
@@ -4767,6 +5166,9 @@ ALTER TABLE "agent_workflow"."workgroup_messages" ADD CONSTRAINT "workgroup_mess
 -- constraint: workgroup_task_state:fk:workgroup_task_state_task_id_tasks_id_fk
 ALTER TABLE "agent_workflow"."workgroup_task_state" ADD CONSTRAINT "workgroup_task_state_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "agent_workflow"."tasks" ("id") ON UPDATE NO ACTION ON DELETE CASCADE;
 
+-- constraint: workgroups:check:workgroups_output_contract_enum
+ALTER TABLE "agent_workflow"."workgroups" ADD CONSTRAINT "workgroups_output_contract_enum" CHECK ("output_contract" IN ('files', 'discussion'));
+
 -- metadata: migration-table
 CREATE TABLE "agent_workflow_meta"."schema_migrations" (baseline_id TEXT PRIMARY KEY, contract_digest TEXT NOT NULL, plan_digest TEXT NOT NULL, applied_at BIGINT NOT NULL);
 
@@ -4774,7 +5176,7 @@ CREATE TABLE "agent_workflow_meta"."schema_migrations" (baseline_id TEXT PRIMARY
 CREATE TABLE "agent_workflow_meta"."schema_contract" (singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton), contract_digest TEXT NOT NULL, active_table_count BIGINT NOT NULL, archive_only_table_count BIGINT NOT NULL);
 
 -- metadata: contract-row
-INSERT INTO "agent_workflow_meta"."schema_contract" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7', 178, 6);
+INSERT INTO "agent_workflow_meta"."schema_contract" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:9aabfa484e39f2fa45bfbd7e67a0cffe0b92ead58ebdfa69e14855ec80036b4e', 178, 6);
 
 -- metadata: logical-copy-operations
 CREATE TABLE "agent_workflow_meta"."logical_copy_operations" (operation_id TEXT PRIMARY KEY, source_generation_id TEXT NOT NULL, contract_digest TEXT NOT NULL, plan_digest TEXT NOT NULL, stage TEXT NOT NULL CHECK (stage IN ('prepared', 'copying', 'verified', 'activated', 'finalized')), created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL);

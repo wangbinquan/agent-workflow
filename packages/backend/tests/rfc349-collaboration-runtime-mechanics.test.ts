@@ -18,13 +18,13 @@ import {
 } from '@/db/schema'
 import {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
-  createPostgresqlClarifyRepairParticipant,
-  createPostgresqlCollaborationRuntimeMechanics,
-  createPostgresqlReviewRepairParticipant,
-  createSqliteClarifyRepairParticipant,
-  createSqliteReviewRepairParticipant,
+  // RFC-359 W7：RFC-057 修复的两个协作侧端口各只剩一份中立实现，两个 provider 共用。
+  // 行为对拍在 rfc359-w7-*-repair-conformance.test.ts（真双引擎）；这里留的是 PG 客户端上的
+  // 语句形态（写围栏 marker / 生成代 fence 的相对位置），那是假 fixture 才看得见的面。
+  createClarifyRepairParticipant,
+  createReviewRepairParticipant,
 } from '@/modules/collaboration/composition'
-import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { WorkgroupTaskRoomClarifyParticipantFactory as TaskExecutionClarifyParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -126,7 +126,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
 
   test('SQLite composition owns live suppression and closes orphaned clarify rounds', async () => {
     const taskId = await seedTask({ members: [{ memberType: 'agent' }] })
-    const runtime = createSqliteCollaborationRuntimeMechanics(db)
+    const runtime = createCollaborationRuntimeMechanics(db)
 
     await expect(runtime.isTaskClarifySuppressed({ taskId })).resolves.toBe(true)
     await db
@@ -171,7 +171,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     expect(round?.status).toBe('canceled')
   })
 
-  test('reopens a closed clarify round only through an exact selected-provider CAS', async () => {
+  test('reopens a closed clarify round only through an exact CAS', async () => {
     const taskId = await seedTask({ members: [{ memberType: 'agent' }] })
     const roundId = ulid()
     const runId = ulid()
@@ -193,7 +193,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       answeredAt: 2,
     })
 
-    const sqlite = createSqliteClarifyRepairParticipant(db)
+    const sqlite = createClarifyRepairParticipant(db)
     await expect(sqlite.hasOpenForNodeRun({ taskId, nodeRunId: runId })).resolves.toBe(false)
     await expect(sqlite.latestClosedForNodeRun({ taskId, nodeRunId: runId })).resolves.toEqual({
       roundId,
@@ -232,7 +232,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       [['round-pg']],
       [],
     ])
-    const repair = createPostgresqlClarifyRepairParticipant(postgresql.db)
+    const repair = createClarifyRepairParticipant(postgresql.db)
     await expect(
       repair.hasOpenForNodeRun({ taskId: 'task-pg', nodeRunId: 'run-pg' }),
     ).resolves.toBe(true)
@@ -247,14 +247,16 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         occurredAt: 4,
       }),
     ).resolves.toBe(true)
+    // RFC-359 W7：`reopen` 是单语句 CAS，合一后不再显式包事务——PG 客户端仍把这条裸写
+    // 包进自己的隐式事务（大写 BEGIN/COMMIT），写围栏 marker 与生成代 fence 的位置不变。
     expect(postgresql.executions.map((entry) => entry.sql)).toEqual([
       expect.stringContaining('select'),
       expect.stringContaining('select'),
-      'begin',
+      'BEGIN',
       expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
       expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."clarify_rounds"'),
-      'commit',
+      'COMMIT',
     ])
     expect(postgresql.executions[5]?.sql).toContain('returning')
   })
@@ -283,7 +285,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       decision: 'approved',
     })
 
-    const sqlite = createSqliteReviewRepairParticipant(db)
+    const sqlite = createReviewRepairParticipant(db)
     const identity = { taskId, docVersionId, nodeRunId }
     await expect(sqlite.inspect(identity)).resolves.toEqual({
       decision: 'approved',
@@ -331,7 +333,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       [['approved_doc'], ['approval_meta']],
     ])
     await expect(
-      createPostgresqlReviewRepairParticipant(postgresql.db).inspect({
+      createReviewRepairParticipant(postgresql.db).inspect({
         taskId: 'task-pg',
         docVersionId: 'doc-pg',
         nodeRunId: 'review-run-pg',
@@ -357,7 +359,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       [],
     ])
     await expect(
-      createPostgresqlReviewRepairParticipant(postgresqlComplete.db).completeApproved({
+      createReviewRepairParticipant(postgresqlComplete.db).completeApproved({
         taskId: 'task-pg',
         docVersionId: 'doc-pg',
         nodeRunId: 'review-run-pg',
@@ -384,7 +386,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       [],
     ])
     await expect(
-      createPostgresqlReviewRepairParticipant(postgresqlUnapprove.db).unapprove({
+      createReviewRepairParticipant(postgresqlUnapprove.db).unapprove({
         taskId: 'task-pg',
         docVersionId: 'doc-pg',
         nodeRunId: 'review-run-pg',
@@ -399,31 +401,30 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     ])
   })
 
-  test('provider factories remain inside collaboration and expose no SQLite fallback', () => {
+  // RFC-359 W7：这一对适配器已合一。旧断言（PG 那份自带 withPostgresqlSerializableTaskExecution /
+  // createNodeRunMintParticipantInTx / nodeRunLifecycle.inTransaction 的原生重写）随
+  // `postgresqlCollaborationRuntimeMechanics.ts` 一并退役——2026-09-07 的双引擎对拍
+  // （`rfc359-w7-collaboration-mechanics-conformance.test.ts`）照出那份重写的一处真实分叉：
+  // `dismissOpenClarifyParksForAutonomous` 跑在裸 `db.transaction` 上、不可重入，外层事务
+  // 回滚带不走它的写（实测：合一实现回滚后仍 awaiting_human，那份重写回滚后已 canceled）。
+  test('运行期机制只有一个工厂，契约仍不含任何 provider 类型', () => {
     const reservedTransactionFactory: TaskExecutionClarifyParticipantFactory =
       composeWorkgroupTaskRoomClarifyParticipantFactory()
     const contract = SRC('modules/collaboration/application/ports/collaborationRuntimeMechanics.ts')
-    const sqlite = SRC(
-      'modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts',
-    )
-    const postgres = SRC(
-      'modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
-    )
+    const factory = SRC('modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts')
     const projection = SRC(
       'modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts',
     )
 
     expect(contract).not.toContain('DbClient')
     expect(contract).not.toContain('PostgresqlDatabaseClient')
-    expect(sqlite).not.toContain('@/modules/resource-catalog/')
-    expect(postgres).not.toContain('@/modules/task-execution/application/')
-    expect(postgres).not.toContain('createSqliteCollaborationRuntimeMechanics')
-    expect(postgres).not.toContain('as unknown as DbClient')
-    expect(postgres).toContain('prepareReviewGateOpen')
-    expect(postgres).toContain('prepareClarifyGateOpen')
-    expect(postgres).toContain('withPostgresqlSerializableTaskExecution')
-    expect(postgres).toContain('createNodeRunMintParticipantInTx')
-    expect(postgres).toContain('nodeRunLifecycle.inTransaction')
+    expect(factory).not.toContain('@/modules/resource-catalog/')
+    expect(factory).toContain('createCollaborationRuntimeMechanics')
+    expect(factory).toContain('ProviderNeutralDatabase')
+    expect(factory).not.toMatch(/\bPostgresqlDatabaseClient\b|\bDbClient\b|\$provider/)
+    expect(() =>
+      SRC('modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts'),
+    ).toThrow()
     expect(projection).not.toContain('DbClient')
     expect(projection).not.toContain('createSqlite')
     expect(typeof reservedTransactionFactory.inTransaction).toBe('function')
@@ -545,26 +546,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     })
   })
 
-  test('PostgreSQL composition executes the closed live-suppression query', async () => {
-    const fake = postgresqlFixture([
-      [[JSON.stringify({ members: [{ memberType: 'agent' }], clarifyBudget: 3 })]],
-    ])
-    const runtime = createPostgresqlCollaborationRuntimeMechanics(fake.db, {
-      taskRuntime: {
-        humanGates: {
-          async parkPrepared() {},
-        },
-      },
-      nodeRunLifecycle: {
-        inTransaction() {
-          throw new Error('not used by live-suppression query')
-        },
-      },
-    })
-
-    await expect(runtime.isTaskClarifySuppressed({ taskId: 'task-pg' })).resolves.toBe(true)
-    expect(fake.executions).toHaveLength(1)
-    expect(fake.executions[0]?.sql).toContain('"agent_workflow"."tasks"')
-    expect(fake.executions[0]?.parameters).toEqual(['task-pg', 1])
-  })
+  // RFC-359 W7：原来这里用一个「记录 SQL 文本」的假客户端跑 PG 侧的 live-suppression 查询。
+  // 那份重写已退役，同一判据现在由真库对拍覆盖（`rfc359-w7-collaboration-mechanics-conformance`
+  // 的 isTaskClarifySuppressed 系列在两个引擎上各跑一遍）。
 })

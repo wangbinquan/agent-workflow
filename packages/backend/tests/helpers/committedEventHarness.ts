@@ -20,7 +20,7 @@ import {
 } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 
 function enableCollaborationCutover(db: DbClient): void {
@@ -46,7 +46,7 @@ export function installCommittedEventProjectionHarness(db: DbClient): () => void
   )
   registerAfterCommitEventPump(
     createAfterCommitEventPump({
-      persistence: createSqliteCommittedEventDeliveryPersistence(db),
+      persistence: createCommittedEventDeliveryPersistence(db),
       codecs,
       projectors: [
         createDatabaseTaskLifecycleWsProjector(db),
@@ -102,7 +102,7 @@ export async function drainCommittedEventDeliveriesForTests(
 ): Promise<void> {
   enableCollaborationCutover(db)
   const dispatcher = createCommittedEventDispatcher({
-    persistence: createSqliteCommittedEventDeliveryPersistence(db),
+    persistence: createCommittedEventDeliveryPersistence(db),
     workerId: 'committed-event-test-drain',
     codecs: combineCommittedEventCodecRegistries(
       taskLifecycleCommittedEventCodec,
@@ -132,7 +132,7 @@ export function installCommittedEventDeliveryHarness(
   ]
   const projectionLedger = createCommittedEventProjectionLedger()
   const dispatcher = createCommittedEventDispatcher({
-    persistence: createSqliteCommittedEventDeliveryPersistence(db),
+    persistence: createCommittedEventDeliveryPersistence(db),
     workerId: 'committed-event-test-harness',
     codecs,
     consumers: [...durableTestConsumers(db), ...projectors],
@@ -141,7 +141,7 @@ export function installCommittedEventDeliveryHarness(
   })
   registerAfterCommitEventPump(
     createAfterCommitEventPump({
-      persistence: createSqliteCommittedEventDeliveryPersistence(db),
+      persistence: createCommittedEventDeliveryPersistence(db),
       codecs,
       projectors,
       projectionLedger,

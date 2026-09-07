@@ -67,13 +67,17 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
 import { humanGateComposition } from '@/services/humanGateComposition'
-import { setNodeRunStatus } from '@/services/lifecycle'
-import { currentTaskExecutionContext } from '@/services/taskExecutionParticipants'
+import { setNodeRunStatusTx } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
+import {
+  currentTaskExecutionContext,
+  fenceTaskWrite,
+  withTaskExecutionWrite,
+} from '@/services/taskExecutionParticipants'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -170,7 +174,7 @@ const frameIs = (containerRunId: string | null) =>
 // ---------------------------------------------------------------------------
 
 interface CreateRoundCommon {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   /** Asking agent node id (self: source agent; cross: questioner). */
   askingNodeId: string
@@ -304,15 +308,17 @@ export async function createClarifyRound(
     args.kind === 'self' && args.truncationWarnings && args.truncationWarnings.length > 0
       ? JSON.stringify(args.truncationWarnings)
       : null
-  const taskRow = args.db
-    .select({
-      name: tasks.name,
-      workflowSnapshot: tasks.workflowSnapshot,
-      lifecycleEventRevision: tasks.lifecycleEventRevision,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, args.taskId))
-    .get()
+  const taskRow = (
+    await args.db
+      .select({
+        name: tasks.name,
+        workflowSnapshot: tasks.workflowSnapshot,
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, args.taskId))
+      .limit(1)
+  )[0]
   if (taskRow === undefined) {
     throw new ValidationError('clarify-task-not-found', `task ${args.taskId} not found`)
   }
@@ -383,11 +389,13 @@ export async function createClarifyRound(
       now: createdAt,
     })
   }
-  const storedRound = args.db
-    .select()
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.id, prepared.roundId))
-    .get()
+  const storedRound = (
+    await args.db
+      .select()
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, prepared.roundId))
+      .limit(1)
+  )[0]
   if (storedRound === undefined) {
     throw new Error('clarify-open-committed-round-projection-missing')
   }
@@ -404,7 +412,7 @@ export async function createClarifyRound(
 }
 
 async function findSelfGateRunForShard(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   intermediaryNodeId: string,
   shardKey: string | null,
@@ -603,12 +611,14 @@ export interface DispatchCrossClarifyResult {
  * transition + reason string.
  */
 export async function dispatchCrossClarifyNode(args: {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   crossClarifyNodeId: string
   /** node_runs.id being dispatched (must exist, typically 'pending'). */
   nodeRunId: string
   definition: WorkflowDefinition
+  /** 显式执行上下文；缺席时按环境上下文取（与围栏 `fenceTaskWrite` 同规则）。 */
+  executionContext?: TaskExecutionContextRef
 }): Promise<DispatchCrossClarifyResult> {
   const questionerNodeId = findQuestionerNodeForCrossClarify(
     args.definition,
@@ -619,13 +629,24 @@ export async function dispatchCrossClarifyNode(args: {
   }
   const stopped = await resolveCrossNodeStopped(args.db, args.taskId, questionerNodeId)
   if (stopped) {
-    await setNodeRunStatus({
-      db: args.db,
-      nodeRunId: args.nodeRunId,
-      to: 'done',
-      allowedFrom: ['pending'],
-      reason: 'cross-clarify-persistent-stop',
-      extra: { finishedAt: Date.now() },
+    const now = Date.now()
+    // RFC-359 W7：与合一前的 `setNodeRunStatus`（同步 `withOwnedTaskTx`，bun:sqlite 独有）
+    // 逐条同判据——同一条围栏（显式上下文 > 环境上下文 > 无主）+ 同一个事务内 CAS，
+    // 只是跑在两引擎共用的写事务上。
+    await withTaskExecutionWrite(args.db, async (tx) => {
+      await fenceTaskWrite(tx, {
+        taskId: args.taskId,
+        ...(args.executionContext === undefined ? {} : { context: args.executionContext }),
+        now,
+      })
+      await setNodeRunStatusTx({
+        tx,
+        nodeRunId: args.nodeRunId,
+        to: 'done',
+        allowedFrom: ['pending'],
+        reason: 'cross-clarify-persistent-stop',
+        extra: { finishedAt: now },
+      })
     })
     return { kind: 'short-circuit-stop' }
   }
@@ -643,7 +664,7 @@ export async function dispatchCrossClarifyNode(args: {
  * stop re-enables the questioner. No row or 'continue' ⇒ not stopped.
  */
 export async function resolveCrossNodeStopped(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   questionerNodeId: string,
 ): Promise<boolean> {

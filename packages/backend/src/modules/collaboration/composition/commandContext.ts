@@ -2,7 +2,7 @@
 // Public callers carry only an opaque object reference; the live DB and app
 // home never become part of a public command/query contract.
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { CollaborationCommandContext } from '../public/types'
 import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
@@ -30,8 +30,7 @@ import { DrizzleReviewNodeReviewerStore } from '../infrastructure/reviewNodeRevi
 import { createReviewTaskAccessPort } from '../infrastructure/reviewTaskAccess'
 import { DrizzleTaskFeedbackStore } from '../infrastructure/taskFeedbackStore'
 import { createCollaborationTaskAccessPort } from '../infrastructure/collaborationTaskAccess'
-import { createSqliteClarifyDirectiveStore } from '../infrastructure/sqliteClarifyDirectiveStore'
-import { createPostgresqlClarifyDirectiveStore } from '../infrastructure/postgresqlClarifyDirectiveStore'
+import { createClarifyDirectiveStore } from '../infrastructure/clarifyDirectiveStore'
 
 export interface CollaborationPersistence {
   readonly operations: HumanGateOperationStore
@@ -58,7 +57,9 @@ const dependencies = new WeakMap<object, CollaborationCommandDependencies>()
 
 export function createCollaborationCommandContext(
   input: Omit<CollaborationCommandDependencies, 'persistence' | 'artifacts' | 'taskAccess'> & {
-    readonly db: DbClient
+    // RFC-359 W7：装配面只用中立客户端组合中立实现（`DbClient` 是 SQLite 的具体类型，
+    // 这里从来没用到它的任何 SQLite-专属能力）。
+    readonly db: ProviderNeutralDatabase
     readonly appHome?: string
   },
 ): CollaborationCommandContext {
@@ -75,7 +76,7 @@ export function createCollaborationCommandContext(
       ),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),
-      clarifyDirectives: createSqliteClarifyDirectiveStore(input.db),
+      clarifyDirectives: createClarifyDirectiveStore(input.db),
       ...(input.appHome === undefined
         ? {}
         : {
@@ -107,7 +108,7 @@ export function createPostgresqlCollaborationCommandContext(
       ),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),
-      clarifyDirectives: createPostgresqlClarifyDirectiveStore(input.db),
+      clarifyDirectives: createClarifyDirectiveStore(input.db),
       ...(input.appHome === undefined
         ? {}
         : {

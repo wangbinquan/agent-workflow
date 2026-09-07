@@ -42,7 +42,10 @@ import {
 } from '../application/graphValidation'
 import type { IntentWorkflowGraphValidationPort } from '../application/ports/intentWorkflowGraphValidation'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
-import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
+import {
+  INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
+  INTENT_APPLY_DIAGNOSTICS,
+} from '../application/journalConvergence'
 import {
   requireCommittableDraft,
   assertIntentDraftUnresolved,
@@ -337,6 +340,24 @@ async function applyInner(
         .run()
     })
   }
+  /**
+   * RFC-359 W7 抬齐①：提交后的尾巴没做完时的写回。
+   *
+   * 这里刻意走**中立事务原语**而不是 `dbTxSync`：本函数只在提交之后跑（此刻没有同步面要维持），
+   * 而 SQLite 同步事务面是「只降不升」的高水位账（`tests/architecture/rfc359-sync-transaction-highwater`）
+   * ——为一条新写回再开一个 SQLite 专属句柄，等于给合一多欠一笔。PG 侧同一条写回也是这一句。
+   */
+  const keepCommittedRollForwardRetryable = async (): Promise<void> => {
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await tx
+        .update(intentApplyJournal)
+        .set({
+          error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
+          updatedAt: Date.now(),
+        })
+        .where(eq(intentApplyJournal.id, journalId))
+    })
+  }
   const keepRetryable = (error: unknown, compensationErrors: readonly unknown[]): void => {
     const original = error instanceof Error ? error.message : String(error)
     const cleanup = compensationErrors
@@ -525,8 +546,14 @@ async function applyInner(
     committedReceipt = receipt
 
     // ── roll-forward (design §9.5; idempotent) ──
+    // RFC-359 W7 抬齐①: the return value is the ONLY in-band signal that the
+    // committed tail is unfinished. Dropping it (the pre-W7 shape here) left a
+    // clean-looking row that nobody could tell apart from a fully settled one
+    // until the next boot/hourly convergence. Record it now, in the same words
+    // convergence uses; the row stays `committed` because the bundle IS applied.
     deps.faults?.afterTxBeforeRollForward?.()
-    await deps.artifacts.rollForward(artifacts, log)
+    const complete = await deps.artifacts.rollForward(artifacts, log)
+    if (!complete) await keepCommittedRollForwardRetryable()
     resourceSession.broadcastCommitted()
     return receipt
   } catch (error) {
@@ -685,7 +712,7 @@ export async function convergeIntentApplyJournal(
         dbTxSync(db, (tx) => {
           tx.update(intentApplyJournal)
             .set({
-              error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
+              error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
               updatedAt: Date.now(),
             })
             .where(

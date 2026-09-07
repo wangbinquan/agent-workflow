@@ -106,18 +106,9 @@ const VALUE_IMPORT =
  * **对数只降不升，`unverified` 数也只降不升**（两个量在下面各有一条独立断言钉死）。
  */
 export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
-  'modules/collaboration/infrastructure/ClarifyDirectiveStore: sqlite + postgresql — unverified',
-  'modules/collaboration/infrastructure/ClarifyRepairParticipant: sqlite + postgresql — unverified',
-  'modules/collaboration/infrastructure/CollaborationRouteOperations: sqlite + postgresql — unverified',
-  'modules/collaboration/infrastructure/CollaborationRuntimeMechanics: sqlite + postgresql — unverified',
-  'modules/collaboration/infrastructure/ReviewRepairParticipant: sqlite + postgresql — unverified',
-  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite + postgresql — unverified',
-  'modules/intent/infrastructure/IntentApplyOperations: sqlite + postgresql — unverified',
-  'modules/intent/infrastructure/IntentPersistence: sqlite + postgresql — unverified',
-  'modules/intent/infrastructure/IntentSqlProgramRunner: sqlite + postgresql — unverified',
+  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite + postgresql — verified by rfc359-w7-intent-apply-artifact-conformance.test.ts',
+  'modules/intent/infrastructure/IntentApplyOperations: sqlite + postgresql — verified by rfc359-w7-intent-apply-operations-conformance.test.ts',
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — unverified',
-  'modules/runtime-management/infrastructure/RealtimeStore: sqlite + postgresql — unverified',
-  'modules/system-operations/infrastructure/ResourceLimitPersistence: sqlite + postgresql — unverified',
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite + postgresql — unverified',
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — unverified',
   'modules/task-execution/infrastructure/TaskArchiveMaintenanceCommand: sqlite + postgresql — unverified',
@@ -126,19 +117,17 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — unverified',
   'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite + postgresql — unverified',
   'modules/task-execution/infrastructure/TaskOwnershipPersistence: sqlite + postgresql — verified by rfc359-w4-d28a-task-ownership-conformance.test.ts',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TerminalMaintenancePersistence: sqlite + postgresql — unverified',
-  'platform/events/committed/Persistence: sqlite + postgresql — unverified',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts',
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts',
   'platform/persistence/LogicalSource: sqlite + postgresql — unverified',
   'platform/persistence/LogicalTarget: sqlite + postgresql — unverified',
 ]
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
-export const PROVIDER_PAIR_COUNT = 26
+export const PROVIDER_PAIR_COUNT = 15
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
-export const UNVERIFIED_PAIR_COUNT = 25
+export const UNVERIFIED_PAIR_COUNT = 10
 
 // ---------------------------------------------------------------------------
 // 判据本体：纯函数（输入是路径 / 测试事实，不碰文件系统），供真实树与内存 fixture 共用

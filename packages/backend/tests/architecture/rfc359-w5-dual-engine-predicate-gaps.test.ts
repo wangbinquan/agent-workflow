@@ -32,6 +32,21 @@
 //   3. **`context` 语料下限**：`absent` 站点必须仍然含有若干「对应代码路径还活着」的锚点。
 //      文件被删 / 函数被改名 / 那段逻辑被搬走时，探针红在「语料消失」而不是静默通过。
 //
+// # 锚是**按函数作用域**匹配的——补缺口时要注意（RFC-359 W7 实撞）
+//
+// 每条缺口的锚点写的是「某个**函数体内**必须/不得出现某标识符或字面量」。于是补缺口时
+// 有一种写法会让守卫**看不见你补了**：把判据抽成一个辅助函数再调用它。
+// 行为完全正确，但被点名的那个函数体里不再出现该标识符，`absent` 断言照旧成立，
+// **账本静默保持绿**——收敛发生了却没有留下销账记录，而这条守卫的全部意义就是强制留下记录。
+//
+// W7 补 `01a` / `01b` / `02` 时第一版正是这么写的（抽了 `assertWorkflowNotBuiltin` /
+// `assertChildCallRowDrivable`），实测账本没红；改成在被点名的函数体内直接出现
+// `assertNotBuiltin` / `'call-row-finalized'` 之后才按设计变红并给出销账指令。
+//
+// **规矩**：补一条缺口后，**先确认这条守卫真的红了**再去改账本。它没红有两种可能——
+// 你没补上，或者你补的位置守卫看不见；两种都不该直接往下走。
+// （想抽辅助函数是合理的，那就把锚点一起改成新的形状，让账本跟着那次重构走。）
+
 // # 为什么它抗重构
 //
 //   · **锚在语义标识上，不锚行号**。行号一定会漂；锚点是错误码字面量（`call-row-finalized`）、
@@ -51,8 +66,6 @@
 //
 // # 账本里每条缺口的用户可见后果（一句话，逐条也写在 `consequence` 字段里）
 //
-//   01a/01b 内置工作流在 PG 上可被手动执行 / 被 sync，SQLite 上是 403 `builtin-readonly`。
-//   02      父调用节点已终结的子任务，PG 上仍可 retry，SQLite 上被 `call-row-finalized` 拒绝。
 //   03      PG 上 code-host 节点结算会覆写已终态的 node_run、也不认 source-termination 围栏。
 //   04      PG 上 code-host 恢复不校验接管者代际与静默证据，旧 daemon 的证据也能落账。
 //   05      同一次恢复在两个引擎上产出**不同**的 takeover 证明摘要，跨引擎无法互认。
@@ -60,14 +73,26 @@
 //   07      PG 上取消与其它状态写并发时直接 409，SQLite 会回收竞态并照常完成取消。
 //   08      PG 上 daemon 重启恢复后，未消费的 `actor-replay-authorized` 决策不回退成
 //           `requires-actor`，重放授权悬空。
-//   09      PG 上评审派发无锁无事务，并发派发会重复建 doc_version / 互相覆盖。
 //   10      PG 上归档恢复不认 cleanupPlan 里的 archiveRoot，换了归档目录会恢复到错误的位置。
-//   11a     PG 上封存 clarify 轮次时用**未翻转**的 round 做 reconcile，条目状态与轮次不一致。
-//   11b     PG 上 `askingNodeId` 为空也照写 stop 指令，写出一条指向空节点的指令行。
-//   11c     PG 上 answers 传成非数组时不报 `clarify-answers-not-array`，行为与 SQLite 不一致。
 //   12      SQLite 上子任务启动缺 5 道亲子准入门，错配的 parent node_run / 深度 / actor 也能起。
 //   13a     SQLite 上资源包恢复不校验 committed receipt，回执缺失 / 错配也照样 roll-forward。
 //   13b     SQLite 上资源包技能恢复缺代际四分支与路径 / 版本哈希校验，跨代际也会 roll-forward。
+//
+// # RFC-359 W7 销账：17 → 10（两种成因，别混成一句「已收敛」）
+//
+//   **一、PG 侧补上了判据**（守卫报「缺口已补」，给出逐条销账指令）：
+//     01a  内置工作流在 PG 上可被手动执行  —— `assertManualExecutionAllowed` 补 `assertNotBuiltin`
+//     01b  内置工作流在 PG 上可被 sync    —— `syncWorkflow` 同上
+//     02   父调用节点已终结的子任务 PG 上仍可 retry —— `retryNode` 补 `call-row-finalized` 门
+//   补这三条时踩过一个坑：把判据抽成辅助函数会让守卫**看不见**（见上文「锚是按函数作用域匹配的」）。
+//
+//   **二、这一对合了，缺口不复存在**（锚点文件随合一删除，走「语料消失」那条断言）：
+//     09   PG 评审派发无锁无事务
+//     11a  PG 封存 clarify 轮次用未翻转的 round 做 reconcile
+//     11b  PG 上 `askingNodeId` 为空也照写 stop 指令
+//     11c  PG 上 answers 非数组时不报 `clarify-answers-not-array`
+//   这四条的 absent 侧都是 `postgresqlCollaborationRuntimeMechanics.ts`，该文件已随
+//   `CollaborationRuntimeMechanics` 合一整体退役，两个引擎现在跑同一份实现。
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -130,87 +155,6 @@ type PredicateGap = Readonly<{
  * 补上一条 ⇒ 从这里删掉这一行；确需新增一条 ⇒ 在 PR 里说明为什么允许这个缺口存在。
  */
 export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
-  {
-    id: '01a-pg-manual-execution-builtin-workflow',
-    item: 1,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
-        fn: ['assertManualExecutionAllowed'],
-        anchors: [{ kind: 'identifier', text: 'assertNotBuiltin' }],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-      fn: ['createPostgresqlTaskRouteOperations', 'assertManualExecutionAllowed'],
-      anchors: [{ kind: 'identifier', text: 'assertNotBuiltin' }],
-    },
-    context: [
-      { kind: 'identifier', text: 'taskExecutionKind' },
-      { kind: 'identifier', text: 'isWorkgroupTask' },
-    ],
-    consequence: '内置工作流在 PG 上可被手动执行；SQLite 上是 403 builtin-readonly。',
-  },
-  {
-    id: '01b-pg-sync-workflow-builtin-workflow',
-    item: 1,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
-        fn: ['assertTaskSyncable'],
-        anchors: [{ kind: 'identifier', text: 'assertNotBuiltin' }],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-      fn: ['syncWorkflow'],
-      anchors: [{ kind: 'identifier', text: 'assertNotBuiltin' }],
-    },
-    context: [
-      { kind: 'identifier', text: 'taskExecutionKind' },
-      { kind: 'literal', text: 'task-host-sync-unsupported' },
-    ],
-    consequence: '内置工作流在 PG 上可被 sync；SQLite 上是 403 builtin-readonly。',
-  },
-  {
-    id: '02-pg-retry-node-call-row-finalized',
-    item: 2,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'services/task.ts',
-        fn: ['assertChildTaskDrivable'],
-        anchors: [{ kind: 'literal', text: 'call-row-finalized' }],
-      },
-      {
-        file: 'services/task.ts',
-        fn: ['retryNode'],
-        anchors: [{ kind: 'identifier', text: 'assertChildTaskDrivable' }],
-      },
-      {
-        // PG 的 **resume** 有这道门，只有 retry 漏了——这条锚点保证「PG 也知道这个判据」
-        // 这件事本身不漂：真要收敛，就是把它接到 retry 上。
-        file: 'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
-        fn: ['assertResumeAdmission'],
-        anchors: [{ kind: 'literal', text: 'call-row-finalized' }],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
-      fn: ['retryNode'],
-      anchors: [
-        { kind: 'literal', text: 'call-row-finalized' },
-        { kind: 'identifier', text: 'assertChildTaskDrivable' },
-      ],
-    },
-    context: [
-      { kind: 'literal', text: 'task-still-running' },
-      { kind: 'identifier', text: 'nodeRuns' },
-    ],
-    consequence: '父调用节点已终结的子任务，PG 上仍可 retry；SQLite 上被 call-row-finalized 拒绝。',
-  },
   {
     id: '03-pg-code-host-projection-node-run-cas',
     item: 3,
@@ -412,31 +356,6 @@ export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
       'PG 上 daemon 重启恢复后，未消费的 actor-replay-authorized 决策不回退成 requires-actor，重放授权悬空。',
   },
   {
-    id: '09-pg-review-dispatch-mutation-lock',
-    item: 9,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/collaboration/infrastructure/legacySqliteReview.ts',
-        fn: ['dispatchReviewNode'],
-        anchors: [{ kind: 'identifier', text: 'withTaskReviewMutationLock' }],
-      },
-    ],
-    absent: {
-      file: 'modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
-      fn: ['dispatchPostgresqlReviewNode'],
-      anchors: [
-        { kind: 'identifier', text: 'withTaskReviewMutationLock' },
-        { kind: 'identifier', text: 'withPostgresqlSerializableTaskExecution' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'docVersions' },
-      { kind: 'identifier', text: 'migrateWorkflowDefinitionToLatest' },
-    ],
-    consequence: 'PG 上评审派发全程无锁无事务，并发派发会重复建 doc_version / 互相覆盖。',
-  },
-  {
     id: '10-pg-archive-recovery-root-fence',
     item: 10,
     missingSide: 'postgresql',
@@ -467,84 +386,6 @@ export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
     ],
     consequence:
       'PG 上归档恢复直接拼 options.archiveDir、从不读 cleanupPlanJson，换了归档目录会恢复到错误的位置。',
-  },
-  {
-    id: '11a-pg-clarify-seal-reconcile-effective-round',
-    item: 11,
-    missingSide: 'postgresql',
-    present: [
-      {
-        // SQLite 用**就地构造的 effective round**（`{...round, status/answersJson/answeredAt}`）
-        // 做 reconcile，且放在状态翻转的写之后。
-        file: 'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
-        fn: ['sealRoundQuestions'],
-        anchors: [
-          { kind: 'call-arg-object', text: 'reconcileRoundEntriesTx', argIndex: 1 },
-          { kind: 'identifier', text: 'fullySealed' },
-        ],
-      },
-    ],
-    absent: {
-      // PG 把 reconcile 放在所有写**之前**，且直接传未修改的 `round`（裸标识符，不是对象字面量）。
-      file: 'modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
-      fn: ['sealPostgresqlClarifyQuestions'],
-      anchors: [{ kind: 'call-arg-object', text: 'reconcilePostgresqlRoundEntries', argIndex: 1 }],
-    },
-    context: [
-      { kind: 'identifier', text: 'reconcilePostgresqlRoundEntries' },
-      { kind: 'identifier', text: 'clarifyRounds' },
-      { kind: 'identifier', text: 'flipNow' },
-    ],
-    consequence: 'PG 上封存 clarify 轮次时用未翻转的 round 做 reconcile，条目状态与轮次不一致。',
-  },
-  {
-    id: '11b-pg-clarify-seal-asking-node-guard',
-    item: 11,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
-        fn: ['sealRoundQuestions'],
-        anchors: [
-          { kind: 'condition', text: 'askingNodeId' },
-          { kind: 'identifier', text: 'setNodeClarifyDirectiveTx' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
-      fn: ['sealPostgresqlClarifyQuestions'],
-      anchors: [{ kind: 'condition', text: 'askingNodeId' }],
-    },
-    context: [
-      { kind: 'identifier', text: 'askingNodeId' },
-      { kind: 'identifier', text: 'taskNodeClarifyDirectives' },
-      { kind: 'literal', text: 'stop' },
-    ],
-    consequence: 'PG 上 askingNodeId 为空也照写 stop 指令，写出一条指向空节点的指令行。',
-  },
-  {
-    id: '11c-pg-clarify-seal-answers-not-array',
-    item: 11,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/collaboration/infrastructure/legacySqliteClarify/service.ts',
-        fn: ['sealAnswersServerSide'],
-        anchors: [{ kind: 'literal', text: 'clarify-answers-not-array' }],
-      },
-    ],
-    absent: {
-      file: 'modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
-      fn: ['sealAnswers'],
-      anchors: [{ kind: 'literal', text: 'clarify-answers-not-array' }],
-    },
-    context: [
-      { kind: 'literal', text: 'clarify-answer-malformed' },
-      { kind: 'identifier', text: 'questionId' },
-    ],
-    consequence:
-      'PG 上 answers 传成非数组时不报 clarify-answers-not-array，错误面与 SQLite 不一致。',
   },
   {
     id: '12-sqlite-child-launch-parent-admission',

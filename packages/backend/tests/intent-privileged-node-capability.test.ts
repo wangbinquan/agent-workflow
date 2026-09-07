@@ -54,9 +54,9 @@ import { createIntentSession } from '@/modules/intent/application/session'
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
-import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
@@ -298,9 +298,9 @@ async function storedNodes(id: string): Promise<Array<Record<string, unknown>>> 
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
-  persistence = composeSqliteIntentPersistence({
+  persistence = composeIntentPersistence({
     db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-priv-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })

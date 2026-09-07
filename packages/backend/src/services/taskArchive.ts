@@ -26,7 +26,6 @@ import {
   lte,
   or,
   sql,
-  dbTxSync,
   clarifyRounds,
   collaborationGateArtifacts,
   collaborationGateOperations,
@@ -66,8 +65,11 @@ import { ulid } from 'ulid'
 
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
-  taskExecutionModule,
+  assertTerminalMaintenanceClaimTx,
+  createTerminalMaintenanceStore,
+  transitionTerminalMaintenanceClaimTx,
   type TerminalMaintenanceClaim,
 } from '@/services/taskExecutionParticipants'
 import {
@@ -580,17 +582,19 @@ async function archiveClaimedTree(
     rowCounts[`${kind}_dirs`] = moved
   }
 
-  const claimRow = db
+  // RFC-359 W7：这两条读必须 `await`。合一前它们跑在 bun:sqlite 的同步驱动上，少写 await 也拿得到
+  // 行；PostgreSQL 上同一段代码会把两个 **Promise** 写进 manifest（claimRow 恒真、于是连
+  // 「认领消失了」这条判据都失效），而类型检查不报错。
+  const claimRow = await db
     .select()
     .from(taskExecutionMaintenanceClaims)
     .where(eq(taskExecutionMaintenanceClaims.id, initialClaim.claimId))
     .get()
-  const claimMembers = db
+  const claimMembers = await db
     .select()
     .from(taskExecutionMaintenanceMembers)
     .where(eq(taskExecutionMaintenanceMembers.claimId, initialClaim.claimId))
-    .orderBy(taskExecutionMaintenanceMembers.taskId)
-    .all()
+    .orderBy(asc(taskExecutionMaintenanceMembers.taskId))
   if (claimRow === undefined) throw new Error(`archive claim '${initialClaim.claimId}' disappeared`)
 
   const manifest = {
@@ -619,14 +623,14 @@ async function archiveClaimedTree(
   // 全部落盘成功后才 rename;rename 之后库里的行才允许删。
   renameSync(tmpDir, finalDir)
 
-  let maintenanceClaim = taskExecutionModule.terminalMaintenance.transition({
-    db,
+  const terminalMaintenance = createTerminalMaintenanceStore(db)
+  let maintenanceClaim = await terminalMaintenance.transition({
     claim: initialClaim,
     to: 'io-complete',
     now,
   })
-  maintenanceClaim = deleteTreeRows(db, rootTaskId, taskIds, maintenanceClaim, now)
-  taskExecutionModule.terminalMaintenance.complete({ db, claim: maintenanceClaim, now })
+  maintenanceClaim = await deleteTreeRows(db, rootTaskId, taskIds, maintenanceClaim, now)
+  await terminalMaintenance.complete({ claim: maintenanceClaim, now })
 
   log.info('archived task tree', { rootTaskId, tasks: taskIds.length, dir: finalDir })
   return { rootTaskId, taskIds: [...taskIds], rows: rowCounts, dir: finalDir }
@@ -644,10 +648,10 @@ export async function archiveTaskTree(
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
   const runsRoot = opts.runsDir ?? Paths.runsDir
   const logsRoot = opts.logsDir ?? Paths.logsDir
-  const members = taskExecutionModule.terminalMaintenance.snapshotTree(db, rootTaskId)
+  const terminalMaintenance = createTerminalMaintenanceStore(db)
+  const members = await terminalMaintenance.snapshotTree(rootTaskId)
   const taskIds = members.map((member) => member.taskId)
-  const claim = taskExecutionModule.terminalMaintenance.claim({
-    db,
+  const claim = await terminalMaintenance.claim({
     rootTaskId,
     // A scheduled retention pass and an actor-requested archive share the
     // exact export implementation, but retain distinct durable authorities.
@@ -666,46 +670,44 @@ export async function archiveTaskTree(
   return archiveClaimedTree(db, rootTaskId, taskIds, claim, opts)
 }
 
-/** 删库:一个事务、子先父后(FK 级联仍然生效,这里显式删非 FK 的软链接行)。 */
-function deleteTreeRows(
+/**
+ * 删库:一个事务、子先父后(FK 级联仍然生效,这里显式删非 FK 的软链接行)。
+ *
+ * RFC-359 W7：事务是中立原语(`databaseSessionFor(db).transaction`),不再是 bun:sqlite 独有的
+ * `dbTxSync`；认领的事务内 CAS 走两个 provider 共用的 `terminalMaintenanceClaim.ts`。
+ * `claim` 是入参、返回新 revision，因此整笔重放(SQLite 的写者争用重试 / PG 的序列化失败重放)
+ * 每次都从同一个 revision 起算。
+ */
+async function deleteTreeRows(
   db: LegacySqliteTaskDatabase,
   rootTaskId: string,
   taskIds: readonly string[],
   claim: TerminalMaintenanceClaim,
   now: number,
-): TerminalMaintenanceClaim {
-  return dbTxSync(db, (tx) => {
-    taskExecutionModule.terminalMaintenance.assertClaimTx({
-      tx,
-      claim,
-      expectedState: 'io-complete',
-    })
+): Promise<TerminalMaintenanceClaim> {
+  return await databaseSessionFor(db).transaction(async (tx) => {
+    await assertTerminalMaintenanceClaimTx(tx, { claim, expectedState: 'io-complete' })
     const currentIds = (
-      tx.all(sql`
+      (await tx.all(sql`
         WITH RECURSIVE tree(id) AS (
           SELECT id FROM tasks WHERE id = ${rootTaskId}
           UNION
           SELECT child.id FROM tasks child JOIN tree parent ON child.parent_task_id = parent.id
         )
         SELECT id FROM tree ORDER BY id
-      `) as Array<{ id: string }>
+      `)) as Array<{ id: string }>
     ).map((row) => row.id)
     if (JSON.stringify(currentIds) !== JSON.stringify([...taskIds].sort())) {
       throw new Error(`archive task tree changed after claim '${claim.claimId}'`)
     }
     for (let i = 0; i < taskIds.length; i += 200) {
       const chunk = [...taskIds].slice(i, i + 200)
-      tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, chunk)).run()
+      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, chunk)).run()
       // 后代先删:同一棵树里子任务的 parent_task_id 指向父,反序删除避免
       // 触发外键顺序问题(SQLite 的 FK 在同一事务内延迟检查,但显式反序更稳)。
-      tx.delete(tasks).where(inArray(tasks.id, chunk)).run()
+      await tx.delete(tasks).where(inArray(tasks.id, chunk)).run()
     }
-    return taskExecutionModule.terminalMaintenance.transitionTx({
-      tx,
-      claim,
-      to: 'db-finalized',
-      now,
-    })
+    return await transitionTerminalMaintenanceClaimTx(tx, { claim, to: 'db-finalized', now })
   })
 }
 
@@ -744,9 +746,10 @@ export async function recoverInterruptedArchives(
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
   const promoted: string[] = []
   const discarded: string[] = []
+  const terminalMaintenance = createTerminalMaintenanceStore(db)
   const recoverable = [
-    ...taskExecutionModule.terminalMaintenance.listRecoverable({ db, operation: 'archive' }),
-    ...taskExecutionModule.terminalMaintenance.listRecoverable({ db, operation: 'retention' }),
+    ...(await terminalMaintenance.listRecoverable({ operation: 'archive' })),
+    ...(await terminalMaintenance.listRecoverable({ operation: 'retention' })),
   ]
   const claimedRoots = new Set<string>()
   for (const item of recoverable) {
@@ -771,15 +774,13 @@ export async function recoverInterruptedArchives(
 
     if (state === 'recovery-required') {
       if (existsSync(finalDir)) {
-        claim = taskExecutionModule.terminalMaintenance.transition({
-          db,
+        claim = await terminalMaintenance.transition({
           claim,
           to: root === undefined ? 'db-finalized' : 'io-complete',
         })
         state = root === undefined ? 'db-finalized' : 'io-complete'
       } else if (root !== undefined) {
-        claim = taskExecutionModule.terminalMaintenance.transition({
-          db,
+        claim = await terminalMaintenance.transition({
           claim,
           to: 'claimed',
         })
@@ -803,8 +804,7 @@ export async function recoverInterruptedArchives(
     }
 
     if (state === 'claimed') {
-      claim = taskExecutionModule.terminalMaintenance.transition({
-        db,
+      claim = await terminalMaintenance.transition({
         claim,
         to: 'io-complete',
       })
@@ -816,8 +816,7 @@ export async function recoverInterruptedArchives(
         promoted.push(item.rootTaskId)
       }
       if (!existsSync(finalDir)) {
-        taskExecutionModule.terminalMaintenance.transition({
-          db,
+        await terminalMaintenance.transition({
           claim,
           to: 'recovery-required',
         })
@@ -825,12 +824,11 @@ export async function recoverInterruptedArchives(
       }
       claim =
         root === undefined
-          ? taskExecutionModule.terminalMaintenance.transition({
-              db,
+          ? await terminalMaintenance.transition({
               claim,
               to: 'db-finalized',
             })
-          : deleteTreeRows(
+          : await deleteTreeRows(
               db,
               item.rootTaskId,
               item.members.map((member) => member.taskId),
@@ -841,14 +839,13 @@ export async function recoverInterruptedArchives(
     }
     if (state === 'db-finalized' || state === 'cleanup-pending') {
       if (!existsSync(finalDir)) {
-        taskExecutionModule.terminalMaintenance.transition({
-          db,
+        await terminalMaintenance.transition({
           claim,
           to: 'recovery-required',
         })
         continue
       }
-      taskExecutionModule.terminalMaintenance.complete({ db, claim })
+      await terminalMaintenance.complete({ claim })
     }
   }
 

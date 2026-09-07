@@ -46,6 +46,13 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // 时才有意义（`AW_E2E_ROUTE_JOURNAL` 由 e2e-full-nightly 提供）。PR 腿只跑 PR 档，
   // 它的命中集合天然小于全量，拿它比账本会把账本「修」成一个更宽松的值。
   // 同文件的结构检查（幽灵条目 / 排序去重 / 语料上下界）不带门，始终跑。
+  // RFC-359 W6-T26 —— PostgreSQL 执行计划审计（EXPLAIN ANALYZE + buffers/loops 账本）
+  // **必须有真库**才有意义：它读的是 PG 自己给出的计划节点与 buffers 计数，SQLite 上没有对应物。
+  // 本地 `AW_TEST_PROVIDERS=sqlite` 时留一条**可见的** skip，而不是静默让整份账本变绿——
+  // 静默通过会让「计划退化」这类回归在只跑 SQLite 的通道上永远发现不了。
+  // 缺 `AW_TEST_POSTGRESQL_URL`（而不是显式只选 sqlite）时仍然**判红不 skip**，
+  // 与 `describeEachProvider` 同一条硬判据。
+  'packages/backend/tests/rfc359-w6-t26-postgresql-plan-audit.test.ts#skip': 1,
   'packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-route-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,

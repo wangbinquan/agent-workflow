@@ -30,10 +30,10 @@ import { intentResourceVisibility } from '@/modules/intent/application/resourceC
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
-import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { IntentDumpAuxiliaryQueries } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_bports_000000000'
@@ -50,9 +50,9 @@ const actor: Actor = {
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
-  persistence = composeSqliteIntentPersistence({
+  persistence = composeIntentPersistence({
     db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-bports-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })

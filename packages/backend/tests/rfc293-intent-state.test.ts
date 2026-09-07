@@ -36,8 +36,8 @@ import {
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import {
   composeIntentDumpAuxiliaryQueries,
   composeIntentTurnRuntimeResolver,
@@ -71,9 +71,9 @@ test('intent builder keeps the ordinary runtime tool surface', () => {
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
-  persistence = composeSqliteIntentPersistence({
+  persistence = composeIntentPersistence({
     db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const owner = await createUser(db, {

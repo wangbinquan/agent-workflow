@@ -86,4 +86,44 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
       code: 'postgresql-migration-history-drift',
     })
   })
+
+  // 这条漂移在测试里是从 `beforeAll` 抛出的，会把**全仓每个 describeEachProvider 用例的
+  // PostgreSQL 分支**一起打死，而报错既不属于任何一个用例、也不指向成因。2026-09-07 实撞：
+  // 一次 `db/schema.ts` 改动没同步基线，几个并发作业各自排查了很久才定位。消息因此必须
+  // 自解释——说清哪一半漂了、以及重生成的命令。
+  test('drift message names which half drifted and how to regenerate', async () => {
+    const plan = buildPostgresqlSchemaPlan()
+
+    const baselineHistory = copyHistory()
+    const baselinePath = join(baselineHistory, '0000_rfc349_baseline.sql')
+    writeFileSync(baselinePath, `${readFileSync(baselinePath, 'utf8')}-- drift\n`)
+    const baselineError = await verifyPostgresqlMigrationHistory({
+      plan,
+      migrationsFolder: baselineHistory,
+    }).then(
+      () => null,
+      (error: unknown) => error as Error,
+    )
+    expect(baselineError?.message).toContain('baseline SQL drifted')
+    expect(baselineError?.message).not.toContain('journal')
+    expect(
+      baselineError?.message,
+      '消息里必须有重生成命令——否则读到它的人只知道「不匹配」，不知道该跑什么',
+    ).toContain('bun run db:rfc349-postgresql-schema')
+
+    const journalHistory = copyHistory()
+    const journalPath = join(journalHistory, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as Record<string, unknown>
+    journal.planDigest = `sha256:${'0'.repeat(64)}`
+    writeFileSync(journalPath, JSON.stringify(journal))
+    const journalError = await verifyPostgresqlMigrationHistory({
+      plan,
+      migrationsFolder: journalHistory,
+    }).then(
+      () => null,
+      (error: unknown) => error as Error,
+    )
+    expect(journalError?.message).toContain('journal drifted')
+    expect(journalError?.message).not.toContain('baseline SQL')
+  })
 })

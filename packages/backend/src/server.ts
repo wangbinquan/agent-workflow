@@ -217,8 +217,8 @@ import {
   composeIntentTurnRuntimeResolver,
 } from '@/modules/intent/composition/auxiliaryQueries'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
-import { composeSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
+import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import type { IntentApplyOperations } from '@/modules/intent/public/operations'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
@@ -354,7 +354,7 @@ import {
   createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
-import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/sqliteTaskCatalogSources'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
@@ -1828,7 +1828,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
               createWorkgroupClarifyAskGate(deps.db),
             ),
             memoryInjectionQueries,
-            collaborationRuntime: createSqliteCollaborationRuntimeMechanics(deps.db),
+            collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
             persistence: taskExecutionPersistence,
             runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
             runtimeRegistry,
@@ -2685,9 +2685,9 @@ function composeSqliteApiRouteMounts(
       workgroups: workgroupCatalog.queries,
     },
   })
-  const intentPersistence = composeSqliteIntentPersistence({
+  const intentPersistence = composeIntentPersistence({
     db: deps.db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
     authorityFor: intentAuthorityFor,

@@ -6,13 +6,12 @@ import {
   createIntentScratchFilesystem,
   type IntentScratchFilesystem,
 } from '../infrastructure/intentScratchFilesystem'
-import { createPostgresqlIntentPersistence } from '../infrastructure/postgresqlIntentPersistence'
+import { createIntentPersistence } from '../infrastructure/intentPersistence'
 import { composeSqliteIntentApplyArtifactLifecycle } from './apply'
 import {
   activeIntentApplyJournalIds,
   convergeIntentApplyJournal,
 } from '../infrastructure/sqliteIntentApplyOperations'
-import { createSqliteIntentPersistence } from '../infrastructure/sqliteIntentPersistence'
 import type { IntentMaintenanceCommands } from '../public/commands'
 import type { IntentBootRecoveryInput, IntentScratchSweepInput } from '../public/commands'
 import { composePostgresqlIntentApplyConvergence } from './postgresqlApplyMaintenance'
@@ -70,7 +69,7 @@ export function composeSqliteIntentMaintenanceSnapshotQueries(
   db: DbClient,
 ): IntentMaintenanceSnapshotQueries {
   return composeIntentMaintenanceSnapshotQueries({
-    persistence: createSqliteIntentPersistence(db),
+    persistence: createIntentPersistence(db),
     activity: { activeJournalIds: activeIntentApplyJournalIds },
   })
 }
@@ -82,7 +81,7 @@ export function composePostgresqlIntentMaintenanceSnapshotQueries(input: {
   readonly activity: IntentApplyActivitySource
 }): IntentMaintenanceSnapshotQueries {
   return composeIntentMaintenanceSnapshotQueries({
-    persistence: createPostgresqlIntentPersistence(input.db),
+    persistence: createIntentPersistence(input.db),
     activity: input.activity,
   })
 }
@@ -180,7 +179,7 @@ export function composeSqliteIntentMaintenanceCommandsForAppHome(
     appHome: input.appHome,
   })
   return composeIntentMaintenanceCommandsForAppHome({
-    persistence: createSqliteIntentPersistence(input.db),
+    persistence: createIntentPersistence(input.db),
     appHome: input.appHome,
     scratchDirectoryName: input.scratchDirectoryName,
     intentApplies: {
@@ -201,7 +200,7 @@ export function composePostgresqlIntentMaintenanceCommandsForAppHome(
 ): IntentMaintenanceCommands {
   const log = input.log ?? createLogger('intentMaintenance')
   return composeIntentMaintenanceCommandsForAppHome({
-    persistence: createPostgresqlIntentPersistence(input.db),
+    persistence: createIntentPersistence(input.db),
     appHome: input.appHome,
     scratchDirectoryName: input.scratchDirectoryName,
     intentApplies: composePostgresqlIntentApplyConvergence({

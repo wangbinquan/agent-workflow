@@ -25,8 +25,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentSessions, intentWorkingSetChanges } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
-  composeSqliteIntentPersistence,
-  createSqliteIntentPersistence,
+  composeIntentPersistence,
+  createIntentPersistence,
 } from '../src/modules/intent/composition/persistence'
 import {
   composeIntentDumpAuxiliaryQueries,
@@ -37,7 +37,7 @@ import type {
   IntentPersistence,
 } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
 import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
 import {
@@ -74,6 +74,12 @@ let mountedAgentId: string
  */
 function productionShapedResourceCatalogFor(): IntentResourceCatalogFor {
   const catalog = composeSqliteResourceCatalog({ db })
+  // 注册表在**构造时**定住，和上面的 catalog 一样绑在同一个 db 上。
+  // 生产上每个 daemon 进程只有一个 identity-access 注册表；这里的 `let` 是夹具产物：
+  // 恢复完的那一轮会按设计 fire-and-forget 再派发一轮后继（dispatcher 的 finally），
+  // 它的尾巴可能落在下一个用例的 beforeEach 之后——那时模块级 `identityAccess` 已被换掉，
+  // 惰性读它就会把自己铸的 actor 认成外来投影（foreign-legacy-actor-projection）。
+  const registry = identityAccess
   const actorsByContext = new WeakMap<object, Actor>()
   // 逐资源 detail 查询由被派发的那一轮（intent dump）使用；本用例的判据在激活那一步，
   // 所以给它们一个良性返回，别让 dump 的失败盖住真正要看的东西。
@@ -87,15 +93,14 @@ function productionShapedResourceCatalogFor(): IntentResourceCatalogFor {
       },
     }),
     contextFor(candidate) {
-      const context = identityAccess.contexts.queryFromAuthority(
-        directRequestAuthority(identityAccess.directAuthority, candidate),
+      const context = registry.contexts.queryFromAuthority(
+        directRequestAuthority(registry.directAuthority, candidate),
         'http',
       )
       actorsByContext.set(context, candidate)
       return context
     },
-    authorityFor: (candidate) =>
-      directOperationAuthority(identityAccess.directAuthority, candidate),
+    authorityFor: (candidate) => directOperationAuthority(registry.directAuthority, candidate),
     catalogs: {
       agents: { get: unusedDetail },
       skills: {
@@ -136,9 +141,9 @@ const runFn = async (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult>
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
   identityAccess = createIdentityAccessRuntime({ db })
-  persistence = composeSqliteIntentPersistence({
+  persistence = composeIntentPersistence({
     db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const { createUser } = await import('../src/services/users')
@@ -282,7 +287,7 @@ describe('RFC-349 intent boot resume authority', () => {
     // e2e INTENT-X8 在生产二进制里看到的那一幕（变更被判 failed，会话永远转圈）。
     const { changeId } = await seedQueuedSuccessor()
     await resumeQueuedIntentWorkingSets({
-      persistence: createSqliteIntentPersistence(db),
+      persistence: createIntentPersistence(db),
       events: { publish: () => {} },
       identityAccess,
       appHome: '/tmp',
@@ -319,9 +324,9 @@ describe('RFC-349 intent boot resume authority', () => {
     expect(
       composition,
       'daemon 又用回了不带资源鉴权的 runner ⇒ 任何「加资源」的工作上下文变更都会在事务里炸',
-    ).toContain('composeSqliteIntentPersistence({')
+    ).toContain('composeIntentPersistence({')
     expect(composition).toContain('contextAuthorization:')
-    expect(source.includes('createSqliteIntentPersistence(')).toBe(false)
+    expect(source.includes('createIntentPersistence(')).toBe(false)
   })
 
   test('a hand-built projection is exactly what the catalog refuses', async () => {

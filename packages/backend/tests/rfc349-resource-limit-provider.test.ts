@@ -175,10 +175,11 @@ describe('RFC-349 resource-limit provider seam', () => {
     expect(fixture.releases).toBe(2)
   })
 
-  test('service and PostgreSQL adapter prohibit direct DB facade casts and SQLite fallback', () => {
+  test('service and the shared adapter prohibit direct DB facade casts and SQLite fallback', () => {
     const service = source('src/services/limits.ts')
+    // RFC-359 W7：两个 provider 共用同一份实现，所以这里读的就是那一份中立文件。
     const adapter = source(
-      'src/modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts',
+      'src/modules/system-operations/infrastructure/resourceLimitPersistence.ts',
     )
     for (const forbidden of ["from '@/db/", "from 'drizzle-orm'", '.select(', '.update(']) {
       expect(service).not.toContain(forbidden)

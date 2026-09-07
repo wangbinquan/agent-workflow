@@ -201,7 +201,13 @@ export interface ResourcePackageMutationPreparationContext {
 
 export interface ResourcePackageMutationPrestageContext {
   readonly readSkillFile: (ref: string) => Uint8Array
-  readonly recordArtifact: (artifact: ResourcePackageMutationArtifact) => void
+  /**
+   * I14 record-before-act：journal 落库**先于**副作用（npm 安装 / 技能暂存）。
+   * RFC-359 W7 起这一笔走中立异步事务，因此契约是 `Promise<void>` 且每个调用点
+   * 必须 await——写成 `void | Promise<void>` 会让漏掉的 await 合法化（见
+   * `docs/dev-gotchas.md`「端口签名别写成 `void | Promise<void>`」）。
+   */
+  readonly recordArtifact: (artifact: ResourcePackageMutationArtifact) => Promise<void>
 }
 
 export interface ResourcePackageMutationCommitContext {
@@ -822,7 +828,8 @@ export function createLegacyResourcePackageMutationAdapter(
           options.pluginInstallOpts?.pluginsDir,
         )
         if (generationDir !== null) {
-          context.recordArtifact({
+          // I14：安装动手**之前**先把足以补偿它的信息落库。
+          await context.recordArtifact({
             kind: 'plugin-install',
             pluginId: internal.op.resourceId,
             generationId,
@@ -851,7 +858,7 @@ export function createLegacyResourcePackageMutationAdapter(
           (filesDir) => writeSkillTree(filesDir, internal.op, context.readSkillFile),
         )
         skillStages.set(internal.op.opId, stage)
-        context.recordArtifact({ kind: 'skill-stage', ...stage })
+        await context.recordArtifact({ kind: 'skill-stage', ...stage })
         options.afterSkillStage?.()
         return
       }
@@ -870,7 +877,7 @@ export function createLegacyResourcePackageMutationAdapter(
           },
         )
         skillVersionStages.set(internal.op.opId, staged)
-        context.recordArtifact({ kind: 'skill-version-stage', staged })
+        await context.recordArtifact({ kind: 'skill-version-stage', staged })
         options.afterSkillStage?.()
       }
     },

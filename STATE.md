@@ -3,6 +3,33 @@
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
 > 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
+> **进度（2026-09-07，W7 成对适配器收尾）**：本波按 W5 的成对账本逐对收 W4 的剩余部分。
+> **合一 11 对**（RealtimeStore / ResourceLimitPersistence / ClarifyDirectiveStore / Review·ClarifyRepairParticipant /
+> TerminalMaintenancePersistence / IntentSqlProgramRunner / IntentPersistence / CommittedEvents Persistence /
+> CollaborationRoute·RuntimeMechanics），**净退役 4960 行**重复 provider 实现（删 6902 / 新建 1942），
+> 同时新增 **20 个双引擎对拍文件 / 10281 行**。做法前提：在同一容器里开 8 个隔离 PG 库——
+> 此前 harness 按文件 `drop schema … cascade`，两批双引擎测试并行会互相清库。
+> **量化收敛**：成对适配器 26→15（带对拍的 1→5）、未对拍 25→10、PG 缺失 schema 保护 149→10、
+> 双引擎判据缺口 17→10、组合根从没被构造过 70→20、同步事务面 28→17 文件、裸 `db.transaction` 17→10。
+> **判定「不该合」的对 3→7**：`IntentApply{ArtifactLifecycle,Operations}` 是双向能力缺口，
+> `TaskRoute{,Launch}Operations` 是两台执行引擎——四对各配对拍并变异验证「照 PG 那侧合一」会被拦住。
+> **照出并修掉 14 个真 PG-only 分叉**，共同形态是「SQLite 侧有东西兜着、PG 侧没有，且不报错」：
+> PG 上能建同名仓库组、三处裸事务不可重入（外层回滚带不走）、已提交事件结算写逃出外层事务⇒**静默丢事件**、
+> `archiveClaimedTree` 读 claim 不 await⇒PG 上写进 Promise 且「claim 消失」判定恒真、
+> **PG 上 `Task.workflowName` 恒为 null**（详情页/列表/sync 预览的工作流名永远空白）、
+> 索引声明卡在迁移 0031 的旧形状、PG 评审派发全程无锁无事务。
+> **一条覆盖事实**：collaboration 的两份 PG 实现（4015 行）**从未在真数据库上跑过**——
+> 唯一的用例喂的是只记录 SQL 文本的假客户端。
+> **质量防护**：棘轮网收网口径从「名字命中词汇表」换成结构判据（词汇表自己会漏词，本轮新账本一条都不命中），
+> 同批把 23 个账本纳入只降不升棘轮；T19f 补上 `new Database(` 后门（此前 95 处在网外）；
+> 新增 `insert(tasks)` 三列完整性守卫替代「给 PG 补触发器」这个被实测否定的解法；
+> 数值投影守卫大小写漏检修复；PG 迁移基线漂移报错自解释化。
+> **W6 性能**：AC-11 判据不用墙钟毫秒，改成跨引擎结构对比（语句数/取回行数/绑定参数），
+> 实测 8 条路径逐条相同；5 万行下过滤视图 PG **0.70× 反而更快**、最差 cached-repos 5.12×；
+> EXPLAIN 缺口 3 条，正解是把 `CASE` 里的相关子查询改成预聚合 LEFT JOIN（PG 无法上提成 semi join）。
+> **剩余**：约 8 对适配器、W6 的 T23/T24/T25 优化、同步事务面 17 个文件、18 个零消费者适配器；
+> T28（读—改—写加锁）按用户 2026-08-26 明令排除，待裁决。
+>
 > **进度（2026-09-05）**：W2 事务原语与能力矩阵已落（`platform/persistence/databaseTransaction.ts` / `capabilities.ts` /
 > `writerLease.ts`，`databaseSessionFor` / `engineOf` / `affectedRows`）；W5-T19e 双引擎 harness
 > （`tests/helpers/eachProvider.ts`：`describeEachProvider`，PG 缺库即红）与 W5-T21（四个 ubuntu 分片各带真

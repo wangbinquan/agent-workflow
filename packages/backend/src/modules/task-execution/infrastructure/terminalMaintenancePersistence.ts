@@ -1,9 +1,33 @@
-// RFC-349 — PostgreSQL terminal-maintenance claim/CAS adapter.
+// RFC-359 —— 终态维护认领（RFC-328 terminal maintenance claim）：一份实现，两个 provider 共用。
+//
+// 此前是一对逐行同构的适配器：`sqliteTerminalMaintenancePersistence.ts`（33 行薄壳，逐方法转发给
+// `sqliteTerminalMaintenance.ts` 的 519 行 `dbTxSync` 同步 store）与 `postgresqlTerminalMaintenancePersistence.ts`
+// （543 行 SERIALIZABLE）。三个 assert*（open effect 拒绝 / 水位覆盖 / outcome-unknown 需 replay 决策 /
+// owner 必须 released / intents-attempts-holds 三查 / ledger digest 比对）两侧逐条等价，但 PG 侧有两处**更强**，
+// 合一按强侧抬齐：
+//
+//   1. **并发认领的错误分类**。成员表上有 `idx_task_execution_maintenance_members_active_task`
+//      （`task_id where released_at is null` 的偏唯一索引）：同一任务被第二个维护流程认领时撞唯一冲突。
+//      PG 侧捕获 SQLSTATE 23505 → `task-terminal-maintenance-conflict`（调用方按「暂时冲突」重试 / 跳过）；
+//      SQLite 侧让裸 `SQLITE_CONSTRAINT_UNIQUE` 冒泡，于是 workspace-GC / 归档在 SQLite 上把一次正常的
+//      并发认领当成硬故障。这里改按能力矩阵的 `classifyError` 判，两个引擎同一个闭合错误合同。
+//   2. **`snapshotTree` 的原子性**。PG 把「根存在性检查 + 递归 BFS + 逐成员快照」放在**同一笔**事务里；
+//      SQLite 侧分两笔（递归 CTE 一笔，`snapshotMembers` 又开一笔），枚举与快照之间可以插进一次子任务
+//      增删，认领据以成立的成员集合与树的真实形状就此不一致。这里只留 PG 的单事务形态；子树枚举改成
+//      迭代 BFS（`inArray(parentTaskId, frontier)`），因为 SQLite 的 `WITH RECURSIVE` 与 PG 的写法不通用。
+//
+// 隔离级别逐方法保留合一前 PG 侧的取值——五个方法都是「先查后写」的跨行判据，全部走
+// `DatabaseSession.serializable`（PG：SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001 重放整笔；
+// SQLite：`BEGIN IMMEDIATE` 本就全库独占，与合一前 `dbTxSync` 是同一条边界）。
+//
+// 认领行本身的 CAS 不在这里重写：事务内参与者 `terminalMaintenanceClaim.ts` 已经是中立的一份实现
+// （删除恢复 / 归档都挂在它上面），`transition` / `complete` 直接复用它，同一张状态转移表只此一份。
 
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
@@ -15,7 +39,10 @@ import {
   taskExecutionOwners,
   tasks,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import type {
   RecoverableTerminalMaintenanceClaim,
   TerminalMaintenanceStore,
@@ -30,47 +57,22 @@ import {
   type TerminalMaintenanceOperation,
 } from '../domain/ownership'
 import {
-  assertMaintenanceTransition,
   maintenanceMemberSetDigest,
   retainedWatermarkCoversSettledEffect,
   type MaintenanceMemberSnapshot,
   type TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
-import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
-
-type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
+import { transitionTerminalMaintenanceClaimTx } from './terminalMaintenanceClaim'
 
 function sha256(value: unknown): string {
   return sha256Hex(canonicalJson(value))
 }
 
-function uniqueViolation(error: unknown): boolean {
-  let current: unknown = error
-  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth += 1) {
-    if ((current as { readonly code?: unknown }).code === '23505') return true
-    current = (current as { readonly cause?: unknown }).cause
-  }
-  return false
-}
-
-async function serializable<T>(
-  db: PostgresqlDatabaseClient,
-  body: (tx: PgTx) => Promise<T>,
-): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await db.transaction(async (tx) => {
-        await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
-        return await body(tx)
-      })
-    } catch (error) {
-      if (await retryPostgresqlSerialization(attempt, error)) continue
-      throw error
-    }
-  }
-}
-
-async function ledgerDigestTx(tx: PgTx, taskId: string): Promise<string> {
+/**
+ * 任务在执行账本上留下的全部行的摘要。认领时快照一次、认领落库前再比一次：中间只要有一条
+ * effect / lineage 记录动过，认领就作废。
+ */
+async function ledgerDigestTx(tx: DatabaseTransaction, taskId: string): Promise<string> {
   const effects = await tx
     .select({
       id: taskExecutionEffects.id,
@@ -110,7 +112,14 @@ async function ledgerDigestTx(tx: PgTx, taskId: string): Promise<string> {
   return sha256({ effects, records })
 }
 
-async function assertSettledLedgerCoverageTx(tx: PgTx, taskId: string): Promise<void> {
+/**
+ * 任务的行被删掉之后，留存的账本是否还能解释它做过的每一次外部效果：
+ * 不能有 open effect；每条已结算 effect 都要被留存的世代水位覆盖；outcome-unknown 还要有 replay 决策。
+ */
+async function assertSettledLedgerCoverageTx(
+  tx: DatabaseTransaction,
+  taskId: string,
+): Promise<void> {
   const effects = await tx
     .select()
     .from(taskExecutionEffects)
@@ -166,7 +175,11 @@ async function assertSettledLedgerCoverageTx(tx: PgTx, taskId: string): Promise<
   }
 }
 
-async function assertMemberQuiescentTx(tx: PgTx, member: MaintenanceMemberSnapshot): Promise<void> {
+/** 成员任务在认领落库这一刻仍与快照一致，且执行面确实已经静止。 */
+async function assertMemberQuiescentTx(
+  tx: DatabaseTransaction,
+  member: MaintenanceMemberSnapshot,
+): Promise<void> {
   const taskRows = await tx
     .select({
       status: tasks.status,
@@ -265,7 +278,7 @@ async function assertMemberQuiescentTx(tx: PgTx, member: MaintenanceMemberSnapsh
 }
 
 async function snapshotMembersTx(
-  tx: PgTx,
+  tx: DatabaseTransaction,
   taskIds: readonly string[],
 ): Promise<readonly MaintenanceMemberSnapshot[]> {
   const uniqueIds = [...new Set(taskIds)].sort()
@@ -308,15 +321,22 @@ async function snapshotMembersTx(
   return snapshots
 }
 
-export class PostgresqlTerminalMaintenancePersistence implements TerminalMaintenanceStore {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+/** 破坏性终态维护（归档 / 删除 / 保留期清理 / workspace-GC）的认领与 CAS 边界。 */
+export class DrizzleTerminalMaintenancePersistence implements TerminalMaintenanceStore {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async snapshotMembers(taskIds: readonly string[]): Promise<readonly MaintenanceMemberSnapshot[]> {
-    return await serializable(this.db, async (tx) => await snapshotMembersTx(tx, taskIds))
+    return await databaseSessionFor(this.db).serializable(
+      async (tx) => await snapshotMembersTx(tx, taskIds),
+    )
   }
 
+  /**
+   * 子树枚举与逐成员快照在**同一笔**事务里：认领的成员集合与树当时的真实形状必须一致，
+   * 否则中途新增 / 删除的子任务会落在认领之外。
+   */
   async snapshotTree(rootTaskId: string): Promise<readonly MaintenanceMemberSnapshot[]> {
-    return await serializable(this.db, async (tx) => {
+    return await databaseSessionFor(this.db).serializable(async (tx) => {
       const roots = await tx
         .select({ id: tasks.id })
         .from(tasks)
@@ -362,8 +382,9 @@ export class PostgresqlTerminalMaintenancePersistence implements TerminalMainten
       })),
     )
     const claimId = ulid()
+    const session = databaseSessionFor(this.db)
     try {
-      await serializable(this.db, async (tx) => {
+      await session.serializable(async (tx) => {
         for (const member of input.members) await assertMemberQuiescentTx(tx, member)
         await tx
           .insert(taskExecutionMaintenanceClaims)
@@ -395,7 +416,9 @@ export class PostgresqlTerminalMaintenancePersistence implements TerminalMainten
           .run()
       })
     } catch (error) {
-      if (uniqueViolation(error)) {
+      // 活动成员的偏唯一索引：同一任务已被另一个维护流程认领。两个引擎上都是一次**暂时**冲突，
+      // 不是硬故障——判据走能力矩阵，不看驱动错误的具体形状。
+      if (session.engine.classifyError(error) === 'unique-violation') {
         throw new TaskExecutionError(
           'task-terminal-maintenance-conflict',
           'one or more tasks are already claimed by terminal maintenance',
@@ -416,67 +439,15 @@ export class PostgresqlTerminalMaintenancePersistence implements TerminalMainten
   ): Promise<TerminalMaintenanceClaim> {
     assertTerminalMaintenanceClaim(input.claim)
     const now = input.now ?? Date.now()
-    return await serializable(this.db, async (tx) => {
-      const rows = await tx
-        .select()
-        .from(taskExecutionMaintenanceClaims)
-        .where(eq(taskExecutionMaintenanceClaims.id, input.claim.claimId))
-        .limit(1)
-      const row = rows[0]
-      if (
-        row === undefined ||
-        row.operation !== input.claim.operation ||
-        row.memberSetDigest !== input.claim.memberSetDigest ||
-        row.revision !== input.claim.revision
-      ) {
-        throw new TaskExecutionError(
-          'task-terminal-maintenance-conflict',
-          `terminal maintenance claim '${input.claim.claimId}' changed`,
-        )
-      }
-      assertMaintenanceTransition(row.state, input.to)
-      const nextRevision = input.claim.revision + 1
-      const updated = await tx
-        .update(taskExecutionMaintenanceClaims)
-        .set({
-          state: input.to,
-          revision: nextRevision,
-          updatedAt: now,
-          completedAt: input.to === 'completed' ? now : null,
-        })
-        .where(
-          and(
-            eq(taskExecutionMaintenanceClaims.id, input.claim.claimId),
-            eq(taskExecutionMaintenanceClaims.revision, input.claim.revision),
-            eq(taskExecutionMaintenanceClaims.state, row.state),
-          ),
-        )
-        .returning({ id: taskExecutionMaintenanceClaims.id })
-      if (updated[0] === undefined) {
-        throw new TaskExecutionError(
-          'task-terminal-maintenance-conflict',
-          `terminal maintenance claim '${input.claim.claimId}' transition lost`,
-        )
-      }
-      if (input.releaseMembers === true || input.to === 'completed') {
-        await tx
-          .update(taskExecutionMaintenanceMembers)
-          .set({ releasedAt: now })
-          .where(
-            and(
-              eq(taskExecutionMaintenanceMembers.claimId, input.claim.claimId),
-              isNull(taskExecutionMaintenanceMembers.releasedAt),
-            ),
-          )
-          .run()
-      }
-      return createTerminalMaintenanceClaim({
-        claimId: input.claim.claimId,
-        operation: input.claim.operation,
-        revision: nextRevision,
-        memberSetDigest: input.claim.memberSetDigest,
-      })
-    })
+    return await databaseSessionFor(this.db).serializable(
+      async (tx) =>
+        await transitionTerminalMaintenanceClaimTx(tx, {
+          claim: input.claim,
+          to: input.to,
+          now,
+          releaseMembers: input.releaseMembers,
+        }),
+    )
   }
 
   async complete(input: Parameters<TerminalMaintenanceStore['complete']>[0]): Promise<void> {
@@ -487,7 +458,7 @@ export class PostgresqlTerminalMaintenancePersistence implements TerminalMainten
     readonly operation?: TerminalMaintenanceOperation
     readonly rootTaskId?: string
   }): Promise<readonly RecoverableTerminalMaintenanceClaim[]> {
-    return await serializable(this.db, async (tx) => {
+    return await databaseSessionFor(this.db).serializable(async (tx) => {
       const predicates = [
         inArray(taskExecutionMaintenanceClaims.state, [
           'claimed',

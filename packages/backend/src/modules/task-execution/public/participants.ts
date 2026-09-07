@@ -75,6 +75,12 @@ import type {
 } from '../domain/terminalMaintenance'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import type { RecoverableTerminalMaintenanceClaim } from '../composition/sqliteTerminalMaintenance'
+import type { TerminalMaintenanceStore as TerminalMaintenanceStoreInternal } from '../application/ports/terminalMaintenanceStore'
+import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
+import {
+  assertTerminalMaintenanceClaimTx as assertTerminalMaintenanceClaimTxInternal,
+  transitionTerminalMaintenanceClaimTx as transitionTerminalMaintenanceClaimTxInternal,
+} from '../infrastructure/terminalMaintenanceClaim'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 import {
   appendTaskCreatedCommittedEventTx as appendTaskCreatedCommittedEventTxInternal,
@@ -203,6 +209,19 @@ export type CodeHostSendAttemptObserver = DurableCodeHostEffectObserver
 // allowlists.
 export { DEFAULT_OWNERSHIP_HEARTBEAT_MS, DEFAULT_OWNERSHIP_LEASE_MS }
 export const taskExecutionModule = taskExecutionModuleInternal
+
+// RFC-359 W7 —— 终态维护认领的**中立**面。合一前 legacy 调用方拿的是 `taskExecutionModule
+// .terminalMaintenance`（bun:sqlite 同步 store，`assertClaimTx` / `transitionTx` 只吃 `DbTxSync`），
+// 于是删除 / 归档 / workspace-GC 三条路径天生只能在 SQLite 上跑。现在它们与两个 provider 的
+// 组合根共用同一份 `DrizzleTerminalMaintenancePersistence` + 同一个事务内参与者。
+export type TerminalMaintenanceStore = TerminalMaintenanceStoreInternal
+export function createTerminalMaintenanceStore(
+  db: ConstructorParameters<typeof DrizzleTerminalMaintenancePersistence>[0],
+): TerminalMaintenanceStore {
+  return new DrizzleTerminalMaintenancePersistence(db)
+}
+export const assertTerminalMaintenanceClaimTx = assertTerminalMaintenanceClaimTxInternal
+export const transitionTerminalMaintenanceClaimTx = transitionTerminalMaintenanceClaimTxInternal
 export const createCodeHostEffectAttemptObserver = createCodeHostEffectAttemptObserverInternal
 export const createLocalEffectAttemptObserver = createLocalEffectAttemptObserverInternal
 export const createProcessEffectAttemptObserver = createProcessEffectAttemptObserverInternal

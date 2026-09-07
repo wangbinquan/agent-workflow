@@ -314,8 +314,51 @@ describeEachProvider('memory catalog', ({ session, capabilities, db }) => {
 | 7 | 覆盖率对等棘轮：同一 port 两侧行覆盖率差超阈值即红（过渡期；今天能钉住全部 12 条 P0） | A+B | W5-T19d |
 | 8 | 执行链取证：两个引擎上各起一个任务跑到 done，进 push CI 的 e2e | B（RFC-349 验收漏掉的那一环） | W5-T21b |
 | 9 | 性能守卫双引擎，PG 基线不劣于 SQLite，一侧变慢即红 | 优化只落一侧 | W6-T27 |
-| 10 | schema 投影补触发器维度，投影完整性有断言 | 结构漂移 | W3-T16b |
-| 11 | 全量 backend 套件在真 PG 上、在 push 上跑（§11.2） | 最终 oracle | W5-T21 |
+| 10 | ~~schema 投影补触发器维度~~ → **改判**：`insert(tasks)` 三列完整性守卫 | 结构漂移 | W7（见下「第 10 条的改判」） |
+| 11 | 全量 backend 套件在真 PG 上、在 push 上跑（§11.2） | 最终 oracle | W5-T21 ✅ |
+
+#### 实际建成的守卫（W5–W7 落地后，超出原计划 11 条）
+
+原表是**计划**；下面是 `packages/backend/tests/architecture/rfc359-*.test.ts` 的**实际清单**（18 条），
+按失效类归位。计划里没有、实测后补上的用 ➕ 标出——它们都是「对账时才发现这一类会漏」的产物。
+
+| 守卫文件 | 挡什么 |
+| --- | --- |
+| `rfc359-w5-t17-provider-file-location` | provider 命名文件外溢（棘轮 → 0） |
+| `rfc359-w5-t19-provider-branch` | `provider === '<literal>'` 执行分叉 |
+| `rfc359-w5-t19b-composition-root-complete` | 装配缺口（`*-not-bound` / `not-composed`） |
+| `rfc359-w5-t19c-startup-sequence` | 启动序列再分叉 |
+| `rfc359-w5-t19d-coverage-parity` | 同一端口两侧覆盖倒挂 |
+| `rfc359-w5-t19f-test-engine-hardcoding` | 测试写死引擎（➕ W7 补上 `new Database(` 这个后门：此前只数 `createInMemoryDb(`，绕过它的 95 处完全在网外） |
+| `rfc359-w5-t19f-toplevel-column-capture` | ➕ 模块顶层常量捕获列、绕过 provider 投影 |
+| `rfc359-w5-t19g-schema-contract-reconciliation` | ➕ 迁移 DDL 与 drizzle 声明的逐项对账（**PG 缺哪些保护**） |
+| `rfc359-w5-t20-dialect-completeness` | 方言点未声明（函数词汇闭集，判据是闭集不是黑名单） |
+| `rfc359-w5-t18-bare-transaction` | ➕ 裸 `db.transaction(`（**不可重入**，外层回滚带不走） |
+| `rfc359-w5-provider-pair-conformance` | ➕ 成对适配器的合一进度 + 对拍覆盖状态位 |
+| `rfc359-w5-adapter-production-consumer` | ➕ 零生产消费者的适配器（摆设） |
+| `rfc359-w5-provider-runtime-exercised` | ➕ 组合根「只装配、从没被构造过」 |
+| `rfc359-w5-dual-engine-predicate-gaps` | ➕ 「一侧有校验、另一侧没有」的具名缺口（**补上了也红**，强制销账） |
+| `rfc359-w5-artifact-format-portability` | ➕ 落盘工件格式两侧不互通 |
+| `rfc359-sync-transaction-highwater` | ➕ 同步事务面（`dbTxSync`）棘轮 |
+| `rfc359-w6-t28-read-modify-write` | ➕ 读—改—写中间不锁的形状清单 |
+| `rfc359-w7-task-insert-lineage-completeness` | ➕ `insert(tasks)` 的血缘 / 启动来源三列完整性 |
+
+另有 RFC-349 遗留的 provider 守卫家族 155 条（`tests/rfc349-*.test.ts`）与本表互补：
+本表管**结构**（谁允许存在），那一族管**行为**（同一段 SQL 两侧跑出同一个结果）。
+
+#### 第 10 条的改判（W7，有实测依据）
+
+原计划要「给 PostgreSQL 的 schema 投影补上触发器维度」。**实测后不做**：
+活库直查确认 PG 侧非内部触发器数为 **0**，SQLite 侧那 8 个里与功能相关的三个
+（`rfc328_*_lineage_after_insert`、`trg_tasks_launch_origin_inherit_child`）都是
+`WHEN … IS NULL` 的**兜底填充**，而 AST 清点确认全仓**四个** `insert(tasks)` 站点**全部**
+显式提供 `executionLineageId` / `lineageSlotPathJson` / `launchOrigin` —— 触发条件在任何生产
+路径上都不成立。
+
+给 PG 补触发器等于给同一条不变量做**第二份实现**（且两方言 DDL 写法不同、必然会漂），
+与本 RFC 的方向相反。**正解是让不变量留在唯一的地方（写入方），用守卫钉住每个写入点都遵守**
+—— 即上表最后一条。残余风险（将来新增一条子任务插入路径而忘了写这三列，SQLite 会被触发器
+悄悄救回来、PG 不会）由该守卫的 exact 账本挡住。
 
 **判定标准不变**：一个新工程师加一个功能，能不能不小心让它只在一个 provider 上工作？11 条守卫
 下的答案应当是——他写的测试自动跑两遍（6/11），他写的实现不能提 provider 名（1/2），他装的东西

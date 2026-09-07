@@ -40,8 +40,13 @@ const read = (path: string): string => readFileSync(resolve(backendRoot, path), 
 /**
  * `文件相对 src 的路径 -> 被匹配的列 -> 为什么这里大小写敏感才是对的`。
  *
- * 这三类模式都不是用户输入：前两条按代码写死的 JSON 片段找引用（id 是 ULID，大小写
- * 由生成器决定），第三条按平台自己的常量前缀过滤消费者。改成 ilike 反而会误召回。
+ * 这几条模式都不是用户输入：一条按运行时写死的机器标记找证据，其余按代码写死的 JSON 片段
+ * 找引用（id 是 ULID，大小写由生成器决定）。改成 ilike 反而会误召回。
+ *
+ * RFC-359 W7 删掉了原先第四条（已提交事件出站存储按 'event-center.%' 过滤消费者）：那处
+ * `like` 与它自己在 JS 里的 `stage` 投影语义相反——SQLite 的 LIKE 对 ASCII 不敏感，
+ * `Event-Center.x` 会被筛进 producer-publication，自报的 stage 却是 consumer-delivery
+ * （2026-09-07 双引擎对拍实测）。合一后改成 `substr(...)` 等值比较，两个引擎都按字节比。
  */
 const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
   'modules/task-execution/infrastructure/effectQuiescence.ts': {
@@ -58,9 +63,6 @@ const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
   // 判据与上面两条同源：按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对。
   'modules/resource-catalog/infrastructure/legacy/resourceRefs.ts': {
     'args.column': '按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
-  },
-  'platform/events/committed/postgresqlPersistence.ts': {
-    'committedEventDeliveries.consumerId': "按平台常量前缀 'event-center.%' 过滤消费者",
   },
 }
 

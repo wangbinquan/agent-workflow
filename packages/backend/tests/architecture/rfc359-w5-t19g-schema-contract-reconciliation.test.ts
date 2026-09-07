@@ -30,20 +30,37 @@
 // ② `CONTRACT_ONLY_PROTECTIONS` —— 契约（⇒PG）有、SQLite 没有。成因 N1–N3，见数组内分段注释。
 // ③ `NAME_COLLISION_DEFINITION_DRIFT` —— 两边**同名**、定义不同；这类同时也会各自落进 ① ②。
 //
-// 计划点名的两条已知差异，实测确认并登记在册（都属 M1）：
-//   - `repo_group_nodes` 的挂载形状 CHECK（`attachment_kind` 三分支 + 空挂载全零值）；
-//   - `repository_transport_connections` 的摘要 CHECK
+// 收敛记录（RFC-359 W7）
+// ----------------------
+// 首轮清点：SQLite 专属 **149**（M1 125 CHECK + M2 9 索引 + M3 7 UNIQUE + M4 8 触发器）、
+// 契约专属 7、同名漂移 4。W7 之后分别是 **10 / 4 / 2**：
+//   - **M1 全清（125 → 0）**：迁移里的列级 / 表级匿名 CHECK 逐条补进 `db/schema.ts`。含计划点名的
+//     两条——`repo_group_nodes` 的挂载形状 CHECK（`attachment_kind` 三分支 + 空挂载全零值）与
+//     `repository_transport_connections` 的摘要 CHECK
 //     （`LENGTH(ENDPOINT_BINDING_DIGEST) = 64 AND … NOT GLOB '*[^0-9a-f]*'`）。
-//     顺带更正一处口径：`token_hint` 的长度 CHECK 实际落在
-//     `user_repository_transport_credentials`（`LENGTH(TOKEN_HINT) = 4`），
-//     不在 `repository_transport_connections` 上——后者的 `global_token_hint` 没有 CHECK。
+//     口径更正保留：`token_hint` 的长度 CHECK 落在 `user_repository_transport_credentials`
+//     （`LENGTH(TOKEN_HINT) = 4`），不在 `repository_transport_connections` 上。
+//   - **M2 全清（9 → 0）**、**M3 收敛 5 条（7 → 2）**、**N2 收敛（PG 上两个代数字段能写负数）**、
+//     **同名漂移收敛 2 条（4 → 2）**。
+//   - SQLITE_ONLY 剩的 10 条 = M4 的 8 个触发器（逻辑契约里没有触发器这个概念，整类补齐属另一套
+//     机制）+ 2 条已判定等价的部分唯一索引；CONTRACT_ONLY 剩的 4 条 = N1 的 2 条
+//     （`runtime_session_leases.reset_pending`：SQLite 用触发器、PG 用 CHECK，两侧都有保护、
+//     只是形态不同）+ 同两条唯一索引的契约侧；同名漂移剩的 2 条也是它们。
+//
+// **收敛过的每一条唯一性都另有行为验收**：`tests/rfc359-w7-schema-uniqueness-parity.test.ts`
+// 用 `describeEachProvider` 往两个真引擎各塞一遍应当冲突的数据，两边都必须拒。对账证明差异
+// 消失了，那条测试才证明保护真的生效了。
 //
 // 账本纪律
 // --------
 // **只降不升**：把某条差异补进 drizzle 声明（PG 随之投影）后，把对应条目一并删掉，让这次收敛
 // 留下一次有署名的提交记录；新增一条而账本没改 ⇒ 红。要新增只能是一次有意识的决定，并在
-// 分段注释里写清它为什么只能是 SQLite 专属。**本刀不改生产代码**：哪些该补进 drizzle 声明、
-// 哪些该长期登记为 SQLite 专属，由 RFC-359 主线裁决。
+// 分段注释里写清它为什么只能是 SQLite 专属。
+//
+// **改 `db/schema.ts` 必须同步重生成 PG 基线**：`bun run db:rfc349-postgresql-schema` 重写
+// `db/postgresql-migrations/0000_rfc349_baseline.sql` 与 `meta/_journal.json`；漏了这一步，
+// `verifyPostgresqlMigrationHistory` 会让**所有** `describeEachProvider` 的 PG 分支在
+// `beforeAll` 就死在 `postgresql-migration-history-drift`。
 //
 // 这条守卫**不连 PostgreSQL**：契约侧读的是 drizzle 声明（PG DDL 的唯一来源），
 // 所以它在纯 SQLite 环境下就能证明「PG 会缺哪些保护」。
@@ -328,167 +345,56 @@ const RECONCILED = reconcile(ACTUAL, EXPECTED)
  */
 export const SQLITE_ONLY_PROTECTIONS: readonly string[] = [
   // —— M1：迁移 SQL 里写了 CHECK，却没同步进 drizzle 声明，于是 PostgreSQL 上一条都没有 ——
-  // drizzle 的 `getTableConfig().checks` 只看得见 TS 里 `check('name', sql…)` 的声明；迁移里的
-  // 列级 `col text CHECK (…)` 与表级匿名 `CHECK (…)` 全部落不进契约。下面 125 条里只有
-  // `auth_login_policy :: CHECK(ID = 'global')` 在迁移里是有名字的（`CONSTRAINT
-  // auth_login_policy_global_only`），其余全是匿名的。内容以枚举取值（`IN (…)`）、非负 / 正数
-  // 计数、`json_valid(…)`、状态机形状为主——每一条在 PostgreSQL 上都缺席。
-  // 计划点名的两条已知差异也在这一段：`repo_group_nodes` 的挂载形状 CHECK（三分支 +
-  // 空挂载全零值）、`repository_transport_connections` 的摘要 CHECK（64 位十六进制）。
-  "auth_login_policy :: CHECK(ID = 'global')",
-  "auth_login_policy :: CHECK(OIDC_DEFAULT_ROLE IN('guest','user'))",
-  "capability_templates :: CHECK(VISIBILITY IN('public','private'))",
-  "clarify_rounds :: CHECK((KIND = 'self' AND STATUS != 'abandoned')OR(KIND = 'cross' AND STATUS != 'canceled'))",
-  "clarify_rounds :: CHECK(DIRECTIVE IS NULL OR DIRECTIVE IN('continue','stop'))",
-  "clarify_rounds :: CHECK(KIND IN('self','cross'))",
-  "clarify_rounds :: CHECK(STATUS IN('awaiting_human','answered','canceled','abandoned'))",
-  'code_ai_attempts :: CHECK(ATTEMPT_SEQ >= 0)',
-  'code_ai_attempts :: CHECK(RERUN_SEQ >= 0)',
-  "code_ai_attempts :: CHECK(STATUS IN('claimed','running','validated','failed','interrupted'))",
-  "code_findings :: CHECK(ANCHOR_KIND IN('mr','issue','pipeline','platform'))",
-  "code_findings :: CHECK(LIFECYCLE IN('active','disappeared','reappeared'))",
-  'code_host_connections :: CHECK(JSON_VALID(REPOSITORY_URL_PREFIXES_JSON))',
-  'code_host_connections :: CHECK(JSON_VALID(TRANSPORT_MAPPINGS_JSON))',
-  'code_host_connections :: CHECK(LENGTH(CONNECTION_GENERATION)BETWEEN 1 AND 128)',
-  "code_host_connections :: CHECK(PROVIDER IN('gitlab','github'))",
-  'code_host_connections :: CHECK(REJECT_UNAUTHORIZED IN(0,1))',
-  'code_publish_intents :: CHECK(EPOCH >= 1)',
-  "code_publish_intents :: CHECK(STATE IN('pending','settled','compensated','abandoned'))",
-  "code_round_stages :: CHECK(STAGE_KIND IN('program','script','ai','invoke'))",
-  'code_round_stages :: CHECK(STAGE_SEQ >= 0)',
-  "code_round_stages :: CHECK(STATUS IN('pending','running','done','failed','skipped','inherited'))",
-  "code_work_items :: CHECK(ANCHOR_KIND IN('mr','issue','pipeline','platform'))",
-  'code_work_items :: CHECK(EPOCH >= 1)',
-  'code_work_items :: CHECK(PUBLISHING_EPOCH IS NULL OR PUBLISHING_EPOCH >= 1)',
-  "code_work_items :: CHECK(STATUS IN('idle','queued','running','awaiting','settled','failed','superseding','handed_off','closing','closed'))",
-  'code_work_rounds :: CHECK(EPOCH >= 1)',
-  "code_work_rounds :: CHECK(OUTCOME IS NULL OR OUTCOME IN('published','awaiting','failed','canceled','superseded'))",
-  'code_work_rounds :: CHECK(ROUND_SEQ >= 1)',
-  "collaboration_gate_artifacts :: CHECK(ARTIFACT_KIND = 'review-doc')",
-  "collaboration_gate_artifacts :: CHECK(STATE IN('declared','staged','consumed','finalized','cleanup_pending'))",
-  "collaboration_gate_operations :: CHECK(GATE_KIND IN('review','clarify','questions'))",
-  "collaboration_gate_operations :: CHECK(OPERATION_KIND IN('open','decide','manual-question-open','legacy-seed'))",
-  "collaboration_gate_operations :: CHECK(STATE IN('preparing','prepared','committed','cleanup_pending','completed','failed'))",
-  "employee_case_members :: CHECK(ROLE IN('collaborator','observer'))",
-  "fusions :: CHECK(STATUS IN('running','awaiting_approval','applying','done','rejected','canceled','failed'))",
-  "intent_draft_resolutions :: CHECK(REASON IN('superseded','discarded'))",
-  "intent_working_set_changes :: CHECK(MODE IN('after-current','interrupt'))",
-  "intent_working_set_changes :: CHECK(STATE IN('queued','applying','applied','failed','canceled'))",
-  "maintenance_runs :: CHECK((STATE = 'running' AND LEASE_TOKEN IS NOT NULL AND LEASE_EXPIRES_AT IS NOT NULL)OR(STATE <> 'running'))",
-  'maintenance_runs :: CHECK(ATTEMPT >= 0)',
-  'maintenance_runs :: CHECK(CURSOR_JSON IS NULL OR JSON_VALID(CURSOR_JSON))',
-  'maintenance_runs :: CHECK(CURSOR_VERSION > 0)',
-  "maintenance_runs :: CHECK(JOB_CLASS IN('cleanup','recovery','checkpoint'))",
-  'maintenance_runs :: CHECK(JSON_VALID(COUNTERS_JSON))',
-  'maintenance_runs :: CHECK(JSON_VALID(PAYLOAD_JSON))',
-  'maintenance_runs :: CHECK(SLICE_NO >= 0)',
-  "maintenance_runs :: CHECK(STATE IN('pending','running','deferred','succeeded','failed'))",
-  "memories :: CHECK((SCOPE_TYPE = 'global' AND SCOPE_ID IS NULL)OR(SCOPE_TYPE != 'global' AND SCOPE_ID IS NOT NULL))",
-  "memories :: CHECK((STATUS = 'fused')=(FUSED_INTO_SKILL IS NOT NULL))",
-  "memories :: CHECK((STATUS = 'fused')=(FUSED_INTO_SKILL_ID IS NOT NULL))",
-  "memories :: CHECK(DISTILL_ACTION IS NULL OR DISTILL_ACTION IN('new','update_of','duplicate_of','conflict_with'))",
-  "memories :: CHECK(SCOPE_TYPE IN('agent','workflow','repo','repo_group','global'))",
-  "memories :: CHECK(SOURCE_KIND IN('clarify','review','feedback','manual'))",
-  "memories :: CHECK(STATUS IN('candidate','approved','archived','superseded','rejected','fused'))",
-  "memory_distill_jobs :: CHECK(SOURCE_KIND IN('clarify','review','feedback'))",
-  "memory_distill_jobs :: CHECK(STATUS IN('pending','running','done','failed','canceled'))",
-  'repo_capability_config :: CHECK(ENABLED IN(0,1))',
-  "repo_capability_config :: CHECK(READINESS IN('disabled','misconfigured','ready'))",
-  "repo_group_nodes :: CHECK((ATTACHMENT_KIND IS NULL AND CACHED_REPO_ID IS NULL AND CHILD_GROUP_ID IS NULL AND REF = '' AND SUBDIR = '' AND READONLY = 0)OR(ATTACHMENT_KIND = 'repo' AND CACHED_REPO_ID IS NOT NULL AND CHILD_GROUP_ID IS NULL)OR(ATTACHMENT_KIND = 'group' AND CHILD_GROUP_ID IS NOT NULL AND CACHED_REPO_ID IS NULL AND REF = '' AND SUBDIR = ''))",
-  "repo_group_nodes :: CHECK(ATTACHMENT_KIND IS NULL OR ATTACHMENT_KIND IN('repo','group'))",
-  'repository_transport_connections :: CHECK(CREDENTIAL_REVISION > 0)',
-  'repository_transport_connections :: CHECK(JSON_VALID(ALLOWED_HTTP_BASE_URLS_JSON))',
-  'repository_transport_connections :: CHECK(JSON_VALID(TRANSPORT_MAPPINGS_JSON))',
-  "repository_transport_connections :: CHECK(LENGTH(ENDPOINT_BINDING_DIGEST)= 64 AND ENDPOINT_BINDING_DIGEST NOT GLOB '*[^0-9a-f]*')",
-  "repository_transport_connections :: CHECK(PROVIDER IN('gitlab','github'))",
-  'repository_transport_connections :: CHECK(REJECT_UNAUTHORIZED IN(0,1))',
-  "resource_grants :: CHECK(LEVEL IN('read','write'))",
-  'skill_operations :: CHECK(ACTIVE IN(0,1))',
-  "skill_operations :: CHECK(KIND IN('reserve','migrate','delete','version-write'))",
-  "task_execution_effect_attempts :: CHECK(APPLICATION_EVIDENCE IS NULL OR APPLICATION_EVIDENCE IN('applied','definitely-not-applied','ambiguous'))",
-  'task_execution_effect_attempts :: CHECK(RECEIPT_JSON IS NULL OR JSON_VALID(RECEIPT_JSON))',
-  'task_execution_effect_attempts :: CHECK(RECOVERY_DESCRIPTOR_JSON IS NULL OR JSON_VALID(RECOVERY_DESCRIPTOR_JSON))',
-  "task_execution_effect_attempts :: CHECK(RETRY_AUTHORITY IN('none','probe','convergent','transport-policy'))",
-  "task_execution_effect_attempts :: CHECK(STATE IN('prepared','acting','succeeded','failed-not-applied','retry-authorized','recovery-required','outcome-unknown'))",
-  'task_execution_effects :: CHECK(JSON_VALID(SLOT_PATH_JSON))',
-  "task_execution_effects :: CHECK(KIND IN('workspace-prepare','workspace-rollback','isolation-create','isolation-merge','repository','process','workspace-cleanup','code-host-mutation','outbound-mutation'))",
-  'task_execution_effects :: CHECK(LAST_ATTEMPT_NO >= 0)',
-  'task_execution_effects :: CHECK(RECEIPT_JSON IS NULL OR JSON_VALID(RECEIPT_JSON))',
-  "task_execution_effects :: CHECK(STATE IN('open','succeeded','failed','outcome-unknown'))",
-  'task_execution_intents :: CHECK(AUTHORIZATION_SCOPE_JSON IS NULL OR JSON_VALID(AUTHORIZATION_SCOPE_JSON))',
-  'task_execution_intents :: CHECK(CLAIMED_EPOCH IS NULL OR CLAIMED_EPOCH > 0)',
-  'task_execution_intents :: CHECK(JSON_VALID(PAYLOAD_JSON))',
-  'task_execution_intents :: CHECK(JSON_VALID(SLOT_PATH_JSON))',
-  "task_execution_intents :: CHECK(KIND IN('launch','resume','retry-repository-preparation','retry-node','sync-workflow','gate-continuation','recovery'))",
-  "task_execution_intents :: CHECK(SOURCE IN('rest','mcp','scheduler','auto','boot','internal'))",
-  "task_execution_intents :: CHECK(STATE IN('pending','claimed','completed','canceled','failed'))",
-  "task_execution_lineage_operation_records :: CHECK((RECORD_KIND = 'generation-watermark' AND HIGHEST_SETTLED_GENERATION IS NOT NULL AND HIGHEST_SETTLED_GENERATION >= 0 AND OPERATION_GENERATION IS NULL AND DECISION_STATE IS NULL)OR(RECORD_KIND = 'replay-decision' AND OPERATION_GENERATION IS NOT NULL AND OPERATION_GENERATION >= 0 AND HIGHEST_SETTLED_GENERATION IS NULL AND DECISION_STATE IS NOT NULL))",
-  'task_execution_lineage_operation_records :: CHECK(AUTHORIZATION_SCOPE_JSON IS NULL OR JSON_VALID(AUTHORIZATION_SCOPE_JSON))',
-  'task_execution_lineage_operation_records :: CHECK(COMPACTED IN(0,1))',
-  "task_execution_lineage_operation_records :: CHECK(DECISION_STATE IS NULL OR DECISION_STATE IN('requires-actor','actor-replay-authorized','actor-replay-authorized-suspended','consumed'))",
-  'task_execution_lineage_operation_records :: CHECK(JSON_VALID(SLOT_PATH_JSON))',
-  'task_execution_lineage_operation_records :: CHECK(PROVIDER_COORDINATE_JSON IS NULL OR JSON_VALID(PROVIDER_COORDINATE_JSON))',
-  "task_execution_lineage_operation_records :: CHECK(RECORD_KIND IN('generation-watermark','replay-decision'))",
-  'task_execution_maintenance_claims :: CHECK(JSON_VALID(CLEANUP_PLAN_JSON))',
-  "task_execution_maintenance_claims :: CHECK(OPERATION IN('archive','delete','retention','workspace-gc','repair-metadata'))",
-  "task_execution_maintenance_claims :: CHECK(STATE IN('claimed','io-complete','db-finalized','cleanup-pending','completed','recovery-required'))",
-  "task_execution_owners :: CHECK(STATE IN('claimed','revoked','released','recovery-required'))",
-  "tasks :: CHECK(LAUNCH_ORIGIN IN('manual','scheduled','webhook','api','event'))",
-  'tasks :: CHECK(SOURCE_TERMINATION_EFFECT_REV IS NULL OR SOURCE_TERMINATION_EFFECT_REV >= 1)',
-  "tasks :: CHECK(SOURCE_TERMINATION_FENCE IS NULL OR SOURCE_TERMINATION_FENCE IN('closed','merged'))",
-  'tasks :: CHECK(SOURCE_TERMINATION_LAUNCH_REV IS NULL OR SOURCE_TERMINATION_LAUNCH_REV >= 0)',
-  "tasks :: CHECK(WORKSPACE_PRUNE_CAUSE IS NULL OR(WORKSPACE_PRUNE_CAUSE = 'webhook-terminal' AND WORKSPACE_PRUNING_AT IS NOT NULL))",
-  'user_repository_transport_credentials :: CHECK(CREDENTIAL_REVISION > 0)',
-  'user_repository_transport_credentials :: CHECK(LENGTH(CONNECTION_GENERATION)BETWEEN 1 AND 128)',
-  "user_repository_transport_credentials :: CHECK(LENGTH(ENDPOINT_BINDING_DIGEST)= 64 AND ENDPOINT_BINDING_DIGEST NOT GLOB '*[^0-9a-f]*')",
-  'user_repository_transport_credentials :: CHECK(LENGTH(TOKEN_HINT)= 4)',
-  "user_repository_transport_credentials :: CHECK(PROVIDER IN('gitlab','github'))",
-  "webhook_deliveries :: CHECK(MR_STATE_AFTER IS NULL OR MR_STATE_AFTER IN('open','closed','merged'))",
-  'webhook_deliveries :: CHECK(MR_STREAM_REVISION IS NULL OR MR_STREAM_REVISION >= 1)',
-  'webhook_mr_control_effects :: CHECK(ATTEMPT_COUNT >= 0)',
-  "webhook_mr_control_effects :: CHECK(KIND IN('fence-closed','fence-merged','clear-closed'))",
-  "webhook_mr_control_effects :: CHECK(OBSERVED_EVENT_TYPE IN('mr_opened','mr_closed','mr_merged'))",
-  'webhook_mr_control_effects :: CHECK(REVISION >= 1)',
-  "webhook_mr_control_effects :: CHECK(STATUS IN('pending','leased','waiting-launches','retryable','succeeded'))",
-  "webhook_mr_control_targets :: CHECK(CANCEL_OUTCOME IN('canceled','already-terminal','not-applicable'))",
-  "webhook_mr_control_targets :: CHECK(FENCE_OUTCOME IN('fenced-closed','fenced-merged','cleared-closed','unchanged'))",
-  "webhook_mr_control_targets :: CHECK(RELEASE_OUTCOME IN('pending','no-active-owner','released','unreaped'))",
-  'webhook_mr_launch_guards :: CHECK(LAUNCH_REVISION >= 0)',
-  "webhook_mr_launch_guards :: CHECK(STATUS IN('reserved','launching','revoking-terminal','task-committed','launch-settled','aborted-terminal','failed'))",
-  'webhook_mr_stream_states :: CHECK(LAST_TERMINAL_REVISION IS NULL OR LAST_TERMINAL_REVISION >= 1)',
-  'webhook_mr_stream_states :: CHECK(REVISION >= 1)',
-  "webhook_mr_stream_states :: CHECK(STATE IN('open','closed','merged'))",
-  'webhook_triggers :: CHECK(CANCEL_ON_MR_TERMINAL IN(0,1))',
-  "workgroups :: CHECK(OUTPUT_CONTRACT IN('files','discussion'))",
+  // **RFC-359 W7 已清空这一段**（原 125 条）。drizzle 的 `getTableConfig().checks` 只看得见 TS 里
+  // `check('name', sql…)` 的声明；迁移里的列级 `col text CHECK (…)` 与表级匿名 `CHECK (…)` 全部
+  // 落不进契约，于是枚举取值、非负 / 正数计数、`json_valid(…)`、状态机形状这一整类在 PostgreSQL
+  // 上一条都不存在。125 条已按迁移 DDL 逐条补进 `db/schema.ts`（含计划点名的两条：
+  // `repo_group_nodes` 的挂载形状三分支、`repository_transport_connections` 的 64 位十六进制摘要），
+  // PG 基线随之投影。方言不通吃的三类由 `postgresqlSchema.ts` 既有的 `localExpression` 承担，
+  // 无需新增翻译层：`NOT GLOB '*[^0-9a-f]*'` → `!~ '[^0-9a-f]'`、boolean 列的 `IN (0,1)` →
+  // `IN (FALSE, TRUE)`、`json_valid(…)` 走 `agent_workflow` schema 里的同名 bootstrap 函数。
   // —— M2：迁移 SQL 里手写的索引（含部分索引谓词）而 drizzle 未声明 ——
-  // 头两条同时是 NAME_COLLISION_DEFINITION_DRIFT 的 SQLite 侧（同名、定义不同）。
-  // `tasks` 那五条是任务树 / 工作组查询的下推索引；`tasks :: INDEX(ID) WHERE ROOT_TASK_ID
-  // IS NULL` 与 `webhook_deliveries` 那条是**部分索引**——PG 上这些查询没有索引可用。
-  'clarify_rounds :: INDEX(TARGET_CONSUMER_NODE_ID,LOOP_ITER,ITERATION)',
-  'code_work_observations :: INDEX(WORK_ITEM_ID,CREATED_AT DESC)',
-  'event_type_catalog :: INDEX(CATALOG_VISIBILITY,EVENT_TYPE_ID,REVISION)',
-  'tasks :: INDEX(ID) WHERE ROOT_TASK_ID IS NULL',
-  'tasks :: INDEX(ROOT_TASK_ID,STARTED_AT)',
-  'tasks :: INDEX(STATUS,PARENT_TASK_ID,FINISHED_AT)',
-  'tasks :: INDEX(STATUS,WORKGROUP_ID)',
-  'tasks :: INDEX(WORKGROUP_ID)',
-  'webhook_deliveries :: INDEX(RECEIVED_AT) WHERE BODY_JSON IS NOT NULL',
+  // **RFC-359 W7 已清空这一段**：9 条索引（`event_type_catalog` 的可见性索引、`tasks` 的
+  // 五条任务树 / 工作组下推索引含一条部分索引、`webhook_deliveries` 的 body 保留期部分索引，
+  // 外加 `clarify_rounds` / `code_work_observations` 两条同名漂移）全部补进了 `db/schema.ts`。
   // —— M3：迁移 SQL 里的 UNIQUE 约束 / 唯一索引（含表达式、含部分）而 drizzle 未声明 ——
-  // 三条 `LOWER(…)` 是大小写不敏感唯一性（仓库组名 / 组内路径 / 任务空间路径），PG 上完全没有
-  // 对应保护；`workflows :: UNIQUE(NAME) WHERE BUILTIN = 1` 是内建工作流重名闸；
-  // `webhook_mr_launch_guards :: UNIQUE(FIRE_ID)` 是迁移里的列级 `UNIQUE`。
-  // 另两条（`code_work_observations` / `intent_turn_events`）是同名定义漂移的 SQLite 侧。
+  // **RFC-359 W7 收敛了 5 条**：三条 `LOWER(…)` 大小写不敏感唯一性（仓库组名 / 组内路径 /
+  // 任务空间路径）走 `uniqueIndex().on(sql\`lower(…)\`)`（表达式唯一在 PG 上只能是索引，
+  // `ALTER TABLE … ADD CONSTRAINT … UNIQUE` 那条路径只渲染列名）；
+  // `workflows :: UNIQUE(NAME) WHERE BUILTIN = 1` 走部分唯一索引；
+  // `webhook_mr_launch_guards :: UNIQUE(FIRE_ID)` 走列级 `.unique()`。
+  //
+  // 剩下这两条**已判定与契约侧等价，刻意不改声明**（同时是 NAME_COLLISION_DEFINITION_DRIFT
+  // 的 SQLite 侧）：迁移写的是部分唯一索引 `WHERE <col> IS NOT NULL`，drizzle 写的是全量唯一
+  // 索引。判据：两个引擎的唯一索引都把含 NULL 的行视作互不相同——SQLite 一贯如此，PostgreSQL
+  // 是 `NULLS DISTINCT` 默认（`CREATE INDEX` 文档；只有显式 `NULLS NOT DISTINCT` 才改变）。
+  // 于是谓词排除的正是那批**本来就不参与冲突判定**的行：两种写法强制同一条不变量，
+  // 差别只在部分索引不为这些行留索引条目（体积），保护面对等。
   'code_work_observations :: UNIQUE(EVENT_ID) WHERE EVENT_ID IS NOT NULL',
   'intent_turn_events :: UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID) WHERE EXTERNAL_EVENT_ID IS NOT NULL',
-  'repo_group_nodes :: UNIQUE(GROUP_ID,LOWER(PATH))',
-  'repo_groups :: UNIQUE(LOWER(NAME))',
-  'task_space_nodes :: UNIQUE(TASK_ID,LOWER(NODE_PATH))',
-  'webhook_mr_launch_guards :: UNIQUE(FIRE_ID)',
-  'workflows :: UNIQUE(NAME) WHERE BUILTIN = 1',
   // —— M4：触发器——逻辑契约里**没有触发器这个概念**，`postgresqlSchema.ts` 也不产出触发器 ——
   // 所以这 8 个整类只在 SQLite 生效：审计表禁改禁删、承诺态不可变、血缘落表、子任务启动来源
   // 继承、运行时会话 `reset_pending` 形状（最后这条在 PG 侧由契约的两条 CHECK 承担，
-  // 见 CONTRACT_ONLY_PROTECTIONS 的 N1）。整类补齐属于生产改动，由 RFC-359 主线裁决。
+  // 见 CONTRACT_ONLY_PROTECTIONS 的 N1）。
+  //
+  // **W7 裁决：这 8 条不补，也不算活着的功能缺口。** 实测（2026-09-07，活库
+  // `select … from pg_trigger … where nspname='agent_workflow'` 返回 **0**）确认 PG 侧一个触发器
+  // 都没有；但逐条追写入路径后，它们要维持的不变量**应用层已经自己维持了**：
+  //   · 血缘两列（`rfc328_*_lineage_after_insert`）与 `trg_tasks_launch_origin_inherit_child`
+  //     都是 `WHEN … IS NULL` / `WHEN 父子不一致` 的**兜底填充**，而 AST 清点确认：全仓
+  //     **四个** `insert(tasks)` 站点**全部**显式提供 `executionLineageId` /
+  //     `lineageSlotPathJson` / `launchOrigin`（`postgresqlFusionEngineTaskOperations.ts:110`、
+  //     `postgresqlChildExecutionLaunchOperations.ts:585`、
+  //     `postgresqlTaskRouteLaunchOperations.ts:762`、`services/task.ts:3482`）。
+  //     也就是说这三个触发器的触发条件在**任何**生产路径上都不成立——它们在 SQLite 上是纯冗余，
+  //     PG 缺它们不改变任何行为。（消费侧另有确定性兜底，见
+  //     `composition/nodeMechanics.ts:2418-2426`，那是第二道保险，本判断不依赖它。）
+  //
+  // **残余风险**（记在这里，别当成已消除）：PG 上没有任何兜底，所以将来**新增**一条子任务插入
+  // 路径若忘了写血缘 / launchOrigin，SQLite 会被触发器救回来、PG 会静默写错（子任务拿到自己的
+  // 血缘 id 而不是父的）。要收口的话，正解不是给 PG 补触发器（那是给同一条不变量做第二份实现，
+  // 与本 RFC 的方向相反），而是**加一条守卫钉住「`insert(tasks)` 的每个站点都显式提供这三列」**。
+  // 本刀不做。
   'collaboration_gate_operations :: TRIGGER trg_collaboration_gate_operations_committed_immutable',
   'node_runs :: TRIGGER rfc328_node_runs_lineage_after_insert',
   'runtime_session_leases :: TRIGGER runtime_session_leases_reset_pending_insert',
@@ -508,31 +414,34 @@ export const CONTRACT_ONLY_PROTECTIONS: readonly string[] = [
   // SQLite 的 ALTER 加不了 CHECK，于是迁移改用两个 BEFORE INSERT / UPDATE 触发器
   // `RAISE(ABORT, …)` 表达同一条不变量（见 SQLITE_ONLY_PROTECTIONS M4）。两侧都有保护，形态不同。
   // —— N2：`task_execution_lineage_operation_records` 的记录形状 CHECK ——
-  // 迁移那份多了 `HIGHEST_SETTLED_GENERATION >= 0` 与 `OPERATION_GENERATION >= 0` 两个合取项，
-  // 即 **SQLite 比 PG 更严**；drizzle 声明缺这两项，PG 上这两个字段可以写成负数。
+  // **RFC-359 W7 已收敛**：迁移那份多了 `HIGHEST_SETTLED_GENERATION >= 0` 与
+  // `OPERATION_GENERATION >= 0` 两个合取项（SQLite 比 PG 更严，PG 上这两个代数字段能写负数），
+  // 两项已补进 drizzle 声明，两侧同形。
   'runtime_session_leases :: CHECK(RESET_PENDING = 0 OR LEASE_NODE_RUN_ID IS NOT NULL)',
   'runtime_session_leases :: CHECK(RESET_PENDING IN(0,1))',
-  "task_execution_lineage_operation_records :: CHECK((RECORD_KIND = 'generation-watermark' AND HIGHEST_SETTLED_GENERATION IS NOT NULL AND OPERATION_GENERATION IS NULL AND DECISION_STATE IS NULL)OR(RECORD_KIND = 'replay-decision' AND OPERATION_GENERATION IS NOT NULL AND HIGHEST_SETTLED_GENERATION IS NULL AND DECISION_STATE IS NOT NULL))",
-  // —— N3：同名索引定义漂移的契约侧（与 NAME_COLLISION_DEFINITION_DRIFT 一一对应） ——
-  'clarify_rounds :: INDEX(TARGET_CONSUMER_NODE_ID,STATUS)',
-  'code_work_observations :: INDEX(WORK_ITEM_ID,CREATED_AT)',
+  // —— N3：同名唯一索引定义漂移的契约侧（与 NAME_COLLISION_DEFINITION_DRIFT 一一对应） ——
+  // 两条索引漂移（`idx_clarify_rounds_target_consumer` 列集不同、
+  // `idx_code_work_observations_item` 少 `DESC`）已由 W7 对齐到迁移；剩下这两条唯一索引
+  // 是**已判定等价**的部分 vs 全量之差，判据见 SQLITE_ONLY_PROTECTIONS 的 M3 段。
   'code_work_observations :: UNIQUE(EVENT_ID)',
   'intent_turn_events :: UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID)',
 ]
 
 /**
  * 两侧**同名**、定义不同。这一类最容易漏：名字对得上，列集 / 排序 / 部分索引谓词却不一样，
- * 于是两个引擎上「同一个索引」保护的根本不是同一件事。四条各自的形态：
- *   - `idx_clarify_rounds_target_consumer`：列集完全不同（迁移 `(target_consumer_node_id,
- *     loop_iter, iteration)` vs 声明 `(target_consumer_node_id, status)`）——同名不同物；
- *   - `idx_code_work_observations_item`：迁移带 `created_at DESC`，声明没有 `.desc()`；
- *   - `uniq_code_work_observations_event` / `uniq_intent_turn_events_external`：迁移是**部分**
- *     唯一索引（`WHERE … IS NOT NULL`），声明是全量唯一索引。
- * 三种都属于生产改动（改声明或改迁移），由 RFC-359 主线裁决；本守卫只负责把差异钉住。
+ * 于是两个引擎上「同一个索引」保护的根本不是同一件事。原有四条，RFC-359 W7 逐条判定后：
+ *   - `idx_clarify_rounds_target_consumer`：**真差异，已修**。列集完全不同——迁移 0107
+ *     （RFC-217 T17）重建 clarify_rounds 时把它换成了 `(target_consumer_node_id, loop_iter,
+ *     iteration)`，drizzle 声明却停在 0031（RFC-058）的 `(target_consumer_node_id, status)`。
+ *     PostgreSQL 投影出来的是那个**已被取代**的形状。声明已对齐到迁移（= 生产真值）。
+ *   - `idx_code_work_observations_item`：**已对齐**。迁移带 `created_at DESC`，声明少了排序
+ *     方向；drizzle 的 SQLite 索引列没有 `.desc()`，改用 `sql\`${…} DESC\`` 写出同一形状。
+ *   - `uniq_code_work_observations_event` / `uniq_intent_turn_events_external`：**已判定等价，
+ *     刻意保留**。迁移是部分唯一索引（`WHERE … IS NOT NULL`），声明是全量唯一索引；两个引擎
+ *     的唯一索引都把含 NULL 的行视作互不相同（PostgreSQL 的 `NULLS DISTINCT` 默认），
+ *     谓词排除的正是那批本来就不参与冲突判定的行。判据详见 SQLITE_ONLY_PROTECTIONS 的 M3 段。
  */
 export const NAME_COLLISION_DEFINITION_DRIFT: readonly string[] = [
-  'clarify_rounds.idx_clarify_rounds_target_consumer :: sqlite=INDEX(TARGET_CONSUMER_NODE_ID,LOOP_ITER,ITERATION) | contract=INDEX(TARGET_CONSUMER_NODE_ID,STATUS)',
-  'code_work_observations.idx_code_work_observations_item :: sqlite=INDEX(WORK_ITEM_ID,CREATED_AT DESC) | contract=INDEX(WORK_ITEM_ID,CREATED_AT)',
   'code_work_observations.uniq_code_work_observations_event :: sqlite=UNIQUE(EVENT_ID) WHERE EVENT_ID IS NOT NULL | contract=UNIQUE(EVENT_ID)',
   'intent_turn_events.uniq_intent_turn_events_external :: sqlite=UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID) WHERE EXTERNAL_EVENT_ID IS NOT NULL | contract=UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID)',
 ]

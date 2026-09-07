@@ -1,4 +1,5 @@
 // RFC-311 PR-4 — task-operations catalog default-view fast path oracle.
+// RFC-359 W6-T27 起两个引擎各跑一遍。
 //
 // The default (filter-free) view used to pay O(all tasks) per page: full
 // MATERIALIZED base + per-row correlated subqueries + two whole-forest
@@ -12,23 +13,32 @@
 // branch_started_at exactly like the maintenance hook does, so running them
 // over a hand-inserted forest also locks "backfill algorithm == fast-path
 // sort-key assumption".
+//
+// RFC-359 W6-T27 —— 双引擎化时唯一必须改形状的地方：那两条回填 SQL 是 SQLite 方言
+// （反引号 + `CREATE TEMP TABLE … WITH RECURSIVE`），PostgreSQL 上跑不了，而 PG 侧本来
+// 也不跑迁移脚本里的数据语句（它的行是 RFC-349 逻辑复制带过来的）。改法是把回填复算成
+// 一份引擎中立的纯函数（`helpers/taskForestBackfill.ts`）用于种数据，**同时**在 SQLite
+// 那一侧保留「迁移 SQL 的结果与复算逐行相等」的对拍——那条锁没丢，只是换了个地方钉。
 
 import { TASK_STATUS, type TaskOperationsListItem } from '@agent-workflow/shared'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { isDefaultView } from '../src/modules/task-execution/infrastructure/taskListPage'
+import { describeEachProvider } from './helpers/eachProvider'
+import { computeForestBackfill } from './helpers/taskForestBackfill'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -65,30 +75,38 @@ interface SeedTask {
 }
 
 async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
-  for (const r of rows) {
-    await db.insert(tasks).values({
-      id: r.id,
-      name: r.id,
-      workflowId: 'wf1',
-      workflowSnapshot: '{}',
-      repoPath: `/tmp/${r.id}`,
-      worktreePath: `/tmp/wt-${r.id}`,
-      baseBranch: 'main',
-      branch: `agent-workflow/${r.id}`,
-      status: r.status,
-      inputs: '{}',
-      startedAt: r.startedAt,
-      finishedAt: r.status === 'done' || r.status === 'failed' ? r.startedAt + 10 : null,
-      runningMs: 0,
-      ownerUserId: r.owner,
-      parentTaskId: r.parent,
-      invocationDepth: r.parent === undefined ? 0 : 1,
-      launchOrigin: 'manual',
-      branchStartedAt: 0, // deliberately wrong — the backfill below must fix it
-    })
+  const backfill = computeForestBackfill(
+    rows.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
+  )
+  const values = rows.map((r) => ({
+    id: r.id,
+    name: r.id,
+    workflowId: 'wf1',
+    workflowSnapshot: '{}',
+    repoPath: `/tmp/${r.id}`,
+    worktreePath: `/tmp/wt-${r.id}`,
+    baseBranch: 'main',
+    branch: `agent-workflow/${r.id}`,
+    status: r.status,
+    inputs: '{}',
+    startedAt: r.startedAt,
+    finishedAt: r.status === 'done' || r.status === 'failed' ? r.startedAt + 10 : null,
+    runningMs: 0,
+    ownerUserId: r.owner,
+    parentTaskId: r.parent ?? null,
+    invocationDepth: r.parent === undefined ? 0 : 1,
+    launchOrigin: 'manual' as const,
+    branchStartedAt: backfill.branchStartedAt.get(r.id) ?? r.startedAt,
+    rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
+  }))
+  for (let offset = 0; offset < values.length; offset += 100) {
+    await db.insert(tasks).values(values.slice(offset, offset + 100))
   }
-  const migrationSql = readFileSync(join(MIGRATIONS, '0180_rfc311_perf_indexes.sql'), 'utf8')
-  const statements = migrationSql
+}
+
+/** 迁移 0180 里那两条回填语句（SQLite 方言）。只有 SQLite 那侧的对拍用得到。 */
+function branchBackfillStatements(): string[] {
+  return readFileSync(join(MIGRATIONS, '0180_rfc311_perf_indexes.sql'), 'utf8')
     .split('--> statement-breakpoint')
     .map((statement) => statement.replace(/^--.*$/gm, '').trim())
     .filter(
@@ -96,7 +114,6 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
         statement.includes('_rfc311_branch_backfill') ||
         statement.startsWith('UPDATE `tasks` SET `branch_started_at`'),
     )
-  for (const statement of statements) db.run(sql.raw(statement))
 }
 
 /** Deterministic pseudo-random forest — varied owners, states, depths. */
@@ -149,7 +166,7 @@ async function collectPages(
   let facets: unknown
   for (let page = 0; page < 20; page += 1) {
     const result = await listTaskOperationsPage(
-      db,
+      db as never,
       who,
       {
         ...extraQuery,
@@ -166,9 +183,9 @@ async function collectPages(
   return { items, facets }
 }
 
-describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
+describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline', (harness) => {
   test('whole paged sequence and facets match on a random forest, per actor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await insertForest(db, buildForest(60))
     await db.insert(taskCollaborators).values({
@@ -190,14 +207,14 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
   })
 
   test('fast path answers a mid-sequence cursor identically', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await insertForest(db, buildForest(25))
     const who = actor('admin', 'admin')
-    const first = await listTaskOperationsPage(db, who, { limit: '5' })
+    const first = await listTaskOperationsPage(db as never, who, { limit: '5' })
     expect(first.kind).toBe('root')
     expect(first.nextCursor).not.toBeNull()
-    const second = await listTaskOperationsPage(db, who, {
+    const second = await listTaskOperationsPage(db as never, who, {
       limit: '5',
       cursor: first.nextCursor!,
     })
@@ -210,7 +227,53 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
   // 把全部根行物化排一遍(10 万任务库实测翻页 197ms vs 首页 30ms)。行值形式
   // `(a, id) < (?, ?)` 才落成一次有序 SEARCH。EXPLAIN 用**字面量**看不出差异
   // (字面量下反而选对索引),所以这条断言必须用 `?` 占位符。
+  // 迁移 0180 的回填只在 SQLite 上跑得动（反引号 + TEMP TABLE）。这条对拍保证上面用来种
+  // 数据的 TypeScript 复算与那份 SQL 逐行一致——「回填算法 == 快路径排序键假设」这条锁
+  // 因此仍然成立，只是从「直接跑迁移」换成了「跑迁移再和复算比」。
+  test('the shipped 0180 backfill agrees with the engine-neutral recomputation', async () => {
+    if (harness.capabilities.provider !== 'sqlite') return
+    const db = harness.db
+    await seedBase(db)
+    const forest = buildForest(60)
+    // 故意种错的 branch_started_at，只有迁移自己的回填能把它算对。
+    for (let offset = 0; offset < forest.length; offset += 100) {
+      await db.insert(tasks).values(
+        forest.slice(offset, offset + 100).map((r) => ({
+          id: r.id,
+          name: r.id,
+          workflowId: 'wf1',
+          workflowSnapshot: '{}',
+          repoPath: `/tmp/${r.id}`,
+          worktreePath: `/tmp/wt-${r.id}`,
+          baseBranch: 'main',
+          branch: `agent-workflow/${r.id}`,
+          status: r.status,
+          inputs: '{}',
+          startedAt: r.startedAt,
+          finishedAt: r.status === 'done' || r.status === 'failed' ? r.startedAt + 10 : null,
+          runningMs: 0,
+          ownerUserId: r.owner,
+          parentTaskId: r.parent ?? null,
+          invocationDepth: r.parent === undefined ? 0 : 1,
+          launchOrigin: 'manual' as const,
+          branchStartedAt: 0,
+        })),
+      )
+    }
+    for (const statement of branchBackfillStatements()) {
+      ;(db as unknown as { run(query: unknown): unknown }).run(sql.raw(statement))
+    }
+    const expected = computeForestBackfill(
+      forest.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
+    )
+    const got = await db.select({ id: tasks.id, bsa: tasks.branchStartedAt }).from(tasks)
+    expect(got.length).toBe(forest.length)
+    for (const row of got)
+      expect([row.id, row.bsa]).toEqual([row.id, expected.branchStartedAt.get(row.id)!])
+  })
+
   test('the paging boundary keeps an ordered index seek (no TEMP B-TREE)', () => {
+    if (harness.capabilities.provider !== 'sqlite') return
     const db = createInMemoryDb(MIGRATIONS)
     const plan = db
       .all<{ detail: string }>(

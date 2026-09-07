@@ -15,7 +15,7 @@ import { createDatabaseTaskLifecycleWsProjector } from '@/modules/task-execution
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
   readonly onTerminalTask?: (db: DbClient, taskId: string, to: TaskStatus) => void
@@ -34,7 +34,7 @@ export function installTaskLifecycleAfterCommitTestPump(
   callbacks: TaskLifecycleAfterCommitTestCallbacks,
 ): () => void {
   const pump = createAfterCommitEventPump({
-    persistence: createSqliteCommittedEventDeliveryPersistence(db),
+    persistence: createCommittedEventDeliveryPersistence(db),
     codecs: combineCommittedEventCodecRegistries(
       taskLifecycleCommittedEventCodec,
       collaborationCommittedEventCodec,

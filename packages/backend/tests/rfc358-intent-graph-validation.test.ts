@@ -40,8 +40,8 @@ import {
   intentResourceCatalogBinding,
 } from './helpers/intentResourceCatalogBinding'
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
-import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { createIntentSessionAndReserveTurn } from '@/modules/intent/application/session'
 import type {
   IntentContextResourceAuthorization,
@@ -502,9 +502,9 @@ describe('RFC-358 — graph repair turn', () => {
   let authorization: IntentContextResourceAuthorization
 
   beforeEach(() => {
-    persistence = composeSqliteIntentPersistence({
+    persistence = composeIntentPersistence({
       db,
-      contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+      contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
     })
     authorization = intentResourceVisibility(
       intentResourceCatalogBinding(db, actor),
@@ -665,9 +665,9 @@ describe('RFC-358 — apply-time gate and copy backfill', () => {
   let appHome: string
 
   beforeEach(() => {
-    persistence = composeSqliteIntentPersistence({
+    persistence = composeIntentPersistence({
       db,
-      contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+      contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
     })
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc358-'))
     mkdirSync(join(appHome, 'skills'), { recursive: true })

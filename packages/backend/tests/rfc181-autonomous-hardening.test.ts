@@ -65,7 +65,7 @@ function canTransitionAssignment(
 // RFC-359 W4-D19c-tail：这两条判据改指两个 provider 共用的端口
 // （`CollaborationRuntimeMechanics`）的 SQLite 实现——合一前 legacy workgroup 里另有一份同名副本，
 // 本文件是它最后的引用方。下面两个薄壳只把端口的入参对象翻回旧的位置参数形状，断言逐条原样保留。
-import { createSqliteCollaborationRuntimeMechanics } from '../src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import { createCollaborationRuntimeMechanics } from '../src/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 
 const isTaskClarifySuppressed = (
   db: DbClient,
@@ -73,7 +73,7 @@ const isTaskClarifySuppressed = (
   nodeId?: string,
   shardKey?: string | null,
 ): Promise<boolean> =>
-  createSqliteCollaborationRuntimeMechanics(db).isTaskClarifySuppressed({
+  createCollaborationRuntimeMechanics(db).isTaskClarifySuppressed({
     taskId,
     ...(nodeId === undefined ? {} : { nodeId }),
     ...(shardKey === undefined ? {} : { shardKey }),
@@ -84,11 +84,9 @@ const dismissOpenClarifyParksForAutonomous = (
   taskId: string,
   mode: string,
 ): ReturnType<
-  ReturnType<
-    typeof createSqliteCollaborationRuntimeMechanics
-  >['dismissOpenClarifyParksForAutonomous']
+  ReturnType<typeof createCollaborationRuntimeMechanics>['dismissOpenClarifyParksForAutonomous']
 > =>
-  createSqliteCollaborationRuntimeMechanics(db).dismissOpenClarifyParksForAutonomous({
+  createCollaborationRuntimeMechanics(db).dismissOpenClarifyParksForAutonomous({
     taskId,
     mode,
   })

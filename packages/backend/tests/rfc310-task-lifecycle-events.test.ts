@@ -20,7 +20,7 @@ import {
   taskLifecycleEventCatalogJson,
 } from '@/modules/task-execution/public/events'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { setTaskStatus } from '@/services/lifecycle'
 import { MIGRATIONS } from './migration-freeze'
 
@@ -113,7 +113,7 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
     )
 
     const dispatcher = createCommittedEventDispatcher({
-      persistence: createSqliteCommittedEventDeliveryPersistence(db),
+      persistence: createCommittedEventDeliveryPersistence(db),
       workerId: 'task-lifecycle-test',
       codecs: taskLifecycleCommittedEventCodec,
       consumers: createTaskLifecycleDurableConsumerDefinitions({

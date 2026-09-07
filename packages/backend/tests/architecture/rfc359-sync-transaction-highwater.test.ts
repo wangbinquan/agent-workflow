@@ -25,13 +25,17 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
 /** `<相对 src 的路径>: <同步事务调用点数>`，按路径字典序。只降不升。 */
 export const SYNC_TRANSACTION_DEBT: readonly string[] = [
-  'modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts: 1',
+  // RFC-359 W7 销账：`legacySqliteClarifyRounds.ts: 1`（澄清草稿的读改写）+
+  // `legacySqliteTaskQuestions.ts: 3`（改派的三处 CAS/读改写）+
+  // `sqliteCollaborationWorkgroupClarify.ts: 1`（自治遣散）—— 三个文件是
+  // `CollaborationRouteOperations` / `CollaborationRuntimeMechanics` 两对适配器合一时被
+  // 转发到的正典实现，写事务改走 `databaseSessionFor(db).transaction(...)` + 中立的
+  // `setNodeRunStatusTx`，于是 PG 侧那两份共 4016 行的原生重写整体退役。
   'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts: 1',
-  'modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts: 3',
-  'modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts: 1',
-  'modules/collaboration/infrastructure/sqliteReviewRepairParticipant.ts: 2',
+  // RFC-359 W7 销账：`sqliteReviewRepairParticipant.ts: 2` —— 它与 PG 那份合成了中立的
+  // `reviewRepairParticipant.ts`，两处 `dbTxSync` 里一处改走 `databaseSessionFor(db).transaction`
+  // （读改写序列），一处直接去掉（单语句 CAS 本就原子，理由写在该文件头注释）。
   'modules/intent/infrastructure/sqliteIntentApplyOperations.ts: 9',
-  'modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts: 2',
   'modules/resource-catalog/infrastructure/legacy/agent.ts: 5',
   'modules/resource-catalog/infrastructure/legacy/importRefs.ts: 1',
   'modules/resource-catalog/infrastructure/legacy/workflow.ts: 2',
@@ -44,15 +48,19 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts: 1',
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts: 1',
   'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 5',
-  'modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts: 5',
-  'platform/events/committed/sqliteStore.ts: 2',
-  'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 4',
+  // RFC-359 W7 销账：`sqliteTerminalMaintenance.ts: 5` + `systemWorkspaceGc.ts: 1` +
+  // `taskArchive.ts: 1` + `taskDelete.ts: 1` —— 终态维护认领的三条消费路径（删除 / 归档 /
+  // workspace-GC）迁到 `databaseSessionFor(db).transaction(...)` + 中立参与者
+  // `terminalMaintenanceClaim.ts`，于是 519 行的同步 store 与它私有的端口文件整体退役。
+  // RFC-359 W7 销账：`legacyResourcePackageBundleApply.ts: 4` —— 资源包 apply 的四笔
+  // **journal 事务**（claim / recordArtifact / settleFailed / 收敛 CAS）改走
+  // `databaseSessionFor(db).transaction`。它们本来就没有参与者按 `DbTxSync` 定型（唯一的
+  // `provider.claimInTx` 走本文件既有的 `sqliteMembers` 窄化，与大事务里的
+  // `revalidateInTx` / `finalizeInTx` 同一形态），级联只有一层：`recordArtifact` 的契约
+  // 收成 `Promise<void>`，生产 prestage 链的三处调用点补 await（I14 record-before-act）。
   'platform/persistence/sqlite/maintenanceRunStore.ts: 4',
-  'platform/persistence/sqlite/systemWorkspaceGc.ts: 1',
   'platform/persistence/sqlite/taskLifecycle.ts: 4',
   'services/task.ts: 3',
-  'services/taskArchive.ts: 1',
-  'services/taskDelete.ts: 1',
 ]
 
 function scan(): string[] {

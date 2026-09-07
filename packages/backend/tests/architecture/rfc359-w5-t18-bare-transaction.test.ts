@@ -139,21 +139,14 @@ function scan(): string[] {
  * 而不是豁免——把它放进白名单等于给「再开一套并行事务抽象」发许可证。
  */
 export const BARE_TRANSACTION_DEBT: readonly string[] = [
-  'modules/collaboration/infrastructure/postgresqlClarifyDirectiveStore.ts: 1',
-  'modules/collaboration/infrastructure/postgresqlClarifyRepairParticipant.ts: 1',
-  'modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts: 1',
-  'modules/collaboration/infrastructure/postgresqlReviewRepairParticipant.ts: 1',
   'modules/intent/infrastructure/intentSqlPersistence.ts: 27',
   'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 2',
-  'modules/intent/infrastructure/postgresqlIntentSqlProgramRunner.ts: 2',
   'modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts: 1',
   'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts: 1',
   'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts: 1',
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts: 1',
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts: 3',
   'modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts: 1',
-  'modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts: 1',
-  'platform/events/committed/postgresqlPersistence.ts: 1',
   'platform/persistence/postgresqlMaintenanceRunStore.ts: 4',
   'platform/persistence/postgresqlResourcePackageAtomicApply.ts: 2',
 ]

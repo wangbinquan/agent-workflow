@@ -2,8 +2,32 @@
 // Mirrors design/design.md §3. Any change here requires:
 //   1. `bun run drizzle-kit generate` to produce a new migration in db/migrations/
 //   2. Updating the corresponding zod schemas in packages/shared/src/schemas/
+//   3. `bun run db:rfc349-postgresql-schema` to regenerate the PostgreSQL baseline
+//      (`db/postgresql-migrations/0000_rfc349_baseline.sql` + `meta/_journal.json`).
+//      Skip it and `verifyPostgresqlMigrationHistory` kills EVERY PostgreSQL test at
+//      `beforeAll` with `postgresql-migration-history-drift`.
 //
 // All `text` columns holding JSON are documented in comments; runtime parses with zod.
+//
+// -----------------------------------------------------------------------------
+// RFC-359 W7 —— 这里的声明是 **PostgreSQL 保护面的唯一来源**
+// -----------------------------------------------------------------------------
+// 两个 provider 的 schema 来源根本不同：SQLite 的表 / 索引 / CHECK / 触发器来自
+// `db/migrations/*.sql`（手写迁移 DDL）；PostgreSQL 的来自本文件，经
+// `buildLogicalSchemaContract()` 归一成 provider-中立契约，再由
+// `platform/persistence/postgresqlSchema.ts` 生成 DDL——**迁移 SQL 一行都不重放**。
+//
+// 于是「只写在迁移里的约束在 PG 上根本不存在」是一条默认成立、且不声不响的漏洞：两个引擎
+// 各自的测试都能全绿。W7 之前它实际有 149 条，其中包括「PG 上能建出同名仓库组」这种
+// 直接后果。收敛后本文件里多了 125 条 `check(...)`、9 条 `index(...)`、5 条唯一性声明，
+// 全部与迁移 DDL 逐字同形。
+//
+// **所以：往迁移里加约束的同时必须在这里加对应声明**，否则那条保护只有一半引擎有。
+// 对账守卫是 `tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts`
+// （只降不升），行为验收是 `tests/rfc359-w7-schema-uniqueness-parity.test.ts`。
+// 方言差异由 `postgresqlSchema.ts` 的 `localExpression` 一处承担（`NOT GLOB '*[^0-9a-f]*'`
+// → `!~ '[^0-9a-f]'`、boolean 列的 `IN (0,1)` → `IN (FALSE, TRUE)`、`json_valid` 等 SQLite
+// 函数在 `agent_workflow` schema 里有同名 shim）——不要另起一层 SQL 翻译。
 
 import { sql } from 'drizzle-orm'
 import { TASK_CATALOG_VISIBILITIES, TASK_LAUNCH_ORIGINS } from '@agent-workflow/shared'
@@ -452,6 +476,11 @@ export const skillOperations = sqliteTable(
     activeUq: uniqueIndex('uq_skill_operations_active')
       .on(t.skillId)
       .where(sql`${t.active} = 1`),
+    kindEnum: check(
+      'skill_operations_kind_enum',
+      sql`${t.kind} IN ('reserve', 'migrate', 'delete', 'version-write')`,
+    ),
+    activeBoolean: check('skill_operations_active_boolean', sql`${t.active} IN (0, 1)`),
   }),
 )
 
@@ -472,27 +501,40 @@ export const skillOperationLocks = sqliteTable('skill_operation_locks', {
 // -----------------------------------------------------------------------------
 // workflows — DB is source of truth; YAML import/export is a transport, not source.
 // -----------------------------------------------------------------------------
-export const workflows = sqliteTable('workflows', {
-  id: text('id').primaryKey(), // ULID
-  name: text('name').notNull(), // not unique; YAML import collisions resolved via dialog
-  description: text('description').notNull().default(''),
-  definition: text('definition').notNull(), // JSON: { $schema_version, nodes, edges, inputs, outputs }
-  version: integer('version').notNull().default(1), // bumps on each PUT
-  // RFC-099 ACL (see agents table comment).
-  ownerUserId: text('owner_user_id'),
-  visibility: text('visibility', { enum: ['private', 'public'] })
-    .notNull()
-    .default('public'), // legacy storage fallback; not the product create default
-  aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
-  builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 (see agents)
-  schemaVersion: integer('schema_version').notNull().default(1),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-})
+export const workflows = sqliteTable(
+  'workflows',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(), // not unique; YAML import collisions resolved via dialog
+    description: text('description').notNull().default(''),
+    definition: text('definition').notNull(), // JSON: { $schema_version, nodes, edges, inputs, outputs }
+    version: integer('version').notNull().default(1), // bumps on each PUT
+    // RFC-099 ACL (see agents table comment).
+    ownerUserId: text('owner_user_id'),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'), // legacy storage fallback; not the product create default
+    aclRevision: integer('acl_revision').notNull().default(0), // RFC-170 §8 aclRevision CAS
+    builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false), // RFC-104 (see agents)
+    schemaVersion: integer('schema_version').notNull().default(1),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    /**
+     * RFC-359 W7 —— 内建工作流的重名闸（迁移 0049 手写的部分唯一索引）。
+     * drizzle 一直没声明，PG 上因此缺席：seed 重跑能造出两条同名 builtin 工作流。
+     * 声明与迁移逐字同形（`builtin` 是 boolean 列，PG 投影会把 `= 1` 渲染成 `= TRUE`）。
+     */
+    builtinNameUq: uniqueIndex('idx_workflows_builtin_name')
+      .on(t.name)
+      .where(sql`${t.builtin} = 1`),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // RFC-099/RFC-164 resource_grants — one generic per-user grant table for all
@@ -554,6 +596,7 @@ export const resourceGrants = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.resourceType, t.resourceId, t.userId] }),
     userIdx: index('idx_resource_grants_user').on(t.userId),
+    levelEnum: check('resource_grants_level_enum', sql`${t.level} IN ('read', 'write')`),
   }),
 )
 
@@ -617,6 +660,10 @@ export const workgroups = sqliteTable(
     ownerNameUq: uniqueIndex('workgroups_owner_name_unique').on(
       sql`COALESCE(${t.ownerUserId}, '')`,
       t.name,
+    ),
+    outputContractEnum: check(
+      'workgroups_output_contract_enum',
+      sql`${t.outputContract} IN ('files', 'discussion')`,
     ),
   }),
 )
@@ -880,21 +927,33 @@ export const cachedRepos = sqliteTable(
 // repo_groups / repo_group_nodes — RFC-249. 仓库组是一棵显式目录树；repo/group
 // 是目录节点上的可选 attachment，root path=''，纯目录也会持久化。
 // -----------------------------------------------------------------------------
-export const repoGroups = sqliteTable('repo_groups', {
-  id: text('id').primaryKey(), // ULID
-  name: text('name').notNull(), // migration 0131 建了 lower(name) 唯一索引
-  description: text('description').notNull().default(''),
-  /** PUT 时自增（与 workflows 同款）。启动时快照进 task_repos，不做漂移提示（D8）。 */
-  version: integer('version').notNull().default(1),
-  /**
-   * 审计展示用，**不是** ACL owner——仓库组与 cached_repos 同类，不进 RFC-099
-   * 的 owner + visibility + grants 体系，能力只由 `repos:*` 权限点治理（D5）。
-   */
-  createdByUserId: text('created_by_user_id'),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-  schemaVersion: integer('schema_version').notNull().default(1),
-})
+export const repoGroups = sqliteTable(
+  'repo_groups',
+  {
+    id: text('id').primaryKey(), // ULID
+    name: text('name').notNull(), // migration 0131 建了 lower(name) 唯一索引
+    description: text('description').notNull().default(''),
+    /** PUT 时自增（与 workflows 同款）。启动时快照进 task_repos，不做漂移提示（D8）。 */
+    version: integer('version').notNull().default(1),
+    /**
+     * 审计展示用，**不是** ACL owner——仓库组与 cached_repos 同类，不进 RFC-099
+     * 的 owner + visibility + grants 体系，能力只由 `repos:*` 权限点治理（D5）。
+     */
+    createdByUserId: text('created_by_user_id'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    schemaVersion: integer('schema_version').notNull().default(1),
+  },
+  (t) => ({
+    /**
+     * RFC-359 W7 —— 大小写不敏感的组名唯一性。迁移 0131 手写了
+     * `CREATE UNIQUE INDEX idx_repo_groups_name_ci ON repo_groups (lower(name))`，
+     * drizzle 侧一直没声明，于是 **PostgreSQL 上根本建不出这个索引**——同一个名字
+     * 换个大小写就能再建一个仓库组。声明与迁移逐字同形。
+     */
+    nameCiUq: uniqueIndex('idx_repo_groups_name_ci').on(sql`lower(${t.name})`),
+  }),
+)
 
 export const repoGroupNodes = sqliteTable(
   'repo_group_nodes',
@@ -925,6 +984,19 @@ export const repoGroupNodes = sqliteTable(
     pk: primaryKey({ columns: [t.groupId, t.path] }),
     cachedRepoIdx: index('idx_rgn_cached_repo').on(t.cachedRepoId),
     childGroupIdx: index('idx_rgn_child_group').on(t.childGroupId),
+    /**
+     * RFC-359 W7 —— 组内路径的大小写不敏感唯一性（迁移 0134 手写，drizzle 一直没声明，
+     * PG 上因此缺席：同一目录换个大小写能在同一组里挂两次）。声明与迁移逐字同形。
+     */
+    pathCiUq: uniqueIndex('idx_rgn_path_ci').on(t.groupId, sql`lower(${t.path})`),
+    attachmentKindEnum: check(
+      'repo_group_nodes_attachment_kind_enum',
+      sql`${t.attachmentKind} IS NULL OR ${t.attachmentKind} IN ('repo','group')`,
+    ),
+    attachmentKindShape: check(
+      'repo_group_nodes_attachment_kind_shape',
+      sql`(${t.attachmentKind} IS NULL AND ${t.cachedRepoId} IS NULL AND ${t.childGroupId} IS NULL AND ${t.ref} = '' AND ${t.subdir} = '' AND ${t.readonly} = 0) OR (${t.attachmentKind} = 'repo' AND ${t.cachedRepoId} IS NOT NULL AND ${t.childGroupId} IS NULL) OR (${t.attachmentKind} = 'group' AND ${t.childGroupId} IS NOT NULL AND ${t.cachedRepoId} IS NULL AND ${t.ref} = '' AND ${t.subdir} = '')`,
+    ),
   }),
 )
 
@@ -1249,6 +1321,39 @@ export const tasks = sqliteTable(
       t.sourceTerminationBinding,
       t.sourceTerminationLaunchRev,
     ),
+    // RFC-359 W7 —— 下面五条在迁移里手写、drizzle 一直没声明，于是 PostgreSQL 上
+    // 任务树 / 工作组这几类查询**一条索引都没有**，只能全表扫。声明与迁移逐字同形。
+    rootMissingIdx: index('idx_tasks_root_missing')
+      .on(t.id)
+      .where(sql`${t.rootTaskId} is null`),
+    rootStartedIdx: index('idx_tasks_root_started').on(t.rootTaskId, t.startedAt),
+    statusParentFinishedIdx: index('idx_tasks_status_parent_finished').on(
+      t.status,
+      t.parentTaskId,
+      t.finishedAt,
+    ),
+    statusWorkgroupIdx: index('idx_tasks_status_workgroup').on(t.status, t.workgroupId),
+    workgroupIdx: index('idx_tasks_workgroup').on(t.workgroupId),
+    workspacePruningAtShape: check(
+      'tasks_workspace_pruning_at_shape',
+      sql`${t.workspacePruneCause} IS NULL OR ( ${t.workspacePruneCause} = 'webhook-terminal' AND ${t.workspacePruningAt} IS NOT NULL )`,
+    ),
+    sourceTerminationLaunchRevNonnegative: check(
+      'tasks_source_termination_launch_rev_nonnegative',
+      sql`${t.sourceTerminationLaunchRev} IS NULL OR ${t.sourceTerminationLaunchRev} >= 0`,
+    ),
+    sourceTerminationFenceEnum: check(
+      'tasks_source_termination_fence_enum',
+      sql`${t.sourceTerminationFence} IS NULL OR ${t.sourceTerminationFence} IN ('closed','merged')`,
+    ),
+    sourceTerminationEffectRevPositive: check(
+      'tasks_source_termination_effect_rev_positive',
+      sql`${t.sourceTerminationEffectRev} IS NULL OR ${t.sourceTerminationEffectRev} >= 1`,
+    ),
+    launchOriginEnum: check(
+      'tasks_launch_origin_enum',
+      sql`${t.launchOrigin} IN ('manual', 'scheduled', 'webhook', 'api', 'event')`,
+    ),
   }),
 )
 
@@ -1382,6 +1487,10 @@ export const webhookTriggers = sqliteTable(
   (t) => ({
     endpointEnabledIdx: index('idx_webhook_triggers_endpoint_enabled').on(t.endpointId, t.enabled),
     ownerIdx: index('idx_webhook_triggers_owner').on(t.ownerUserId),
+    cancelOnMrTerminalBoolean: check(
+      'webhook_triggers_cancel_on_mr_terminal_boolean',
+      sql`${t.cancelOnMrTerminal} IN (0, 1)`,
+    ),
   }),
 )
 
@@ -1415,8 +1524,7 @@ export const webhookDeliveries = sqliteTable(
     bodyJson: text('body_json'), // ≤256KiB 截断入库；保留期后置空（F-12 GC）
   },
   (t) => ({
-    // 去重 partial unique index（0138）与 body-retention partial index（0139，
-    // WHERE body_json IS NOT NULL）在迁移手写；这里只声明普通查询索引。
+    // 去重 partial unique index（0138）在迁移手写。
     // RFC-261 索引策略（10 万投递/天基准）：每个过滤维度 × received_at 组合，
     // 过滤前缀 + 时间序游走 + LIMIT 早停；单列 status 索引已被组合索引取代。
     // RFC-359 W4-D2：这两条部分唯一索引此前只在 SQLite 迁移（0157）里存在、没进 drizzle 声明，PG 投影因此没有它们——
@@ -1434,6 +1542,21 @@ export const webhookDeliveries = sqliteTable(
     statusTimeIdx: index('idx_webhook_deliveries_status_time').on(t.status, t.receivedAt),
     eventTimeIdx: index('idx_webhook_deliveries_event_time').on(t.eventType, t.receivedAt),
     repoTimeIdx: index('idx_webhook_deliveries_repo_time').on(t.repoPath, t.receivedAt),
+    /**
+     * RFC-359 W7 —— body 保留期回收的驱动索引（迁移 0139 手写的部分索引）。
+     * drizzle 一直没声明，PG 上因此缺席：body 回收 sweep 只能全表扫投递表。
+     */
+    bodyRetentionIdx: index('idx_webhook_deliveries_body_retention')
+      .on(t.receivedAt)
+      .where(sql`${t.bodyJson} IS NOT NULL`),
+    mrStreamRevisionPositive: check(
+      'webhook_deliveries_mr_stream_revision_positive',
+      sql`${t.mrStreamRevision} IS NULL OR ${t.mrStreamRevision} >= 1`,
+    ),
+    mrStateAfterEnum: check(
+      'webhook_deliveries_mr_state_after_enum',
+      sql`${t.mrStateAfter} IS NULL OR ${t.mrStateAfter} IN ('open','closed','merged')`,
+    ),
   }),
 )
 
@@ -1515,6 +1638,15 @@ export const webhookMrStreamStates = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.endpointId, t.streamKey] }),
     endpointStateIdx: index('idx_webhook_mr_stream_endpoint_state').on(t.endpointId, t.state),
+    stateEnum: check(
+      'webhook_mr_stream_states_state_enum',
+      sql`${t.state} IN ('open','closed','merged')`,
+    ),
+    revisionPositive: check('webhook_mr_stream_states_revision_positive', sql`${t.revision} >= 1`),
+    lastTerminalRevisionPositive: check(
+      'webhook_mr_stream_states_last_terminal_revision_positive',
+      sql`${t.lastTerminalRevision} IS NULL OR ${t.lastTerminalRevision} >= 1`,
+    ),
   }),
 )
 
@@ -1527,7 +1659,11 @@ export const webhookMrLaunchGuards = sqliteTable(
     binding: text('binding').notNull(),
     launchRevision: integer('launch_revision').notNull(),
     deliveryId: text('delivery_id').notNull(),
-    fireId: text('fire_id').notNull(),
+    /**
+     * RFC-359 W7 —— 迁移 0157 写的是列级 `fire_id text NOT NULL UNIQUE`；drizzle 侧
+     * 没有 `.unique()`，于是 PG 上同一次 fire 能预留出两条 guard 行。
+     */
+    fireId: text('fire_id').notNull().unique(),
     triggerId: text('trigger_id'),
     triggerNameSnapshot: text('trigger_name_snapshot').notNull(),
     taskId: text('task_id'),
@@ -1555,6 +1691,14 @@ export const webhookMrLaunchGuards = sqliteTable(
     ),
     taskIdx: index('idx_webhook_mr_guard_task').on(t.taskId),
     statusIdx: index('idx_webhook_mr_guard_status').on(t.status, t.updatedAt),
+    launchRevisionNonnegative: check(
+      'webhook_mr_launch_guards_launch_revision_nonnegative',
+      sql`${t.launchRevision} >= 0`,
+    ),
+    statusEnum: check(
+      'webhook_mr_launch_guards_status_enum',
+      sql`${t.status} IN ( 'reserved','launching','revoking-terminal','task-committed', 'launch-settled','aborted-terminal','failed' )`,
+    ),
   }),
 )
 
@@ -1590,6 +1734,26 @@ export const webhookMrControlEffects = sqliteTable(
       t.revision,
     ),
     dueIdx: index('idx_webhook_mr_effect_due').on(t.status, t.nextAttemptAt),
+    revisionPositive: check(
+      'webhook_mr_control_effects_revision_positive',
+      sql`${t.revision} >= 1`,
+    ),
+    observedEventTypeEnum: check(
+      'webhook_mr_control_effects_observed_event_type_enum',
+      sql`${t.observedEventType} IN ('mr_opened','mr_closed','mr_merged')`,
+    ),
+    kindEnum: check(
+      'webhook_mr_control_effects_kind_enum',
+      sql`${t.kind} IN ('fence-closed','fence-merged','clear-closed')`,
+    ),
+    statusEnum: check(
+      'webhook_mr_control_effects_status_enum',
+      sql`${t.status} IN ('pending','leased','waiting-launches','retryable','succeeded')`,
+    ),
+    attemptCountNonnegative: check(
+      'webhook_mr_control_effects_attempt_count_nonnegative',
+      sql`${t.attemptCount} >= 0`,
+    ),
   }),
 )
 
@@ -1614,6 +1778,18 @@ export const webhookMrControlTargets = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.effectId, t.taskId] }),
     taskIdx: index('idx_webhook_mr_target_task').on(t.taskId),
+    fenceOutcomeEnum: check(
+      'webhook_mr_control_targets_fence_outcome_enum',
+      sql`${t.fenceOutcome} IN ('fenced-closed','fenced-merged','cleared-closed','unchanged')`,
+    ),
+    cancelOutcomeEnum: check(
+      'webhook_mr_control_targets_cancel_outcome_enum',
+      sql`${t.cancelOutcome} IN ('canceled','already-terminal','not-applicable')`,
+    ),
+    releaseOutcomeEnum: check(
+      'webhook_mr_control_targets_release_outcome_enum',
+      sql`${t.releaseOutcome} IN ('pending','no-active-owner','released','unreaped')`,
+    ),
   }),
 )
 
@@ -1633,30 +1809,55 @@ export const webhookMrControlTargets = sqliteTable(
 // the webhook ingress secret, so disaster recovery gains one line ("re-enter
 // the code-host tokens"), not a new mechanism.
 // -----------------------------------------------------------------------------
-export const codeHostConnections = sqliteTable('code_host_connections', {
-  provider: text('provider', { enum: ['gitlab', 'github'] }).primaryKey(),
-  /** Normalized API root, no trailing slash (`https://host/api/v4`). */
-  baseUrl: text('base_url').notNull(),
-  /** GitLab-only normalized repository URL prefixes; JSON string array. */
-  repositoryUrlPrefixesJson: text('repository_url_prefixes_json').notNull().default('[]'),
-  /** RFC-321 typed SSH authority/path -> HTTP base mappings; JSON V1 array. */
-  transportMappingsJson: text('transport_mappings_json').notNull().default('[]'),
-  /** Opaque logical-connection generation; delete + recreate must mint a new value. */
-  connectionGeneration: text('connection_generation')
-    .notNull()
-    .default(sql`(lower(hex(randomblob(16))))`),
-  /** RFC-277: true by default; only a GitLab connection may opt out. */
-  rejectUnauthorized: integer('reject_unauthorized', { mode: 'boolean' }).notNull().default(true),
-  tokenEnc: text('token_enc').notNull(), // secretBox.seal(token)
-  /** Last 4 chars — the ONLY part any read path ever returns. */
-  tokenHint: text('token_hint').notNull(),
-  /** Last "test connection" result (JSON). Display only; never an admission input. */
-  lastTestJson: text('last_test_json'),
-  updatedAt: integer('updated_at')
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedBy: text('updated_by'), // users.id (audit)
-})
+export const codeHostConnections = sqliteTable(
+  'code_host_connections',
+  {
+    provider: text('provider', { enum: ['gitlab', 'github'] }).primaryKey(),
+    /** Normalized API root, no trailing slash (`https://host/api/v4`). */
+    baseUrl: text('base_url').notNull(),
+    /** GitLab-only normalized repository URL prefixes; JSON string array. */
+    repositoryUrlPrefixesJson: text('repository_url_prefixes_json').notNull().default('[]'),
+    /** RFC-321 typed SSH authority/path -> HTTP base mappings; JSON V1 array. */
+    transportMappingsJson: text('transport_mappings_json').notNull().default('[]'),
+    /** Opaque logical-connection generation; delete + recreate must mint a new value. */
+    connectionGeneration: text('connection_generation')
+      .notNull()
+      .default(sql`(lower(hex(randomblob(16))))`),
+    /** RFC-277: true by default; only a GitLab connection may opt out. */
+    rejectUnauthorized: integer('reject_unauthorized', { mode: 'boolean' }).notNull().default(true),
+    tokenEnc: text('token_enc').notNull(), // secretBox.seal(token)
+    /** Last 4 chars — the ONLY part any read path ever returns. */
+    tokenHint: text('token_hint').notNull(),
+    /** Last "test connection" result (JSON). Display only; never an admission input. */
+    lastTestJson: text('last_test_json'),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedBy: text('updated_by'), // users.id (audit)
+  },
+  (t) => ({
+    providerEnum: check(
+      'code_host_connections_provider_enum',
+      sql`${t.provider} IN ('gitlab', 'github')`,
+    ),
+    repositoryUrlPrefixesJsonJsonValid: check(
+      'code_host_connections_repository_url_prefixes_json_json_valid',
+      sql`json_valid(${t.repositoryUrlPrefixesJson})`,
+    ),
+    transportMappingsJsonJsonValid: check(
+      'code_host_connections_transport_mappings_json_json_valid',
+      sql`json_valid(${t.transportMappingsJson})`,
+    ),
+    connectionGenerationLength: check(
+      'code_host_connections_connection_generation_length',
+      sql`length(${t.connectionGeneration}) BETWEEN 1 AND 128`,
+    ),
+    rejectUnauthorizedBoolean: check(
+      'code_host_connections_reject_unauthorized_boolean',
+      sql`${t.rejectUnauthorized} IN (0, 1)`,
+    ),
+  }),
+)
 
 // RFC-321 source-control-owned projection of the administrator connection.
 // The ciphertext is purpose-limited to platform-owned Git publication and is
@@ -1685,6 +1886,30 @@ export const repositoryTransportConnections = sqliteTable(
     generationLength: check(
       'repository_transport_connections_generation_length',
       sql`length(${t.connectionGeneration}) BETWEEN 1 AND 128`,
+    ),
+    providerEnum: check(
+      'repository_transport_connections_provider_enum',
+      sql`${t.provider} IN ('gitlab', 'github')`,
+    ),
+    endpointBindingDigestLength: check(
+      'repository_transport_connections_endpoint_binding_digest_length',
+      sql`length(${t.endpointBindingDigest}) = 64 AND ${t.endpointBindingDigest} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    rejectUnauthorizedBoolean: check(
+      'repository_transport_connections_reject_unauthorized_boolean',
+      sql`${t.rejectUnauthorized} IN (0, 1)`,
+    ),
+    transportMappingsJsonJsonValid: check(
+      'repository_transport_connections_transport_mappings_json_json_valid',
+      sql`json_valid(${t.transportMappingsJson})`,
+    ),
+    allowedHttpBaseUrlsJsonJsonValid: check(
+      'repository_transport_connections_allowed_http_base_urls_json_json_valid',
+      sql`json_valid(${t.allowedHttpBaseUrlsJson})`,
+    ),
+    credentialRevisionPositive: check(
+      'repository_transport_connections_credential_revision_positive',
+      sql`${t.credentialRevision} > 0`,
     ),
   }),
 )
@@ -1790,7 +2015,17 @@ export const taskSpaceNodes = sqliteTable(
     nodePath: text('node_path').notNull(),
     schemaVersion: integer('schema_version').notNull().default(1),
   },
-  (t) => ({ pk: primaryKey({ columns: [t.taskId, t.nodePath] }) }),
+  (t) => ({
+    pk: primaryKey({ columns: [t.taskId, t.nodePath] }),
+    /**
+     * RFC-359 W7 —— 任务空间目录的大小写不敏感唯一性（迁移 0135 手写，drizzle 一直
+     * 没声明，PG 上因此缺席）。声明与迁移逐字同形。
+     */
+    nodePathCiUq: uniqueIndex('idx_task_space_nodes_path_ci').on(
+      t.taskId,
+      sql`lower(${t.nodePath})`,
+    ),
+  }),
 )
 
 // -----------------------------------------------------------------------------
@@ -2217,6 +2452,10 @@ export const taskExecutionOwners = sqliteTable(
     stateLeaseIdx: index('idx_task_execution_owners_state_lease').on(t.state, t.leaseUntil),
     epochPositive: check('task_execution_owners_epoch_positive', sql`${t.epoch} > 0`),
     revisionPositive: check('task_execution_owners_revision_positive', sql`${t.revision} > 0`),
+    stateEnum: check(
+      'task_execution_owners_state_enum',
+      sql`${t.state} IN ('claimed','revoked','released','recovery-required')`,
+    ),
   }),
 )
 
@@ -2271,6 +2510,34 @@ export const taskExecutionIntents = sqliteTable(
     generationNonNegative: check(
       'task_execution_intents_generation_nonnegative',
       sql`${t.operationGeneration} >= 0`,
+    ),
+    kindEnum: check(
+      'task_execution_intents_kind_enum',
+      sql`${t.kind} IN ('launch','resume','retry-repository-preparation','retry-node','sync-workflow','gate-continuation','recovery')`,
+    ),
+    stateEnum: check(
+      'task_execution_intents_state_enum',
+      sql`${t.state} IN ('pending','claimed','completed','canceled','failed')`,
+    ),
+    sourceEnum: check(
+      'task_execution_intents_source_enum',
+      sql`${t.source} IN ('rest','mcp','scheduler','auto','boot','internal')`,
+    ),
+    payloadJsonJsonValid: check(
+      'task_execution_intents_payload_json_json_valid',
+      sql`json_valid(${t.payloadJson})`,
+    ),
+    slotPathJsonJsonValid: check(
+      'task_execution_intents_slot_path_json_json_valid',
+      sql`json_valid(${t.slotPathJson})`,
+    ),
+    authorizationScopeJsonJsonValid: check(
+      'task_execution_intents_authorization_scope_json_json_valid',
+      sql`${t.authorizationScopeJson} IS NULL OR json_valid(${t.authorizationScopeJson})`,
+    ),
+    claimedEpochPositive: check(
+      'task_execution_intents_claimed_epoch_positive',
+      sql`${t.claimedEpoch} IS NULL OR ${t.claimedEpoch} > 0`,
     ),
   }),
 )
@@ -2329,6 +2596,26 @@ export const taskExecutionEffects = sqliteTable(
     generationNonNegative: check(
       'task_execution_effects_generation_nonnegative',
       sql`${t.operationGeneration} >= 0`,
+    ),
+    kindEnum: check(
+      'task_execution_effects_kind_enum',
+      sql`${t.kind} IN ('workspace-prepare','workspace-rollback','isolation-create','isolation-merge','repository','process','workspace-cleanup','code-host-mutation','outbound-mutation')`,
+    ),
+    slotPathJsonJsonValid: check(
+      'task_execution_effects_slot_path_json_json_valid',
+      sql`json_valid(${t.slotPathJson})`,
+    ),
+    stateEnum: check(
+      'task_execution_effects_state_enum',
+      sql`${t.state} IN ('open','succeeded','failed','outcome-unknown')`,
+    ),
+    lastAttemptNoNonnegative: check(
+      'task_execution_effects_last_attempt_no_nonnegative',
+      sql`${t.lastAttemptNo} >= 0`,
+    ),
+    receiptJsonJsonValid: check(
+      'task_execution_effects_receipt_json_json_valid',
+      sql`${t.receiptJson} IS NULL OR json_valid(${t.receiptJson})`,
     ),
   }),
 )
@@ -2389,6 +2676,26 @@ export const taskExecutionEffectAttempts = sqliteTable(
       .where(sql`${t.state} IN ('prepared', 'acting', 'recovery-required')`),
     attemptPositive: check('task_execution_attempts_no_positive', sql`${t.attemptNo} > 0`),
     epochPositive: check('task_execution_attempts_epoch_positive', sql`${t.epoch} > 0`),
+    stateEnum: check(
+      'task_execution_effect_attempts_state_enum',
+      sql`${t.state} IN ('prepared','acting','succeeded','failed-not-applied','retry-authorized','recovery-required','outcome-unknown')`,
+    ),
+    recoveryDescriptorJsonJsonValid: check(
+      'task_execution_effect_attempts_recovery_descriptor_json_json_valid',
+      sql`${t.recoveryDescriptorJson} IS NULL OR json_valid(${t.recoveryDescriptorJson})`,
+    ),
+    applicationEvidenceEnum: check(
+      'task_execution_effect_attempts_application_evidence_enum',
+      sql`${t.applicationEvidence} IS NULL OR ${t.applicationEvidence} IN ('applied','definitely-not-applied','ambiguous')`,
+    ),
+    retryAuthorityEnum: check(
+      'task_execution_effect_attempts_retry_authority_enum',
+      sql`${t.retryAuthority} IN ('none','probe','convergent','transport-policy')`,
+    ),
+    receiptJsonJsonValid: check(
+      'task_execution_effect_attempts_receipt_json_json_valid',
+      sql`${t.receiptJson} IS NULL OR json_valid(${t.receiptJson})`,
+    ),
   }),
 )
 
@@ -2444,6 +2751,18 @@ export const taskExecutionMaintenanceClaims = sqliteTable(
   (t) => ({
     stateUpdatedIdx: index('idx_task_execution_maintenance_state_updated').on(t.state, t.updatedAt),
     revisionPositive: check('task_execution_maintenance_revision_positive', sql`${t.revision} > 0`),
+    operationEnum: check(
+      'task_execution_maintenance_claims_operation_enum',
+      sql`${t.operation} IN ('archive','delete','retention','workspace-gc','repair-metadata')`,
+    ),
+    stateEnum: check(
+      'task_execution_maintenance_claims_state_enum',
+      sql`${t.state} IN ('claimed','io-complete','db-finalized','cleanup-pending','completed','recovery-required')`,
+    ),
+    cleanupPlanJsonJsonValid: check(
+      'task_execution_maintenance_claims_cleanup_plan_json_json_valid',
+      sql`json_valid(${t.cleanupPlanJson})`,
+    ),
   }),
 )
 
@@ -2526,19 +2845,49 @@ export const taskExecutionLineageOperationRecords = sqliteTable(
       'task_execution_lineage_revision_positive',
       sql`${t.recordRevision} > 0`,
     ),
+    /**
+     * RFC-359 W7 —— 迁移那份多写了 `>= 0` 两个合取项，声明少了，于是 **PostgreSQL 上
+     * 这两个代数（generation）字段可以写成负数**，SQLite 上不行。补齐，与迁移逐字同形。
+     */
     discriminatedShape: check(
       'task_execution_lineage_record_shape',
       sql`(
         (${t.recordKind} = 'generation-watermark'
           AND ${t.highestSettledGeneration} IS NOT NULL
+          AND ${t.highestSettledGeneration} >= 0
           AND ${t.operationGeneration} IS NULL
           AND ${t.decisionState} IS NULL)
         OR
         (${t.recordKind} = 'replay-decision'
           AND ${t.operationGeneration} IS NOT NULL
+          AND ${t.operationGeneration} >= 0
           AND ${t.highestSettledGeneration} IS NULL
           AND ${t.decisionState} IS NOT NULL)
       )`,
+    ),
+    recordKindEnum: check(
+      'task_execution_lineage_operation_records_record_kind_enum',
+      sql`${t.recordKind} IN ('generation-watermark','replay-decision')`,
+    ),
+    slotPathJsonJsonValid: check(
+      'task_execution_lineage_operation_records_slot_path_json_json_valid',
+      sql`json_valid(${t.slotPathJson})`,
+    ),
+    providerCoordinateJsonJsonValid: check(
+      'task_execution_lineage_operation_records_provider_coordinate_json_json_valid',
+      sql`${t.providerCoordinateJson} IS NULL OR json_valid(${t.providerCoordinateJson})`,
+    ),
+    decisionStateEnum: check(
+      'task_execution_lineage_operation_records_decision_state_enum',
+      sql`${t.decisionState} IS NULL OR ${t.decisionState} IN ('requires-actor','actor-replay-authorized','actor-replay-authorized-suspended','consumed')`,
+    ),
+    authorizationScopeJsonJsonValid: check(
+      'task_execution_lineage_operation_records_authorization_scope_json_json_valid',
+      sql`${t.authorizationScopeJson} IS NULL OR json_valid(${t.authorizationScopeJson})`,
+    ),
+    compactedBoolean: check(
+      'task_execution_lineage_operation_records_compacted_boolean',
+      sql`${t.compacted} IN (0,1)`,
     ),
   }),
 )
@@ -2650,6 +2999,18 @@ export const collaborationGateOperations = sqliteTable(
       'collaboration_gate_operations_failed_shape',
       sql`${t.state} <> 'failed' OR ${t.failureJson} IS NOT NULL`,
     ),
+    gateKindEnum: check(
+      'collaboration_gate_operations_gate_kind_enum',
+      sql`${t.gateKind} IN ('review','clarify','questions')`,
+    ),
+    operationKindEnum: check(
+      'collaboration_gate_operations_operation_kind_enum',
+      sql`${t.operationKind} IN ('open','decide','manual-question-open','legacy-seed')`,
+    ),
+    stateEnum: check(
+      'collaboration_gate_operations_state_enum',
+      sql`${t.state} IN ('preparing','prepared','committed','cleanup_pending','completed','failed')`,
+    ),
   }),
 )
 
@@ -2682,6 +3043,14 @@ export const collaborationGateArtifacts = sqliteTable(
     receiptJsonValid: check(
       'collaboration_gate_artifacts_receipt_json_valid',
       sql`${t.receiptJson} IS NULL OR json_valid(${t.receiptJson})`,
+    ),
+    artifactKindFixed: check(
+      'collaboration_gate_artifacts_artifact_kind_fixed',
+      sql`${t.artifactKind} = 'review-doc'`,
+    ),
+    stateEnum: check(
+      'collaboration_gate_artifacts_state_enum',
+      sql`${t.state} IN ('declared','staged','consumed','finalized','cleanup_pending')`,
     ),
   }),
 )
@@ -3007,9 +3376,30 @@ export const clarifyRounds = sqliteTable(
       t.loopIter,
       t.iteration,
     ),
+    /**
+     * RFC-359 W7 —— 这条声明此前停在 **0031（RFC-058）** 的旧形状
+     * `(target_consumer_node_id, status)`；迁移 **0107（RFC-217 T17）** 重建 clarify_rounds
+     * 时已经把它换成了 `(target_consumer_node_id, loop_iter, iteration)`，声明没跟。
+     * 于是两个引擎上「同一个索引」保护的根本不是同一件事：SQLite 是 0107 的形状、
+     * PostgreSQL 投影出来的是 0031 那个已被取代的形状。对齐到迁移（= 生产真值）。
+     */
     targetConsumerIdx: index('idx_clarify_rounds_target_consumer').on(
       t.targetConsumerNodeId,
-      t.status,
+      t.loopIter,
+      t.iteration,
+    ),
+    kindEnum: check('clarify_rounds_kind_enum', sql`${t.kind} IN ('self', 'cross')`),
+    directiveEnum: check(
+      'clarify_rounds_directive_enum',
+      sql`${t.directive} IS NULL OR ${t.directive} IN ('continue', 'stop')`,
+    ),
+    statusEnum: check(
+      'clarify_rounds_status_enum',
+      sql`${t.status} IN ('awaiting_human', 'answered', 'canceled', 'abandoned')`,
+    ),
+    kindShape: check(
+      'clarify_rounds_kind_shape',
+      sql`(${t.kind} = 'self' AND ${t.status} != 'abandoned') OR (${t.kind} = 'cross' AND ${t.status} != 'canceled')`,
     ),
   }),
 )
@@ -3129,6 +3519,26 @@ export const userRepositoryTransportCredentials = sqliteTable(
     })
       .onUpdate('cascade')
       .onDelete('cascade'),
+    providerEnum: check(
+      'user_repository_transport_credentials_provider_enum',
+      sql`${t.provider} IN ('gitlab', 'github')`,
+    ),
+    connectionGenerationLength: check(
+      'user_repository_transport_credentials_connection_generation_length',
+      sql`length(${t.connectionGeneration}) BETWEEN 1 AND 128`,
+    ),
+    endpointBindingDigestLength: check(
+      'user_repository_transport_credentials_endpoint_binding_digest_length',
+      sql`length(${t.endpointBindingDigest}) = 64 AND ${t.endpointBindingDigest} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    tokenHintLength: check(
+      'user_repository_transport_credentials_token_hint_length',
+      sql`length(${t.tokenHint}) = 4`,
+    ),
+    credentialRevisionPositive: check(
+      'user_repository_transport_credentials_credential_revision_positive',
+      sql`${t.credentialRevision} > 0`,
+    ),
   }),
 )
 
@@ -3393,17 +3803,27 @@ export const userIdentities = sqliteTable(
 // bootstrapCompletedAt means the daemon token is a restricted first-admin
 // credential; non-NULL permanently retires that external credential.
 // -----------------------------------------------------------------------------
-export const authLoginPolicy = sqliteTable('auth_login_policy', {
-  id: text('id').primaryKey(),
-  passwordLoginEnabled: integer('password_login_enabled', { mode: 'boolean' })
-    .notNull()
-    .default(true),
-  oidcDefaultRole: text('oidc_default_role', { enum: ['guest', 'user'] })
-    .notNull()
-    .default('guest'),
-  bootstrapCompletedAt: integer('bootstrap_completed_at'),
-  updatedAt: integer('updated_at').notNull(),
-})
+export const authLoginPolicy = sqliteTable(
+  'auth_login_policy',
+  {
+    id: text('id').primaryKey(),
+    passwordLoginEnabled: integer('password_login_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    oidcDefaultRole: text('oidc_default_role', { enum: ['guest', 'user'] })
+      .notNull()
+      .default('guest'),
+    bootstrapCompletedAt: integer('bootstrap_completed_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    oidcDefaultRoleEnum: check(
+      'auth_login_policy_oidc_default_role_enum',
+      sql`${t.oidcDefaultRole} IN ('guest', 'user')`,
+    ),
+    idFixed: check('auth_login_policy_id_fixed', sql`${t.id} = 'global'`),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // RFC-036 task_collaborators — owner + collaborators ("任务用户"). RFC-099
@@ -3530,6 +3950,34 @@ export const memories = sqliteTable(
       t.fusedIntoSkillId,
       t.fusedIntoSkillVersion,
     ),
+    scopeTypeEnum: check(
+      'memories_scope_type_enum',
+      sql`${t.scopeType} IN ('agent','workflow','repo','repo_group','global')`,
+    ),
+    statusEnum: check(
+      'memories_status_enum',
+      sql`${t.status} IN ('candidate','approved','archived','superseded','rejected','fused')`,
+    ),
+    sourceKindEnum: check(
+      'memories_source_kind_enum',
+      sql`${t.sourceKind} IN ('clarify','review','feedback','manual')`,
+    ),
+    distillActionEnum: check(
+      'memories_distill_action_enum',
+      sql`${t.distillAction} IS NULL OR ${t.distillAction} IN ('new','update_of','duplicate_of','conflict_with')`,
+    ),
+    scopeTypeShape: check(
+      'memories_scope_type_shape',
+      sql`(${t.scopeType} = 'global' AND ${t.scopeId} IS NULL) OR (${t.scopeType} != 'global' AND ${t.scopeId} IS NOT NULL)`,
+    ),
+    fusedIntoSkillShape: check(
+      'memories_fused_into_skill_shape',
+      sql`(${t.status} = 'fused') = (${t.fusedIntoSkill} IS NOT NULL)`,
+    ),
+    fusedIntoSkillIdShape: check(
+      'memories_fused_into_skill_id_shape',
+      sql`(${t.status} = 'fused') = (${t.fusedIntoSkillId} IS NOT NULL)`,
+    ),
   }),
 )
 
@@ -3638,6 +4086,10 @@ export const fusions = sqliteTable(
   (t) => ({
     skillIdx: index('idx_fusions_skill').on(t.skillId),
     statusIdx: index('idx_fusions_status').on(t.status),
+    statusEnum: check(
+      'fusions_status_enum',
+      sql`${t.status} IN ('running','awaiting_approval','applying','done','rejected','canceled','failed')`,
+    ),
   }),
 )
 
@@ -3685,6 +4137,14 @@ export const memoryDistillJobs = sqliteTable(
     statusNextIdx: index('idx_distill_jobs_status_next').on(t.status, t.nextRunAt),
     debounceIdx: index('idx_distill_jobs_debounce').on(t.debounceKey, t.status),
     taskIdx: index('idx_distill_jobs_task').on(t.taskId, t.sourceKind),
+    sourceKindEnum: check(
+      'memory_distill_jobs_source_kind_enum',
+      sql`${t.sourceKind} IN ('clarify','review','feedback')`,
+    ),
+    statusEnum: check(
+      'memory_distill_jobs_status_enum',
+      sql`${t.status} IN ('pending','running','done','failed','canceled')`,
+    ),
   }),
 )
 
@@ -4538,6 +4998,14 @@ export const intentTurnEvents = sqliteTable(
   },
   (t) => ({
     turnSeqUnique: uniqueIndex('uniq_intent_turn_events_turn_seq').on(t.turnId, t.eventSeq),
+    /**
+     * RFC-359 W7 判定：迁移 0124 是**部分**唯一索引（`WHERE external_event_id IS NOT NULL`），
+     * 这里是全量——**两侧等价，刻意不改声明**。两个引擎的唯一索引都把含 NULL 的行视作
+     * 互不相同（SQLite 一贯如此；PostgreSQL 是 NULLS DISTINCT 默认），所以
+     * `external_event_id IS NULL` 的行在两种写法下都不参与冲突判定，强制的是同一条
+     * 不变量，差别只在部分索引不为这些行留条目（体积）。保护面对等，
+     * 登记在 RFC-359 W5-T19g 账本里而不是抹平形态。
+     */
     externalEventUnique: uniqueIndex('uniq_intent_turn_events_external').on(
       t.turnId,
       t.source,
@@ -4595,6 +5063,10 @@ export const intentDraftResolutions = sqliteTable(
   },
   (t) => ({
     sessionIdx: index('idx_intent_draft_resolutions_session').on(t.sessionId, t.createdAt),
+    reasonEnum: check(
+      'intent_draft_resolutions_reason_enum',
+      sql`${t.reason} IN ('superseded','discarded')`,
+    ),
   }),
 )
 
@@ -4633,6 +5105,14 @@ export const intentWorkingSetChanges = sqliteTable(
       .where(sql`${t.state} IN ('queued', 'applying', 'failed')`),
     sessionIdx: index('idx_intent_working_set_session').on(t.sessionId, t.createdAt),
     stateIdx: index('idx_intent_working_set_state').on(t.state, t.updatedAt),
+    modeEnum: check(
+      'intent_working_set_changes_mode_enum',
+      sql`${t.mode} IN ('after-current','interrupt')`,
+    ),
+    stateEnum: check(
+      'intent_working_set_changes_state_enum',
+      sql`${t.state} IN ('queued','applying','applied','failed','canceled')`,
+    ),
   }),
 )
 
@@ -4852,6 +5332,14 @@ export const codeFindings = sqliteTable(
     externalCreatedIdx: index('idx_code_findings_external_created')
       .on(t.createdAt)
       .where(sql`${t.externalId} IS NOT NULL`),
+    anchorKindEnum: check(
+      'code_findings_anchor_kind_enum',
+      sql`${t.anchorKind} IN ('mr','issue','pipeline','platform')`,
+    ),
+    lifecycleEnum: check(
+      'code_findings_lifecycle_enum',
+      sql`${t.lifecycle} IN ('active','disappeared','reappeared')`,
+    ),
   }),
 )
 
@@ -4948,6 +5436,19 @@ export const codeWorkItems = sqliteTable(
       t.anchorKind,
       t.anchorId,
     ),
+    anchorKindEnum: check(
+      'code_work_items_anchor_kind_enum',
+      sql`${t.anchorKind} IN ('mr','issue','pipeline','platform')`,
+    ),
+    statusEnum: check(
+      'code_work_items_status_enum',
+      sql`${t.status} IN ('idle','queued','running','awaiting','settled','failed','superseding','handed_off','closing','closed')`,
+    ),
+    epochPositive: check('code_work_items_epoch_positive', sql`${t.epoch} >= 1`),
+    publishingEpochPositive: check(
+      'code_work_items_publishing_epoch_positive',
+      sql`${t.publishingEpoch} IS NULL OR ${t.publishingEpoch} >= 1`,
+    ),
   }),
 )
 
@@ -4982,6 +5483,12 @@ export const codeWorkRounds = sqliteTable(
     itemIdx: index('idx_code_work_rounds_item').on(t.workItemId),
     taskIdx: index('idx_code_work_rounds_task').on(t.taskId),
     startedIdx: index('idx_code_work_rounds_started').on(t.startedAt), // RFC-311：指标窗口/GC 汇总
+    roundSeqPositive: check('code_work_rounds_round_seq_positive', sql`${t.roundSeq} >= 1`),
+    epochPositive: check('code_work_rounds_epoch_positive', sql`${t.epoch} >= 1`),
+    outcomeEnum: check(
+      'code_work_rounds_outcome_enum',
+      sql`${t.outcome} IS NULL OR ${t.outcome} IN ('published','awaiting','failed','canceled','superseded')`,
+    ),
   }),
 )
 
@@ -5009,6 +5516,15 @@ export const codeRoundStages = sqliteTable(
   (t) => ({
     seqUq: uniqueIndex('uniq_code_round_stages_seq').on(t.roundId, t.stageSeq),
     roundIdx: index('idx_code_round_stages_round').on(t.roundId),
+    stageSeqNonnegative: check('code_round_stages_stage_seq_nonnegative', sql`${t.stageSeq} >= 0`),
+    stageKindEnum: check(
+      'code_round_stages_stage_kind_enum',
+      sql`${t.stageKind} IN ('program','script','ai','invoke')`,
+    ),
+    statusEnum: check(
+      'code_round_stages_status_enum',
+      sql`${t.status} IN ('pending','running','done','failed','skipped','inherited')`,
+    ),
   }),
 )
 
@@ -5063,6 +5579,15 @@ export const codeAiAttempts = sqliteTable(
     roundIdx: index('idx_code_ai_attempts_round').on(t.roundId),
     statusIdx: index('idx_code_ai_attempts_status').on(t.status),
     startedIdx: index('idx_code_ai_attempts_started').on(t.startedAt), // RFC-311：30 天 GC 扫描
+    rerunSeqNonnegative: check('code_ai_attempts_rerun_seq_nonnegative', sql`${t.rerunSeq} >= 0`),
+    attemptSeqNonnegative: check(
+      'code_ai_attempts_attempt_seq_nonnegative',
+      sql`${t.attemptSeq} >= 0`,
+    ),
+    statusEnum: check(
+      'code_ai_attempts_status_enum',
+      sql`${t.status} IN ('claimed','running','validated','failed','interrupted')`,
+    ),
   }),
 )
 
@@ -5207,11 +5732,22 @@ export const codeWorkObservations = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => ({
-    itemIdx: index('idx_code_work_observations_item').on(t.workItemId, t.createdAt),
+    /**
+     * RFC-359 W7 —— 迁移 0166 写的是 `created_at DESC`，声明少了排序方向。
+     * drizzle 的 SQLite 索引列没有 `.desc()`（那是 pg-core 的能力），用 `sql` 表达式
+     * 写出同一形状；PG 投影会把它渲染成 `("created_at" DESC)`。
+     */
+    itemIdx: index('idx_code_work_observations_item').on(t.workItemId, sql`${t.createdAt} DESC`),
     /**
      * T10e — an ingress event is claimed by exactly one top-level capability.
      * Partial (`WHERE event_id IS NOT NULL`) in the migration: most rows have
      * no event id, and NULLs do not conflict in SQLite anyway.
+     *
+     * RFC-359 W7 判定：**两侧等价，刻意不改声明**。两个引擎的唯一索引默认都把 NULL
+     * 视作互不相同（SQLite 一贯如此；PostgreSQL 是 NULLS DISTINCT 默认），所以
+     * 「全量 UNIQUE(event_id)」与「UNIQUE(event_id) WHERE event_id IS NOT NULL」
+     * 强制的是同一条不变量，差别只在部分索引不为 NULL 行留条目（体积）。
+     * 保护面对等，登记在 RFC-359 W5-T19g 账本里而不是抹平形态。
      */
     eventUq: uniqueIndex('uniq_code_work_observations_event').on(t.eventId),
   }),
@@ -5322,6 +5858,11 @@ export const codePublishIntents = sqliteTable(
   (t) => ({
     roundIdx: index('idx_code_publish_intents_round').on(t.roundId),
     stateIdx: index('idx_code_publish_intents_state').on(t.state),
+    epochPositive: check('code_publish_intents_epoch_positive', sql`${t.epoch} >= 1`),
+    stateEnum: check(
+      'code_publish_intents_state_enum',
+      sql`${t.state} IN ('pending','settled','compensated','abandoned')`,
+    ),
   }),
 )
 
@@ -5405,6 +5946,10 @@ export const capabilityTemplates = sqliteTable(
     ownerNameUq: uniqueIndex('capability_templates_owner_name_unique').on(t.ownerUserId, t.name),
     capabilityIdx: index('idx_capability_templates_capability').on(t.capability),
     upstreamIdx: index('idx_capability_templates_upstream').on(t.upstreamId),
+    visibilityEnum: check(
+      'capability_templates_visibility_enum',
+      sql`${t.visibility} IN ('public','private')`,
+    ),
   }),
 )
 
@@ -5444,6 +5989,11 @@ export const repoCapabilityConfig = sqliteTable(
     cellUq: uniqueIndex('uniq_repo_capability_cell').on(t.repoId, t.capability),
     templateIdx: index('idx_repo_capability_template').on(t.templateId),
     readinessIdx: index('idx_repo_capability_readiness').on(t.readiness),
+    enabledBoolean: check('repo_capability_config_enabled_boolean', sql`${t.enabled} IN (0, 1)`),
+    readinessEnum: check(
+      'repo_capability_config_readiness_enum',
+      sql`${t.readiness} IN ('disabled','misconfigured','ready')`,
+    ),
   }),
 )
 
@@ -5921,6 +6471,15 @@ export const eventTypeCatalog = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.eventTypeId, t.revision] }),
     sourceIdx: index('idx_event_type_source').on(t.sourceId, t.sourceRevision, t.state),
+    /**
+     * RFC-359 W7 —— 目录可见性过滤的下推索引（迁移手写，drizzle 一直没声明，
+     * PG 上因此缺席）。声明与迁移逐字同形。
+     */
+    visibilityIdx: index('idx_event_type_catalog_visibility').on(
+      t.catalogVisibility,
+      t.eventTypeId,
+      t.revision,
+    ),
   }),
 )
 
@@ -6401,6 +6960,10 @@ export const employeeCaseMembers = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.caseId, t.userId] }),
     userIdx: index('idx_employee_case_members_user').on(t.userId, t.caseId),
+    roleEnum: check(
+      'employee_case_members_role_enum',
+      sql`${t.role} IN ('collaborator', 'observer')`,
+    ),
   }),
 )
 
@@ -7556,5 +8119,35 @@ export const maintenanceRuns = sqliteTable(
     admissionIdx: index('idx_maintenance_runs_admission').on(t.state, t.jobClass, t.scheduledAt),
     leaseIdx: index('idx_maintenance_runs_lease').on(t.state, t.leaseExpiresAt),
     lastIdx: index('idx_maintenance_runs_last').on(t.finishedAt, t.jobKey),
+    jobClassEnum: check(
+      'maintenance_runs_job_class_enum',
+      sql`${t.jobClass} IN ('cleanup','recovery','checkpoint')`,
+    ),
+    stateEnum: check(
+      'maintenance_runs_state_enum',
+      sql`${t.state} IN ('pending','running','deferred','succeeded','failed')`,
+    ),
+    payloadJsonJsonValid: check(
+      'maintenance_runs_payload_json_json_valid',
+      sql`json_valid(${t.payloadJson})`,
+    ),
+    cursorVersionPositive: check(
+      'maintenance_runs_cursor_version_positive',
+      sql`${t.cursorVersion} > 0`,
+    ),
+    cursorJsonJsonValid: check(
+      'maintenance_runs_cursor_json_json_valid',
+      sql`${t.cursorJson} IS NULL OR json_valid(${t.cursorJson})`,
+    ),
+    attemptNonnegative: check('maintenance_runs_attempt_nonnegative', sql`${t.attempt} >= 0`),
+    sliceNoNonnegative: check('maintenance_runs_slice_no_nonnegative', sql`${t.sliceNo} >= 0`),
+    countersJsonJsonValid: check(
+      'maintenance_runs_counters_json_json_valid',
+      sql`json_valid(${t.countersJson})`,
+    ),
+    stateShape: check(
+      'maintenance_runs_state_shape',
+      sql`(${t.state} = 'running' AND ${t.leaseToken} IS NOT NULL AND ${t.leaseExpiresAt} IS NOT NULL) OR (${t.state} <> 'running')`,
+    ),
   }),
 )

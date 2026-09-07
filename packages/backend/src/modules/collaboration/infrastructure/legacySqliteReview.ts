@@ -96,7 +96,6 @@ import type {
   ReviewRoundSummary,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   databaseSessionFor,
@@ -141,10 +140,7 @@ import { chunkedAll } from '@/util/sqlChunk'
 import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
 import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
 import { parseConsumedJson } from '@/services/freshness'
-import {
-  assertNodeRunSourceTerminationAdmission,
-  transitionNodeRunStatus,
-} from '@/services/lifecycle'
+import { assertNodeRunSourceTerminationAdmission } from '@/services/lifecycle'
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
 // （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
 import {
@@ -537,7 +533,7 @@ async function upstreamPortArchiveJson(
 }
 
 export interface DispatchReviewArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   appHome: string
   definition: WorkflowDefinition
@@ -1151,14 +1147,17 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // Defensive (legacy cascade-minted pending row): park it as awaiting_review.
     reviewNodeRunId = reuse.id
     reviewIteration = reuse.reviewIteration
-    await transitionNodeRunStatus({
-      db,
-      nodeRunId: reviewNodeRunId,
-      event: { kind: 'park-review' },
-      extra: { startedAt: reuse.startedAt ?? Date.now() },
-    })
+    // RFC-359 W7：与合一前的 `transitionNodeRunStatus`（同步 `.get()` + 同步 owner 事务，
+    // bun:sqlite 独有）逐条同判据——同一条围栏（显式上下文 > 环境上下文 > 无主）+ 同一个
+    // 事务内 CAS，只是跑在两引擎共用的写事务上；顺带与紧随其后的 consumed 写并成一笔。
     await withTaskExecutionWrite(db, async (tx) => {
       await fenceTaskWrite(tx, { taskId })
+      await transitionNodeRunStatusTx({
+        tx,
+        nodeRunId: reviewNodeRunId,
+        event: { kind: 'park-review' },
+        extra: { startedAt: reuse.startedAt ?? Date.now() },
+      })
       await tx
         .update(nodeRuns)
         .set({ consumedUpstreamRunsJson: consumedJson })
@@ -1388,7 +1387,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
 // ---------------------------------------------------------------------------
 
 export interface CreateDocVersionArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   taskId: string
   reviewNodeId: string
@@ -1547,7 +1546,7 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
  * data) are skipped — they do not inherit, and `nextGeneration` restarts at 1.
  */
 async function loadPriorRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   args: { taskId: string; reviewNodeId: string; iteration: number },
 ): Promise<{ members: PriorRoundMember[]; nextGeneration: number }> {
@@ -1737,7 +1736,7 @@ function assembleReviewSummary(
 }
 
 export async function listReviewSummaries(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   filter: ListReviewSummariesFilter = {},
 ): Promise<ReviewSummary[]> {
   // Join doc_versions ↔ nodeRuns ↔ tasks ↔ workflows. We do it manually with
@@ -1870,7 +1869,10 @@ export async function listReviewSummaries(
  * assignment) applied before counting. The oracle test (rfc311-badge-counts)
  * locks this count to the list+filter pipeline's length.
  */
-export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<number> {
+export async function countPendingReviews(
+  db: ProviderNeutralDatabase,
+  actor?: Actor,
+): Promise<number> {
   const newer = alias(docVersions, 'dv_newer')
   const conditions = [
     eq(docVersions.decision, 'pending'),
@@ -1939,7 +1941,7 @@ export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<
 }
 
 export async function getReviewDetail(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   nodeRunId: string,
 ): Promise<Omit<ReviewDetail, 'capabilities'>> {
@@ -2062,7 +2064,7 @@ export async function getReviewDetail(
 }
 
 export async function listDocVersionsForReview(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
 ): Promise<DocVersion[]> {
   const rows = await db
@@ -2073,7 +2075,10 @@ export async function listDocVersionsForReview(
   return rows.map(rowToDocVersion)
 }
 
-export async function getDocVersion(db: DbClient, versionId: string): Promise<DocVersion | null> {
+export async function getDocVersion(
+  db: ProviderNeutralDatabase,
+  versionId: string,
+): Promise<DocVersion | null> {
   const rows = await db.select().from(docVersions).where(eq(docVersions.id, versionId)).limit(1)
   return rows.length > 0 ? rowToDocVersion(rows[0]!) : null
 }
@@ -2092,7 +2097,7 @@ export async function getDocVersion(db: DbClient, versionId: string): Promise<Do
  * live rows, decided → frozen commentsJson; anchor-sorted; empty when none).
  */
 export async function getDocVersionDetail(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   nodeRunId: string,
   versionId: string,
@@ -2116,7 +2121,7 @@ export async function getDocVersionDetail(
  * Sorted by anchor position (paragraph index, then offset) either way.
  */
 async function commentsForDocVersion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   dv: { id: string; decision: string; commentsJson: string },
 ): Promise<ReviewComment[]> {
   if (dv.decision === 'pending') {
@@ -2184,7 +2189,7 @@ function parseArchivedComments(json: string | null | undefined): ReviewComment[]
  * constant 0 for every decided round — fixed here).
  */
 async function buildRoundMember(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   m: typeof docVersions.$inferSelect,
 ): Promise<{ summary: ReviewDocumentSummary; decision: DocVersionDecision }> {
@@ -2334,7 +2339,7 @@ export function groupDocVersionRounds<R extends RoundGroupRow>(
  * item_index rows). Scoped to one nodeRunId — exactly /versions' scope.
  */
 export async function listReviewRounds(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   nodeRunId: string,
 ): Promise<ReviewRoundSummary[]> {
@@ -4408,7 +4413,7 @@ export function renderCommentsForPrompt(
  * main table). `null` = the decision contributes no re-run context.
  */
 type ReviewPromptCtxBuilder = (args: {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   taskId: string
   upstreamNodeId: string
@@ -4479,7 +4484,7 @@ const REVIEW_PROMPT_CTX_BUILDERS: Record<DocVersionDecision, ReviewPromptCtxBuil
  * `siblingOutputs` undefined — locked by review-prompt-injection.test.ts A6.
  */
 export async function buildReviewPromptContext(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   upstreamNodeId: string,
   taskId: string,
@@ -4548,7 +4553,7 @@ export async function buildReviewPromptContext(
 // ---------------------------------------------------------------------------
 
 interface BuildSiblingOutputsArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   taskId: string
   /** Upstream agent node id (from doc_version.sourceNodeId). */
@@ -4730,7 +4735,7 @@ function readBool(node: WorkflowNode, key: string, fallback: boolean): boolean {
 
 // Exported for the regression test that locks the path<md> recognition fix.
 export async function loadUpstreamPortKind(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   definition: WorkflowDefinition,
   nodeId: string,
   portName: string,

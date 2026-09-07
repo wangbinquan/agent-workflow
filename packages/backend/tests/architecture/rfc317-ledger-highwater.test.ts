@@ -200,10 +200,34 @@ const PREVIOUS = readPreviousBaselines()
  * `DIRECT_STATUS_WRITE_ALLOWLIST`（node_run 盲写）与 `STATUS_WRITE_ALLOWLIST`
  * （tasks.status 直写）。AC-6 写的是「R10 覆盖仓内每一个 allowlist」。
  *
- * 判据形状：扫 tests / scripts 下的**顶层集合常量**，名字命中账本词汇
- * （ALLOWLIST / EXEMPT / KNOWN_VIOLATIONS / DEBT / _HASHES / ALLOWED_ / PENDING_），
- * 初始化式是数组 / 对象 / new Set / new Map。每一处要么在基线文件里有条目，
- * 要么进下面这张**具名豁免表**并写清为什么它不是账本。
+ * 判据形状：扫 tests / scripts 下的**顶层集合常量**（初始化式是数组 / 对象 /
+ * new Set / new Map），两条判据取**并集**——
+ *
+ *   **A（词汇）**：名字命中账本词汇（ALLOWLIST / EXEMPT / KNOWN_VIOLATIONS / DEBT /
+ *   _HASHES / ALLOWED_ / PENDING_）。这条覆盖「当过滤器用、从不被断言」的豁免表。
+ *
+ *   **B（结构）**：住在 `tests/architecture/` 里、且被 `toEqual` / `toStrictEqual`
+ *   **等值断言**过。与名字无关。
+ *
+ * 为什么要有 B：A 是一张**词汇表，而词汇表自己会漏词**——T73 就是在往
+ * `rfc254-platform-surface-guard` 的 `ALLOWANCES` 里加条目时才发现该词没进表、
+ * 那份账本在覆盖规则眼里根本不存在。补一个词只是把同一个错推迟到下一个新名词：
+ * RFC-359 W5 一轮新增的守卫里，`SQLITE_ONLY_PROTECTIONS` /
+ * `PROVIDER_RUNTIME_UNEXERCISED` / `COVERAGE_PARITY_LEDGER` /
+ * `DUAL_ENGINE_PREDICATE_GAPS` 等**一个都不命中** A，于是整批新账本全在网外。
+ *
+ * B 换成不依赖命名的两个事实：**住在哪**（守卫都在 `tests/architecture/`，目录不像
+ * 名词那样漂）与**怎么用**（账本的定义就是「被拿来做等值断言的存量快照」）。
+ * 「被等值断言」这一条不能省——实测：守卫目录内顶层集合常量共 143 个未登记，
+ * 加上等值断言约束后降到 23 个且几乎全是真账本，其余是语料根 / 正则表 / 夹具。
+ *
+ * 判据 B 只作用于 `tests/architecture/`：守卫目录外也有账本（实测 13 处，含
+ * `scheduler-audit-s10` 的 `RAW_TRANSACTION_SITES`、`rfc310-architecture-lock` 的
+ * `COMPOSITION_CONSUMERS`、前端 `tab-callsite-contract` 的 `TRUE_TAB_CALLSITES`），
+ * 它们目前只被 A 覆盖、A 又覆盖不到 —— 已记入 `docs/audit-backlog.md`，本刀不扩面：
+ * 那些文件同时是普通测试，直接套 B 会把大批夹具误判成账本。
+ *
+ * 每一处要么在基线文件里有条目，要么进下面这张**具名豁免表**并写清为什么它不是账本。
  */
 const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   // 这张表自己：它是「哪些集合不算账本」的声明，不是债务。
@@ -215,6 +239,25 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   // 所以给它单独钉一个数字只会在收敛叶子时多红一次，钉不住任何多出来的债。
   'packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts|EXEMPT_REASONS':
     'RFC-329 豁免叶子的分组理由字典；债务由 MCP_SURFACE_EXEMPTION_LEAVES 计量，这里只是它的说明文字',
+  // —— 以下五条由判据 B（RFC-359 W7 新增）扫出来。它们都住在 `tests/architecture/` 里、
+  // 也都被等值断言，但都不是「仓内存量的快照」，钉一个只降不升的数字没有意义。 ——
+  //
+  // ① 从扫描结果**派生**的期望：内容由 `capabilityTemplateAccessCalls`（一次源码扫描）
+  //    经条件展开算出来，不是手工维护的清单——手工改它做不到，把它钉住只会在被扫对象
+  //    正常演化时假红。
+  'packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts|CAPABILITY_TEMPLATE_OPERATION_GATES':
+    '由 capabilityTemplateAccessCalls 扫描结果派生的期望值，不是手工维护的存量清单',
+  // ② 判据**自证**用的夹具：喂给纯函数 matcher 的假语料（`__fixture__/` / `modules/demo/` /
+  //    `fixture-foo-*.test.ts`），一个字节都不来自真实仓库。它们变化只说明自证用例改了，
+  //    与债务无关；反过来把它们钉住会让「给 matcher 补一条自证」变成要改基线的事。
+  'packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts|FIXTURE_EXPECTED_DECLARATIONS':
+    'matcher 自证的假语料（__fixture__/thing.ts），不来自真实仓库',
+  'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES':
+    'matcher 自证的假语料（modules/demo/…），不来自真实仓库',
+  'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SINGLE_ENGINE_TEST':
+    'matcher 自证的假测试单元（fixture-foo-single-engine.test.ts），不来自真实仓库',
+  'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_HALF_TEST':
+    'matcher 自证的假测试单元（fixture-foo-half.test.ts），不来自真实仓库',
 }
 
 describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () => {
@@ -254,7 +297,8 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       {
         for (const file of corpus) {
           const rel = portable(relative(REPO_ROOT, file))
-          for (const symbol of ledgerShapedSymbols(readFileSync(file, 'utf8'))) {
+          const inGuardDirectory = rel.includes('/tests/architecture/')
+          for (const symbol of ledgerShapedSymbols(readFileSync(file, 'utf8'), inGuardDirectory)) {
             const key = `${rel}|${symbol}`
             found.push(key)
             if (registered.has(key)) continue
@@ -276,8 +320,13 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
 
   test('豁免表逐条相等（删一条消红也会红）', () => {
     expect(Object.keys(NOT_A_LEDGER).sort()).toEqual([
+      'packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts|CAPABILITY_TEMPLATE_OPERATION_GATES',
       'packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts|NOT_A_LEDGER',
       'packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts|EXEMPT_REASONS',
+      'packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts|FIXTURE_EXPECTED_DECLARATIONS',
+      'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_HALF_TEST',
+      'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SINGLE_ENGINE_TEST',
+      'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES',
     ])
   })
 
@@ -305,29 +354,156 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       '判据把非账本也算进来了——那会逼着后来的人给普通常量改名',
     ).toEqual([])
   })
+
+  test('matcher 自证（判据 B）：守卫目录内「被等值断言的集合」不看名字也算账本', () => {
+    // 名字完全不命中词汇表——判据 A 放过它，判据 B 必须抓住。
+    // 这正是 RFC-359 W5 那批新账本（SQLITE_ONLY_PROTECTIONS 等）逃逸的形状。
+    const assertedInGuard = [
+      "export const SQLITE_ONLY_PROTECTIONS: readonly string[] = ['a']",
+      "test('x', () => { expect(actual).toEqual([...SQLITE_ONLY_PROTECTIONS]) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(assertedInGuard, true)).toEqual(['SQLITE_ONLY_PROTECTIONS'])
+    expect(
+      ledgerShapedSymbols(assertedInGuard, false),
+      '判据 B 只作用于守卫目录；目录外套用它会把大批普通夹具误判成账本',
+    ).toEqual([])
+
+    // 账本在**实际**侧而不是期望侧，同样要认出来。
+    const assertedOnActualSide = [
+      "const UNDEFINED_CLASS_SNAPSHOT = new Set(['x'])",
+      "test('x', () => { expect(UNDEFINED_CLASS_SNAPSHOT).toStrictEqual(scanned) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(assertedOnActualSide, true)).toEqual(['UNDEFINED_CLASS_SNAPSHOT'])
+
+    // 集合但从没被等值断言——是语料 / 夹具，不是账本。去掉这一条约束的话，
+    // 守卫目录内未登记的顶层集合会从 23 个涨到 143 个，豁免表会变得没法维护。
+    const neverAsserted = [
+      "const SCAN_ROOTS = ['packages/backend/src']",
+      "test('x', () => { expect(SCAN_ROOTS.length).toBeGreaterThan(0) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(neverAsserted, true)).toEqual([])
+
+    // 扫描累加器（空初始化 + push/add）是判据的**实际**侧，不是账本。
+    const accumulator = [
+      'const observedDebt: string[] = []',
+      'for (const f of files) { observedDebt.push(f) }',
+      "test('x', () => { expect(observedDebt).toEqual([...LEDGER]) })",
+    ].join('\n')
+    expect(
+      ledgerShapedSymbols(accumulator, true),
+      '把扫描累加器登记进只降不升的棘轮毫无意义——它每次跑出来的数都不同',
+    ).toEqual([])
+    // 但**故意留空的账本**要认出来（`ASSEMBLY_CALLS_IN_MOUNT` 就是 0 条、且「多一条 ⇒ 红」）。
+    const intentionallyEmpty = [
+      'const ASSEMBLY_CALLS_IN_MOUNT: readonly string[] = []',
+      "test('x', () => { expect(scanned).toEqual([...ASSEMBLY_CALLS_IN_MOUNT]) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(intentionallyEmpty, true)).toEqual(['ASSEMBLY_CALLS_IN_MOUNT'])
+
+    // 回归：名字只出现在**字符串字面量**里不算「被断言」。判据初稿用文本匹配时，
+    // 本文件的 NOT_A_LEDGER 因为期望值里写着自己的名字而被误判成账本。
+    const nameOnlyInsideStringLiteral = [
+      'const OWNERS_TABLE = { a: 1 }',
+      "test('x', () => { expect(keys).toEqual(['file.ts|OWNERS_TABLE']) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(nameOnlyInsideStringLiteral, true)).toEqual([])
+  })
 })
 
-// RFC-317 T73 —— 补 `ALLOWANCE`：`rfc254-platform-surface-guard` 的豁免表叫
-// `ALLOWANCES`，判据初版的词汇表漏了它，于是那份账本在覆盖规则眼里根本不存在。
+// 判据 A 的词汇表。RFC-317 T73 —— 补 `ALLOWANCE`：`rfc254-platform-surface-guard` 的
+// 豁免表叫 `ALLOWANCES`，判据初版的词汇表漏了它，于是那份账本在覆盖规则眼里根本不存在。
 // 这条漏词是在**往那张表里加条目时**才发现的——判据的词汇表本身也会有覆盖缺口。
+//
+// RFC-359 W7：**别再往这里加词**。加词只能补上已经发现的那一个漏，补不了下一个新名词；
+// 守卫目录内改由不依赖命名的判据 B 兜底（见上面 T72 的规则说明）。
 const LEDGER_NAME = /ALLOWLIST|ALLOWED_|ALLOWANCE|EXEMPT|KNOWN_VIOLATIONS|_HASHES|DEBT|PENDING_/
 
-/** 顶层的、名字命中账本词汇的、集合形状的常量名。纯函数——扫描与自证共用。 */
-function ledgerShapedSymbols(text: string): string[] {
+/** 判据 B 认的等值断言。`toMatchObject` 是部分匹配、不构成「存量快照」，不算。 */
+const EQUALITY_MATCHER = /^(?:toEqual|toStrictEqual)$/
+
+/** 会改动集合内容的方法。带这些调用的常量是**扫描累加器**，不是账本。 */
+const MUTATING_METHOD = /^(?:push|unshift|splice|pop|shift|add|set|delete|clear)$/
+
+/**
+ * 声明之后被就地改动过的顶层常量名。
+ *
+ * 账本与扫描累加器在**形状**上分不开——两者都可能是 `const x: string[] = []`；分得开的是
+ * **用法**：账本声明时就写全内容、此后一个字不动（改它就是一次有署名的销账），累加器则先空着
+ * 再 `push` / `add` 进扫描结果。累加器是判据的**实际**侧，把它登记进只降不升的棘轮毫无意义
+ * （它每次跑出来的数都不同）。实测本仓有 2 个这样的常量落进判据 B（`rfc359-w5-t20` 的
+ * `observedDebt` / `unshimmed`），靠这一条机械排除，不必进具名豁免表。
+ */
+function mutatedNames(source: ts.SourceFile): Set<string> {
+  const names = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      MUTATING_METHOD.test(node.expression.name.text)
+    ) {
+      names.add(node.expression.expression.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return names
+}
+
+/**
+ * 一条 `expect(…).toEqual(…)` 里出现的**标识符**集合（两侧都取——账本既可能在期望侧
+ * `toEqual([...LEDGER])`，也可能在实际侧 `expect(LEDGER).toEqual(…)`）。
+ *
+ * 取标识符而不是匹配源码文本：`[...LEDGER]` / `LEDGER.map(…)` / `new Set(LEDGER)` 都要认出来，
+ * 而**字符串字面量里恰好含这个名字的不算**——本判据初稿用文本匹配时，
+ * `expect(Object.keys(NOT_A_LEDGER)).toEqual(['…|NOT_A_LEDGER'])` 这种把自己的名字写进
+ * 期望字符串的写法会被误判成「被断言」。
+ */
+function equalityAssertedNames(source: ts.SourceFile): Set<string> {
+  const names = new Set<string>()
+  const collect = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) names.add(node.text)
+    ts.forEachChild(node, collect)
+  }
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      EQUALITY_MATCHER.test(node.expression.name.text)
+    ) {
+      collect(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return names
+}
+
+/**
+ * 顶层集合常量里、判据 A ∪ B 认定为账本形状的那些。纯函数——扫描与自证共用。
+ *
+ * `inGuardDirectory` 打开判据 B（见上面 T72 的规则说明）：`tests/architecture/` 里被等值
+ * 断言过的顶层集合常量一律算账本，**与名字无关**。目录外只跑判据 A。
+ */
+function ledgerShapedSymbols(text: string, inGuardDirectory = false): string[] {
   const source = ts.createSourceFile('ledger.ts', text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
+  const collections: string[] = []
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) continue
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name)) continue
-      if (!LEDGER_NAME.test(declaration.name.text)) continue
       const initializer = declaration.initializer
       if (initializer === undefined) continue
       if (!isCollectionInitializer(initializer)) continue
-      out.push(declaration.name.text)
+      collections.push(declaration.name.text)
     }
   }
-  return out
+  if (!inGuardDirectory) return collections.filter((name) => LEDGER_NAME.test(name))
+  const asserted = equalityAssertedNames(source)
+  const mutated = mutatedNames(source)
+  return collections.filter(
+    (name) => LEDGER_NAME.test(name) || (asserted.has(name) && !mutated.has(name)),
+  )
 }
 
 function isCollectionInitializer(node: ts.Expression): boolean {

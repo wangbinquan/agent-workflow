@@ -44,44 +44,35 @@ describe('RFC-349 collaboration route operations', () => {
     expect(text.match(/Promise</g)?.length ?? 0).toBeGreaterThanOrEqual(20)
   })
 
-  test('SQLite and PostgreSQL factories implement the same closed aggregate', () => {
-    const sqlite = source(
-      'src/modules/collaboration/infrastructure/sqliteCollaborationRouteOperations.ts',
+  // RFC-359 W7：这一对适配器已合一。旧断言（两份工厂各自含 reviews:/questions:/clarify:、
+  // PG 那份自带 .transaction()/.select()/.insert()/.update() 的原生重写）随
+  // `postgresqlCollaborationRouteOperations.ts` 一并退役——2026-09-07 的双引擎对拍
+  // （`rfc359-w7-collaboration-route-conformance.test.ts`）照出那份重写的两处真实分叉：
+  // `reviews.setSelection` / `clarify.saveDraft` 跑在裸 `db.transaction` 上、不可重入，
+  // 外层事务回滚带不走它们的写。正典是被转发的中立实现。
+  test('路由持久化面只有一个工厂，且不含任何 provider 分叉', () => {
+    const factory = source(
+      'src/modules/collaboration/infrastructure/collaborationRouteOperations.ts',
     )
-    const postgresql = source(
-      'src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
-    )
-    expect(sqlite).toContain('createSqliteCollaborationRouteOperations')
-    expect(postgresql).toContain('createPostgresqlCollaborationRouteOperations')
     for (const group of ['reviews:', 'questions:', 'clarify:']) {
-      expect(sqlite).toContain(group)
-      expect(postgresql).toContain(group)
+      expect(factory).toContain(group)
     }
-    expect(postgresql).toMatch(/\.transaction\(/)
-    expect(postgresql).toMatch(/\.select\(\)/)
-    expect(postgresql).toMatch(/\.insert\(/)
-    expect(postgresql).toMatch(/\.update\(/)
-    expect(postgresql).toContain('await publishCommittedEventsAfterCommit')
-    expect(postgresql).not.toMatch(
-      /legacySqlite|createSqlite|\bas DbClient\b|\bas PostgresqlDatabaseClient\b|\bno-?op\b/i,
+    expect(factory).toContain('createCollaborationRouteOperations')
+    expect(factory).toContain('ProviderNeutralDatabase')
+    expect(factory).not.toMatch(
+      /\bPostgresqlDatabaseClient\b|\bDbClient\b|\$provider|'postgresql'|'sqlite'/,
     )
+    // 惰性 import 是为了断开 `services/humanGateComposition` 绕回 composition barrel 的值环。
+    expect(factory).toContain("() => import('./legacySqliteReview')")
+    expect(() =>
+      source('src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts'),
+    ).toThrow()
+    expect(() =>
+      source('src/modules/collaboration/infrastructure/sqliteCollaborationRouteOperations.ts'),
+    ).toThrow()
   })
 
-  test('PostgreSQL sealing requires task lifecycle and draft publication participants', () => {
-    const postgresql = source(
-      'src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
-    )
-    expect(postgresql).toContain(
-      'taskNodeLifecycle: PostgresqlCollaborationRouteNodeLifecycleParticipantFactory',
-    )
-    expect(postgresql).not.toContain('@/modules/task-execution/composition')
-    expect(postgresql).toContain('clarifyDraftEvents:')
-    expect(postgresql).toContain(
-      'await input.taskNodeLifecycle.inTransaction(tx).completeClarifyNode',
-    )
-    expect(postgresql).toContain('await composition.clarifyDraftEvents.publish')
-    expect(postgresql).not.toContain('taskBroadcaster')
-
+  test('封存时的任务生命周期参与者与草稿投影仍由装配点注入', () => {
     const composition = source(
       'src/modules/collaboration/composition/collaborationRouteOperations.ts',
     )
@@ -89,11 +80,18 @@ describe('RFC-349 collaboration route operations', () => {
       'src/modules/collaboration/infrastructure/collaborationClarifyDraftEventPublisher.ts',
     )
     expect(composition).toContain('composePostgresqlCollaborationRouteOperations')
+    expect(composition).toContain('composeSqliteCollaborationRouteOperations')
     expect(composition).toContain('context: CollaborationCommandContext')
     expect(composition).toContain('bindCollaborationRouteContext')
     expect(composition).toContain('createCollaborationClarifyDraftEventPublisher()')
     expect(publisher).toContain('taskBroadcaster.broadcast(TASK_CHANNEL(input.taskId)')
     expect(publisher).toContain("type: 'clarify.draft.updated'")
+    // 持久化实现不再直接够全局广播器：草稿事件走注入的 publisher。
+    const factory = source(
+      'src/modules/collaboration/infrastructure/collaborationRouteOperations.ts',
+    )
+    expect(factory).toContain('draftEvents: input.clarifyDraftEvents')
+    expect(factory).not.toContain('taskBroadcaster')
   })
 
   test('SQLite daemon composition wires every collaboration decision port without a root cycle', () => {

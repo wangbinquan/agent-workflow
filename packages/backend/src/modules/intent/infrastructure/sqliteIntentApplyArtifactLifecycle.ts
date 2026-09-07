@@ -1,7 +1,10 @@
-import { rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
+import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { plugins } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
 import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
 import type { SqliteSkillArtifactCompensation } from '../ports/skillArtifactCompensation'
 import type { Logger } from '@/util/log'
@@ -42,6 +45,24 @@ async function compensate(
   }
 }
 
+/**
+ * RFC-359 W7 抬齐③ —— 插件发布是否真的落地了。
+ *
+ * 判据与 PostgreSQL 侧逐条相同（`postgresqlIntentApplyArtifactLifecycle.ts`
+ * 的 `assertPluginPublished`）：行在 + 目录在 = 装成了。缺任一条就说明提交后的
+ * 尾巴还没走完，这条 journal 行必须留着重试，而不是被当成已收敛。
+ */
+async function assertPluginPublished(db: DbClient, pluginId: string): Promise<void> {
+  const [row] = await db
+    .select({ cachedPath: plugins.cachedPath })
+    .from(plugins)
+    .where(eq(plugins.id, pluginId))
+    .limit(1)
+  if (row === undefined || !existsSync(row.cachedPath)) {
+    throw new Error(`intent-apply-plugin-publication-missing:${pluginId}`)
+  }
+}
+
 async function rollForward(
   rc: SqliteSkillArtifactCompensation,
   db: DbClient,
@@ -50,6 +71,25 @@ async function rollForward(
   log: Logger,
 ): Promise<boolean> {
   let complete = true
+
+  // RFC-359 W7 抬齐③: plugin artifacts used to be skipped as a whole class here,
+  // so "the plugin never actually installed" could not be discovered on this
+  // path at all. Same check, same word as the PostgreSQL engine; per-artifact
+  // isolation so one unfinished plugin does not hide the skill tails below.
+  for (const artifact of artifacts) {
+    if (artifact.kind !== 'plugin-install') continue
+    try {
+      await assertPluginPublished(db, artifact.pluginId)
+    } catch (error) {
+      complete = false
+      log.warn(INTENT_APPLY_DIAGNOSTICS.artifactRollForwardRetryable, {
+        kind: artifact.kind,
+        operationId: artifact.generationId,
+        err: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   const skillVersionStages = artifacts.flatMap((artifact) =>
     artifact.kind === 'skill-version-stage' ? [artifact.staged] : [],
   )

@@ -328,7 +328,7 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
     walk('packages/backend/src')
     offenders.sort()
     expect(offenders).toEqual([
-      'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
+      // RFC-359 W7：协作侧的自治遣散合一后只剩这一份（PG 那份原生重写已退役）。
       'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',

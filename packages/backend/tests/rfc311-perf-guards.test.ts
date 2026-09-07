@@ -1,4 +1,4 @@
-// RFC-311 —— 数据库性能的**结构性**防护网。
+// RFC-311 —— 数据库性能的**结构性**防护网。**RFC-359 W6-T27 起两个引擎各跑一遍。**
 //
 // 背景：生产 2.2GB 库上「所有操作都慢」的六路审计里，真正咬人的不是某条慢 SQL，
 // 而是四类**形状**问题：①N+1（每行再查一次）；②全表扫 / 排序（缺索引或排序键与
@@ -12,47 +12,64 @@
 //   - 既有的计划断言把 SQL **字面量抄进测试**，只能锁住抄进去的那一条，实现换了
 //     形状照样绿，而且没人会记得给新查询补断言。
 //
-// 这里换一条路：让被测代码正常跑，用 `recordStatements` 把它**实际执行**的每条语句
-// 连同绑定参数抓下来，再对**每一条**做统一审计。新增查询自动进入审计面。
+// 这里换一条路：让被测代码正常跑，用 `harness.recordStatements()` 把它**实际执行**的
+// 每条语句连同绑定参数抓下来，再对**每一条**做统一审计。新增查询自动进入审计面。
 //
-// 三条不变量，全部**确定性**（不看墙钟，因此可以进每次 PR 的门禁而不 flaky）：
+// 四条不变量，全部**确定性**（不看墙钟，因此可以进每次 PR 的门禁而不 flaky）：
 //   1. **语句条数不随行数增长**：同一路径在两种规模的库上执行的语句数必须**完全
 //      相等**。这是 N+1 的充要形态，且不需要写死任何魔数。
-//   2. **不许扫大表、不许临时排序**：每条 SELECT 的 EXPLAIN QUERY PLAN 里不得出现
-//      `SCAN <大表>` 或 `USE TEMP B-TREE`。EXPLAIN 用**绑定参数**跑——字面量下
-//      SQLite 会选出生产里根本不存在的计划（RFC-311 实测：展开式断点用字面量看不出
-//      MULTI-INDEX OR + TEMP B-TREE 全排序）。
-//   3. **绑定参数有界**：任何一条语句的参数个数不得超过 900，离 32766 的悬崖足够远。
+//   3. **绑定参数有界**：任何一条语句的参数个数不得超过 900，离 SQLite 32766 的悬崖
+//      足够远（PostgreSQL 的上限是 65535，同一个数对两个引擎都安全）。
 //   4. **取回的行数不随行数增长**：形状对了不代表体量对了。一条走索引、只发一次的
 //      SELECT 照样能把整张表搬进内存——旧的 `listMissionSummaries` 正是如此，它在
 //      只看计划的前三条判据下**完全干净**（实测过：塞进注册表 7 pass 0 fail）。这条
 //      是 RFC-311 立项动机（/tasks 2000 行、/repos 280 行就卡）的直接判据。
-//
-// 两种规模**都要大到连被过滤后的子集也超过页上限**（200 / 500，各路径上限最大 50，
-// 而过滤视图只有 1/3 的行命中）：分页路径两次都只取回一页，无界路径才会跟着库长。
-// 规模取小了会把「返回 min(limit, N)」这种正确行为误判成增长——前两版判据先后栽在
-// 这两处（4/40 太小、80/200 对过滤视图仍太小）。
-//
 //   5. **列表查询不碰重列**：行数有界、走索引，仍可能每行搬回 10KB——RFC-311 审计
 //      的 L2「窄投影」正是这一类（node_runs 平均每行 10.5KB，其中 prompt_text 占
 //      57%，而它只在详情页被读）。重列**按命名派生**而非人工枚举（`*_json` /
 //      `*_snapshot` / `*_text` / stdout / inputs / outputs…），所以新加的列自动纳入，
 //      判据不会因为有人忘了登记而失效。
 //
+// 第②条（计划审计：不许扫大表、不许临时排序）**只在 SQLite 上跑**，见下面
+// `assertPlans` 的注释——PostgreSQL 侧的计划审计由
+// `rfc359-w6-t26-postgresql-plan-audit.test.ts` 在一万行语料上用真 `EXPLAIN (ANALYZE,
+// BUFFERS)` 承担。在这里 500 行的语料上断言 PostgreSQL 的计划，断的是「表小」不是「缺索引」。
+//
+// 两种规模**都要大到连被过滤后的子集也超过页上限**（200 / 500，各路径上限最大 50，
+// 而过滤视图只有 1/3 的行命中）：分页路径两次都只取回一页，无界路径才会跟着库长。
+// 规模取小了会把「返回 min(limit, N)」这种正确行为误判成增长——前两版判据先后栽在
+// 这两处（4/40 太小、80/200 对过滤视图仍太小）。
+//
 // 另：计划审计**不只看 SELECT**。历史上最恶劣的一次是归档器的 DELETE（无界 IN 撞
 // 32766 上限死循环），写语句的计划同样要审。
+//
+// # AC-11：PostgreSQL 不劣于 SQLite（RFC-359 W6-T27）
+//
+// 判据**不是墙钟毫秒**。`docs/audit-backlog.md` §「O(k²) 守卫用墙钟毫秒当判据，在共享
+// runner 上会假红」记着一次实撞：同一份代码本机 0.6ms、CI 上量到 182ms 而红——毫秒把
+// 「算法复杂度」和「这台机器此刻有多忙」混成了一个数，而假红会训练所有人「重跑一下就好」，
+// 真的回潮反而被淹掉。
+//
+// 这里的 AC-11 判据是**跨引擎的结构对比**：同一条路径在 PostgreSQL 上发的语句条数、取回
+// 的行数、单条语句的最大绑定参数，都不得多于 SQLite。三个量全部确定性、与负载无关，
+// 而且正是「PG 上更慢」的**因**（多发语句 = 多一次网络往返；多取行 = 多搬数据）。
+// 两个引擎各自的 P95 墙钟仍然**采集并打印**（RFC-359 AC-11 要的「各取各的基线」），
+// 但只作诊断，不作判据；唯一带毫秒的断言是一条离噪声极远的塌方阈值（见 `CATASTROPHE_RATIO`）。
 
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   cachedRepos,
   developmentMissions,
+  lifecycleAlerts,
+  nodeRunEvents,
+  nodeRuns,
   taskRepos,
   tasks,
   users,
@@ -70,12 +87,16 @@ import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { buildOverview } from '../src/services/overview'
+import {
+  describeEachProvider,
+  resolveTestProviders,
+  type ProviderHarness,
+} from './helpers/eachProvider'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 import { listTaskOperationsPage } from './helpers/taskListPage'
-import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
+import type { RecordedStatement } from './helpers/statementRecorder'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const T0 = 1_700_000_000_000
 const LEGACY_TERMINAL_STATUSES = [
   'merged',
@@ -109,7 +130,7 @@ function actorOf(id: string, role: 'admin' | 'user' = 'admin'): Actor {
   })
 }
 
-async function seed(db: DbClient, n: number): Promise<void> {
+async function seed(db: ProviderNeutralDatabase, n: number): Promise<void> {
   await db.insert(users).values({
     id: 'admin',
     username: 'admin',
@@ -119,9 +140,13 @@ async function seed(db: DbClient, n: number): Promise<void> {
     updatedAt: 1,
   })
   await db.insert(workflows).values({ id: 'wf1', name: 'nightly', definition: '{}' })
+  const taskRows: (typeof tasks.$inferInsert)[] = []
+  const repoRows: (typeof taskRepos.$inferInsert)[] = []
+  const cacheRows: (typeof cachedRepos.$inferInsert)[] = []
+  const missionRows: (typeof developmentMissions.$inferInsert)[] = []
   for (let i = 0; i < n; i += 1) {
     const id = `t${String(i).padStart(4, '0')}`
-    await db.insert(tasks).values({
+    taskRows.push({
       id,
       name: `task ${id}`,
       workflowId: 'wf1',
@@ -145,7 +170,7 @@ async function seed(db: DbClient, n: number): Promise<void> {
       // 那样这套防护就在审计一条生产上不会走的路径。
       rootTaskId: id,
     })
-    await db.insert(taskRepos).values({
+    repoRows.push({
       taskId: id,
       repoIndex: 0,
       repoPath: `/repos/r${i % 7}`,
@@ -154,7 +179,7 @@ async function seed(db: DbClient, n: number): Promise<void> {
       branch: `agent-workflow/${id}`,
       baseBranch: 'main',
     })
-    await db.insert(cachedRepos).values({
+    cacheRows.push({
       id: `repo${String(i).padStart(4, '0')}`,
       urlHash: `hash-${i}`,
       urlRedacted: `git@github.com:acme/c${i}.git`,
@@ -167,7 +192,7 @@ async function seed(db: DbClient, n: number): Promise<void> {
       hasSubmodules: i % 4 === 0,
       lastSubmoduleSyncOk: i % 8 !== 0,
     })
-    await db.insert(developmentMissions).values({
+    missionRows.push({
       id: `m${String(i).padStart(4, '0')}`,
       revision: 1,
       status: LEGACY_TERMINAL_STATUSES[i % LEGACY_TERMINAL_STATUSES.length]!,
@@ -182,16 +207,41 @@ async function seed(db: DbClient, n: number): Promise<void> {
       updatedAt: T0 + i * 1_000,
     })
   }
+  // 分批插：PostgreSQL 的绑定参数上限是 65535，逐行插又会把整条 lane 拖成分钟级。
+  const batch = 200
+  for (let offset = 0; offset < taskRows.length; offset += batch) {
+    await db.insert(tasks).values(taskRows.slice(offset, offset + batch))
+    await db.insert(taskRepos).values(repoRows.slice(offset, offset + batch))
+    await db.insert(cachedRepos).values(cacheRows.slice(offset, offset + batch))
+    await db.insert(developmentMissions).values(missionRows.slice(offset, offset + batch))
+  }
+}
+
+/**
+ * 两种规模要在**同一个库**上先后铺开（harness 每个用例只给一个库），所以两次之间要
+ * 清空。顺序按外键依赖从叶到根；受防护路径自己写的表（归档器碰 events、巡检可能落
+ * lifecycle_alerts）也要清，否则第二次测量会带上第一次的残留。
+ */
+async function clearCorpus(db: ProviderNeutralDatabase): Promise<void> {
+  await db.delete(lifecycleAlerts)
+  await db.delete(nodeRunEvents)
+  await db.delete(nodeRuns)
+  await db.delete(developmentMissions)
+  await db.delete(taskRepos)
+  await db.delete(tasks)
+  await db.delete(cachedRepos)
+  await db.delete(workflows)
+  await db.delete(users)
 }
 
 interface GuardedPath {
   readonly name: string
   /**
-   * - `list`：分页/计数读面，受全部五条约束。
+   * - `list`：分页/计数读面，受全部四条约束。
    * - `sweep`：周期维护（归档器、巡检…）。它**天生就是 O(全表)**——那正是它的职责，
    *   所以豁免「取回行数不随库增长」；但**每一拍必须分块**，因此仍受「单条语句取回
-   *   行数有上界」「绑定参数有界」「计划不许裸扫」约束。历史上最恶劣的一次事故正是
-   *   归档器把无界 id 列表塞进 `IN (…)` 撞 32766 上限死循环。
+   *   行数有上界」「绑定参数有界」约束。历史上最恶劣的一次事故正是归档器把无界 id
+   *   列表塞进 `IN (…)` 撞 32766 上限死循环。
    * - `detail`：详情读面，按定义要读重列，豁免第五条。
    */
   readonly kind?: 'list' | 'sweep' | 'detail'
@@ -201,7 +251,7 @@ interface GuardedPath {
    * 它是 O(1) 有用。填这个字段必须同时写清为什么还没消。
    */
   readonly maxStatementsPerRow?: number
-  run(db: DbClient): Promise<unknown>
+  run(db: ProviderNeutralDatabase): Promise<unknown>
 }
 
 /**
@@ -234,34 +284,35 @@ function heavyColumns(): string[] {
 const GUARDED: GuardedPath[] = [
   {
     name: 'task-operations catalog — 默认视图首页',
-    run: (db) => listTaskOperationsPage(db, actorOf('admin'), {}),
+    run: (db) => listTaskOperationsPage(db as never, actorOf('admin'), {}),
   },
   {
     name: 'task-operations catalog — 过滤视图（G1 快路径）',
-    run: (db) => listTaskOperationsPage(db, actorOf('admin'), { statuses: 'running' }),
+    run: (db) => listTaskOperationsPage(db as never, actorOf('admin'), { statuses: 'running' }),
   },
   {
     name: '/api/cached-repos — keyset 首页',
-    run: (db) => listCachedReposPage(composeSqliteRepositoryWorkspaceStore(db), { limit: 20 }),
+    run: (db) =>
+      listCachedReposPage(composeSqliteRepositoryWorkspaceStore(db as never), { limit: 20 }),
   },
   {
     name: '/api/code/missions — keyset 首页',
-    run: async (db) => listMissionSummariesPage(db, { limit: 20 }),
+    run: async (db) => listMissionSummariesPage(db as never, { limit: 20 }),
   },
   {
     name: '/api/code/missions/outcome-summaries — 员工终态分组',
-    run: async (db) => listMissionTerminalOutcomeGroups(db),
+    run: async (db) => listMissionTerminalOutcomeGroups(db as never),
   },
   {
     name: '/api/overview — 计数面板',
     run: (db) => {
       const actor = actorOf('admin')
-      const store = composeSqliteRepositoryWorkspaceStore(db)
+      const store = composeSqliteRepositoryWorkspaceStore(db as never)
       return buildOverview(
-        db,
-        resourceScopeAuthority(db, actor),
+        db as never,
+        resourceScopeAuthority(db as never, actor),
         composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
-        memoryCatalogOf(db),
+        memoryCatalogOf(db as never),
       )
     },
   },
@@ -274,7 +325,7 @@ const GUARDED: GuardedPath[] = [
       const logsDir = mkdtempSync(join(tmpdir(), 'aw-perf-guard-logs-'))
       try {
         return await archiveEvents(
-          db,
+          db as never,
           {
             eventsArchiveThresholds: {
               perNodeRunRows: 5,
@@ -298,46 +349,113 @@ const GUARDED: GuardedPath[] = [
     // 让它不再冻结主连接，但每条规则仍逐任务查一次。集合化之前，先把比率钉住。
     maxStatementsPerRow: 3.1,
     run: (db) =>
-      runLifecycleInvariants({ operations: taskRecoveryOperations(db), scope: { all: true } }),
+      runLifecycleInvariants({
+        operations: taskRecoveryOperations(db as never),
+        scope: { all: true },
+      }),
   },
 ]
 
 const SMALL = 200
 const LARGE = 500
 
-async function capture(n: number, path: GuardedPath): Promise<RecordedStatement[]> {
-  const db = createInMemoryDb(MIGRATIONS)
-  await seed(db, n)
-  const raw = (db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client
-  const rec = recordStatements(raw)
+/** P95 采样次数。取奇数，`sorted[ceil(0.95*n)-1]` 落在最后一个样本上。 */
+const P95_SAMPLES = 9
+
+/**
+ * 唯一带毫秒的断言：PostgreSQL 的 P95 不得超过 SQLite 的这个倍数。
+ *
+ * 它**不是**性能 SLA，是塌方探测器——离噪声极远，只有「某条页查询在 PG 上退化成
+ * 全表扫描 / 每行再查一次」这种量级的回归才够得着。50 倍这个数怎么来的：500 行语料上
+ * PG 的每条语句都要付一次本机网络往返（约 0.3–1ms），而 SQLite 是同进程函数调用，
+ * 便宜路径上 PG 天然就慢一个量级；实测比值 1.4–30 倍（`/api/overview` 13 条语句最差）。
+ * 真正的「PG 不劣于 SQLite」由下面的结构对比断言承担。
+ */
+const CATASTROPHE_RATIO = 50
+/**
+ * 倍数之外还有一条**绝对下限**：最便宜的路径 SQLite 侧只要 0.2ms，50 倍也才 10ms，
+ * 而满载 runner 上 PostgreSQL 光是几次本机往返就能吃掉那个预算——判据会在没有任何回归时红。
+ * 250ms 在 500 行语料上是够不着的（实测最贵的一条也只有 31ms），而真塌方是秒级。
+ */
+const CATASTROPHE_FLOOR_MS = 250
+
+interface Measurement {
+  readonly statements: number
+  readonly rows: number
+  readonly maxParams: number
+  readonly p95Ms: number
+}
+
+/** 两条 lane 共用的跨引擎测量表：`路径 → 引擎 → 测量`。 */
+const MEASURED = new Map<string, Map<string, Measurement>>()
+let comparisons = 0
+
+function percentile95(samples: readonly number[]): number {
+  const sorted = [...samples].sort((a, b) => a - b)
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * 0.95) - 1))
+  return sorted[index] ?? 0
+}
+
+async function capture(
+  harness: ProviderHarness,
+  n: number,
+  path: GuardedPath,
+): Promise<RecordedStatement[]> {
+  await clearCorpus(harness.db)
+  await seed(harness.db, n)
+  const recording = harness.recordStatements()
   try {
-    await path.run(db)
+    await path.run(harness.db)
   } finally {
-    rec.stop()
+    recording.stop()
   }
-  return rec.statements
+  return recording.statements
 }
 
-function planOf(db: DbClient, stmt: RecordedStatement): string {
-  const raw = (
-    db as unknown as { $client: { prepare(q: string): { all(...a: unknown[]): unknown[] } } }
-  ).$client
-  const args = Array.from({ length: stmt.params }, () => null)
-  const rows = raw.prepare(`EXPLAIN QUERY PLAN ${stmt.sql}`).all(...args) as Array<{
-    detail: string
-  }>
-  return rows.map((r) => r.detail).join('\n')
+/**
+ * 计划审计（不变量②：不许扫大表、不许临时排序）——**只在 SQLite 上有意义**。
+ *
+ * `EXPLAIN QUERY PLAN` 是 SQLite 方言，PostgreSQL 的 `EXPLAIN` 是另一套词汇；更要紧的是
+ * 语料规模：这里是 500 行，PostgreSQL 在这个体量上会（完全正确地）偏好顺序扫描，
+ * 断言「不许 Seq Scan」断的是「表小」而不是「缺索引」。PostgreSQL 侧的计划审计因此
+ * 独立成 `rfc359-w6-t26-postgresql-plan-audit.test.ts`：一万行语料 + 真
+ * `EXPLAIN (ANALYZE, BUFFERS)` + 一本只降不升的缺口账。
+ */
+async function assertPlans(
+  harness: ProviderHarness,
+  statements: readonly RecordedStatement[],
+): Promise<void> {
+  const offenders: string[] = []
+  // 读写都审：归档器那次死循环就在 DELETE 上。
+  for (const stmt of statements.filter((s) => /^\s*(select|delete|update)/i.test(s.sql))) {
+    const plan = await harness.explain(stmt)
+    if (plan.length === 0) continue // EXPLAIN 解释不了的（CTE 里的临时构造等）跳过
+    for (const table of UNBOUNDED_TABLES) {
+      // SQLite 把**有序索引扫描**也叫 SCAN（`SCAN t USING COVERING INDEX ix`），
+      // 那正是 keyset 首页该有的形态（顺着索引走、到 LIMIT 就停），不是缺陷。
+      // 真正要拦的是**没有 USING** 的裸表扫描。
+      if (new RegExp(`SCAN ${table}(?! USING)\\b`).test(plan))
+        offenders.push(
+          `SCAN ${table}（裸表扫描）\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}`,
+        )
+    }
+    if (/USE TEMP B-TREE/.test(plan))
+      offenders.push(
+        `TEMP B-TREE\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}\n  PLAN: ${plan}`,
+      )
+  }
+  expect(offenders, `这些语句会随数据量线性变慢：\n${offenders.join('\n')}`).toEqual([])
 }
 
-describe('RFC-311 性能防护 —— 每条受防护读路径的四条结构性不变量', () => {
+describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结构性不变量', (harness) => {
   test.each(GUARDED.map((p) => [p.name, p] as const))(
     '%s',
-    async (_name, path) => {
-      const small = await capture(SMALL, path)
-      const large = await capture(LARGE, path)
+    async (name, path) => {
+      const small = await capture(harness, SMALL, path)
+      const large = await capture(harness, LARGE, path)
 
       // ① N+1：语句条数必须与行数无关。
-      const summarize = (s: RecordedStatement[]): string[] =>
+      const summarize = (s: readonly RecordedStatement[]): string[] =>
         s.map((x) => x.sql.replace(/\s+/g, ' ').slice(0, 90))
       if (path.maxStatementsPerRow === undefined) {
         expect(
@@ -366,7 +484,7 @@ describe('RFC-311 性能防护 —— 每条受防护读路径的四条结构性
       // ④b 体量：取回的**总**行数不随库里行数增长。这是「无界结果集」唯一的可靠
       //     信号，与①正交（①数**发了几条**，④数**搬回来多少行**）。
       //     sweep 豁免——它的职责就是遍历全表，见 GuardedPath.kind 的注释。
-      const rowsOf = (s: RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
+      const rowsOf = (s: readonly RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
       if ((path.kind ?? 'list') !== 'sweep')
         expect(
           rowsOf(large),
@@ -394,43 +512,90 @@ describe('RFC-311 性能防护 —— 每条受防护读路径的四条结构性
         ).toEqual([])
       }
 
-      // ③ 绑定参数有界（SQLite 硬上限 32766，无界 IN(…) 会在生产上直接抛）。
+      // ③ 绑定参数有界（SQLite 硬上限 32766 / PostgreSQL 65535，无界 IN(…) 会在生产上直接抛）。
       const worst = large.reduce((m, s) => Math.max(m, s.params), 0)
       expect(
         worst,
         `某条语句绑定了 ${worst} 个参数，逼近 SQLite 的 32766 上限`,
       ).toBeLessThanOrEqual(MAX_BOUND_PARAMS)
 
-      // ② 计划：不许扫大表、不许临时排序。
-      const db = createInMemoryDb(MIGRATIONS)
-      await seed(db, LARGE)
-      const offenders: string[] = []
-      // 读写都审：归档器那次死循环就在 DELETE 上。
-      for (const stmt of large.filter((s) => /^\s*(select|delete|update)/i.test(s.sql))) {
-        let plan: string
-        try {
-          plan = planOf(db, stmt)
-        } catch {
-          continue // EXPLAIN 解释不了的（CTE 里的临时构造等）跳过，不假装审计过
-        }
-        for (const table of UNBOUNDED_TABLES) {
-          // SQLite 把**有序索引扫描**也叫 SCAN（`SCAN t USING COVERING INDEX ix`），
-          // 那正是 keyset 首页该有的形态（顺着索引走、到 LIMIT 就停），不是缺陷。
-          // 真正要拦的是**没有 USING** 的裸表扫描。
-          if (new RegExp(`SCAN ${table}(?! USING)\\b`).test(plan))
-            offenders.push(
-              `SCAN ${table}（裸表扫描）\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}`,
-            )
-        }
-        if (/USE TEMP B-TREE/.test(plan))
-          offenders.push(
-            `TEMP B-TREE\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}\n  PLAN: ${plan}`,
-          )
+      // ② 计划审计——见 assertPlans 的注释，PostgreSQL 侧另有专门的一份。
+      if (harness.capabilities.provider === 'sqlite') await assertPlans(harness, large)
+
+      // —— AC-11 的采集面 ——
+      // P95 墙钟：两个引擎各取各的基线（RFC-359 AC-11）。只打印、不作判据。
+      const samples: number[] = []
+      for (let i = 0; i < P95_SAMPLES; i += 1) {
+        const startedAt = performance.now()
+        await path.run(harness.db)
+        samples.push(performance.now() - startedAt)
       }
-      expect(offenders, `这些语句会随数据量线性变慢：\n${offenders.join('\n')}`).toEqual([])
+      const engine = harness.capabilities.provider
+      const measurement: Measurement = {
+        statements: large.length,
+        rows: rowsOf(large),
+        maxParams: worst,
+        p95Ms: percentile95(samples),
+      }
+      const byEngine = MEASURED.get(name) ?? new Map<string, Measurement>()
+      byEngine.set(engine, measurement)
+      MEASURED.set(name, byEngine)
+      console.info(
+        `[rfc311-perf ${engine}] ${name}: ${measurement.statements} 条语句 / ` +
+          `${measurement.rows} 行 / 最大 ${measurement.maxParams} 参数 / ` +
+          `P95 ${measurement.p95Ms.toFixed(2)}ms（${LARGE} 行语料）`,
+      )
+
+      // AC-11 的判据。两条 lane 在同一个进程里跑，**后跑到的那一条**做比较——
+      // 这样断言与 describe / test 的执行顺序无关（CI 用 `bun test --randomize`）。
+      const sqlite = byEngine.get('sqlite')
+      const postgresql = byEngine.get('postgresql')
+      if (sqlite !== undefined && postgresql !== undefined) {
+        comparisons += 1
+        expect(
+          postgresql.statements,
+          `AC-11：同一条路径在 PostgreSQL 上发了 ${postgresql.statements} 条语句，` +
+            `SQLite 只发 ${sqlite.statements} 条。多发的每一条在 PG 上都是一次网络往返——` +
+            `这是「PG 更慢」最直接的因，而且与机器负载无关。`,
+        ).toBeLessThanOrEqual(sqlite.statements)
+        expect(
+          postgresql.rows,
+          `AC-11：同一条路径在 PostgreSQL 上取回 ${postgresql.rows} 行，SQLite 只取回 ${sqlite.rows} 行。`,
+        ).toBeLessThanOrEqual(sqlite.rows)
+        expect(
+          postgresql.maxParams,
+          `AC-11：同一条路径在 PostgreSQL 上单条语句最多绑定 ${postgresql.maxParams} 个参数，` +
+            `SQLite 是 ${sqlite.maxParams} 个。`,
+        ).toBeLessThanOrEqual(sqlite.maxParams)
+        console.info(
+          `[rfc311-perf AC-11] ${name}: P95 sqlite ${sqlite.p95Ms.toFixed(2)}ms / ` +
+            `postgresql ${postgresql.p95Ms.toFixed(2)}ms（比值 ` +
+            `${(postgresql.p95Ms / Math.max(sqlite.p95Ms, 0.001)).toFixed(1)}×，只作诊断）`,
+        )
+        // 塌方探测器，不是 SLA。见 CATASTROPHE_RATIO 的注释。
+        expect(
+          postgresql.p95Ms,
+          `AC-11 塌方探测：PostgreSQL 的 P95 ${postgresql.p95Ms.toFixed(2)}ms 是 SQLite ` +
+            `${sqlite.p95Ms.toFixed(2)}ms 的 ${(postgresql.p95Ms / Math.max(sqlite.p95Ms, 0.001)).toFixed(1)} 倍。\n` +
+            `这个倍数远超「每条语句多一次本机网络往返」能解释的范围，多半是某条查询在 PG 上\n` +
+            `退化成了全表扫描 / 每行再查一次。去看 rfc359-w6-t26-postgresql-plan-audit 的账本。`,
+        ).toBeLessThanOrEqual(Math.max(sqlite.p95Ms * CATASTROPHE_RATIO, CATASTROPHE_FLOOR_MS))
+      }
     },
-    30_000,
+    180_000,
   )
+})
+
+// 两条 lane 都跑过之后：AC-11 到底比没比。放 afterAll 而不是最后一个 test，
+// 是因为 CI 用 `bun test --randomize`——写成 test 会被排到前面去，counter 恒 0 而空洞绿。
+afterAll(() => {
+  if (!resolveTestProviders(process.env).includes('postgresql')) return
+  if (comparisons < GUARDED.length) {
+    throw new Error(
+      `AC-11 只完成了 ${comparisons} / ${GUARDED.length} 条路径的跨引擎对比——` +
+        '说明有 lane 没跑到，「PG 不劣于 SQLite」这句话此刻没有证据。',
+    )
+  }
 })
 
 // 枚举型守卫必须先断言自己的枚举面（本仓已有的定式：不然「没找到违规」和「没扫到

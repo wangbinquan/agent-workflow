@@ -12,6 +12,7 @@ import {
   diffWorkflowForSync,
   emptyWorkflowSyncDiff,
   isHumanReviewConclusion,
+  isTerminalNodeRunStatus,
   isTerminalTaskStatus,
   isTurnEngineWorkgroupTask,
   isWrapperKind,
@@ -60,6 +61,7 @@ import {
   taskRepos,
   taskSpaceNodes,
   tasks,
+  workflows,
 } from '@/db/schema'
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
 import type {
@@ -114,10 +116,11 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
-import { loadTaskFailureCodes } from '@/services/task'
+import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
+import { assertNotBuiltin } from '@/services/systemResources'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
-import { deriveReviewRoundTiming } from '@/services/reviewRoundStart'
+import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
@@ -303,8 +306,48 @@ async function failedCode(
   return rows.find((row) => row.parentNodeRunId === null)?.failureCode ?? null
 }
 
+/**
+ * RFC-359 W7 —— 任务引用的工作流行（`name` / `builtin`）。
+ *
+ * 这两列**不是**装饰：`Task.workflowName` 是详情页、任务列表、sync 预览横幅显示的工作流名，
+ * `builtin` 决定 `projectWorkflowSnapshotForRead` 要不要给框架内置宿主快照重新排版。此前这里
+ * 恒写 `null` / 不排版，于是 PostgreSQL 部署上工作流名**永远空白**、agent / 工作组宿主任务的
+ * 画布拿到的是未排版快照——而 SQLite 侧 `services/task.ts` 的 `getTask` 一直是
+ * `leftJoin(workflows)` 取这两列的。`leftJoin` 语义保留：工作流已删（RFC-285 软链）时回 null，
+ * 详情页照常渲染悬空引用。
+ */
+async function workflowIdentities(
+  db: PostgresqlDatabaseClient,
+  workflowIds: readonly string[],
+): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean }>>> {
+  const wanted = [...new Set(workflowIds)]
+  if (wanted.length === 0) return new Map()
+  const rows = await db
+    .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
+    .from(workflows)
+    .where(inArray(workflows.id, wanted))
+  return new Map(rows.map((row) => [row.id, { name: row.name, builtin: row.builtin === true }]))
+}
+
+/**
+ * RFC-359 W7（判据缺口账本 01a / 01b）—— 内置工作流只读锁要判的那一行。
+ *
+ * SQLite 侧 `assertManualExecutionAllowed` / `assertTaskSyncable` 都会
+ * `assertNotBuiltin('workflow', workflow)`，PostgreSQL 侧两处都没有：同一个内置工作流在 PG
+ * 部署上可被手动执行、可被 sync，在 SQLite 上是 403 `builtin-readonly`。判据只需要
+ * `workflows.builtin`，而 `TaskExecutionWorkflowSnapshot` 不带这一列，所以按 SQLite 的
+ * `getWorkflow` 同款直接读行；行不存在（工作流已删，RFC-285 软链）时回 null，调用方与
+ * SQLite 一致地不拦。
+ */
+async function builtinCandidateWorkflow(
+  db: PostgresqlDatabaseClient,
+  workflowId: string,
+): Promise<Readonly<{ builtin: boolean }> | null> {
+  return (await workflowIdentities(db, [workflowId])).get(workflowId) ?? null
+}
+
 async function taskProjection(db: PostgresqlDatabaseClient, row: TaskRow): Promise<Task> {
-  const [repoRows, nodeRows, failureCode] = await Promise.all([
+  const [repoRows, nodeRows, failureCode, identities] = await Promise.all([
     db
       .select()
       .from(taskRepos)
@@ -315,7 +358,9 @@ async function taskProjection(db: PostgresqlDatabaseClient, row: TaskRow): Promi
       .from(taskSpaceNodes)
       .where(eq(taskSpaceNodes.taskId, row.id)),
     failedCode(db, row),
+    workflowIdentities(db, [row.workflowId]),
   ])
+  const identity = identities.get(row.workflowId)
   const repos = repoRows.length > 0 ? repoRows.map(repoProjection) : [fallbackRepo(row)]
   const nodePaths =
     nodeRows.length > 0
@@ -329,8 +374,11 @@ async function taskProjection(db: PostgresqlDatabaseClient, row: TaskRow): Promi
     id: row.id,
     name: row.name,
     workflowId: row.workflowId,
-    workflowName: null,
-    workflowSnapshot: parseJson(row.workflowSnapshot, null),
+    workflowName: identity?.name ?? null,
+    workflowSnapshot: projectWorkflowSnapshotForRead(
+      parseJson(row.workflowSnapshot, null),
+      identity?.builtin === true,
+    ),
     workflowVersion: row.workflowVersion ?? null,
     repoPath: row.repoPath,
     repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl),
@@ -399,12 +447,13 @@ function summaryProjection(
   row: TaskListRow,
   openAlertCount: number,
   failureCode: string | null | undefined,
+  workflowName: string | null,
 ): TaskSummary {
   return TaskSummarySchema.parse({
     id: row.id,
     name: row.name,
     workflowId: row.workflowId,
-    workflowName: null,
+    workflowName,
     repoPath: row.repoPath,
     repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl),
     cachedRepoId: row.cachedRepoId ?? null,
@@ -530,11 +579,18 @@ async function listSummaries(
   // 的形状在 10k 上界的列表上就是 N+1；`loadTaskFailureCodes` 的函数体只有一次批量查询加
   // 一个纯函数挑选，两个 provider 共用。
   const failureCodes = await loadTaskFailureCodes(db, rows)
+  // RFC-359 W7：列表行的工作流名与详情页同源（SQLite 侧是 `leftJoin(workflows)`）。
+  // 一次批量，不是每行一次——列表上界 10k。
+  const identities = await workflowIdentities(
+    db,
+    rows.map((row) => row.workflowId),
+  )
   return rows.map((row) => ({
     summary: summaryProjection(
       row,
       alerts.get(row.id) ?? 0,
       failureCodes.has(row.id) ? (failureCodes.get(row.id) ?? null) : undefined,
+      identities.get(row.workflowId)?.name ?? null,
     ),
     ownerUserId: row.ownerUserId ?? null,
   }))
@@ -974,6 +1030,10 @@ async function taskNodeRuns(
       clarifyNavKind,
     })
   })
+  // RFC-078 —— 评审行的时间线锚是它这一轮**内容**的时间，不是槽位首次打开时钉住的
+  // `started_at`；没有这次重排，评审行会排在它所评审的产物**之前**。SQLite 侧
+  // `services/task.ts:getTaskNodeRuns` 一直做这一步（`runs.sort(compareNodeRunsForTimeline)`）。
+  runs.sort(compareNodeRunsForTimeline)
   const outputRows =
     runs.length === 0
       ? []
@@ -1029,7 +1089,10 @@ async function nodeRunEventsPage(
 ) {
   await assertNodeRunOwner(dependencies.db, taskId, nodeRunId)
   const since = options.since ?? 0
-  const limit = Math.max(1, Math.min(options.limit ?? 1000, 5000))
+  // RFC-359 W7：分页口径与 SQLite 同一份契约（缺省 500 / 上限 1000）。此前 PG 是
+  // 1000 / 5000，于是同一个 `GET /api/tasks/:id/runs/:runId/events` 在两种部署上回不同
+  // 条数——前端的游标推进逻辑按条数判「还有没有下一页」，两侧不能各说各话。
+  const limit = Math.min(options.limit ?? 500, 1000)
   const archived = await readArchivedEvents(Paths.logsDir, taskId, nodeRunId, since, limit)
   const events = archived.map((event) => ({
     id: event.id,
@@ -1148,19 +1211,33 @@ async function taskDiff(
       410,
     )
   }
+  // RFC-359 W7 —— 多仓任务一个可用 base commit 都没有时必须 409，而不是回一个空 diff。
+  // SQLite 侧 `services/task.ts:getTaskDiff` 一直有这道门（`usable.length === 0`）：
+  // 「没东西可比」与「比过了，没有改动」在用户面前是两件事，前者是准备阶段就失败的任务，
+  // 静默回空 diff 会让人以为 agent 什么都没改。
+  const usable: boolean[] = []
+  for (const repo of task.repos) {
+    usable.push(
+      repo.baseCommit !== null &&
+        repo.baseCommit !== '' &&
+        existsSync(repo.worktreePath) &&
+        (await isGitWorkTree(repo.worktreePath)),
+    )
+  }
+  if (!usable.some(Boolean)) {
+    throw new DomainError(
+      'task-no-base-commit',
+      `task '${taskId}' has no repo with a recorded base commit; cannot compute diff`,
+      409,
+    )
+  }
   const labels = canonicalRepoKeysWire(task.repos)
   let diff = ''
   let truncated = false
   for (let index = 0; index < task.repos.length; index += 1) {
     const repo = task.repos[index]!
-    if (
-      repo.readonly ||
-      repo.baseCommit === null ||
-      repo.baseCommit === '' ||
-      !(await isGitWorkTree(repo.worktreePath))
-    ) {
-      continue
-    }
+    // RFC-248 D11：只读成员不进任务 diff（可用性判据在上面，与 SQLite 同序）。
+    if (repo.readonly || usable[index] !== true || repo.baseCommit === null) continue
     const value = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit)
     if (value === '') continue
     const section = `# === Repo: ${labels[index] ?? '.'} ===\n${value}${value.endsWith('\n') ? '' : '\n'}`
@@ -1362,6 +1439,10 @@ async function syncWorkflow(
       'agent/workgroup host tasks run a synthesized snapshot and cannot be synced',
     )
   }
+  // 判据缺口账本 01b —— 与 SQLite 的 `assertTaskSyncable` 同位同序：内置身份先于
+  // 活跃 / 状态 / 工作树各门，一个内置工作流无论任务处于什么状态都不可被 sync。
+  const syncCandidate = await builtinCandidateWorkflow(dependencies.db, row.workflowId)
+  if (syncCandidate !== null) assertNotBuiltin('workflow', syncCandidate)
   await dependencies.activity.awaitReleasedSettled(input.taskId)
   if (dependencies.activity.isActive(input.taskId)) {
     throw new ConflictError('task-not-syncable', `task '${input.taskId}' is actively running`)
@@ -1506,6 +1587,27 @@ function freshestTopLevel(rows: readonly NodeRunRow[], nodeId: string): NodeRunR
     .sort((left, right) => right.id.localeCompare(left.id))[0]
 }
 
+/**
+ * RFC-243 §4.2 —— 子任务的父调用行**已经收场**时它的状态；否则 null。判据与 SQLite 的
+ * `assertChildTaskDrivable` 逐字相同：不是子任务、没有父调用行、父调用行已不存在
+ * （被删 / 老数据）都算可驱动。
+ */
+async function finalizedParentCallRowStatus(
+  db: PostgresqlDatabaseClient,
+  task: Pick<TaskRow, 'parentTaskId' | 'parentNodeRunId'>,
+): Promise<string | null> {
+  const callRowId = task.parentNodeRunId ?? null
+  if ((task.parentTaskId ?? null) === null || callRowId === null) return null
+  const rows = await db
+    .select({ status: nodeRuns.status })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, callRowId))
+    .limit(1)
+  const row = rows[0]
+  if (row === undefined) return null
+  return isTerminalNodeRunStatus(row.status as NodeRunStatus) ? row.status : null
+}
+
 async function retryNode(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
   input: Parameters<TaskRouteOperations['retry']>[0],
@@ -1522,6 +1624,18 @@ async function retryNode(
     throw new ConflictError(
       'task-still-running',
       `task '${input.taskId}' is ${task.status}; cancel it before retrying`,
+    )
+  }
+  // 判据缺口账本 02（RFC-243 §4.2 子侧门）—— 父任务的调用行已经收场时，重跑这个子任务
+  // 的产物没有任何人会去消费（父的 outputs / merge 源已经结算完）。SQLite 侧 `retryNode`
+  // 走 `assertChildTaskDrivable`，PG 侧的 **resume** 有这道门（`assertResumeAdmission`）而
+  // retry 没有——同一个子任务在 PG 上 resume 被拒、retry 却放行。
+  const finalizedCallRow = await finalizedParentCallRowStatus(dependencies.db, task)
+  if (finalizedCallRow !== null) {
+    throw new ConflictError(
+      'call-row-finalized',
+      `task '${input.taskId}' is a child execution whose call node run already settled ` +
+        `('${finalizedCallRow}'); retry the parent's call node instead`,
     )
   }
   const runs = await dependencies.db
@@ -2037,6 +2151,11 @@ export function createPostgresqlTaskRouteOperations(
       ) {
         return
       }
+      // 判据缺口账本 01a —— 与 SQLite 的 `assertManualExecutionAllowed` 同判据：
+      // 内置工作流不可被手动执行（403 `builtin-readonly`）。可见性那一步是 PG 侧既有的
+      // 额外判据，保留在其后。
+      const candidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
+      if (candidate !== null) assertNotBuiltin('workflow', candidate)
       await loadVisibleWorkflow(dependencies, actor, task.workflowId)
     },
     workflowSyncPreview: (actor, taskId) => workflowSyncPreview(dependencies, actor, taskId),

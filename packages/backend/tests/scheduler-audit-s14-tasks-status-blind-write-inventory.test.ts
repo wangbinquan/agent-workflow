@@ -62,8 +62,8 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': 1,
-  'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': 1,
-  'modules/system-operations/infrastructure/sqliteResourceLimitPersistence.ts': 1,
+  // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
+  'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 2,
   'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts': 1,
@@ -79,7 +79,8 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-350：不活跃超时收割在**已经落进 canceled** 的行上覆盖终态原因文案
   // （`error_summary` / `error_message`），不翻状态——写入门本身要求
   // `status='canceled' AND error_summary = cancelTask 的默认值`，抢不到就是空操作。
-  // 与上面两条 ResourceLimitPersistence 的 writeLimitReason 完全同形。
+  // 与上面那条 ResourceLimitPersistence 的 writeLimitReason 完全同形（两者都已是
+  // 双 provider 共用的一份中立实现）。
   'modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts': 1,
   'platform/persistence/sqlite/systemWorkspaceGc.ts': 8,
   'platform/persistence/sqlite/taskLifecycle.ts': 1,

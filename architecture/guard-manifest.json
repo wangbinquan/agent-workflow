@@ -1869,7 +1869,7 @@
       "runner": "bun",
       "mechanism": "ast",
       "corpusScanner": true,
-      "minCorpusFiles": 20,
+      "minCorpusFiles": 10,
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
@@ -1934,6 +1934,18 @@
       "negativeFixture": true,
       "classified": true,
       "lines": 617
+    },
+    {
+      "id": "rfc359-w7-task-insert-lineage-completeness",
+      "file": "packages/backend/tests/architecture/rfc359-w7-task-insert-lineage-completeness.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 500,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 182
     },
     {
       "id": "runtime-parameter-ratchet",
@@ -2333,14 +2345,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:62e7d483da01877f1b6c1b1105756b6e081fbeba4e148ad9b88f28293ee539b8",
+    "sourceDigest": "sha256:55f876a7b5e58416c1a424ca5b741dc0e466612c9c9db0173a562b434b50ef08",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "e0be514a396de2fade2bb6f3e6b4a20479d4f82b",
-    "contentDigest": "sha256:6633e564484e0bdf32d1dc90d3f9b5e588b3a223e6362516c304dec67f707fdf",
+    "currentSnapshotSha": "5197f64d2fbcb6dc05eadf3d2ed27b4b6e99545a",
+    "contentDigest": "sha256:1d3e300f8858967b038fbe8c4532ae3b32cdd32067b34dab7a710965e6f71335",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

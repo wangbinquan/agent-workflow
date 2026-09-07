@@ -26,7 +26,7 @@ import {
 } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import {
   assertCommittedEventRegistry,
   combineCommittedEventCodecRegistries,
@@ -257,7 +257,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       },
     }
     const pump = createAfterCommitEventPump({
-      persistence: createSqliteCommittedEventDeliveryPersistence(db),
+      persistence: createCommittedEventDeliveryPersistence(db),
       codecs: collaborationCommittedEventCodec,
       projectors: [projector],
       projectionLedger,
@@ -319,7 +319,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
     expect(continuationNudges).toBe(1)
 
     const dispatcher = createCommittedEventDispatcher({
-      persistence: createSqliteCommittedEventDeliveryPersistence(db),
+      persistence: createCommittedEventDeliveryPersistence(db),
       workerId: 'rfc341-dispatcher',
       codecs: collaborationCommittedEventCodec,
       consumers: [...durable, projector],

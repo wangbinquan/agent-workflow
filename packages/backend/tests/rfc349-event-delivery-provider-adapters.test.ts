@@ -15,7 +15,6 @@ import {
   type EventSourceDescriptor,
   type EventTypeDescriptor,
 } from '@/modules/event-center/domain/model'
-import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
 import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -223,34 +222,13 @@ describe('RFC-349 Event Center provider behavior', () => {
     }
   })
 
-  test('PostgreSQL committed-event manual retry preserves lease and version CAS', async () => {
-    const fake = postgresqlFixture([{}, { values: [[3, 500]] }, {}])
-    const persistence = createPostgresqlCommittedEventDeliveryPersistence(fake.db)
-
-    await expect(
-      persistence.retry({
-        eventId: 'committed-event-1',
-        consumerId: 'consumer-1',
-        observedLeaseEpoch: 4,
-        observedUpdatedAt: 400,
-        now: 500,
-      }),
-    ).resolves.toEqual({
-      eventId: 'committed-event-1',
-      consumerId: 'consumer-1',
-      replayGeneration: 3,
-      state: 'pending',
-      updatedAt: 500,
-    })
-
-    const update = fake.executions.find((execution) =>
-      execution.sql.toLowerCase().includes('update "agent_workflow"."committed_event_deliveries"'),
-    )
-    expect(update?.sql).toContain('"lease_epoch"')
-    expect(update?.sql).toContain('"updated_at"')
-    expect(update?.sql.toLowerCase()).toContain('returning')
-  })
-
+  // RFC-359 W7 —— 这里原有一条「PostgreSQL committed-event manual retry preserves lease and
+  // version CAS」的脚本化夹具，断言的是 PG 适配器 retry 语句里带 RETURNING 的**形状**。
+  // 出站存储合一后只剩一份实现（`platform/events/committed/deliveryPersistence.ts`），retry 的
+  // CAS 改成「UPDATE + 同事务读回」——脚本化 mock 照不出方言差异，也钉不住已不存在的实现。
+  // 同一条判据（只能从 dead-letter 起、按 (leaseEpoch, updatedAt) CAS、推进 replayGeneration、
+  // 输了就抛）现在在**真 PostgreSQL 与真 SQLite** 上各跑一遍，见
+  // `tests/rfc359-w7-committed-events-conformance.test.ts`。
   test('PostgreSQL producer atom allocates aggregate sequence and deliveries in its caller transaction', async () => {
     const fake = postgresqlFixture([
       {},

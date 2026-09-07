@@ -438,21 +438,21 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/cli/start.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics",
-      "specifier": "@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics",
+      "specifier": "@/modules/collaboration/infrastructure/collaborationRuntimeMechanics",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "why": "RFC-359 W7 合一后 provider 选择那一半已消失（两个引擎共用中立的 `collaborationRuntimeMechanics.ts`），**剩下的是纯分层债**：bootstrap 仍直接 import owner 的 infrastructure，而不是走 owner 的 public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover）→ RFC-359 W7 改指中立实现后保留",
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:7ab5900a011d6261daa8"
+        "import:e35db63c6bb530d0a83b"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts#createSqliteCollaborationRuntimeMechanics"
+        "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts#createCollaborationRuntimeMechanics"
       ],
       "canonicalFacadeIds": []
     },
@@ -1277,21 +1277,21 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics",
-      "specifier": "@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics",
+      "specifier": "@/modules/collaboration/infrastructure/collaborationRuntimeMechanics",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "why": "RFC-359 W7 合一后 provider 选择那一半已消失（两个引擎共用中立的 `collaborationRuntimeMechanics.ts`），**剩下的是纯分层债**：bootstrap 仍直接 import owner 的 infrastructure，而不是走 owner 的 public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover）→ RFC-359 W7 改指中立实现后保留",
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:19b9bfb1784ca5f23458"
+        "import:221195a2392d08f0aff2"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts#createSqliteCollaborationRuntimeMechanics"
+        "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts#createCollaborationRuntimeMechanics"
       ],
       "canonicalFacadeIds": []
     },
@@ -5638,7 +5638,6 @@
         "import:4728b29e51290b1c9ceb",
         "import:5de495cef2ae8bd2787f",
         "import:5eade3e01613137f7011",
-        "import:5f4ba26a02bd30ab36bf",
         "import:623ca1a8aa194a0e7d58",
         "import:63633e32e8841772358e",
         "import:7096a6c32c28bbb5cbf4",
@@ -5841,7 +5840,6 @@
         "import:327ee7c47da391c2edde",
         "import:4f8b966273adad08c895",
         "import:507f5317dc722e19491f",
-        "import:7de3d23ccfd1d0ce78c7",
         "import:9d6e175357b93312fe02",
         "import:db4cd236b2f67cab4105",
         "import:e3b3ed144860eaf28518"
@@ -8566,15 +8564,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:62e7d483da01877f1b6c1b1105756b6e081fbeba4e148ad9b88f28293ee539b8",
+    "sourceDigest": "sha256:55f876a7b5e58416c1a424ca5b741dc0e466612c9c9db0173a562b434b50ef08",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "e0be514a396de2fade2bb6f3e6b4a20479d4f82b",
-    "contentDigest": "sha256:2dc74116318d2dab750e43cccfb84cffdf4dfc8954267257c1eefd57203ab634",
+    "currentSnapshotSha": "5197f64d2fbcb6dc05eadf3d2ed27b4b6e99545a",
+    "contentDigest": "sha256:6a8ba544f7442d9996996234b2ebb23ec168fa8243181952f86367c198980300",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

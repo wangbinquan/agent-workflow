@@ -25,8 +25,7 @@ import type { EventObservationCommandPort } from './public/commands'
 import type { EventCenterParticipant, EventObserverControlParticipant } from './public/participants'
 import type { EventCenterCatalogQueryPort, EventCenterOperationsQueryPort } from './public/queries'
 import type { CommittedEventDeliveryPersistencePort } from '@/platform/events/committed/persistence'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
-import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   CommittedEventDeliveryPage,
@@ -489,7 +488,7 @@ export async function composeEventCenter(
       events: createEventStore(db),
       customSources: createCustomEventSourceStore(db),
       responseRules: createEventResponseRuleStore(db),
-      committedEvents: createSqliteCommittedEventDeliveryPersistence(db),
+      committedEvents: createCommittedEventDeliveryPersistence(db),
     },
   })
 }
@@ -506,7 +505,7 @@ export async function composePostgresqlEventCenter(
       events: createEventStore(db),
       customSources: createCustomEventSourceStore(db),
       responseRules: createEventResponseRuleStore(db),
-      committedEvents: createPostgresqlCommittedEventDeliveryPersistence(db),
+      committedEvents: createCommittedEventDeliveryPersistence(db),
     },
   })
 }

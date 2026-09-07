@@ -66,6 +66,11 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
   'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts': {
     finishedAt: 'WHERE 是 lte(finishedAt, cutoff)；NULL 被比较排除',
   },
+  // RFC-359 W7：归档服务迁到中立事务原语后按类型可达性进了 PG 执行面，这条 ORDER BY 第一次被扫到。
+  // 判据与上面那条同形（`findArchivableTrees` 与 PG 适配器是同一条「保留期到期的根任务」查询）。
+  'services/taskArchive.ts': {
+    finishedAt: 'WHERE 是 lte(finishedAt, cutoff)；NULL 被比较排除',
+  },
 }
 
 interface NullableColumn {

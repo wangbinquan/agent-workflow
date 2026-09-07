@@ -40,7 +40,7 @@ import { watchExecutionTerminal } from '../src/services/execution/executor'
 import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
 import { createIntentSession } from '@/modules/intent/application/session'
-import { createSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { createIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '../src/modules/resource-catalog/public/participants'
 import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
@@ -328,7 +328,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       source: 'session',
     })
     const { session } = await createIntentSession(
-      createSqliteIntentPersistence(db),
+      createIntentPersistence(db),
       {
         currentAuthority: {
           authority: Object.freeze({}) as ResourceRequestContext,

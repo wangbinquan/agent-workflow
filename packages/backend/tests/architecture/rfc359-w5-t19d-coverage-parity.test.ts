@@ -69,18 +69,9 @@ const PROVIDER_PREFIX = /^(sqlite|postgresql)(?=[A-Z])/
  * 只降不升：任何一格变了都要改这份账本。
  */
 export const COVERAGE_PARITY_LEDGER: readonly string[] = [
-  'modules/collaboration/infrastructure/ClarifyDirectiveStore: sqlite 0/0, postgresql 0/0',
-  'modules/collaboration/infrastructure/ClarifyRepairParticipant: sqlite 1/0, postgresql 2/0',
-  'modules/collaboration/infrastructure/CollaborationRouteOperations: sqlite 1/0, postgresql 1/0',
-  'modules/collaboration/infrastructure/CollaborationRuntimeMechanics: sqlite 4/4, postgresql 3/0',
-  'modules/collaboration/infrastructure/ReviewRepairParticipant: sqlite 1/0, postgresql 2/0',
-  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite 2/0, postgresql 2/1',
-  'modules/intent/infrastructure/IntentApplyOperations: sqlite 16/0, postgresql 2/0',
-  'modules/intent/infrastructure/IntentPersistence: sqlite 4/1, postgresql 1/1',
-  'modules/intent/infrastructure/IntentSqlProgramRunner: sqlite 1/0, postgresql 1/0',
+  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite 3/1, postgresql 3/2',
+  'modules/intent/infrastructure/IntentApplyOperations: sqlite 17/1, postgresql 3/1',
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 2/1, postgresql 2/2',
-  'modules/runtime-management/infrastructure/RealtimeStore: sqlite 1/1, postgresql 1/1',
-  'modules/system-operations/infrastructure/ResourceLimitPersistence: sqlite 1/0, postgresql 3/0',
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite 4/1, postgresql 5/0',
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 2/1, postgresql 1/0',
   'modules/task-execution/infrastructure/TaskArchiveMaintenanceCommand: sqlite 3/2, postgresql 1/0',
@@ -89,10 +80,8 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 8/2, postgresql 4/0',
   'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite 0/0, postgresql 0/0',
   'modules/task-execution/infrastructure/TaskOwnershipPersistence: sqlite 1/1, postgresql 3/2',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 1/0, postgresql 4/0',
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 5/0, postgresql 7/0',
-  'modules/task-execution/infrastructure/TerminalMaintenancePersistence: sqlite 2/2, postgresql 1/0',
-  'platform/events/committed/Persistence: sqlite 6/6, postgresql 4/2',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 5/1',
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 6/1, postgresql 8/1',
   'platform/persistence/LogicalSource: sqlite 7/3, postgresql 4/2',
   'platform/persistence/LogicalTarget: sqlite 2/2, postgresql 10/7',
 ]
@@ -105,10 +94,9 @@ export const REFERENCE_GAP_THRESHOLD = 3
  * 这是「先合谁」的排序依据：倒挂越深，合一时撞出行为差异的概率越大（D19b 实证）。
  */
 export const INVERTED_PAIRS: readonly string[] = [
-  'modules/intent/infrastructure/IntentApplyOperations: 16 vs 2',
-  'modules/intent/infrastructure/IntentPersistence: 4 vs 1',
+  'modules/intent/infrastructure/IntentApplyOperations: 17 vs 3',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 8 vs 4',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 1 vs 4',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 7 vs 4',
   'platform/persistence/LogicalTarget: 2 vs 10',
 ]
@@ -289,7 +277,12 @@ describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，�
       scan().rows.length,
       '同目录 `sqliteX.ts` / `postgresqlX.ts` 一对都没配上——配对判据失效了。' +
         'W4 真的把 pair 合光时，这条下限要连同账本一起显式改小，那必须是一次有记录的决定。',
-    ).toBeGreaterThanOrEqual(20)
+      // RFC-359 W7（2026-09-07）：26 → 15，本波合掉 11 对，下限随之从 20 显式改小到 10。
+      // 这是守卫注释要求的「一次有记录的决定」。**下调的是防假绿的地板，不是目标**——
+      // 目标仍是 0（见 `PROVIDER_PAIR_COUNT` 的注释）。
+      // 注意：真正证明「配对匹配器还咬人」的是上面那条 `>= 40` 的 provider 命名文件下限；
+      // 等这里逼近 0 时，本条应当整体让位给它，而不是继续往下调。
+    ).toBeGreaterThanOrEqual(10)
   }, 30_000)
 
   test('逐对的两侧引用 / 驱动数与账本逐字相等（倒挂加深了红，收敛了也红）', () => {

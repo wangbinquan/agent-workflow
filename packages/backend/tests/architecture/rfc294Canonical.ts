@@ -2435,7 +2435,7 @@ function classifyTaskExecutionAuthority(input: {
 > | null {
   const value = `${input.file}#${input.callable}`
   if (
-    /sqliteTerminalMaintenance|terminalMaintenanceClaim|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
+    /sqliteTerminalMaintenance|terminalMaintenanceClaim|terminalMaintenancePersistence|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
       value,
     )
   ) {
@@ -2578,7 +2578,9 @@ function classifyTaskExecutionAuthority(input: {
   // would make the ledger blind to future adapters, so every family below is
   // deliberately named.
   if (
-    /modules\/collaboration\/infrastructure\/(?:legacySqliteClarify\/seal|legacySqliteReview|postgresqlCollaborationRuntimeMechanics|humanGateOpenParticipant|(?:postgresql|sqlite)ReviewRepairParticipant)/.test(
+    // RFC-359 W7：`reviewRepairParticipant` 合一后是中立文件名，provider 前缀那两份已删；
+    // `CollaborationRuntimeMechanics` 同样合一（PG 那份原生重写已退役，写手回到 legacySqliteReview）。
+    /modules\/collaboration\/infrastructure\/(?:legacySqliteClarify\/seal|legacySqliteReview|humanGateOpenParticipant|reviewRepairParticipant)/.test(
       value,
     )
   ) {
@@ -2614,7 +2616,10 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/system-operations\/infrastructure\/(?:postgresql|sqlite)ResourceLimitPersistence/.test(
+    // RFC-359 W7：两份 provider 实现已合一为中立的 `resourceLimitPersistence.ts`（首字母小写、
+    // 无 provider 前缀）。旧前缀保留在这里没有代价，但**中立名必须认**——不认就会让合一后的
+    // 写点变成 unknown writer，普查当场失败（本刀实撞）。
+    /modules\/system-operations\/infrastructure\/(?:(?:postgresql|sqlite)ResourceLimitPersistence|resourceLimitPersistence)/.test(
       value,
     )
   ) {

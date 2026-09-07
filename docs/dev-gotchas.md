@@ -4513,3 +4513,160 @@ replace 掉、不会再出现，只能挂满 30s 超时。满载 runner 更容�
 - 报错消息现在会自己说清「哪一半漂了 + 该跑哪条命令」，由
   `rfc349-postgresql-migration-history.test.ts` 的 `drift message names which half drifted…`
   锁住。**别把它改回一句笼统的「does not match」**——那正是这次排查慢的原因。
+
+## 合一 provider 适配器时，`db.get(sql…)` 与 `db.all(sql…)[0]` **在 SQLite 上不等价**（2026-09-07 实测）
+
+两侧适配器常有一处「取首行」的写法差异：SQLite 那份写 `db.all(query)[0]`、PostgreSQL 那份写
+`db.get(query)`，注释还会写「空集都返回 `undefined`，语义等价」。**空集确实等价，命中时不等价**：
+
+```
+db.get(q)    = ["u1","alice"]              ← 位置元组，AS 别名全丢
+db.all(q)[0] = {"id":"u1","username":"alice"}
+```
+
+（`bun:sqlite` + `drizzle-orm/bun-sqlite`，`q = sql\`select id as "id", name as "username" from t\``。）
+PostgreSQL 侧两种写法都返回具名对象——`postgresqlDatabaseClient.ts` 的代理把 `all` / `get`
+**双双**改写成 `rawRows(...)`，它的 `get` 就是 `rawRows(...)[0]`。
+
+**所以合一时正典是 `all(query)[0]`，不是 `get(query)`**，哪怕这一对的其余部分都以 PG 为底本。
+反过来选会让 SQLite 上**每个具名字段变成 `undefined`**，而且不抛错——消费 `AS "alias"` 的
+程序（如 intent 的 `sessionColumns`）会静默拿到空值。RFC-359 W7 合 `IntentSqlProgramRunner`
+时差点踩中：交接说明写的是「以 PG 为正典、两者等价」，实测才推翻。
+
+**规矩**：合一遇到 `get` / `all[0]` 的差异，**不要按「哪侧是正典」决定，按实测决定**；
+选定后在文件头注释写明为什么，别让下一个人再推一遍。
+
+## `'$provider' in db` 对 PostgreSQL 客户端恒为 **false**（Proxy 只有 get trap）
+
+判 provider 时容易写成 `'$provider' in db`——**这会把 PG 客户端判成非 PG**。
+`postgresqlDatabaseClient.ts:241-243` 是 `new Proxy(base, { get(...) })`，`$provider` 只在
+**get trap** 里合成（`if (property === '$provider') return 'postgresql'`），**没有 `has` trap**，
+于是 `in` 直接落到 target 上、查不到这个属性。
+
+**正确写法是属性访问**：`db.$provider === 'postgresql'`。仓内既有的
+`databaseTransaction.ts:301` 就是这么写的（`(client as { readonly $provider?: unknown }).$provider`），
+照它抄。
+
+**为什么危险**：判错的后果往往是**静默走错分支而测试照绿**——RFC-359 W7 合
+`ClarifyDirectiveStore` 时，对拍夹具因此把 SQLite 工厂喂给了 PG 客户端，**全绿**
+（反倒歪打正着证明了中立实现在 PG 上跑得通）。这类错判不会抛异常，只会让你以为验过了。
+
+## 同步参与者改异步后，**漏一个 `await` 既不会红也不会被 lint 抓**（RFC-359 W7 实测）
+
+把一个同步事务参与者（`recordArtifact(tx, …): void`）改成 `Promise<void>` 之后，生产链上**漏掉
+一个 `await` 通常一条测试都不会红**。原因是既有用例几乎都在整个操作**返回之后**才去读库校验，
+那时 fire-and-forget 的写早已落库、结果完全正确。被打破的是**时序**不变量
+（「副作用发生之前 journal 已经落库」），它只在**崩溃窗口**里可见——而没有测试模拟那个窗口。
+
+实测（`legacyResourcePackageBundleApply.ts` 的 prestage 链，三处 `await` 同时改成 `void`）：
+`rfc271-bundle-engine` / `rfc271-recovery-hardening` / `rfc294` 全套**全绿**。
+
+**lint 也挡不住**：`no-floating-promises` 报的是**裸调用**；写成 `void foo()` 是显式丢弃，
+规则认为你知道自己在干什么，**不报**。所以「eslint.promises.config.js 过了」不等于没漏 await。
+
+**规矩**：把同步参与者改异步时，除了功能用例，**必须再加一条源码层兜底断言**钉住那几个调用点
+带 `await`（本仓的既有形态：文本断言某个符号必须/不得出现在某文件里）。判断它有没有用的办法是
+**变异**：把生产链的 `await` 改成 `void`，如果只有功能用例、没有兜底断言，你会看到全绿——
+那就是这条坑本身。
+
+同理适用于任何「同步回调契约 → Promise」的迁移。**契约声明不要写成 `void | Promise<void>`**：
+那会让漏 await 变成合法写法，连兜底断言都失去锚点。
+
+## 找「漏掉的同步终结符」：把 `db: DbClient` 放宽成 `ProviderNeutralDatabase` 当探测器（RFC-359 W7）
+
+把一个 SQLite-only 的大文件迁成中立实现时，最难找全的是散落各处的 **bun:sqlite 独有同步面**：
+`.get()` / `.all()` / `.run()` 不带 `await`、`dbTxSync`、按 `DbTxSync` 定型的参与者。
+逐行读几千行找它们既慢又必漏——本波实测有效的办法是**让类型系统去找**：
+
+1. 先只把签名里的 `db: DbClient` 改成 `db: ProviderNeutralDatabase`（`@/db/query`），**别动别的**；
+2. 跑 `bunx tsc --noEmit`。中立类型上 `.get()` / `.all()` / `.run()` 返回 Promise，
+   于是**每一处「拿它当同步值用」的地方都会精确报错**——包括那些看着无害、
+   在 bun:sqlite 上恰好能跑的（`row === undefined` 永远为 false 那一类）;
+3. 按报错清单逐条改成 `await` / 中立事务原语 / 中立参与者，改完 tsc 归零。
+
+本波用这招在 collaboration 三个大文件里一次找齐了 6 类站点，**没有漏网**；
+另一刀漏掉的两处未 await（`archiveClaimedTree` 读 claim）正是没用这招的代价——
+它在 SQLite 上无害，在 PostgreSQL 上把 Promise 写进了归档清单。
+
+**注意**：这一步只是**探测**。放宽类型本身不改变运行时行为，但它会让「本来编译不过的错」
+变成「编译得过但运行时错」的反面——所以**必须把 tsc 报的每一条都真正修掉**，
+不要用 `as` 把类型压回去。压回去等于关掉探测器。
+
+### 第三种形态：接受「路径**或**过滤器」的命令会把整串当**过滤器**，跑得像成功（2026-09-07 同日再撞）
+
+`bun test` 的位置参数既可以是文件路径、也可以是测试名过滤器。于是：
+
+```bash
+FILES=$(ls tests/rfc359-w7-*.test.ts | grep -v task-route)   # 19 个路径，换行分隔
+bun test $FILES                                              # ← zsh：整串是**一个**参数
+```
+
+bun 把那一大串（含换行）当成过滤器，匹配不到任何测试，退出码 1，输出是一段
+「did not match any test files / 若要当路径请写 ./…」的提示——**看着像用法建议，不像「你的命令错了」**。
+如果外面还套着 `| tail -8` 或 `> log`，你看到的可能只是 `exit=1`，很容易读成「有用例红了」而去查
+根本不存在的失败。
+
+同类命令还有 `vitest` / `jest` / `pytest`（路径与 `-k` 过滤器同形）、`rg`（模式与路径同形）。
+
+**定式**：给这类命令传变量时一律显式分词 —— zsh 用 `${=FILES}`，或干脆
+`ls … | xargs bun test`、`bun test $(cat list.txt)`（命令替换会分词）。
+**判据**：命令"成功跑完"但用例总数远少于预期、或输出里出现「did not match」，先怀疑这条。
+
+## 本地复现 CI 必须带 `--isolate`：裸 `bun test` 会给出**几十条根本不存在的失败**（2026-09-07 实撞）
+
+想在本地复现 CI 的后端结果时，直觉写法是 `bun test`。**它跑出来的红有大半是假的。**
+实撞：全量后端裸跑 50 条红，随手挑一条单独跑 —— `bun test tests/routes-worktree-files.test.ts`
+**10 pass / 0 fail**。
+
+成因是**模块级全局状态**：`platform/operations/catalog.ts` 的操作目录在
+`createComposedApp` 时做 `assertOperationCatalogClosed`。bun 默认**并行**跑测试文件，
+多个文件同时注册 / 挂载操作时互相干扰，于是抛
+`<operation-id>: declared operation has no mounted binding` —— 这条错**看起来像真的架构缺口**
+（「某个操作声明了却没挂路由」），很容易让人去查一个根本不存在的问题。本波就有两个并发作业
+各自把它当成「别人的在制品」放过去了。
+
+CI 用的是 `bun test --isolate --randomize --seed=… --shard=N/4`，**每片一个独立的 PostgreSQL
+服务容器**。要点在后半句——**只加 `--isolate` 不够**（这条是本条初稿写错、当天实测推翻的）：
+
+- `--isolate` 解决的是**模块级全局状态**（上面那个假的 `no mounted binding`）；
+- 但它**不解决 PostgreSQL 侧的争用**。PG lane 的 `beforeEach` 要 `drop schema … cascade` +
+  跑一遍全量迁移；几百个文件并发打**同一个库**时它会超过 5s 默认预算，实测报
+  `a beforeEach/afterEach hook timed out`（5016ms），**48 条红全在 `[postgresql]` 分支**。
+  少量文件（实测 19 个）不会踩，全量必踩——所以「跑一小批绿了」不能推广到全量。
+
+**本地对齐 CI 的正确姿势是复制它的拓扑：分片 + 每片一个独立数据库。**
+
+```bash
+# 先备好 4 个库（一次性）：docker exec <pg> psql -U postgres -c 'CREATE DATABASE awpar1;' …
+for i in 1 2 3 4; do
+  AW_TEST_POSTGRESQL_URL="postgresql://…/awpar$i" RUN_GIT_NETWORK=1     bun test --isolate --randomize --shard=$i/4 > "shard$i.log" 2>&1 &
+done
+wait
+```
+
+同源的第三条坑：PG harness 按文件 `drop schema … cascade`，所以**两批双引擎测试并行会互相清库**
+（本文件另有一条记这个）。三个原因叠在一起，裸 `bun test` 的结果没有任何参考价值。
+
+**判据**：本地红、单独跑绿；或错误里出现 `declared operation has no mounted binding`
+而对应的 `public/operations.ts` 与 `origin/main` 逐字相同。
+
+## PostgreSQL 的 advisory lock 是**集群级**的——按库隔离并不能隔离并行测试（2026-09-07 实撞）
+
+想让多个测试进程并行跑 PostgreSQL lane 时，直觉做法是「一个进程一个数据库」
+（`CREATE DATABASE awpar1..awpar8`）。**数据隔离了，锁没有**：`pg_advisory_lock` /
+`pg_try_advisory_lock` 的键空间是**整个实例共享**的，与当前连的是哪个库无关。
+
+实撞：4 个测试分片各连一个独立库、但同一个 PG 容器，已提交事件出站存储那批用例
+（append 路径用 `pg_try_advisory_lock(hashtextextended($1…))`）跨分片互相抢锁，
+连同 `beforeEach` 的 `drop schema` + 全量迁移争用，一共造出 **55 条假红**——
+而单独跑那些文件是全绿的。
+
+**规矩**：
+- 要并行跑 PG lane，**必须一个进程一个 PostgreSQL 实例**（CI 就是这么做的：4 个分片 = 4 个
+  独立服务容器），不是一个实例开多个库；
+- 一个实例上只能**串行**跑；
+- 给并行 agent 分配「独立数据库」时要意识到这只隔离数据，**不隔离 advisory lock、也不隔离
+  实例级资源**（连接池、CPU、WAL）。少量文件不会踩，全量必踩。
+
+**判据**：失败集中在 `[postgresql]` 分支，错因是 `a beforeEach/afterEach hook timed out`
+或与 `pg_advisory_lock` 相关，而同一批文件单独跑全绿。

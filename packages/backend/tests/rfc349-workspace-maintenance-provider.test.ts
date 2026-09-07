@@ -18,7 +18,7 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { taskExecutionMaintenanceClaims, tasks, workflows } from '@/db/schema'
 import { composeSqliteWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
-import { SqliteTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/sqliteTerminalMaintenancePersistence'
+import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -101,7 +101,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
     const command = composeSqliteWorkspaceMaintenanceCommand({
       db,
       appHome,
-      terminalMaintenance: new SqliteTerminalMaintenancePersistence(db),
+      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
       isMaterializingTask: () => false,
       invalidateWorkspacePath: (path) => invalidated.push(path),
     })
@@ -155,7 +155,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
     const command = composeSqliteWorkspaceMaintenanceCommand({
       db,
       appHome,
-      terminalMaintenance: new SqliteTerminalMaintenancePersistence(db),
+      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
       isMaterializingTask: (taskId) => taskId === leasedId,
       invalidateWorkspacePath() {},
     })
@@ -214,7 +214,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       finishedAt: 2,
       workspacePruningAt: 100,
     })
-    const terminalMaintenance = new SqliteTerminalMaintenancePersistence(db)
+    const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(db)
     const members = await terminalMaintenance.snapshotMembers([taskId])
     await terminalMaintenance.claim({
       rootTaskId: taskId,
@@ -275,7 +275,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
     const command = composeSqliteWorkspaceMaintenanceCommand({
       db,
       appHome,
-      terminalMaintenance: new SqliteTerminalMaintenancePersistence(db),
+      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
       isMaterializingTask: () => false,
       invalidateWorkspacePath() {},
     })

@@ -5,11 +5,15 @@
 import { sql } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
-import { type PostgresqlCommittedEventTransaction } from '@/platform/events/committed/postgresqlPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
-export type PostgresqlTaskExecutionTransaction = PostgresqlCommittedEventTransaction
+// RFC-359 W7：这个别名以前借道 `platform/events/committed/postgresqlPersistence.ts`——那个文件
+// 是已提交事件出站存储的 PG 适配器，与本别名毫无关系，只是当年顺手把 PG 客户端的事务句柄类型
+// 定义在了那里。出站存储合一后该文件整个删除，别名回到它本来就该在的地方：PG 客户端自身。
+export type PostgresqlTaskExecutionTransaction = Parameters<
+  Parameters<PostgresqlDatabaseClient['transaction']>[0]
+>[0]
 
 export async function withPostgresqlSerializableTaskExecution<T>(
   db: PostgresqlDatabaseClient,

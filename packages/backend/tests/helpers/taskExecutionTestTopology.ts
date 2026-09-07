@@ -1,6 +1,6 @@
 import type { DbClient } from '../../src/db/client'
 import { createTaskDagCollaborationOperations } from '../../src/modules/collaboration/infrastructure/taskDagCollaborationOperations'
-import { createSqliteCollaborationRuntimeMechanics } from '../../src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import { createCollaborationRuntimeMechanics } from '../../src/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
@@ -75,7 +75,7 @@ export function composeTaskExecutionTestRuntime(
       db,
       identityAccess: identity.resources,
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
-      collaborationRuntime: createSqliteCollaborationRuntimeMechanics(db),
+      collaborationRuntime: createCollaborationRuntimeMechanics(db),
       persistence,
       workgroupTurns: composeWorkgroupTurnsOperations(
         db,
@@ -209,7 +209,7 @@ export function runTaskWithRealTestTopology(
       db: options.db,
       identityAccess,
       memoryInjectionQueries,
-      collaborationRuntime: createSqliteCollaborationRuntimeMechanics(options.db),
+      collaborationRuntime: createCollaborationRuntimeMechanics(options.db),
       persistence,
       workgroupTurns: composeWorkgroupTurnsOperations(
         options.db,
@@ -235,7 +235,7 @@ export function runTaskWithRealTestTopology(
       taskDagCollaboration:
         options.taskDagCollaboration ?? createTaskDagCollaborationOperations(options.db),
       collaborationRuntime:
-        options.collaborationRuntime ?? createSqliteCollaborationRuntimeMechanics(options.db),
+        options.collaborationRuntime ?? createCollaborationRuntimeMechanics(options.db),
       workgroupTurns:
         options.workgroupTurns ??
         composeWorkgroupTurnsOperations(

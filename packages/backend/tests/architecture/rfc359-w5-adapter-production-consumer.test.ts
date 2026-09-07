@@ -304,18 +304,6 @@ export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] 
       '由 `services/reviewMutationCoordinator.ts:75` new 出来，两个引擎共用一份。',
   ],
   [
-    'modules/collaboration/infrastructure/sqliteClarifyRepairParticipant.ts::createSqliteClarifyRepairParticipant',
-    '改指：SQLite 侧的 clarify 修复真实能力在 `platform/persistence/sqlite/taskLifecycleRepair/options-C1.ts`' +
-      '（经 `platform/persistence/sqlite/taskLifecycleRepair.ts:86` 以 C1 注册）；只有 PG 侧走这个 port，' +
-      '装配在 `modules/task-execution/composition/providerRuntime.ts:370`。',
-  ],
-  [
-    'modules/collaboration/infrastructure/sqliteReviewRepairParticipant.ts::createSqliteReviewRepairParticipant',
-    '改指：SQLite 侧的 review 修复真实能力在 `platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts`' +
-      '（经 `platform/persistence/sqlite/taskLifecycleRepair.ts:84` 以 R1 注册）；只有 PG 侧走这个 port，' +
-      '装配在 `modules/task-execution/composition/providerRuntime.ts:371`。',
-  ],
-  [
     'modules/integration/composition/webhookDispatch.ts::composePostgresqlWebhookTriggerAdministration',
     '纯死代码：全仓零引用。它只是中立的 ' +
       '`modules/integration/infrastructure/webhookTriggerAdministration.ts::createWebhookTriggerAdministration`' +
@@ -348,6 +336,15 @@ export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] 
       '但两个别名都没有调用方）。生产路径同上：`modules/integration/composition/webhookIngress.ts:34`。',
   ],
   [
+    'modules/resource-catalog/composition/intentContextAuthorization.ts::composeSqliteIntentContextResourceAuthorizationSyncFactory',
+    '改指：真实能力是同文件的中立工厂 ' +
+      '`modules/resource-catalog/composition/intentContextAuthorization.ts:65::composeIntentContextResourceAuthorizationFactory`。' +
+      'RFC-359 W7 合 IntentSqlProgramRunner 后本工厂生产消费者归零——中立 runner 只收异步授权会话，' +
+      '两个 SQLite bootstrap 已改指中立工厂。该同步链自己写的退役条件' +
+      '（`modules/resource-catalog/infrastructure/intentContextResourceAuthorization.ts:79`）现已成立；' +
+      '未当场删是因为 `tests/rfc345-resource-catalog-contracts.test.ts` 有源码文本断言钉着它。',
+  ],
+  [
     'modules/resource-catalog/composition/resourceCatalogOverview.ts::composeSqliteResourceCatalogOverviewQuery',
     '改指：没有任何调用方，唯一引用是一条源码锁里的**字符串**' +
       '（`tests/rfc349-resource-catalog-provider-contributions.test.ts:28` 的 `toContain`）。' +
@@ -368,6 +365,13 @@ export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] 
       '同文件的 `createPostgresqlProviderBackup`；本工厂是绕开命令层的第二条入口。',
   ],
   [
+    'modules/task-execution/composition/nodeRunLifecycle.ts::composePostgresqlNodeRunLifecycleParticipantFactory',
+    '改指：真实能力已收进中立实现 ' +
+      '`modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts:26::createCollaborationRuntimeMechanics`，' +
+      '两个引擎共用。本工厂当初是为 collaboration 的 serializable 原子而开的 task-execution 接缝，' +
+      'RFC-359 W7 合掉那一对后生产消费者归零（只剩一个测试引用），接缝不再需要。',
+  ],
+  [
     'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts::createSqliteLegacyAgentDependencyLookup',
     '改指：生产的注入解析走 `services/execution/taskExecutionResources.ts:97::resolveTaskExecutionInjection`' +
       '（具名 Resource Catalog participant）；本文件整体是 RFC-349 的行为神谕，' +
@@ -379,6 +383,13 @@ export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] 
       '被 `modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts:83` 与 ' +
       '`modules/collaboration/infrastructure/legacySqliteReview.ts:3544` 调用；' +
       '同文件的 `createSqliteTaskAuthorizationQueries` 仍在生产使用，死的只有这个 in-tx 工厂。',
+  ],
+  [
+    'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts::createSqliteTaskAuthorizationQueries',
+    '改指：真实能力是中立的 ' +
+      '`modules/task-execution/infrastructure/taskAuthorization.ts:88::createTaskAuthorizationQueries`，' +
+      'RFC-359 W7 合 collaboration 两对时 `modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts:287` ' +
+      '已改指它，本工厂生产消费者归零。',
   ],
   [
     'platform/persistence/sqliteLogicalTarget.ts::createSqliteLogicalTarget',

@@ -11,14 +11,10 @@ import {
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import {
-  acceptCommittedEventDelivery,
   appendCommittedEventTx,
   changeCommittedEventCutoverTx,
-  claimNextCommittedEventDelivery,
-  committedEventDeliveryPage,
-  retryCommittedEventDelivery,
 } from '@/platform/events/committed/sqliteStore'
 import {
   committedEventGroupId,
@@ -91,7 +87,7 @@ describe('RFC-341 committed-event store', () => {
     expect(route).toContain('/api/event-center/committed-deliveries/:eventId/:consumerId/retry')
   })
 
-  test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', () => {
+  test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', async () => {
     const db = createLegacyStoreDb()
     const legacy = dbTxSync(db, (tx) =>
       appendCommittedEventTx(tx, eventInput({ operation: 'legacy' })),
@@ -111,7 +107,12 @@ describe('RFC-341 committed-event store', () => {
     const replay = dbTxSync(db, (tx) => appendCommittedEventTx(tx, input))
     expect(replay.eventRef).toEqual(first.eventRef)
     expect(db.select().from(committedEvents).all()).toHaveLength(1)
-    expect(claimNextCommittedEventDelivery({ db, workerId: 'worker', now: NOW + 100 })).toBeNull()
+    expect(
+      await createCommittedEventDeliveryPersistence(db).claimNext({
+        workerId: 'worker',
+        now: NOW + 100,
+      }),
+    ).toBeNull()
     expect(() =>
       dbTxSync(db, (tx) =>
         appendCommittedEventTx(tx, eventInput({ operation: 'shadow', value: 'different' })),
@@ -119,15 +120,16 @@ describe('RFC-341 committed-event store', () => {
     ).toThrow('conflicts with immutable event')
   })
 
-  test('preflights an idle queue without reserving the writer and rechecks due work in the claim transaction', () => {
+  test('preflights an idle queue without reserving the writer and rechecks due work in the claim transaction', async () => {
     const db = createLegacyStoreDb()
     cutover(db, 'legacy', 1, 'shadow')
     cutover(db, 'shadow', 2, 'dispatchable')
 
+    const persistence = createCommittedEventDeliveryPersistence(db)
     const idleRecording = recordStatements(db.$client)
-    const idleClaim = (() => {
+    const idleClaim = await (async () => {
       try {
-        return claimNextCommittedEventDelivery({ db, workerId: 'idle-worker', now: NOW + 100 })
+        return await persistence.claimNext({ workerId: 'idle-worker', now: NOW + 100 })
       } finally {
         idleRecording.stop()
       }
@@ -142,9 +144,9 @@ describe('RFC-341 committed-event store', () => {
       appendCommittedEventTx(tx, eventInput({ operation: 'preflight-then-claim' })),
     )
     const dueRecording = recordStatements(db.$client)
-    const dueClaim = (() => {
+    const dueClaim = await (async () => {
       try {
-        return claimNextCommittedEventDelivery({ db, workerId: 'due-worker', now: NOW + 200 })
+        return await persistence.claimNext({ workerId: 'due-worker', now: NOW + 200 })
       } finally {
         dueRecording.stop()
       }
@@ -156,7 +158,7 @@ describe('RFC-341 committed-event store', () => {
     ).toHaveLength(2)
   })
 
-  test('claims only current dispatchable epoch and preserves per-consumer aggregate FIFO', () => {
+  test('claims only current dispatchable epoch and preserves per-consumer aggregate FIFO', async () => {
     const db = createLegacyStoreDb()
     cutover(db, 'legacy', 1, 'shadow')
     dbTxSync(db, (tx) => appendCommittedEventTx(tx, eventInput({ operation: 'shadow' })))
@@ -174,25 +176,14 @@ describe('RFC-341 committed-event store', () => {
       ),
     )
 
-    const claimedSecond = claimNextCommittedEventDelivery({
-      db,
-      workerId: 'worker-a',
-      now: NOW + 100,
-    })
+    const persistence = createCommittedEventDeliveryPersistence(db)
+    const claimedSecond = await persistence.claimNext({ workerId: 'worker-a', now: NOW + 100 })
     expect(claimedSecond?.event.envelope.eventId).toBe(second.eventRef?.eventId)
-    const claimedOther = claimNextCommittedEventDelivery({
-      db,
-      workerId: 'worker-b',
-      now: NOW + 100,
-    })
+    const claimedOther = await persistence.claimNext({ workerId: 'worker-b', now: NOW + 100 })
     expect(claimedOther?.event.envelope.aggregate.id).toBe('review-2')
-    expect(claimNextCommittedEventDelivery({ db, workerId: 'worker-c', now: NOW + 100 })).toBeNull()
-    acceptCommittedEventDelivery({ db, claim: claimedSecond!, now: NOW + 101 })
-    const claimedThird = claimNextCommittedEventDelivery({
-      db,
-      workerId: 'worker-c',
-      now: NOW + 102,
-    })
+    expect(await persistence.claimNext({ workerId: 'worker-c', now: NOW + 100 })).toBeNull()
+    await persistence.accept({ claim: claimedSecond!, now: NOW + 101 })
+    const claimedThird = await persistence.claimNext({ workerId: 'worker-c', now: NOW + 102 })
     expect(claimedThird?.event.envelope.eventId).toBe(third.eventRef?.eventId)
   })
 
@@ -203,8 +194,9 @@ describe('RFC-341 committed-event store', () => {
     const appended = dbTxSync(db, (tx) =>
       appendCommittedEventTx(tx, eventInput({ operation: 'poison' })),
     )
+    const persistence = createCommittedEventDeliveryPersistence(db)
     const dispatcher = createCommittedEventDispatcher({
-      persistence: createSqliteCommittedEventDeliveryPersistence(db),
+      persistence,
       workerId: 'dispatcher',
       codecs: {
         eventTypes: ['fixture.changed.v1'],
@@ -244,17 +236,13 @@ describe('RFC-341 committed-event store', () => {
       lastErrorSummary: 'fixture-poison',
     })
     expect(
-      committedEventDeliveryPage(db, { page: 1, limit: 20, state: 'dead-letter' }).items[0],
+      (await persistence.deliveryPage({ page: 1, limit: 20, state: 'dead-letter' })).items[0],
     ).toMatchObject({ canRetry: true, stage: 'producer-publication' })
     expect(
-      committedEventDeliveryPage(db, {
-        page: 1,
-        limit: 20,
-        stage: 'consumer-delivery',
-      }).items,
+      (await persistence.deliveryPage({ page: 1, limit: 20, stage: 'consumer-delivery' })).items,
     ).toEqual([])
     expect(
-      retryCommittedEventDelivery(db, {
+      await persistence.retry({
         eventId: dead.eventId,
         consumerId: dead.consumerId,
         observedLeaseEpoch: dead.leaseEpoch,
@@ -262,14 +250,14 @@ describe('RFC-341 committed-event store', () => {
         now: NOW + 200,
       }),
     ).toMatchObject({ state: 'pending', replayGeneration: 1 })
-    expect(() =>
-      retryCommittedEventDelivery(db, {
+    await expect(
+      persistence.retry({
         eventId: dead.eventId,
         consumerId: dead.consumerId,
         observedLeaseEpoch: dead.leaseEpoch,
         observedUpdatedAt: dead.updatedAt,
         now: NOW + 201,
       }),
-    ).toThrow('lost CAS')
+    ).rejects.toThrow('lost CAS')
   })
 })

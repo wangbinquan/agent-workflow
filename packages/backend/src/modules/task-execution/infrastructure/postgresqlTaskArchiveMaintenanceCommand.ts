@@ -51,7 +51,8 @@ import type {
   TaskArchiveSweepReceipt,
   TaskArchiveRecoveryReceipt,
 } from '../application/ports/taskArchiveMaintenanceCommand'
-import { PostgresqlTerminalMaintenancePersistence } from './postgresqlTerminalMaintenancePersistence'
+import type { TerminalMaintenanceStore } from '../application/ports/terminalMaintenanceStore'
+import { DrizzleTerminalMaintenancePersistence } from './terminalMaintenancePersistence'
 import { sweepArchiveTempDirectories } from './archiveTempDirectorySweep'
 import { createTerminalMaintenanceClaim, type TerminalMaintenanceClaim } from '../domain/ownership'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
@@ -429,7 +430,7 @@ async function finalizeDatabase(
 
 async function archiveClaimed(
   db: PostgresqlDatabaseClient,
-  maintenance: PostgresqlTerminalMaintenancePersistence,
+  maintenance: TerminalMaintenanceStore,
   rootTaskId: string,
   taskIds: readonly string[],
   initialClaim: TerminalMaintenanceClaim,
@@ -514,7 +515,7 @@ async function archiveClaimed(
 
 async function archiveTree(
   db: PostgresqlDatabaseClient,
-  maintenance: PostgresqlTerminalMaintenancePersistence,
+  maintenance: TerminalMaintenanceStore,
   rootTaskId: string,
   options: ArchiveOptions,
 ): Promise<ArchivedTaskTreeReceipt> {
@@ -538,7 +539,7 @@ async function archiveTree(
 
 async function recoverCompletedIo(
   db: PostgresqlDatabaseClient,
-  maintenance: PostgresqlTerminalMaintenancePersistence,
+  maintenance: TerminalMaintenanceStore,
   options: ArchiveOptions,
 ): Promise<{ readonly promoted: readonly string[]; readonly claimedRoots: ReadonlySet<string> }> {
   const promoted: string[] = []
@@ -610,7 +611,7 @@ async function recoverCompletedIo(
 export function createPostgresqlTaskArchiveMaintenanceCommand(
   db: PostgresqlDatabaseClient,
 ): TaskArchiveMaintenanceCommand {
-  const maintenance = new PostgresqlTerminalMaintenancePersistence(db)
+  const maintenance = new DrizzleTerminalMaintenancePersistence(db)
   return Object.freeze({
     async runSweep(
       config: TaskArchiveConfig,

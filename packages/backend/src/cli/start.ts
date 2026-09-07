@@ -223,7 +223,7 @@ import {
   createHumanGateContinuationWorkerDefinition,
 } from '@/modules/collaboration/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import {
   createCommittedEventDispatcherWorkerDefinition,
@@ -258,7 +258,7 @@ import {
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
-import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
@@ -269,8 +269,8 @@ import { directOperationAuthority, directRequestAuthority } from '@/routes/opera
 import type { Actor } from '@/auth/actor'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
-import { composeSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
+import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import {
   composeIntentDumpAuxiliaryQueries,
   composeIntentTurnRuntimeResolver,
@@ -310,7 +310,6 @@ import {
   type PostgresqlDaemonApplicationInput,
 } from './postgresqlDaemonApplication'
 import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
-import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
 import {
   createPostgresqlCollaborationCommittedEventProjection,
   createPostgresqlHumanGateContinuationRecoveryQueries,
@@ -700,7 +699,7 @@ async function composePostgresqlProviderSession(
     createCollaborationWsProjector(createPostgresqlCollaborationCommittedEventProjection(db)),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
-  const committedEventPersistence = createPostgresqlCommittedEventDeliveryPersistence(db)
+  const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
   const terminalSweep = createPostgresqlHumanGateTerminalSweepCommand(db)
   const committedEventDispatcher = createCommittedEventDispatcher({
     persistence: committedEventPersistence,
@@ -1890,7 +1889,7 @@ async function composeSqliteProviderSession(
     composeSqliteTaskExecutionProviderRuntime(db, {
       runtime: {
         memoryInjectionQueries,
-        collaborationRuntime: createSqliteCollaborationRuntimeMechanics(db),
+        collaborationRuntime: createCollaborationRuntimeMechanics(db),
         workgroupTurns: composeWorkgroupTurnsOperations(
           db,
           composeWorkgroupHostLedgerParticipantFactory({
@@ -2607,7 +2606,7 @@ async function composeSqliteProviderSession(
     createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
-  const committedEventPersistence = createSqliteCommittedEventDeliveryPersistence(db)
+  const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
   const humanGateTerminalSweep = createSqliteHumanGateTerminalSweepCommand(db)
 
   const committedEventDispatcher = createCommittedEventDispatcher({
@@ -3214,9 +3213,9 @@ async function composeSqliteProviderSession(
   // the PostgreSQL daemon compose. With the plain runner every activation that
   // adds a resource dies on `intent-context-authorization-not-composed`, which is
   // how boot recovery silently failed every queued working-context successor.
-  const intentPersistence = composeSqliteIntentPersistence({
+  const intentPersistence = composeIntentPersistence({
     db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
     authorityFor: intentAuthorityFor,

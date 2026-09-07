@@ -35,11 +35,25 @@
 //
 // 为什么现在是高水位而不是 0
 // ------------------------
-// 今天 70 个 provider 组合根从未被测试构造过，一次性补齐等于重写半个 PostgreSQL 测试面。
-// 所以本轮**只上守卫、不做迁移**：机制同 RFC-317 T17 与 `rfc359-sync-transaction-highwater.ts`
-// ——逐条列出欠债并与实测**逐字相等**。**增**了红：又一个组合根只有装配、没有构造。
-// **减**了也红：某个组合根终于被真的构造过了，把账本一起改小，让这次收敛留下一次有署名的
-// 提交记录。长期目标是 0。
+// 本守卫落地时有 70 个 provider 组合根从未被测试构造过，一次性补齐等于重写半个 PostgreSQL
+// 测试面。所以那一轮**只上守卫、不做迁移**：机制同 RFC-317 T17 与
+// `rfc359-sync-transaction-highwater.ts`——逐条列出欠债并与实测**逐字相等**。
+// **增**了红：又一个组合根只有装配、没有构造。**减**了也红：某个组合根终于被真的构造过了，
+// 把账本一起改小，让这次收敛留下一次有署名的提交记录。长期目标是 0。
+//
+// RFC-359 W7 第一轮还债把 70 收敛到 20：`tests/rfc359-w7-*-composition-roots.test.ts` 四个文件
+// 给 50 个组合根写了「双引擎装配 + 至少驱动一个真方法」的用例（webhook 全家、目录 ACL /
+// 概览 / 演示种子、认证 / 身份访问 / 记忆、code-capability 三个读端口与能力模板、研发配置、
+// 工作区维护、数字员工模块与动作执行器、资源包 apply 收敛）。剩下的 20 条不是「忘了写」，
+// 而是各自卡在一件具体的事上——`design/RFC-359-*/` 之外不另立文档，逐条理由见那四个文件的
+// 头注释与 W7 的交接说明：
+//   · `providerRuntime.ts` 的两个执行链组合根要整包 daemon 依赖（runtime / routeLaunch /
+//     routes / lifecycleRepair / fusion / trigger / rootResumeRuntime …），得先有一份可复用的
+//     bootstrap 夹具；
+//   · intent 的 7 条与 `runtime-management` 的 realtime 运行时正在被 provider 适配器合一改写，
+//     这一轮刻意不去钉住即将消失的名字；
+//   · collaboration 路由操作、event-center、资源包目录 / 提供方、intent-apply 资源绑定需要
+//     跨 context 的已准入 authority 与外部生命周期 owner，属于下一波。
 //
 // 扫描面刻意按 RFC-359 W5 的口径限定在 `src/**/composition*`——`cli/**` 里的 daemon 组合根
 // （`composePostgresqlDaemonApplication`）同属这个问题域但不在本账本内，那是下一步的事。
@@ -89,40 +103,9 @@ const PROVIDER_ROOT_PREFIX = /(?:compose|create)(?:Sqlite|Postgresql)/
  * 改成真调用即可摘掉对应行；`readFileSync` + 文本断言无论写多少条都不算。
  */
 export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
-  'auth/composition.ts#createPostgresqlAuthRuntime: 只有源码文本锁',
-  'modules/code-capability/composition/capabilityTemplateOperations.ts#composePostgresqlCapabilityTemplateOperations: 零引用',
-  'modules/code-capability/composition/legacyCodeReads.ts#composePostgresqlLegacyCodeReadProviders: 零引用',
-  'modules/code-capability/composition/legacyCodeReads.ts#composeSqliteLegacyCodeReadProviders: 零引用',
-  'modules/code-capability/composition/reviewerResolution.ts#composePostgresqlReviewerResolutionRead: 零引用',
   'modules/collaboration/composition/collaborationRouteOperations.ts#composePostgresqlCollaborationRouteOperations: 只有源码文本锁',
-  'modules/collaboration/composition/collaborationRouteOperations.ts#composeSqliteCollaborationRouteOperations: 零引用',
-  'modules/development-automation/composition/configOperations.ts#composePostgresqlDevelopmentConfigOperations: 零引用',
-  'modules/digital-employee/composition.ts#composePostgresqlDigitalEmployee: 只有源码文本锁',
+  'modules/collaboration/composition/collaborationRouteOperations.ts#composeSqliteCollaborationRouteOperations: 只有源码文本锁',
   'modules/event-center/composition.ts#composePostgresqlEventCenter: 零引用',
-  'modules/identity-access/composition.ts#createPostgresqlIdentityAccessRuntime: 只有源码文本锁',
-  'modules/integration/composition/approvalGateway.ts#composePostgresqlApprovalGatewayRunner: 零引用',
-  'modules/integration/composition/digitalEmployeeToolConnections.ts#composeSqliteDevelopmentToolConnectionCatalog: 零引用',
-  'modules/integration/composition/pipelineEvidence.ts#composePostgresqlPipelineEvidenceRunner: 零引用',
-  'modules/integration/composition/pipelineEvidence.ts#composeSqlitePipelineEvidenceRunner: 零引用',
-  'modules/integration/composition/requirementSource.ts#composePostgresqlRequirementSourceRunner: 零引用',
-  'modules/integration/composition/scheduledTasks.ts#composePostgresqlScheduledTaskRuntime: 零引用',
-  'modules/integration/composition/terminalWorkspaceCleanup.ts#composePostgresqlWebhookTerminalWorkspacePrunePolicy: 零引用',
-  'modules/integration/composition/webhookDelivery.ts#composePostgresqlWebhookDeliveryPersistence: 零引用',
-  'modules/integration/composition/webhookDelivery.ts#composeSqliteWebhookDeliveryPersistence: 零引用',
-  'modules/integration/composition/webhookDispatch.ts#composePostgresqlWebhookDispatchPersistence: 零引用',
-  'modules/integration/composition/webhookDispatch.ts#composePostgresqlWebhookTriggerAdministration: 零引用',
-  'modules/integration/composition/webhookDispatch.ts#composePostgresqlWebhookTriggerServiceDependencies: 零引用',
-  'modules/integration/composition/webhookDispatch.ts#composeSqliteWebhookDispatchPersistence: 零引用',
-  'modules/integration/composition/webhookDispatch.ts#composeSqliteWebhookTriggerAdministration: 零引用',
-  'modules/integration/composition/webhookDispatch.ts#composeSqliteWebhookTriggerServiceDependencies: 零引用',
-  'modules/integration/composition/webhookEndpoints.ts#composePostgresqlWebhookEndpointServiceDependencies: 零引用',
-  'modules/integration/composition/webhookEndpoints.ts#composeSqliteWebhookEndpointServiceDependencies: 零引用',
-  'modules/integration/composition/webhookIngress.ts#composePostgresqlWebhookDeliveryRuntime: 零引用',
-  'modules/integration/composition/webhookIngress.ts#composePostgresqlWebhookIngressPersistence: 零引用',
-  'modules/integration/composition/webhookIngress.ts#composeSqliteWebhookDeliveryRuntime: 零引用',
-  'modules/integration/composition/webhookTerminalControl.ts#composePostgresqlMrTerminalControl: 零引用',
-  'modules/integration/composition/webhookTerminalControl.ts#composePostgresqlVerifiedWebhookDeliveryAcceptance: 零引用',
-  'modules/integration/composition/webhookTerminalControl.ts#composeSqliteVerifiedWebhookDeliveryAcceptance: 零引用',
   'modules/intent/composition/apply.ts#composePostgresqlIntentApplyOperations: 零引用',
   'modules/intent/composition/apply.ts#composeSqliteIntentApplyArtifactLifecycle: 零引用',
   'modules/intent/composition/apply.ts#composeSqliteIntentApplyOperations: 零引用',
@@ -130,35 +113,16 @@ export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
   'modules/intent/composition/maintenance.ts#composePostgresqlIntentMaintenanceSnapshotQueries: 零引用',
   'modules/intent/composition/maintenance.ts#composeSqliteIntentMaintenanceCommandsForAppHome: 零引用',
   'modules/intent/composition/maintenance.ts#composeSqliteIntentMaintenanceSnapshotQueries: 零引用',
-  'modules/intent/composition/persistence.ts#composePostgresqlIntentPersistence: 零引用',
   'modules/intent/composition/postgresqlApplyMaintenance.ts#composePostgresqlIntentApplyConvergence: 零引用',
-  'modules/memory/composition.ts#composePostgresqlMemoryCatalogOperations: 零引用',
-  'modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composePostgresqlDemoResourceCatalogSeedParticipant: 只有源码文本锁',
-  'modules/resource-catalog/composition/integrationTrigger.ts#composePostgresqlIntegrationTriggerResourceSnapshotFactory: 零引用',
   'modules/resource-catalog/composition/intentApply.ts#composePostgresqlIntentApplyResourceBinding: 零引用',
-  'modules/resource-catalog/composition/intentApply.ts#composePostgresqlSkillArtifactCompensation: 零引用',
-  'modules/resource-catalog/composition/intentApply.ts#composeSqliteSkillArtifactCompensation: 零引用',
+  'modules/resource-catalog/composition/intentContextAuthorization.ts#composeSqliteIntentContextResourceAuthorizationSyncFactory: 只有源码文本锁',
   'modules/resource-catalog/composition/postgresqlClassicCatalogs.ts#composePostgresqlClassicCatalogs: 只有源码文本锁',
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageCatalog: 只有源码文本锁',
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageProvider: 只有源码文本锁',
-  'modules/resource-catalog/composition/providerResourceCatalog.ts#composePostgresqlResourceCatalog: 只有源码文本锁',
-  'modules/resource-catalog/composition/resourceCatalogOverview.ts#composePostgresqlResourceCatalogOverviewQuery: 只有源码文本锁',
-  'modules/resource-catalog/composition/resourceCatalogOverview.ts#composeSqliteResourceCatalogOverviewQuery: 只有源码文本锁',
-  'modules/resource-catalog/composition/resourcePackageMaintenance.ts#composePostgresqlResourcePackageApplyMaintenance: 只有源码文本锁',
-  'modules/resource-catalog/composition/resourcePackageMaintenance.ts#composeSqliteResourcePackageApplyMaintenance: 只有源码文本锁',
-  'modules/resource-catalog/composition/resourceScopeAuthorization.ts#composePostgresqlResourceScopeAccessParticipant: 零引用',
-  'modules/resource-catalog/composition/workflowOperations.ts#composeSqliteDynamicWorkflowValidationContext: 只有源码文本锁',
   'modules/runtime-management/composition.ts#composePostgresqlRealtimeRuntime: 只有源码文本锁',
-  'modules/source-control/composition/workspaceMaintenance.ts#composePostgresqlWorkspaceMaintenanceCommand: 只有源码文本锁',
-  'modules/system-operations/composition.ts#composeSqlitePostRestoreRecovery: 零引用',
-  'modules/task-execution/composition/agentActionExecution.ts#composePostgresqlAgentActionExecution: 只有源码文本锁',
   'modules/task-execution/composition/digitalEmployeeExecution.ts#composePostgresqlDigitalEmployeeExecution: 零引用',
-  'modules/task-execution/composition/dynamicWorkflowPersistence.ts#composePostgresqlDynamicWorkflowPersistence: 零引用',
-  'modules/task-execution/composition/nodeRunLifecycle.ts#composePostgresqlNodeRunLifecycleParticipantFactory: 零引用',
   'modules/task-execution/composition/providerRuntime.ts#composePostgresqlTaskExecutionProviderRuntime: 零引用',
   'modules/task-execution/composition/providerRuntime.ts#composeSqliteTaskExecutionProviderRuntime: 只有源码文本锁',
-  'modules/task-execution/composition/scriptActionExecution.ts#composePostgresqlScriptActionExecution: 只有源码文本锁',
-  'modules/task-execution/composition/sourceTermination.ts#composePostgresqlTaskSourceTermination: 零引用',
 ]
 
 interface ProviderRoot {

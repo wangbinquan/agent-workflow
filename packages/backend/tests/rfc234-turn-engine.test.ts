@@ -880,7 +880,10 @@ describe('runIntentTurn', () => {
 
   test('a failed incomplete write cannot be repainted complete by the outer retry', async () => {
     const { session } = await createIntentSession(db, actor, { message: 'x' })
-    const originalTransaction = db.transaction.bind(db)
+    // RFC-359 W7：Intent 的事务不再走驱动的 `db.transaction`（合一后是中立原语的显式
+    // BEGIN IMMEDIATE / COMMIT），故障注入点随之落到 `db.run` 上——中立事务的第一条语句
+    // 就是它，注入的错误因此仍旧在「终态写」的那一笔里抛出。断言的东西一个字没变。
+    const originalRun = db.run.bind(db)
     const outcome = await runIntentTurn(
       {
         db,
@@ -888,19 +891,19 @@ describe('runIntentTurn', () => {
         config: config(),
         runFn: scriptedRun(async (opts, nonce) => {
           let failOnce = true
-          db.transaction = ((...args: Parameters<DbClient['transaction']>) => {
+          db.run = ((...args: Parameters<DbClient['run']>) => {
             if (failOnce) {
               failOnce = false
               throw new Error('transient sqlite failure')
             }
-            return originalTransaction(...args)
-          }) as DbClient['transaction']
+            return originalRun(...args)
+          }) as DbClient['run']
           try {
             await expect(
               opts.eventSink?.markTerminal('incomplete', 'stream-persist-failed'),
             ).rejects.toThrow('transient sqlite failure')
           } finally {
-            db.transaction = originalTransaction
+            db.run = originalRun
           }
           return okResult(envelope(nonce, { summary: 's', changeset: MINIMAL_CHANGESET }))
         }),

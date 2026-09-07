@@ -8,6 +8,16 @@
 // design/RFC-311-database-performance-and-scalability/audit-2026-08-18.md).
 // If a refactor turns any of these plans back into a full-table SCAN, this
 // file is the tripwire.
+//
+// RFC-359 W6-T27 —— 这个文件锁的东西**大半是 SQLite 机制**（`PRAGMA index_list` /
+// `EXPLAIN QUERY PLAN` / `openDb` 的容量 PRAGMA / bun:sqlite 的慢语句包装），它们在
+// PostgreSQL 上没有对应物，硬套 `describeEachProvider` 只会得到「跑了但什么都没断言」的
+// 双引擎剧场。真正**两个引擎都必须成立**的是第一条：迁移 0180 那批索引在当前引擎上确实
+// 存在。它被单独拎成下面的 `describeEachProvider` 块——这正是 PostgreSQL 上曾经出事的地方：
+// `tasks` 有五条索引只写在迁移 SQL 里、没进 drizzle 声明，于是 SQLite 上有、PG 上完全没有
+// （PG 的 DDL 从 drizzle 投影），任务树 / 工作组查询在 PG 上没有索引可用而只是「慢」，不报错。
+// 全量的索引对账（SQLite 的具名索引 PG 必须一条不少）在
+// `rfc359-w6-t26-postgresql-plan-audit.test.ts`；这里锁的是 0180 这一批的逐条存在性。
 
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
@@ -17,7 +27,9 @@ import { join, resolve } from 'node:path'
 
 import { Database } from 'bun:sqlite'
 import { createInMemoryDb, instrumentSlowStatements, openDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { tasks, users, workflows } from '../src/db/schema'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -39,6 +51,88 @@ function plan(db: ReturnType<typeof createInMemoryDb>, query: string): string {
     .map((row) => row.detail)
     .join('\n')
 }
+
+/**
+ * 迁移 0180 建的索引，按表分组。两个引擎共用这一份清单——SQLite 从迁移脚本得到它们，
+ * PostgreSQL 从 drizzle 声明投影得到，两条路必须落到同一个结果。
+ */
+const MIGRATION_0180_INDEXES: Record<string, readonly string[]> = {
+  tasks: [
+    'idx_tasks_branch_started_id',
+    'idx_tasks_cached_repo',
+    'idx_tasks_status_finished',
+    'idx_tasks_source_agent',
+    'idx_tasks_code_round',
+  ],
+  node_runs: ['idx_node_runs_status_active'],
+  doc_versions: ['idx_doc_versions_pending_created'],
+  memories: ['idx_memories_created'],
+  skill_versions: ['idx_skill_versions_fusion'],
+  code_findings: ['idx_code_findings_external_created'],
+  code_work_items: ['idx_code_work_items_created'],
+  code_work_rounds: ['idx_code_work_rounds_started'],
+  code_ai_attempts: ['idx_code_ai_attempts_started'],
+  code_artifacts: ['idx_code_artifacts_released'],
+  development_missions: ['idx_development_missions_created', 'idx_development_missions_fenced'],
+  development_mr_claims: ['idx_dev_mr_claims_lookup'],
+  development_wake_hints: ['idx_dev_wake_hints_unconsumed'],
+  development_deferred_wakes: ['idx_dev_deferred_wakes_due'],
+  development_agent_attempts: ['idx_dev_agent_attempts_execution_ref'],
+  development_effects: ['idx_dev_effects_prepared'],
+}
+
+/** 这些索引必须是 partial（谓词写在索引上），两个引擎同样要求。 */
+const PARTIAL_0180_INDEXES = [
+  'idx_doc_versions_pending_created',
+  'idx_dev_deferred_wakes_due',
+  'idx_dev_wake_hints_unconsumed',
+  'idx_dev_effects_prepared',
+  'idx_code_artifacts_released',
+  'idx_code_findings_external_created',
+] as const
+
+/** 当前引擎上某张表的索引清单：名字 + 是不是 partial。表不存在时返回空。 */
+async function listIndexes(
+  harness: ProviderHarness,
+  table: string,
+): Promise<{ name: string; partial: boolean }[]> {
+  const db: ProviderNeutralDatabase = harness.db
+  if (harness.capabilities.provider === 'sqlite') {
+    return (
+      await db.all<{ name: string; partial: number }>(sql.raw(`PRAGMA index_list('${table}')`))
+    ).map((row) => ({ name: row.name, partial: row.partial === 1 }))
+  }
+  const rows = await db.all<{ indexname: string; indexdef: string }>(
+    sql.raw(
+      `select indexname, indexdef from pg_indexes ` +
+        `where schemaname = 'agent_workflow' and tablename = '${table}'`,
+    ),
+  )
+  return rows.map((row) => ({ name: row.indexname, partial: / WHERE /i.test(row.indexdef) }))
+}
+
+describeEachProvider('migration 0180 — RFC-311 index batch（两个引擎都必须有）', (harness) => {
+  test('every 0180 index exists on this engine, with the intended partial flags', async () => {
+    const partials = new Set<string>()
+    let checked = 0
+    for (const [table, expected] of Object.entries(MIGRATION_0180_INDEXES)) {
+      const present = await listIndexes(harness, table)
+      // `code_artifacts` 一类按 RFC349_ARCHIVE_THEN_OMIT_TABLES 根本不投影到 PostgreSQL；
+      // 表不在就跳过，但**表在就一条都不许少**。
+      if (present.length === 0) continue
+      const names = present.map((row) => row.name)
+      checked += expected.length
+      expect(names, `${table} 少了 0180 的索引`).toEqual(expect.arrayContaining([...expected]))
+      for (const row of present) if (row.partial) partials.add(row.name)
+    }
+    // 失败关闭：扫描面下界，否则「没少索引」与「没扫到表」同形。
+    expect(checked).toBeGreaterThanOrEqual(18)
+    for (const name of PARTIAL_0180_INDEXES) {
+      if (!partials.has(name) && name.startsWith('idx_code_')) continue // 归档表，PG 上不存在
+      expect(partials.has(name), `${name} 应当是 partial index`).toBe(true)
+    }
+  }, 120_000)
+})
 
 describe('migration 0180 — RFC-311 index batch', () => {
   test('new indexes exist with the intended partial flags', () => {

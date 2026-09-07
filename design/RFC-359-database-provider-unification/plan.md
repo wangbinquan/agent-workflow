@@ -14,6 +14,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | **W4** | 逐 context 合一适配器（153 对 → 0） | 体量最大，但 W2 之后是机械工作 |
 | **W5** | 防复辟：七条结构性守卫 + harness 按 provider 参数化 + **全量套件在真 PG 上进 push CI** | 守卫的棘轮值要等 W4 收敛完才能钉死；覆盖率对等棘轮可提前到 W1 后立即上 |
 | **W6** | PostgreSQL 性能：JSONB + GIN 投影、`EXPLAIN (ANALYZE)` 热查询审计、双引擎性能基线 | 放 W4 之后——合一前给 PG 调优就是在给一份即将删除的实现调优 |
+| **W7** | W4 的收尾：把 W5 守卫点出来的**剩余成对适配器**逐对合一 | 见 §5c——W4 当时没有「还剩哪些对、每对验没验过」的清单，是 W5 的成对账本把它变成了可排期的有限集 |
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 
@@ -1442,6 +1443,124 @@ push CI 的四个 ubuntu 分片**早就带真 PostgreSQL**（W5-T21 已落），
 - **T28** 写法纪律审计：全仓「读—改—写中间不锁」的形状清单，逐条改成 `lockAggregateRoot`（design §10.1）。
   这类代码在 SQLite 上碰巧正确、在 PG 上是竞态——合一时必须改形状，不能原样搬。
 
+## 5c. W7 —— 成对适配器收尾（并发波次）
+
+**为什么排在 W5/W6 之后**：W4 定的目标是「153 对 → 0」，但当时没有「还剩哪些对、每对验没验过」
+的清单，只能凭印象挑。W5 的 `rfc359-w5-provider-pair-conformance` 账本把它变成了**有限、可排期、
+带 verified/unverified 状态**的集合——W7 就是照着那张表逐对收。测试文件统一叫 `rfc359-w7-*`。
+
+**做法上的一个前提**：此前合一验证只能串行，因为 PG harness 按文件 `drop schema … cascade`，
+两批双引擎测试并行会互相清库（见 `docs/dev-gotchas.md` 那一条）。本波先在同一个容器里开了
+8 个隔离库（`awpar1`…`awpar8`），每个作业独占一个，**并行验证才成立**；git index 与
+`architecture/*.json` 重采仍然只能串行。
+
+### 已合 11 对（各带 `describeEachProvider` 对拍）
+
+`RealtimeStore` · `ResourceLimitPersistence` · `ClarifyDirectiveStore` · `ReviewRepairParticipant` ·
+`ClarifyRepairParticipant` · `TerminalMaintenancePersistence` · `IntentSqlProgramRunner` ·
+`IntentPersistence` · `platform/events/committed/Persistence` · `CollaborationRouteOperations` ·
+`CollaborationRuntimeMechanics`。
+
+**净退役 4960 行**（删 6902 / 新建 1942），同时新增 **20 个双引擎对拍文件 / 10281 行**。
+最能说明形态的一组：`collaborationRouteOperations.ts` 用 **149 行**替代了 2269+116 行，
+`collaborationRuntimeMechanics.ts` 用 **99 行**替代 1746+81 行——因为 PG 那两份「原生重写」重写的，
+正是 SQLite 薄壳早已转发过去的同一台机器。
+
+**「先补对拍、再合一」这条又一次被证明是对的**（D23c/D25/D26 之后第四次）——纸面判成
+「零分叉」的对，一跑对拍就照出真差异：
+
+- **`ClarifyDirectiveStore`：PG 侧的裸 `db.transaction` 不可重入。** 外层显式事务里调 `store.set`，
+  外层回滚后 SQLite 侧 0 行（写被一起回滚）、**PG 侧 1 行**（另开连接独立提交，外层带不走）；
+  外层事务还开着时独立连接就已经能看到那笔写。合一后两侧都可重入，这条已锁进对拍。
+- **`TerminalMaintenancePersistence`：PG 侧有两处更强，按强侧抬齐。**
+  ① 并发 claim 的错误分类（PG 捕 `23505` → `task-terminal-maintenance-conflict`，SQLite 侧让裸
+  `SQLITE_CONSTRAINT_UNIQUE` 冒泡）——中立实现改走能力矩阵的 `classifyError`；
+  ② `snapshotTree` 的原子性（PG 把递归枚举 + 快照放同一笔 SERIALIZABLE，SQLite 分两笔 ⇒ 枚举与
+  快照不原子）——中立实现只保留单事务形态，子树枚举用迭代 BFS 替掉两方言不通用的 `WITH RECURSIVE`。
+  两条都做了变异验证。
+- **两个 repair participant 的事务包裹没有语义依据**：`unapprove` 在 SQLite 侧包、PG 侧不包，
+  `reopen` 反过来。合一按**语句形态**裁定（读改写序列包、单条 CAS UPDATE 不包），
+  理由写进头注释——而不是「保留原样」。
+- **`IntentSqlProgramRunner` 的 `get` 陷阱**：详见 `docs/dev-gotchas.md` 新增的那一条。
+  纸面上「以 PG 为正典」会让 SQLite 上每个具名字段静默变 `undefined`。
+
+### 判定为**不该合**的对：从 3 对增到 7 对
+
+成对账本上「同名两份实现」并不等于「重复实现」。逐方法核对后判定**不合**的，本波又加两对——
+合一会把一侧的缺口伪装成完成：
+
+| 对 | 为什么不合 |
+| --- | --- |
+| `LogicalSource` / `LogicalTarget` | 漂移检测与目标端口物理绑定引擎 |
+| `TaskLifecycleAutoRepairCommand` | PG 侧只实现了 14 个规则族中的 1 个 |
+| `IntentApplyArtifactLifecycle` | **两套不同的恢复设计**：SQLite 重放 `skill_operations` 账，PG 从 `skills`/`skill_versions` 行 + 目录哈希重新推导。两侧写路径只产出各自那一套事实，换一侧跑就无据可依。日志工件词汇也不互通（同一列 `intent_apply_journal.prepared_artifacts_json`：`opId`/`skillDir` vs `operationId`/`stagingDirectory`，信封一个带 `{version,artifacts}` 一个是裸数组），而解码器是 `.strict()`。 |
+| `IntentApplyOperations` | 骨架同构，但挂的是**两套资源会话协议**（提交期句柄、提交后前滚、资源侧中止的形状都不同），合它等于先合 resource-catalog 的两套 apply 栈。 |
+| `TaskRouteOperations` | **两台执行引擎**（见下「挑对的先验」）：SQLite 侧带模块级可变全局 + 2 处 `dbTxSync` + 自驱进程内 scheduler，PG 侧一律委托端口 + serializable 事务 + 已提交事件出站。合一的前置是 `services/task.ts` 的调度耦合与同步事务面——正是本节记的结构性阻塞。 |
+| `TaskRouteLaunchOperations` | 1362 行里只有 47 行与那 92 行壳对位，其余是别的端口借住同一文件；真正要合的是它背后的启动机器。 |
+
+**「不合」不等于「不管」**：这两对各配了一份双引擎对拍（共 1182 行），A 段锁两侧真正同义的
+共同子集、B 段锁实测分叉，并做了变异验证——其中一次专门变异「照 PG 那侧合一」，确认对拍会拦住。
+成对账本上它们从 `unverified` 翻成 `verified by`，但 `PROVIDER_PAIR_COUNT` **不减**：
+仍是两份实现，只是从此有守卫看着。
+
+### 「不能合」与「一侧更弱」是两件事，要分开处置
+
+同一轮对拍在这两对上还照出三条**与合不合无关**的「一个好一个不好」，已单独立刀抬齐：
+① 提交后前滚未完成时 SQLite 丢掉 `rollForward` 的返回值（那一行看上去干净，要等 boot/hourly
+才发现）；② `intent-left-retryable` 诊断词汇只有 SQLite 记，运维在 PG 部署上 grep 不到同一类失败；
+③ `plugin-install` 前滚的插件存在性判定只有 PG 做，SQLite 上「插件其实没装成」永远发现不了。
+
+### 挑对的先验：**薄壳只说明「真实现在别处」，不说明「PG 抄了它」**
+
+成对适配器里 SQLite 侧常常只有几十行。本波量了所有对的 `postgresql/sqlite` 行数比，
+高比值确实高度对应「PG 把 SQLite 早已转发过去的那台机器又抄了一遍」——合掉后中立实现极短：
+
+| 比值 | sqlite → postgresql | 合一后 |
+| --- | --- | --- |
+| 7.0 | 292 → 2048（`CollaborationRouteOperations` 是同形态） | **149 行**替代 2385 |
+| — | 81 → 1746（`CollaborationRuntimeMechanics`） | **99 行**替代 1827 |
+| — | 41 → 363（已提交事件出站存储） | 净退役 390 行 |
+
+**但这条先验必须修正一次，否则会误判**：`TaskLifecycleAutoRepairCommand` 比值 3.0（65 → 198）
+同样是薄壳，却是判定**不该合**的那一对——SQLite 的真能力在 `taskLifecycleRepair/options-*.ts`
+（14 个规则族），PG 那 198 行只实现了 **1 个**。照「薄壳 = 抄写」硬合，会把 13 个规则族的缺口
+伪装成完工。
+
+**正确用法**：薄壳 ⇒ 先找到它转发去的那台机器，拿**机器**去比 PG 那份，然后才分得清
+「PG 抄了同一台机器」（纯重复，合）还是「PG 另建了一个部分替代品」（能力缺口，不合）。
+
+**再修正一次（task-route 两对实测）：薄壳可能转发到「好几个横向层」，不是一台机器。**
+`sqliteTaskRouteOperations.ts` 292 行看着比值 7.0，但它转发到**四处**——`services/task.ts`
+（读面 ~1220 + 命令面 ~2030）、`services/taskDelete.ts`(399)、
+`legacySqliteTaskCollab.ts`(516)、`taskLifecycleRepair.ts`(513)，**合计约 4700 行**，
+对面是 `postgresqlTaskRouteOperations.ts`(2048) + `postgresqlTaskRouteRepairOperations.ts`(1448)
+约 3500 行。**不是「壳 + 机器被抄」，是两台执行引擎**：SQLite 侧带模块级可变全局、2 处
+`dbTxSync`、并自己驱动进程内 scheduler；PG 侧一律委托三个端口 + `withPostgresqlSerializableTaskExecution`
++ 已提交事件出站。
+
+**另一个陷阱：对面那个大文件里可能大部分不属于这个端口。** `postgresqlTaskRouteLaunchOperations.ts`
+1362 行里**只有 47 行**站在 92 行壳对面，其余是别的端口借住在同一文件
+（`createRootLaunch` 287 / `createPostgresqlTaskLaunchArms` 236 / 启动参与者 110 / 接口与快照构造 ~640）。
+
+**所以量比值只能用来排优先级，不能用来下判定。** 判定必须做两件事：
+① 把薄壳的**全部**转发目标找齐并求和；② 把对面文件按端口**分区段**，只比属于该端口的那部分。
+本波已合的对里，`platform/events/committed/` 就是靠②才发现「802 行里只有一半服务这个端口」。
+
+另一端也有信号：**比值接近 1 的对（两侧各自长出同样体量的代码）与「已判定不合」高度重合**
+——`LogicalSource` 1.1、`SourceTerminationParticipant` 1.0、`TaskExecutionRuntimeParticipants` 1.2、
+`ResourcePackageMaintenance` 1.3。同等体量通常意味着它们真的在做不同的事。
+
+### 本波暴露的两个结构性阻塞
+
+1. **`sqliteTerminalMaintenance.ts`（519 行 / 5 处 `dbTxSync`）删不掉**——`services/taskArchive.ts`
+   `services/taskDelete.ts` `platform/persistence/sqlite/systemWorkspaceGc.ts` 三处要的是**同步端口
+   独有**的 `assertClaimTx` / `transitionTx`，中立参与者是 async、进不了 `dbTxSync`。
+   **同步事务面是死代码清理的前置**，不只是「以后再说的债」。
+   三处的级联深度都很浅（两处外层已 async、一处只差一级），按 §「D28b 的可做判据」是最易的一类。
+2. **`clarify_rounds` 的 `kind` / `status` CHECK 在 PG 上不存在**（实测：同一行 SQLite 拒、PG 收）。
+   这与 W5-T19g 的 `SQLITE_ONLY_PROTECTIONS` 账本是同一件事的两次独立发现，
+   佐证那 149 条不是纸面差异。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；
@@ -1449,6 +1568,29 @@ push CI 的四个 ubuntu 分片**早就带真 PostgreSQL**（W5-T21 已落），
 - `workgroupTurns` 两侧是两套独立引擎（839 行 ↔ 2,801+561 行），**未做逐方法对拍**，
   分歧面可能比已发现的还大。**建议单独立一轮对账**，其结论可能给 W4-B1 增批。
 - 前置对账的 5 条存疑项（Q1–Q5）不在本 RFC 范围，随 W4 各批顺带确认或销账。
+
+### W7 发现的三处「合不了」，与「还没合」要分开记
+
+这三处不是排期问题，是**结构上就绑死在一个引擎**，合一之前先要改形状。它们此前不在任何账本里
+（成对账本只数「同名两份实现」，这三处不是那个形状），先记在这里：
+
+- **`modules/integration/infrastructure/developmentToolConnectionStore.ts:43-53`** —— 读用
+  bun:sqlite 的**同步** `.get()` / `.all()` 且**不 `await`**。换成 PostgreSQL 客户端时这两个
+  方法返回的是 Promise，于是 `row === undefined` 永远不成立、`identityRow(promise)` 拿到垃圾。
+  它**结构上只能跑 SQLite**——不抛错、不报警，只是悄悄产出错的数据。合一的前置是先把它改成
+  异步读。（PG 侧另有自己的工厂，所以现状不是 bug；但那也意味着这一对永远是两份实现。）
+- **`composeSqlite/PostgresqlResourcePackageApplyMaintenance` 的 API 不对称** —— SQLite 侧要调用方
+  传 `activitySource`、不暴露 tracker；PG 侧自带内部注册表并多暴露一个 `activityTracker`。
+  两者**调用点无法互换**，合一前要先把端口对齐。
+- **`composePostgresqlTaskSourceTermination`** —— 两个引擎都构造得起来（组合根覆盖已证明），
+  但它包的 participant 只在 PG 上真正 apply（`withPostgresqlSerializableTaskExecution`）。
+  「装配得起来」不等于「跑得通」，这一对的覆盖要按后者写。
+
+### 同步事务面是死代码清理的**前置**，不是可以往后放的债
+
+W7 实测：`sqliteTerminalMaintenance.ts`（519 行）删不掉，唯一原因是三处服务要的是同步端口
+（`assertClaimTx` / `transitionTx` 挂进各自的 `dbTxSync` 大事务），中立参与者是 async 进不去。
+凡是「SQLite 侧薄壳 + 成熟同步机器」的形状都会撞到同一堵墙——**先清同步事务面，才轮得到删重复实现**。
 
 ## 7. 风险
 

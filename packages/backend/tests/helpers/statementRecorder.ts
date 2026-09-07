@@ -22,6 +22,12 @@ export interface RecordedStatement {
    * 只看计划的判据下完全干净。行数是唯一能把「无界结果集」这一类抓出来的信号。
    */
   readonly rows: number
+  /**
+   * RFC-359 W6-T27 —— 绑定参数的**值**。SQLite 侧取计划可以用 NULL 占位（`params` 个数够了），
+   * PostgreSQL 侧不行：`EXPLAIN` 的计划随参数值而变（`x = NULL` 恒不成立，会选出生产里
+   * 根本不存在的计划）。双引擎的计划审计要拿真值去 EXPLAIN，所以值必须一起录下来。
+   */
+  readonly values: readonly unknown[]
 }
 
 export interface StatementRecording {
@@ -62,6 +68,7 @@ export function recordStatements(sqlite: Database): StatementRecording {
       sql: behavior === 'deferred' ? 'BEGIN' : `BEGIN ${behavior.toUpperCase()}`,
       params: 0,
       rows: 0,
+      values: [] as readonly unknown[],
     }
     const ensureBegin = (): void => {
       if (!statements.slice(start).some((statement) => /^\s*begin\b/i.test(statement.sql))) {
@@ -72,13 +79,13 @@ export function recordStatements(sqlite: Database): StatementRecording {
       const result = run()
       ensureBegin()
       if (!statements.slice(start).some((statement) => /^\s*commit\b/i.test(statement.sql))) {
-        statements.push({ sql: 'COMMIT', params: 0, rows: 0 })
+        statements.push({ sql: 'COMMIT', params: 0, rows: 0, values: [] })
       }
       return result
     } catch (error) {
       ensureBegin()
       if (!statements.slice(start).some((statement) => /^\s*rollback\b/i.test(statement.sql))) {
-        statements.push({ sql: 'ROLLBACK', params: 0, rows: 0 })
+        statements.push({ sql: 'ROLLBACK', params: 0, rows: 0, values: [] })
       }
       throw error
     }
@@ -94,7 +101,7 @@ export function recordStatements(sqlite: Database): StatementRecording {
           return (...args: unknown[]) => {
             const out = bound(...args)
             const rows = Array.isArray(out) ? out.length : out === undefined || out === null ? 0 : 1
-            statements.push({ sql, params: countParams(args), rows })
+            statements.push({ sql, params: countParams(args), rows, values: args })
             return out
           }
         }
@@ -111,7 +118,12 @@ export function recordStatements(sqlite: Database): StatementRecording {
   const origExec = (sqlite.exec as (...a: unknown[]) => unknown).bind(sqlite)
   originals.set('exec', sqlite.exec)
   ;(sqlite as unknown as Record<string, unknown>).exec = (...args: unknown[]) => {
-    statements.push({ sql: String(args[0]), params: Math.max(0, args.length - 1), rows: 0 })
+    statements.push({
+      sql: String(args[0]),
+      params: Math.max(0, args.length - 1),
+      rows: 0,
+      values: args.slice(1),
+    })
     return origExec(...args)
   }
 

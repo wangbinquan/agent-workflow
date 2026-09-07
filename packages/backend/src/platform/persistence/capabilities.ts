@@ -23,8 +23,9 @@
 //   · 错误分类：`postgresqlSerializationRetry.ts` 的 `errno` 判据——Bun.SQL 把 SQLSTATE 放在
 //     `errno`，`code` 恒为 ERR_POSTGRES_SERVER_ERROR。本轮对账 F-I-13 发现
 //     `isPostgresqlUniqueViolation` 只看 `code`，在真 PG 上恒为 false ⇒ 并发同名拿 500 而非 409。
-//   · 行锁与 advisory lock：`postgresqlTaskLifecycleTransaction.ts:100` 与
-//     `platform/events/committed/postgresqlPersistence.ts:230` 的既有写法。
+//   · 行锁与 advisory lock：`postgresqlTaskLifecycleTransaction.ts:100` 与已提交事件 append 的
+//     聚合序号互斥（RFC-359 W7 起是 `platform/events/committed/append.ts` 里的
+//     `engineOf(tx).advisoryLock`；此前是已删除的 `committed/postgresqlPersistence.ts` 的私有写法）。
 //
 // # 隔离级别（PG 侧默认 READ COMMITTED，见 databaseTransaction.ts §3.3）
 //

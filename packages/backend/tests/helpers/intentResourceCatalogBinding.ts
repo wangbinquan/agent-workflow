@@ -35,10 +35,10 @@ import {
   createIntentSessionAndReserveTurn,
 } from '@/modules/intent/application/session'
 import {
-  composeSqliteIntentPersistence,
+  composeIntentPersistence,
   type IntentPersistence,
 } from '../../src/modules/intent/composition/persistence'
-import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentContextResourceAuthorizationFactory } from '../../src/modules/resource-catalog/composition/intentContextAuthorization'
 import {
   composeIntentDumpAuxiliaryQueries,
   composeIntentTurnRuntimeResolver,
@@ -61,9 +61,9 @@ const EMPTY_PLATFORM_INVENTORY: IntentPlatformInventoryParticipant = Object.free
 })
 
 export function intentPersistenceForTest(db: DbClient): IntentPersistence {
-  return composeSqliteIntentPersistence({
+  return composeIntentPersistence({
     db,
-    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
 }
 

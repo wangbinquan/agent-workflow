@@ -14,8 +14,7 @@ import type {
   IntentSessionRecord,
   IntentTurnRecord,
 } from '@/modules/intent/application/ports/intentPersistence'
-import { createPostgresqlIntentPersistence } from '@/modules/intent/infrastructure/postgresqlIntentPersistence'
-import { createSqliteIntentPersistence } from '@/modules/intent/infrastructure/sqliteIntentPersistence'
+import { createIntentPersistence } from '@/modules/intent/infrastructure/intentPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -170,7 +169,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
       createdAt: 1,
       updatedAt: 1,
     })
-    const persistence = createSqliteIntentPersistence(db)
+    const persistence = createIntentPersistence(db)
 
     await persistence.createSession({ session: SESSION, userTurn: USER_TURN })
 
@@ -180,7 +179,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
 
   test('PostgreSQL createSession keeps table qualification out of INSERT columns', async () => {
     const fixture = postgresqlFixture()
-    const persistence = createPostgresqlIntentPersistence(fixture.db)
+    const persistence = createIntentPersistence(fixture.db)
 
     await persistence.createSession({ session: SESSION, userTurn: USER_TURN })
 
@@ -196,7 +195,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
 
   test('PostgreSQL update assignments keep table qualification out of SET targets', async () => {
     const fixture = postgresqlFixture()
-    const persistence = createPostgresqlIntentPersistence(fixture.db)
+    const persistence = createIntentPersistence(fixture.db)
 
     const result = await persistence.setStatus({
       ownerUserId: SESSION.ownerUserId,

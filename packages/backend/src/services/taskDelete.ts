@@ -10,10 +10,13 @@
 //                                       Fusion approval flow; Fusion owns its
 //                                       lifecycle)
 //   Held under the per-task write lock so an in-flight writer can't race the
-//   delete. The terminal re-check + row deletion run in ONE dbTxSync tx, so a
+//   delete. The terminal re-check + row deletion run in ONE transaction, so a
 //   concurrent resume either loses the terminal re-read (→ 409) or finds the
 //   row gone (its CAS fails cleanly — deletion is the row's death, not a
-//   transition).
+//   transition). RFC-359 W7: that transaction is the provider-neutral
+//   `databaseSessionFor(db).transaction(...)`, not the bun:sqlite-only
+//   `dbTxSync`, and the terminal-maintenance claim it fences is the same
+//   neutral store both provider composition roots assemble.
 //
 //   Cascade: the 12 FK-cascade tables clear automatically (foreign_keys=ON).
 //   task_feedback is deleted explicitly (no FK, task-scoped). Pending task
@@ -35,7 +38,6 @@
 // for cold connections is a documented follow-up.
 
 import {
-  dbTxSync,
   eq,
   inArray,
   sql,
@@ -52,7 +54,12 @@ import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
-import { taskExecutionModule } from '@/services/taskExecutionParticipants'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import {
+  assertTerminalMaintenanceClaimTx,
+  createTerminalMaintenanceStore,
+  transitionTerminalMaintenanceClaimTx,
+} from '@/services/taskExecutionParticipants'
 import {
   cleanupDeletedTaskResources,
   recoverInterruptedTaskDeletes,
@@ -143,7 +150,8 @@ export async function deleteTask(
 
   // Freeze the complete member set before collecting its cleanup resources.
   // The claim revalidates this same snapshot before it becomes authoritative.
-  const maintenanceMembers = taskExecutionModule.terminalMaintenance.snapshotTree(db, taskId)
+  const terminalMaintenance = createTerminalMaintenanceStore(db)
+  const maintenanceMembers = await terminalMaintenance.snapshotTree(taskId)
   for (const member of maintenanceMembers) {
     if (isTaskActive(member.taskId)) {
       throw new ConflictError(
@@ -207,8 +215,7 @@ export async function deleteTask(
       join(Paths.root, 'scratch', id),
     ]),
   }
-  let maintenanceClaim = taskExecutionModule.terminalMaintenance.claim({
-    db,
+  let maintenanceClaim = await terminalMaintenance.claim({
     rootTaskId: taskId,
     operation: 'delete',
     members: maintenanceMembers,
@@ -217,8 +224,7 @@ export async function deleteTask(
   // The immutable member/ledger/cleanup manifest is now frozen.  Advancing to
   // io-complete makes the following DB deletion restartable without claiming
   // that best-effort filesystem cleanup has already succeeded.
-  maintenanceClaim = taskExecutionModule.terminalMaintenance.transition({
-    db,
+  maintenanceClaim = await terminalMaintenance.transition({
     claim: maintenanceClaim,
     to: 'io-complete',
   })
@@ -227,14 +233,19 @@ export async function deleteTask(
   // one transaction (closes the resume/retry TOCTOU — §6.2).
   const release = await getTaskWriteSem(taskId).acquire()
   let deletedAudiences: Array<{ taskId: string; visibleUserIds: ReadonlySet<string> }> = []
+  // The claim this transaction fences is read from a `const`, never from the
+  // mutable `maintenanceClaim`: the neutral primitive may replay the whole body
+  // (SQLite retries a writer-contention BUSY, PostgreSQL a serialization
+  // failure), and a body that had already advanced the revision would fence
+  // against a claim that no longer exists on the second attempt.
+  const claimBeforeDelete = maintenanceClaim
   try {
-    dbTxSync(db, (tx) => {
-      taskExecutionModule.terminalMaintenance.assertClaimTx({
-        tx,
-        claim: maintenanceClaim,
+    maintenanceClaim = await databaseSessionFor(db).transaction(async (tx) => {
+      await assertTerminalMaintenanceClaimTx(tx, {
+        claim: claimBeforeDelete,
         expectedState: 'io-complete',
       })
-      const fresh = tx
+      const fresh = await tx
         .select({ status: tasks.status })
         .from(tasks)
         .where(eq(tasks.id, taskId))
@@ -254,7 +265,7 @@ export async function deleteTask(
       // RFC-244: freeze the complete FK-cascade audience inside the deletion
       // transaction. Once the root delete commits neither rows nor memberships
       // remain available to the tasks-list frame gate.
-      const cascadeRows = tx.all(sql`
+      const cascadeRows = (await tx.all(sql`
         WITH RECURSIVE cascade(id) AS (
           SELECT id FROM tasks WHERE id = ${taskId}
           UNION
@@ -265,7 +276,7 @@ export async function deleteTask(
         SELECT t.id, t.owner_user_id
         FROM tasks t
         JOIN cascade c ON c.id = t.id
-      `) as Array<{ id: string; owner_user_id: string | null }>
+      `)) as Array<{ id: string; owner_user_id: string | null }>
       const cascadeIds = cascadeRows.map((item) => item.id)
       const claimedIds = maintenanceMembers.map((member) => member.taskId).sort()
       if (JSON.stringify([...cascadeIds].sort()) !== JSON.stringify(claimedIds)) {
@@ -277,11 +288,10 @@ export async function deleteTask(
       const memberRows =
         cascadeIds.length === 0
           ? []
-          : tx
+          : await tx
               .select({ taskId: taskCollaborators.taskId, userId: taskCollaborators.userId })
               .from(taskCollaborators)
               .where(inArray(taskCollaborators.taskId, cascadeIds))
-              .all()
       deletedAudiences = cascadeRows.map((item) => {
         const visibleUserIds = new Set<string>()
         if (item.owner_user_id !== null) visibleUserIds.add(item.owner_user_id)
@@ -292,8 +302,8 @@ export async function deleteTask(
       })
       // Explicit task-scoped deletes; committed lifecycle facts intentionally
       // survive task deletion as Event Center audit records.
-      tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
-      tx.delete(tasks).where(eq(tasks.id, taskId)).run()
+      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
+      await tx.delete(tasks).where(eq(tasks.id, taskId)).run()
 
       // RFC-311 实现门 P1-6/P2-3:`branch_started_at` 是「子树 max(started_at)」的
       // 物化值,此前只有铸行点向上推进(单调 MAX),删掉一个子任务后父行会**永久**
@@ -302,7 +312,7 @@ export async function deleteTask(
       // 删除是低频操作,在同一事务里沿父链重算即可闭合(链长同 MAX_TREE_DEPTH)。
       let cursor: string | null = row.parentTaskId
       for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
-        const parent = tx
+        const parent = await tx
           .select({
             id: tasks.id,
             parentTaskId: tasks.parentTaskId,
@@ -312,18 +322,21 @@ export async function deleteTask(
           .where(eq(tasks.id, cursor))
           .get()
         if (parent === undefined) break
-        const childMax = tx
-          .select({ v: sql<number | null>`MAX(${tasks.branchStartedAt})` })
+        const childMax = await tx
+          .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
           .from(tasks)
           .where(eq(tasks.parentTaskId, parent.id))
           .get()
         const recomputed = Math.max(parent.startedAt ?? 0, childMax?.v ?? 0)
-        tx.update(tasks).set({ branchStartedAt: recomputed }).where(eq(tasks.id, parent.id)).run()
+        await tx
+          .update(tasks)
+          .set({ branchStartedAt: recomputed })
+          .where(eq(tasks.id, parent.id))
+          .run()
         cursor = parent.parentTaskId
       }
-      maintenanceClaim = taskExecutionModule.terminalMaintenance.transitionTx({
-        tx,
-        claim: maintenanceClaim,
+      return await transitionTerminalMaintenanceClaimTx(tx, {
+        claim: claimBeforeDelete,
         to: 'db-finalized',
         now: Date.now(),
       })
@@ -346,8 +359,7 @@ export async function deleteTask(
       },
     )
   }
-  maintenanceClaim = taskExecutionModule.terminalMaintenance.transition({
-    db,
+  maintenanceClaim = await terminalMaintenance.transition({
     claim: maintenanceClaim,
     to: cleanup === 'done' ? 'completed' : 'cleanup-pending',
     releaseMembers: cleanup === 'done',

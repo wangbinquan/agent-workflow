@@ -41,8 +41,21 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
   },
   'platform/persistence/postgresqlEventsArchive.ts': {
     value: '调用点用 numberValue() 解码；投影类型也刻意写成 sql<unknown> 提醒这一点',
+    avg:
+      'averageRecentPayloadBytes 的 AVG(LENGTH(payload))：行类型写成 `{ avg: unknown }`，' +
+      '返回前走 numberValue(value) 解码，null 原样透传。与上面 value 同一形态。',
   },
-  'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': {
+  // RFC-359 W7：判据改成大小写不敏感后才看得见的一条（此前 `MAX(` 整类漏检）。
+  'services/task.ts': {
+    branchStartedAt:
+      'MAX(a, b) 是**两参数标量**形态、写在 update().set() 里让 branch_started_at 只前进不后退，' +
+      '不是投影列——没有值回到 JS 侧，也就没有可解码的东西（同 capabilities.ts 的 greatest 条目）。' +
+      '⚠️ 但它是一颗雷：两参数 max 只有 SQLite 有，PostgreSQL 要 greatest(a, b)。' +
+      '这块代码今天跑在 `dbTxSync` 里（SQLite-only 执行面）所以打不着，' +
+      '**等 services/task.ts 迁离同步事务面时必须同时换成能力矩阵的 greatest**，否则当场 42883。',
+  },
+  // RFC-359 W7：两份 provider 实现合一后按领域命名，仍按类型可达性落进 PG 语料。
+  'modules/system-operations/infrastructure/resourceLimitPersistence.ts': {
     total: 'decodeResourceLimitTokenTotal() 显式接受 string / bigint / number 三种形态',
   },
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': {
@@ -52,7 +65,14 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
   },
 }
 
-const AGGREGATE = /\bsql(?:<[^>]*>)?`[^`]*\b(?:count|sum|avg|max|min)\(/gu
+/**
+ * 聚合函数名**大小写不敏感**（`iu`）。初版只有 `u`，于是 `sql<number | null>`MAX(…)`` 这类
+ * 大写写法整类漏检——SQL 函数名本来就不区分大小写，判据区分就是一个纯粹的检测盲区。
+ * RFC-359 W7 实测：`services/taskDelete.ts` 迁成中立事务、进入 PG 执行面之后，它的两处
+ * `MAX(branch_started_at)` 正好落在这个盲区里（PostgreSQL 的 `max(bigint)` 回 **int8**，
+ * 驱动交回字符串）。
+ */
+const AGGREGATE = /\bsql(?:<[^>]*>)?`[^`]*\b(?:count|sum|avg|max|min)\(/giu
 
 /**
  * 语料是**类型可达**的 PG 执行面，不是文件名前缀。

@@ -1,5 +1,13 @@
-// RFC-349 — WebSocket transport consumes one closed realtime contract while
-// SQLite and PostgreSQL keep their query mechanics inside provider adapters.
+// RFC-349 — WebSocket transport consumes one closed realtime contract; the
+// realtime query mechanics stay behind that contract's single adapter.
+//
+// RFC-359 W7 — that adapter is now provider-neutral (`DrizzleRealtimeStore`,
+// one implementation for both providers: the four methods are read-only
+// selects with no transaction). The two store cases below therefore drive the
+// SAME class through the two provider CLIENTS — a real bun:sqlite database and
+// a PostgreSQL client fake — which is exactly the boundary this file locks.
+// Behavioural equivalence on real engines is in
+// `rfc359-w7-realtime-store-conformance.test.ts`.
 
 import type { ServerWebSocket } from 'bun'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -11,8 +19,7 @@ import { createInMemoryDb } from '@/db/client'
 import { nodeRunEvents, nodeRuns, taskCollaborators, tasks, users, workflows } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createRealtimeChannelAccess } from '@/modules/runtime-management/application/realtimeChannelAccess'
-import { PostgresqlRealtimeStore } from '@/modules/runtime-management/infrastructure/postgresqlRealtimeStore'
-import { SqliteRealtimeStore } from '@/modules/runtime-management/infrastructure/sqliteRealtimeStore'
+import { DrizzleRealtimeStore } from '@/modules/runtime-management/infrastructure/realtimeStore'
 import type {
   RealtimeChannelAccess,
   RealtimeCredentialAccess,
@@ -348,7 +355,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
       { id: 2, nodeRunId: 'realtime-run', ts: 2, kind: 'text', payload: '{"token":"new"}' },
     ])
 
-    const channels = createRealtimeChannelAccess(new SqliteRealtimeStore(db), {
+    const channels = createRealtimeChannelAccess(new DrizzleRealtimeStore(db), {
       resourceVisibility: { canViewResource: async () => false },
       memoryVisibility: { canViewMemory: async () => false },
       repoImportOwnerUserId: () => null,
@@ -388,7 +395,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
       [['repo', 'repo-1']],
       [[2, 'realtime-run', 2, 'text', '{"token":"new"}']],
     ])
-    const store = new PostgresqlRealtimeStore(fake.db)
+    const store = new DrizzleRealtimeStore(fake.db)
 
     await expect(store.findTaskAudience('realtime-task', 'realtime-member')).resolves.toEqual({
       ownerUserId: 'realtime-owner',

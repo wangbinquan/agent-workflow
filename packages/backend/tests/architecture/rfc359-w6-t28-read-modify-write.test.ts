@@ -475,7 +475,6 @@ const CORPUS_FILES: readonly string[] = (() => {
 
 /** `<相对 src 的路径>: <未加锁的读—改—写处数>`，按路径字典序。只降不升。 */
 export const READ_MODIFY_WRITE_DEBT: readonly string[] = [
-  'modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts: 1',
   'modules/digital-employee/infrastructure/runtimeStore.ts: 2',
   'modules/event-center/infrastructure/eventStore.ts: 2',
   'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 1',

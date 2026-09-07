@@ -32,10 +32,10 @@ import {
 } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { createSqliteTaskAuthorizationQueries } from '@/modules/task-execution/infrastructure/sqliteTaskAuthorization'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { createTaskAuthorizationQueries } from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { chunkedAll } from '@/util/sqlChunk'
-import { dbTxSync } from '@/db/txSync'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import {
   TERMINAL_TASK_STATUSES,
@@ -167,7 +167,7 @@ function clarifyRoundsCondition(filter: {
 }
 
 export async function listClarifyRounds(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   filter: ListClarifyRoundsFilter = {},
 ): Promise<Array<typeof clarifyRounds.$inferSelect>> {
   // `id desc` secondary key: created_at has millisecond resolution and the old
@@ -204,7 +204,7 @@ export interface ListClarifyRoundSummariesFilter {
  * `tasks.workflowSnapshot`. Sort: createdAt descending.
  */
 export async function listClarifyRoundSummaries(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   filter: ListClarifyRoundSummariesFilter = {},
 ): Promise<ClarifyRoundSummary[]> {
   const desiredStatus = filter.status ?? 'awaiting_human'
@@ -261,7 +261,10 @@ export async function listClarifyRoundSummaries(
  *     out, exactly like filterRoundsByTaskVisibility's "look up rows first"
  *     behavior. Locked by the rfc311-badge-counts oracle test.
  */
-export async function countAwaitingClarifyRounds(db: DbClient, actor: Actor): Promise<number> {
+export async function countAwaitingClarifyRounds(
+  db: ProviderNeutralDatabase,
+  actor: Actor,
+): Promise<number> {
   const conditions: SQL<unknown>[] = [
     eq(clarifyRounds.status, 'awaiting_human'),
     or(isNull(tasks.id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]))!,
@@ -281,7 +284,7 @@ export async function countAwaitingClarifyRounds(db: DbClient, actor: Actor): Pr
     .leftJoin(tasks, eq(tasks.id, clarifyRounds.taskId))
     .where(and(...conditions))
   const taskIds = rows.map((row) => row.taskId)
-  const visible = await createSqliteTaskAuthorizationQueries(db).visibleTaskIds({
+  const visible = await createTaskAuthorizationQueries(db).visibleTaskIds({
     subject: { userId: actor.user.id, canReadAllTasks: false },
     taskIds,
   })
@@ -294,7 +297,7 @@ export async function countAwaitingClarifyRounds(db: DbClient, actor: Actor): Pr
  * Throws NotFoundError when no matching row exists.
  */
 export async function getClarifyRoundDetail(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   intermediaryNodeRunId: string,
 ): Promise<ClarifyRound> {
   const rows = await db
@@ -457,7 +460,7 @@ function parseJsonRecord<T>(raw: string | null): T | null {
 }
 
 async function loadTaskStatusesByTaskId(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskIds: string[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>()
@@ -471,7 +474,7 @@ async function loadTaskStatusesByTaskId(
 }
 
 async function loadTaskNamesByTaskId(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskIds: string[],
 ): Promise<Map<string, string>> {
   // RFC-311: WHERE id IN + two-column projection. The previous shape read the
@@ -489,7 +492,7 @@ async function loadTaskNamesByTaskId(
 }
 
 async function loadNodeTitlesByTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskIds: string[],
 ): Promise<Map<string, Map<string, string>>> {
   // RFC-311: same WHERE id IN fix as loadTaskNamesByTaskId — this variant was
@@ -535,13 +538,27 @@ async function loadNodeTitlesByTask(
 // ---------------------------------------------------------------------------
 
 export interface SaveClarifyDraftArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   /** The intermediary (clarify / clarify-cross-agent) node_run the client is on. */
   intermediaryNodeRunId: string
   roundId: string
   questionId: string
   value: ClarifyDraftValue
   editor: { userId: string; displayName: string; role: TaskActorRole }
+  /**
+   * RFC-359 W7 —— 草稿提交后的实时投影由装配点注入（`CollaborationClarifyDraftEventPublisher`），
+   * 持久化实现不再直接够全局广播器。省略时退回内联广播，保住既有 service 层调用方。
+   */
+  draftEvents?: {
+    publish(input: {
+      readonly taskId: string
+      readonly nodeRunId: string
+      readonly roundId: string
+      readonly questionId: string
+      readonly editor: { userId: string; displayName: string; role: TaskActorRole }
+      readonly occurredAt: number
+    }): Promise<void>
+  }
 }
 
 export interface SaveClarifyDraftResult {
@@ -582,16 +599,17 @@ export async function saveClarifyDraft(
     )
   }
   const now = Date.now()
-  dbTxSync(args.db, (tx) => {
-    const fresh = tx
-      .select({
-        draftAnswersJson: clarifyRounds.draftAnswersJson,
-        answerAttributionsJson: clarifyRounds.answerAttributionsJson,
-        status: clarifyRounds.status,
-      })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, args.roundId))
-      .get()
+  await databaseSessionFor(args.db).transaction(async (tx) => {
+    const fresh = (
+      await tx
+        .select({
+          draftAnswersJson: clarifyRounds.draftAnswersJson,
+          answerAttributionsJson: clarifyRounds.answerAttributionsJson,
+          status: clarifyRounds.status,
+        })
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.id, args.roundId))
+    )[0]
     if (fresh === undefined || fresh.status !== 'awaiting_human') {
       throw new ConflictError(
         'clarify-round-not-awaiting',
@@ -602,24 +620,35 @@ export async function saveClarifyDraft(
     const attrs = parseJsonRecord<ClarifyAnswerAttributions>(fresh.answerAttributionsJson) ?? {}
     drafts[args.questionId] = args.value
     attrs[args.questionId] = { userId: args.editor.userId, role: args.editor.role, updatedAt: now }
-    tx.update(clarifyRounds)
+    await tx
+      .update(clarifyRounds)
       .set({
         draftAnswersJson: JSON.stringify(drafts),
         answerAttributionsJson: JSON.stringify(attrs),
       })
       .where(eq(clarifyRounds.id, args.roundId))
-      .run()
   })
   // Live-sync other members' open forms ("X just edited question N").
-  taskBroadcaster.broadcast(TASK_CHANNEL(row.taskId), {
-    id: -1,
-    type: 'clarify.draft.updated',
-    nodeRunId: args.intermediaryNodeRunId,
-    roundId: args.roundId,
-    questionId: args.questionId,
-    editor: args.editor,
-    ts: now,
-  })
+  if (args.draftEvents !== undefined) {
+    await args.draftEvents.publish({
+      taskId: row.taskId,
+      nodeRunId: args.intermediaryNodeRunId,
+      roundId: args.roundId,
+      questionId: args.questionId,
+      editor: args.editor,
+      occurredAt: now,
+    })
+  } else {
+    taskBroadcaster.broadcast(TASK_CHANNEL(row.taskId), {
+      id: -1,
+      type: 'clarify.draft.updated',
+      nodeRunId: args.intermediaryNodeRunId,
+      roundId: args.roundId,
+      questionId: args.questionId,
+      editor: args.editor,
+      ts: now,
+    })
+  }
   return { roundId: args.roundId, questionId: args.questionId, updatedAt: now }
 }
 
@@ -669,7 +698,7 @@ export function freezeAnswerAttributions(args: {
  * the freeze rides the same write.
  */
 export async function buildFrozenAttributionSet(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   roundId: string,
   answers: readonly ClarifyAnswer[],
   submitter: { userId: string; role: TaskActorRole },

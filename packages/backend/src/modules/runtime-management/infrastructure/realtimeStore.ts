@@ -1,8 +1,21 @@
-// RFC-349 — SQLite realtime persistence adapter for runtime-management.
+// RFC-359 W7 —— realtime 持久化：一份实现，两个 provider 共用。
+//
+// 合一前是 `sqliteRealtimeStore.ts` / `postgresqlRealtimeStore.ts` 各 91 行，body **逐字节
+// 相同**——只差注释首行、db 类型 import、类名与构造签名。纯重复，留着只会漂。
+//
+// 可以合成一份，判据与 RFC-350 的 `taskIdleTimeoutPersistence.ts` 同款：本 adapter 的四个方法
+// （`findTaskAudience` / `findResource` / `findMemoryScope` / `listTaskEvents`）**全是只读
+// select、没有任何事务**，SQLite 的 `dbTxSync` 与 PostgreSQL 的异步事务那道真正的分歧在这里
+// 不存在；而 `DbClient` 与 `PostgresqlDatabaseClient` 都是 drizzle 的 `BaseSQLiteDatabase`
+// （即 `ProviderNeutralDatabase`），同一套 query builder 在 `await` 下两边行为一致。
+//
+// 于是 provider 一致性在**结构上**成立，而不是靠纸面对账。行为侧另有
+// `tests/rfc359-w7-realtime-store-conformance.test.ts` 把这四个方法在两个引擎上各跑一遍
+// ——合一之前这一对是「无对拍」的，那份对拍本身就是合一换来的。
 
 import { and, asc, eq, gt } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   memories,
   nodeRunEvents,
@@ -18,8 +31,8 @@ import type {
   RealtimeStore,
 } from '../application/ports/realtimeStore'
 
-export class SqliteRealtimeStore implements RealtimeStore {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleRealtimeStore implements RealtimeStore {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async findTaskAudience(taskId: string, userId: string) {
     const taskRows = await this.db

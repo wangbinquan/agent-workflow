@@ -16,9 +16,9 @@ import {
 import { createPostgresqlResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createSqliteResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
 import type { MaintenanceRunStore } from '@/platform/background/maintenanceRunStorePort'
-import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
+import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import type { CommittedEventDeliveryPersistencePort } from '@/platform/events/committed/persistence'
-import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+
 import type {
   CommittedEventEnvelopeV1,
   StoredCommittedEvent,
@@ -123,6 +123,7 @@ function createScriptedPostgresqlFixture(
 
 const BEGIN: SqlStep = { label: 'BEGIN', sql: /^BEGIN$/i }
 const COMMIT: SqlStep = { label: 'COMMIT', sql: /^COMMIT$/i }
+const ROLLBACK: SqlStep = { label: 'ROLLBACK', sql: /^ROLLBACK$/i }
 type MaintenanceRow = Awaited<ReturnType<MaintenanceRunStore['read']>> & object
 
 function maintenanceRow(input: {
@@ -463,10 +464,17 @@ function postgresqlCommittedEventPersistence(events: readonly EventFixtureRow[])
       sql: /select .* from "agent_workflow"\."committed_events".*order by/is,
       values: events.map(eventValues),
     },
+    // RFC-359 W7：合一后的 retry 是「UPDATE CAS + 同事务读回 replayGeneration」——回执里的
+    // 自增值只能读回，不再靠 RETURNING（那是旧 PG 适配器的私有形状）。CAS 输了就抛，整笔回滚。
     BEGIN,
     {
       label: 'manual retry wins CAS',
       sql: /update "agent_workflow"\."committed_event_deliveries"/i,
+      count: 1,
+    },
+    {
+      label: 'manual retry reads the settled row back',
+      sql: /select .* from "agent_workflow"\."committed_event_deliveries"/is,
       values: [[3, 500]],
     },
     COMMIT,
@@ -474,12 +482,12 @@ function postgresqlCommittedEventPersistence(events: readonly EventFixtureRow[])
     {
       label: 'duplicate manual retry loses CAS',
       sql: /update "agent_workflow"\."committed_event_deliveries"/i,
-      values: [],
+      count: 0,
     },
-    COMMIT,
+    ROLLBACK,
   ])
   return {
-    persistence: createPostgresqlCommittedEventDeliveryPersistence(fixture.db),
+    persistence: createCommittedEventDeliveryPersistence(fixture.db),
     assertExhausted: fixture.assertExhausted,
   }
 }
@@ -665,7 +673,7 @@ describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
           createSqliteMaintenanceRunStore(sqliteMaintenanceDb),
         ),
         committedEvents: await committedEventTranscript(
-          createSqliteCommittedEventDeliveryPersistence(sqliteEventsDb),
+          createCommittedEventDeliveryPersistence(sqliteEventsDb),
           events,
         ),
         applyRecovery: await applyRecoveryTranscript(

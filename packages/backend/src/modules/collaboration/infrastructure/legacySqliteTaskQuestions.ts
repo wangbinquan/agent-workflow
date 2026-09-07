@@ -23,10 +23,8 @@ import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { humanGateComposition } from '@/services/humanGateComposition'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import {
   databaseSessionFor,
   type DatabaseTransaction,
@@ -288,7 +286,7 @@ function resolveDispatchedEntryHandler(
  *  its derived phase. Optional filters: by source node (node badge / clarify page)
  *  and/or by phase (board column). */
 export async function listTaskQuestions(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: { sourceNodeId?: string; phase?: TaskQuestionPhase } = {},
 ): Promise<TaskQuestionDTO[]> {
@@ -415,7 +413,10 @@ export async function listTaskQuestions(
   return out
 }
 
-async function runIdsWithOutput(db: DbClient, runIds: string[]): Promise<Set<string>> {
+async function runIdsWithOutput(
+  db: ProviderNeutralDatabase,
+  runIds: string[],
+): Promise<Set<string>> {
   if (runIds.length === 0) return new Set()
   const rows = await db
     .select({ nodeRunId: nodeRunOutputs.nodeRunId })
@@ -477,7 +478,7 @@ function summarizeAnswer(
  *  done+output); once consumed, a still-undispatched sibling re-parks the node so a later
  *  dispatch isn't stranded. Empty for any non-deferred task (golden-lock). */
 export async function loadUndispatchedDesignerTargets(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义（旧 flag 门移除）。
@@ -495,7 +496,10 @@ export async function loadUndispatchedDesignerTargets(
  *  rows), the projection partitionUndispatchedParkTargets consumes. Extracted so the per-role
  *  designer source AND the RFC-128 P5-D all-role {@link loadUndispatchedParkTargets} share ONE
  *  query (no drift). Caller applies the deferred-flag gate + the partition. */
-async function fetchDesignerParkEntries(db: DbClient, taskId: string): Promise<ParkTargetEntry[]> {
+async function fetchDesignerParkEntries(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<ParkTargetEntry[]> {
   const clarifyDesigner = await db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
@@ -633,7 +637,7 @@ function partitionUndispatchedParkTargets(
 /** Does the task currently park on ≥1 undispatched designer entry? (Self-gated on
  *  the deferred flag — always false for non-deferred tasks.) */
 export async function hasUndispatchedDesignerQuestions(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<boolean> {
   return (await loadUndispatchedDesignerTargets(db, taskId)).size > 0
@@ -658,7 +662,7 @@ export async function hasUndispatchedDesignerQuestions(
  * {@link partitionUndispatchedParkTargets} (byte-for-byte the designer source's tail).
  */
 export async function loadUndispatchedSelfQuestionerTargets(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
@@ -681,7 +685,7 @@ export async function loadUndispatchedSelfQuestionerTargets(
  *  entries, and this query excludes `confirmation='confirmed'`. So the superseded q1 drops out
  *  automatically (no starvation, no re-park duplicate). */
 async function fetchSelfQuestionerParkEntries(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<ParkTargetEntry[]> {
   return db
@@ -725,7 +729,7 @@ async function fetchSelfQuestionerParkEntries(
  * The per-role helpers stay for direct callers/tests (RFC-132: every task takes this path).
  */
 export async function loadUndispatchedParkTargets(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<Set<string>> {
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
@@ -763,7 +767,7 @@ export interface TaskQuestionActor {
   role: string
 }
 
-async function loadEntry(db: DbClient, entryId: string): Promise<TaskQuestionRow> {
+async function loadEntry(db: ProviderNeutralDatabase, entryId: string): Promise<TaskQuestionRow> {
   const [e] = await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)).limit(1)
   if (!e)
     throw new NotFoundError(TASK_QUESTION_CONFLICT.notFound, `task question ${entryId} not found`)
@@ -771,7 +775,10 @@ async function loadEntry(db: DbClient, entryId: string): Promise<TaskQuestionRow
 }
 
 /** Derive one entry's current phase (loads its round + the task's runs). */
-async function deriveEntryPhase(db: DbClient, entry: TaskQuestionRow): Promise<TaskQuestionPhase> {
+async function deriveEntryPhase(
+  db: ProviderNeutralDatabase,
+  entry: TaskQuestionRow,
+): Promise<TaskQuestionPhase> {
   // RFC-120 §15 — manual question: no clarify round. Phase from the entry's OWN dispatch
   // state (content always answered; no human-answer step) — the SAME resolution the
   // read-side uses for manual rows.
@@ -842,7 +849,10 @@ export async function taskNodeHasRun(
 }
 
 /** Agent-kind node ids of the task's frozen workflow snapshot (reassign candidates). */
-async function agentNodeIdsForTask(db: DbClient, taskId: string): Promise<Set<string>> {
+async function agentNodeIdsForTask(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<Set<string>> {
   const [t] = await db
     .select({ snapshot: tasks.workflowSnapshot })
     .from(tasks)
@@ -863,7 +873,10 @@ async function agentNodeIdsForTask(db: DbClient, taskId: string): Promise<Set<st
 // dynamic_workflow task, an agent node coincidentally named '__wg_member__' is a plain single node
 // with no shard ambiguity, so the manual-target ban below must NOT apply. `isTurnEngineWorkgroupTask`
 // is the exact predicate (workgroupId set AND mode != dynamic_workflow).
-async function taskIsTurnEngineWorkgroup(db: DbClient, taskId: string): Promise<boolean> {
+async function taskIsTurnEngineWorkgroup(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<boolean> {
   const [t] = await db
     .select({ workgroupId: tasks.workgroupId, workgroupConfigJson: tasks.workgroupConfigJson })
     .from(tasks)
@@ -881,7 +894,7 @@ async function taskIsTurnEngineWorkgroup(db: DbClient, taskId: string): Promise<
 // WG_MEMBER_NODE_ID import — workgroupLaunch pulls in task/workgroups/orchestrator services and
 // importing it here risks a module-init cycle; the rfc172 test source-locks the two to match.)
 async function assertManualTargetNotSharedMemberHost(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   target: string,
 ): Promise<void> {
@@ -895,7 +908,7 @@ async function assertManualTargetNotSharedMemberHost(
 
 /** Confirm (已处理待确认 → 完成). Only from awaiting_confirm; pure closure (D5). */
 export async function confirmTaskQuestion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   entryId: string,
   actor: TaskQuestionActor,
 ): Promise<void> {
@@ -941,7 +954,7 @@ export type ReassignTaskQuestionAction = 'added-designer' | 'removed-designer' |
  *  to the single default card). A MANUAL question (no asker) still MOVES via override. The only
  *  constraint is the target must be a workflow agent node (Codex F5). */
 export async function reassignTaskQuestion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   entryId: string,
   targetNodeId: string,
   actor: TaskQuestionActor,
@@ -980,14 +993,14 @@ export async function reassignTaskQuestion(
     // Once dispatched the entry is committed for execution — CAS on `dispatched_at IS NULL` so a
     // concurrent dispatch that won leaves this a 0-row no-op → reject (reopen's job post-dispatch).
     let updated = false
-    dbTxSync(db, (tx) => {
-      const stillOpen = tx
+    await databaseSessionFor(db).transaction(async (tx) => {
+      const stillOpen = await tx
         .select({ id: taskQuestions.id })
         .from(taskQuestions)
         .where(and(eq(taskQuestions.id, entryId), isNull(taskQuestions.dispatchedAt)))
-        .all()
       if (stillOpen.length === 0) return
-      tx.update(taskQuestions)
+      await tx
+        .update(taskQuestions)
         .set({
           overrideTargetNodeId: targetNodeId,
           lastReassignedBy: actor.userId,
@@ -995,7 +1008,6 @@ export async function reassignTaskQuestion(
           updatedAt: Date.now(),
         })
         .where(and(eq(taskQuestions.id, entryId), isNull(taskQuestions.dispatchedAt)))
-        .run()
       updated = true
     })
     if (!updated) {
@@ -1035,24 +1047,25 @@ export async function reassignTaskQuestion(
   // Target == the asking node → "back to single card": remove the designer handler row (if any).
   if (targetNodeId === askingNodeId) {
     let dispatched = false
-    dbTxSync(db, (tx) => {
-      const existing = tx
-        .select({ id: taskQuestions.id, dispatchedAt: taskQuestions.dispatchedAt })
-        .from(taskQuestions)
-        .where(
-          and(
-            eq(taskQuestions.originNodeRunId, entry.originNodeRunId),
-            eq(taskQuestions.questionId, entry.questionId),
-            eq(taskQuestions.roleKind, 'designer'),
-          ),
-        )
-        .all()[0]
+    await databaseSessionFor(db).transaction(async (tx) => {
+      const existing = (
+        await tx
+          .select({ id: taskQuestions.id, dispatchedAt: taskQuestions.dispatchedAt })
+          .from(taskQuestions)
+          .where(
+            and(
+              eq(taskQuestions.originNodeRunId, entry.originNodeRunId),
+              eq(taskQuestions.questionId, entry.questionId),
+              eq(taskQuestions.roleKind, 'designer'),
+            ),
+          )
+      )[0]
       if (existing === undefined) return // nothing to remove (already single card)
       if (existing.dispatchedAt !== null) {
         dispatched = true
         return
       }
-      tx.delete(taskQuestions).where(eq(taskQuestions.id, existing.id)).run()
+      await tx.delete(taskQuestions).where(eq(taskQuestions.id, existing.id))
     })
     if (dispatched) {
       throw new ConflictError(
@@ -1073,24 +1086,26 @@ export async function reassignTaskQuestion(
   // later reruns the asker via the normal cascade (a revision pass, not an out-of-order bug).
   let dispatched = false
   const now = Date.now()
-  dbTxSync(db, (tx) => {
-    const existing = tx
-      .select()
-      .from(taskQuestions)
-      .where(
-        and(
-          eq(taskQuestions.originNodeRunId, entry.originNodeRunId),
-          eq(taskQuestions.questionId, entry.questionId),
-          eq(taskQuestions.roleKind, 'designer'),
-        ),
-      )
-      .all()[0]
+  await databaseSessionFor(db).transaction(async (tx) => {
+    const existing = (
+      await tx
+        .select()
+        .from(taskQuestions)
+        .where(
+          and(
+            eq(taskQuestions.originNodeRunId, entry.originNodeRunId),
+            eq(taskQuestions.questionId, entry.questionId),
+            eq(taskQuestions.roleKind, 'designer'),
+          ),
+        )
+    )[0]
     if (existing !== undefined) {
       if (existing.dispatchedAt !== null) {
         dispatched = true
         return
       }
-      tx.update(taskQuestions)
+      await tx
+        .update(taskQuestions)
         .set({
           defaultTargetNodeId: targetNodeId,
           overrideTargetNodeId: null,
@@ -1099,10 +1114,10 @@ export async function reassignTaskQuestion(
           updatedAt: now,
         })
         .where(eq(taskQuestions.id, existing.id))
-        .run()
       return
     }
-    tx.insert(taskQuestions)
+    await tx
+      .insert(taskQuestions)
       .values({
         id: ulid(),
         taskId: entry.taskId,
@@ -1140,7 +1155,6 @@ export async function reassignTaskQuestion(
       .onConflictDoNothing({
         target: [taskQuestions.originNodeRunId, taskQuestions.questionId, taskQuestions.roleKind],
       })
-      .run()
   })
   if (dispatched) {
     throw new ConflictError(
@@ -1161,7 +1175,10 @@ export async function reassignTaskQuestion(
  *  Keyed on the seal MARKER (sealed_at / round status), NOT on answerSummary: a partial
  *  round leaves answerSummary independent of round.status (Codex design gate F3), so
  *  answerSummary is unreliable as a "has an answer" signal here. */
-async function isEntrySealed(db: DbClient, entry: TaskQuestionRow): Promise<boolean> {
+async function isEntrySealed(
+  db: ProviderNeutralDatabase,
+  entry: TaskQuestionRow,
+): Promise<boolean> {
   if (entry.sourceKind === 'manual') return true
   if (entry.sealedAt !== null) return true
   const [round] = await db
@@ -1180,7 +1197,7 @@ async function isEntrySealed(db: DbClient, entry: TaskQuestionRow): Promise<bool
  *  from a user-clicked batch dispatch's auto-split defer; ANY staging change kills it" — a
  *  re-staged entry is back in the暂存 state and must be batch-dispatched again. */
 export async function stageTaskQuestion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   entryId: string,
   staged: boolean,
   actor: TaskQuestionActor,
@@ -1292,7 +1309,7 @@ export interface CreateManualTaskQuestionInput {
  *  recorded for audit ONLY — it NEVER enters an agent prompt (RFC-099 prompt-isolation; no
  *  prompt builder reads manual_created_by). */
 export async function createManualTaskQuestion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,

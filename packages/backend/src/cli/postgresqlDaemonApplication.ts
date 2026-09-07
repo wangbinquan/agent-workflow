@@ -97,7 +97,6 @@ import {
 import { createPostgresqlTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createPostgresqlTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { composePostgresqlNodeRunLifecycleParticipantFactory } from '@/modules/task-execution/composition/nodeRunLifecycle'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
@@ -109,8 +108,8 @@ import { resolveTaskDriveConfig } from '@/modules/task-execution/application/dri
 import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
 import {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
+  createCollaborationRuntimeMechanics,
   createPostgresqlCollaborationCommandContext,
-  createPostgresqlCollaborationRuntimeMechanics,
 } from '@/modules/collaboration/composition'
 import { composePostgresqlCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import {
@@ -188,7 +187,7 @@ import {
 } from '@/services/developmentDeliveryDeps'
 import type { DigitalEmployeeAclResourceType } from '@/routes/digitalEmployees'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
-import { composePostgresqlIntentPersistence } from '@/modules/intent/composition/persistence'
+import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
 import {
   composeIntentDumpAuxiliaryQueries,
   composeIntentTurnRuntimeResolver,
@@ -739,11 +738,9 @@ export async function composePostgresqlDaemonApplication(
     taskExecutionResourceSnapshots,
   )
   const taskExecutionPersistence = createPostgresqlTaskExecutionPersistence(input.db)
-  const nodeRunLifecycle = composePostgresqlNodeRunLifecycleParticipantFactory()
-  const collaborationRuntime = createPostgresqlCollaborationRuntimeMechanics(input.db, {
-    taskRuntime: { humanGates: taskExecutionPersistence.humanGateLifecycle },
-    nodeRunLifecycle,
-  })
+  // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
+  // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
+  const collaborationRuntime = createCollaborationRuntimeMechanics(input.db)
   const boundCollaborationContext = createPostgresqlCollaborationCommandContext({
     db: input.db,
     appHome: input.appHome,
@@ -1047,7 +1044,6 @@ export async function composePostgresqlDaemonApplication(
   const collaborationRouteOperations = composePostgresqlCollaborationRouteOperations({
     db: input.db,
     context: boundCollaborationContext,
-    taskNodeLifecycle: nodeRunLifecycle,
   })
   const fusionOperations = composePostgresqlFusionOperations({
     // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。
@@ -1637,7 +1633,7 @@ export async function composePostgresqlDaemonApplication(
       workgroups: workgroupCatalog.queries,
     },
   })
-  const intentPersistence = composePostgresqlIntentPersistence({
+  const intentPersistence = composeIntentPersistence({
     db: input.db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })

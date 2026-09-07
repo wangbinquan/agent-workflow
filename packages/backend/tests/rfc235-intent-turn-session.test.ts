@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import { intentSessions, intentTurnEvents, intentTurns } from '../src/db/schema'
-import { createSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { createIntentPersistence } from '../src/modules/intent/composition/persistence'
 import {
   INTENT_TURN_EVENT_BYTE_LIMIT,
   IntentTurnSessionEventSink,
@@ -43,7 +43,7 @@ function seedAgentTurn(id: string) {
       createdAt: 1,
     })
     .run()
-  return { db, persistence: createSqliteIntentPersistence(db) }
+  return { db, persistence: createIntentPersistence(db) }
 }
 
 describe('RFC-235 Intent turn Session capture', () => {

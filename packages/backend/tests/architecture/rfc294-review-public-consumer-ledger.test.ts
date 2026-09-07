@@ -298,6 +298,15 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:system-operations:types:stageRestoreOptionsSchema', removeAfterWave: 'W4-E7' },
   { id: 'public:system-operations:types:stageRestoreResultSchema', removeAfterWave: 'W4-E7' },
   { id: 'public:task-catalog:types:TaskCatalogListQuery', removeAfterWave: 'W4-E10' },
+  // RFC-359 W7：随 `CollaborationRuntimeMechanics` 合一失去生产消费者——这个类型是当初为
+  // collaboration 的 serializable 原子而开的 task-execution 接缝，两个引擎现在跑同一份中立实现，
+  // 接缝不再需要。与它配套的 `composePostgresqlNodeRunLifecycleParticipantFactory` 已记进
+  // `rfc359-w5-adapter-production-consumer` 的「改指」账本。
+  {
+    id: 'public:task-execution:commands:NodeRunLifecycleParticipantInTx',
+    removeAfterWave:
+      'W8（RFC-359 死代码清理批：连同 composePostgresqlNodeRunLifecycleParticipantFactory 一起删）',
+  },
   { id: 'public:task-execution:commands:TaskCancellationCommand', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:commands:TaskDriveCoordinator', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:commands:TaskRouteMultipartFilePart', removeAfterWave: 'W4-E1' },

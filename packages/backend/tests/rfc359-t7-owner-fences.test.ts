@@ -216,6 +216,21 @@ test('源码锁：每个 PG owner 围栏都先读环境上下文；effect 账本
   )
   expect(effects).not.toContain('token.ownerRevision')
   expect(effects).not.toContain('token.leaseUntil')
+  // RFC-359 W7：协作运行期机制合一后，围栏由中立的 `fenceTaskWrite` 统一取——它自己
+  // 「显式上下文 > 环境上下文 > 无主围栏」，不再各 provider 抄一遍。
+  const fence = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'infrastructure',
+      'ownedTaskExecution.ts',
+    ),
+    'utf8',
+  )
+  expect(fence).toContain('currentTaskExecutionContext(input.taskId)')
   const collaboration = readFileSync(
     resolve(
       import.meta.dir,
@@ -224,9 +239,10 @@ test('源码锁：每个 PG owner 围栏都先读环境上下文；effect 账本
       'modules',
       'collaboration',
       'infrastructure',
-      'postgresqlCollaborationRuntimeMechanics.ts',
+      'legacySqliteClarify',
+      'service.ts',
     ),
     'utf8',
   )
-  expect(collaboration).toContain('currentTaskExecutionContext(input.taskId)')
+  expect(collaboration).toContain('fenceTaskWrite(tx, {')
 })

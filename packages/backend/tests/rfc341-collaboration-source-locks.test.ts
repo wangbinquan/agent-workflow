@@ -178,15 +178,14 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('idle committed-event reconciliation stays read-only while nudge and periodic convergence remain wired', () => {
-    const store = source('platform/events/committed/sqliteStore.ts')
+    // RFC-359 W7：出站存储合一后，这段形状住在唯一那份实现里（旧址 `sqliteStore.ts` 只剩
+    // append 半区）。判据不变——预检必须在开事务**之前**，否则空队列的每秒对账都要占写者。
+    const store = source('platform/events/committed/deliveryPersistence.ts')
     const worker = source('platform/events/committed/workerDefinitions.ts')
     const pump = source('platform/events/committed/afterCommitEventPump.ts')
-    const claimAt = store.indexOf('export function claimNextCommittedEventDelivery')
-    const preflightAt = store.indexOf(
-      'if (!hasDueCommittedEventDelivery(input.db, at)) return null',
-      claimAt,
-    )
-    const transactionAt = store.indexOf('return dbTxSync(input.db, (tx) => {', claimAt)
+    const claimAt = store.indexOf('async claimNext(input) {')
+    const preflightAt = store.indexOf('if (!(await hasDueDelivery(db, at))) return null', claimAt)
+    const transactionAt = store.indexOf('return await session.transaction(async (tx) => {', claimAt)
 
     expect(claimAt).toBeGreaterThan(-1)
     expect(preflightAt).toBeGreaterThan(claimAt)

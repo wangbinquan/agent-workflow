@@ -18,7 +18,7 @@
 
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions } from '@/db/schema'
 import { isTargetNodeConsumed } from './rerunLedger'
 import { createLogger } from '@/util/log'
@@ -34,7 +34,7 @@ import {
 const log = createLogger('clarify-queue')
 
 export interface SelectAgentQueueArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   /** The running agent node. Its "agent queue" = task_questions projected to it by
    *  effectiveTarget (override_target_node_id ?? default_target_node_id). */
@@ -274,7 +274,7 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
  * actually bound.
  */
 export async function bindTriggerRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   entryIds: string[],
   dispatchedRunId: string,
 ): Promise<string[]> {
@@ -322,7 +322,7 @@ export interface ClarifyQueueContext {
 }
 
 export interface BuildClarifyQueueContextArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   /** Reserved (design §2 contract) — selection needs no definition; kept for forward-compat. */
   definition: WorkflowDefinition
   taskId: string
@@ -397,7 +397,10 @@ export async function buildClarifyQueueContext(
 }
 
 /** node_run ids (within `runIds`) that captured ≥1 `<workflow-output>` row. */
-async function runIdsWithOutput(db: DbClient, runIds: string[]): Promise<Set<string>> {
+async function runIdsWithOutput(
+  db: ProviderNeutralDatabase,
+  runIds: string[],
+): Promise<Set<string>> {
   if (runIds.length === 0) return new Set()
   const rows = await db
     .select({ nodeRunId: nodeRunOutputs.nodeRunId })

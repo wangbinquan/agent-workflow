@@ -1,4 +1,4 @@
-// RFC-311 G1 —— 过滤视图快路径 === 旧穷举管线。
+// RFC-311 G1 —— 过滤视图快路径 === 旧穷举管线。**RFC-359 W6-T27 起两个引擎各跑一遍。**
 //
 // 背景:旧管线为了回答「哪些 root 进这一页」，要先物化全部授权任务再走两条递归
 // CTE，10 万任务库上单次 68 秒且是一条不可打断的 SQL（单连接同步 daemon ⇒ 整站
@@ -15,25 +15,29 @@
 //   - `matchingDescendantCount` / `qualifyingChildCount` 的口径；
 //   - facets 的分母是「过滤但未套视图」的匹配集。
 
-import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { sql } from 'drizzle-orm'
+// RFC-359 W6-T27 —— 双引擎化时唯一必须改形状的地方：迁移 0180 / 0183 的回填是 SQLite
+// 方言（反引号 + `CREATE TEMP TABLE … WITH RECURSIVE`），PostgreSQL 上跑不了，而 PG 侧
+// 本来也不跑迁移脚本里的数据语句。改法是把回填复算成引擎中立的纯函数
+// （`helpers/taskForestBackfill.ts`），SQLite 那侧另有一条「迁移 SQL == 复算」的对拍
+// （见 `rfc311-task-page-fastpath.test.ts`），所以「oracle 顺带验收回填算法」没有丢。
+
+import { expect, test } from 'bun:test'
 import type { TaskOperationsListItem } from '@agent-workflow/shared'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { lifecycleAlerts, taskRepos, tasks, users, workflows } from '../src/db/schema'
 import {
   canUseFilteredFastPath,
   hasUnrootedTasks,
   isDefaultView,
 } from '../src/modules/task-execution/infrastructure/taskListPage'
+import { describeEachProvider } from './helpers/eachProvider'
+import { computeForestBackfill } from './helpers/taskForestBackfill'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -71,6 +75,10 @@ async function seedBase(db: Db): Promise<void> {
 }
 
 async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
+  // 迁移 0180 / 0183 的回填结果由引擎中立的复算给出（见文件头）。
+  const backfill = computeForestBackfill(
+    rows.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
+  )
   for (const r of rows) {
     await db.insert(tasks).values({
       id: r.id,
@@ -97,10 +105,8 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
           ? null
           : JSON.stringify({ workgroupName: `squad-${r.workgroup}` }),
       sourceAgentName: r.agentName ?? null,
-      branchStartedAt: 0,
-      // 故意留空:下面跑 migration 0183 的真实回填 SQL 把它算出来,
-      // 这样 oracle 顺带成为回填算法的验收。
-      rootTaskId: null,
+      branchStartedAt: backfill.branchStartedAt.get(r.id) ?? r.startedAt,
+      rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
     })
     await db.insert(taskRepos).values({
       taskId: r.id,
@@ -122,28 +128,6 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
       })
     }
   }
-  applyBackfill(
-    db,
-    '0180_rfc311_perf_indexes.sql',
-    (statement) =>
-      statement.includes('_rfc311_branch_backfill') ||
-      statement.startsWith('UPDATE `tasks` SET `branch_started_at`'),
-  )
-  applyBackfill(
-    db,
-    '0183_rfc311_tasks_root_task_id.sql',
-    (statement) =>
-      statement.startsWith('WITH RECURSIVE walk') ||
-      statement.startsWith('UPDATE tasks SET root_task_id = id'),
-  )
-}
-
-function applyBackfill(db: Db, file: string, keep: (statement: string) => boolean): void {
-  const statements = readFileSync(join(MIGRATIONS, file), 'utf8')
-    .split('--> statement-breakpoint')
-    .map((statement) => statement.replace(/^--.*$/gm, '').trim())
-    .filter(keep)
-  for (const statement of statements) db.run(sql.raw(statement))
 }
 
 /** 确定性伪随机森林:多 owner / 多状态 / 两层父子 / 工作组 / 代理 / 来源 / 告警。 */
@@ -199,7 +183,7 @@ async function collectPages(
   let pages = 0
   for (; pages < 40; pages += 1) {
     const result = await listTaskOperationsPage(
-      db,
+      db as never,
       who,
       { ...query, limit: String(limit), ...(cursor !== undefined ? { cursor } : {}) },
       { pipeline },
@@ -243,9 +227,9 @@ const FILTER_MATRIX: Array<Record<string, string>> = [
   { view: 'attention', q: 'beta' },
 ]
 
-describe('RFC-311 G1 — filtered fast path === exhaustive pipeline', () => {
+describeEachProvider('RFC-311 G1 — filtered fast path === exhaustive pipeline', (harness) => {
   test('every filter combination matches page-for-page, for every actor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await insertForest(db, buildForest(70))
 
@@ -271,7 +255,7 @@ describe('RFC-311 G1 — filtered fast path === exhaustive pipeline', () => {
   test('context ancestors and branch aggregates survive the rewrite', async () => {
     // 手工构造一棵树:只有孙子匹配 ⇒ 父与祖父必须作为 context 出现在同一分支里,
     // 且排序键取**匹配行**的 started_at（不是子树里最新的那一行）。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await insertForest(db, [
       {
@@ -331,24 +315,35 @@ describe('RFC-311 G1 — filtered fast path === exhaustive pipeline', () => {
   // 子任务突然自成一行」，没有报错、没有日志。所以准入闸门先问一句「还有没有未
   // 落根的行」，有就整条退回旧管线。这条锁的是「宁可慢、不可错」。
   test('one unrooted row disables the fast path instead of silently mis-branching', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await insertForest(db, buildForest(20))
-    expect(await hasUnrootedTasks(db)).toBe(false)
+    expect(await hasUnrootedTasks(db as never)).toBe(false)
 
-    // 模拟绕过服务层的写入:有父、但没落根。
+    // 模拟绕过服务层的写入:有父、但没落根。原写法用裸 SQL（无 schema 限定的 INSERT），
+    // PostgreSQL 上找不到表；改成 query builder 后两个引擎同一条路径，语义不变。
     const parent = (await db.select({ id: tasks.id }).from(tasks).limit(1))[0]!.id
-    db.run(
-      sql.raw(`INSERT INTO tasks (
-        id, name, workflow_id, workflow_snapshot, repo_path, worktree_path, base_branch, branch,
-        status, inputs, started_at, running_ms, owner_user_id, parent_task_id, invocation_depth,
-        launch_origin, branch_started_at, root_task_id
-      ) VALUES (
-        'orphan', 'orphan', 'wf1', '{}', '/srv/repos/alpha', '/tmp/wt-orphan', 'main',
-        'agent-workflow/orphan', 'running', '{}', 9999, 0, 'alice', '${parent}', 1, 'manual', 9999, NULL
-      )`),
-    )
-    expect(await hasUnrootedTasks(db)).toBe(true)
+    await db.insert(tasks).values({
+      id: 'orphan',
+      name: 'orphan',
+      workflowId: 'wf1',
+      workflowSnapshot: '{}',
+      repoPath: '/srv/repos/alpha',
+      worktreePath: '/tmp/wt-orphan',
+      baseBranch: 'main',
+      branch: 'agent-workflow/orphan',
+      status: 'running',
+      inputs: '{}',
+      startedAt: 9999,
+      runningMs: 0,
+      ownerUserId: 'alice',
+      parentTaskId: parent,
+      invocationDepth: 1,
+      launchOrigin: 'manual',
+      branchStartedAt: 9999,
+      rootTaskId: null,
+    })
+    expect(await hasUnrootedTasks(db as never)).toBe(true)
 
     const who = actor('admin', 'admin')
     const auto = await collectPages(db, who, { statuses: 'running' }, 5, 'auto')

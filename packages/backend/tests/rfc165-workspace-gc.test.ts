@@ -36,7 +36,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { taskExecutionModule } from '../src/modules/task-execution/composition'
+import { DrizzleTerminalMaintenancePersistence } from '../src/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import {
   PRUNING_LEASE_MS,
   materializingSpaces,
@@ -375,9 +375,9 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
     })
     const now = Date.now()
     await h.db.update(tasks).set({ workspacePruningAt: now }).where(eq(tasks.id, id))
-    const members = taskExecutionModule.terminalMaintenance.snapshotMembers(h.db, [id])
-    let claim = taskExecutionModule.terminalMaintenance.claim({
-      db: h.db,
+    const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(h.db)
+    const members = await terminalMaintenance.snapshotMembers([id])
+    let claim = await terminalMaintenance.claim({
       rootTaskId: id,
       operation: 'workspace-gc',
       members,
@@ -385,8 +385,7 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
       now,
     })
     rmSync(dir, { recursive: true, force: true })
-    claim = taskExecutionModule.terminalMaintenance.transition({
-      db: h.db,
+    claim = await terminalMaintenance.transition({
       claim,
       to: 'io-complete',
       now: now + 1,

@@ -22,6 +22,7 @@ import {
   tasks,
 } from '@/db/schema'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
+import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import {
   createExclusiveDaemonLockProof,
   createVerifiedOutcomeUnknownClosure,
@@ -1290,13 +1291,13 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
     expect(canonicalResourceKeySet(['process:b', 'process:a'])).toEqual(['process:a', 'process:b'])
   })
 
-  test('maintenance claim precedes IO and blocks new continuation admission', () => {
+  test('maintenance claim precedes IO and blocks new continuation admission', async () => {
     const database = db()
     seedTask(database, 'task-maintenance', 'done')
     const module = createTaskExecutionTestModule('daemon-maintenance')
-    const members = module.terminalMaintenance.snapshotTree(database, 'task-maintenance')
-    let claim = module.terminalMaintenance.claim({
-      db: database,
+    const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(database)
+    const members = await terminalMaintenance.snapshotTree('task-maintenance')
+    let claim = await terminalMaintenance.claim({
       rootTaskId: 'task-maintenance',
       operation: 'delete',
       members,
@@ -1310,20 +1311,17 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
         intentId: 'maintenance-race-intent',
       }),
     ).toThrow(expect.objectContaining({ code: 'task-terminal-maintenance-conflict' }))
-    claim = module.terminalMaintenance.transition({
-      db: database,
+    claim = await terminalMaintenance.transition({
       claim,
       to: 'io-complete',
       now: 41,
     })
-    claim = module.terminalMaintenance.transition({
-      db: database,
+    claim = await terminalMaintenance.transition({
       claim,
       to: 'db-finalized',
       now: 42,
     })
-    module.terminalMaintenance.transition({
-      db: database,
+    await terminalMaintenance.transition({
       claim,
       to: 'completed',
       releaseMembers: true,
@@ -1348,10 +1346,9 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
   test('boot recovery resumes the exact delete claim after the IO/DB barrier', async () => {
     const database = db()
     seedTask(database, 'task-delete-recovery', 'done')
-    const module = createTaskExecutionTestModule('daemon-delete-recovery')
-    const members = module.terminalMaintenance.snapshotTree(database, 'task-delete-recovery')
-    let claim = module.terminalMaintenance.claim({
-      db: database,
+    const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(database)
+    const members = await terminalMaintenance.snapshotTree('task-delete-recovery')
+    let claim = await terminalMaintenance.claim({
       rootTaskId: 'task-delete-recovery',
       operation: 'delete',
       members,
@@ -1364,8 +1361,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       }),
       now: 50,
     })
-    claim = module.terminalMaintenance.transition({
-      db: database,
+    claim = await terminalMaintenance.transition({
       claim,
       to: 'io-complete',
       now: 51,

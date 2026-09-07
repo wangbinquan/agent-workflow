@@ -1,32 +1,21 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
-  createAuthorizedSqliteIntentPersistence,
-  createSqliteIntentPersistence,
-} from '../infrastructure/sqliteIntentPersistence'
-import {
-  createAuthorizedPostgresqlIntentPersistence,
-  createPostgresqlIntentPersistence,
-} from '../infrastructure/postgresqlIntentPersistence'
-import type { SqliteIntentContextResourceAuthorizationFactoryDependency } from '../infrastructure/sqliteIntentSqlProgramRunner'
-import type { PostgresqlIntentContextResourceAuthorizationFactoryDependency } from '../infrastructure/postgresqlIntentSqlProgramRunner'
+  createAuthorizedIntentPersistence,
+  createIntentPersistence,
+} from '../infrastructure/intentPersistence'
+import type { IntentContextResourceAuthorizationFactoryDependency } from '../infrastructure/intentSqlProgramRunner'
 
-export { createSqliteIntentPersistence, createPostgresqlIntentPersistence }
+export { createIntentPersistence }
 
-/** Production SQLite composition; context mutations cannot omit RC binding. */
-export function composeSqliteIntentPersistence(input: {
-  readonly db: DbClient
-  readonly contextAuthorization: SqliteIntentContextResourceAuthorizationFactoryDependency
+/**
+ * RFC-359 W7 —— 生产装配，两个 provider 共用一条：上下文变更不可能漏掉 RC 绑定，
+ * 授权会话与 Intent 程序跑在**同一笔**中立事务里。
+ */
+export function composeIntentPersistence(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly contextAuthorization: IntentContextResourceAuthorizationFactoryDependency
 }) {
-  return createAuthorizedSqliteIntentPersistence(input)
-}
-
-/** Production PostgreSQL composition; context mutations share its reserved tx. */
-export function composePostgresqlIntentPersistence(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly contextAuthorization: PostgresqlIntentContextResourceAuthorizationFactoryDependency
-}) {
-  return createAuthorizedPostgresqlIntentPersistence(input)
+  return createAuthorizedIntentPersistence(input)
 }
 
 export type { IntentPersistence } from '../application/ports/intentPersistence'

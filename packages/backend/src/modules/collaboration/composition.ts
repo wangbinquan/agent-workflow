@@ -8,15 +8,19 @@ export {
   createCollaborationTaskAccessPort as createPostgresqlCollaborationTaskAccessPort,
 } from './infrastructure/collaborationTaskAccess'
 export { planMembersReplacement } from './infrastructure/legacySqliteTaskCollab'
-export { createSqliteClarifyRepairParticipant } from './infrastructure/sqliteClarifyRepairParticipant'
-export { createPostgresqlClarifyRepairParticipant } from './infrastructure/postgresqlClarifyRepairParticipant'
-export { createSqliteReviewRepairParticipant } from './infrastructure/sqliteReviewRepairParticipant'
-export { createPostgresqlReviewRepairParticipant } from './infrastructure/postgresqlReviewRepairParticipant'
+// RFC-359 W7：RFC-057 修复的两个协作侧端口也各只剩一份实现；provider 具名导出只做绑定。
 export {
-  createPostgresqlCollaborationRuntimeMechanics,
-  type PostgresqlCollaborationNodeRunLifecycleParticipantFactory,
-  type PostgresqlCollaborationRuntimeMechanicsDependencies,
-} from './infrastructure/postgresqlCollaborationRuntimeMechanics'
+  createClarifyRepairParticipant,
+  createClarifyRepairParticipant as createSqliteClarifyRepairParticipant,
+  createClarifyRepairParticipant as createPostgresqlClarifyRepairParticipant,
+} from './infrastructure/clarifyRepairParticipant'
+export {
+  createReviewRepairParticipant,
+  createReviewRepairParticipant as createSqliteReviewRepairParticipant,
+  createReviewRepairParticipant as createPostgresqlReviewRepairParticipant,
+} from './infrastructure/reviewRepairParticipant'
+// RFC-359 W7：运行期机制合一后只剩一个工厂（`infrastructure/collaborationRuntimeMechanics.ts`）。
+export { createCollaborationRuntimeMechanics } from './infrastructure/collaborationRuntimeMechanics'
 export {
   createCollaborationWsProjector,
   createSqliteCollaborationCommittedEventProjection,
@@ -33,11 +37,11 @@ export {
   createHumanGateTerminalSweepCommand as createPostgresqlHumanGateTerminalSweepCommand,
 } from './infrastructure/humanGateTerminalSweep'
 export { createCollaborationClarifyDraftEventPublisher } from './infrastructure/collaborationClarifyDraftEventPublisher'
+// RFC-359 W7：路由持久化面合一后只剩一个工厂（`infrastructure/collaborationRouteOperations.ts`）。
 export {
-  createPostgresqlCollaborationRouteOperations,
-  type CreatePostgresqlCollaborationRouteOperationsInput,
-  type PostgresqlCollaborationRouteNodeLifecycleParticipantFactory,
-} from './infrastructure/postgresqlCollaborationRouteOperations'
+  createCollaborationRouteOperations,
+  type CreateCollaborationRouteOperationsInput,
+} from './infrastructure/collaborationRouteOperations'
 export {
   createCollaborationCommandContext,
   createPostgresqlCollaborationCommandContext,

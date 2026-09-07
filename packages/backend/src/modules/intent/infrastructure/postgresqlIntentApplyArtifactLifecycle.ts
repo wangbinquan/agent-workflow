@@ -10,6 +10,10 @@ import {
   decodeIntentJournalArtifacts,
   type IntentJournalArtifact,
 } from '@/modules/intent/domain/journalArtifacts'
+import {
+  INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
+  INTENT_APPLY_DIAGNOSTICS,
+} from '../application/journalConvergence'
 import { safeJoin } from '@/util/safePath'
 import type { Logger } from '@/util/log'
 import type { PostgresqlIntentApplyArtifactLifecycle } from './postgresqlIntentApplyOperations'
@@ -319,7 +323,7 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
           throw new Error('legacy intent artifact needs manual source-provider recovery')
         } catch (error) {
           complete = false
-          log.warn('intent-apply-artifact-roll-forward-retryable', {
+          log.warn(INTENT_APPLY_DIAGNOSTICS.artifactRollForwardRetryable, {
             kind: artifact.kind,
             operationId:
               decodePostgresqlArtifact(artifact) === null
@@ -425,7 +429,7 @@ export function createPostgresqlIntentApplyJournalConvergence(input: {
           await input.db
             .update(intentApplyJournal)
             .set({
-              error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
+              error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
               updatedAt: now(),
             })
             .where(

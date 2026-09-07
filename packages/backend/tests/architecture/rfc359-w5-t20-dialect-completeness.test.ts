@@ -290,6 +290,8 @@ const PORTABLE_SQL_FUNCTIONS: Readonly<Record<string, string>> = {
   length: 'SQL-92 标量，两侧对文本都按字符计。（blob/bytea 上都按字节，语义同样对齐。）',
   lower: 'SQL-92 标量；两侧都只对 ASCII 做无争议折叠，本仓的搜索路径正是按 ASCII 语义对齐的。',
   min: 'SQL-92 聚合（单参数形态）；多参数标量形态是 SQLite 专属，那一支由 max/greatest 一路处置。',
+  substr:
+    'SQL-92 `SUBSTRING` 的通用简写，两侧都原生提供 `substr(text, from, count)`，且都是 **1 起算、取 count 个字符**——语义逐字相同。RFC-359 W7 引入：已提交事件出站存储的 stage 筛子要按**字节**比消费者 id 前缀，不能用 `LIKE`（SQLite 的 LIKE 对 ASCII 大小写不敏感、PG 敏感，两侧筛出来的行会和各自 JS 投影的 stage 对不上，2026-09-07 双引擎对拍实测）。两个引擎上的真实执行由 `rfc359-w7-committed-events-conformance.test.ts` 覆盖。',
   sum: 'SQL-92 聚合，两侧同名同参。（int8 归一同 avg，另有守卫。）',
 }
 
@@ -387,13 +389,6 @@ interface DialectDebtRow {
  */
 const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   {
-    file: 'modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: 'PG 适配器各自手写 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE，而不是向统一事务原语要一个可串行化会话；SQLite 孪生走 dbTxSync，两边形状不同。',
-    clearedBy: 'RFC-359 W4 该 context 的 pair 合一 + W5-T22 退役 dbTxSync',
-  },
-  {
     file: 'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
     construct: 'pg-greatest',
     count: 1,
@@ -441,13 +436,6 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
     count: 1,
     why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
     clearedBy: 'RFC-359 W4-D28a task ownership 合一',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
-    clearedBy: 'RFC-359 W3-T15b 终态维护恢复 pair 合一',
   },
   {
     file: 'platform/persistence/maintenanceExecutionFence.ts',

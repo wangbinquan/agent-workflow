@@ -249,7 +249,7 @@ async function finalizeDeleteRowsTx(input: {
         if (parent === undefined) break
         const childMax = (
           await tx
-            .select({ v: sql<number | null>`MAX(${tasks.branchStartedAt})` })
+            .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
             .from(tasks)
             .where(eq(tasks.parentTaskId, parent.id))
         )[0]

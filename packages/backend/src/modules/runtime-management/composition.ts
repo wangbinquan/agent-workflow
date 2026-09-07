@@ -6,8 +6,7 @@ import type { DirectAuthorityAdmission } from '@/modules/identity-access/public/
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createRealtimeChannelAccess } from './application/realtimeChannelAccess'
 import { createRealtimeCredentialAccess } from './application/realtimeCredentialAccess'
-import { PostgresqlRealtimeStore } from './infrastructure/postgresqlRealtimeStore'
-import { SqliteRealtimeStore } from './infrastructure/sqliteRealtimeStore'
+import { DrizzleRealtimeStore } from './infrastructure/realtimeStore'
 import type { RealtimeCompositionPolicy, RealtimeRuntime } from './public/participants'
 
 export type { RealtimeCompositionPolicy } from './public/participants'
@@ -32,7 +31,7 @@ export function composeSqliteRealtimeRuntime(input: {
   return composeRealtimeRuntime({
     auth: input.auth,
     directAuthority: input.directAuthority,
-    channels: createRealtimeChannelAccess(new SqliteRealtimeStore(input.db), input.policy),
+    channels: createRealtimeChannelAccess(new DrizzleRealtimeStore(input.db), input.policy),
   })
 }
 
@@ -45,6 +44,6 @@ export function composePostgresqlRealtimeRuntime(input: {
   return composeRealtimeRuntime({
     auth: input.auth,
     directAuthority: input.directAuthority,
-    channels: createRealtimeChannelAccess(new PostgresqlRealtimeStore(input.db), input.policy),
+    channels: createRealtimeChannelAccess(new DrizzleRealtimeStore(input.db), input.policy),
   })
 }

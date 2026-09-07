@@ -3,207 +3,11 @@
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。",
   "ledgers": [
     {
-      "id": "depcheck-known-violations",
-      "file": "scripts/depcheck.ts",
-      "symbol": "KNOWN_VIOLATIONS",
-      "baseline": 8,
-      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。"
-    },
-    {
-      "id": "spawn-site-allowlist",
-      "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
-      "symbol": "ALLOWLIST",
-      "baseline": 16,
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
-    },
-    {
-      "id": "rfc328-capability-factory-call-sites",
-      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
-      "symbol": "FACTORY_ALLOWLIST",
-      "baseline": 7,
-      "why": "RFC-328 私有 ownership/proof factory 的精确 production consumer 账本；新增调用点必须逐站审查，不能从 raw task id 或 JSON 构造 authority。"
-    },
-    {
-      "id": "ux-role-dialog-allowlist",
-      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
-      "symbol": "ROLE_DIALOG_ALLOWLIST",
-      "baseline": 4,
-      "why": "未走 Dialog 公共组件的 role=dialog 站点。前端一致性原则要求收敛到 Dialog"
-    },
-    {
-      "id": "ux-input-implementation-allowlist",
-      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
-      "symbol": "INPUT_IMPLEMENTATION_ALLOWLIST",
-      "baseline": 10,
-      "why": "未走 Form primitives 的原生 input 站点。同上，只许收敛"
-    },
-    {
-      "id": "ux-embedded-table-allowlist",
-      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
-      "symbol": "EMBEDDED_TABLE_ALLOWLIST",
+      "id": "acl-edit-gate-elsewhere-allowlist",
+      "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
+      "symbol": "EDIT_GATE_ELSEWHERE_ALLOWLIST",
       "baseline": 1,
-      "why": "抽屉内嵌表格（非独立页面表格）的例外"
-    },
-    {
-      "id": "rfc143-kind-discrimination-allowlist",
-      "file": "packages/backend/tests/rfc143-runtime-driver-capability.test.ts",
-      "symbol": "ALLOWLIST",
-      "baseline": 2,
-      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 清掉两条死条目后只剩 cli/start.ts；T33 把扫描面从「跳过整个 services/runtime」收窄成「只跳驱动实现目录」，公共层第一次进扫描，暴露出 services/runtime/types.ts 并如实入账。"
-    },
-    {
-      "id": "legacy-migration-hashes",
-      "file": "packages/backend/src/db/schemaAdmission.ts",
-      "symbol": "LEGACY_MIGRATION_HASHES",
-      "baseline": 9,
-      "why": "历史迁移文件的可接受哈希（内容曾被改动过的迁移）。新迁移绝不该进这张表"
-    },
-    {
-      "id": "rfc349-dual-provider-predicate-forks",
-      "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
-      "symbol": "ALLOWED_DIVERGENCE",
-      "baseline": 1,
-      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。 RFC-359 W4-D6c：digital-employee 作者面孪生对合一为 authoringStore.ts，`toTool` / `uniqueError` 两条豁免随孪生对消失删除，12 → 10。 RFC-359 W4-D16（2026-09-05）：Mcp 仓库合一后 ownerScopedNameWhere 的方言分叉退役，5→4。 RFC-359 W4-D17（2026-09-06）：Plugin 仓库合一后 ownerScopedNameWhere 的方言分叉退役，4→3。 RFC-359 W4-D18（2026-09-06）：Workgroup 仓库合一后 ownerScopedNameWhere 的方言分叉退役，3→2。 RFC-359 W4-D24：运行时会话租约合一后 `constraintViolation` 只剩一份、走能力矩阵归类，这条 fork 销账，2→1。"
-    },
-    {
-      "id": "rfc359-w5-provider-named-file-location",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
-      "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 136,
-      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
-    },
-    {
-      "id": "rfc359-w5-provider-named-directory",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
-      "symbol": "PROVIDER_NAMED_DIRECTORY_DEBT",
-      "baseline": 2,
-      "why": "RFC-359 W5「防复辟」波次。provider 命名的**目录**形态（`legacySqliteClarify/` 等）——把 `sqliteFoo.ts` 改叫 `sqlite/foo.ts` 就能绕过按文件名的判据，这条堵它。"
-    },
-    {
-      "id": "rfc359-w5-bare-transaction",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t18-bare-transaction.test.ts",
-      "symbol": "BARE_TRANSACTION_DEBT",
-      "baseline": 17,
-      "why": "RFC-359 W5「防复辟」波次。事务原语之外直调 `db.transaction(` 的存量。bun:sqlite 的同步包装器在第一个 await 处就 COMMIT，所以一个事务体没法同时跑两个引擎——新写的必须走 `databaseSessionFor(db).transaction(...)`。含 `intentSqlPersistence.ts` 的 27 处 `this.runner.transaction`：那是本仓第二套并行的中立事务抽象，按债计入（豁免它等于给「再开一套」发许可证），随 IntentSqlProgramRunner 合一自然清零。"
-    },
-    {
-      "id": "rfc359-w5-provider-branch",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
-      "symbol": "PROVIDER_BRANCH_DEBT",
-      "baseline": 16,
-      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。"
-    },
-    {
-      "id": "rfc359-w5-provider-branch-relocation",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
-      "symbol": "PROVIDER_BRANCH_RELOCATION_DEBT",
-      "baseline": 1,
-      "why": "RFC-359 W5「防复辟」波次。与上一条同判据、但销账方式是**搬家**而非重写：`db/providerSchema.ts` 就是「把品牌翻译成能力」的投影层本身，只是住在 `db/` 而不是 `platform/persistence/`。"
-    },
-    {
-      "id": "rfc359-w5-startup-provider-execution-branch",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19c-startup-sequence.test.ts",
-      "symbol": "PROVIDER_EXECUTION_BRANCH_DEBT",
-      "baseline": 1,
-      "why": "RFC-359 W5「防复辟」波次。启动入口里按 provider **分执行流程**的分支（选装配合法、分流程不合法）。同文件另有 exact 钉死：启动序列各环节的调用点数，多一条启动路径就红。"
-    },
-    {
-      "id": "rfc359-w5-composition-root-placeholder",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts",
-      "symbol": "COMPOSITION_ROOT_PLACEHOLDER_DEBT",
-      "baseline": 13,
-      "why": "RFC-359 W5「防复辟」波次。组合根里的 `*-not-bound` / `*-not-composed` 占位与晚绑定 holder（fail-closed 那种）。语料含 `cli/**`、`**/composition*` 与 `server.ts`——把 server.ts 收进来照出了 `mcpCatalogRef` 在 HTTP 根与 daemon 根各存一份、而只有一份在守卫下。"
-    },
-    {
-      "id": "rfc359-w5-toplevel-column-capture",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-toplevel-column-capture.test.ts",
-      "symbol": "TOPLEVEL_COLUMN_CAPTURE_DEBT",
-      "baseline": 8,
-      "why": "RFC-359 W5「防复辟」波次。PG 执行面上模块顶层捕获 `@/db/schema` 表列（投影常量）。表是按 provider 投影的 Proxy 门面，顶层捕获会钉死在**加载时**的 provider 上。按**列引用数**而非捕获点数计（83 处 / 8 文件），否则往已欠债的投影里再塞几列就免检。计划原文以为存量是 0，实测不是。"
-    },
-    {
-      "id": "rfc359-w5-test-engine-hardcoding",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
-      "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 821,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
-    },
-    {
-      "id": "rfc359-w5-test-engine-hardcoding-exempt",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
-      "symbol": "EXEMPT",
-      "baseline": 2,
-      "why": "RFC-359 W5「防复辟」波次。上一条的豁免名单：harness 自己（`tests/helpers/eachProvider.ts`）与该守卫自身。只降不升，防止豁免退化成空白许可证。"
-    },
-    {
-      "id": "rfc359-w5-raw-dialect",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
-      "symbol": "RAW_DIALECT_DEBT",
-      "baseline": 12,
-      "why": "RFC-359 W5「防复辟」波次。具名渲染器之外裸写的方言构造（`SET TRANSACTION ISOLATION LEVEL` 7 行、`DELETE … USING` 4 处、for-update / nulls-ordering / INDEXED BY / GREATEST 各若干）。本仓 PG 客户端是 drizzle sqlite-proxy：渲染的是 SQLite 方言文本，只经一层极窄改写就发给 PG，**没有第二个翻译层**——所以每个方言点必须两侧同名同参存在，否则是运行到那条语句才炸的 42883。"
-    },
-    {
-      "id": "rfc359-w5-unshimmed-function",
-      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
-      "symbol": "UNSHIMMED_FUNCTION_DEBT",
-      "baseline": 0,
-      "why": "RFC-359 W5「防复辟」波次。raw SQL 里用了「既不可移植、又不在 PG shim 集、也不在能力矩阵」的函数。今天为 0，钉 0——挡的是未来的 `strftime(` / `iif(` / `group_concat(`。"
-    },
-    {
-      "id": "rfc359-w5-dead-provider-adapter",
-      "file": "packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts",
-      "symbol": "DEAD_PROVIDER_ADAPTER_DEBT",
-      "baseline": 18,
-      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。"
-    },
-    {
-      "id": "rfc359-w6-read-modify-write-unlocked",
-      "file": "packages/backend/tests/architecture/rfc359-w6-t28-read-modify-write.test.ts",
-      "symbol": "READ_MODIFY_WRITE_DEBT",
-      "baseline": 9,
-      "why": "RFC-359 W6「防复辟」波次。事务内「读—改—写、中间既不锁也不 CAS」的存量（20 处 / 9 文件）。SQLite 的 BEGIN IMMEDIATE 独占下碰巧正确，PG 的 READ COMMITTED 上是**丢更新且不报错**——计划原文的「合一时必须改形状、不能原样搬」说的就是它。其中 17 处今天已经跑在两个引擎上（如 `mcpRuntimeTestPersistence` 的 8 处 sessionVersion 自增），只有 3 处是 SQLite-only 的合一陷阱。逐条改成 `lockAggregateRoot` 或补 CAS 谓词后把基线改小。"
-    },
-    {
-      "id": "rfc294-cross-context-pilot-debt",
-      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
-      "symbol": "CROSS_CONTEXT_PILOT_DEBT",
-      "baseline": 3,
-      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0"
-    },
-    {
-      "id": "rfc294-public-surface-pilot-debt",
-      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
-      "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
-      "baseline": 6,
-      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离；RFC-347 又清偿一条，剩余条目继续按后续 consumer cutover 删除。 RFC-353 T5：memory 的 5 条 fusion 债随端口迁进 knowledge-evolution 收成 4 条（落点在 application，因为 public 命令面目前是薄再导出，T8 收窄），`memory/public/fusion.ts: non-exact` 与 `catalog.ts#MemoryScopeAuthority` 两条销账，12 → 10。"
-    },
-    {
-      "id": "rfc294-god-surface-allowlist",
-      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
-      "symbol": "GOD_SURFACE_ALLOWLIST",
-      "baseline": 8,
-      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。"
-    },
-    {
-      "id": "rfc317-no-corpus-floor",
-      "file": "packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts",
-      "symbol": "NO_FLOOR_YET",
-      "baseline": 0,
-      "why": "尚未声明语料下限的扫语料守卫。B2-a 已全部补齐，0 是目标态"
-    },
-    {
-      "id": "rfc317-no-negative-fixture",
-      "file": "packages/backend/tests/architecture/rfc317-guard-negative-fixture.test.ts",
-      "symbol": "NO_FIXTURE_YET",
-      "baseline": 0,
-      "why": "尚未配负 fixture 的受管守卫。B2-b 已全部补齐，0 是目标态"
-    },
-    {
-      "id": "rfc317-pending-acl-enrolment",
-      "file": "packages/backend/tests/architecture/rfc317-acl-column-enrolment-guard.test.ts",
-      "symbol": "PENDING_ENROLMENT",
-      "baseline": 0,
-      "why": "带 ACL 列却未入网的表。B1-c 已全部入网，0 是目标态"
+      "why": "RFC-324：挂了 /acl 端点、却没有任何 requireResourceEdit 的路由文件。每一条都是「这类资源的内容写门在别处」的断言；新增一条等于新增一处「可编辑档对该资源不生效」的缺口——那种失败不报错、不变红，只留下一个不生效的开关，必须人复核。当前唯一条目是 mountAclEndpoints 的定义处；资源内容写已全部委托给各自 application 写门。"
     },
     {
       "id": "acl-read-only-visibility-allowlist",
@@ -213,11 +17,32 @@
       "why": "routes/ 下只读消费 canViewResource、无 owner 写门的文件。每一条都是「这个路由确实只读」的断言，新增一条等于新增一处需要人复核的写门缺口（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
-      "id": "acl-edit-gate-elsewhere-allowlist",
-      "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
-      "symbol": "EDIT_GATE_ELSEWHERE_ALLOWLIST",
+      "id": "depcheck-known-violations",
+      "file": "scripts/depcheck.ts",
+      "symbol": "KNOWN_VIOLATIONS",
+      "baseline": 8,
+      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。"
+    },
+    {
+      "id": "frontend-form-error-allowlist",
+      "file": "packages/frontend/tests/rfc286-f1-dead-class-extinction.test.ts",
+      "symbol": "FORM_ERROR_ALLOWLIST",
       "baseline": 1,
-      "why": "RFC-324：挂了 /acl 端点、却没有任何 requireResourceEdit 的路由文件。每一条都是「这类资源的内容写门在别处」的断言；新增一条等于新增一处「可编辑档对该资源不生效」的缺口——那种失败不报错、不变红，只留下一个不生效的开关，必须人复核。当前唯一条目是 mountAclEndpoints 的定义处；资源内容写已全部委托给各自 application 写门。"
+      "why": "form-error 这个 class 的嵌套定义真实生效的语境（ScriptEdit）。多一条就意味着又有一处依赖嵌套定义的巧合（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "frontend-inline-loading-allowlist",
+      "file": "packages/frontend/tests/inline-loading-ban.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 4,
+      "why": "仍自写 inline loading 而未走 LoadingState 的站点（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "legacy-migration-hashes",
+      "file": "packages/backend/src/db/schemaAdmission.ts",
+      "symbol": "LEGACY_MIGRATION_HASHES",
+      "baseline": 9,
+      "why": "历史迁移文件的可接受哈希（内容曾被改动过的迁移）。新迁移绝不该进这张表"
     },
     {
       "id": "lifecycle-status-set-exemptions",
@@ -227,11 +52,11 @@
       "why": "仍手抄任务状态集合而未走 shared 派生的站点。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
-      "id": "table-ownership-debt",
-      "file": "packages/backend/tests/architecture/rfc317-table-ownership.test.ts",
-      "symbol": "OWNERSHIP_DEBT",
-      "baseline": 14,
-      "why": "一张表被两个 bounded context 直查的存量。R5 的目标终值是 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "id": "merge-state-blind-writes",
+      "file": "packages/backend/tests/rfc144-merge-state-blind-write-inventory.test.ts",
+      "symbol": "MERGE_STATE_WRITE_ALLOWLIST",
+      "baseline": 4,
+      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
       "id": "node-run-direct-status-writes",
@@ -241,18 +66,77 @@
       "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T2c：node_run 状态 CAS 合成一份中立事务内内核 `nodeRunLifecycleTransition.ts`（两处直写），PG participant 委托过去（其账本 2 → 1），8 → 9；W4 删 SQLite 同步孪生后回落。 RFC-359 W4-B3a：终态清扫的两份 provider 文件合成一份中立实现（同一处 2 笔直写），9 → 8。"
     },
     {
-      "id": "merge-state-blind-writes",
-      "file": "packages/backend/tests/rfc144-merge-state-blind-write-inventory.test.ts",
-      "symbol": "MERGE_STATE_WRITE_ALLOWLIST",
-      "baseline": 4,
-      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "id": "rfc143-kind-discrimination-allowlist",
+      "file": "packages/backend/tests/rfc143-runtime-driver-capability.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 2,
+      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 清掉两条死条目后只剩 cli/start.ts；T33 把扫描面从「跳过整个 services/runtime」收窄成「只跳驱动实现目录」，公共层第一次进扫描，暴露出 services/runtime/types.ts 并如实入账。"
     },
     {
-      "id": "safejson-local-definitions",
-      "file": "packages/backend/tests/rfc284-safejson-convergence.test.ts",
-      "symbol": "LOCAL_DEF_ALLOWLIST",
+      "id": "rfc254-platform-allowances",
+      "file": "packages/backend/tests/rfc254-platform-surface-guard.test.ts",
+      "symbol": "ALLOWANCES",
+      "baseline": 19,
+      "why": "POSIX-only 形态的逐处豁免（含 permanent posix-by-contract 与待迁移两类）。跨平台正确性的每一条例外都要能被数出来（RFC-317 T73 入网；判据词汇表此前漏了 ALLOWANCE 这个词）"
+    },
+    {
+      "id": "rfc294-capability-compatibility-debt",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
+      "baseline": 21,
+      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。"
+    },
+    {
+      "id": "rfc294-cross-context-pilot-debt",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "CROSS_CONTEXT_PILOT_DEBT",
+      "baseline": 3,
+      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0"
+    },
+    {
+      "id": "rfc294-god-surface-allowlist",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "GOD_SURFACE_ALLOWLIST",
+      "baseline": 8,
+      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。"
+    },
+    {
+      "id": "rfc294-public-surface-pilot-debt",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
+      "baseline": 6,
+      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离；RFC-347 又清偿一条，剩余条目继续按后续 consumer cutover 删除。 RFC-353 T5：memory 的 5 条 fusion 债随端口迁进 knowledge-evolution 收成 4 条（落点在 application，因为 public 命令面目前是薄再导出，T8 收窄），`memory/public/fusion.ts: non-exact` 与 `catalog.ts#MemoryScopeAuthority` 两条销账，12 → 10。"
+    },
+    {
+      "id": "rfc294-review-dead-required-ports",
+      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
+      "symbol": "DEAD_REQUIRED_PORT_DEBT",
+      "baseline": 8,
+      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。"
+    },
+    {
+      "id": "rfc294-review-module-layer-rules",
+      "file": "packages/backend/tests/architecture/rfc294-review-module-layer-rules.test.ts",
+      "symbol": "MODULE_LAYER_RULE_DEBT",
       "baseline": 0,
-      "why": "自写 safeJson 的文件。**当前为空**——钉成 0 之后加第一条就红，这正是空账本值得入账的理由（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。"
+    },
+    {
+      "id": "rfc294-review-off-dag-offered-edges",
+      "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
+      "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
+      "baseline": 41,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。"
+    },
+    {
+      "id": "rfc294-review-unconsumed-public-symbols",
+      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
+      "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
+      "baseline": 143,
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。",
+      "allowGrowth": {
+        "why": "RFC-359 W7：+1。`public:task-execution:commands:NodeRunLifecycleParticipantInTx` 随 `CollaborationRuntimeMechanics` 合一失去生产消费者——它是当初为 collaboration 的 serializable 原子而开的 task-execution 接缝，两个引擎现在跑同一份中立实现，接缝不再需要。**这不是新写的死声明，是合一让一条既有接缝失去了理由**；清理连同 `composePostgresqlNodeRunLifecycleParticipantFactory` 一起放在 W8 死代码批。"
+      }
     },
     {
       "id": "rfc310-top-level-allowed-dirs",
@@ -269,6 +153,411 @@
       "why": "同上，文件维度（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
+      "id": "rfc317-assembly-calls-in-mount",
+      "file": "packages/backend/tests/architecture/rfc317-mount-assembly-ledger.test.ts",
+      "symbol": "ASSEMBLY_CALLS_IN_MOUNT",
+      "baseline": 0,
+      "why": "RFC-344：`mountApiRoutes` 体内残留的装配调用。今天为 0——新模块的装配必须落在 bootstrap，多一次就红。"
+    },
+    {
+      "id": "rfc317-endpoints-without-contract",
+      "file": "packages/backend/tests/architecture/rfc317-route-contract-oracle.test.ts",
+      "symbol": "ENDPOINTS_WITHOUT_CONTRACT",
+      "baseline": 43,
+      "why": "RFC-317：没有 operation contract 的端点存量。成因集中在计算路径的路由家族，正则扫描器对它们整族失明。"
+    },
+    {
+      "id": "rfc317-foreign-vocabulary-budget",
+      "file": "packages/backend/tests/architecture/rfc317-foreign-vocabulary-budget.test.ts",
+      "symbol": "BUDGETS",
+      "baseline": 1,
+      "why": "RFC-317：每条是一个 context/层允许出现的外来词汇预算。加一条 = 多放行一类跨域词汇，正是要防的方向。"
+    },
+    {
+      "id": "rfc317-lifecycle-origin-neutrality",
+      "file": "packages/backend/tests/architecture/rfc317-lifecycle-origin-neutrality.test.ts",
+      "symbol": "NEUTRAL_SUBJECT",
+      "baseline": 5,
+      "why": "RFC-317：生命周期 port 允许出现的中立入参属性白名单。任何「只有某个集成才有」的列混进来就是本守卫要抓的东西，所以它只能缩不能涨。"
+    },
+    {
+      "id": "rfc317-modules-without-public",
+      "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
+      "symbol": "MODULES_WITHOUT_PUBLIC",
+      "baseline": 0,
+      "why": "RFC-294/317：还没有 public 合同面的模块存量。目标是 0——每个模块都该只经 exact public 被消费。"
+    },
+    {
+      "id": "rfc317-no-corpus-floor",
+      "file": "packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts",
+      "symbol": "NO_FLOOR_YET",
+      "baseline": 0,
+      "why": "尚未声明语料下限的扫语料守卫。B2-a 已全部补齐，0 是目标态"
+    },
+    {
+      "id": "rfc317-no-negative-fixture",
+      "file": "packages/backend/tests/architecture/rfc317-guard-negative-fixture.test.ts",
+      "symbol": "NO_FIXTURE_YET",
+      "baseline": 0,
+      "why": "尚未配负 fixture 的受管守卫。B2-b 已全部补齐，0 是目标态"
+    },
+    {
+      "id": "rfc317-non-exact-public",
+      "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
+      "symbol": "NON_EXACT_PUBLIC",
+      "baseline": 3,
+      "why": "RFC-294/317：public 面不是 exact 合同（含通配 / 再导出）的模块存量。非 exact 等于没有边界。"
+    },
+    {
+      "id": "rfc317-open-record-sites",
+      "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
+      "symbol": "OPEN_RECORD_SITES",
+      "baseline": 12,
+      "why": "RFC-294/317：跨模块合同里用开放 Record 而不是具名字段的站点。开放 Record 让边界形同虚设。"
+    },
+    {
+      "id": "rfc317-pending-acl-enrolment",
+      "file": "packages/backend/tests/architecture/rfc317-acl-column-enrolment-guard.test.ts",
+      "symbol": "PENDING_ENROLMENT",
+      "baseline": 0,
+      "why": "带 ACL 列却未入网的表。B1-c 已全部入网，0 是目标态"
+    },
+    {
+      "id": "rfc317-permission-type-leak",
+      "file": "packages/backend/tests/architecture/rfc317-permission-domain-ownership.test.ts",
+      "symbol": "TYPE_LEAK_LEDGER",
+      "baseline": 8,
+      "why": "RFC-317 T55：通用权限路由里泄漏出来的、只属于某个资源类型的权限点。通用路由不该认识任何具体类型。"
+    },
+    {
+      "id": "rfc319-axe-unswept",
+      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+      "symbol": "AXE_UNSWEPT",
+      "baseline": 29,
+      "why": "存在、无参、但不在 axe wcag2a/2aa 整页扫描里的页面。只许缩。axe 的语料比焦点环还小（10 页 / 39 页）：/tasks、/users、/scheduled、/reviews 这些每天在用的主屏从来没被扫过"
+    },
+    {
+      "id": "rfc319-capability-gaps",
+      "file": "architecture/e2e-capability-ledger.json",
+      "symbol": "gapIds",
+      "baseline": 0,
+      "why": "RFC-319 R3：820 条用户面能力里还没有 system-mock e2e 防护的那些（开工时 679，本 RFC 已补 11 条 ⇒ 668）。只许降——每降一条代表一个真实用户场景被端到端跑过了。涨了说明新增能力没带 e2e，必须在 review 里解释。（2026-08-25：RFC-323 用真实浏览器覆盖员工泳道 Adapter 覆盖/恢复及三个旧入口重定向，DE-18/DE-39 从 gap 转 covered，589 → 587。）（2026-08-25：RFC-319 B39 覆盖 HUMAN-X2 澄清答案类型矩阵，587 → 586 → 585。）（2026-08-25：RFC-319 B41 覆盖 HUMAN-14 待办角标，585 → 584。）（2026-08-25：RFC-319 B42 覆盖 HUMAN-13 澄清收件箱列表页，584 → 583。）（2026-08-25：RFC-319 B43 覆盖 HUMAN-41 评审收件箱列表页，583 → 582。）（2026-08-25：RFC-319 B44 覆盖 HUMAN-46 未保存草稿拦截，582 → 581。）（2026-08-25：RFC-319 B46 覆盖 HUMAN-38 历史版本只读视图，581 → 580。）（2026-08-25：RFC-319 B47 覆盖 HUMAN-35 决策确认弹窗，580 → 579。）（2026-08-25：RFC-319 B48 覆盖 HUMAN-X1 任务详情人工门入口，579 → 578。）（2026-08-25：RFC-319 B49 覆盖 HUMAN-21/23/24 任务问题看板，578 → 575。）（2026-08-25：RFC-319 B50 覆盖 HUMAN-22 改派守卫，575 → 574。）（2026-08-25：RFC-319 B51 覆盖 HUMAN-07/27 两个停止反问的闸，574 → 572。）（2026-08-25：RFC-319 B52 覆盖 HUMAN-26 跨通道锁，572 → 571。）（2026-08-25：RFC-319 B53 覆盖 HUMAN-10 逐题协作草稿，571 → 570。）（2026-08-25：RFC-319 B54 覆盖 HUMAN-12 实时协作与多标签同步，570 → 569。）（2026-08-25：RFC-319 B55 覆盖 HUMAN-20 看板界面面，569 → 568。）（2026-08-25：RFC-319 B56 覆盖 HUMAN-25 集中回答面板，568 → 567。）（2026-08-25：RFC-319 B57 覆盖 HUMAN-37 diff 粒度与两种加载失败态，567 → 566。）（2026-08-25：RFC-319 B58 覆盖 HUMAN-05 多源等齐的用户可见三段，566 → 565。）（2026-08-25：RFC-319 B59 覆盖 HUMAN-17b 工作组撤销反问后的只读态与原因，565 → 564。）（2026-08-25：RFC-319 B60 覆盖 HUMAN-40 / HUMAN-X4 多文档评审的轮次面，564 → 562。）（2026-08-25：RFC-319 B61 覆盖 HUMAN-36 / HUMAN-42 单文档评审的键盘与下载，562 → 560。）（2026-08-25：RFC-319 B62 覆盖 HUMAN-16 / HUMAN-48 / HUMAN-X5，560 → 557。）（2026-08-25：RFC-319 B63 覆盖 HUMAN-47 / HUMAN-X6 任务反馈与蒸馏，557 → 555。）（2026-08-25：RFC-319 B64 覆盖 HUMAN-X3 首页待办预览，555 → 554。）（2026-08-25：RFC-319 B65 覆盖 HUMAN-43 空文档评审自动放行，554 → 553。）（2026-08-25：RFC-319 B66 覆盖 HUMAN-15 分片切换器正向，人机交互门整域清零，553 → 552。）（2026-08-25：RFC-319 B67 意图构建器域并行批，26 条一次落地，526 → 526。）（2026-08-25：RFC-319 B68 工作组 + 设置双域并行批，39 条一次落地，526 → 487。）（2026-08-25：RFC-319 B69 工作组 ACL 与意图入口，487 → 482。）（2026-08-25：RFC-319 B70 代理端口/删除 + 记忆面板/蒸馏 + 画布检查器三域并行批，43 条一次落地，482 → 439。）（2026-08-25：RFC-319 B72 数字员工 P1 + 仓库列表与导入 + MCP 管理三域并行批，20 条一次落地，439 → 419。）（2026-08-25：RFC-319 B75 运维 CLI + Webhook 端点 + 定时任务 + 任务列表四域并行批，33 条一次落地，419 → 386。）（2026-08-25：RFC-319 B80 工作流列表与 ACL + 画布编辑操作 + 用户与账号三域并行批，28 条一次落地，386 → 358。）（2026-08-25：RFC-319 B81 —— 138 条散文证据逐条回源核查后归一，其中 UX-46 查实**没有任何测试**守着它（散文引的全是 workflow YAML 行号与文件头注释），如实转回 gap，358 → 359。）（2026-08-25：RFC-319 B81 续 —— 12 条「一行捆两件事、只证明了一件」的行按 B40 拆 HUMAN-17 的先例逐条拆开，新开 13 条 gap（REPO-38 捆了三件事），分母 822 → 835，359 → 372。**这不是覆盖倒退，是把此前被整行 covered 抹掉的债显式化。**）（2026-08-25：RFC-319 B83a 技能 / MCP / 插件三类资源管理域 9 条，362 → 353。）（2026-08-25：RFC-319 B83b 记忆批量融合 / 待办徽标 / 多标签同步 / 两条 WS 通道 8 条，353 → 345。）（2026-08-25：RFC-319 B85 运维 CLI 备份/恢复/用户/配置包 5 条 + 设置页运维面板 8 条，345 → 332。）（2026-08-25：RFC-319 B86 前端公共原语的键盘与可访问性契约 8 条，332 → 324。）（2026-08-25：RFC-319 B87 启动闸门与小时级后台清扫 10 条，324 → 314。）（2026-08-25：RFC-319 B88 doctor / migrate / db 维护 / 凭据助手 7 条，314 → 307。）（2026-08-25：RFC-319 B89 意图构建器草稿/提交 9 条 + 融合与拒绝闸 7 条 + 工作组启动与配置 9 条，307 → 282。）（2026-08-25：RFC-319 B90 意图时间线与轮次 8 条 + 工作组房间与交付 9 条，282 → 265。）（2026-08-25：RFC-319 B91 仓库镜像 9 + 仓库组 8 + 工作树与提交 9 + 数字员工配置 8 共 34 条，265 → 231。）（2026-08-25：RFC-319 B92 数字员工任务向导与案例页 8 条，231 → 223。）（2026-08-25：B93 资源管理 REST/UI 九条：MCP env 拒动态加载、删除三闸、插件装配失败留档、file: 源无升级、options 非法跳页、删除双闸、导出脏闸与 fence、密钥补录不落占位符、根类型不符提示，223 → 214。）（2026-08-25：B94 任务向导八条：必填闸、四类选择器打包、上传落盘、基线 ref、版本过期双腿、高级字段往返、结果未知对账、终态重放冻结布局，214 → 206。）（2026-08-25：B95 设置配置九条：extraArgs 能力门、config-dir 保留名双拦、System agents 分区隔离、融合与 config 原子性、Recovery 阈值、外部访问总闸、渲染器连通四态、PlantUML 代理五响应、执行预算被新任务采用，206 → 197。）（2026-08-25：B96 事件中心九条：来源树三态与四卡口径、订阅审计合并分页、投递四档状态、全局记录只出公开目录、投递审计双筛与翻页、终态控制不泄漏任务 id、触发开关与级联清理、/webhooks 兼容重定向、草稿撤销重做，197 → 188。）（2026-08-25：B97 任务详情页签九条：输出端口顺序与下载门、Markdown 预览四源、commit&push 两结局、变更叙述空态与查看、节点重试级联开关、仓库准备重试、熔断隔离放行、工作流版本同步、只读成员脏改动横幅，188 → 179。）（2026-08-25：B98 前端外壳与恢复九条：深链回环与开放重定向、首启 token 交接、权威未解出不抢跑、WS 重连补偿、未知路由、巡览进度、欢迎屏引导、剪贴板兜底、相对时间自走，179 → 170。）（2026-08-25：B99 数字员工授权与作用域九条：作用域默认档、统一列表类别过滤排他性、非 Agent 工具授权、模板改版 v2、基本信息、上传落点与撞路径、作用域选仓、老 URL 重定向、遗留向导去处，170 → 161。）（2026-08-25：B100 身份与权限九条：OIDC 授权码回环、邀请绑定、回调四种失败、provider 增删改与连通性、托管账号改密关死、分档写门、内置资源只读、ACL 并发 409、强制改密后端信号，161 → 152。）（2026-08-25：B101 工作流检查器与配置包九条：call-workflow / call-workgroup 引用双写、script 检查器五项、join 模式默认档、特权节点置灰与服务端遮蔽、右键菜单、校验回执过期、导出围栏、wrapper 自动适配，152 → 143。）（2026-08-25：B102 代理与资源配置十条：依赖闭包保存回读、成环/自依赖/不可见引用拒绝、自动探测勾选合并、三类选择器一次保存、引用失效后启动入口降级、内置代理只放行 runtime-only 补丁、改名后引用按 id 不断、三类资源转让降级、上传扩展名闸与文件名兜底，143 → 133。）（2026-08-25：B103 记忆注入与工作组九条：四档记忆注入面、裁剪后快照卡、反馈失败不丢草稿、两类蒸馏入队、终态房间只读、组名冻结与降级、awaiting_human 成因卡、成员回合预算与共享任务分组、两种工作组的页签形状，133 → 124。）（2026-08-25：B104 意图与设置九条：日志级别热生效、webhook 保留期互斥闸、重启横幅只对重启键、git 子模块四旋钮、默认运行时被新任务采用、资源挂载根、类型提示卡决定负载、会话列表实时推送、提交在飞时不可关闭，124 → 115。）（2026-08-25：B105 运维事件与仓库清扫十条：周期孤儿对账热生效、HMAC 签名闸、autoRegisterRepos 双向、重启修复投递、按需观察器起停、点火 WS 推送与可见性、频率弹窗重算、孤儿工作树回收、子模块模式作用于克隆，115 → 105。）（2026-08-26：RFC-319 对账批 —— 前五批起草者在开工前 grep 时反复撞见「标着 gap 其实已有真覆盖」的行，累计点名 33 条。本次逐条**读 test 正文**核实：16 条确属假 gap，改为 covered 并挂逐字 evidence，105 → 89。**没有**用关键字匹配代劳——我自己先试过脚本按关键字找证据，把 MEM-21 匹配到了毫不相干的 INTENT-50 上，是彻底的假阳性，已弃用。另有 10 条判定为部分覆盖、7 条内容通过但 tier 与用例标签不一致、1 条（UX-39）线索被推翻仍是真 gap，均留在 gap 里未动。）（2026-08-25：B106 数字员工与资源生命周期九条：ZIP 选择期本地校验、提交失败停在审阅页、两种传输真握手、SSE 回退、Intent 挂载与融合入口、分类工作台页签、泳道重排、写权限点收放、上手引导四阶段，89 → 80。）（2026-08-25：B107 工作流入口与外壳偏好八条：配置包新建工作流、他处删除与权限收回两个终态、启动准备期取消、执行合同目录与指南、AI 入口挂载、code-round 只读检查器、语言切换回滚、后退滚动恢复，80 → 72。）（2026-08-26：对账批的续篇——6 条「内容已被覆盖、只是账本 tier 与用例标签不一致」的行（AGENT-39 / UX-06 / UX-36 / CFG-08 / WF-X2 / WF-25）**把账本 tier 改成 pr**并转 covered。取舍理由：那些用例本来就跑在 PR 腿上，PR 腿比夜跑更强；反过来给它们加 @nightly 会把它们移出 PR 腿、削弱现有防护。账本该跟实现走。72 → 66。）（2026-08-26：B108 六条新覆盖 + 三条假 gap 销账。假 gap 三条：RES-24 已被 `e2e/mcp-runtime-playground.spec.ts` 完整覆盖；RES-25 已被 `packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts` 覆盖（该行随之改 tier=pr，与账本里既有 5 条以 backend/tests 为证据的行同形）；MEM-X4 由 MEM-29 的 href 断言与 task-feedback-distill 的落地断言合起来盖满。66 → 57。）（2026-08-25：B109 部分覆盖补完八条：收件箱三路求和与抽屉关闭、跨标签正向传播、applying 中不可取消、写面 404 同形、工作目录刷新、看板三控件、bindHost 往返、排队上下文重启后接着跑，57 → 49。）（2026-08-25：B110 插件源与运维十条：npm registry 安装与版本钉、检查更新三态、升级与重装基线、工作组包导出 fence、成员画廊三态与焦点归位、事件自动化四类启动目标、数字员工四面 axe、dispatch 协作路由校验、dev 代次锁交接、webhook 任务终态清工作区，49 → 39。）（2026-08-26：DE-39 经核实为假 gap —— `e2e/rfc310-digital-employee-journey.spec.ts` 的 `RFC-323 DE-18/39: …retired URLs redirect` 已逐条断言 /code/executors、/code/config/adapters、/code/config/adapters/retired-adapter 三条深链重定向到 /digital-employees 且旧界面元素 count(0)，tier=pr 与该用例无 @nightly 一致。39 → 38。）（2026-08-25：B111 身份交接与手册十条：首启 token 链落地与退役、三类资源的权限弹窗、记忆 scope 读管权、平台令牌清单与调用审计、手册按身份裁剪、宽块容器内横滚、beforeunload 守卫、重命名的描述与名称折叠，38 → 28。）（2026-08-25：B112 设置身份与差异九条：窄屏折叠导航、分区徽标三态、presence 圆点实时增删、代码平台连接删除的连带吊销、OIDC 防自锁、评审区四种空态、工作上下文回填顶替、结构化 diff 作用域与 1 MiB 截断、webhook 端点 URL 的诚实降级，28 → 19。）（2026-08-25：B113 工作组动态编排六条：生成图待确认与驳回重生成与审批、另存为正式工作流、房间三帧实时刷新、call-workgroup 起子任务与冻结面、result 锚回填父端口、子任务只作为子行出现；另 REPO-43 经核实为假 gap 销账，19 → 13。）（2026-08-25：OPS-007 改由后端用例真跑（e2e harness 的 15s 上限盖不住 CLI 的 30s 预算），13 → 12。）（2026-08-25：REPO-42 用桩 ssh 真跑通了 ssh:// clone，不必再等 gitea 夹具，12 → 11。）（2026-08-26：MEM-49 的设置半边本就由 CFG-21 逐字覆盖，徽标半边在产品里不可达、已收窄出能力定义并记入 audit-backlog，11 → 10。）（2026-08-25：DE-41 不是退役面而是排干路径：创建那道门焊死了，/:id 之下 20 个运维端点一个没挡，10 → 9。）（2026-08-25：维护拍五条：慢时钟不是「做不了」，只是墙钟长——首拍相位 8/16/5 分钟，在一次 startDaemon 里就会发生，9 → 4。）（2026-08-25：UX 四条是「扫描覆盖面本身」的判据：清单跟不跟得上路由表、基线有没有孤儿、视觉门两条腿的过滤有没有漂移，4 → 0。）"
+    },
+    {
+      "id": "rfc319-capability-prose-evidence",
+      "file": "architecture/e2e-capability-ledger.json",
+      "symbol": "unverifiedIds",
+      "baseline": 0,
+      "why": "RFC-319 R3：审计判定有 e2e 防护、但证据仍是散文（path:line + 说明）而没归一成可校验 {file, test} 的存量条目（开工时 141）。只许降——它衡量的是「账本还有多少话是不可验证的」。这个状态是存量专用，新增行不许用它（守卫另有一条上界断言）。（2026-08-25：RFC-319 B65-DE 将真实数字员工复验触达的 EVENT-07 / HUMAN-28 / HUMAN-29 归一为可执行测试标题，141 → 138。）（2026-08-25：RFC-319 B81 —— 剩余 138 条全部逐条回源核查完毕，138 → **0**。这个状态自此清空：新增行本就不许用它，存量也不再有，账本里每一条「已覆盖」从此都指向逐字可达的 {file,test}。）"
+    },
+    {
+      "id": "rfc319-e2e-endpoint-coverage",
+      "file": "architecture/e2e-endpoint-coverage.json",
+      "symbol": "uncovered",
+      "baseline": 80,
+      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。（2026-08-25：RFC-319 B76 —— 夜跑 `d366ed4f2` 的实测 journal 显示 B70/B72 那两批 spec 已真实打到 28 条，206 → 178。**这两份账本只在夜跑对账**，前几批只改了 R3 能力账本、漏了这里，是本次红的成因。）（2026-08-25：RFC-319 B84 —— 夜跑 `5eb976fc3`（run 32830821072）实测 journal 显示 B75 那批 spec 已真实打到 6 条：webhook 端点的 GET/PUT/DELETE 与 rotate-url-token、webhook 触发规则的 DELETE、定时任务的 PUT。178 → 172。**再次是「只改了 R3 能力账本、漏了这份」造成的夜跑红**，与 B76 同一成因。）（同批**预对账**：夜跑那份 journal 采自 `5eb976fc3`，在 B80 / B82 / B83 六份新 spec 之前，照现状下次夜跑还会再红一次。于是把那 6 份 spec 在本地按同一套 `AW_E2E_ROUTE_JOURNAL` 开关跑了一遍（57 passed），把命中并进夜跑 journal 后重跑对账，又销掉 8 条：身份/会话面 5 条、`GET /api/users/:id`、`DELETE /api/users/:id`、`GET /api/skills/:id/versions/diff`、`POST /api/workflows/:id/validate-draft`。172 → 164。）（2026-08-26：RFC-319 B93～B100 —— 本轮把基线补齐到与来源逐字相等并继续预对账。B93～B97 那笔（caca2b451）改了来源却没把基线带上：共享工作树上这份文件在我写完与提交之间被并发 session 覆写回旧值，commit-mine 取的是工作树内容，于是来源 147 / 基线 164 直接把 T16 推红。教训：账本类文件改完要立刻提交，并在提交后回读committed内容复核。B98～B100 三份新 spec（27 条用例）本地开 AW_E2E_ROUTE_JOURNAL 跑过（27 passed），再销 13 条：OIDC provider 的 PATCH/DELETE、action-templates 一族七条、automation-policies、code/digital-employees、task-catalog/sources、code/missions。）（2026-08-26：RFC-319 B101 —— WF-52 的配置包导出用例真打到 `GET /api/workflows/:id/export-package`，134 → 133。R2 无变化：本批只加载工作流详情页，账本里剩的六条都是 /code 一族与 /workflows/new、/workgroups/launch。）（2026-08-26：RFC-319 B102 —— AGENT-44/RES-X6 的改名用例真打到三类资源的 rename 端点（agents / mcps / plugins），133 → 130。R2 无变化。）（2026-08-26：RFC-319 B104+B105 —— EVENT-36 的按需观察器用例真打到 `POST /api/event-center/observers/run-due`，130 → 129。R2 无变化：两批只加载已覆盖的页面。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）（2026-08-30：exact SHA `acb518f8` 的 full-tier journal 显示 RFC-341 committed-delivery retry 与 RFC-342 memory scope move 两条新增写端点尚未被浏览器旅程命中；两条均已有 focused backend / frontend contract 测试，本批先如实登记，后续补真实用户旅程再销账。）（2026-09-02：RFC-349 —— `/api/database*` 的 12 条端点如实登记为未覆盖，68 → 80。浏览器腿 rfc349-database-migration-settings.spec.ts 用 page.route 把它们整段以夹具应答，刻意不打真服务端（它要在没有外置 PostgreSQL 的机器上逐相位驱动 UI）；真实覆盖在 postgresql-evidence 那条腿上，但 journal 只采被测 daemon 的 req 日志，采不到它。销账要求：让浏览器腿真打服务端。）"
+    },
+    {
+      "id": "rfc319-e2e-route-coverage",
+      "file": "architecture/e2e-route-coverage.json",
+      "symbol": "uncovered",
+      "baseline": 2,
+      "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。RFC-323 浏览器用例直达 /code/executors 与两个 Adapter 配置深链并验证重定向，16 → 13。（2026-08-25：RFC-319 B76 —— `rfc319-memory-distill-jobs.spec.ts` 的 MEM-29 真加载了蒸馏任务详情页，13 → 12。）（2026-08-26：RFC-319 B98～B100 —— UX-38 的未知路由用例与 DE-42 的四条兼容重定向真加载了 /code、/code/missions、/code/missions/new、/code/outcomes、/outcomes 五条遗留路由。同批把基线补齐到与来源逐字相等，成因同 R1。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）"
+    },
+    {
+      "id": "rfc319-focus-ring-unswept",
+      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+      "symbol": "FOCUS_RING_UNSWEPT",
+      "baseline": 18,
+      "why": "存在、无参、但不在焦点环全站扫描里的页面。只许缩——每一条都意味着那一页上被祖先容器裁掉的焦点环，键盘用户看不见而 CI 不会告诉任何人。新增页面要么进扫描，要么显式进这张表，两条路都在 diff 里看得见"
+    },
+    {
+      "id": "rfc321-repository-publication-call-sites",
+      "file": "architecture/repository-publication-call-sites.json",
+      "symbol": "callSites",
+      "baseline": 6,
+      "why": "RFC-321 T1/T19：平台拥有的 Git publication 网络入口必须全部登记并经 source-control transport participant；新增入口需要显式扩账和审查 owner/subject/operations。"
+    },
+    {
+      "id": "rfc326-exempt-review-routes",
+      "file": "packages/backend/tests/architecture/rfc326-review-tool-route-guard.test.ts",
+      "symbol": "EXEMPT_REVIEW_ROUTES",
+      "baseline": 1,
+      "why": "RFC-326：/api/reviews* 路由里**有意不给 MCP 工具**的名单（今天只有 pending-count 徽章计数）。每加一条都是在把评审面从 MCP 上抠掉一块，只许降；守卫同时钉死名单里的路由确实没有工具、且路由确实存在（过期条目也红）"
+    },
+    {
+      "id": "rfc328-capability-factory-call-sites",
+      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
+      "symbol": "FACTORY_ALLOWLIST",
+      "baseline": 7,
+      "why": "RFC-328 私有 ownership/proof factory 的精确 production consumer 账本；新增调用点必须逐站审查，不能从 raw task id 或 JSON 构造 authority。"
+    },
+    {
+      "id": "rfc328-cross-context-provider-bridge-debt",
+      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
+      "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
+      "baseline": 13,
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
+    },
+    {
+      "id": "rfc329-mcp-surface-exemptions",
+      "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
+      "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
+      "baseline": 392,
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
+    },
+    {
+      "id": "rfc345-resource-acl-facade-compatibility",
+      "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
+      "symbol": "EXACT_COMPATIBILITY_DEBT",
+      "baseline": 42,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。"
+    },
+    {
+      "id": "rfc348-teaching-frontend-allowlist",
+      "file": "packages/backend/tests/intent-teaching-registry.test.ts",
+      "symbol": "FRONTEND_ALLOWLIST",
+      "baseline": 3,
+      "why": "RFC-348 D7 教学注册表 ↔ 前端消费点字段对账：前端读到、但不是 declaration 字段的名字（inputKey / inputs / severity）。每条都是一处未被注册表覆盖的字段读取，只许降。"
+    },
+    {
+      "id": "rfc348-teaching-validator-allowlist",
+      "file": "packages/backend/tests/intent-teaching-registry.test.ts",
+      "symbol": "VALIDATOR_ALLOWLIST",
+      "baseline": 2,
+      "why": "RFC-348 D7 教学注册表 ↔ 校验器字段对账：校验器读到、但按设计不进教学的字段（agentName/agentId 是平台身份缓存，意图侧以 agentRef 表达）。每条都是一处「校验器看得见、模型看不见」的例外，只许降。"
+    },
+    {
+      "id": "rfc349-dual-provider-predicate-forks",
+      "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
+      "symbol": "ALLOWED_DIVERGENCE",
+      "baseline": 1,
+      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。 RFC-359 W4-D6c：digital-employee 作者面孪生对合一为 authoringStore.ts，`toTool` / `uniqueError` 两条豁免随孪生对消失删除，12 → 10。 RFC-359 W4-D16（2026-09-05）：Mcp 仓库合一后 ownerScopedNameWhere 的方言分叉退役，5→4。 RFC-359 W4-D17（2026-09-06）：Plugin 仓库合一后 ownerScopedNameWhere 的方言分叉退役，4→3。 RFC-359 W4-D18（2026-09-06）：Workgroup 仓库合一后 ownerScopedNameWhere 的方言分叉退役，3→2。 RFC-359 W4-D24：运行时会话租约合一后 `constraintViolation` 只剩一份、走能力矩阵归类，这条 fork 销账，2→1。"
+    },
+    {
+      "id": "rfc349-provider-selection-sites",
+      "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
+      "symbol": "PROVIDER_SELECTION_SITES",
+      "baseline": 6,
+      "why": "RFC-349：按 provider 选实现的站点存量。RFC-359 的目标是把它们收敛到 bootstrap 唯一装配点。"
+    },
+    {
+      "id": "rfc349-provider-specific-business-dependencies",
+      "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
+      "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
+      "baseline": 44,
+      "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。 RFC-359 W1-T2a：`services/questionDispatchComposition.ts` facade 改指 provider-中立的 `questionDispatchCommand`，67 → 66。 RFC-359 W1-T2b：`services/clarifyDecisionComposition.ts` facade 改指 provider-中立的 `clarifyDecisionCommand`，66 → 65。 RFC-359 W1-T2c：`services/reviewDecisionComposition.ts` facade 改指 provider-中立的 `reviewDecisionCommand`，`services/reviewMutationCoordinator.ts` 改依赖中立的 `reviewMutationScope`，65 → 63。 RFC-359 W4-B1 批 1：services/task.ts → branchTraceSnapshotReader 不再 provider 专属，63 → 62。 RFC-359 W4-B4 批 c：identity-access 公共面改为只导出中立的 DrizzleOidcProviderRepository，public → provider 适配器的两条债与 services/oidcProviders 那条随之还清，58 → 55。 RFC-359 W4-D24：`services/startTaskDeps.ts` 的租约依赖不再是 provider 专属，50→49。 RFC-359 W4-D26：`SqliteHumanGateOperationStore` 随手工提问写面合一整份退役，`humanGateComposition` 对它的 provider 具名依赖随之消失，49 → 48。 RFC-359 W4-D27：任务执行资源快照绑定合一，`services/execution/taskExecutionResources.ts` 对两份 provider 绑定的具名依赖并成一条中立导出，48 → 46。 RFC-359 W4-D28b：同步 owned-mutation 网关（`composition/sqliteOwnedTaskMutation`）整体退役，`public/operations.ts` 与 `public/participants.ts` 对它的两条具名依赖随之出账，46 → 44。"
+    },
+    {
+      "id": "rfc359-sync-transaction-surface",
+      "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
+      "symbol": "SYNC_TRANSACTION_DEBT",
+      "baseline": 17,
+      "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 28（调用点合计 72）；账本正文逐文件记着各自的调用点数，逐字相等。 RFC-359 W4-D28b：`sqliteOwnedTaskMutation.ts`（2 处 `dbTxSync` + 2 处 `withOwnedTaskTx`）整份退役，5 处调用点迁到中立的 `withTaskExecutionWrite` + `fenceTaskWrite`，30 → 29（调用点 81 → 77）。 RFC-359 W4-D28b 第二刀：runtime 注册表两份 provider 实现合成一份中立实现，`sqliteRuntimeRegistryPersistence.ts`（5 处 `dbTxSync`）随之退役，29 → 28（调用点 77 → 72）。"
+    },
+    {
+      "id": "rfc359-w5-artifact-format-portability",
+      "file": "packages/backend/tests/architecture/rfc359-w5-artifact-format-portability.test.ts",
+      "symbol": "ARTIFACT_FORMAT_PORTABILITY",
+      "baseline": 12,
+      "why": "RFC-359 W5：两个 provider 写出的落盘工件格式不互通的存量（字段名 / 信封形状不同），换一侧读就无据可依。"
+    },
+    {
+      "id": "rfc359-w5-bare-transaction",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t18-bare-transaction.test.ts",
+      "symbol": "BARE_TRANSACTION_DEBT",
+      "baseline": 10,
+      "why": "RFC-359 W5「防复辟」波次。事务原语之外直调 `db.transaction(` 的存量。bun:sqlite 的同步包装器在第一个 await 处就 COMMIT，所以一个事务体没法同时跑两个引擎——新写的必须走 `databaseSessionFor(db).transaction(...)`。含 `intentSqlPersistence.ts` 的 27 处 `this.runner.transaction`：那是本仓第二套并行的中立事务抽象，按债计入（豁免它等于给「再开一套」发许可证），随 IntentSqlProgramRunner 合一自然清零。"
+    },
+    {
+      "id": "rfc359-w5-composition-root-placeholder",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts",
+      "symbol": "COMPOSITION_ROOT_PLACEHOLDER_DEBT",
+      "baseline": 13,
+      "why": "RFC-359 W5「防复辟」波次。组合根里的 `*-not-bound` / `*-not-composed` 占位与晚绑定 holder（fail-closed 那种）。语料含 `cli/**`、`**/composition*` 与 `server.ts`——把 server.ts 收进来照出了 `mcpCatalogRef` 在 HTTP 根与 daemon 根各存一份、而只有一份在守卫下。"
+    },
+    {
+      "id": "rfc359-w5-contract-only-protections",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts",
+      "symbol": "CONTRACT_ONLY_PROTECTIONS",
+      "baseline": 4,
+      "why": "RFC-359 W5-T19g：drizzle 声明（⇒PostgreSQL）有、SQLite 迁移没有的保护面。方向相反的同一种病。"
+    },
+    {
+      "id": "rfc359-w5-coverage-parity",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
+      "symbol": "COVERAGE_PARITY_LEDGER",
+      "baseline": 15,
+      "why": "RFC-359 W5-T19d：成对适配器两侧的测试引用 / 驱动数。倒挂说明一侧几乎没有行为覆盖。"
+    },
+    {
+      "id": "rfc359-w5-dead-provider-adapter",
+      "file": "packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts",
+      "symbol": "DEAD_PROVIDER_ADAPTER_DEBT",
+      "baseline": 19,
+      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。",
+      "allowGrowth": {
+        "why": "RFC-359 W7：净 +1。本波合一让 3 个适配器的生产消费者归零（`composeSqliteIntentContextResourceAuthorizationSyncFactory` / `composePostgresqlNodeRunLifecycleParticipantFactory` / `createSqliteTaskAuthorizationQueries`），同时删掉了 2 条（两个 repair participant 的 SQLite 侧）。三条新增都已按账本要求标注「改指」并给出中立替代者的 `file:line`；删除属第二波死代码清理（其中一条有 rfc345 源码文本断言钉着）。"
+      }
+    },
+    {
+      "id": "rfc359-w5-dual-engine-predicate-gaps",
+      "file": "packages/backend/tests/architecture/rfc359-w5-dual-engine-predicate-gaps.test.ts",
+      "symbol": "DUAL_ENGINE_PREDICATE_GAPS",
+      "baseline": 10,
+      "why": "RFC-359 W5：「同一件事，一侧有校验、另一侧没有」的具名缺口。补上了**也红**，强制每次收敛留下署名记录。"
+    },
+    {
+      "id": "rfc359-w5-inverted-pairs",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
+      "symbol": "INVERTED_PAIRS",
+      "baseline": 5,
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
+    },
+    {
+      "id": "rfc359-w5-name-collision-definition-drift",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts",
+      "symbol": "NAME_COLLISION_DEFINITION_DRIFT",
+      "baseline": 2,
+      "why": "RFC-359 W5-T19g：两侧**同名**但定义不同的索引 / 约束——名字对得上、保护的却不是同一件事，最容易漏。"
+    },
+    {
+      "id": "rfc359-w5-postgresql-function-shims",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
+      "symbol": "POSTGRESQL_FUNCTION_SHIMS",
+      "baseline": 7,
+      "why": "RFC-359 W5-T20：给 PostgreSQL 装的同名同参 SQLite 标量函数集合。删一个（而业务还在用）或悄悄加一个都必须留痕。"
+    },
+    {
+      "id": "rfc359-w5-provider-branch",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
+      "symbol": "PROVIDER_BRANCH_DEBT",
+      "baseline": 16,
+      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。"
+    },
+    {
+      "id": "rfc359-w5-provider-branch-relocation",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
+      "symbol": "PROVIDER_BRANCH_RELOCATION_DEBT",
+      "baseline": 1,
+      "why": "RFC-359 W5「防复辟」波次。与上一条同判据、但销账方式是**搬家**而非重写：`db/providerSchema.ts` 就是「把品牌翻译成能力」的投影层本身，只是住在 `db/` 而不是 `platform/persistence/`。"
+    },
+    {
+      "id": "rfc359-w5-provider-named-directory",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
+      "symbol": "PROVIDER_NAMED_DIRECTORY_DEBT",
+      "baseline": 2,
+      "why": "RFC-359 W5「防复辟」波次。provider 命名的**目录**形态（`legacySqliteClarify/` 等）——把 `sqliteFoo.ts` 改叫 `sqlite/foo.ts` 就能绕过按文件名的判据，这条堵它。"
+    },
+    {
+      "id": "rfc359-w5-provider-named-file-location",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
+      "symbol": "PROVIDER_NAMED_FILE_DEBT",
+      "baseline": 113,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
+    },
+    {
+      "id": "rfc359-w5-provider-pair-conformance",
+      "file": "packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts",
+      "symbol": "PROVIDER_PAIR_CONFORMANCE_LEDGER",
+      "baseline": 15,
+      "why": "RFC-359：成对 provider 适配器的清单 + 对拍覆盖状态位。这个数就是合一进度，降到 0 是完工线。"
+    },
+    {
+      "id": "rfc359-w5-provider-runtime-unexercised",
+      "file": "packages/backend/tests/architecture/rfc359-w5-provider-runtime-exercised.test.ts",
+      "symbol": "PROVIDER_RUNTIME_UNEXERCISED",
+      "baseline": 20,
+      "why": "RFC-359 W5：只被装配、从没被任何测试真正构造过的组合根。没跑起来 = 那条装配链的正确性无人知晓。"
+    },
+    {
+      "id": "rfc359-w5-provider-session-composer-refs",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19c-startup-sequence.test.ts",
+      "symbol": "PROVIDER_SESSION_COMPOSER_REFERENCES",
+      "baseline": 2,
+      "why": "RFC-359 W5-T19c：provider 会话装配器的引用点清单，用来钉住「启动序列恰有一个调用方」。"
+    },
+    {
+      "id": "rfc359-w5-raw-dialect",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
+      "symbol": "RAW_DIALECT_DEBT",
+      "baseline": 10,
+      "why": "RFC-359 W5「防复辟」波次。具名渲染器之外裸写的方言构造（`SET TRANSACTION ISOLATION LEVEL` 7 行、`DELETE … USING` 4 处、for-update / nulls-ordering / INDEXED BY / GREATEST 各若干）。本仓 PG 客户端是 drizzle sqlite-proxy：渲染的是 SQLite 方言文本，只经一层极窄改写就发给 PG，**没有第二个翻译层**——所以每个方言点必须两侧同名同参存在，否则是运行到那条语句才炸的 42883。"
+    },
+    {
+      "id": "rfc359-w5-runtime-exercised-nothing-extra",
+      "file": "packages/backend/tests/architecture/rfc359-w5-provider-runtime-exercised.test.ts",
+      "symbol": "NOTHING_EXTRA",
+      "baseline": 0,
+      "why": "RFC-359 W5：刻意留空的「不许有额外项」集合。它是 0，加进任何一条都需要一次显式决定。"
+    },
+    {
+      "id": "rfc359-w5-sqlite-only-protections",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts",
+      "symbol": "SQLITE_ONLY_PROTECTIONS",
+      "baseline": 10,
+      "why": "RFC-359 W5-T19g：写在迁移 SQL 里、却没进 drizzle 声明的约束——**PostgreSQL 上根本不存在**，且两侧测试都能全绿。"
+    },
+    {
+      "id": "rfc359-w5-startup-provider-execution-branch",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19c-startup-sequence.test.ts",
+      "symbol": "PROVIDER_EXECUTION_BRANCH_DEBT",
+      "baseline": 1,
+      "why": "RFC-359 W5「防复辟」波次。启动入口里按 provider **分执行流程**的分支（选装配合法、分流程不合法）。同文件另有 exact 钉死：启动序列各环节的调用点数，多一条启动路径就红。"
+    },
+    {
+      "id": "rfc359-w5-startup-sequence-call-sites",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19c-startup-sequence.test.ts",
+      "symbol": "STARTUP_SEQUENCE_CALL_SITES",
+      "baseline": 4,
+      "why": "RFC-359 W5-T19c：boot 链上每个函数的调用点数。再复制一条启动路径必然要多调一次，多一个就红。"
+    },
+    {
+      "id": "rfc359-w5-test-engine-hardcoding",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
+      "symbol": "TEST_ENGINE_HARDCODING_DEBT",
+      "baseline": 896,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。",
+      "allowGrowth": {
+        "why": "RFC-359 W7：**不是新增了债，是判据加宽了**。原判据只数 `createInMemoryDb(`，绕过那个夹具直接 `new Database(` 的写法整类在网外——实测非迁移测试里还有 95 处 / 55 个文件。把 `new Database(` 一并计入后存量从 821 涨到 896（净 +75，已扣掉本波 W6 收敛的 8 处）。只堵一个入口的守卫等于没堵，这次上涨换来的是**后门关闭**。"
+      }
+    },
+    {
+      "id": "rfc359-w5-test-engine-hardcoding-exempt",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
+      "symbol": "EXEMPT",
+      "baseline": 2,
+      "why": "RFC-359 W5「防复辟」波次。上一条的豁免名单：harness 自己（`tests/helpers/eachProvider.ts`）与该守卫自身。只降不升，防止豁免退化成空白许可证。"
+    },
+    {
+      "id": "rfc359-w5-toplevel-column-capture",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-toplevel-column-capture.test.ts",
+      "symbol": "TOPLEVEL_COLUMN_CAPTURE_DEBT",
+      "baseline": 8,
+      "why": "RFC-359 W5「防复辟」波次。PG 执行面上模块顶层捕获 `@/db/schema` 表列（投影常量）。表是按 provider 投影的 Proxy 门面，顶层捕获会钉死在**加载时**的 provider 上。按**列引用数**而非捕获点数计（83 处 / 8 文件），否则往已欠债的投影里再塞几列就免检。计划原文以为存量是 0，实测不是。"
+    },
+    {
+      "id": "rfc359-w5-unshimmed-function",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
+      "symbol": "UNSHIMMED_FUNCTION_DEBT",
+      "baseline": 0,
+      "why": "RFC-359 W5「防复辟」波次。raw SQL 里用了「既不可移植、又不在 PG shim 集、也不在能力矩阵」的函数。今天为 0，钉 0——挡的是未来的 `strftime(` / `iif(` / `group_concat(`。"
+    },
+    {
+      "id": "rfc359-w6-read-modify-write-unlocked",
+      "file": "packages/backend/tests/architecture/rfc359-w6-t28-read-modify-write.test.ts",
+      "symbol": "READ_MODIFY_WRITE_DEBT",
+      "baseline": 8,
+      "why": "RFC-359 W6「防复辟」波次。事务内「读—改—写、中间既不锁也不 CAS」的存量（20 处 / 9 文件）。SQLite 的 BEGIN IMMEDIATE 独占下碰巧正确，PG 的 READ COMMITTED 上是**丢更新且不报错**——计划原文的「合一时必须改形状、不能原样搬」说的就是它。其中 17 处今天已经跑在两个引擎上（如 `mcpRuntimeTestPersistence` 的 8 处 sessionVersion 自增），只有 3 处是 SQLite-only 的合一陷阱。逐条改成 `lockAggregateRoot` 或补 CAS 谓词后把基线改小。"
+    },
+    {
+      "id": "rfc359-w7-task-insert-sites",
+      "file": "packages/backend/tests/architecture/rfc359-w7-task-insert-lineage-completeness.test.ts",
+      "symbol": "TASK_INSERT_SITES",
+      "baseline": 4,
+      "why": "RFC-359 W7：`insert(tasks)` 的站点及其血缘 / 启动来源三列完整性。它替代 PostgreSQL 上不存在的三个兜底触发器。"
+    },
+    {
       "id": "routes-allowed-cast-targets",
       "file": "packages/backend/tests/routes-no-cast.test.ts",
       "symbol": "ALLOWED_CAST_TARGETS",
@@ -283,11 +572,11 @@
       "why": "routes/ 下按 file:line 豁免的 cast 存量。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
-      "id": "tasks-status-blind-writes",
-      "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
-      "symbol": "STATUS_WRITE_ALLOWLIST",
-      "baseline": 11,
-      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T1：human-gate 任务跃迁合成一份中立实现 `humanGateTaskTransition.ts`（CAS on lifecycleEventRevision），两 provider 的旧写点在 W4 pair-deletion 前仍在，10 → 11；W4 删孪生后回落。"
+      "id": "safejson-local-definitions",
+      "file": "packages/backend/tests/rfc284-safejson-convergence.test.ts",
+      "symbol": "LOCAL_DEF_ALLOWLIST",
+      "baseline": 0,
+      "why": "自写 safeJson 的文件。**当前为空**——钉成 0 之后加第一条就红，这正是空账本值得入账的理由（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
       "id": "shared-schema-any-allowlist",
@@ -297,25 +586,49 @@
       "why": "shared API schema 里允许 z.any() 的文件。**当前为空**——钉成 0 让第一个逃生口必须显式声明（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
+      "id": "spawn-site-allowlist",
+      "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
+      "symbol": "ALLOWLIST",
+      "baseline": 16,
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
+    },
+    {
+      "id": "table-ownership-debt",
+      "file": "packages/backend/tests/architecture/rfc317-table-ownership.test.ts",
+      "symbol": "OWNERSHIP_DEBT",
+      "baseline": 14,
+      "why": "一张表被两个 bounded context 直查的存量。R5 的目标终值是 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+    },
+    {
+      "id": "tasks-status-blind-writes",
+      "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
+      "symbol": "STATUS_WRITE_ALLOWLIST",
+      "baseline": 11,
+      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T1：human-gate 任务跃迁合成一份中立实现 `humanGateTaskTransition.ts`（CAS on lifecycleEventRevision），两 provider 的旧写点在 W4 pair-deletion 前仍在，10 → 11；W4 删孪生后回落。"
+    },
+    {
       "id": "test-suite-allowed-skips",
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
-      "baseline": 43,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。"
+      "baseline": 44,
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。",
+      "allowGrowth": {
+        "why": "RFC-359 W6-T26：+1。新增 `rfc359-w6-t26-postgresql-plan-audit.test.ts#skip` —— PostgreSQL 执行计划审计（EXPLAIN ANALYZE + buffers/loops 账本）读的是 PG 自己给出的计划节点，SQLite 上没有对应物。本地 `AW_TEST_PROVIDERS=sqlite` 时留一条**可见的** skip，而不是静默让整份计划账本变绿——静默通过会让「计划退化」这类回归在只跑 SQLite 的通道上永远发现不了。缺 `AW_TEST_POSTGRESQL_URL`（而非显式只选 sqlite）时仍判红不 skip，与 `describeEachProvider` 同一条硬判据。"
+      }
     },
     {
-      "id": "frontend-inline-loading-allowlist",
-      "file": "packages/frontend/tests/inline-loading-ban.test.ts",
-      "symbol": "ALLOWLIST",
-      "baseline": 4,
-      "why": "仍自写 inline loading 而未走 LoadingState 的站点（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
-    },
-    {
-      "id": "frontend-form-error-allowlist",
-      "file": "packages/frontend/tests/rfc286-f1-dead-class-extinction.test.ts",
-      "symbol": "FORM_ERROR_ALLOWLIST",
+      "id": "ux-embedded-table-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "EMBEDDED_TABLE_ALLOWLIST",
       "baseline": 1,
-      "why": "form-error 这个 class 的嵌套定义真实生效的语境（ScriptEdit）。多一条就意味着又有一处依赖嵌套定义的巧合（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "why": "抽屉内嵌表格（非独立页面表格）的例外"
+    },
+    {
+      "id": "ux-input-implementation-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "INPUT_IMPLEMENTATION_ALLOWLIST",
+      "baseline": 10,
+      "why": "未走 Form primitives 的原生 input 站点。同上，只许收敛"
     },
     {
       "id": "ux-modal-chrome-allowlist",
@@ -339,6 +652,13 @@
       "why": "公共 class 被特性名限定的存量选择器（R9.4）。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
+      "id": "ux-role-dialog-allowlist",
+      "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
+      "symbol": "ROLE_DIALOG_ALLOWLIST",
+      "baseline": 4,
+      "why": "未走 Dialog 公共组件的 role=dialog 站点。前端一致性原则要求收敛到 Dialog"
+    },
+    {
       "id": "ux-segmented-allowlist",
       "file": "packages/frontend/tests/ux-source-ratchets.test.ts",
       "symbol": "SEGMENTED_ALLOWLIST",
@@ -346,157 +666,10 @@
       "why": "手拼 .segmented 家族的站点（R9.2）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
-      "id": "rfc254-platform-allowances",
-      "file": "packages/backend/tests/rfc254-platform-surface-guard.test.ts",
-      "symbol": "ALLOWANCES",
-      "baseline": 19,
-      "why": "POSIX-only 形态的逐处豁免（含 permanent posix-by-contract 与待迁移两类）。跨平台正确性的每一条例外都要能被数出来（RFC-317 T73 入网；判据词汇表此前漏了 ALLOWANCE 这个词）"
-    },
-    {
-      "id": "rfc321-repository-publication-call-sites",
-      "file": "architecture/repository-publication-call-sites.json",
-      "symbol": "callSites",
-      "baseline": 6,
-      "why": "RFC-321 T1/T19：平台拥有的 Git publication 网络入口必须全部登记并经 source-control transport participant；新增入口需要显式扩账和审查 owner/subject/operations。"
-    },
-    {
-      "id": "rfc319-e2e-endpoint-coverage",
-      "file": "architecture/e2e-endpoint-coverage.json",
-      "symbol": "uncovered",
-      "baseline": 80,
-      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。（2026-08-25：RFC-319 B76 —— 夜跑 `d366ed4f2` 的实测 journal 显示 B70/B72 那两批 spec 已真实打到 28 条，206 → 178。**这两份账本只在夜跑对账**，前几批只改了 R3 能力账本、漏了这里，是本次红的成因。）（2026-08-25：RFC-319 B84 —— 夜跑 `5eb976fc3`（run 32830821072）实测 journal 显示 B75 那批 spec 已真实打到 6 条：webhook 端点的 GET/PUT/DELETE 与 rotate-url-token、webhook 触发规则的 DELETE、定时任务的 PUT。178 → 172。**再次是「只改了 R3 能力账本、漏了这份」造成的夜跑红**，与 B76 同一成因。）（同批**预对账**：夜跑那份 journal 采自 `5eb976fc3`，在 B80 / B82 / B83 六份新 spec 之前，照现状下次夜跑还会再红一次。于是把那 6 份 spec 在本地按同一套 `AW_E2E_ROUTE_JOURNAL` 开关跑了一遍（57 passed），把命中并进夜跑 journal 后重跑对账，又销掉 8 条：身份/会话面 5 条、`GET /api/users/:id`、`DELETE /api/users/:id`、`GET /api/skills/:id/versions/diff`、`POST /api/workflows/:id/validate-draft`。172 → 164。）（2026-08-26：RFC-319 B93～B100 —— 本轮把基线补齐到与来源逐字相等并继续预对账。B93～B97 那笔（caca2b451）改了来源却没把基线带上：共享工作树上这份文件在我写完与提交之间被并发 session 覆写回旧值，commit-mine 取的是工作树内容，于是来源 147 / 基线 164 直接把 T16 推红。教训：账本类文件改完要立刻提交，并在提交后回读committed内容复核。B98～B100 三份新 spec（27 条用例）本地开 AW_E2E_ROUTE_JOURNAL 跑过（27 passed），再销 13 条：OIDC provider 的 PATCH/DELETE、action-templates 一族七条、automation-policies、code/digital-employees、task-catalog/sources、code/missions。）（2026-08-26：RFC-319 B101 —— WF-52 的配置包导出用例真打到 `GET /api/workflows/:id/export-package`，134 → 133。R2 无变化：本批只加载工作流详情页，账本里剩的六条都是 /code 一族与 /workflows/new、/workgroups/launch。）（2026-08-26：RFC-319 B102 —— AGENT-44/RES-X6 的改名用例真打到三类资源的 rename 端点（agents / mcps / plugins），133 → 130。R2 无变化。）（2026-08-26：RFC-319 B104+B105 —— EVENT-36 的按需观察器用例真打到 `POST /api/event-center/observers/run-due`，130 → 129。R2 无变化：两批只加载已覆盖的页面。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）（2026-08-30：exact SHA `acb518f8` 的 full-tier journal 显示 RFC-341 committed-delivery retry 与 RFC-342 memory scope move 两条新增写端点尚未被浏览器旅程命中；两条均已有 focused backend / frontend contract 测试，本批先如实登记，后续补真实用户旅程再销账。）（2026-09-02：RFC-349 —— `/api/database*` 的 12 条端点如实登记为未覆盖，68 → 80。浏览器腿 rfc349-database-migration-settings.spec.ts 用 page.route 把它们整段以夹具应答，刻意不打真服务端（它要在没有外置 PostgreSQL 的机器上逐相位驱动 UI）；真实覆盖在 postgresql-evidence 那条腿上，但 journal 只采被测 daemon 的 req 日志，采不到它。销账要求：让浏览器腿真打服务端。）"
-    },
-    {
-      "id": "rfc319-e2e-route-coverage",
-      "file": "architecture/e2e-route-coverage.json",
-      "symbol": "uncovered",
-      "baseline": 2,
-      "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。RFC-323 浏览器用例直达 /code/executors 与两个 Adapter 配置深链并验证重定向，16 → 13。（2026-08-25：RFC-319 B76 —— `rfc319-memory-distill-jobs.spec.ts` 的 MEM-29 真加载了蒸馏任务详情页，13 → 12。）（2026-08-26：RFC-319 B98～B100 —— UX-38 的未知路由用例与 DE-42 的四条兼容重定向真加载了 /code、/code/missions、/code/missions/new、/code/outcomes、/outcomes 五条遗留路由。同批把基线补齐到与来源逐字相等，成因同 R1。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）"
-    },
-    {
-      "id": "rfc319-capability-gaps",
-      "file": "architecture/e2e-capability-ledger.json",
-      "symbol": "gapIds",
-      "baseline": 0,
-      "why": "RFC-319 R3：820 条用户面能力里还没有 system-mock e2e 防护的那些（开工时 679，本 RFC 已补 11 条 ⇒ 668）。只许降——每降一条代表一个真实用户场景被端到端跑过了。涨了说明新增能力没带 e2e，必须在 review 里解释。（2026-08-25：RFC-323 用真实浏览器覆盖员工泳道 Adapter 覆盖/恢复及三个旧入口重定向，DE-18/DE-39 从 gap 转 covered，589 → 587。）（2026-08-25：RFC-319 B39 覆盖 HUMAN-X2 澄清答案类型矩阵，587 → 586 → 585。）（2026-08-25：RFC-319 B41 覆盖 HUMAN-14 待办角标，585 → 584。）（2026-08-25：RFC-319 B42 覆盖 HUMAN-13 澄清收件箱列表页，584 → 583。）（2026-08-25：RFC-319 B43 覆盖 HUMAN-41 评审收件箱列表页，583 → 582。）（2026-08-25：RFC-319 B44 覆盖 HUMAN-46 未保存草稿拦截，582 → 581。）（2026-08-25：RFC-319 B46 覆盖 HUMAN-38 历史版本只读视图，581 → 580。）（2026-08-25：RFC-319 B47 覆盖 HUMAN-35 决策确认弹窗，580 → 579。）（2026-08-25：RFC-319 B48 覆盖 HUMAN-X1 任务详情人工门入口，579 → 578。）（2026-08-25：RFC-319 B49 覆盖 HUMAN-21/23/24 任务问题看板，578 → 575。）（2026-08-25：RFC-319 B50 覆盖 HUMAN-22 改派守卫，575 → 574。）（2026-08-25：RFC-319 B51 覆盖 HUMAN-07/27 两个停止反问的闸，574 → 572。）（2026-08-25：RFC-319 B52 覆盖 HUMAN-26 跨通道锁，572 → 571。）（2026-08-25：RFC-319 B53 覆盖 HUMAN-10 逐题协作草稿，571 → 570。）（2026-08-25：RFC-319 B54 覆盖 HUMAN-12 实时协作与多标签同步，570 → 569。）（2026-08-25：RFC-319 B55 覆盖 HUMAN-20 看板界面面，569 → 568。）（2026-08-25：RFC-319 B56 覆盖 HUMAN-25 集中回答面板，568 → 567。）（2026-08-25：RFC-319 B57 覆盖 HUMAN-37 diff 粒度与两种加载失败态，567 → 566。）（2026-08-25：RFC-319 B58 覆盖 HUMAN-05 多源等齐的用户可见三段，566 → 565。）（2026-08-25：RFC-319 B59 覆盖 HUMAN-17b 工作组撤销反问后的只读态与原因，565 → 564。）（2026-08-25：RFC-319 B60 覆盖 HUMAN-40 / HUMAN-X4 多文档评审的轮次面，564 → 562。）（2026-08-25：RFC-319 B61 覆盖 HUMAN-36 / HUMAN-42 单文档评审的键盘与下载，562 → 560。）（2026-08-25：RFC-319 B62 覆盖 HUMAN-16 / HUMAN-48 / HUMAN-X5，560 → 557。）（2026-08-25：RFC-319 B63 覆盖 HUMAN-47 / HUMAN-X6 任务反馈与蒸馏，557 → 555。）（2026-08-25：RFC-319 B64 覆盖 HUMAN-X3 首页待办预览，555 → 554。）（2026-08-25：RFC-319 B65 覆盖 HUMAN-43 空文档评审自动放行，554 → 553。）（2026-08-25：RFC-319 B66 覆盖 HUMAN-15 分片切换器正向，人机交互门整域清零，553 → 552。）（2026-08-25：RFC-319 B67 意图构建器域并行批，26 条一次落地，526 → 526。）（2026-08-25：RFC-319 B68 工作组 + 设置双域并行批，39 条一次落地，526 → 487。）（2026-08-25：RFC-319 B69 工作组 ACL 与意图入口，487 → 482。）（2026-08-25：RFC-319 B70 代理端口/删除 + 记忆面板/蒸馏 + 画布检查器三域并行批，43 条一次落地，482 → 439。）（2026-08-25：RFC-319 B72 数字员工 P1 + 仓库列表与导入 + MCP 管理三域并行批，20 条一次落地，439 → 419。）（2026-08-25：RFC-319 B75 运维 CLI + Webhook 端点 + 定时任务 + 任务列表四域并行批，33 条一次落地，419 → 386。）（2026-08-25：RFC-319 B80 工作流列表与 ACL + 画布编辑操作 + 用户与账号三域并行批，28 条一次落地，386 → 358。）（2026-08-25：RFC-319 B81 —— 138 条散文证据逐条回源核查后归一，其中 UX-46 查实**没有任何测试**守着它（散文引的全是 workflow YAML 行号与文件头注释），如实转回 gap，358 → 359。）（2026-08-25：RFC-319 B81 续 —— 12 条「一行捆两件事、只证明了一件」的行按 B40 拆 HUMAN-17 的先例逐条拆开，新开 13 条 gap（REPO-38 捆了三件事），分母 822 → 835，359 → 372。**这不是覆盖倒退，是把此前被整行 covered 抹掉的债显式化。**）（2026-08-25：RFC-319 B83a 技能 / MCP / 插件三类资源管理域 9 条，362 → 353。）（2026-08-25：RFC-319 B83b 记忆批量融合 / 待办徽标 / 多标签同步 / 两条 WS 通道 8 条，353 → 345。）（2026-08-25：RFC-319 B85 运维 CLI 备份/恢复/用户/配置包 5 条 + 设置页运维面板 8 条，345 → 332。）（2026-08-25：RFC-319 B86 前端公共原语的键盘与可访问性契约 8 条，332 → 324。）（2026-08-25：RFC-319 B87 启动闸门与小时级后台清扫 10 条，324 → 314。）（2026-08-25：RFC-319 B88 doctor / migrate / db 维护 / 凭据助手 7 条，314 → 307。）（2026-08-25：RFC-319 B89 意图构建器草稿/提交 9 条 + 融合与拒绝闸 7 条 + 工作组启动与配置 9 条，307 → 282。）（2026-08-25：RFC-319 B90 意图时间线与轮次 8 条 + 工作组房间与交付 9 条，282 → 265。）（2026-08-25：RFC-319 B91 仓库镜像 9 + 仓库组 8 + 工作树与提交 9 + 数字员工配置 8 共 34 条，265 → 231。）（2026-08-25：RFC-319 B92 数字员工任务向导与案例页 8 条，231 → 223。）（2026-08-25：B93 资源管理 REST/UI 九条：MCP env 拒动态加载、删除三闸、插件装配失败留档、file: 源无升级、options 非法跳页、删除双闸、导出脏闸与 fence、密钥补录不落占位符、根类型不符提示，223 → 214。）（2026-08-25：B94 任务向导八条：必填闸、四类选择器打包、上传落盘、基线 ref、版本过期双腿、高级字段往返、结果未知对账、终态重放冻结布局，214 → 206。）（2026-08-25：B95 设置配置九条：extraArgs 能力门、config-dir 保留名双拦、System agents 分区隔离、融合与 config 原子性、Recovery 阈值、外部访问总闸、渲染器连通四态、PlantUML 代理五响应、执行预算被新任务采用，206 → 197。）（2026-08-25：B96 事件中心九条：来源树三态与四卡口径、订阅审计合并分页、投递四档状态、全局记录只出公开目录、投递审计双筛与翻页、终态控制不泄漏任务 id、触发开关与级联清理、/webhooks 兼容重定向、草稿撤销重做，197 → 188。）（2026-08-25：B97 任务详情页签九条：输出端口顺序与下载门、Markdown 预览四源、commit&push 两结局、变更叙述空态与查看、节点重试级联开关、仓库准备重试、熔断隔离放行、工作流版本同步、只读成员脏改动横幅，188 → 179。）（2026-08-25：B98 前端外壳与恢复九条：深链回环与开放重定向、首启 token 交接、权威未解出不抢跑、WS 重连补偿、未知路由、巡览进度、欢迎屏引导、剪贴板兜底、相对时间自走，179 → 170。）（2026-08-25：B99 数字员工授权与作用域九条：作用域默认档、统一列表类别过滤排他性、非 Agent 工具授权、模板改版 v2、基本信息、上传落点与撞路径、作用域选仓、老 URL 重定向、遗留向导去处，170 → 161。）（2026-08-25：B100 身份与权限九条：OIDC 授权码回环、邀请绑定、回调四种失败、provider 增删改与连通性、托管账号改密关死、分档写门、内置资源只读、ACL 并发 409、强制改密后端信号，161 → 152。）（2026-08-25：B101 工作流检查器与配置包九条：call-workflow / call-workgroup 引用双写、script 检查器五项、join 模式默认档、特权节点置灰与服务端遮蔽、右键菜单、校验回执过期、导出围栏、wrapper 自动适配，152 → 143。）（2026-08-25：B102 代理与资源配置十条：依赖闭包保存回读、成环/自依赖/不可见引用拒绝、自动探测勾选合并、三类选择器一次保存、引用失效后启动入口降级、内置代理只放行 runtime-only 补丁、改名后引用按 id 不断、三类资源转让降级、上传扩展名闸与文件名兜底，143 → 133。）（2026-08-25：B103 记忆注入与工作组九条：四档记忆注入面、裁剪后快照卡、反馈失败不丢草稿、两类蒸馏入队、终态房间只读、组名冻结与降级、awaiting_human 成因卡、成员回合预算与共享任务分组、两种工作组的页签形状，133 → 124。）（2026-08-25：B104 意图与设置九条：日志级别热生效、webhook 保留期互斥闸、重启横幅只对重启键、git 子模块四旋钮、默认运行时被新任务采用、资源挂载根、类型提示卡决定负载、会话列表实时推送、提交在飞时不可关闭，124 → 115。）（2026-08-25：B105 运维事件与仓库清扫十条：周期孤儿对账热生效、HMAC 签名闸、autoRegisterRepos 双向、重启修复投递、按需观察器起停、点火 WS 推送与可见性、频率弹窗重算、孤儿工作树回收、子模块模式作用于克隆，115 → 105。）（2026-08-26：RFC-319 对账批 —— 前五批起草者在开工前 grep 时反复撞见「标着 gap 其实已有真覆盖」的行，累计点名 33 条。本次逐条**读 test 正文**核实：16 条确属假 gap，改为 covered 并挂逐字 evidence，105 → 89。**没有**用关键字匹配代劳——我自己先试过脚本按关键字找证据，把 MEM-21 匹配到了毫不相干的 INTENT-50 上，是彻底的假阳性，已弃用。另有 10 条判定为部分覆盖、7 条内容通过但 tier 与用例标签不一致、1 条（UX-39）线索被推翻仍是真 gap，均留在 gap 里未动。）（2026-08-25：B106 数字员工与资源生命周期九条：ZIP 选择期本地校验、提交失败停在审阅页、两种传输真握手、SSE 回退、Intent 挂载与融合入口、分类工作台页签、泳道重排、写权限点收放、上手引导四阶段，89 → 80。）（2026-08-25：B107 工作流入口与外壳偏好八条：配置包新建工作流、他处删除与权限收回两个终态、启动准备期取消、执行合同目录与指南、AI 入口挂载、code-round 只读检查器、语言切换回滚、后退滚动恢复，80 → 72。）（2026-08-26：对账批的续篇——6 条「内容已被覆盖、只是账本 tier 与用例标签不一致」的行（AGENT-39 / UX-06 / UX-36 / CFG-08 / WF-X2 / WF-25）**把账本 tier 改成 pr**并转 covered。取舍理由：那些用例本来就跑在 PR 腿上，PR 腿比夜跑更强；反过来给它们加 @nightly 会把它们移出 PR 腿、削弱现有防护。账本该跟实现走。72 → 66。）（2026-08-26：B108 六条新覆盖 + 三条假 gap 销账。假 gap 三条：RES-24 已被 `e2e/mcp-runtime-playground.spec.ts` 完整覆盖；RES-25 已被 `packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts` 覆盖（该行随之改 tier=pr，与账本里既有 5 条以 backend/tests 为证据的行同形）；MEM-X4 由 MEM-29 的 href 断言与 task-feedback-distill 的落地断言合起来盖满。66 → 57。）（2026-08-25：B109 部分覆盖补完八条：收件箱三路求和与抽屉关闭、跨标签正向传播、applying 中不可取消、写面 404 同形、工作目录刷新、看板三控件、bindHost 往返、排队上下文重启后接着跑，57 → 49。）（2026-08-25：B110 插件源与运维十条：npm registry 安装与版本钉、检查更新三态、升级与重装基线、工作组包导出 fence、成员画廊三态与焦点归位、事件自动化四类启动目标、数字员工四面 axe、dispatch 协作路由校验、dev 代次锁交接、webhook 任务终态清工作区，49 → 39。）（2026-08-26：DE-39 经核实为假 gap —— `e2e/rfc310-digital-employee-journey.spec.ts` 的 `RFC-323 DE-18/39: …retired URLs redirect` 已逐条断言 /code/executors、/code/config/adapters、/code/config/adapters/retired-adapter 三条深链重定向到 /digital-employees 且旧界面元素 count(0)，tier=pr 与该用例无 @nightly 一致。39 → 38。）（2026-08-25：B111 身份交接与手册十条：首启 token 链落地与退役、三类资源的权限弹窗、记忆 scope 读管权、平台令牌清单与调用审计、手册按身份裁剪、宽块容器内横滚、beforeunload 守卫、重命名的描述与名称折叠，38 → 28。）（2026-08-25：B112 设置身份与差异九条：窄屏折叠导航、分区徽标三态、presence 圆点实时增删、代码平台连接删除的连带吊销、OIDC 防自锁、评审区四种空态、工作上下文回填顶替、结构化 diff 作用域与 1 MiB 截断、webhook 端点 URL 的诚实降级，28 → 19。）（2026-08-25：B113 工作组动态编排六条：生成图待确认与驳回重生成与审批、另存为正式工作流、房间三帧实时刷新、call-workgroup 起子任务与冻结面、result 锚回填父端口、子任务只作为子行出现；另 REPO-43 经核实为假 gap 销账，19 → 13。）（2026-08-25：OPS-007 改由后端用例真跑（e2e harness 的 15s 上限盖不住 CLI 的 30s 预算），13 → 12。）（2026-08-25：REPO-42 用桩 ssh 真跑通了 ssh:// clone，不必再等 gitea 夹具，12 → 11。）（2026-08-26：MEM-49 的设置半边本就由 CFG-21 逐字覆盖，徽标半边在产品里不可达、已收窄出能力定义并记入 audit-backlog，11 → 10。）（2026-08-25：DE-41 不是退役面而是排干路径：创建那道门焊死了，/:id 之下 20 个运维端点一个没挡，10 → 9。）（2026-08-25：维护拍五条：慢时钟不是「做不了」，只是墙钟长——首拍相位 8/16/5 分钟，在一次 startDaemon 里就会发生，9 → 4。）（2026-08-25：UX 四条是「扫描覆盖面本身」的判据：清单跟不跟得上路由表、基线有没有孤儿、视觉门两条腿的过滤有没有漂移，4 → 0。）"
-    },
-    {
-      "id": "rfc319-capability-prose-evidence",
-      "file": "architecture/e2e-capability-ledger.json",
-      "symbol": "unverifiedIds",
-      "baseline": 0,
-      "why": "RFC-319 R3：审计判定有 e2e 防护、但证据仍是散文（path:line + 说明）而没归一成可校验 {file, test} 的存量条目（开工时 141）。只许降——它衡量的是「账本还有多少话是不可验证的」。这个状态是存量专用，新增行不许用它（守卫另有一条上界断言）。（2026-08-25：RFC-319 B65-DE 将真实数字员工复验触达的 EVENT-07 / HUMAN-28 / HUMAN-29 归一为可执行测试标题，141 → 138。）（2026-08-25：RFC-319 B81 —— 剩余 138 条全部逐条回源核查完毕，138 → **0**。这个状态自此清空：新增行本就不许用它，存量也不再有，账本里每一条「已覆盖」从此都指向逐字可达的 {file,test}。）"
-    },
-    {
-      "id": "rfc326-exempt-review-routes",
-      "file": "packages/backend/tests/architecture/rfc326-review-tool-route-guard.test.ts",
-      "symbol": "EXEMPT_REVIEW_ROUTES",
-      "baseline": 1,
-      "why": "RFC-326：/api/reviews* 路由里**有意不给 MCP 工具**的名单（今天只有 pending-count 徽章计数）。每加一条都是在把评审面从 MCP 上抠掉一块，只许降；守卫同时钉死名单里的路由确实没有工具、且路由确实存在（过期条目也红）"
-    },
-    {
-      "id": "rfc319-focus-ring-unswept",
-      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
-      "symbol": "FOCUS_RING_UNSWEPT",
-      "baseline": 18,
-      "why": "存在、无参、但不在焦点环全站扫描里的页面。只许缩——每一条都意味着那一页上被祖先容器裁掉的焦点环，键盘用户看不见而 CI 不会告诉任何人。新增页面要么进扫描，要么显式进这张表，两条路都在 diff 里看得见"
-    },
-    {
-      "id": "rfc319-axe-unswept",
-      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
-      "symbol": "AXE_UNSWEPT",
-      "baseline": 29,
-      "why": "存在、无参、但不在 axe wcag2a/2aa 整页扫描里的页面。只许缩。axe 的语料比焦点环还小（10 页 / 39 页）：/tasks、/users、/scheduled、/reviews 这些每天在用的主屏从来没被扫过"
-    },
-    {
-      "id": "rfc329-mcp-surface-exemptions",
-      "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
-      "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "baseline": 392,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
-    },
-    {
-      "id": "rfc294-review-off-dag-offered-edges",
-      "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
-      "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 41,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。"
-    },
-    {
-      "id": "rfc294-review-module-layer-rules",
-      "file": "packages/backend/tests/architecture/rfc294-review-module-layer-rules.test.ts",
-      "symbol": "MODULE_LAYER_RULE_DEBT",
-      "baseline": 0,
-      "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。"
-    },
-    {
-      "id": "rfc294-review-unconsumed-public-symbols",
-      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
-      "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 142,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。"
-    },
-    {
-      "id": "rfc294-review-dead-required-ports",
-      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
-      "symbol": "DEAD_REQUIRED_PORT_DEBT",
-      "baseline": 8,
-      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。"
-    },
-    {
-      "id": "rfc345-resource-acl-facade-compatibility",
-      "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
-      "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 42,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。"
-    },
-    {
-      "id": "rfc349-provider-specific-business-dependencies",
-      "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
-      "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
-      "baseline": 44,
-      "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。 RFC-359 W1-T2a：`services/questionDispatchComposition.ts` facade 改指 provider-中立的 `questionDispatchCommand`，67 → 66。 RFC-359 W1-T2b：`services/clarifyDecisionComposition.ts` facade 改指 provider-中立的 `clarifyDecisionCommand`，66 → 65。 RFC-359 W1-T2c：`services/reviewDecisionComposition.ts` facade 改指 provider-中立的 `reviewDecisionCommand`，`services/reviewMutationCoordinator.ts` 改依赖中立的 `reviewMutationScope`，65 → 63。 RFC-359 W4-B1 批 1：services/task.ts → branchTraceSnapshotReader 不再 provider 专属，63 → 62。 RFC-359 W4-B4 批 c：identity-access 公共面改为只导出中立的 DrizzleOidcProviderRepository，public → provider 适配器的两条债与 services/oidcProviders 那条随之还清，58 → 55。 RFC-359 W4-D24：`services/startTaskDeps.ts` 的租约依赖不再是 provider 专属，50→49。 RFC-359 W4-D26：`SqliteHumanGateOperationStore` 随手工提问写面合一整份退役，`humanGateComposition` 对它的 provider 具名依赖随之消失，49 → 48。 RFC-359 W4-D27：任务执行资源快照绑定合一，`services/execution/taskExecutionResources.ts` 对两份 provider 绑定的具名依赖并成一条中立导出，48 → 46。 RFC-359 W4-D28b：同步 owned-mutation 网关（`composition/sqliteOwnedTaskMutation`）整体退役，`public/operations.ts` 与 `public/participants.ts` 对它的两条具名依赖随之出账，46 → 44。"
-    },
-    {
-      "id": "rfc328-cross-context-provider-bridge-debt",
-      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
-      "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "baseline": 13,
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
-    },
-    {
-      "id": "rfc294-capability-compatibility-debt",
-      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
-      "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
-      "baseline": 21,
-      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。"
-    },
-    {
-      "id": "rfc348-teaching-validator-allowlist",
-      "file": "packages/backend/tests/intent-teaching-registry.test.ts",
-      "symbol": "VALIDATOR_ALLOWLIST",
-      "baseline": 2,
-      "why": "RFC-348 D7 教学注册表 ↔ 校验器字段对账：校验器读到、但按设计不进教学的字段（agentName/agentId 是平台身份缓存，意图侧以 agentRef 表达）。每条都是一处「校验器看得见、模型看不见」的例外，只许降。"
-    },
-    {
-      "id": "rfc348-teaching-frontend-allowlist",
-      "file": "packages/backend/tests/intent-teaching-registry.test.ts",
-      "symbol": "FRONTEND_ALLOWLIST",
-      "baseline": 3,
-      "why": "RFC-348 D7 教学注册表 ↔ 前端消费点字段对账：前端读到、但不是 declaration 字段的名字（inputKey / inputs / severity）。每条都是一处未被注册表覆盖的字段读取，只许降。"
-    },
-    {
-      "id": "rfc359-sync-transaction-surface",
-      "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
-      "symbol": "SYNC_TRANSACTION_DEBT",
-      "baseline": 28,
-      "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 28（调用点合计 72）；账本正文逐文件记着各自的调用点数，逐字相等。 RFC-359 W4-D28b：`sqliteOwnedTaskMutation.ts`（2 处 `dbTxSync` + 2 处 `withOwnedTaskTx`）整份退役，5 处调用点迁到中立的 `withTaskExecutionWrite` + `fenceTaskWrite`，30 → 29（调用点 81 → 77）。 RFC-359 W4-D28b 第二刀：runtime 注册表两份 provider 实现合成一份中立实现，`sqliteRuntimeRegistryPersistence.ts`（5 处 `dbTxSync`）随之退役，29 → 28（调用点 77 → 72）。"
-    },
-    {
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1790,
+      "baseline": 1766,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -510,14 +683,14 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 309,
+      "baseline": 298,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 351,
+      "baseline": 349,
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -531,7 +704,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5508,
+      "baseline": 5389,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -552,7 +725,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4915,
+      "baseline": 4829,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -566,8 +739,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 978,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 982,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-359 W7 成对适配器合一：`sqliteTerminalMaintenance.ts`（519 行）整体退役后，它的三个同步消费者（`services/taskArchive.ts` / `services/taskDelete.ts` / `platform/persistence/sqlite/systemWorkspaceGc.ts`）改从 task-execution 的 `public/participants.ts` 取中立入口——新增 `createTerminalMaintenanceStore` / `assertTerminalMaintenanceClaimTx` 等 4 个公开符号。**这是把跨模块耦合从「直接 import owner 内部实现」搬到 exact public 合同上**，正是 RFC-294 的方向：public 面涨 4，换掉的是三条内部 import 边。合一本身让净生产代码少了约 5000 行。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -587,12 +763,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25211,
+      "baseline": 25069,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:62e7d483da01877f1b6c1b1105756b6e081fbeba4e148ad9b88f28293ee539b8",
+    "sourceDigest": "sha256:55f876a7b5e58416c1a424ca5b741dc0e466612c9c9db0173a562b434b50ef08",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -605,8 +781,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e0be514a396de2fade2bb6f3e6b4a20479d4f82b",
-    "contentDigest": "sha256:585bcbfc7a3771a4dff3625e803709d335b7b99c7548f2c9afe6da54d2abca35",
+    "currentSnapshotSha": "5197f64d2fbcb6dc05eadf3d2ed27b4b6e99545a",
+    "contentDigest": "sha256:7e188bcd16c3e76bf69deb9ce167d9b3960f8e4f55586159024e15fd28427015",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

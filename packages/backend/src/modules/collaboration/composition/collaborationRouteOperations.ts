@@ -1,13 +1,10 @@
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   CollaborationRouteOperations,
   CollaborationRoutePersistenceOperations,
 } from '../application/ports/collaborationRouteOperations'
 import { createCollaborationClarifyDraftEventPublisher } from '../infrastructure/collaborationClarifyDraftEventPublisher'
-import { createPostgresqlCollaborationRouteOperations } from '../infrastructure/postgresqlCollaborationRouteOperations'
-import type { PostgresqlCollaborationRouteNodeLifecycleParticipantFactory } from '../infrastructure/postgresqlCollaborationRouteOperations'
-import { createSqliteCollaborationRouteOperations } from '../infrastructure/sqliteCollaborationRouteOperations'
+import { createCollaborationRouteOperations } from '../infrastructure/collaborationRouteOperations'
 import {
   dispatchTaskQuestions,
   submitClarifyDecision,
@@ -54,31 +51,31 @@ function bindCollaborationRouteContext(
   return Object.freeze({ access, reviews, questions, clarify })
 }
 
-export function composeSqliteCollaborationRouteOperations(input: {
-  readonly db: DbClient
+// RFC-359 W7：路由持久化面已合一（`infrastructure/collaborationRouteOperations.ts`），两个
+// 装配入口只是名字不同的同一条线；名字暂留，等 bootstrap 侧的 provider 命名一并收敛。
+function composeCollaborationRouteOperations(input: {
+  readonly db: ProviderNeutralDatabase
   readonly context: CollaborationCommandContext
 }): CollaborationRouteOperations {
   return bindCollaborationRouteContext(
     input.context,
-    createSqliteCollaborationRouteOperations(input.db),
-  )
-}
-
-export function composePostgresqlCollaborationRouteOperations(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly context: CollaborationCommandContext
-  readonly taskNodeLifecycle: PostgresqlCollaborationRouteNodeLifecycleParticipantFactory
-}): CollaborationRouteOperations {
-  return bindCollaborationRouteContext(
-    input.context,
-    createPostgresqlCollaborationRouteOperations({
+    createCollaborationRouteOperations({
       db: input.db,
-      taskAccess: {
-        visibleTaskIds: async (actor, taskIds) =>
-          await visibleCollaborationTaskIds(input.context, { actor, taskIds }),
-      },
-      taskNodeLifecycle: input.taskNodeLifecycle,
       clarifyDraftEvents: createCollaborationClarifyDraftEventPublisher(),
     }),
   )
+}
+
+export function composeSqliteCollaborationRouteOperations(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly context: CollaborationCommandContext
+}): CollaborationRouteOperations {
+  return composeCollaborationRouteOperations(input)
+}
+
+export function composePostgresqlCollaborationRouteOperations(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly context: CollaborationCommandContext
+}): CollaborationRouteOperations {
+  return composeCollaborationRouteOperations(input)
 }
