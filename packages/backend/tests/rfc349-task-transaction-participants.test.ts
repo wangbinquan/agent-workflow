@@ -96,6 +96,17 @@ function postgresqlFixture() {
     let objects: readonly Record<string, unknown>[] = []
     if (normalized.includes('database_generations')) {
       objects = [{ generation_id: 'rfc349-task-transaction' }]
+    } else if (
+      normalized.includes('from "agent_workflow"."tasks"') &&
+      normalized.includes('lineage_slot_path_json')
+    ) {
+      // RFC-359 W6 —— 铸行前会读任务的**血缘锚**（`lineage_slot_path_json` + `workflow_version`）。
+      // 这一支必须排在下面那个泛化的 `from "tasks"` 之前：这个假 pool 是**按位置**返回的，
+      // 泛化支给的 `[[TASK_ID]]` 会被当成第一列 `lineage_slot_path_json`，于是推导那边
+      // `JSON Parse error: Unexpected identifier "rfc349"`——**假 pool 不知道查询选了哪些列**，
+      // 每新增一处读新列的生产代码，它就会静默喂错值。两个 null 表示「任务尚无血缘前缀」，
+      // 正是根任务的真实形状；本用例断言的是**语句落在同一条预留连接上**，不是血缘取值。
+      values = [[null, null]]
     } else if (normalized.includes('from "agent_workflow"."tasks"')) {
       values = [[TASK_ID]]
     } else if (

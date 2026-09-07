@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 222 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 224 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -534,7 +534,18 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 三个 family 同步切到 dispatchable epoch 2。
     // RFC-354 bump 到 223 with 0223_rfc354_node_run_frames：node_runs /
     // clarify_rounds 各加一根帧轴（container_run_id）+ scope_path 面包屑。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(223)
+    // RFC-359 W6 bump 到 224 with 0224_rfc359_node_run_lineage_explicit：**删掉** 0210 给
+    // `node_runs.continuation_slot_key` / `lineage_slot_path_json` 补齐的触发器。它只存在于
+    // SQLite（PG 的 DDL 投影从不重放迁移里的触发器），于是同一次铸行在两个引擎上写出不同的
+    // 血缘路径——实测 PG 上每个任务的**第一个** node_run 拿到 null，消费者回落到任务级路径，
+    // 同一任务的不同节点因此塌到同一个 slot path、effect 摘要相撞。改由应用层
+    // （`nodeRunLineageColumns`，两引擎共用）显式派生并写入，架构守卫
+    // `rfc359-w6-node-run-insert-lineage-completeness` 接管兜底——安全网写在守卫里
+    // 对两个引擎同时生效，而触发器天然只能属于一个方言。
+    //
+    // 注意：本条断言与上面的 test 标题在 0223 那一轮曾经脱节（标题停在 222、断言已是 223）。
+    // 两处都要改——标题是 CI 日志里唯一能看见的那一行。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(224)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {
