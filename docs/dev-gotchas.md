@@ -1622,6 +1622,22 @@ set -o pipefail                       # 让管道取第一个非零
 但注意本仓这个特征太宽（672 个文件命中，等于全量），所以更实际的做法是：
 **接受 CI 作为全量门，但把「源码锁会红」写进预期**——推完立刻按 exact SHA 查，别以为架构守卫绿就完了。
 
+**第二次复发（2026-09-07 当天）**：我把这条记下来之后，下一次落盘**又只在导出副本上跑了
+`tests/architecture/`**，推上去红在 `rfc345-classic-facade-provider-neutralization`——
+它住在 `tests/` 根下，读的文件被本波删了。**光知道这条不够，要有可执行的动作。**
+
+**导出副本上的验证命令**（把两处一起跑，别只跑架构目录）：
+
+```bash
+cd <headtree>/packages/backend
+GIT_DIR=<repo>/.git AW_TEST_PROVIDERS=sqlite bun test --isolate \
+  tests/architecture/ \
+  $(grep -rl "readFileSync" tests/*.test.ts | xargs grep -l "src/" | tr '\n' ' ')
+```
+
+第二段是「读 `src/` 源码文本的用例」——源码锁就藏在这里面，没有共同前缀。
+**`--isolate` 不能省**：不加会因模块全局态互相污染产出幻影失败（本仓实撞多次）。
+
 **另一半教训**：这三条红**没有一条是产品回归**，全是判据跟着实现走。所以它们该修的是**判据**，
 不是代码；修的时候要同时问「这条判据的**意图**还成立吗」——本次三条的意图都还成立，
 只是钉法过期了。顺手把「意图 vs 钉法」写进注释，下一个人就不用重新判断一次。

@@ -43,10 +43,19 @@ describe('RFC-345 classic facade provider neutralization', () => {
   test('SQLite adapters consume owner infrastructure without crossing back through facades', () => {
     for (const path of [
       'src/modules/resource-catalog/infrastructure/skillRepository.ts',
-      'src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts',
+      // RFC-359 W9：`sqlitePackageSkillTree.ts` 与 PG 那半合成了中立的 `packageSkillTree.ts`
+      // （一份实现两个引擎共用）。判据跟着它走。
+      'src/modules/resource-catalog/infrastructure/packageSkillTree.ts',
     ]) {
       const text = source(path)
-      expect(text).toContain('@/modules/resource-catalog/infrastructure/legacy/')
+      // 判据按**行为**取、不按**字面量**取：要证的是「读自己模块的 legacy 层」，
+      // 而同模块内既可以写别名（`@/modules/resource-catalog/infrastructure/legacy/…`）
+      // 也可以写相对路径（`./legacy/…`）——合一后的中立实现用的正是后者。
+      // 只认别名会把「换了个写法做同一件事」误判成「没做」，这是本波实撞过的一类判据错误
+      // （见 `docs/dev-gotchas.md` §「守卫的 absent 锚点只写强侧的字面量」）。
+      expect(text).toMatch(
+        /(?:@\/modules\/resource-catalog\/infrastructure\/legacy\/|from '\.\/legacy\/)/,
+      )
       expect(text).not.toMatch(/@\/services\/(?:skill|workflow|workgroups|workgroup\/)/)
     }
   })
