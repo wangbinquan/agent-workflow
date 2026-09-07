@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5358,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W6：新增中立设施带来的边——`platform/persistence/batchInsert.ts`（批量写原语，两个引擎共用）与 node_run 血缘派生的调用边。5351→5358。这是**加共享代码**引起的投影增长，不是新耦合：这些边全部指向新建的中立模块，方向与 RFC-294 一致（去重后由一处提供，而不是各 provider 各写一份）。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。 RFC-359 W6：新增中立设施带来的边——`platform/persistence/batchInsert.ts`（批量写原语，两个引擎共用）与 node_run 血缘派生的调用边。5351→5358。这是**加共享代码**引起的投影增长，不是新耦合：这些边全部指向新建的中立模块，方向与 RFC-294 一致（去重后由一处提供，而不是各 provider 各写一份）。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4814,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W6：同上，新增中立设施与新守卫文件进入投影面。4807→4814。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。 RFC-359 W6：同上，新增中立设施与新守卫文件进入投影面。4807→4814。"
     },
     {
       "id": "rfc294-facades",
@@ -874,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25034,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W6：新增中立设施的导出符号（`insertInBatches` / `lastPerKey` / `nodeRunLineageColumns` / `jsonMemberText` 等）进入符号归属投影。25022→25034。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。 RFC-359 W6：新增中立设施的导出符号（`insertInBatches` / `lastPerKey` / `nodeRunLineageColumns` / `jsonMemberText` 等）进入符号归属投影。25022→25034。"
     }
   ],
   "canonicalProjection": {
@@ -895,7 +886,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "f2657dd005d7de5c63f70dea2a6568f2552b5b0d",
-    "contentDigest": "sha256:a1e3d612acb92d306156e5aa595e6a38c706479ac2937232de267f28a05354cd",
+    "contentDigest": "sha256:9e3f3e0e90f6c438f288e941e69f111fc85cc17cd37a2a609140a5e3d0a3716e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
