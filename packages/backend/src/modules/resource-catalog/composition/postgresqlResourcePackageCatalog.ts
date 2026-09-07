@@ -15,9 +15,9 @@ import {
 import {
   createPostgresqlResourcePackagePluginArtifactOwner,
   createPostgresqlResourcePackageSkillArtifactOwner,
-  readPostgresqlPackageSkillTree,
   type PostgresqlResourcePackagePluginInstaller,
 } from '../infrastructure/postgresqlResourcePackageArtifacts'
+import { readPackageSkillTree } from '../infrastructure/packageSkillTree'
 import {
   composeResourcePackageOperations,
   type ComposedResourcePackageCatalog,
@@ -69,8 +69,7 @@ export function composePostgresqlResourcePackageProvider(
   return Object.freeze({
     resources: createResourcePackageOwnedResourceLookup(input.db),
     reads: createResourcePackageReadPort(input.db),
-    readSkillTree: (skillId: string) =>
-      readPostgresqlPackageSkillTree(input.db, input.appHome, skillId),
+    readSkillTree: (skillId: string) => readPackageSkillTree(input.db, input.appHome, skillId),
     mutationSessionFactory,
   })
 }

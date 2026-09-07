@@ -8,7 +8,7 @@ import type {
 } from '../application/drive/taskDriveCoordinator'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
-import type { TaskExecutionModule } from '../composition'
+import type { ProviderTaskExecutionModule } from '../composition'
 import { createTaskExecutionContext } from '../application/taskExecutionContext'
 import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
 import {
@@ -21,7 +21,10 @@ const OWNER_HEARTBEAT_MS = 15_000
 
 export interface PostgresqlTaskDriverLifecycleOptions {
   readonly db: PostgresqlDatabaseClient
-  readonly module: TaskExecutionModule
+  // RFC-359 W5-T19b：这里要的是 `claimPersisted`，而它只长在**持久化已经交齐**的模块上。
+  // 类型写成 `ProviderTaskExecutionModule` 之后，「拿一个没装配持久化的模块来驱动任务」
+  // 在装配处就编译不过，不再等运行到 attach 那一刻才抛。
+  readonly module: ProviderTaskExecutionModule
   readonly persistence: TaskExecutionPersistence
   readonly log: TaskExecutionTopologyLogger
   readonly finalizeWorkspace: (taskId: string) => Promise<void>

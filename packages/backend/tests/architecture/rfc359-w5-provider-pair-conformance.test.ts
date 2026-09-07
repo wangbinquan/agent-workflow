@@ -111,7 +111,10 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // RFC-359 W8：判**不合**——`ArtifactRecovery` 那半边是两套落盘工件格式（缺口已由
   // `rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵钉住），`JournalPort` 那半边的
   // 事务包装也不是冗余（SQLite 的 `dbTxSync` 兜着跨上下文事务守卫）。只补对拍，理由见对拍文件头。
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts',
+  // RFC-359 W9：这一对多了第二份双引擎对拍——W8 那份问的是「哪些 journal 行会被收、收完账面
+  // 什么样」，W9 这份问的是门后的**落盘结果**：崩溃到收敛之间账面代际变了（用户又发了一版 /
+  // 删了技能 / 库更旧），live 目录里最后是哪一代内容。判据缺口 13b 就是被它照出来并销掉的。
+  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts, rfc359-w9-resource-package-skill-recovery-conformance.test.ts',
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite + postgresql — verified by rfc359-w8-child-launch-conformance.test.ts',
   // RFC-359 W8：判**真重复**（同端口同算法两份实现，见对拍文件头）；本刀只补对拍并把 PG 侧
   // 缺的 RFC-300 工作区回收认领抬齐，合一（改走中立事务设施）留给下一刀。

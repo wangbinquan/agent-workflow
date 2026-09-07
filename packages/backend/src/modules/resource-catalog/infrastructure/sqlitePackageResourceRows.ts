@@ -7,7 +7,7 @@ import { and, eq } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
-import { SQLITE_ACL_TABLES } from './sqliteAclRegistry'
+import { ACL_TABLES } from './aclRegistry'
 
 export type SqlitePackageResourceRow = Record<string, unknown>
 
@@ -16,7 +16,7 @@ export async function getSqlitePackageResourceRow(
   type: BundleResourceType,
   id: string,
 ): Promise<SqlitePackageResourceRow | undefined> {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = ACL_TABLES[type]
   return (await db.select().from(table).where(eq(table.id, id)).get()) as
     | SqlitePackageResourceRow
     | undefined
@@ -27,7 +27,7 @@ export function getSqlitePackageResourceRowInTx(
   type: BundleResourceType,
   id: string,
 ): SqlitePackageResourceRow | undefined {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = ACL_TABLES[type]
   return tx.select().from(table).where(eq(table.id, id)).get() as
     | SqlitePackageResourceRow
     | undefined
@@ -36,7 +36,7 @@ export function getSqlitePackageResourceRowInTx(
 type SeededBuiltinResourceType = 'agent' | 'workflow'
 
 function builtinColumnOf(type: SeededBuiltinResourceType): AnySQLiteColumn {
-  return SQLITE_ACL_TABLES[type].builtin
+  return ACL_TABLES[type].builtin
 }
 
 export async function findSqliteBuiltinResource(
@@ -44,7 +44,7 @@ export async function findSqliteBuiltinResource(
   type: SeededBuiltinResourceType,
   name: string,
 ): Promise<{ readonly id: string; readonly name: string } | undefined> {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = ACL_TABLES[type]
   return (await db
     .select({ id: table.id, name: table.name })
     .from(table)
@@ -57,7 +57,7 @@ export function findSqliteBuiltinResourceInTx(
   type: SeededBuiltinResourceType,
   name: string,
 ): { readonly id: string; readonly name: string } | undefined {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = ACL_TABLES[type]
   return tx
     .select({ id: table.id, name: table.name })
     .from(table)

@@ -29,7 +29,7 @@ import type {
   SchedulerDriverPort,
   TaskExecutionTopologyLogger,
 } from '../application/ports/taskExecutionTopology'
-import type { TaskExecutionModule } from '../composition'
+import type { ProviderTaskExecutionModule } from '../composition'
 import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
@@ -47,7 +47,7 @@ export interface PostgresqlFusionEngineTaskDependencies {
   readonly appHome: string
   readonly schedulerDriver: SchedulerDriverPort
   readonly persistence: TaskExecutionPersistence
-  readonly executionModule: TaskExecutionModule
+  readonly executionModule: ProviderTaskExecutionModule
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly log: TaskExecutionTopologyLogger
 }

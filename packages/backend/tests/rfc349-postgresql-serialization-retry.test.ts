@@ -52,6 +52,10 @@ function clientThatFails(errors: readonly unknown[]): {
   const pending = [...errors]
   let attempts = 0
   const db = {
+    // RFC-359 W5-T18：`withPostgresqlSerializableTaskExecution` 的边界改走中立会话，而它按
+    // `$provider` 品牌分派（没有品牌 ⇒ 按 bun:sqlite 走显式 BEGIN IMMEDIATE）。假客户端要
+    // 冒充 PostgreSQL 客户端就得自报家门，否则这里测的根本不是 PG 那条路。
+    $provider: 'postgresql',
     async transaction<T>(body: (tx: unknown) => Promise<T>): Promise<T> {
       attempts += 1
       const failure = pending.shift()

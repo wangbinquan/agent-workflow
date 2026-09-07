@@ -10,7 +10,7 @@ import {
   createPostgresqlEventsArchiveStore,
   runPostgresqlEventsArchiveSlice,
 } from '@/platform/persistence/postgresqlEventsArchive'
-import { createPostgresqlHealthDatabaseReadModel } from '@/modules/system-operations/infrastructure/postgresqlHealthReadModel'
+import { createHealthDatabaseReadModel } from '@/modules/system-operations/infrastructure/healthReadModel'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -182,9 +182,7 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
   test('health projection executes through the PostgreSQL provider client', async () => {
     const fake = fixture()
 
-    await expect(
-      createPostgresqlHealthDatabaseReadModel(fake.client).countRunningTasks(),
-    ).resolves.toBe(3)
+    await expect(createHealthDatabaseReadModel(fake.client).countRunningTasks()).resolves.toBe(3)
 
     expect(fake.statements.at(-1)).toContain('"agent_workflow"."tasks"')
   })

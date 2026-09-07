@@ -13,16 +13,12 @@ import {
   BundlePluginPayloadSchema,
   BundleSkillPayloadSchema,
   isProtectedSkillMainFile,
-  parseSkillMarkdown,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import { stringify as stringifyYaml } from 'yaml'
 
-import { skills } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { ValidationError } from '@/util/errors'
 import { safeJoin } from '@/util/safePath'
-import type { ResourcePackageSkillTree } from '../application/package/ports'
+import { assertRegularDirectory, SKILL_MAIN } from './packageSkillTree'
 import {
   cleanupOpDirs,
   opCandidateDir,
@@ -47,8 +43,6 @@ import type {
 } from './aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { SkillPackageMutation } from '../public/types'
 
-const SKILL_MAIN = 'SKILL.md'
-
 function pathInside(root: string, target: string): boolean {
   const rel = relative(root, target)
   return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))
@@ -57,20 +51,6 @@ function pathInside(root: string, target: string): boolean {
 function assertPathInside(root: string, target: string, code: string): void {
   if (pathInside(root, target)) return
   throw new ValidationError(code, 'resource package filesystem path escaped its managed root')
-}
-
-function assertRegularDirectory(path: string, code: string): void {
-  let stat: ReturnType<typeof lstatSync>
-  try {
-    stat = lstatSync(path)
-  } catch {
-    throw new ValidationError(code, `resource package filesystem path is missing: ${path}`)
-  }
-  if (stat.isDirectory() && !stat.isSymbolicLink()) return
-  throw new ValidationError(
-    code,
-    `resource package filesystem path is not a real directory: ${path}`,
-  )
 }
 
 function copyRegularTree(source: string, target: string): void {
@@ -506,69 +486,4 @@ export function createPostgresqlResourcePackagePluginArtifactOwner(input: {
     },
   }
   return Object.freeze(owner)
-}
-
-function collectSkillFiles(root: string, relativeRoot: string, output: string[]): void {
-  const absolute = relativeRoot === '' ? root : join(root, relativeRoot)
-  for (const entry of readdirSync(absolute, { withFileTypes: true }).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  )) {
-    const childRelative = relativeRoot === '' ? entry.name : `${relativeRoot}/${entry.name}`
-    const childAbsolute = join(root, childRelative)
-    const stat = lstatSync(childAbsolute)
-    if (stat.isSymbolicLink()) {
-      throw new ValidationError(
-        'resource-package-skill-tree-invalid',
-        `skill tree contains a symbolic link: ${childAbsolute}`,
-      )
-    }
-    if (stat.isDirectory()) {
-      collectSkillFiles(root, childRelative, output)
-      continue
-    }
-    if (!stat.isFile()) {
-      throw new ValidationError(
-        'resource-package-skill-tree-invalid',
-        `skill tree contains a non-regular entry: ${childAbsolute}`,
-      )
-    }
-    output.push(childRelative)
-  }
-}
-
-/** PostgreSQL row guard plus provider-neutral managed-files projection for export. */
-export async function readPostgresqlPackageSkillTree(
-  db: PostgresqlDatabaseClient,
-  appHome: string,
-  skillId: string,
-): Promise<ResourcePackageSkillTree> {
-  const row = await db
-    .select({
-      id: skills.id,
-      managedPath: skills.managedPath,
-      reservationState: skills.reservationState,
-    })
-    .from(skills)
-    .where(eq(skills.id, skillId))
-    .get()
-  if (row === undefined || row.reservationState !== 'ready' || row.managedPath === null) {
-    throw new ValidationError('package-invalid', `skill '${skillId}' vanished mid-export`)
-  }
-  const root = safeJoin(appHome, row.managedPath)
-  assertRegularDirectory(root, 'resource-package-skill-tree-invalid')
-  const relativeFiles: string[] = []
-  collectSkillFiles(root, '', relativeFiles)
-
-  let frontmatterExtra: Record<string, unknown> = {}
-  let bodyMd = ''
-  const mainPath = join(root, SKILL_MAIN)
-  if (relativeFiles.includes(SKILL_MAIN)) {
-    const parsed = parseSkillMarkdown(readFileSync(mainPath, 'utf8'))
-    frontmatterExtra = parsed.frontmatterExtra
-    bodyMd = parsed.bodyMd
-  }
-  const files = relativeFiles
-    .filter((path) => path !== SKILL_MAIN)
-    .map((path) => Object.freeze({ path, bytes: new Uint8Array(readFileSync(join(root, path))) }))
-  return Object.freeze({ frontmatterExtra, bodyMd, files })
 }

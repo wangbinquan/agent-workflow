@@ -21,7 +21,7 @@ import { is } from 'drizzle-orm'
 import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import * as schema from '../../src/db/schema'
-import { SQLITE_ACL_TABLES } from '../../src/modules/resource-catalog/infrastructure/sqliteAclRegistry'
+import { ACL_TABLES } from '../../src/modules/resource-catalog/infrastructure/aclRegistry'
 import type { ForeignResourceAclType } from '../../src/modules/resource-catalog/application/ports/resourceAclPersistence'
 
 /** RFC-099 的行级 ACL 列集。 */
@@ -61,7 +61,7 @@ const OWNER_INJECTED_ACL_TABLES = {
   employee_job_template: schema.employeeJobTemplates,
 } satisfies Record<ForeignResourceAclType, SQLiteTable>
 const ACL_TABLE_NAMES = new Set(
-  [...Object.values(SQLITE_ACL_TABLES), ...Object.values(OWNER_INJECTED_ACL_TABLES)].map(
+  [...Object.values(ACL_TABLES), ...Object.values(OWNER_INJECTED_ACL_TABLES)].map(
     (table) => getTableConfig(table).name,
   ),
 )

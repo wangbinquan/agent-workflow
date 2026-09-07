@@ -484,13 +484,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.ts',
-    'platform/persistence/sqlite/systemProviderBackup.ts',
-    ['listWorkflows'],
-    'provider backup Workflow inventory',
-    REMOVE_OWNERS.systemOperations,
-  ),
-  edge(
-    'services/workflow.ts',
     'services/task.ts',
     ['getWorkflow'],
     'task service Workflow lookup',
@@ -533,16 +526,12 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.yaml.ts',
-    'modules/system-operations/infrastructure/postgresqlProviderBackupApplicationAssets.ts',
+    'platform/persistence/portableApplicationAssets.ts',
     ['stringifyWorkflowYaml'],
-    'PostgreSQL backup Workflow serialization',
-    REMOVE_OWNERS.systemOperations,
-  ),
-  edge(
-    'services/workflow.yaml.ts',
-    'platform/persistence/sqlite/systemProviderBackup.ts',
-    ['stringifyWorkflowYaml'],
-    'SQLite backup Workflow serialization',
+    // RFC-359 W9：备份的 workflow 序列化此前是两条边（SQLite 的 systemProviderBackup.ts
+    // 与 PostgreSQL 的 postgresqlProviderBackupApplicationAssets.ts 各一份实现），
+    // 合一后只剩这一条；同时销掉了 `services/workflow.ts#listWorkflows` 那条边。
+    'portable backup Workflow serialization',
     REMOVE_OWNERS.systemOperations,
   ),
   edge(

@@ -22,7 +22,8 @@ import {
   createResourceGrantReadPort,
 } from '@/modules/resource-catalog/infrastructure/resourceVisibility'
 import { POSTGRESQL_ACL_TABLES } from '@/modules/resource-catalog/infrastructure/aclRegistry'
-import { SQLITE_ACL_TABLES } from '@/modules/resource-catalog/infrastructure/sqliteAclRegistry'
+import * as neutralAclReads from '@/modules/resource-catalog/infrastructure/aclReadRepository'
+import * as sqliteAclReads from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedUser(db: ProviderNeutralDatabase, role: 'admin' | 'user'): Promise<string> {
@@ -180,9 +181,38 @@ describeEachProvider('RFC-359 W4-B2b —— 可见性阶梯与 grant 读端口',
     })
     expect(second).toHaveLength(1)
     expect(second[0]!.ref.id).not.toBe(first[0]!.ref.id)
-    expect(SQLITE_ACL_TABLES).toBe(ACL_TABLES)
     expect(POSTGRESQL_ACL_TABLES).toBe(ACL_TABLES)
   })
+})
+
+// RFC-359 W8：`sqliteAclReadRepository` 里那七个 async 读曾与 `aclReadRepository` 里同名的
+// 七个**逐字相同**（只差参数类型写成 `DbClient`）。现在前者直接 re-export 后者——用**函数同一性**
+// 钉住：谁再 fork 一份实现回来（哪怕内容一模一样），`toBe` 立刻红，因为那会是另一个函数对象。
+// 剩下的五个 `*InTx` 是真差异（`DbTxSync` 同步事务，PostgreSQL 上没有这个形态），不在这条锁里。
+test('实现同一性锁：目录 ACL 的七个 async 读只有一份实现', () => {
+  for (const name of [
+    'findOwnedAclResourceIdsByName',
+    'getAclResourceAccessRow',
+    'getAclResourceOwner',
+    'listAclResourceIdentityRowsByIds',
+    'listAclResourceIdentityRowsByNames',
+    'listOwnedAclResourceNames',
+    'loadAclResourceNamesByIds',
+  ] as const) {
+    expect(typeof neutralAclReads[name], `${name} 在中立模块里应当是个函数`).toBe('function')
+    expect(sqliteAclReads[name], `${name} 又被 fork 成了第二份实现`).toBe(neutralAclReads[name])
+  }
+  // `*InTx` 只在 SQLite 侧存在：中立模块不该长出同名的东西（否则上面那条锁会变成自证）。
+  for (const name of [
+    'getAclResourceAccessRowInTx',
+    'getAclResourceIdentityRowInTx',
+    'getAclResourceOwnerInTx',
+    'listAclResourceIdentityRowsByIdsInTx',
+    'listAclResourceIdentityRowsByNamesInTx',
+  ] as const) {
+    expect(typeof sqliteAclReads[name], `${name} 应当仍是 SQLite 侧的同步读`).toBe('function')
+    expect(name in neutralAclReads, `${name} 不该出现在中立模块里`).toBe(false)
+  }
 })
 
 test('源码锁：provider 命名的孪生实现不得复活', () => {
@@ -200,6 +230,12 @@ test('源码锁：provider 命名的孪生实现不得复活', () => {
     'postgresqlResourceCatalogOverview.ts',
     'sqliteCatalogQuery.ts',
     'postgresqlCatalogQuery.ts',
+    // RFC-359 W8：`SQLITE_ACL_TABLES` 只是 `ACL_TABLES` 的别名，另有五个零消费导出，整份退役。
+    'sqliteAclRegistry.ts',
+    // RFC-359 W8：`sqliteLegacyResourceAccess.ts` 八个导出零消费（死代码），整份退役。
+    'sqliteLegacyResourceAccess.ts',
+    // RFC-359 W8：技能树读出合成中立的 `packageSkillTree.ts`，两个 provider 共用。
+    'sqlitePackageSkillTree.ts',
   ]) {
     expect(existsSync(resolve(infra, entry))).toBe(false)
   }

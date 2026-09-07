@@ -18,10 +18,7 @@ import {
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
-import type {
-  BoundRunTaskOptions,
-  RunTaskOptions,
-} from '@/services/execution/taskEngineRuntimeOptions'
+import type { BoundRunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { taskEngineOutcomeFromScope, type TaskScopeOutcome } from '../domain/taskEngine'
 import { DagTaskEngine } from '../engine/task/dag/dagTaskEngine'
 import { DynamicWorkflowTaskEngine } from '../engine/task/dynamicWorkflowTaskEngine'
@@ -157,50 +154,27 @@ async function cancelRuntimeTask(
   })
 }
 
+/**
+ * TaskEngine 的驱动入口。
+ *
+ * RFC-359 W5-T19b —— 这里曾经是账本里最大的一处组合根占位：形参写 `RunTaskOptions`
+ * （九个装配依赖全是可选），进门先连着九句
+ * `if (opts.X === undefined) throw new Error('X-not-composed')`，再把自己收窄成
+ * `BoundRunTaskOptions` 交给下面。那正是「装配未完成但已经可被调用」——类型层完全合法，
+ * 缺口只在真的驱动到某个任务时才炸，而两个 provider 的 daemon 各自跑到它的时机不一样。
+ *
+ * 现在**形参直接是 `BoundRunTaskOptions`**：九个依赖是它的必填字段，「没装配」在装配处
+ * 就编译不过，九句 throw 与那次自我收窄一起消失。三个调用点（PG / SQLite 两个 runtime
+ * participants + 测试 topology）本来就逐个显式交齐这九项，一字未改。
+ *
+ * `RunTaskOptions` 那九格仍然可选：它是**更外层**的调用词汇（`runTask` / `runNode` /
+ * 各路由的启动参数）在用，那些路径不经过本函数。
+ */
 export async function driveTaskEngineApplication(
-  opts: RunTaskOptions,
+  opts: BoundRunTaskOptions,
   topology: SchedulerRuntimeTopology,
   runtimeComponents: TaskExecutionRuntimeComponents,
 ): Promise<void> {
-  if (opts.memoryInjectionQueries === undefined) {
-    throw new Error('memory-injection-queries-not-composed')
-  }
-  if (opts.persistence === undefined) {
-    throw new Error('task-execution-persistence-not-composed')
-  }
-  if (opts.runtimeSessionLeases === undefined) {
-    throw new Error('runtime-session-leases-not-composed')
-  }
-  if (opts.runtimeRegistry === undefined) {
-    throw new Error('runtime-registry-not-composed')
-  }
-  if (opts.taskDagCollaboration === undefined) {
-    throw new Error('task-dag-collaboration-not-composed')
-  }
-  if (opts.collaborationRuntime === undefined) {
-    throw new Error('collaboration-runtime-mechanics-not-composed')
-  }
-  if (opts.workgroupTurns === undefined) {
-    throw new Error('workgroup-turns-not-composed')
-  }
-  if (opts.childLaunch === undefined) {
-    throw new Error('child-execution-launch-not-composed')
-  }
-  if (opts.processConcurrencyScope === undefined) {
-    throw new Error('task-execution-concurrency-scope-not-composed')
-  }
-  const boundOptions: BoundRunTaskOptions = {
-    ...opts,
-    memoryInjectionQueries: opts.memoryInjectionQueries,
-    persistence: opts.persistence,
-    runtimeSessionLeases: opts.runtimeSessionLeases,
-    runtimeRegistry: opts.runtimeRegistry,
-    taskDagCollaboration: opts.taskDagCollaboration,
-    collaborationRuntime: opts.collaborationRuntime,
-    workgroupTurns: opts.workgroupTurns,
-    childLaunch: opts.childLaunch,
-    processConcurrencyScope: opts.processConcurrencyScope,
-  }
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
   // mutex against our cached legacy mechanics writeSem reference).
@@ -209,10 +183,10 @@ export async function driveTaskEngineApplication(
   // shard concurrency), so it is reclaimed in this one place too.
   try {
     if (opts.executionContext === undefined) {
-      await runTaskEngineOrchestratorInner(boundOptions, topology, runtimeComponents)
+      await runTaskEngineOrchestratorInner(opts, topology, runtimeComponents)
     } else {
       await runWithTaskExecutionContext(opts.executionContext, () =>
-        runTaskEngineOrchestratorInner(boundOptions, topology, runtimeComponents),
+        runTaskEngineOrchestratorInner(opts, topology, runtimeComponents),
       )
     }
   } finally {

@@ -1,3 +1,22 @@
+// RFC-359 W9 —— 协作已提交事件的 WS 投影：**一份实现，两个 provider 共用**。
+//
+// 合一前这里是一对适配器：本文件里的 `createSqliteCollaborationCommittedEventProjection`
+// （bun:sqlite 同步 `.get()` / `.all()`）与 `postgresqlCollaborationCommittedEventProjection.ts`
+// （273 行把同一批语义用异步 drizzle 重写了一遍）。两份逐帧对应、没有能力缺口，但那份重写
+// **从未在真数据库上跑过**——它唯一的用例只对源码文本做断言。2026-09-07 的双引擎对拍
+// （`tests/rfc359-w9-collaboration-committed-event-projection-conformance.test.ts`）把两份
+// 各自在自己的引擎上跑了一遍，17 个场景逐帧相同：这一对**确实**没有分叉，于是按 PG 那份的
+// 异步形状收成一份中立实现（`ProviderNeutralDatabase` + `engineOf(db)` 的 NULL 排序）。
+//
+// 唯一被丢掉的是 SQLite 那份多出来的 `questionIds` 前置过滤：`reruns[].entryIds` 由
+// `dispatchedReruns` 生成、`questionIds = dispatchIds ∪ deferredEntryIds`
+// （`legacySqliteTaskQuestionDispatch.ts:1566` / `:1624`），因此
+// `reruns[].entryIds ⊆ questionIds` 恒成立，那道过滤**可证冗余**。
+//
+// 两处 NULL 排序必须显式写出 SQLite 语义（`platform/persistence/postgresqlNullOrdering.ts`）：
+// 评审门挑「哪一份待审文档」的 `item_index ASC`（NULL = RFC-079 单文档判别位）与澄清决定
+// 回落读模型时的 `dispatched_at DESC`（NULL = 尚未下发）。两条都在对拍里带变异验证。
+
 import type {
   ClarifyAnswer,
   ClarifyQuestion,
@@ -9,8 +28,9 @@ import type {
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, gte, isNotNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, committedEvents, docVersions, taskQuestions, tasks } from '@/db/schema'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import {
@@ -87,21 +107,23 @@ function selfSession(round: typeof clarifyRounds.$inferSelect): ClarifySession {
   return session
 }
 
-function openFrames(
-  db: DbClient,
+async function openFrames(
+  db: ProviderNeutralDatabase,
   event: CollaborationCommittedV1,
-): readonly CollaborationProjectionFrame[] {
+): Promise<readonly CollaborationProjectionFrame[]> {
   const gate = event.payload.gate
   if (event.family === 'review') {
-    const document = db
-      .select()
-      .from(docVersions)
-      .where(
-        and(eq(docVersions.reviewNodeRunId, gate.nodeRunId), eq(docVersions.decision, 'pending')),
-      )
-      .orderBy(asc(docVersions.itemIndex), asc(docVersions.versionIndex))
-      .limit(1)
-      .get()
+    const document = (
+      await db
+        .select()
+        .from(docVersions)
+        .where(
+          and(eq(docVersions.reviewNodeRunId, gate.nodeRunId), eq(docVersions.decision, 'pending')),
+        )
+        // `item_index IS NULL` 是 RFC-079 的单文档判别位，SQLite 的 ASC 把它排最前。
+        .orderBy(engineOf(db).ascNullsFirst(docVersions.itemIndex), asc(docVersions.versionIndex))
+        .limit(1)
+    )[0]
     if (document === undefined) return []
     return [
       {
@@ -116,11 +138,13 @@ function openFrames(
     ]
   }
   if (event.family !== 'clarify') return []
-  const round = db
-    .select()
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.id, gate.roundId ?? gate.gateId))
-    .get()
+  const round = (
+    await db
+      .select()
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, gate.roundId ?? gate.gateId))
+      .limit(1)
+  )[0]
   if (round === undefined) return []
   if (round.kind === 'cross') {
     return [
@@ -136,11 +160,13 @@ function openFrames(
       },
     ]
   }
-  const task = db
-    .select({ name: tasks.name, workflowSnapshot: tasks.workflowSnapshot })
-    .from(tasks)
-    .where(eq(tasks.id, round.taskId))
-    .get()
+  const task = (
+    await db
+      .select({ name: tasks.name, workflowSnapshot: tasks.workflowSnapshot })
+      .from(tasks)
+      .where(eq(tasks.id, round.taskId))
+      .limit(1)
+  )[0]
   if (task === undefined) return []
   return [
     {
@@ -155,10 +181,10 @@ function openFrames(
   ]
 }
 
-function clarifyDecisionFrames(
-  db: DbClient,
+async function clarifyDecisionFrames(
+  db: ProviderNeutralDatabase,
   event: CollaborationCommittedV1,
-): readonly CollaborationProjectionFrame[] {
+): Promise<readonly CollaborationProjectionFrame[]> {
   if (
     event.type !== 'collaboration.human-gate-decision-committed.v1' ||
     event.family !== 'clarify' ||
@@ -167,39 +193,46 @@ function clarifyDecisionFrames(
     return []
   }
   const gate = event.payload.gate
-  const round = db
-    .select()
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.id, gate.roundId ?? gate.gateId))
-    .get()
+  const round = (
+    await db
+      .select()
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, gate.roundId ?? gate.gateId))
+      .limit(1)
+  )[0]
   if (round === undefined || round.status !== 'answered') return []
-  const triggered = db
-    .select({ triggerRunId: taskQuestions.triggerRunId })
-    .from(taskQuestions)
-    .where(
-      and(
-        eq(taskQuestions.originNodeRunId, round.intermediaryNodeRunId),
-        isNotNull(taskQuestions.triggerRunId),
-      ),
-    )
-    .orderBy(desc(taskQuestions.dispatchedAt), desc(taskQuestions.updatedAt))
-    .limit(1)
-    .get()?.triggerRunId
-  const committedRerunNodeRunId = (() => {
+  const triggered = (
+    await db
+      .select({ triggerRunId: taskQuestions.triggerRunId })
+      .from(taskQuestions)
+      .where(
+        and(
+          eq(taskQuestions.originNodeRunId, round.intermediaryNodeRunId),
+          isNotNull(taskQuestions.triggerRunId),
+        ),
+      )
+      // 未下发的条目 `dispatched_at IS NULL`，SQLite 的 DESC 把它们排最后。
+      .orderBy(
+        engineOf(db).descNullsLast(taskQuestions.dispatchedAt),
+        desc(taskQuestions.updatedAt),
+      )
+      .limit(1)
+  )[0]?.triggerRunId
+  const committedRerunNodeRunId = await (async () => {
     const roundEntryIds = new Set(
-      db
-        .select({ id: taskQuestions.id })
-        .from(taskQuestions)
-        .where(eq(taskQuestions.originNodeRunId, round.intermediaryNodeRunId))
-        .all()
-        .map((row) => row.id),
+      (
+        await db
+          .select({ id: taskQuestions.id })
+          .from(taskQuestions)
+          .where(eq(taskQuestions.originNodeRunId, round.intermediaryNodeRunId))
+      ).map((row) => row.id),
     )
     if (roundEntryIds.size === 0) return null
     // The clarify decision and its follow-up question dispatch intentionally
     // have different gate-node correlation refs. Match the immutable question
     // ids instead; they are globally unique and preserve the exact rerun even
     // when the two commits belong to different gate aggregates.
-    const dispatchEvents = db
+    const dispatchEvents = await db
       .select({ payloadJson: committedEvents.payloadJson })
       .from(committedEvents)
       .where(
@@ -212,7 +245,6 @@ function clarifyDecisionFrames(
       )
       .orderBy(asc(committedEvents.occurredAt), asc(committedEvents.createdAt))
       .limit(256)
-      .all()
     for (const stored of dispatchEvents) {
       try {
         const dispatchEvent = decodeCollaborationCommittedEvent(JSON.parse(stored.payloadJson))
@@ -267,21 +299,21 @@ function clarifyDecisionFrames(
   return frames
 }
 
-function projectionFrames(
-  db: DbClient,
+async function projectionFrames(
+  db: ProviderNeutralDatabase,
   event: CollaborationCommittedV1,
-): readonly CollaborationProjectionFrame[] {
+): Promise<readonly CollaborationProjectionFrame[]> {
   if (event.payload.projectionFrames.length > 0) return event.payload.projectionFrames
-  if (event.type === 'collaboration.human-gate-opened.v1') return openFrames(db, event)
-  return clarifyDecisionFrames(db, event)
+  if (event.type === 'collaboration.human-gate-opened.v1') return await openFrames(db, event)
+  return await clarifyDecisionFrames(db, event)
 }
 
-export function createSqliteCollaborationCommittedEventProjection(
-  db: DbClient,
+export function createCollaborationCommittedEventProjection(
+  db: ProviderNeutralDatabase,
 ): CollaborationCommittedEventProjection {
   return Object.freeze({
     async frames(event: CollaborationCommittedV1) {
-      return projectionFrames(db, event)
+      return await projectionFrames(db, event)
     },
   })
 }

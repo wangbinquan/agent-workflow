@@ -26,7 +26,7 @@ import { dbTxSync } from '../src/db/txSync'
 import { nodeRuns, taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { transitionNodeRunStatus, transitionNodeRunStatusTx } from '../src/services/lifecycle'
 import { mintNodeRun, mintNodeRunTx, type MintNodeRunArgs } from '../src/services/nodeRunMint'
-import { hasActingMembership, hasActingMembershipTx } from '../src/services/taskCollab'
+import { hasActingMembership } from '../src/services/taskCollab'
 import { DomainError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -295,13 +295,20 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ mintNodeRunTx (including retired mer
   })
 })
 
-describe('RFC-326 AC-19 — hasActingMembership ≡ hasActingMembershipTx', () => {
-  test('owner / collaborator act; observer / stranger do not — identical on both surfaces', async () => {
+// RFC-359 W9 —— AC-19 的「两个面等价」判据退役成「只剩一个面」。
+//
+// 原判据是 `hasActingMembership`（异步）≡ `hasActingMembershipTx`（`dbTxSync` 内的同步孪生）。
+// 同步孪生存在的理由是评审决定在 `dbTxSync` 的提交点上复核成员身份，而那条链路 RFC-359 W1-T2c
+// 已迁到 `databaseSessionFor`；从那天起同步孪生在 `src` 里零调用方，只有本用例按名字钉着它。
+// W9 把它连同 `updateTaskMembersLocked` 的 `dbTxSync` 一起删掉了——两个引擎现在共用同一个
+// 异步谓词。保留的断言是这条谓词**本身**的行为（AC-19 真正要锁的东西）：owner / collaborator
+// 有行动权，observer / 陌生人没有。行为跨引擎的对拍在
+// `tests/rfc359-w9-task-members-conformance.test.ts`。
+describe('RFC-326 AC-19 — 行动权谓词（合一后只剩异步一个面）', () => {
+  test('owner / collaborator act; observer / stranger do not', async () => {
     const [a] = await pair()
     const users = ['u-owner', 'u-collab', 'u-observer', 'u-stranger']
     const viaAsync = await Promise.all(users.map((u) => hasActingMembership(a, TASK, u)))
-    const viaTx = users.map((u) => dbTxSync(a, (tx) => hasActingMembershipTx(tx, TASK, u)))
-    expect(viaTx).toEqual(viaAsync)
     expect(viaAsync).toEqual([true, true, false, false])
     // Sanity: the observer row is really there (otherwise the false is vacuous).
     const observer = a

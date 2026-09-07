@@ -152,8 +152,7 @@ import type { MaintenanceDiskOperations } from '@/modules/system-operations/publ
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
 import type { HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
-import { createPostgresqlHealthDatabaseReadModel } from '@/modules/system-operations/composition'
-import { createSqliteHealthDatabaseReadModel } from '@/platform/persistence/sqlite/systemHealthReadModel'
+import { createHealthDatabaseReadModel } from '@/modules/system-operations/composition'
 import {
   composeOidcIdentityOperations,
   composeOwnerIdentityQueries,
@@ -594,7 +593,7 @@ export function composeSqliteDaemonProviderCore(
     sourceWriteWindow,
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
-    healthDatabase: createSqliteHealthDatabaseReadModel(input.db),
+    healthDatabase: createHealthDatabaseReadModel(input.db),
     runtimeRegistry: composeSqliteRuntimeRegistryOperations(input.db),
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
@@ -648,7 +647,7 @@ export function composePostgresqlDaemonProviderCore(
     sourceWriteWindow,
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
-    healthDatabase: createPostgresqlHealthDatabaseReadModel(input.db),
+    healthDatabase: createHealthDatabaseReadModel(input.db),
     runtimeRegistry: composePostgresqlRuntimeRegistryOperations(input.db),
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
@@ -661,6 +660,7 @@ export function composePostgresqlDaemonProviderCore(
     }),
     systemOperations: composePostgresqlSystemOperations({
       runtime: input.runtime,
+      db: input.db,
       databaseConfig: input.databaseConfig,
       repositoryBackupPreparation: repositoryWorkspaceOperations.backupPreparation,
       appHome: input.appHome,
@@ -1802,7 +1802,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
   const healthDatabase =
     deps.healthDatabase ??
     deps.providerCore?.healthDatabase ??
-    createSqliteHealthDatabaseReadModel(deps.db)
+    createHealthDatabaseReadModel(deps.db)
   const webhookIngressPersistence =
     deps.webhookIngressPersistence ?? composeSqliteWebhookIngressPersistence(deps.db)
   const runtimeRegistry =

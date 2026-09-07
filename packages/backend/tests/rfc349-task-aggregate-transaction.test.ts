@@ -57,6 +57,11 @@ function recordingClient(): {
   const statements: string[] = []
   const order: string[] = []
   const db = {
+    // RFC-359 W5-T18：这几个 helper 的事务边界改走中立会话 `databaseSessionFor(db)`，
+    // 而它按客户端句柄自述的 `$provider` 品牌分派（`platform/persistence/databaseTransaction.ts`
+    // 的 `databaseProviderOf`：没有品牌 ⇒ 当 bun:sqlite 处理，会去发 `BEGIN IMMEDIATE`）。
+    // 假客户端必须像真客户端一样自报家门，否则它冒充的就不是 PostgreSQL 客户端。
+    $provider: 'postgresql',
     async transaction<T>(body: (tx: unknown) => Promise<T>): Promise<T> {
       order.push('begin')
       return await body({

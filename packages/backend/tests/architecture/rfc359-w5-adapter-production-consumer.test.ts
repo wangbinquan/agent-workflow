@@ -87,8 +87,7 @@
 //   · `纯死代码：` —— 全仓（含测试）**零引用**，没有任何东西依赖它。处置是直接删。
 //     开账当天 8 条属于这一类，其中 `server.ts::composeSqliteProviderAppDeps` 与
 //     `modules/collaboration/infrastructure/postgresqlReviewMutationScope.ts::PostgresqlReviewMutationScopeResolver`
-//     连一行测试都没有——它们已经不是「抽象层错位」，是纯死代码（这两条至今仍在账本里，
-//     原因写在各自条目里：删它们要动的文件当时被并发改动持有）。
+//     连一行测试都没有——它们已经不是「抽象层错位」，是纯死代码。后者已于 RFC-359 W9 随文件删除。
 //
 // # 为什么是高水位而不是 0
 //
@@ -101,7 +100,15 @@
 // 源码文本锁与级联死掉的中立包装）在 src 里已不存在，还引用它们的测试全部改指了生产在跑的那一份。
 // 剩下的 4 条不是「删不动」而是「当时轮不到」——`modules/collaboration/**`、`server.ts`、
 // 以及 `rfc359-w5-t17-provider-file-location.test.ts` 的账本当时都被并发改动持有，
-// 逐条理由写在各自条目末尾。棘轮规则照旧：
+// 逐条理由写在各自条目末尾。
+//
+// RFC-359 W9 collaboration 收敛批再销 1 条，账本 4 → 3：
+// `postgresqlReviewMutationScope.ts::PostgresqlReviewMutationScopeResolver` 已随文件一并删除
+// （2026-09-07 复核零生产消费者仍然成立：全仓只有本账本与 T17 账本在按名字提它）。
+// 它的能力今天由中立的 `modules/collaboration/infrastructure/reviewMutationScope.ts` 承担，
+// 两个引擎共用。剩下 3 条里的两条（`sqliteTaskAuthorization.ts` 的两个工厂）当时被
+// T17 账本占用而推迟，那个理由本批已消失——账本现在改得动，只是文件属于 task-execution。
+// 棘轮规则照旧：
 //   · **增**了红 —— 又多了一份「看着对等、其实没接」的摆设；要么接上，要么删掉，
 //     要么写进账本并说明它的真实能力在哪；
 //   · **减**了也红 —— 收敛发生了；把账本一起改小，让每一次销账都留下一次有署名的提交记录。
@@ -288,14 +295,6 @@ const DECLARATIONS: readonly ProviderAdapterDeclaration[] = providerAdapterDecla
  * 生产上到底是谁在干这件事，否则删除会变成一次盲改。处置标记的语义见文件头。
  */
 export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] = [
-  [
-    'modules/collaboration/infrastructure/postgresqlReviewMutationScope.ts::PostgresqlReviewMutationScopeResolver',
-    '纯死代码：全仓零引用（连测试都没有）。同一件事的实现是中立的 ' +
-      '`modules/collaboration/infrastructure/reviewMutationScope.ts:11::DatabaseReviewMutationScopeResolver`，' +
-      '由 `services/reviewMutationCoordinator.ts:75` new 出来，两个引擎共用一份。' +
-      'RFC-359 W8 清理批未动它：并发波次里 collaboration 整个 bounded context 由别人持有，' +
-      '且删掉这个文件要同批改 `rfc359-w5-t17-provider-file-location` 的账本（当时也在别人手上）。',
-  ],
   [
     'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts::createSqliteTaskAuthorizationParticipantInTx',
     '改指：真实能力在中立的 `modules/task-execution/infrastructure/taskAuthorization.ts:82::createTaskAuthorizationParticipantInTx`，' +

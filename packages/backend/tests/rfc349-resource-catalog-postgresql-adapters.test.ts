@@ -114,11 +114,13 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     // RFC-359 W4-D20：资源包读模型与 owner/name 查找合成一份中立实现，两个装配都接它。
     expect(composition).toContain('createResourcePackageOwnedResourceLookup')
     expect(composition).toContain('createResourcePackageReadPort')
-    expect(composition).toContain('readSqlitePackageSkillTree')
+    // RFC-359 W8：技能树读出也合成一份中立实现（`infrastructure/packageSkillTree.ts`），两个装配都接它。
+    expect(composition).toContain('readPackageSkillTree')
     expect(postgresqlComposition).toContain('composePostgresqlResourcePackageProvider')
     expect(postgresqlComposition).toContain('createResourcePackageOwnedResourceLookup')
     expect(postgresqlComposition).toContain('createResourcePackageReadPort')
     expect(postgresqlComposition).toContain('createPostgresqlResourcePackageMutationSessionFactory')
+    expect(postgresqlComposition).toContain('readPackageSkillTree')
     expect(postgresqlComposition).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(postgresqlComposition).toContain('execution: input.execution')
     expect(`${composition}\n${postgresqlComposition}`).not.toMatch(
@@ -306,7 +308,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
 
     const testBinding = source('tests/helpers/resourcePackageProvider.ts')
     expect(testBinding).toContain('createResourcePackageReadPort')
-    expect(testBinding).toContain('readSqlitePackageSkillTree')
+    expect(testBinding).toContain('readPackageSkillTree')
 
     const route = source('src/routes/resourcePackages.ts')
     expect(route).toContain('resourceType: z.enum(BUNDLE_RESOURCE_TYPES)')

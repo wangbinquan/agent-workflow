@@ -13,8 +13,11 @@
 //   资源侧中止          —（补偿全靠 journal 工件）       abortPrepared({databaseCommitted})
 //   工件词汇            IntentJournalArtifactV1          PostgresqlIntentApplyArtifact
 //   工件信封            {"version":1,"artifacts":[…]}    裸数组 […]
-//   recordArtifact      同步                             异步
 //   id / now 注入       无（直接 ulid / Date.now）       有
+//
+// （原表还有一行「recordArtifact 同步 / 异步」——RFC-359 W9 把 SQLite 侧的 9 笔 journal 事务
+// 迁到中立事务原语之后两侧都是 `Promise<void>`，那一行消失了。判据见
+// `tests/rfc359-w9-intent-apply-sync-transaction-cutover.test.ts`。）
 //
 // 于是本文件只把**两侧真正同义的那部分**做成一份 body 在两个引擎上各跑一遍（A 段），
 // 把实测出来的分叉逐条钉成显式断言（B 段）。A 段是「合一时不能退化的」，B 段是「合一会抹掉的」。
@@ -312,9 +315,9 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
   const session = {
     preflight,
     prepare,
-    async prestage(_plan: unknown, context: { recordArtifact(a: unknown): void }) {
+    async prestage(_plan: unknown, context: { recordArtifact(a: unknown): Promise<void> }) {
       calls.prestage += 1
-      if (options.artifact !== undefined) context.recordArtifact(options.artifact)
+      if (options.artifact !== undefined) await context.recordArtifact(options.artifact)
     },
     participantInTransaction() {
       return { authorizeAndCommit: async () => commitReceipt() }

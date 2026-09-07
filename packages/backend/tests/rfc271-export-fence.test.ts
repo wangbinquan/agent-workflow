@@ -12,7 +12,7 @@
 // 但没参与比对」这类失败。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -328,8 +328,15 @@ describe('AC-12 · workflow / workgroup 只用 expectedVersion（ACL 维**不该
 describe('AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）', () => {
   // 技能是唯一三维的：只改 description 会推 metaRevision 而 contentVersion 不变，
   // 只带后者的 fence 完全看不见这次修改。
-  const seedSkill = async (db: DbClient): Promise<string> => {
+  // RFC-359 W8：技能行之外还要铺出它在 appHome 下的目录——导出读的是真实文件树，
+  // 缺目录此后是 `resource-package-skill-tree-invalid`（合一前 SQLite 侧静默产出零文件条目，
+  // 见 `tests/rfc359-w8-package-skill-tree-conformance.test.ts` 差异②）。本组用例锁的是三维
+  // fence，不是空目录行为，所以按生产形态把目录补齐。
+  const seedSkill = async (db: DbClient, appHome: string): Promise<string> => {
     const id = ulid()
+    const files = join(appHome, 'skills', id, 'files')
+    mkdirSync(files, { recursive: true })
+    writeFileSync(join(files, 'SKILL.md'), '---\nname: helper\n---\n\nhelper body\n')
     await db.insert(skills).values({
       id,
       name: 'helper',
@@ -349,7 +356,7 @@ describe('AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）
 
   test('三维齐且都对 ⇒ 成功', async () => {
     const { db, appHome } = await seed()
-    const id = await seedSkill(db)
+    const id = await seedSkill(db, appHome)
     const ok = await exportResourcePackage(
       db,
       actorOf('u1'),
@@ -364,7 +371,7 @@ describe('AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）
 
   test('**只有 metaRevision 漂移** ⇒ 409（内容没变不等于没改）', async () => {
     const { db, appHome } = await seed()
-    const id = await seedSkill(db)
+    const id = await seedSkill(db, appHome)
     expect(
       await codeOf(
         exportResourcePackage(
@@ -382,7 +389,7 @@ describe('AC-12 · skill 三维（contentVersion + metaRevision + aclRevision）
 
   test('少给一维 ⇒ package-invalid（不能只比给了的那两维）', async () => {
     const { db, appHome } = await seed()
-    const id = await seedSkill(db)
+    const id = await seedSkill(db, appHome)
     expect(
       await codeOf(
         exportResourcePackage(

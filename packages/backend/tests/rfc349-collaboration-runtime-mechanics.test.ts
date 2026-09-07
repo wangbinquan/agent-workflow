@@ -412,8 +412,11 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       composeWorkgroupTaskRoomClarifyParticipantFactory()
     const contract = SRC('modules/collaboration/application/ports/collaborationRuntimeMechanics.ts')
     const factory = SRC('modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts')
+    // RFC-359 W9：已提交事件投影也合一了。正典搬到中立的 WS 投影文件里，
+    // `postgresqlCollaborationCommittedEventProjection.ts` 随之退役（对拍见
+    // `rfc359-w9-collaboration-committed-event-projection-conformance.test.ts`）。
     const projection = SRC(
-      'modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts',
+      'modules/collaboration/infrastructure/collaborationCommittedEventWsProjector.ts',
     )
 
     expect(contract).not.toContain('DbClient')
@@ -426,7 +429,17 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       SRC('modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts'),
     ).toThrow()
     expect(projection).not.toContain('DbClient')
-    expect(projection).not.toContain('createSqlite')
+    expect(projection).not.toContain('PostgresqlDatabaseClient')
+    expect(projection).toContain('createCollaborationCommittedEventProjection')
+    // 判「声明」而不是「出现」：合一的头注释要留下退役前那个名字，才说得清这份文件的来历。
+    expect(projection).not.toContain(
+      'export function createSqliteCollaborationCommittedEventProjection',
+    )
+    expect(() =>
+      SRC(
+        'modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts',
+      ),
+    ).toThrow()
     expect(typeof reservedTransactionFactory.inTransaction).toBe('function')
   })
 

@@ -145,7 +145,6 @@ export async function loadGrantLevelsForUser(
 // RFC-359 W4-B2：可见性阶梯、grant 谓词与 Promise 形态的 grant 读端口只有一份（resourceVisibility.ts）；
 // 这里保留给 legacy 同步调用方的 `*InTx` 读法与 DbClient 形态的便捷函数（dbTxSync 归零时删）。
 export {
-  createResourceGrantReadPort as createSqliteResourceGrantReadPort,
   grantsOfResourceWhere,
   grantsOfUserWhere,
   visibleRowsCondition,

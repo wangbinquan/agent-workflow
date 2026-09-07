@@ -34,7 +34,6 @@ import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlL
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
-  SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import type {
   LogicalColumnContract,
@@ -42,6 +41,8 @@ import type {
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
 import { readManifest } from '@/services/backupManifest'
+import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
+import { captureWorktreeRows } from '@/services/worktreeBackup'
 import { extractTarGz } from '@/util/archive'
 
 const roots: string[] = []
@@ -114,14 +115,6 @@ function tempRoot(): string {
   const value = mkdtempSync(join(tmpdir(), 'rfc349-postgresql-backup-'))
   roots.push(value)
   return value
-}
-
-function rows(value: readonly Record<string, unknown>[]): SqlRows {
-  return Object.assign(Promise.resolve(value), {
-    async values() {
-      return value.map((row) => Object.values(row))
-    },
-  })
 }
 
 function advanceToAcceptingWrites(input: {
@@ -237,38 +230,14 @@ function livePostgresqlFixture() {
   mkdirSync(worktreePath, { recursive: true })
   mkdirSync(repoPath, { recursive: true })
   writeFileSync(join(worktreePath, 'tracked.txt'), 'live PostgreSQL worktree\n')
+  // RFC-359 W9：workflow / worktree 的行选择已经合成中立实现并由组合根注入，
+  // 这条适配器不再自己拿裸连接池去查业务表——池上任何一条查询都是回归。
   const pool: PostgresqlPool = {
     async reserve() {
       throw new Error('provider backup assets must not reserve a connection')
     },
     unsafe(sql: string) {
-      if (sql.includes('"agent_workflow"."workflows"')) {
-        return rows([
-          {
-            id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-            name: 'PostgreSQL backup workflow',
-            description: 'default production application assets',
-            definition: JSON.stringify({
-              $schema_version: 1,
-              inputs: [],
-              nodes: [],
-              edges: [],
-            }),
-          },
-        ])
-      }
-      if (sql.includes('"agent_workflow"."tasks"')) {
-        return rows([
-          {
-            id: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
-            worktreePath,
-            branch: 'agent-workflow/postgresql-backup',
-            repoPath,
-            baseCommit: null,
-          },
-        ])
-      }
-      throw new Error(`unexpected PostgreSQL provider backup query: ${sql}`)
+      throw new Error(`PostgreSQL provider backup must not query the pool: ${sql}`)
     },
     async close() {},
   }
@@ -277,7 +246,43 @@ function livePostgresqlFixture() {
     generationId: GENERATION_ID,
     providerPool: () => pool,
   } as PostgresqlDatabaseRuntime
-  return { appHome, operationsRoot, runtime }
+  return { appHome, operationsRoot, runtime, worktreePath, repoPath }
+}
+
+/**
+ * 归档信封用例只关心「一份 workflow YAML + 一份 worktree tar 进了包」，
+ * 行选择本身的双引擎判据在
+ * `rfc359-w9-system-operations-application-assets-conformance.test.ts` 里对真库跑。
+ * worktree 那半仍走**真的**归档机制，tar 断言才有意义。
+ */
+function fixtureApplication(fixture: {
+  readonly worktreePath: string
+  readonly repoPath: string
+}): PortableBackupApplicationAssets {
+  return {
+    async exportWorkflows(destination: string) {
+      writeFileSync(
+        join(destination, '01ARZ3NDEKTSV4RRFFQ69G5FAV.yaml'),
+        'id: 01ARZ3NDEKTSV4RRFFQ69G5FAV\nname: PostgreSQL backup workflow\n',
+        'utf-8',
+      )
+      return 1
+    },
+    async captureWorktrees(stagingDirectory: string) {
+      await captureWorktreeRows(
+        [
+          {
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+            worktreePath: fixture.worktreePath,
+            branch: 'agent-workflow/postgresql-backup',
+            repoPath: fixture.repoPath,
+            baseCommit: null,
+          },
+        ],
+        stagingDirectory,
+      )
+    },
+  }
 }
 
 function logicalSource(onClose: () => void): PostgresqlLogicalSource {
@@ -317,10 +322,13 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     let closed = 0
 
     const backup = await createPostgresqlProviderBackup({
-      ...fixture,
+      appHome: fixture.appHome,
+      operationsRoot: fixture.operationsRoot,
+      runtime: fixture.runtime,
       contract: CONTRACT,
       now: 5,
       includeWorktrees: true,
+      application: fixtureApplication(fixture),
       openLogicalSource: async () => logicalSource(() => (closed += 1)),
     })
 

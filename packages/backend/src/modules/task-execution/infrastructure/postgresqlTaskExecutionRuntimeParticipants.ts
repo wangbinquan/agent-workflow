@@ -18,7 +18,7 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
 import { composeExecutionMergeRecovery } from '../composition/executionMergeRecovery'
-import { createProviderTaskExecutionModule, type TaskExecutionModule } from '../composition'
+import { createProviderTaskExecutionModule, type ProviderTaskExecutionModule } from '../composition'
 import { driveTaskEngineApplication } from '../composition/taskEngineApplication'
 import { createPostgresqlTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { composeWrapperRuntime } from '../composition/wrapperRuntime'
@@ -61,12 +61,12 @@ export interface PostgresqlTaskExecutionRuntimeDependencies {
   readonly persistence?: TaskExecutionPersistence
   readonly runtimeSessionLeases?: RuntimeSessionLeaseOperations
   /** Share one claim gate and process registry with launch/cancel compositions. */
-  readonly executionModule?: TaskExecutionModule
+  readonly executionModule?: ProviderTaskExecutionModule
 }
 
 export interface PostgresqlTaskExecutionRuntimeAggregate extends TaskExecutionRuntimeParticipants {
   readonly persistence: TaskExecutionPersistence
-  readonly executionModule: TaskExecutionModule
+  readonly executionModule: ProviderTaskExecutionModule
 }
 
 /**

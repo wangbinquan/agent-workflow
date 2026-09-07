@@ -57,17 +57,39 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  */
 export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   'cli/daemonRealtimePolicy.ts: marker=1, prose=0, holder=1',
-  'cli/package.ts: marker=1, prose=0, holder=0',
+  // RFC-359 W5-T19b 销账：`cli/package.ts: marker=1` —— `packageCommand` 的 `bootstrapFactory`
+  // 从可选变必填，缺省时那句「把没装配当成一种命令输出返回给用户」（`identity-access-runtime-not-composed`）
+  // 随之删除。这处占位的代价是**实测到的**：`tests/rfc271-cli.test.ts` 的「--plan 与 --on-conflict
+  // 同时给 ⇒ 报错」本意走到「user not found」，却因为不传 factory 在那一句就返回了，
+  // 断言因一个无关理由变绿；必填之后那条用例才真的走到它要测的路径。
   'cli/postgresqlDaemonApplication.ts: marker=9, prose=0, holder=3',
   'cli/start.ts: marker=10, prose=0, holder=5',
   'modules/collaboration/composition/commandContext.ts: marker=0, prose=6, holder=0',
   'modules/collaboration/composition/reviewNodeReviewerDependencies.ts: marker=0, prose=1, holder=0',
   'modules/development-automation/composition/activityOperations.ts: marker=1, prose=0, holder=1',
-  'modules/digital-employee/composition.ts: marker=0, prose=1, holder=0',
+  // RFC-359 W5-T19b 销账：`modules/digital-employee/composition.ts: prose=1` —— 那句
+  // `'digital employee runtime is not composed'` 是**声明位置**造成的假占位：`runtimeDocument`
+  // 的 7 个使用点全在 `runtimeService === null ? null : {…}` 的非 null 分支里（同批箭头里
+  // `runtimeService.launchCase(…)` 本来就直接调、不判空），只是它自己声明在分支外、收窄够不着。
+  // 改成显式接收已收窄的 service（`documentForCase(service, caseId)`），缺口无处可表达。
   'modules/integration/composition.ts: marker=0, prose=1, holder=1',
-  'modules/task-execution/composition.ts: marker=0, prose=1, holder=0',
+  // RFC-359 W5-T19b 销账：`modules/task-execution/composition.ts: prose=1` ——
+  // `TaskExecutionModule.persistence?` 这个空槽与 `claimPersisted` 进门那句
+  // `'task-execution persistence is not composed'` 一起拆成两个类型：基类不再持有空槽，
+  // `claimPersisted` 只长在 `ProviderTaskExecutionModule` 上。要持久化认领的能力，就得先拿到
+  // 一个持有持久化的模块；这个要求沿装配链一路上浮到 `SelectedPostgresqlTaskExecutionProviderRuntime`
+  // （SQLite 那一支用进程级单例、走同步 `claim(db)`，两支不再共用一个「可能没装配」的槽）。
   'modules/task-execution/composition/nodeMechanics.ts: marker=1, prose=0, holder=0',
-  'modules/task-execution/composition/taskEngineApplication.ts: marker=11, prose=0, holder=0',
+  // RFC-359 W5-T19b 收敛：`taskEngineApplication.ts` marker 11 → 2 —— `driveTaskEngineApplication`
+  // 的形参从 `RunTaskOptions`（九个装配依赖全可选 + 进门九句 `throw new Error('X-not-composed')`
+  // + 一次自我收窄）改成 `BoundRunTaskOptions`，九句 throw 一起消失。三个调用点（PG / SQLite 两个
+  // runtime participants + 测试 topology）本来就逐个显式交齐这九项，一字未改。
+  // 剩下的 2 处不是同一回事，故意留着：`identity-access-runtime-not-composed` 走的是
+  // `failRuntimeTask` 的领域收场（不是裸抛），而把 `identityAccess` 改必填实测会连坐 254 处
+  // 编译错误（绝大多数是 legacy 测试夹具）；`dynamic-workflow-operations-not-composed` 是
+  // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
+  // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
+  'modules/task-execution/composition/taskEngineApplication.ts: marker=2, prose=0, holder=0',
   'server.ts: marker=6, prose=0, holder=2',
 ]
 

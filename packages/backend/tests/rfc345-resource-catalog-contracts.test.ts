@@ -1789,7 +1789,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(composition).toContain('composeSqliteResourcePackageProvider')
     expect(composition).toContain('createResourcePackageReadPort')
-    expect(composition).toContain('readSqlitePackageSkillTree')
+    // RFC-359 W8：技能树读出也合成一份中立实现（`infrastructure/packageSkillTree.ts`），两个装配都接它。
+    expect(composition).toContain('readPackageSkillTree')
     expect(composition).not.toMatch(
       /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,
     )

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { RepositoryBackupPreparationParticipant } from '@/modules/source-control/public/participants'
 import {
@@ -58,7 +59,7 @@ import {
 import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 
-export { createPostgresqlHealthDatabaseReadModel } from './infrastructure/postgresqlHealthReadModel'
+export { createHealthDatabaseReadModel } from './infrastructure/healthReadModel'
 export {
   createDatabaseMigrationDaemonAdmission,
   type DatabaseMigrationDaemonAdmission,
@@ -158,6 +159,12 @@ export function composeSystemOperationsWithRecoveryAdapter(deps: {
  * verified target runtime. No SQLite handle or fallback enters this path. */
 export function composePostgresqlSystemOperations(deps: {
   readonly runtime: PostgresqlDatabaseRuntime
+  /**
+   * RFC-359 W9：备份 / 还原要读的 workflow 与 worktree 行没有 provider 差异，走中立
+   * 客户端（`portableApplicationAssets.ts`）。runtime 仍然只负责真正按引擎分叉的那一半
+   * ——逻辑快照 / 逻辑还原目标与 advisory lock。
+   */
+  readonly db: ProviderNeutralDatabase
   readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
   readonly repositoryBackupPreparation: RepositoryBackupPreparationParticipant
   readonly appHome?: string
@@ -183,7 +190,7 @@ export function composePostgresqlSystemOperations(deps: {
     contract,
     plan,
     filesystem: createPostgresqlProviderRestoreApplicationAssets({
-      runtime: deps.runtime,
+      db: deps.db,
       appHome,
       databaseConfig: deps.databaseConfig,
     }),
@@ -193,6 +200,7 @@ export function composePostgresqlSystemOperations(deps: {
     adapter: {
       backup: createPostgresqlAdminBackupCoordinator({
         runtime: deps.runtime,
+        db: deps.db,
         appHome,
         prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
       }),
@@ -247,6 +255,7 @@ export function composeLocalSystemOperations(
       ).backupPreparation
     module = composePostgresqlSystemOperations({
       runtime: provider.runtime,
+      db: database,
       databaseConfig,
       repositoryBackupPreparation,
       appHome,

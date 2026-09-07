@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BackupManifestV2 } from '@/services/backupManifest'
-import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createPostgresqlProviderRestoreApplicationAssets } from '@/modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets'
 
 const TARGET_DATABASE = Object.freeze({
@@ -66,7 +66,8 @@ describe('RFC-349 PostgreSQL portable restore application assets', () => {
     const assets = createPostgresqlProviderRestoreApplicationAssets({
       appHome,
       databaseConfig: TARGET_DATABASE,
-      runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
+      // config / skills 那一半完全不碰库；`includesWorktrees: false` 时 db 一次也不用。
+      db: {} as ProviderNeutralDatabase,
     })
     await expect(assets.apply({ stagingDirectory, manifest: manifest(false) })).resolves.toEqual({
       config: true,
@@ -83,56 +84,27 @@ describe('RFC-349 PostgreSQL portable restore application assets', () => {
     )
   })
 
-  test('binds worktree reconstruction to rows from the restored PostgreSQL target', async () => {
+  test('binds worktree reconstruction to the composed provider-neutral client', async () => {
+    // RFC-359 W9：这一条此前断的是**手写 SQL 的文本**（`FROM "agent_workflow"."tasks"` +
+    // `$1` 绑定），而那条语句在真 PostgreSQL 上一行都没跑过。行选择合一之后，判据是
+    // 「还原资产把组合根给它的中立客户端与 staging 目录**原样**交给中立重建实现」；
+    // 真实的取行行为（找不到 / 终态 / 已存在的三条 skip 理由）在
+    // `rfc359-w9-system-operations-application-assets-conformance.test.ts` ⑤ 上对**两个真引擎**跑。
     const appHome = temporaryRoot('rfc349-pg-restore-worktree-')
     const stagingDirectory = temporaryRoot('rfc349-pg-restore-worktree-staging-')
-    const queries: Array<{ query: string; parameters: readonly unknown[] | undefined }> = []
+    const composed = {} as ProviderNeutralDatabase
     let reconstructed: unknown
-    const runtime = {
-      provider: 'postgresql',
-      providerPool() {
-        return {
-          unsafe(query: string, parameters?: readonly unknown[]) {
-            queries.push({ query, parameters })
-            return Promise.resolve([
-              {
-                id: '01J00000000000000000000000',
-                status: 'running',
-                worktreePath: '/tmp/worktree',
-                branch: 'work',
-                repoPath: '/tmp/repo',
-              },
-            ])
-          },
-        }
-      },
-    } as unknown as PostgresqlDatabaseRuntime
     const assets = createPostgresqlProviderRestoreApplicationAssets({
       appHome,
       databaseConfig: TARGET_DATABASE,
-      runtime,
-      async reconstructWorktrees(rows, extractedDirectory) {
-        reconstructed = {
-          row: await rows.findById('01J00000000000000000000000'),
-          extractedDirectory,
-        }
+      db: composed,
+      async reconstructWorktrees(db, extractedDirectory) {
+        reconstructed = { sameClient: db === composed, extractedDirectory }
         return { reconstructed: [], skipped: [] }
       },
     })
 
     await assets.apply({ stagingDirectory, manifest: manifest(true) })
-    expect(queries).toHaveLength(1)
-    expect(queries[0]?.query).toContain('FROM "agent_workflow"."tasks"')
-    expect(queries[0]?.parameters).toEqual(['01J00000000000000000000000'])
-    expect(reconstructed).toEqual({
-      row: {
-        id: '01J00000000000000000000000',
-        status: 'running',
-        worktreePath: '/tmp/worktree',
-        branch: 'work',
-        repoPath: '/tmp/repo',
-      },
-      extractedDirectory: stagingDirectory,
-    })
+    expect(reconstructed).toEqual({ sameClient: true, extractedDirectory: stagingDirectory })
   })
 })

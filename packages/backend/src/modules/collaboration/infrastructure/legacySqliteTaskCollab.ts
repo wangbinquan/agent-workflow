@@ -15,8 +15,8 @@ import type {
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type { tasks } from '@/db/schema'
 import { taskCollaborators, tasks as tasksTable, users } from '@/db/schema'
 import { NotFoundError } from '@/util/errors'
@@ -38,7 +38,7 @@ export type TaskRowForVisibility = Pick<typeof tasks.$inferSelect, 'id' | 'owner
  * - daemon-token actor (__system__) sees everything via `tasks:read:all`.
  */
 export async function canViewTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<boolean> {
@@ -61,7 +61,7 @@ export async function canViewTask(
  * 靠错误码区分「有这个任务但你没权限」与「没有这个任务」。
  */
 export async function assertCanReplaySourceTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   sourceTaskId: string,
 ): Promise<void> {
@@ -81,7 +81,7 @@ export async function assertCanReplaySourceTask(
  * VISIBILITY predicate: an observer was added precisely so they could watch.
  */
 export async function hasMembership(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   userId: string,
 ): Promise<boolean> {
@@ -101,7 +101,7 @@ export async function hasMembership(
  * 混起来正好会让观察者拿回他被明确排除的那些操作。
  */
 export async function hasActingMembership(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   userId: string,
 ): Promise<boolean> {
@@ -112,22 +112,14 @@ export async function hasActingMembership(
   return rows.some((r) => r.role === 'owner' || r.role === 'collaborator')
 }
 
-/**
- * RFC-326 — synchronous twin of `hasActingMembership` for callers inside a
- * `dbTxSync` (the review decision re-verifies the actor's membership at its
- * commit point, linearised with `updateTaskMembers` by the shared task lock).
- */
-export function hasActingMembershipTx(tx: DbTxSync, taskId: string, userId: string): boolean {
-  const rows = tx
-    .select({ role: taskCollaborators.role })
-    .from(taskCollaborators)
-    .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
-    .all()
-  return rows.some((r) => r.role === 'owner' || r.role === 'collaborator')
-}
+// RFC-359 W9：RFC-326 的同步孪生 `hasActingMembershipTx(tx: DbTxSync, …)` 已删除。
+// 它存在的理由是「评审决定在 `dbTxSync` 的提交点上复核成员身份」，而那条链路早在
+// RFC-359 W1-T2c 就迁到了 `databaseSessionFor` 上——从那天起它在 `src` 里零调用方，
+// 只剩 `tests/rfc326-tx-primitives-equivalence.test.ts` 的 AC-19 等价锁在按名字钉着它。
+// 事务体里现在直接 `await hasActingMembership(tx, …)`：`tx` 与 `db` 是同一套 query builder。
 
 export async function listCollaborators(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<(typeof taskCollaborators.$inferSelect)[]> {
   return db.select().from(taskCollaborators).where(eq(taskCollaborators.taskId, taskId))
@@ -140,7 +132,7 @@ export async function listCollaborators(
  * non-member privileged actor → a legacy audit label, anyone else → ForbiddenError.
  */
 export async function requireTaskMember(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskActorRole> {
@@ -163,7 +155,7 @@ export async function requireTaskMember(
  * 分开命名让将来任一侧单独演进时不必先把调用点摘开。
  */
 export async function requireTaskOperator(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<void> {
@@ -192,7 +184,7 @@ function toUserPublic(row: UserRow): UserPublic {
 }
 
 export async function getTaskMembers(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskMembers> {
@@ -274,7 +266,7 @@ export function planMembersReplacement(input: {
 
 /** RFC-330 —— 引用的用户必须 active 且非系统用户（422 `members-user-invalid`）；任务 / 案例共用。 */
 export async function assertMembersUsersActive(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   body: {
     readonly ownerUserId?: string
     readonly members?: ReadonlyArray<{ readonly userId: string }>
@@ -305,7 +297,7 @@ interface MembersCommit {
 }
 
 export async function updateTaskMembers(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   task: TaskRowForVisibility,
   body: {
@@ -363,7 +355,7 @@ export async function updateTaskMembers(
 }
 
 async function updateTaskMembersLocked(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   task: TaskRowForVisibility,
   body: {
@@ -388,15 +380,19 @@ async function updateTaskMembersLocked(
   let nextMembers = new Map<string, AssignableTaskMemberRole>()
 
   const now = Date.now()
-  dbTxSync(db, (tx) => {
+  // RFC-359 W9 —— 从 `dbTxSync`（bun:sqlite 独有的同步事务面）迁到中立事务原语。
+  // 事务体开头锁住聚合根：这是「读一批成员 → 全量 delete → insert 回去」的形状，
+  // PostgreSQL 的 SERIALIZABLE 会把 predicate lock 落在索引**页**上、连改别的任务的
+  // 事务都判成读写依赖（实测 32 并发 22.9% 冲突逃逸成 500）。锁 tasks 行即可。
+  await databaseSessionFor(db).transaction(async (tx) => {
+    await engineOf(tx).lockAggregateRoot(tx, tasksTable, tasksTable.id, task.id)
     // Freeze the pre-change audience in the same transaction as the full
     // replacement. The post-commit WS frame can then authorize both sides of
     // the transition without racing a membership read.
-    beforeCollaborators = tx
+    beforeCollaborators = await tx
       .select()
       .from(taskCollaborators)
       .where(eq(taskCollaborators.taskId, task.id))
-      .all()
     const plan = planMembersReplacement({
       prevOwner,
       requestedOwner: body.ownerUserId,
@@ -409,9 +405,13 @@ async function updateTaskMembersLocked(
     nextMembers = plan.nextMembers
 
     if (nextOwner !== prevOwner) {
-      tx.update(tasksTable).set({ ownerUserId: nextOwner }).where(eq(tasksTable.id, task.id)).run()
+      await tx
+        .update(tasksTable)
+        .set({ ownerUserId: nextOwner })
+        .where(eq(tasksTable.id, task.id))
+        .run()
     }
-    tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id)).run()
+    await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id)).run()
     const values: (typeof taskCollaborators.$inferInsert)[] = []
     if (nextOwner !== null) {
       values.push({
@@ -432,7 +432,7 @@ async function updateTaskMembersLocked(
       })
     }
     if (values.length > 0) {
-      tx.insert(taskCollaborators).values(values).run()
+      await tx.insert(taskCollaborators).values(values).run()
     }
   })
 
@@ -443,8 +443,7 @@ async function updateTaskMembersLocked(
  * RFC-165 (F17): pure row builder behind `recordLaunchContext` — validates
  * every referenced user against the provided user rows (active only) and
  * returns the deduped owner + collaborator rows. Extracted so the launch
- * transaction (dbTxSync, synchronous surface) can run the SAME logic inline
- * without this module's async db reads.
+ * transaction can run the SAME logic inline without this module's async db reads.
  */
 export function buildLaunchCollabRows(
   args: {
@@ -500,7 +499,7 @@ export function buildLaunchCollabRows(
  * writes the supporting rows. (RFC-099 removed the assignments leg.)
  */
 export async function recordLaunchContext(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   args: {
     taskId: string
     ownerUserId: string

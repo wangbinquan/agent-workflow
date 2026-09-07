@@ -422,13 +422,13 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
     why: '裸写 `select … for update` 而不是调 capabilities.lockAggregateRoot——同一个聚合根锁在两处各有一份渲染，矩阵改了这里不会跟着改。',
     clearedBy: 'RFC-359 W4 task-execution 生命周期事务 pair 合一（design §10.1 写法纪律）',
   },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
-    clearedBy: 'RFC-359 W4 task-execution 生命周期事务 pair 合一',
-  },
+  // RFC-359 W5-T18 销账：`postgresqlTaskLifecycleTransaction.ts: set-transaction ×1` ——
+  // `withPostgresqlSerializableTaskExecution` 不再自己 `sql.raw('SET TRANSACTION ISOLATION LEVEL
+  // SERIALIZABLE')` + 自己写 40001 重试循环，整个事务边界改走 `databaseSessionFor(db).serializable(...)`。
+  // 那句方言现在只剩中立原语里的一处（`platform/persistence/databaseTransaction.ts`，它本来就是渲染器），
+  // 隔离级别的语义一字未变——中立原语的 `serializable` 显式记着以本文件当年那段为蓝本。
+  // 同文件的 `for-update ×2` **仍在账本上**：那两处 `select … for update` 一字未动，
+  // 该收敛成 `capabilities.lockAggregateRoot` 的事还没做。
   {
     file: 'platform/persistence/maintenanceExecutionFence.ts',
     construct: 'indexed-by',

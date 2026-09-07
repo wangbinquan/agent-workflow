@@ -29,12 +29,12 @@
 // op-lock + staged-version roll-forward path.
 
 import { and, eq } from 'drizzle-orm'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import {
   intentWorkflowInvalidMessage,
@@ -100,6 +100,15 @@ import type { SqliteIntentApplyArtifactLifecycle } from './sqliteIntentApplyArti
  * 没迁完。把中立句柄重新窄化给它们**不是强转谎话**：SQLite 会话交出的事务句柄**就是 `DbClient`
  * 本身**（`createSqliteDatabaseSession`），这些成员运行时拿到的对象逐字相同。
  * 退役条件同 bundle apply：那批成员迁完、两套 apply 引擎合一时随之消失。
+ *
+ * RFC-359 W9 —— 本文件的 9 笔 **journal 事务**（claim / recordArtifact / settleFailed /
+ * keepRetryable / 收敛的 5 笔）也迁完了，`dbTxSync` 调用点归零；这条窄化只剩
+ * `participantInTransaction` 一个使用者（legacy 资源会话的六条提交臂仍是同步 `*InTx`）。
+ * 与此同时大事务体内的裸 `.run()` 也改成了 `await`——它们是 bun:sqlite 独有的同步执行面，
+ * 在 PostgreSQL 客户端（drizzle sqlite-proxy，异步）上返回未 await 的 Promise、`changes`
+ * 恒为 undefined，于是 CAS 判据静默失真。改完之后本文件的编排层**整体是 provider 中立的**，
+ * 只有注入进来的资源会话还锁死在 SQLite 上。行为锁在
+ * `tests/rfc359-w9-intent-apply-sync-transaction-cutover.test.ts`（双引擎）。
  */
 function syncMembers(tx: DatabaseTransaction): DbTxSync {
   return tx as unknown as DbTxSync
@@ -121,6 +130,11 @@ export interface IntentApplyReceipt {
 export interface ApplyIntentFaults {
   afterPluginInstall?: () => void
   afterSkillStage?: () => void
+  /**
+   * RFC-359 W9 —— claim 事务的原子性接缝：在 journal 行**已插入、事务尚未提交**时抛。
+   * 这是「四道读判据 + 认领同生共死」唯一可观测的形态（其余判据都在写之前拒绝）。
+   */
+  inClaimTxAfterJournal?: () => void
   beforeTx?: () => void
   inTxAfterOps?: () => void
   afterTxBeforeRollForward?: () => void
@@ -175,7 +189,12 @@ export interface IntentApplyResourceSession {
   ): Promise<void>
   prestage(
     plan: VersionedIntentResourceChangesetPlan,
-    context: { readonly recordArtifact: (artifact: IntentJournalArtifactV1) => void },
+    /**
+     * RFC-359 W9 —— I14 record-before-act：这一笔**必须**在副作用（插件安装 / 技能暂存）之前
+     * 落库，所以它是 `Promise<void>` 而不是 `void | Promise<void>`——联合里混进 `void`，调用方
+     * 漏掉 await 就成了合法写法，连 `no-floating-promises` 都不再报（`docs/dev-gotchas.md`）。
+     */
+    context: { readonly recordArtifact: (artifact: IntentJournalArtifactV1) => Promise<void> },
   ): Promise<void>
   participantInTransaction(
     tx: DbTxSync,
@@ -247,14 +266,18 @@ async function applyInner(
   const journalId = ulid()
 
   // ── claim (design §9.1) ──
-  const claim = dbTxSync(db, (tx) => {
-    const session = tx
+  // RFC-359 W9：四道读判据 + journal 认领必须同生共死，所以它是**唯一**一笔多语句的
+  // journal 事务，改走中立事务原语后仍是一笔。读用 `(await …limit(1))[0]`：中立句柄上
+  // `.get()` 的返回类型是 `T | Promise<T>` 的联合，能 await 但读起来像同步面，容易被下一个
+  // 人抄成漏 await 的形状（`plan.md` 记着 `sqliteResourcePackageMaintenance.ts` 那个活标本）。
+  const claim = await databaseSessionFor(db).transaction(async (tx) => {
+    const [session] = await tx
       .select()
       .from(intentSessions)
       .where(eq(intentSessions.id, input.sessionId))
-      .get()
+      .limit(1)
     assertIntentSessionClaimable(session, actor.user.id)
-    const existing = tx
+    const [existing] = await tx
       .select()
       .from(intentApplyJournal)
       .where(
@@ -263,12 +286,12 @@ async function applyInner(
           eq(intentApplyJournal.clientMutationId, input.clientMutationId),
         ),
       )
-      .get()
+      .limit(1)
     if (existing !== undefined) {
       return { kind: 'replay' as const, existing, session }
     }
     assertIntentSessionReady(session)
-    const draft = tx
+    const [draft] = await tx
       .select()
       .from(intentDrafts)
       .where(
@@ -277,32 +300,31 @@ async function applyInner(
           eq(intentDrafts.revision, input.draftRevision),
         ),
       )
-      .get()
+      .limit(1)
     const committable = requireCommittableDraft({
       draft,
       session,
       confirmedDraftHash: input.draftHash,
     })
-    const resolution = tx
+    const [resolution] = await tx
       .select({ reason: intentDraftResolutions.reason })
       .from(intentDraftResolutions)
       .where(eq(intentDraftResolutions.draftId, committable.id))
-      .get()
+      .limit(1)
     assertIntentDraftUnresolved(resolution?.reason)
     const now = Date.now()
-    tx.insert(intentApplyJournal)
-      .values({
-        id: journalId,
-        sessionId: input.sessionId,
-        clientMutationId: input.clientMutationId,
-        draftId: committable.id,
-        draftHash: committable.draftHash,
-        state: 'prepared',
-        preparedArtifactsJson: '[]',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+    await tx.insert(intentApplyJournal).values({
+      id: journalId,
+      sessionId: input.sessionId,
+      clientMutationId: input.clientMutationId,
+      draftId: committable.id,
+      draftHash: committable.draftHash,
+      state: 'prepared',
+      preparedArtifactsJson: '[]',
+      createdAt: now,
+      updatedAt: now,
+    })
+    deps.faults?.inClaimTxAfterJournal?.()
     return { kind: 'claimed' as const, session, draft: committable }
   })
 
@@ -313,21 +335,25 @@ async function applyInner(
   ACTIVE_APPLY_JOURNALS.add(journalId)
 
   const artifacts: IntentJournalArtifactV1[] = []
-  const recordArtifact = (artifact: IntentJournalArtifactV1): void => {
+  // RFC-359 W9 —— I14 record-before-act：登记必须**先于**副作用落库，切成异步后调用方
+  // 必须 await（生产链上的三处在 `legacyIntentApplyResourceParticipants.ts`，源码层守卫
+  // 在本刀的行为锁文件里——漏掉 await 时既有断言全绿，只有那条守卫会红）。
+  const recordArtifact = async (artifact: IntentJournalArtifactV1): Promise<void> => {
     artifacts.push(artifact)
-    dbTxSync(db, (tx) => {
-      tx.update(intentApplyJournal)
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await tx
+        .update(intentApplyJournal)
         .set({
           preparedArtifactsJson: encodeIntentJournalArtifacts(artifacts),
           updatedAt: Date.now(),
         })
         .where(eq(intentApplyJournal.id, journalId))
-        .run()
     })
   }
-  const settleFailed = (error: unknown): void => {
-    dbTxSync(db, (tx) => {
-      tx.update(intentApplyJournal)
+  const settleFailed = async (error: unknown): Promise<void> => {
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await tx
+        .update(intentApplyJournal)
         .set({
           state: 'failed',
           error:
@@ -337,15 +363,15 @@ async function applyInner(
           updatedAt: Date.now(),
         })
         .where(eq(intentApplyJournal.id, journalId))
-        .run()
     })
   }
   /**
    * RFC-359 W7 抬齐①：提交后的尾巴没做完时的写回。
    *
-   * 这里刻意走**中立事务原语**而不是 `dbTxSync`：本函数只在提交之后跑（此刻没有同步面要维持），
-   * 而 SQLite 同步事务面是「只降不升」的高水位账（`tests/architecture/rfc359-sync-transaction-highwater`）
-   * ——为一条新写回再开一个 SQLite 专属句柄，等于给合一多欠一笔。PG 侧同一条写回也是这一句。
+   * 它是本文件第一笔走**中立事务原语**的 journal 写回（W7 落地时其余 9 笔还是 `dbTxSync`），
+   * 理由是 SQLite 同步事务面记的是「只降不升」的高水位账
+   * （`tests/architecture/rfc359-sync-transaction-highwater`）——为一条新写回再开一个 SQLite
+   * 专属句柄，等于给合一多欠一笔。W9 把其余 9 笔一并迁过来后，这里与它们同形。
    */
   const keepCommittedRollForwardRetryable = async (): Promise<void> => {
     await databaseSessionFor(db).transaction(async (tx) => {
@@ -358,19 +384,22 @@ async function applyInner(
         .where(eq(intentApplyJournal.id, journalId))
     })
   }
-  const keepRetryable = (error: unknown, compensationErrors: readonly unknown[]): void => {
+  const keepRetryable = async (
+    error: unknown,
+    compensationErrors: readonly unknown[],
+  ): Promise<void> => {
     const original = error instanceof Error ? error.message : String(error)
     const cleanup = compensationErrors
       .map((item) => (item instanceof Error ? item.message : String(item)))
       .join('; ')
-    dbTxSync(db, (tx) => {
-      tx.update(intentApplyJournal)
+    await databaseSessionFor(db).transaction(async (tx) => {
+      await tx
+        .update(intentApplyJournal)
         .set({
           error: `retryable after apply error: ${original}; compensation incomplete: ${cleanup}`,
           updatedAt: Date.now(),
         })
         .where(eq(intentApplyJournal.id, journalId))
-        .run()
     })
   }
 
@@ -468,12 +497,13 @@ async function applyInner(
     // ── the big transaction (design §9.4 ③) ──
     const applied: IntentApplyReceipt['applied'] = []
     const receipt = await databaseSessionFor(db).transaction(async (tx) => {
-      const cas = tx
+      // RFC-359 W9：CAS 判据从 bun:sqlite 独有的 `.run().changes` 换成中立的 `affectedRows`
+      // （两个引擎都读 `changes`，缺失按 0 计 ⇒ 判据失真时失败得大声）。
+      const cas = await tx
         .update(intentApplyJournal)
         .set({ state: 'applying', updatedAt: Date.now() })
         .where(and(eq(intentApplyJournal.id, journalId), eq(intentApplyJournal.state, 'prepared')))
-        .run()
-      if ((cas as unknown as { changes?: number }).changes !== 1) {
+      if (affectedRows(cas) !== 1) {
         throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
       }
 
@@ -502,15 +532,13 @@ async function applyInner(
         const op = requireOpForPlan(bundle.ops[index], plan)
         await resourceParticipant.authorizeAndCommit(deps.authority, plan)
         applied.push(appliedEntryOf(op))
-        tx.insert(intentProvenance)
-          .values({
-            resourceType: op.resourceType,
-            resourceId: op.resourceId,
-            commitId: journalId,
-            sessionId: input.sessionId,
-            createdAt: Date.now(),
-          })
-          .run()
+        await tx.insert(intentProvenance).values({
+          resourceType: op.resourceType,
+          resourceId: op.resourceId,
+          commitId: journalId,
+          sessionId: input.sessionId,
+          createdAt: Date.now(),
+        })
       }
 
       deps.faults?.inTxAfterOps?.()
@@ -521,7 +549,8 @@ async function applyInner(
         ops: bundle.ops,
       })
       const commitSeq = mutation.commitSeq
-      tx.update(intentSessions)
+      await tx
+        .update(intentSessions)
         .set({
           commitSeq: mutation.commitSeq,
           contextRevision: mutation.contextRevision,
@@ -531,16 +560,15 @@ async function applyInner(
           updatedAt: Date.now(),
         })
         .where(eq(intentSessions.id, input.sessionId))
-        .run()
       const receiptValue: IntentApplyReceipt = { journalId, commitSeq, applied }
-      tx.update(intentApplyJournal)
+      await tx
+        .update(intentApplyJournal)
         .set({
           state: 'committed',
           receiptJson: JSON.stringify(receiptValue),
           updatedAt: Date.now(),
         })
         .where(eq(intentApplyJournal.id, journalId))
-        .run()
       return receiptValue
     })
     committedReceipt = receipt
@@ -583,12 +611,12 @@ async function applyInner(
         })
       }
     }
-    if (compensationErrors.length === 0) settleFailed(error)
+    if (compensationErrors.length === 0) await settleFailed(error)
     else {
       // A non-terminal row truthfully records that cleanup is incomplete and
       // lets boot/hourly convergence retry. Marking it failed would make the
       // converger skip the residue forever.
-      keepRetryable(error, compensationErrors)
+      await keepRetryable(error, compensationErrors)
       log.warn(INTENT_APPLY_DIAGNOSTICS.applyLeftRetryable, {
         journalId,
         err: error instanceof Error ? error.message : String(error),
@@ -636,15 +664,15 @@ export async function convergeIntentApplyJournal(
         err: err instanceof Error ? err.message : String(err),
       })
       if (row.state === 'prepared' || row.state === 'applying' || row.state === 'committed') {
-        dbTxSync(db, (tx) => {
-          tx.update(intentApplyJournal)
+        await databaseSessionFor(db).transaction(async (tx) => {
+          await tx
+            .update(intentApplyJournal)
             .set({
               error: `retryable: artifact decode failed: ${
                 err instanceof Error ? err.message : String(err)
               }`,
             })
             .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-            .run()
         })
       }
       continue
@@ -673,44 +701,46 @@ export async function convergeIntentApplyJournal(
         }
       }
       if (compensationErrors.length > 0) {
-        dbTxSync(db, (tx) => {
-          tx.update(intentApplyJournal)
+        await databaseSessionFor(db).transaction(async (tx) => {
+          await tx
+            .update(intentApplyJournal)
             .set({
               error: `retryable: compensation incomplete: ${compensationErrors
                 .map((item) => (item instanceof Error ? item.message : String(item)))
                 .join('; ')}`,
             })
             .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-            .run()
         })
         log.warn(INTENT_APPLY_DIAGNOSTICS.convergeLeftRetryable, { journalId: row.id })
         continue
       }
-      const cas = dbTxSync(db, (tx) =>
-        tx
-          .update(intentApplyJournal)
-          .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: Date.now() })
-          .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-          .run(),
+      const cas = await databaseSessionFor(db).transaction(
+        async (tx) =>
+          await tx
+            .update(intentApplyJournal)
+            .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: Date.now() })
+            .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state))),
       )
-      if ((cas as unknown as { changes?: number }).changes === 1) failed += 1
+      // CAS 的判据是「恰好一行」：`affectedRows` 在两个引擎上都读 `changes`，缺失按 0 计。
+      if (affectedRows(cas) === 1) failed += 1
     } else if (row.state === 'committed') {
       const complete = await artifactLifecycle.rollForward(artifacts, log)
       if (complete) {
         rolledForward += 1
         if (row.error !== null) {
-          dbTxSync(db, (tx) => {
-            tx.update(intentApplyJournal)
+          await databaseSessionFor(db).transaction(async (tx) => {
+            await tx
+              .update(intentApplyJournal)
               .set({ error: null, updatedAt: Date.now() })
               .where(
                 and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
               )
-              .run()
           })
         }
       } else {
-        dbTxSync(db, (tx) => {
-          tx.update(intentApplyJournal)
+        await databaseSessionFor(db).transaction(async (tx) => {
+          await tx
+            .update(intentApplyJournal)
             .set({
               error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
               updatedAt: Date.now(),
@@ -718,7 +748,6 @@ export async function convergeIntentApplyJournal(
             .where(
               and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
             )
-            .run()
         })
       }
     }

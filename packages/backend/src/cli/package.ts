@@ -205,9 +205,20 @@ export interface PackageCommandBootstrap {
 
 export type PackageCommandBootstrapFactory = () => Promise<PackageCommandBootstrap>
 
+/**
+ * RFC-359 W5-T19b —— `bootstrapFactory` 从可选变必填。
+ *
+ * 改造前它是可选参数，缺省时命令返回 `'identity-access-runtime-not-composed'`——组合根占位的
+ * 一个变种：不抛异常，而是**把「没装配」当成一种命令输出**交给用户。它的代价在测试里已经
+ * 实际发生过：`tests/rfc271-cli.test.ts` 的「--plan 与 --on-conflict 同时给 ⇒ 报错」本意是
+ * 走到「user 'nobody' not found」，但那条用例不传 factory，于是**在这一句就返回了**，
+ * 断言 `status === 'error'` 因为一个完全无关的理由变绿。必填之后那条用例才真的走到它要测的路径。
+ *
+ * 唯一的生产调用点 `main.ts` 本来就传 `composePackageCommandBootstrap`。
+ */
 export async function packageCommand(
   args: string[],
-  bootstrapFactory?: PackageCommandBootstrapFactory,
+  bootstrapFactory: PackageCommandBootstrapFactory,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const sub = args[0]
   if (sub !== 'export' && sub !== 'import') return { output: USAGE, status: 'error' }
@@ -219,10 +230,6 @@ export async function packageCommand(
       output: '--as-user is required: every package operation happens AS someone.\n',
       status: 'error',
     }
-  }
-
-  if (bootstrapFactory === undefined) {
-    return { output: 'identity-access-runtime-not-composed\n', status: 'error' }
   }
 
   let bootstrap: PackageCommandBootstrap | undefined

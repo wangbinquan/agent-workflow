@@ -21,11 +21,12 @@ export {
 } from './infrastructure/reviewRepairParticipant'
 // RFC-359 W7：运行期机制合一后只剩一个工厂（`infrastructure/collaborationRuntimeMechanics.ts`）。
 export { createCollaborationRuntimeMechanics } from './infrastructure/collaborationRuntimeMechanics'
+// RFC-359 W9：已提交事件的 WS 投影合一后只剩一个工厂
+// （`infrastructure/collaborationCommittedEventWsProjector.ts`）。
 export {
   createCollaborationWsProjector,
-  createSqliteCollaborationCommittedEventProjection,
+  createCollaborationCommittedEventProjection,
 } from './infrastructure/collaborationCommittedEventWsProjector'
-export { createPostgresqlCollaborationCommittedEventProjection } from './infrastructure/postgresqlCollaborationCommittedEventProjection'
 export {
   createHumanGateContinuationRecoveryQueries,
   createHumanGateContinuationRecoveryQueries as createSqliteHumanGateContinuationRecoveryQueries,

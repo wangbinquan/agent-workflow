@@ -44,7 +44,7 @@ import type { RuntimeSessionLeaseOperations } from '../application/ports/runtime
 import type { ChildTaskLifecycleParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
-import type { TaskExecutionModule } from '../composition'
+import type { ProviderTaskExecutionModule } from '../composition'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { taskStopProjection } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
@@ -95,7 +95,7 @@ type ResumeTask = Readonly<{
 export interface PostgresqlChildTaskLifecycleDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly persistence: TaskExecutionPersistence
-  readonly executionModule: TaskExecutionModule
+  readonly executionModule: ProviderTaskExecutionModule
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   /** Source-control selected finalizer for a terminal workspace-prune claim. */
   readonly finalizeWorkspace: (taskId: string) => Promise<void>

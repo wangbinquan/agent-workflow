@@ -101,6 +101,7 @@ import { createPostgresqlTaskRouteRepairOperations } from './postgresqlTaskRoute
 import {
   withPostgresqlSerializableTaskExecution,
   withPostgresqlTaskAggregateTransaction,
+  type PostgresqlTaskExecutionTransaction,
 } from './postgresqlTaskLifecycleTransaction'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
@@ -2208,8 +2209,11 @@ interface DeleteWorktreeTarget {
   readonly worktreePath: string
 }
 
+// 两个调用点：一个传客户端本身，一个传事务句柄。RFC-359 W5-T18 之后事务句柄是中立的
+// `DatabaseTransaction`，客户端仍是 PG 客户端——取二者共同的读面（`ProviderNeutralDatabase`
+// 是两个 provider 客户端的公共基类型，见 `db/query.ts`）。
 async function taskTreeIds(
-  db: Pick<PostgresqlDatabaseClient, 'select'>,
+  db: Pick<PostgresqlTaskExecutionTransaction, 'select'>,
   rootTaskId: string,
 ): Promise<readonly string[]> {
   const seen = new Set([rootTaskId])

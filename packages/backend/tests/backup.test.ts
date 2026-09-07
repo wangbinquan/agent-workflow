@@ -268,6 +268,10 @@ describe('createBackup', () => {
   })
 
   test('workflow YAML uses each list-captured row without an N+1 by-id reread', () => {
+    // RFC-359 W9：不变式没变，实现搬家了。合一前它只长在 SQLite 侧（这里内联的
+    // `application`），PostgreSQL 侧是同一批查询的手写 SQL 副本、从来不受这条守卫约束；
+    // 现在两个 provider 共用 `portableApplicationAssets.ts`，守卫跟着钉在那一份上。
+    // 判据仍是同一条：导出用的是列表那**一次**读回来的行，绝不按 id 回读第二次。
     const source = readFileSync(
       resolve(
         import.meta.dir,
@@ -275,13 +279,12 @@ describe('createBackup', () => {
         'src',
         'platform',
         'persistence',
-        'sqlite',
-        'systemProviderBackup.ts',
+        'portableApplicationAssets.ts',
       ),
       'utf8',
     )
-    expect(source).toContain('stringifyWorkflowYaml(wf)')
-    expect(source).not.toContain('exportWorkflowYaml(opts.db, wf.id)')
+    expect(source).toContain('.from(workflows)')
+    expect(source).not.toMatch(/getWorkflow\(|eq\(workflows\.id/)
   })
 })
 

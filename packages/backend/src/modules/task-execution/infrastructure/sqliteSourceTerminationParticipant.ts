@@ -204,6 +204,13 @@ async function applyOne(
     let exactToken: OwnershipToken | null = null
     let ownerWithoutLocalToken = false
     let canceledNodeRuns: Array<{ id: string; nodeId: string }> = []
+    /**
+     * RFC-359 —— 终态 CAS 输给别人时**赢家**的状态。收据必须按它出，不能按本次开工前读到的
+     * `priorStatus` 出：那样投递详情会记「本次把它取消了」，而任务实际是别人写成的 `done`。
+     * PostgreSQL 侧没有这个坑——它整笔跑在 SERIALIZABLE 里，40001 之后重放整个 atom，
+     * 第二遍读到的就是赢家的状态，于是 `priorStatus` / `cancelOutcome` 天然是对的。
+     */
+    let raceWinnerStatus: TaskStatus | null = null
     if (disposition === 'cancel') {
       try {
         const now = Date.now()
@@ -278,6 +285,7 @@ async function applyOne(
           .limit(1)
           .all()[0]
         if (winner !== undefined && CANCELABLE.includes(winner.status)) throw error
+        raceWinnerStatus = winner?.status ?? null
         let nodeEventRef: CommittedEventRef | null = null
         dbTxSync(db, (tx) => {
           const now = Date.now()
@@ -401,12 +409,16 @@ async function applyOne(
         ? null
         : taskExecutionModule.runtimeRegistry.requestStop(exactToken, cause)
 
+    const effectivePriorStatus = raceWinnerStatus ?? priorStatus
     return {
       receipt: {
         taskId,
-        priorStatus,
+        priorStatus: effectivePriorStatus,
         fenceOutcome: nextFence === 'merged' ? 'fenced-merged' : 'fenced-closed',
-        cancelOutcome: disposition === 'cancel' ? 'canceled' : 'already-terminal',
+        cancelOutcome:
+          sourceTerminationTargetDisposition(effectivePriorStatus) === 'cancel'
+            ? 'canceled'
+            : 'already-terminal',
         releaseOutcome: 'pending',
         errorCode: null,
       },

@@ -73,7 +73,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'modules/intent/infrastructure/IntentApplyOperations: sqlite 17/1, postgresql 3/1',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-resource-package-maintenance-conformance.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧的 journal + 恢复端口）。
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 3/2, postgresql 3/3',
+  // RFC-359 W9：两侧各 +1 ref / +1 drive —— `rfc359-w9-resource-package-skill-recovery-conformance.test.ts`
+  // 同时驱动两侧的恢复端口（判据缺口 13b 的对拍）。两侧同步上涨，倒挂没有加深。
+  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 4/3, postgresql 4/4',
   // RFC-359 W8：两侧各 +1 ref —— `rfc359-w8-runtime-participants-conformance.test.ts` 的
   // 不合一判定用源码文本钉住了「drive 里两侧各挂一台子任务启动引擎」这条锚点。
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite 6/2, postgresql 8/1',

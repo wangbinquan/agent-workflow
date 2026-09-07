@@ -8,7 +8,7 @@ import {
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
-import type { TaskExecutionModule } from '../composition'
+import type { ProviderTaskExecutionModule, TaskExecutionModule } from '../composition'
 import { taskExecutionModule } from '../composition'
 import type { TaskArchiveMaintenanceCommand } from '../application/ports/taskArchiveMaintenanceCommand'
 import type {
@@ -130,6 +130,14 @@ export interface SelectedSqliteTaskExecutionProviderRuntime extends SelectedTask
 
 export interface SelectedPostgresqlTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
   readonly provider: 'postgresql'
+  /**
+   * RFC-359 W5-T19b —— PG 这一支的模块**必定**已经拿到持久化：它由
+   * `createPostgresqlTaskExecutionRuntimeParticipants` 用 `createProviderTaskExecutionModule`
+   * 造出来。把这件事写进类型，`postgresqlTaskDriverLifecycle` 要的 `claimPersisted` 就在
+   * 装配处得到保证；SQLite 那一支用的是进程级单例（没有持久化、走同步 `claim(db)`），
+   * 所以基类那格仍是 `TaskExecutionModule`，两支不共用一个「可能没装配」的槽。
+   */
+  readonly executionModule: ProviderTaskExecutionModule
   /**
    * TaskExecution's half of the Workgroup room transaction. Resource Catalog
    * reserves the transaction and binds this factory together with Workflow;

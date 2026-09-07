@@ -218,7 +218,7 @@ import {
 import {
   createCollaborationDurableConsumerDefinitions,
   createCollaborationWsProjector,
-  createSqliteCollaborationCommittedEventProjection,
+  createCollaborationCommittedEventProjection,
   collaborationCommittedEventCodec,
   createHumanGateContinuationWorkerDefinition,
 } from '@/modules/collaboration/composition/committedEvents'
@@ -311,7 +311,6 @@ import {
 } from './postgresqlDaemonApplication'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import {
-  createPostgresqlCollaborationCommittedEventProjection,
   createPostgresqlHumanGateContinuationRecoveryQueries,
   createPostgresqlHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
@@ -696,7 +695,7 @@ async function composePostgresqlProviderSession(
   )
   const committedEventProjectors = [
     runtime.taskExecution.lifecycleProjector,
-    createCollaborationWsProjector(createPostgresqlCollaborationCommittedEventProjection(db)),
+    createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
@@ -2603,7 +2602,7 @@ async function composeSqliteProviderSession(
   )
   const committedEventProjectors = [
     createSqliteTaskLifecycleWsProjector(db),
-    createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
+    createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)

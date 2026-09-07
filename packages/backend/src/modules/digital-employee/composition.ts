@@ -876,9 +876,22 @@ function composeDigitalEmployeeFromPersistence(
           ...(options.runtime.workerId === undefined ? {} : { workerId: options.runtime.workerId }),
         })
 
-  const runtimeDocument = async (caseId: string): Promise<EmployeeCaseProjectionDocument> => {
-    if (runtimeService === null) throw new Error('digital employee runtime is not composed')
-    const projection = await runtimeService.project(caseId)
+  /**
+   * RFC-359 W5-T19b —— 这里曾经是 `const runtimeDocument = async (caseId) => { if
+   * (runtimeService === null) throw new Error('digital employee runtime is not composed'); … }`。
+   *
+   * 那句 throw 是**声明位置**造成的，不是真的有「运行时可能没装配」这回事：`runtimeDocument`
+   * 的全部 7 个使用点都在 `runtimeService === null ? null : { … }` 的**非 null 分支**里
+   * （同一批箭头函数里 `runtimeService.launchCase(…)` 等等本来就是直接调、不判空的——
+   * TS 对 `const` 的收窄在其后创建的闭包里保留），只是它自己声明在分支外面，收窄够不着。
+   *
+   * 改成显式接收那个已经收窄的 service，缺口就在类型层不可表达了，throw 无处可写。
+   */
+  const documentForCase = async (
+    service: DigitalEmployeeRuntimeService,
+    caseId: string,
+  ): Promise<EmployeeCaseProjectionDocument> => {
+    const projection = await service.project(caseId)
     return {
       caseRef: { id: projection.case.id, revision: projection.case.revision },
       state: projection.case.state,
@@ -1014,30 +1027,30 @@ function composeDigitalEmployeeFromPersistence(
             commands: {
               launch: async (input) => {
                 const record = await runtimeService.launchCase(input)
-                return await runtimeDocument(record.id)
+                return await documentForCase(runtimeService, record.id)
               },
               launchWork: async (input) => {
                 const record = await runtimeService.launchWork(input)
-                return await runtimeDocument(record.id)
+                return await documentForCase(runtimeService, record.id)
               },
               previewPolicyUpgrade: (caseId, targetPolicyRevision) =>
                 runtimeService.previewPolicyUpgrade(caseId, targetPolicyRevision),
               applyPolicyUpgrade: async (previewToken) => {
                 const record = await runtimeService.applyPolicyUpgrade(previewToken)
-                return await runtimeDocument(record.id)
+                return await documentForCase(runtimeService, record.id)
               },
               terminate: async (caseId, terminalKind) => {
                 const record = await runtimeService.terminate(caseId, terminalKind)
-                return await runtimeDocument(record.id)
+                return await documentForCase(runtimeService, record.id)
               },
               resume: async (caseId) => {
                 const record = await runtimeService.resume(caseId)
-                return await runtimeDocument(record.id)
+                return await documentForCase(runtimeService, record.id)
               },
               replaceCaseMembers: (input) => runtimeService.replaceCaseMembers(input),
             },
             queries: {
-              getCase: runtimeDocument,
+              getCase: (caseId) => documentForCase(runtimeService, caseId),
               getCaseAcl: (caseId) => runtimeService.getCaseAcl(caseId),
               peekPolicyUpgradeCaseId: (previewToken) =>
                 runtimeService.peekPolicyUpgradeCaseId(previewToken),
@@ -1055,7 +1068,7 @@ function composeDigitalEmployeeFromPersistence(
                   subjectType,
                   subjectRef,
                 )
-                return record === null ? null : await runtimeDocument(record.id)
+                return record === null ? null : await documentForCase(runtimeService, record.id)
               },
             },
             worker: {

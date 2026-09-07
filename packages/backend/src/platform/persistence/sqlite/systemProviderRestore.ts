@@ -49,7 +49,7 @@ import {
   readMigrationAxisFromJournal,
 } from './systemBackupManifest'
 import { rawCopyDb } from '@/services/rawDbSnapshot'
-import { reconstructWorktrees } from './systemWorktreeBackup'
+import { reconstructWorktrees } from '@/platform/persistence/portableApplicationAssets'
 import { ulid } from 'ulid'
 
 const log = createLogger('restore')

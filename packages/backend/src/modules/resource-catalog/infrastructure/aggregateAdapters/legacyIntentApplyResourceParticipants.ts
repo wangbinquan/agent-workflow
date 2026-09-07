@@ -406,7 +406,12 @@ export interface LegacyIntentApplyPrepareContext {
 }
 
 export interface LegacyIntentApplyPrestageContext {
-  readonly recordArtifact: (artifact: LegacyIntentApplyArtifact) => void
+  /**
+   * RFC-359 W9 —— I14 record-before-act：登记必须**先于**副作用（插件安装 / 技能暂存）落库，
+   * 所以它是 `Promise<void>` 而不是 `void | Promise<void>`——联合里混进 `void`，调用方漏掉
+   * await 就成了合法写法，连 `no-floating-promises` 都不再报（`docs/dev-gotchas.md`）。
+   */
+  readonly recordArtifact: (artifact: LegacyIntentApplyArtifact) => Promise<void>
 }
 
 export interface LegacyIntentApplyCommitContext {
@@ -1029,7 +1034,7 @@ export function createLegacyIntentApplyResourceSession(
           options.pluginInstallOpts?.pluginsDir,
         )
         if (generationDir !== null) {
-          context.recordArtifact({
+          await context.recordArtifact({
             kind: 'plugin-install',
             pluginId: plan.resourceId,
             generationId,
@@ -1059,7 +1064,7 @@ export function createLegacyIntentApplyResourceSession(
           },
         )
         skillVersionStages.set(plan.operationId, staged)
-        context.recordArtifact({ kind: 'skill-version-stage', staged })
+        await context.recordArtifact({ kind: 'skill-version-stage', staged })
         options.afterSkillStage?.()
         return
       }
@@ -1078,7 +1083,7 @@ export function createLegacyIntentApplyResourceSession(
           (filesDir) => writeSkillTree(filesDir, payload),
         )
         skillStages.set(plan.operationId, stage)
-        context.recordArtifact({ kind: 'skill-stage', ...stage })
+        await context.recordArtifact({ kind: 'skill-stage', ...stage })
         options.afterSkillStage?.()
       }
     },

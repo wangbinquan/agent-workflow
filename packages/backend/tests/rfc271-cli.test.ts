@@ -16,28 +16,60 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { packageCommand } from '../src/cli/package'
+import {
+  packageCommand,
+  type PackageCommandBootstrap,
+  type PackageCommandBootstrapFactory,
+} from '../src/cli/package'
 
 const SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'package.ts'), 'utf8')
 const MAIN = readFileSync(resolve(import.meta.dir, '..', 'src', 'main.ts'), 'utf8')
 
+/**
+ * RFC-359 W5-T19b：`bootstrapFactory` 从可选变必填之后，每条用例都得说清楚它假设的装配是什么。
+ *
+ * `resolveLocalIdentityByUsername` 返回 null（「没有这个用户」）；`catalog` 用一个**一碰就抛**
+ * 的代理，因为下面的用例没有一条应该走到目录操作——真走到了要立刻红，而不是安静地返回 undefined。
+ *
+ * 这不是形式主义：改造前那条「--plan 与 --on-conflict 同时给」的用例不传 factory，命令在
+ * 「没装配」那一句就返回了，`status === 'error'` 因为一个与被测判据无关的理由变绿。
+ */
+const unusedCatalog = new Proxy(
+  {},
+  {
+    get(_target, property) {
+      throw new Error(`package CLI touched the catalog (${String(property)}) but should not have`)
+    },
+  },
+) as PackageCommandBootstrap['catalog']
+
+const noSuchUserBootstrap: PackageCommandBootstrapFactory = async () => ({
+  identity: {
+    async resolveLocalIdentityByUsername() {
+      return null
+    },
+  },
+  catalog: unusedCatalog,
+  shutdown() {},
+})
+
+/** 连 bootstrap 都不该被构造的用例（usage / 缺 --as-user）：工厂被调到就是回归。 */
+const neverBootstrapped: PackageCommandBootstrapFactory = async () => {
+  throw new Error('package CLI bootstrapped before it had decided the arguments were usable')
+}
+
 describe('① --as-user 强制', () => {
   test('导出不给 --as-user ⇒ 报错', async () => {
-    const out = await packageCommand([
-      'export',
-      '--type',
-      'agent',
-      '--name',
-      'x',
-      '--out',
-      '/tmp/x',
-    ])
+    const out = await packageCommand(
+      ['export', '--type', 'agent', '--name', 'x', '--out', '/tmp/x'],
+      neverBootstrapped,
+    )
     expect(out.status).toBe('error')
     expect(out.output).toContain('--as-user is required')
   })
 
   test('导入不给 --as-user ⇒ 报错', async () => {
-    const out = await packageCommand(['import', '--file', '/tmp/x.zip'])
+    const out = await packageCommand(['import', '--file', '/tmp/x.zip'], neverBootstrapped)
     expect(out.status).toBe('error')
     expect(out.output).toContain('--as-user is required')
   })
@@ -71,17 +103,20 @@ describe('② 同名多行不猜 / ③ 两个决策来源互斥', () => {
   })
 
   test('--plan 与 --on-conflict 同时给 ⇒ 报错', async () => {
-    const out = await packageCommand([
-      'import',
-      '--as-user',
-      'nobody',
-      '--file',
-      '/tmp/x.zip',
-      '--plan',
-      '/tmp/p.json',
-      '--on-conflict',
-      'new',
-    ])
+    const out = await packageCommand(
+      [
+        'import',
+        '--as-user',
+        'nobody',
+        '--file',
+        '/tmp/x.zip',
+        '--plan',
+        '/tmp/p.json',
+        '--on-conflict',
+        'new',
+      ],
+      noSuchUserBootstrap,
+    )
     // 用户不存在会先报 user not found；两者都是「拒绝而不是猜」，这里断言它没有
     // 静默继续。
     expect(out.status).toBe('error')
@@ -107,7 +142,7 @@ describe('注册与帮助', () => {
   })
 
   test('无子命令 ⇒ 打 usage 而不是静默成功', async () => {
-    const out = await packageCommand([])
+    const out = await packageCommand([], neverBootstrapped)
     expect(out.status).toBe('error')
     expect(out.output).toContain('usage: agent-workflow package')
   })

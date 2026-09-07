@@ -1,35 +1,41 @@
 // RFC-349 — PostgreSQL task lifecycle primitives used only by named
-// task-execution atoms. They intentionally expose a provider-private
-// transaction type, never a callback through an application/public port.
+// task-execution atoms. They are named after the provider because their
+// *judgement* is PostgreSQL-shaped (SERIALIZABLE budgets, `FOR UPDATE` row
+// locks); the transaction boundary itself is the neutral one.
+//
+// RFC-359 W5-T18：这三个开事务的地方原本直接调驱动的 `db.transaction(`，是账本里的裸事务。
+// 它们现在一律走 `databaseSessionFor(db)` 的中立会话。两件事因此变了，都是修复：
+//   · **可重入**——裸的 PG `db.transaction(` 会在**另一条连接**上另开一笔并独立提交，外层
+//     回滚带不走它（本波实撞：外层回滚后 SQLite 侧 0 行、PG 侧 1 行）。中立会话按客户端认
+//     AsyncLocalStorage 帧，嵌套时复用外层事务句柄，于是内层的写随外层一起回滚。
+//   · **失败回滚**——体内抛错整笔回滚的语义由原语统一保证，两个引擎相同。
+// 隔离级别与行锁的判断没有变：serializable 走的正是本文件当年那段
+// 「SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001/40P01 退避重试」——
+// `platform/persistence/databaseTransaction.ts` 的 `serializable` 显式记着它以本文件为蓝本。
 
 import { sql } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 
 // RFC-359 W7：这个别名以前借道 `platform/events/committed/postgresqlPersistence.ts`——那个文件
 // 是已提交事件出站存储的 PG 适配器，与本别名毫无关系，只是当年顺手把 PG 客户端的事务句柄类型
-// 定义在了那里。出站存储合一后该文件整个删除，别名回到它本来就该在的地方：PG 客户端自身。
-export type PostgresqlTaskExecutionTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
+// 定义在了那里。出站存储合一后该文件整个删除。
+//
+// RFC-359 W5-T18：它不再从 PG 客户端的 `transaction` 签名里挖，而**就是**中立事务句柄
+// `DatabaseTransaction`——事务由中立会话开出，交给 body 的本来就是那一个。别名留着是因为
+// 这几个 atom 的调用点还叫这个名字；语义上它已经没有 provider 私有面了。
+export type PostgresqlTaskExecutionTransaction = DatabaseTransaction
 
 export async function withPostgresqlSerializableTaskExecution<T>(
   db: PostgresqlDatabaseClient,
   body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await db.transaction(async (tx) => {
-        await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
-        return await body(tx)
-      })
-    } catch (error) {
-      if (await retryPostgresqlSerialization(attempt, error)) continue
-      throw error
-    }
-  }
+  return await databaseSessionFor(db).serializable(body)
 }
 
 /**
@@ -64,7 +70,7 @@ export async function withPostgresqlNodeRunAggregateTransaction<T>(
   db: PostgresqlDatabaseClient,
   body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
-  return await db.transaction(body)
+  return await databaseSessionFor(db).transaction(body)
 }
 
 /** 聚合根行锁：`fencedTaskId` 在 owner fence 之后调用，见上面的锁序说明。 */
@@ -109,7 +115,7 @@ export async function withPostgresqlTaskAggregateTransaction<T>(
   taskId: string,
   body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
-  return await db.transaction(async (tx) => {
+  return await databaseSessionFor(db).transaction(async (tx) => {
     await tx.run(sql`select ${tasks.id} from ${tasks} where ${tasks.id} = ${taskId} for update`)
     return await body(tx)
   })

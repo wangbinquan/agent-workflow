@@ -4,7 +4,7 @@ import type { DbClient } from '@/db/client'
 import {
   collaborationCommittedEventCodec,
   createCollaborationWsProjector,
-  createSqliteCollaborationCommittedEventProjection,
+  createCollaborationCommittedEventProjection,
 } from '@/modules/collaboration/composition/committedEvents'
 import { taskLifecycleCommittedEventCodec } from '@/modules/task-execution/application/taskLifecycleConsumers'
 import {
@@ -41,7 +41,7 @@ export function installTaskLifecycleAfterCommitTestPump(
     ),
     projectors: [
       createDatabaseTaskLifecycleWsProjector(db),
-      createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
+      createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
       {
         id: 'task-lifecycle-test-effect-projector',
         eventTypes: TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,

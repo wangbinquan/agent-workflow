@@ -145,7 +145,15 @@ export const BARE_TRANSACTION_DEBT: readonly string[] = [
   // RFC-359 W8 销账：`postgresqlTaskExecutionRecovery.ts: 1` + `postgresqlTaskOwnershipPersistence.ts: 1`
   // —— 归属与后继恢复两对适配器合一成 `taskOwnershipPersistence.ts` / `taskExecutionRecovery.ts`，
   // 它们的 SERIALIZABLE 事务体改走 `databaseSessionFor(db).serializable(...)`。
-  'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts: 3',
+  // RFC-359 W5-T18 销账：`postgresqlTaskLifecycleTransaction.ts: 3` —— 任务生命周期的三个
+  // 事务 opener（serializable / node-run 聚合 / task 聚合）改走 `databaseSessionFor(db)`。
+  // 隔离级别与行锁一字未动（`serializable` 走的正是当年写在那里的 SERIALIZABLE + 40001 整笔
+  // 重放，中立原语显式记着以它为蓝本；task 聚合的 `select … for update` 原样留在事务头）。
+  // 换来的是那三处此前只有 PG 一份实现的**可重入**与**失败回滚**在两个引擎上同一语义，
+  // 双引擎判据见 `tests/rfc359-w5-t18-task-lifecycle-neutral-transaction.test.ts`（含变异表）。
+  // （文件名刻意不带 `boundary` —— `tests/architecture/census.ts` 的 `GUARD_FILE_NAME_PATTERN`
+  // 按文件名认「架构守卫」，带那个词会被判成守卫并要求进 `architecture/guard-manifest.json`，
+  // 而它是一份行为回归用例、不是扫语料的守卫。）
   // RFC-359 W8 销账：`postgresqlMaintenanceRunStore.ts: 4` —— 它与 SQLite 侧那份
   // 同步实现（4 处 `dbTxSync`）合成了中立的 `platform/persistence/maintenanceRunStore.ts`，
   // 四笔事务改走 `databaseSessionFor(db).transaction(...)`，两份 provider 命名的实现整体退役。

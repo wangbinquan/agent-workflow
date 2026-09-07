@@ -36,39 +36,9 @@ export class TaskExecutionModule {
   // 的组合根共用 `DrizzleTerminalMaintenancePersistence`（`createTerminalMaintenanceStore(db)`），
   // 因此这个进程级单例不再需要一个 bun:sqlite 专属的同步 store 成员。
 
-  constructor(
-    readonly daemonGeneration: string,
-    readonly persistence?: TaskExecutionPersistence,
-  ) {
+  constructor(readonly daemonGeneration: string) {
     this.claimGate = new TaskClaimGate(daemonGeneration)
     this.runtimeRegistry = new InMemoryTaskRuntimeRegistry(this.claimGate)
-  }
-
-  async claimPersisted(input: {
-    intentId: string
-    now?: number
-    leaseMs?: number
-  }): Promise<ClaimedTaskExecution> {
-    if (this.persistence === undefined) {
-      throw new Error('task-execution persistence is not composed')
-    }
-    const permit = this.claimGate.enter()
-    try {
-      const token = await this.persistence.ownership.claimPendingIntent({
-        intentId: input.intentId,
-        identity: createWorkerIdentity({
-          ownerId: ulid(),
-          daemonGeneration: this.daemonGeneration,
-        }),
-        now: input.now ?? Date.now(),
-        leaseMs: input.leaseMs ?? DEFAULT_OWNERSHIP_LEASE_MS,
-      })
-      this.claimGate.bind(permit, token)
-      return { intentId: input.intentId, token, permit }
-    } catch (error) {
-      this.claimGate.leave(permit)
-      throw error
-    }
   }
 
   claim(input: {
@@ -134,6 +104,52 @@ export class TaskExecutionModule {
   }
 }
 
+/**
+ * RFC-359 W5-T19b —— 持久化交齐之后的模块。
+ *
+ * 改造前 `persistence` 是基类上的一个**可选**构造参数，`claimPersisted` 进门先
+ * `if (this.persistence === undefined) throw new Error('task-execution persistence is not composed')`。
+ * 那是「装配未完成但已经可被调用」的典型形状：类型层完全合法，缺口只在运行到那一行时才炸，
+ * 而两个 provider 的 daemon 跑到它的时机不一样——正是 RFC-359 W1-T1 修掉的那批
+ * `*-not-bound` 的同族。
+ *
+ * 现在把它拆成两个类型：**要持久化认领的能力，就得先拿到一个持有持久化的模块**。基类不再有
+ * 空槽（进程级单例与测试模块本来就没有持久化，它们走同步的 `claim(db)`），
+ * `claimPersisted` 只长在这里，于是「没装配」在类型层不可表达，那句 throw 无处可写。
+ */
+export class ProviderTaskExecutionModule extends TaskExecutionModule {
+  constructor(
+    daemonGeneration: string,
+    readonly persistence: TaskExecutionPersistence,
+  ) {
+    super(daemonGeneration)
+  }
+
+  async claimPersisted(input: {
+    intentId: string
+    now?: number
+    leaseMs?: number
+  }): Promise<ClaimedTaskExecution> {
+    const permit = this.claimGate.enter()
+    try {
+      const token = await this.persistence.ownership.claimPendingIntent({
+        intentId: input.intentId,
+        identity: createWorkerIdentity({
+          ownerId: ulid(),
+          daemonGeneration: this.daemonGeneration,
+        }),
+        now: input.now ?? Date.now(),
+        leaseMs: input.leaseMs ?? DEFAULT_OWNERSHIP_LEASE_MS,
+      })
+      this.claimGate.bind(permit, token)
+      return { intentId: input.intentId, token, permit }
+    } catch (error) {
+      this.claimGate.leave(permit)
+      throw error
+    }
+  }
+}
+
 // One production module per JS daemon generation.  Tests that need isolated
 // registries call createTaskExecutionTestModule explicitly; production
 // adapters only import this instance.
@@ -148,6 +164,6 @@ export function createTaskExecutionTestModule(
 export function createProviderTaskExecutionModule(input: {
   readonly daemonGeneration: string
   readonly persistence: TaskExecutionPersistence
-}): TaskExecutionModule {
-  return new TaskExecutionModule(input.daemonGeneration, input.persistence)
+}): ProviderTaskExecutionModule {
+  return new ProviderTaskExecutionModule(input.daemonGeneration, input.persistence)
 }

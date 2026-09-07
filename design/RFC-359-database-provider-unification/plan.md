@@ -1695,6 +1695,26 @@ SQLite 的 `dbTxSync` 兜的是 `foreignExplicitTransactionOpen`（`db/txSync.ts
 一般规律：**keyset 分页的正确性依赖「游标比较」与「排序」用同一套规则**，而这两处在源码里
 往往相隔很远、由不同的东西决定（一个在列 DDL，一个在查询文本）。守住其中一处不等于守住这件事。
 
+### T17 的「provider 命名文件」数**不等于**实现分叉数——很大一部分是命名债（W9 实测）
+
+W9 逐个核过 collaboration 的 12 个条目：**只有 1 个名副其实**。8 个是**误名**——它们早就跑在
+`ProviderNeutralDatabase` / `databaseSessionFor` 上，PG daemon 今天就在用；其中
+`collaborationRouteOperations.ts:14-15` 的注释自己写着「正典是被转发的那批实现…它们的写事务
+已经全部跑在中立原语上」。另 2 个是真 PG 侧产物（1 死代码、1 真成对），1 个是纯转发器。
+
+**推论（读这本账本时必须带上）**：
+- `PROVIDER_NAMED_FILE_DEBT` 的计数是**按文件名**的，它同时装着两类完全不同的债——
+  **实现分叉**（两份实现会漂，是 RFC-359 的靶心）与**命名债**（一份中立实现顶着旧名字，零行为风险）。
+  把这个数当成「还剩多少处分叉」会**高估**，把它当成「还剩多少工作量」会**低估**（改名很便宜）。
+- 反过来，**「独苗」这个标签本身会骗人**：W9 另一处实测发现 `PackageSkillTree` 这一对，
+  SQLite 侧叫 `sqlitePackageSkillTree.ts`、PG 那半**藏在 `postgresqlResourcePackageArtifacts.ts`
+  里的一个函数**——两侧不同名、不同文件，于是 T17 的成对判据与 pair 账本的「同目录同名」判据
+  **同时看不见它**，它只以一个「独苗」的面目出现。而它有 **5 条用户可见的行为差**。
+  **看到独苗要去找孪生，孪生可能藏在别人的文件里。**
+
+**下一步建议**：把纯改名单独做一刀（零行为改动），一次性重采账本。混在功能刀里做会牵动
+5–7 份 architecture ledger、把改名的 diff 淹没在行为改动里，review 不动。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

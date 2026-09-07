@@ -20,7 +20,7 @@ import { DEFAULT_MAX_WORKTREE_BYTES } from '../src/services/worktreeBackup'
 import {
   captureWorktrees,
   reconstructWorktrees,
-} from '../src/platform/persistence/sqlite/systemWorktreeBackup'
+} from '../src/platform/persistence/portableApplicationAssets'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

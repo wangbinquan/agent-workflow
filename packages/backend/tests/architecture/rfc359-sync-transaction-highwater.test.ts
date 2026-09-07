@@ -31,11 +31,27 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // `CollaborationRouteOperations` / `CollaborationRuntimeMechanics` 两对适配器合一时被
   // 转发到的正典实现，写事务改走 `databaseSessionFor(db).transaction(...)` + 中立的
   // `setNodeRunStatusTx`，于是 PG 侧那两份共 4016 行的原生重写整体退役。
-  'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts: 1',
+  // RFC-359 W9 销账：`legacySqliteTaskCollab.ts: 1 → 0` —— 任务成员全量替换
+  // （`updateTaskMembersLocked`：读一批成员 → 全量 delete → insert 回去）改走
+  // `databaseSessionFor(db).transaction(...)`，事务体开头 `lockAggregateRoot(tasks)`。
+  // 同批删掉 RFC-326 的同步孪生 `hasActingMembershipTx`（自 W1-T2c 起生产零调用方，
+  // 只有 `rfc326-tx-primitives-equivalence.test.ts` 的 AC-19 等价锁按名字钉着它）。
+  // 至此 `modules/collaboration/**` 的同步事务面清零。
+  // 判据在 `tests/rfc359-w9-task-members-conformance.test.ts`（两引擎各跑一遍）。
   // RFC-359 W7 销账：`sqliteReviewRepairParticipant.ts: 2` —— 它与 PG 那份合成了中立的
   // `reviewRepairParticipant.ts`，两处 `dbTxSync` 里一处改走 `databaseSessionFor(db).transaction`
   // （读改写序列），一处直接去掉（单语句 CAS 本就原子，理由写在该文件头注释）。
-  'modules/intent/infrastructure/sqliteIntentApplyOperations.ts: 9',
+  //
+  // RFC-359 W9 销账：`sqliteIntentApplyOperations.ts: 9 → 0` —— Intent apply 的九笔 **journal
+  // 事务**（claim / recordArtifact / settleFailed / keepRetryable / 收敛的五笔）全部改走
+  // `databaseSessionFor(db).transaction(...)`，CAS 判据换成中立的 `affectedRows`。
+  // 没有一笔被同步参与者钉住：这九笔的事务体只碰 intent 自己的四张表（sessions / drafts /
+  // draft_resolutions / apply_journal），
+  // 唯一按 `DbTxSync` 定型的回调（`participantInTransaction` 的六条 legacy 提交臂）挂在
+  // **大事务**上，而大事务早在 W4-D23b 就迁完了、本轮不动。级联只有一层：
+  // `recordArtifact` 的契约收成 `Promise<void>`，生产 prestage 链的三处调用点补 await
+  // （`legacyIntentApplyResourceParticipants.ts`，I14 record-before-act）。
+  // 判据在 `tests/rfc359-w9-intent-apply-sync-transaction-cutover.test.ts`（两引擎各 13 条）。
   'modules/resource-catalog/infrastructure/legacy/agent.ts: 5',
   'modules/resource-catalog/infrastructure/legacy/importRefs.ts: 1',
   'modules/resource-catalog/infrastructure/legacy/workflow.ts: 2',

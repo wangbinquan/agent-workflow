@@ -13,7 +13,7 @@ import type {
   ResourcePackageApplyJournalSnapshot,
   ResourcePackageApplyMaintenanceLog,
 } from '../application/resourcePackageMaintenance'
-import { cleanupOpDirs, opStagedDir, swapInStaged } from './legacy/skillFsPublish'
+import { cleanupOpDirs, opCandidateDir, opStagedDir, swapInStaged } from './legacy/skillFsPublish'
 import { hashRegularFileTree } from './legacy/skillHash'
 import {
   realDirectoryChainState,
@@ -22,6 +22,7 @@ import {
   skillVersionAbs,
 } from './legacy/skillIdentityPaths'
 import { markSkillBootVerified, unmarkSkillBootVerified } from './legacy/skillBootVerify'
+import { resourcePackageSkillRecoveryDisposition } from '../domain/resourcePackageSkillRecovery'
 import { abandonOperation, finishOperation } from './legacy/skillOperations'
 
 const LegacySkillStageArtifactSchema = z
@@ -103,6 +104,32 @@ async function publishStagedVersion(
   ) {
     throw new Error('resource-package-skill-version-artifact-path-mismatch')
   }
+
+  // RFC-359 W9（判据缺口 13b）：换盘之前先问账面还认不认这一代。崩溃到收敛之间用户可能又发布了
+  // 一版、或把技能删了；此前这里从头到尾不读 `content_version`，于是无条件 `swapInStaged` 会把
+  // **陈旧代际**换回 live、或把**已删技能的目录复活**成一棵没有数据库行的孤儿树，两者都无声无息。
+  // 判定与 PostgreSQL 侧共用中立的 `resourcePackageSkillRecoveryDisposition`（纯算术，无引擎差异）。
+  const current = await db
+    .select({ contentVersion: skills.contentVersion })
+    .from(skills)
+    .where(eq(skills.id, staged.skillId))
+    .get()
+  const disposition = resourcePackageSkillRecoveryDisposition({
+    currentContentVersion: current?.contentVersion ?? null,
+    artifactVersion: staged.newVersion,
+  })
+  if (disposition === 'cleanup-deleted' || disposition === 'cleanup-superseded') {
+    // live 树一个字节都不动，只清掉这次操作留下的 staged / backup / candidate。
+    // 与 PostgreSQL 侧一样**不**补 `markSkillBootVerified`——启动复核由启动复核器负责，
+    // 在这里补一次会造出一条只有 SQLite 才有的分支。
+    cleanupOpDirs(filesDir, staged.publishId)
+    rmSync(opCandidateDir(versionDir, staged.publishId), { recursive: true, force: true })
+    return
+  }
+  if (disposition === 'reject-missing-generation') {
+    throw new Error(`resource-package-skill-publication-missing:${staged.skillId}`)
+  }
+
   mkdirSync(dirname(filesDir), { recursive: true })
   swapInStaged(filesDir, staged.publishId)
   if (
@@ -198,7 +225,11 @@ async function rollForwardArtifacts(input: {
         pendingVersions.push(artifact)
         continue
       }
-      const operation = input.db
+      // RFC-359 W8：这里的 `await` 不是装饰。bun:sqlite 的 `.get()` 是同步的，漏掉它今天恰好无害；
+      // 但同一段代码只要接上 PostgreSQL（或换成中立设施），`operation` 就成了 Promise，
+      // `operation?.active === 1` 恒 false、`operation?.phase !== 'done'` 恒真 —— 静默改走告警分支。
+      // 同函数上一处读 `plugins` 一直是 await 的，这一处是漏的。
+      const operation = await input.db
         .select({ active: skillOperations.active, phase: skillOperations.phase })
         .from(skillOperations)
         .where(eq(skillOperations.opId, opId))

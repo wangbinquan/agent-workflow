@@ -1,4 +1,4 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { finishCommittedClarifyAutoDispatch } from '@/services/clarify/autoDispatch'
 import type {
@@ -6,11 +6,19 @@ import type {
   ClarifyContinuationConvergenceRequest,
 } from '../application/ports/clarifyContinuationConvergence'
 
-/** SQLite compatibility adapter. The clarify command is being migrated behind
- * this collaboration-owned Promise port; task execution no longer imports its
- * storage mechanism or memory scheduler. */
+/**
+ * 澄清续跑收敛端口的**唯一**实现，两个 provider 共用。
+ *
+ * RFC-359 W9：类型面从 `DbClient`（bun:sqlite 同步客户端）改成 `ProviderNeutralDatabase`。
+ * 这里从来只做一件事——把请求转给早已中立的 `finishCommittedClarifyAutoDispatch`
+ * （它的 `db` 就是 `ProviderNeutralDatabase`）；`DbClient` 是这条链上唯一残留的引擎断言，
+ * 而它在 PostgreSQL 上照样跑：`services/task.ts` 的 `createTaskDriveCoordinator` 把
+ * `gateContinuationPreDrive` 默认成 `createSqliteGateContinuationPreDriveStep(...)`，
+ * 五个 drive 入口没有一个注入替代品，PG daemon 走的也是这一份。名字里的 `sqlite`
+ * 因此名不副实——改名会牵动 provider 命名账本，留给后续刀口。
+ */
 export function createSqliteClarifyContinuationConvergence(input: {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): ClarifyContinuationConvergence {
   return Object.freeze({

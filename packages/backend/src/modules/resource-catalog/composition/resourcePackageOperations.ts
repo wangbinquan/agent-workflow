@@ -17,7 +17,7 @@ import {
   createResourcePackageOwnedResourceLookup,
   createResourcePackageReadPort,
 } from '../infrastructure/packageResourceRows'
-import { readSqlitePackageSkillTree } from '../infrastructure/sqlitePackageSkillTree'
+import { readPackageSkillTree } from '../infrastructure/packageSkillTree'
 import { createResourcePackageOperationDescriptors } from './catalogOperationDescriptors'
 import type { ResourcePackageCatalogModule } from '../public/operations'
 import {
@@ -248,7 +248,7 @@ export function composeSqliteResourcePackageProvider(
   return Object.freeze({
     resources: createResourcePackageOwnedResourceLookup(deps.db),
     reads: createResourcePackageReadPort(deps.db),
-    readSkillTree: (skillId: string) => readSqlitePackageSkillTree(deps.db, deps.appHome, skillId),
+    readSkillTree: (skillId: string) => readPackageSkillTree(deps.db, deps.appHome, skillId),
   })
 }
 

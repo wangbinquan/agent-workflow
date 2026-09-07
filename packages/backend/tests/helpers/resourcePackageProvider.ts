@@ -5,7 +5,7 @@ import {
   composeSqliteResourcePackageProvider,
 } from '../../src/modules/resource-catalog/composition/resourcePackageOperations'
 import { createResourcePackageReadPort } from '../../src/modules/resource-catalog/infrastructure/packageResourceRows'
-import { readSqlitePackageSkillTree } from '../../src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree'
+import { readPackageSkillTree } from '../../src/modules/resource-catalog/infrastructure/packageSkillTree'
 import { createSqliteResourcePackageExecutionAdapter } from '../../src/services/resourcePackage/executionAdapter'
 import { walkExportClosureFromReadPort } from '../../src/services/resourcePackage/closure'
 import { exportResourcePackageFromReadPort } from '../../src/services/resourcePackage/export'
@@ -63,7 +63,7 @@ export function exportResourcePackage(
 ): ReturnType<typeof exportResourcePackageFromReadPort> {
   return exportResourcePackageFromReadPort(
     createResourcePackageReadPort(db),
-    (skillId) => readSqlitePackageSkillTree(db, options.appHome, skillId),
+    (skillId) => readPackageSkillTree(db, options.appHome, skillId),
     actor,
     root,
     options,

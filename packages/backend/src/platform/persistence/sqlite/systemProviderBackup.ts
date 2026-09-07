@@ -19,7 +19,6 @@
 // its provider-neutral coordinator; this file alone owns VACUUM INTO.
 
 import type { Database } from 'bun:sqlite'
-import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import {
@@ -30,10 +29,8 @@ import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDat
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
-import { listWorkflows } from '@/services/workflow'
+import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { quickCheckSqlite } from './systemBackupVacuum'
-import { captureWorktrees } from './systemWorktreeBackup'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
@@ -189,25 +186,10 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
     kind: opts.kind,
     includeWorktrees: opts.includeWorktrees,
     now: opts.now,
-    application: {
-      async exportWorkflows(destination) {
-        let count = 0
-        for (const wf of await listWorkflows(opts.db)) {
-          // RFC-199: listWorkflows already captured the immutable row used for
-          // this export. Never re-read by id and serialize a later revision.
-          writeFileSync(join(destination, `${wf.id}.yaml`), stringifyWorkflowYaml(wf), 'utf-8')
-          count += 1
-        }
-        return count
-      },
-      async captureWorktrees(stagingDirectory) {
-        const result = await captureWorktrees(opts.db, stagingDirectory)
-        log.info('backup captured worktrees', {
-          captured: result.captured.length,
-          skipped: result.skipped.length,
-        })
-      },
-    },
+    // RFC-359 W9：workflow / worktree 的行选择两个 provider 共用一份中立实现
+    // （合一前 PostgreSQL 侧是同一批查询的手写 SQL 复制品）。RFC-199 的「导出用的是
+    // 已捕获的那一行、不按 id 回读」由那份实现的单次 SELECT 天然满足。
+    application: createPortableBackupApplicationAssets({ db: opts.db }),
     async exportDatabase({ stagingDirectory, logicalArtifactRoot, operationId }) {
       // 1. SQLite via VACUUM INTO. The path must be inside a directory the
       //    daemon can write to; staging is a tmp dir we'll tar shortly.

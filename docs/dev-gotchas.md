@@ -1751,8 +1751,12 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 
 1. **把「删许可」当成跟进提交的固定动作**——凡是上一提开过 `allowGrowth`，下一提**无论改什么**
    都顺手把它删掉、把上涨理由折进该条目的 `why`（理由要长期保留，不能随许可一起消失）。
-2. **删完必须重算 `contentDigest`**。`architecture:write` 会顺带做，**手改不会**——
-   这是同一段流程里的第二个坑，见本文件 §「架构账本的联动点」第 4 行。
+2. **删完不是「重算 `contentDigest`」就够了——必须重跑一次普查。**（2026-09-07 实撞，
+   这是同一个形状的**第五次**）我删掉三条许可后只重算了 `ledger-baselines.json` 自己的
+   `contentDigest`，推上去 **N1b「RFC-317 subset ledgers project into canonical owner/import/facade
+   truth」当场红**：这份治理产物的内容还要**投影进其他 canonical manifest**，改了它就等于改了投影源。
+   正确动作是在 HEAD 的只读导出上跑 `bun run scripts/architecture-census.ts --write --snapshot-sha HEAD`
+   再把产物整批拷回——`architecture:write` 会把 digest 与投影一起重算，手改两样都不会。
 3. 如果确实还会继续涨（后面还有波次要落），**不要反复开关许可**——把那几笔攒到一起落一次，
    或者干脆等波次收尾再采一次普查。反复开许可 = 反复过期。
 

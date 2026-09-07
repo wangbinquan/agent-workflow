@@ -22,6 +22,10 @@ import {
 import { hashRegularFileTree } from './legacy/skillHash'
 import { skillFilesAbs, skillVersionAbs } from './legacy/skillIdentityPaths'
 import { markSkillBootVerified } from './legacy/skillBootVerify'
+import {
+  resourcePackageSkillRecoveryDisposition,
+  type ResourcePackageSkillRecoveryDisposition,
+} from '../domain/resourcePackageSkillRecovery'
 
 const PostgresqlArtifactSchema = z.discriminatedUnion('kind', [
   z
@@ -139,22 +143,13 @@ function skillArtifactVersion(artifact: PostgresqlSkillArtifact): number {
   return artifact.kind === 'skill-stage' ? 1 : artifact.version
 }
 
+// RFC-359 W9：代际判定搬进中立的 `domain/resourcePackageSkillRecovery.ts`，SQLite 侧的
+// `publishStagedVersion` 现在调同一份（此前它一格都没有，见判据缺口 13b）。旧名保留为别名，
+// 只为 `tests/rfc349-resource-package-maintenance.test.ts` 那组四分支单测不必跟着改。
 export type PostgresqlResourcePackageSkillRecoveryDisposition =
-  | 'cleanup-deleted'
-  | 'cleanup-superseded'
-  | 'roll-forward-current'
-  | 'reject-missing-generation'
-
-/** Pure journal/owner generation decision used before any snapshot read. */
-export function postgresqlResourcePackageSkillRecoveryDisposition(input: {
-  readonly currentContentVersion: number | null
-  readonly artifactVersion: number
-}): PostgresqlResourcePackageSkillRecoveryDisposition {
-  if (input.currentContentVersion === null) return 'cleanup-deleted'
-  if (input.currentContentVersion > input.artifactVersion) return 'cleanup-superseded'
-  if (input.currentContentVersion < input.artifactVersion) return 'reject-missing-generation'
-  return 'roll-forward-current'
-}
+  ResourcePackageSkillRecoveryDisposition
+export const postgresqlResourcePackageSkillRecoveryDisposition =
+  resourcePackageSkillRecoveryDisposition
 
 function assertSkillArtifactPaths(input: {
   readonly artifact: PostgresqlSkillArtifact
@@ -204,7 +199,7 @@ async function rollForwardSkillArtifact(input: {
     .from(skills)
     .where(eq(skills.id, input.artifact.skillId))
     .get()
-  const disposition = postgresqlResourcePackageSkillRecoveryDisposition({
+  const disposition = resourcePackageSkillRecoveryDisposition({
     currentContentVersion: skill?.contentVersion ?? null,
     artifactVersion: version,
   })

@@ -36,14 +36,32 @@
 // `resolveTerminalWorkspacePruneDecision`，在同一个终态 CAS 里写 prune 认领（连三列墓碑条件
 // 一起，形状对齐 `taskRuntimeLifecyclePersistence`），并把认领塞进 committed event。
 // 下面每条断言在抬齐前后都成立。
+//
+// # RFC-359 W9 追加的两条（清 `rfc359-w5-dual-engine-predicate-gaps.test.ts` 的存量缺口）
+//
+//   **⑮** 把上面那条「看起来像差异、实际不是」从**议论**变成**判据**：拿本次落下的
+//   lifecycle 事件去喂 `createTaskLifecycleDurableConsumerDefinitions` 真造出来的
+//   `task-workspace-prune-nudge`，断言两个引擎都会叫醒回收。缺口账本 `06` 记的
+//   「PG 上任务停在半终态」据此销账——PG 的终态 / 完成时刻 / 回收认领三件都在，
+//   SQLite 那句 `finalizeCanceledTaskWithoutDriver` 只是同一条路上的快路径。
+//
+//   **⑯** 并发终态写抢在源终止的终态落笔之前。缺口账本 `07` 记的「PG 直接抛 409」
+//   **不成立**：PG 整笔跑在 SERIALIZABLE 里，那条 UPDATE 撞 40001、中立会话重放整笔，
+//   第二遍读到赢家状态走 already-terminal 收场，投递方收不到 409。真正的差额在收据，
+//   而且弱侧是 SQLite——它按开工前那次读报 `priorStatus='running'` / `cancelOutcome='canceled'`，
+//   于是投递详情说「这次取消了它」，而任务实际是别人写成的 `done`。已按强侧（PostgreSQL）
+//   抬齐：SQLite 的 catch 分支复读赢家状态后，收据按赢家出。⑯ 在抬齐前只在 SQLite 上红。
+//   交错窗口靠 RFC-300 的回收策略回调撑开——两个引擎都在「读到 priorStatus 之后、终态写之前」
+//   await 它一次，是唯一一个对两侧都成立的确定性交错点，不用 sleep、不用墙钟。
 
 import { afterEach, expect, test } from 'bun:test'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql as sqlExpr } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { committedEvents, nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
+import type { EventObservationParticipant } from '@/modules/event-center/public/participants'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
 import type {
   TaskSourceTerminationEffectInput,
@@ -51,11 +69,13 @@ import type {
   TaskSourceTerminationReceipt,
 } from '@/modules/task-execution/application/applySourceTerminationEffect'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
+import { createTaskLifecycleDurableConsumerDefinitions } from '@/modules/task-execution/application/taskLifecycleConsumers'
 // 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里
 // （`tests/architecture/rfc359-w5-provider-pair-conformance.test.ts`）——走 composition 的
 // 再导出会让这份对拍在账本里看不见。
 import { createPostgresqlTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant'
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
+import type { CommittedEventEnvelopeV1 } from '@/platform/events/committed/types'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
@@ -224,6 +244,27 @@ async function taskRow(db: ProviderNeutralDatabase, taskId: string) {
     .where(eq(tasks.id, taskId))
     .limit(1)
   return rows[0]
+}
+
+/** 这次转移落下的 `task.lifecycle-transitioned.v1` **整个信封**（消费者吃的就是它）。 */
+async function lifecycleEventEnvelope(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<CommittedEventEnvelopeV1> {
+  const rows = await db
+    .select({ payloadJson: committedEvents.payloadJson })
+    .from(committedEvents)
+    .where(
+      and(
+        eq(committedEvents.aggregateId, taskId),
+        eq(committedEvents.eventType, 'task.lifecycle-transitioned.v1'),
+      ),
+    )
+    .orderBy(desc(committedEvents.aggregateSeq))
+    .limit(1)
+  const raw = rows[0]?.payloadJson
+  if (raw === undefined) throw new Error(`task ${taskId} 没有落下 lifecycle 事件`)
+  return JSON.parse(raw) as CommittedEventEnvelopeV1
 }
 
 /** 这次转移落下的 `task.lifecycle-transitioned.v1` payload（没有就是 null）。 */
@@ -482,5 +523,98 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
       participant.apply(mintSourceTerminationEffectCapability(effect('fence-merged', 5)), claimed),
     ).rejects.toMatchObject({ code: 'source-termination-capability-invalid' })
     expect(await taskRow(harness.db, taskId)).toMatchObject({ status: 'running', fence: null })
+  })
+
+  test('⑮ 没有 driver 的取消：收尾靠同一个持久消费者，两侧都会叫醒工作区回收', async () => {
+    const { taskId } = await seed(harness.db)
+    registerProductionPrunePolicy(harness.db)
+
+    const receipts = await apply(harness, effect('fence-closed', 5))
+
+    // 任务确实收完尾了（不是「只改了 receipt」）：终态 + 完成时刻 + 认领三件都在。
+    expect(receipts[0]).toMatchObject({
+      cancelOutcome: 'canceled',
+      releaseOutcome: 'no-active-owner',
+    })
+    const row = await taskRow(harness.db, taskId)
+    expect(row?.status).toBe('canceled')
+    expect(row?.finishedAt).not.toBeNull()
+    expect(row?.workspacePruneCause).toBe('webhook-terminal')
+
+    // SQLite 侧在这条「没有活着的 owner」的分支上还会**当场**调一次
+    // `finalizeCanceledTaskWithoutDriver`，PG 侧没有那一句。它只是快路径：真正把工作树从盘上
+    // 删掉的是下面这个持久消费者，两个 bootstrap 都接了它（`cli/start.ts` 的两个
+    // `nudgeWorkspacePrune`）。判据因此落在「认领进没进事件、消费者认不认它」，而不是
+    // 「本次调用返回前 `workspace_pruned_at` 有没有落章」——后者会把机制差异读成能力缺口。
+    const nudged: string[] = []
+    const consumers = createTaskLifecycleDurableConsumerDefinitions({
+      events: { observe: async () => ({}) } as unknown as EventObservationParticipant,
+      closeTerminalGates: async () => {},
+      notifyChildBudget: async () => {},
+      notifyExecutionWatch: async () => {},
+      nudgeWorkspacePrune: async (id) => {
+        nudged.push(id)
+      },
+    })
+    const nudge = consumers.find((consumer) => consumer.id === 'task-workspace-prune-nudge')
+    expect(nudge).toBeDefined()
+    await nudge!.handle(await lifecycleEventEnvelope(harness.db, taskId))
+    expect(nudged).toEqual([taskId])
+  })
+
+  test('⑯ 终态写抢在源终止的终态落笔之前：两侧都不把 409 抛给投递方，收据按赢家出', async () => {
+    const { taskId, openRunId, intentId } = await seed(harness.db)
+    // 唯一一个对两个引擎都成立的确定性交错点：RFC-300 的工作区回收策略。两侧都在
+    // 「读到 priorStatus 之后、终态写之前」await 它一次，所以在这里落一次并发终态写，
+    // 就必然让本次的终态 CAS 输掉——不靠 sleep、不靠墙钟。
+    let raced = false
+    registerTerminalWorkspacePrunePolicy(async () => {
+      if (!raced) {
+        raced = true
+        await harness.db
+          .update(tasks)
+          .set({
+            status: 'done',
+            finishedAt: 99,
+            runningSince: null,
+            lifecycleEventRevision: sqlExpr`${tasks.lifecycleEventRevision} + 1`,
+          })
+          .where(eq(tasks.id, taskId))
+      }
+      return { prune: false }
+    })
+
+    // 两侧的复原机制不同（SQLite 手写 catch + 复读赢家；PostgreSQL 由 SERIALIZABLE 的
+    // 40001 重放整笔），但用户看到的必须逐字一样：投递不报错，围栏照样落章，收据按**赢家**
+    // 的状态出。SQLite 曾按开工前那次读报 `priorStatus='running' / cancelOutcome='canceled'`
+    // ——投递详情于是说「这次取消了它」，而任务实际是 `done`。
+    const receipts = await apply(harness, effect('fence-closed', 5))
+    expect(raced).toBe(true)
+    expect(receipts).toEqual([
+      {
+        taskId,
+        priorStatus: 'done',
+        fenceOutcome: 'fenced-closed',
+        cancelOutcome: 'already-terminal',
+        releaseOutcome: 'no-active-owner',
+        errorCode: null,
+      },
+    ])
+    // 赢家的终态一个字都不被改写，围栏与消费位仍然落章。
+    expect(await taskRow(harness.db, taskId)).toMatchObject({
+      status: 'done',
+      finishedAt: 99,
+      fence: 'closed',
+      effectRevision: 5,
+    })
+    // 连带收尾照做：开着的节点跑批被取消，未消费的执行 intent 被终态化。
+    expect(await runRow(harness.db, openRunId)).toEqual({
+      status: 'canceled',
+      errorMessage: 'webhook-mr-closed',
+    })
+    expect(await intentRow(harness.db, intentId)).toEqual({
+      state: 'canceled',
+      failureCode: 'webhook-mr-closed',
+    })
   })
 })

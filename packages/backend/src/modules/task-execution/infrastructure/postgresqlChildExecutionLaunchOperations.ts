@@ -53,7 +53,7 @@ import type {
 } from '../application/ports/childExecutionLaunchOperations'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
-import type { TaskExecutionModule } from '../composition'
+import type { ProviderTaskExecutionModule } from '../composition'
 import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
@@ -79,7 +79,7 @@ export interface PostgresqlChildWorkgroupLaunchResources {
 export interface PostgresqlChildExecutionLaunchDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly persistence: TaskExecutionPersistence
-  readonly executionModule: TaskExecutionModule
+  readonly executionModule: ProviderTaskExecutionModule
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly log: TaskExecutionTopologyLogger
   readonly workgroup: PostgresqlChildWorkgroupLaunchResources
