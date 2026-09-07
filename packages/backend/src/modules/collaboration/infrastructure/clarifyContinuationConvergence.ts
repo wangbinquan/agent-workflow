@@ -13,7 +13,7 @@ import type {
  * 这里从来只做一件事——把请求转给早已中立的 `finishCommittedClarifyAutoDispatch`
  * （它的 `db` 就是 `ProviderNeutralDatabase`）；`DbClient` 是这条链上唯一残留的引擎断言，
  * 而它在 PostgreSQL 上照样跑：`services/task.ts` 的 `createTaskDriveCoordinator` 把
- * `gateContinuationPreDrive` 默认成 `createSqliteGateContinuationPreDriveStep(...)`，
+ * `gateContinuationPreDrive` 默认成 `composeGateContinuationPreDrive(...)`，
  * 五个 drive 入口没有一个注入替代品，PG daemon 走的也是这一份。
  * RFC-359 W12：实现与调用方统一改为中立名称。
  */

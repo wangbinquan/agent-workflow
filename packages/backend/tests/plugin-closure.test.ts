@@ -8,21 +8,27 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import { buildActor } from '../src/auth/actor'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
+import { composePluginCatalog } from '../src/modules/resource-catalog/composition/pluginOperations'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { createPluginRepository } from '../src/modules/resource-catalog/infrastructure/pluginRepository'
 import {
   collectPluginIdsFromClosure,
   loadPluginsByIds,
   type PluginClosureQuery,
 } from '../src/services/pluginClosure'
+import { createPlugin, type PluginServiceBinding } from './helpers/pluginServiceBinding'
 import {
-  composePluginServiceBindingForTest,
-  createPlugin,
-  type PluginServiceBinding,
-} from './helpers/pluginServiceBinding'
-import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+  checkForUpdate,
+  cleanupInstallGeneration,
+  installPlugin,
+  resetNpmProbeCacheForTests,
+} from '../src/services/pluginInstaller'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let pluginsDir = ''
@@ -75,16 +81,51 @@ describe('collectPluginIdsFromClosure', () => {
   })
 })
 
-describe('loadPluginsByIds', () => {
-  let db: DbClient
+describeEachProvider('loadPluginsByIds', (harness) => {
+  let db: ProviderNeutralDatabase
   let binding: PluginServiceBinding
   let query: PluginClosureQuery
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-cls-'))
     resetNpmProbeCacheForTests()
     process.env.FAKE_NPM_MODE = 'success'
-    binding = composePluginServiceBindingForTest(db, { pluginsDir, npmBin: FAKE_NPM })
+    const actor = buildActor({
+      user: {
+        id: 'plugin-test-admin',
+        username: 'plugin-test-admin',
+        displayName: 'Plugin Test Admin',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'session',
+    })
+    const authority = new AuthorityClaimRegistry().mintDirectAuthority(
+      { userId: actor.user.id, source: actor.source },
+      { ...actor, userId: actor.user.id },
+    ).actor
+    const installerOptions = { pluginsDir, npmBin: FAKE_NPM }
+    binding = {
+      authority,
+      catalog: composePluginCatalog({
+        db,
+        resourceCatalog: composeResourceCatalogFor({ db }),
+        coordinator: new ResourceOperationCoordinator(),
+        installer: {
+          async install(pluginId, spec) {
+            const installed = await installPlugin(pluginId, spec, installerOptions)
+            return {
+              sourceKind: installed.sourceKind,
+              cachedPath: installed.cachedPath,
+              resolvedVersion: installed.resolvedVersion,
+              cleanup: () => cleanupInstallGeneration(installed),
+            }
+          },
+          checkForUpdate: (pluginId, spec, currentCachedPath) =>
+            checkForUpdate(pluginId, spec, currentCachedPath, installerOptions),
+        },
+      }),
+    }
     const repository = createPluginRepository({ db }).repository
     query = Object.freeze({
       async loadByIds(ids: readonly string[]) {

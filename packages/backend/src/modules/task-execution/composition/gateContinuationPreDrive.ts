@@ -1,19 +1,18 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createClarifyContinuationConvergence } from '@/modules/collaboration/infrastructure/clarifyContinuationConvergence'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { createGateContinuationPreDriveStep } from '@/services/humanGateContinuationEffects'
-import { createSqliteTaskExecutionPersistence } from './taskExecutionPersistence'
+import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 
-/** Legacy bootstrap compatibility. Provider-aware composition should inject
- * the three Promise participants directly into createGateContinuationPreDriveStep. */
-export function createSqliteGateContinuationPreDriveStep(input: {
-  readonly db: DbClient
+/** Both providers bind the same continuation, operation and convergence participants. */
+export function composeGateContinuationPreDrive(input: {
+  readonly db: ProviderNeutralDatabase
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }) {
   return createGateContinuationPreDriveStep({
-    persistence: createSqliteTaskExecutionPersistence(input.db),
+    persistence: createTaskExecutionPersistence(input.db),
     humanGateOperations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
     clarifyConvergence: createClarifyContinuationConvergence(input),
   })

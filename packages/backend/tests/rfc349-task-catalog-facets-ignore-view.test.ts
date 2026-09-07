@@ -21,11 +21,11 @@
 // （`rfc357-postgresql-page.integration.test.ts`），不必也不该在这里再假造一个 provider。
 
 import { TASK_LIST_VIEWS, type TaskOperationsFacets, type TaskStatus } from '@agent-workflow/shared'
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { lifecycleAlerts, tasks, users, workflows } from '@/db/schema'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
@@ -33,9 +33,7 @@ import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-executio
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { ValidationError } from '@/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(): Actor {
   return buildActor({
@@ -63,8 +61,7 @@ const FIXTURE: ReadonlyArray<{ status: TaskStatus; alerts?: number }> = [
   { status: 'interrupted' },
 ]
 
-async function catalogSource(): Promise<TaskCatalogSource> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function catalogSource(db: Db): Promise<TaskCatalogSource> {
   await seed(db)
   return createTaskExecutionCatalogSourceFactory(
     createDatabaseTaskListPage(db, composeOwnerIdentityQueries(db)),
@@ -132,9 +129,9 @@ async function seed(db: Db): Promise<void> {
 //   finished  = failed, done, done(告警), canceled, interrupted              → 5
 const EXPECTED: TaskOperationsFacets = { all: 9, active: 4, attention: 4, finished: 5 }
 
-describe('任务目录源：facets 与 view 无关', () => {
+describeEachProvider('任务目录源：facets 与 view 无关', (harness) => {
   test('四个 view 返回同一份 facets，而 items 各自按 view 过滤', async () => {
-    const source = await catalogSource()
+    const source = await catalogSource(harness.db)
     const pageSizes: Record<string, number> = {}
     for (const view of TASK_LIST_VIEWS) {
       const page = await source.list({ actor: actor(), view })
@@ -146,12 +143,12 @@ describe('任务目录源：facets 与 view 无关', () => {
   })
 
   test('view 缺省等同 all', async () => {
-    const source = await catalogSource()
+    const source = await catalogSource(harness.db)
     expect((await source.list({ actor: actor() })).facets).toEqual(EXPECTED)
   })
 
   test('attention 收未结告警的行，与状态无关', async () => {
-    const source = await catalogSource()
+    const source = await catalogSource(harness.db)
     const page = await source.list({ actor: actor(), view: 'attention' })
     const alerted = page.items.find((item) => item.openAlertCount > 0)
     expect(alerted).toBeDefined()
@@ -159,7 +156,7 @@ describe('任务目录源：facets 与 view 无关', () => {
   })
 
   test('显式 statuses 收窄 facets 分母，且与 view 叠加而不是互相取代', async () => {
-    const source = await catalogSource()
+    const source = await catalogSource(harness.db)
     const statuses = 'awaiting_review,failed,done'
     // 分母 = 这三种状态的 4 行（done 两行）；active 只有 awaiting_review、
     // attention 有 awaiting_review + failed + done(告警)、finished 有 failed + 两行 done。
@@ -174,7 +171,7 @@ describe('任务目录源：facets 与 view 无关', () => {
   })
 
   test('非法 view / statuses 是 422，不再静默降级成「无过滤」', async () => {
-    const source = await catalogSource()
+    const source = await catalogSource(harness.db)
     await expect(source.list({ actor: actor(), view: 'nope' })).rejects.toThrow(ValidationError)
     await expect(source.list({ actor: actor(), statuses: 'not-a-status' })).rejects.toThrow(
       ValidationError,
@@ -182,7 +179,7 @@ describe('任务目录源：facets 与 view 无关', () => {
   })
 
   test('分页游标只切 items，facets 仍是整份分母', async () => {
-    const source = await catalogSource()
+    const source = await catalogSource(harness.db)
     const first = await source.list({ actor: actor(), limit: '4' })
     expect(first.facets).toEqual(EXPECTED)
     expect(first.items).toHaveLength(4)

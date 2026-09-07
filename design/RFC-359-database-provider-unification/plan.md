@@ -28,13 +28,13 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                              | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                           | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                    | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 800 个测试文件、1847 次实际 `createInMemoryDb` 调用，其中 797 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 785 个测试文件、1825 次实际 `createInMemoryDb` 调用，其中 782 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；W12 增补生产启动内核到 task done 的双引擎完整执行链                                                                                          | 进行中 |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                    | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                   | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                    | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 5 个性能守卫已双引擎化；当前主要锁语句数、行数与参数，墙钟 P95 仍为诊断输出，尚未满足 proposal 原条款                                                               | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 17 项；provider 命名文件 88 → 65（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 14 项；provider 命名文件 88 → 63（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -130,6 +130,41 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
   该 run 终态 failure，不记全绿（两个 OS 的相同旧守卫失败，Ubuntu shard 3 被取消）。此前 `ab6e36437` / CI `34164925590` 终态 failure，只有两个
   shard 1 的旧 R1/RFC187 锁失败；第三批已修，其他任务通过。
 - 本批完整本地门禁未启动；RFC 仍 In Progress，AC-11 原 P95 条款保留，最终整仓结论等 exact-SHA CI。
+
+### W12 第五批：来源终止公共流程、持久化装配与行为覆盖
+
+- 来源终止的两个工厂共用 binding/revision 查询、depth/id 排序、processed 固定点重扫、
+  停止收据投影和 cause 函数。保持每目标串行，生产净减 17 行；两侧 `applyOne` 共 641 行
+  经 AST 核对逐字不变，原事务、提交后事件/停止及 SQLite 无 driver 路径保留。排序与处理
+  期间出现新子任务的新例在旧实现先通过，提取后加纯算法等候/异常/收据回归，30 pass / 79 expect。
+  这只是公共流程提取，不能将整个 provider pair 销账。
+- taskExecutionPersistence 的 25 个字段与构造顺序相同，抽为一份公共聚合；唯一不同的
+  recoveryAdministration 仍在原位置构造并绑定原生命周期实现。pre-drive 组合根改用中立
+  客户端与所选 persistence，两个 composition 路径去掉旧 provider 名。旧澄清恢复/目录
+  38 个用例保留通过；完整 pre-drive 增补双引擎 claimed intent、重入与载荷错误验证。
+- 两份新测试真实构造 Event Center、SQLite intent artifact lifecycle 与 PG intent convergence，
+  驱动事件去重/重建/确认/重放，以及真实 DB/FS 补偿、活动/新鲜 journal、发布重试与坏日志保留。
+  SQLite 6 pass / 62 expect；空持久化/空补偿变异明确红。未构造根 17 → 14，PG 等本批 CI。
+- 15 个 memory/MCP/plugin/catalog 测试文件中的 137 个数据库行为接入双引擎，20 个纯函数
+  或源码场景单跑，157 个原名称与 380 项断言 AST 保持相同；SQLite 157 pass / 388 expect。
+  测试 seed 的 inputs 编码与两个枚举类型问题由统一类型检查发现并修复，42 个相关用例再次通过。
+  当前 AST 为 1884 个测试文件，785 文件 / 1825 次实际 SQLite 构造、174 个 harness 文件。
+- 第四批 `7ca6290d4` / CI `34168059309` 的四个 Ubuntu backend 分片已全部 success。
+  job `101882938060` 确认真 PG 完整 provider 工厂任务 launch→done；job `101882938150`
+  确认 journal 的语句数、竞争 CAS 与外层回滚真实双引擎通过。整 run 仍为 failure：唯一功能失败是
+  macOS shard 3 的旧 direct-upload body+file journey 在 working 状态等待 90 秒。
+  真 store 竞争回归已复现一条相同停顿链：materializer 插入快照后，peer reconcile 的 readiness
+  写推进 revision，原写回忽略 CAS 失败，需求引用仍为 null；后续决策去重、无未结 effect。
+  现场日志未保存需求引用，不能将这条已证实的缺陷当作现场唯一原因。
+- 同提交维护大样本 run `34168059214` / job `101882937723` 终态 failure：唯一失败是
+  `webhookDeliveryGc` 清理 body 的单笔 SQLite 事务 266.57ms，超过原 250ms 判据。94 个切片
+  各处理 1000 行、各 4 条语句；同任务语句最大 261.39ms，事务均值 12.33ms，去掉最大样本后
+  为 9.60ms。旧两个正常 run 的相同算法最大为 16.01/37.28ms，未发现第四批改动此算法。
+  Worker 只保留 wall histogram，缺少该样本的 SQL/CPU/切片关联，不能据此宣布环境抖动或通过。
+  原负载与阈值保持；不能把 Ubuntu 或目标用例通过当作整仓全绿。
+- 独立功能实现门确认公共来源终止流程和持久化装配无 findings；统一 TypeScript 检查通过。
+  全量本地门禁与本地 PG 未运行。全量行为迁移、641 行终止 atom 及其它真实孪生、原 P95 条款
+  仍未闭合，RFC 状态保持 In Progress。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

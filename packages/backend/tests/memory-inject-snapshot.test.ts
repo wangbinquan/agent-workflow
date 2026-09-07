@@ -10,9 +10,9 @@
 //   - parseInjectedSnapshotJson defends against corrupt rows.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { parseInjectedSnapshotJson } from '../src/modules/memory/domain/injectionRendering'
 import {
@@ -22,9 +22,7 @@ import {
 } from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
-import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { DrizzleMemoryInjectionReadStore } from '../src/modules/memory/infrastructure/memoryInjectionReadStore'
 
 function mkAgent(id: string, name = id): Agent {
   return {
@@ -44,40 +42,38 @@ function mkAgent(id: string, name = id): Agent {
   } as unknown as Agent
 }
 
-function seedTask(db: DbClient): { taskId: string; workflowId: string } {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+): Promise<{ taskId: string; workflowId: string }> {
   const workflowId = ulid()
-  db.insert(workflows)
-    .values({
-      id: workflowId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  await db.insert(workflows).values({
+    id: workflowId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: 'fixture-task',
-      workflowId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 'fixture-task',
+    workflowId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: 'agent-workflow/' + taskId,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return { taskId, workflowId }
 }
 
-function seedApproved(
-  db: DbClient,
+async function seedApproved(
+  db: ProviderNeutralDatabase,
   opts: {
     scopeType: 'agent' | 'workflow' | 'repo' | 'global'
     scopeId: string | null
@@ -89,36 +85,34 @@ function seedApproved(
     approvedAt?: number | null
     createdAt?: number
   },
-): string {
+): Promise<string> {
   const id = ulid()
-  db.insert(memories)
-    .values({
-      id,
-      scopeType: opts.scopeType,
-      scopeId: opts.scopeId,
-      title: opts.title,
-      bodyMd: opts.body ?? 'body',
-      tags: opts.tags ?? '["t1","t2"]',
-      status: 'approved',
-      sourceKind: opts.sourceKind ?? 'review',
-      version: opts.version ?? 1,
-      approvedAt: opts.approvedAt ?? 1_700_000_000_000,
-      createdAt: opts.createdAt ?? Date.now(),
-    })
-    .run()
+  await db.insert(memories).values({
+    id,
+    scopeType: opts.scopeType,
+    scopeId: opts.scopeId,
+    title: opts.title,
+    bodyMd: opts.body ?? 'body',
+    tags: opts.tags ?? '["t1","t2"]',
+    status: 'approved',
+    sourceKind: opts.sourceKind ?? 'review',
+    version: opts.version ?? 1,
+    approvedAt: opts.approvedAt ?? 1_700_000_000_000,
+    createdAt: opts.createdAt ?? Date.now(),
+  })
   return id
 }
 
-describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
-  let db: DbClient
+describeEachProvider('RFC-046 — injectMemoryForRun snapshot capture', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('B1: returns { block, snapshot } with all fields aligned to the source rows', async () => {
-    const { taskId, workflowId } = seedTask(db)
-    const memId = seedApproved(db, {
+    const { taskId, workflowId } = await seedTask(db)
+    const memId = await seedApproved(db, {
       scopeType: 'workflow',
       scopeId: workflowId,
       title: 'WF-A',
@@ -129,7 +123,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       approvedAt: 1_700_000_000_000,
     })
     const out = await injectMemoryForRun({
-      store: sqliteMemoryInjectionStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -151,17 +145,17 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
   })
 
   test('B2: snapshot mirrors post-budget-clip set (rows dropped from block also missing from snapshot)', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     // Two global rows; budget is too tight to fit both. createdAt-DESC
     // order means the newer one survives, the older one is clipped.
-    seedApproved(db, {
+    await seedApproved(db, {
       scopeType: 'global',
       scopeId: null,
       title: 'KEEP',
       body: 'short',
       createdAt: 2_000_000_000_000,
     })
-    seedApproved(db, {
+    await seedApproved(db, {
       scopeType: 'global',
       scopeId: null,
       title: 'DROP',
@@ -169,7 +163,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       createdAt: 1_000_000_000_000,
     })
     const out = await injectMemoryForRun({
-      store: sqliteMemoryInjectionStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -181,9 +175,9 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
   })
 
   test('B3: four-scope empty → block null AND snapshot null (in lock-step)', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const out = await injectMemoryForRun({
-      store: sqliteMemoryInjectionStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -193,15 +187,15 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
   })
 
   test('B4: malformed tags JSON parsed to [] without throwing', async () => {
-    const { taskId } = seedTask(db)
-    seedApproved(db, {
+    const { taskId } = await seedTask(db)
+    await seedApproved(db, {
       scopeType: 'global',
       scopeId: null,
       title: 'G',
       tags: '{not-an-array',
     })
     const out = await injectMemoryForRun({
-      store: sqliteMemoryInjectionStore(db),
+      store: new DrizzleMemoryInjectionReadStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -211,14 +205,14 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
   })
 
   test('B5: loadInjectableMemories tolerates malformed tags JSON', async () => {
-    const { workflowId } = seedTask(db)
-    seedApproved(db, {
+    const { workflowId } = await seedTask(db)
+    await seedApproved(db, {
       scopeType: 'workflow',
       scopeId: workflowId,
       title: 'WF',
       tags: 'not-json-at-all',
     })
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId,
       repoIds: [],
@@ -230,13 +224,13 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
   })
 })
 
-describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
-  let db: DbClient
+describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
-  function seedNodeRun(opts: {
+  async function seedNodeRun(opts: {
     taskId: string
     nodeId: string
     retryIndex: number
@@ -249,21 +243,19 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
     // model a failed attempt (a followup retry's predecessor).
     id?: string
     status?: 'done' | 'failed' | 'pending' | 'running' | 'interrupted'
-  }): string {
+  }): Promise<string> {
     const id = opts.id ?? ulid()
-    db.insert(nodeRuns)
-      .values({
-        id,
-        taskId: opts.taskId,
-        nodeId: opts.nodeId,
-        iteration: opts.iteration ?? 0,
-        shardKey: opts.shardKey ?? null,
-        retryIndex: opts.retryIndex,
-        reviewIteration: opts.reviewIteration ?? 0,
-        status: opts.status ?? 'done',
-        injectedMemoriesJson: opts.json,
-      })
-      .run()
+    await db.insert(nodeRuns).values({
+      id,
+      taskId: opts.taskId,
+      nodeId: opts.nodeId,
+      iteration: opts.iteration ?? 0,
+      shardKey: opts.shardKey ?? null,
+      retryIndex: opts.retryIndex,
+      reviewIteration: opts.reviewIteration ?? 0,
+      status: opts.status ?? 'done',
+      injectedMemoriesJson: opts.json,
+    })
     return id
   }
 
@@ -285,7 +277,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
   }
 
   test('B6: returns parsed snapshot from retry_index=0 sibling', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const payload = JSON.stringify([
       {
         id: 'm1',
@@ -299,35 +291,41 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
         approvedAt: 1,
       },
     ])
-    const runId = seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: payload })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      shardKey: null,
-      reviewIteration: 0,
-      runId,
-    })
+    const runId = await seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: payload })
+    const snap = await loadInjectedSnapshotFromFirstAttempt(
+      new DrizzleMemoryInjectionReadStore(db),
+      {
+        taskId,
+        nodeId: 'agent-1',
+        iteration: 0,
+        shardKey: null,
+        reviewIteration: 0,
+        runId,
+      },
+    )
     expect(snap?.length).toBe(1)
     expect(snap?.[0]?.id).toBe('m1')
   })
 
   test('B7: attempt-0 column NULL → returns null (not throw)', async () => {
-    const { taskId } = seedTask(db)
-    const runId = seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: null })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      shardKey: null,
-      reviewIteration: 0,
-      runId,
-    })
+    const { taskId } = await seedTask(db)
+    const runId = await seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: null })
+    const snap = await loadInjectedSnapshotFromFirstAttempt(
+      new DrizzleMemoryInjectionReadStore(db),
+      {
+        taskId,
+        nodeId: 'agent-1',
+        iteration: 0,
+        shardKey: null,
+        reviewIteration: 0,
+        runId,
+      },
+    )
     expect(snap).toBeNull()
   })
 
   test('B8: shardKey discriminates fan-out sibling rows', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     const payloadA = JSON.stringify([
       {
         id: 'mA',
@@ -354,37 +352,43 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
         approvedAt: null,
       },
     ])
-    const runIdA = seedNodeRun({
+    const runIdA = await seedNodeRun({
       taskId,
       nodeId: 'agent-1',
       retryIndex: 0,
       shardKey: 'shard-a',
       json: payloadA,
     })
-    const runIdB = seedNodeRun({
+    const runIdB = await seedNodeRun({
       taskId,
       nodeId: 'agent-1',
       retryIndex: 0,
       shardKey: 'shard-b',
       json: payloadB,
     })
-    const snapA = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      shardKey: 'shard-a',
-      reviewIteration: 0,
-      runId: runIdA,
-    })
+    const snapA = await loadInjectedSnapshotFromFirstAttempt(
+      new DrizzleMemoryInjectionReadStore(db),
+      {
+        taskId,
+        nodeId: 'agent-1',
+        iteration: 0,
+        shardKey: 'shard-a',
+        reviewIteration: 0,
+        runId: runIdA,
+      },
+    )
     expect(snapA?.[0]?.id).toBe('mA')
-    const snapB = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      shardKey: 'shard-b',
-      reviewIteration: 0,
-      runId: runIdB,
-    })
+    const snapB = await loadInjectedSnapshotFromFirstAttempt(
+      new DrizzleMemoryInjectionReadStore(db),
+      {
+        taskId,
+        nodeId: 'agent-1',
+        iteration: 0,
+        shardKey: 'shard-b',
+        reviewIteration: 0,
+        runId: runIdB,
+      },
+    )
     expect(snapB?.[0]?.id).toBe('mB')
   })
 
@@ -395,9 +399,9 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
   // PRIOR generation's snapshot. The boundary walk (generation starts after a
   // `done` row) fixes it. RED under the old anchor, GREEN under the new.
   test('B-RFC074a: designer rerun (retry=max+1) followup anchors to its own generation, not the prior', async () => {
-    const { taskId } = seedTask(db)
+    const { taskId } = await seedTask(db)
     // gen 0: first design, done at retry=0.
-    seedNodeRun({
+    await seedNodeRun({
       taskId,
       nodeId: 'designer',
       id: '01g0',
@@ -407,7 +411,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
     })
     // gen 1: cross-clarify designer rerun minted at retry=max+1; its first
     // attempt ran inject (snapshot g1) then FAILED an envelope check.
-    seedNodeRun({
+    await seedNodeRun({
       taskId,
       nodeId: 'designer',
       id: '02g1',
@@ -417,7 +421,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
     })
     // gen 1 envelope-followup retry — the row whose snapshot we resolve; it
     // copies from its generation's first attempt.
-    const followupId = seedNodeRun({
+    const followupId = await seedNodeRun({
       taskId,
       nodeId: 'designer',
       id: '03g1f',
@@ -425,14 +429,17 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       status: 'pending',
       json: null,
     })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
-      taskId,
-      nodeId: 'designer',
-      iteration: 0,
-      shardKey: null,
-      reviewIteration: 0,
-      runId: followupId,
-    })
+    const snap = await loadInjectedSnapshotFromFirstAttempt(
+      new DrizzleMemoryInjectionReadStore(db),
+      {
+        taskId,
+        nodeId: 'designer',
+        iteration: 0,
+        shardKey: null,
+        reviewIteration: 0,
+        runId: followupId,
+      },
+    )
     expect(snap?.[0]?.id).toBe('g1') // NOT 'g0' (the pre-fix regression)
   })
 
@@ -440,8 +447,8 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
   // already worked under the old retry=0 anchor since self-clarify reruns mint
   // at retry=0 — kept as a non-regression lock alongside the designer case.)
   test('B-RFC074b: self-clarify generations do not bleed across the id boundary', async () => {
-    const { taskId } = seedTask(db)
-    seedNodeRun({
+    const { taskId } = await seedTask(db)
+    await seedNodeRun({
       taskId,
       nodeId: 'agent-1',
       id: '01a',
@@ -449,7 +456,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       status: 'done',
       json: snapJson('gA'),
     })
-    seedNodeRun({
+    await seedNodeRun({
       taskId,
       nodeId: 'agent-1',
       id: '02b',
@@ -457,7 +464,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       status: 'failed',
       json: snapJson('gB'),
     })
-    const followupId = seedNodeRun({
+    const followupId = await seedNodeRun({
       taskId,
       nodeId: 'agent-1',
       id: '03bf',
@@ -465,14 +472,17 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       status: 'pending',
       json: null,
     })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      shardKey: null,
-      reviewIteration: 0,
-      runId: followupId,
-    })
+    const snap = await loadInjectedSnapshotFromFirstAttempt(
+      new DrizzleMemoryInjectionReadStore(db),
+      {
+        taskId,
+        nodeId: 'agent-1',
+        iteration: 0,
+        shardKey: null,
+        reviewIteration: 0,
+        runId: followupId,
+      },
+    )
     expect(snap?.[0]?.id).toBe('gB')
   })
 })

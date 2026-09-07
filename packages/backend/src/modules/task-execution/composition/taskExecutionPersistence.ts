@@ -155,39 +155,10 @@ function createSqliteRecoveryAdministration(db: DbClient) {
   })
 }
 
-export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutionPersistence {
-  const effects = new DrizzleTaskExecutionEffectPersistence(db)
-  return Object.freeze({
-    drive: new DrizzleTaskEngineApplicationPersistence(db),
-    ownership: new DrizzleTaskOwnershipPersistence(db),
-    intents: new DrizzleTaskExecutionIntentPersistence(db),
-    effects,
-    terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
-    gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
-    gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
-    scheduler: new DrizzleSchedulerCompletionPersistence(db),
-    childBudget: new DrizzleChildTaskBudgetQueries(db),
-    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    nodeRunRuntime: new DrizzleNodeRunRuntimePersistence(db),
-    nodeExecution: new DrizzleNodeExecutionPersistence(db),
-    nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
-    mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
-    artifactPaths: new DrizzleTaskArtifactPathQueries(db),
-    wrapperRuns: new DrizzleWrapperRunPersistence(db),
-    runtimeLifecycle: new DrizzleTaskRuntimeLifecyclePersistence(db),
-    intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
-    recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
-    humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
-    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
-    reads: createTaskExecutionReadModels(db),
-    recoveryAdministration: createSqliteRecoveryAdministration(db),
-    shutdown: new DrizzleTaskExecutionShutdownOperations(db),
-    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
-  })
-}
-
-export function createPostgresqlTaskExecutionPersistence(
-  db: PostgresqlDatabaseClient,
+/** One persistence aggregate; only the legacy recovery lifecycle binding differs. */
+function composeTaskExecutionPersistence(
+  db: ProviderNeutralDatabase,
+  recoveryAdministration: () => TaskExecutionPersistence['recoveryAdministration'],
 ): TaskExecutionPersistence {
   const effects = new DrizzleTaskExecutionEffectPersistence(db)
   return Object.freeze({
@@ -213,10 +184,20 @@ export function createPostgresqlTaskExecutionPersistence(
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
-    recoveryAdministration: createPostgresqlRecoveryAdministration(db),
+    recoveryAdministration: recoveryAdministration(),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })
+}
+
+export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutionPersistence {
+  return composeTaskExecutionPersistence(db, () => createSqliteRecoveryAdministration(db))
+}
+
+export function createPostgresqlTaskExecutionPersistence(
+  db: PostgresqlDatabaseClient,
+): TaskExecutionPersistence {
+  return composeTaskExecutionPersistence(db, () => createPostgresqlRecoveryAdministration(db))
 }
 
 /**

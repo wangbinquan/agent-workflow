@@ -5,16 +5,19 @@
 // conflict; rename leaves id-based references untouched.
 
 import { buildActor } from '../src/auth/actor'
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { CreateAgent } from '@agent-workflow/shared'
+import { agents } from '../src/db/schema'
+import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createMcpRepository } from '../src/modules/resource-catalog/infrastructure/mcpRepository'
 import type { McpCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { McpOperationContext } from '../src/modules/resource-catalog/public/participants'
-import { createAgent } from '../src/services/agent'
 import {
   createMcpForTest as createMcp,
   deleteMcpForTest as deleteMcp,
@@ -24,12 +27,39 @@ import {
   updateMcpForTest as updateMcp,
 } from './helpers/mcpServiceBinding'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
-import { getAgent, getMcp } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+// These rows are reference fixtures for catalog operations. Keep the original
+// canonical ID arrays and default null owner; the catalog itself remains real.
+async function seedAgent(db: ProviderNeutralDatabase, input: CreateAgent): Promise<void> {
+  await db.insert(agents).values({
+    ...input,
+    id: ulid(),
+    ownerUserId: null,
+    visibility: 'private',
+    outputs: JSON.stringify(input.outputs),
+    inputs: JSON.stringify(input.inputs ?? []),
+    permission: JSON.stringify(input.permission),
+    skills: JSON.stringify(input.skills),
+    dependsOn: JSON.stringify(input.dependsOn),
+    mcp: JSON.stringify(input.mcp),
+    plugins: JSON.stringify(input.plugins),
+    frontmatterExtra: JSON.stringify(input.frontmatterExtra),
+  })
+}
+
+async function getAgent(db: ProviderNeutralDatabase, name: string) {
+  const [row] = await db.select().from(agents).where(eq(agents.name, name)).limit(1)
+  return row === undefined
+    ? null
+    : {
+        mcp: JSON.parse(row.mcp) as string[],
+        plugins: JSON.parse(row.plugins) as string[],
+      }
+}
 
 function authorityFor(userId: string, role: 'admin' | 'user' = 'admin'): McpOperationContext {
   const projection = buildActor({
@@ -42,7 +72,7 @@ function authorityFor(userId: string, role: 'admin' | 'user' = 'admin'): McpOper
   ).actor
 }
 
-function composeTestMcpCatalog(db: DbClient): McpCatalogModule {
+function composeTestMcpCatalog(db: ProviderNeutralDatabase): McpCatalogModule {
   return composeMcpCatalog({
     db,
     coordinator: new ResourceOperationCoordinator(),
@@ -67,7 +97,7 @@ function serviceBinding(
   return Object.freeze({ catalog, authority: authorityFor(userId, role) })
 }
 
-function findAgentReferences(db: DbClient, mcpId: string) {
+function findAgentReferences(db: ProviderNeutralDatabase, mcpId: string) {
   return createMcpRepository({
     db,
     lifecycle: Object.freeze({
@@ -75,6 +105,13 @@ function findAgentReferences(db: DbClient, mcpId: string) {
       deletePrepared: async () => undefined,
     }),
   }).repository.findAgentReferences(mcpId)
+}
+
+async function getMcp(db: ProviderNeutralDatabase, name: string) {
+  return (
+    (await listMcps(serviceBinding(composeTestMcpCatalog(db)))).find((mcp) => mcp.name === name) ??
+    null
+  )
 }
 
 function localMcp(name: string): Parameters<typeof createMcp>[1] {
@@ -87,12 +124,12 @@ function localMcp(name: string): Parameters<typeof createMcp>[1] {
   }
 }
 
-describe('services/mcp.ts CRUD', () => {
-  let db: DbClient
+describeEachProvider('services/mcp.ts CRUD', (harness) => {
+  let db: ProviderNeutralDatabase
   let catalog: McpCatalogModule
   let binding: McpServiceBinding
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     catalog = composeTestMcpCatalog(db)
     binding = serviceBinding(catalog)
   })
@@ -293,12 +330,12 @@ describe('services/mcp.ts CRUD', () => {
   })
 })
 
-describe('services/mcp.ts reference cascade', () => {
-  let db: DbClient
+describeEachProvider('services/mcp.ts reference cascade', (harness) => {
+  let db: ProviderNeutralDatabase
   let catalog: McpCatalogModule
   let binding: McpServiceBinding
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     catalog = composeTestMcpCatalog(db)
     binding = serviceBinding(catalog)
   })
@@ -320,7 +357,7 @@ describe('services/mcp.ts reference cascade', () => {
       config: { url: 'https://s.io' },
       enabled: true,
     })
-    await createAgent(db, {
+    await seedAgent(db, {
       name: 'a-prod',
       description: '',
       outputs: [],
@@ -333,7 +370,7 @@ describe('services/mcp.ts reference cascade', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await createAgent(db, {
+    await seedAgent(db, {
       name: 'a-staging',
       description: '',
       outputs: [],
@@ -363,7 +400,7 @@ describe('services/mcp.ts reference cascade', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    await createAgent(db, {
+    await seedAgent(db, {
       name: 'consumer',
       description: '',
       outputs: [],
@@ -417,7 +454,7 @@ describe('services/mcp.ts reference cascade', () => {
       config: { command: ['x'] },
       enabled: true,
     })
-    await createAgent(db, {
+    await seedAgent(db, {
       name: 'consumer-1',
       description: '',
       outputs: [],
@@ -430,7 +467,7 @@ describe('services/mcp.ts reference cascade', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await createAgent(db, {
+    await seedAgent(db, {
       name: 'consumer-2',
       description: '',
       outputs: [],
@@ -443,7 +480,7 @@ describe('services/mcp.ts reference cascade', () => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    await createAgent(db, {
+    await seedAgent(db, {
       name: 'unrelated',
       description: '',
       outputs: [],

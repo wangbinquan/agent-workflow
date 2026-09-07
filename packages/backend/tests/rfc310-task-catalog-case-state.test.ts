@@ -1,22 +1,20 @@
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { employeeCases, employeeContextRecords } from '@/db/schema'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-310 digital-employee task catalog Case-state semantics', () => {
+describeEachProvider('RFC-310 digital-employee task catalog Case-state semantics', (harness) => {
   test('waiting Cases stay active while only blocked Cases require operator attention', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const store = createRuntimePersistence(db)
 
-    seedCase(db, { id: 'active', state: 'active', updatedAt: 10 })
-    seedCase(db, { id: 'waiting', state: 'waiting', updatedAt: 20 })
-    seedCase(db, { id: 'blocked', state: 'blocked', updatedAt: 30 })
-    seedCase(db, { id: 'done', state: 'terminal', terminalKind: 'merged', updatedAt: 40 })
-    seedCase(db, {
+    await seedCase(db, { id: 'active', state: 'active', updatedAt: 10 })
+    await seedCase(db, { id: 'waiting', state: 'waiting', updatedAt: 20 })
+    await seedCase(db, { id: 'blocked', state: 'blocked', updatedAt: 30 })
+    await seedCase(db, { id: 'done', state: 'terminal', terminalKind: 'merged', updatedAt: 40 })
+    await seedCase(db, {
       id: 'canceled',
       state: 'terminal',
       terminalKind: 'closed',
@@ -31,12 +29,12 @@ describe('RFC-310 digital-employee task catalog Case-state semantics', () => {
   })
 
   test('empty and terminal TaskStatus filters are exact without copying terminal vocabulary', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const store = createRuntimePersistence(db)
 
-    seedCase(db, { id: 'waiting', state: 'waiting', updatedAt: 10 })
-    seedCase(db, { id: 'done', state: 'terminal', terminalKind: 'merged', updatedAt: 20 })
-    seedCase(db, {
+    await seedCase(db, { id: 'waiting', state: 'waiting', updatedAt: 10 })
+    await seedCase(db, { id: 'done', state: 'terminal', terminalKind: 'merged', updatedAt: 20 })
+    await seedCase(db, {
       id: 'legacy-canceled',
       state: 'terminal',
       terminalKind: 'closed-unmerged',
@@ -71,51 +69,47 @@ describe('RFC-310 digital-employee task catalog Case-state semantics', () => {
   })
 })
 
-function seedCase(
-  db: ReturnType<typeof createInMemoryDb>,
+async function seedCase(
+  db: ProviderNeutralDatabase,
   input: {
     readonly id: string
     readonly state: 'active' | 'waiting' | 'blocked' | 'terminal'
     readonly terminalKind?: string
     readonly updatedAt: number
   },
-): void {
+): Promise<void> {
   const contextId = `context-${input.id}`
-  db.insert(employeeCases)
-    .values({
-      id: input.id,
-      name: input.id,
-      employeeId: 'employee-1',
-      employeeRevision: 1,
-      typeId: 'development',
-      typeRevision: 10,
-      primaryContextId: contextId,
-      executionPolicyRevision: 1,
-      ownerUserId: 'catalog-user',
-      launchOrigin: 'manual',
-      state: input.state,
-      terminalKind: input.terminalKind ?? null,
-      blockReason: input.state === 'blocked' ? 'operator-visible failure' : null,
-      currentWorkItemRef: input.state === 'active' ? 'analyze' : null,
-      revision: 1,
-      writerGeneration: 1,
-      createdAt: 1,
-      updatedAt: input.updatedAt,
-      terminalAt: input.state === 'terminal' ? input.updatedAt : null,
-    })
-    .run()
-  db.insert(employeeContextRecords)
-    .values({
-      id: contextId,
-      caseId: input.id,
-      typeId: 'development.issue-handling',
-      schemaVersion: 1,
-      currentRevision: 1,
-      lifecycleState: input.state === 'terminal' ? 'terminal' : 'active',
-      stateJson: JSON.stringify({ subjectRef: input.id }),
-      artifactRefsJson: '[]',
-      createdAt: 1,
-      updatedAt: input.updatedAt,
-    })
-    .run()
+  await db.insert(employeeCases).values({
+    id: input.id,
+    name: input.id,
+    employeeId: 'employee-1',
+    employeeRevision: 1,
+    typeId: 'development',
+    typeRevision: 10,
+    primaryContextId: contextId,
+    executionPolicyRevision: 1,
+    ownerUserId: 'catalog-user',
+    launchOrigin: 'manual',
+    state: input.state,
+    terminalKind: input.terminalKind ?? null,
+    blockReason: input.state === 'blocked' ? 'operator-visible failure' : null,
+    currentWorkItemRef: input.state === 'active' ? 'analyze' : null,
+    revision: 1,
+    writerGeneration: 1,
+    createdAt: 1,
+    updatedAt: input.updatedAt,
+    terminalAt: input.state === 'terminal' ? input.updatedAt : null,
+  })
+  await db.insert(employeeContextRecords).values({
+    id: contextId,
+    caseId: input.id,
+    typeId: 'development.issue-handling',
+    schemaVersion: 1,
+    currentRevision: 1,
+    lifecycleState: input.state === 'terminal' ? 'terminal' : 'active',
+    stateJson: JSON.stringify({ subjectRef: input.id }),
+    artifactRefsJson: '[]',
+    createdAt: 1,
+    updatedAt: input.updatedAt,
+  })
 }

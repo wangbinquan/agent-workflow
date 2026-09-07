@@ -118,7 +118,7 @@ import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
-import { createSqliteGateContinuationPreDriveStep } from '@/modules/task-execution/composition/sqliteGateContinuationPreDrive'
+import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
@@ -1565,7 +1565,7 @@ function createTaskDriveCoordinator(input: {
       : { admittedContinuation: input.admittedContinuation }),
     gateContinuationPreDrive:
       input.gateContinuationPreDrive ??
-      createSqliteGateContinuationPreDriveStep({
+      composeGateContinuationPreDrive({
         db: input.deps.db,
         memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
       }),

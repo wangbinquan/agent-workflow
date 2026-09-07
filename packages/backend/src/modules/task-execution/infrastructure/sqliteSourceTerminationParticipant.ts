@@ -13,7 +13,7 @@
 // （`writeTaskStatusTx`）本身还是同步的，属另一刀（账本 `taskLifecycle.ts: 2` 那两笔）。
 import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import type { TaskStatus } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, lt } from 'drizzle-orm'
+import { and, eq, inArray, lt } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
@@ -24,8 +24,9 @@ import {
 import {
   sourceTerminationTargetDisposition,
   taskStopProjection,
-  type TaskStopCause,
 } from '@/modules/task-execution/domain/sourceTermination'
+import { executeSourceTermination, terminalCause } from '../application/sourceTerminationExecution'
+import { listSourceTerminationTargets } from './sourceTerminationTargets'
 import { sourceTerminationCapabilityMatches } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type {
   SourceTerminationEffectCapability,
@@ -88,36 +89,6 @@ type AppliedTarget = {
   ownerWithoutLocalToken: boolean
   statusChanged: boolean
   canceledNodeRuns: Array<{ id: string; nodeId: string }>
-}
-
-function fenceFor(input: TaskSourceTerminationEffectInput): 'closed' | 'merged' | null {
-  if (input.kind === 'fence-closed') return 'closed'
-  if (input.kind === 'fence-merged') return 'merged'
-  return null
-}
-
-function terminalCause(
-  input: TaskSourceTerminationEffectInput,
-  parentTaskId: string | null,
-): TaskStopCause | null {
-  const terminal = fenceFor(input)
-  if (terminal === null) return null
-  return parentTaskId === null
-    ? {
-        kind: 'webhook-terminal',
-        terminal,
-        deliveryId: input.deliveryId,
-        streamRevision: input.streamRevision,
-      }
-    : {
-        kind: 'parent-cascade',
-        parentTaskId,
-        rootCause: {
-          terminal,
-          deliveryId: input.deliveryId,
-          streamRevision: input.streamRevision,
-        },
-      }
 }
 
 async function applyOne(
@@ -497,53 +468,16 @@ export function createTaskSourceTerminationParticipant(
         )
       }
 
-      const receipts = new Map<string, TaskSourceTerminationReceipt>()
-      const processed = new Set<string>()
-      for (;;) {
-        const rows = await db
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(
-            and(
-              eq(tasks.sourceTerminationBinding, input.binding),
-              lt(tasks.sourceTerminationLaunchRev, input.streamRevision),
-            ),
-          )
-          .orderBy(asc(tasks.invocationDepth), asc(tasks.id))
-        const pending = rows.filter((row) => !processed.has(row.id))
-        if (pending.length === 0) break
-
-        for (const row of pending) {
-          processed.add(row.id)
-          const applied = await applyOne(db, row.id, input)
-          if (applied === null) continue
-          let receipt = applied.receipt
-          if (applied.stopTicket !== null) {
-            const stopped = await taskExecutionModule.runtimeRegistry.awaitStopped(
-              applied.stopTicket,
-            )
-            receipt =
-              stopped.kind === 'released'
-                ? { ...receipt, releaseOutcome: 'released' }
-                : {
-                    ...receipt,
-                    releaseOutcome: 'unreaped',
-                    errorCode: stopped.code,
-                  }
-          } else if (applied.ownerWithoutLocalToken) {
-            receipt = {
-              ...receipt,
-              releaseOutcome: 'unreaped',
-              errorCode: 'task-execution-recovery-required',
-            }
-          } else if (input.kind !== 'clear-closed') {
-            await finalizeCanceledTaskWithoutDriver(db, row.id)
-            receipt = { ...receipt, releaseOutcome: 'no-active-owner' }
-          }
-          receipts.set(row.id, receipt)
-        }
-      }
-      return [...receipts.values()]
+      return await executeSourceTermination(
+        input,
+        () => listSourceTerminationTargets(db, input),
+        (taskId) => applyOne(db, taskId, input),
+        async (applied) =>
+          applied.stopTicket === null
+            ? null
+            : await taskExecutionModule.runtimeRegistry.awaitStopped(applied.stopTicket),
+        (taskId) => finalizeCanceledTaskWithoutDriver(db, taskId),
+      )
     },
   }
 }

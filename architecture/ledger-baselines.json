@@ -342,7 +342,7 @@
       "id": "rfc349-provider-specific-business-dependencies",
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
-      "baseline": 30,
+      "baseline": 29,
       "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。 RFC-359 W1-T2a：`services/questionDispatchComposition.ts` facade 改指 provider-中立的 `questionDispatchCommand`，67 → 66。 RFC-359 W1-T2b：`services/clarifyDecisionComposition.ts` facade 改指 provider-中立的 `clarifyDecisionCommand`，66 → 65。 RFC-359 W1-T2c：`services/reviewDecisionComposition.ts` facade 改指 provider-中立的 `reviewDecisionCommand`，`services/reviewMutationCoordinator.ts` 改依赖中立的 `reviewMutationScope`，65 → 63。 RFC-359 W4-B1 批 1：services/task.ts → branchTraceSnapshotReader 不再 provider 专属，63 → 62。 RFC-359 W4-B4 批 c：identity-access 公共面改为只导出中立的 DrizzleOidcProviderRepository，public → provider 适配器的两条债与 services/oidcProviders 那条随之还清，58 → 55。 RFC-359 W4-D24：`services/startTaskDeps.ts` 的租约依赖不再是 provider 专属，50→49。 RFC-359 W4-D26：`SqliteHumanGateOperationStore` 随手工提问写面合一整份退役，`humanGateComposition` 对它的 provider 具名依赖随之消失，49 → 48。 RFC-359 W4-D27：任务执行资源快照绑定合一，`services/execution/taskExecutionResources.ts` 对两份 provider 绑定的具名依赖并成一条中立导出，48 → 46。 RFC-359 W4-D28b：同步 owned-mutation 网关（`composition/sqliteOwnedTaskMutation`）整体退役，`public/operations.ts` 与 `public/participants.ts` 对它的两条具名依赖随之出账，46 → 44。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 65,
+      "baseline": 63,
       "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
     },
     {
@@ -461,7 +461,7 @@
       "id": "rfc359-w5-provider-runtime-unexercised",
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-runtime-exercised.test.ts",
       "symbol": "PROVIDER_RUNTIME_UNEXERCISED",
-      "baseline": 17,
+      "baseline": 14,
       "why": "RFC-359 W5：只被装配、从没被任何测试真正构造过的组合根。没跑起来 = 那条装配链的正确性无人知晓。"
     },
     {
@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 881,
+      "baseline": 866,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -811,10 +811,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5293,
+      "baseline": 5296,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W12：两份 resource package journal 合一为一份中立实现，退役旧表/dbTxSync 导入，新增中立客户端与事务绑定使观察边净增1；不新增业务分叉，资源恢复仍保留原机制。"
+        "why": "RFC-359 W12：来源终止重复 SELECT 提取到共同 infrastructure，新增中立数据库/表/Drizzle 引用；pre-drive 改中立 composition，观察边净增3，原 atom 与跨目标事务边界不变。"
       }
     },
     {
@@ -835,10 +835,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4758,
+      "baseline": 4760,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W12：两份 resource package journal 合一为一份中立实现，退役旧表/dbTxSync 导入，新增中立客户端与事务绑定使观察边净增1；不新增业务分叉，资源恢复仍保留原机制。"
+        "why": "RFC-359 W12：共同来源终止查询复用既有中立客户端、tasks schema 与持久化机制，去除两份重复 SELECT；同样的 legacy-outbound 引用在新共享文件精确登记，例外净增2，不新增另一套业务实现。"
       }
     },
     {
@@ -873,15 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24910,
+      "baseline": 24913,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W12：完整异步 daemon bootstrap 新增初始 generation、生命周期端口和完整返回类型，移除 deferred holder；journal 两工厂合一，生产声明净增6，运行时不新增可空装配能力。"
+        "why": "RFC-359 W12：来源终止公共遍历/目标查询与持久化公共聚合具名，原重复函数删除，两处 composition 路径中立化；生产符号净增3，四个来源终止文件源码净减17行。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d",
+    "sourceDigest": "sha256:7640774d0105b7331cf20895bd1003423f04eed2a18d587a5a340176dd4b9d1e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -894,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "2e68b5a353153ee4904be74b30e60284b0f9addd",
-    "contentDigest": "sha256:08fb2d9278c7692aa5b3b6c686725e7531c14a6e0a047ef61cca8b1f6ff17a38",
+    "currentSnapshotSha": "7ca6290d4d99e9f087c1cb979e52419ffb95a521",
+    "contentDigest": "sha256:39fbb3729c5d9c4f3b522867eb5010785fd8a395be8d0c6f46e71bbea5a29497",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

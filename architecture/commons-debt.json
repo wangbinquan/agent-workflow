@@ -5068,8 +5068,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive",
-      "specifier": "@/modules/task-execution/composition/sqliteGateContinuationPreDrive",
+      "to": "packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive",
+      "specifier": "@/modules/task-execution/composition/gateContinuationPreDrive",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -5078,11 +5078,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:a9da59c9b7eda49921d8"
+        "import:00900c316b35de4079e1"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts#createSqliteGateContinuationPreDriveStep"
+        "owner:packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts#composeGateContinuationPreDrive"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -8734,15 +8734,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d",
+    "sourceDigest": "sha256:7640774d0105b7331cf20895bd1003423f04eed2a18d587a5a340176dd4b9d1e",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "2e68b5a353153ee4904be74b30e60284b0f9addd",
-    "contentDigest": "sha256:b14cc25a1db154415d983ea99d98eaec467534a598daac5eae7ccba3732b93ed",
+    "currentSnapshotSha": "7ca6290d4d99e9f087c1cb979e52419ffb95a521",
+    "contentDigest": "sha256:0c3d37f65fdeb6be047016752a2d4cac1f6761a8a1bdb142a17656bcdd6e5b14",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

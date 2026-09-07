@@ -13,7 +13,10 @@
 //       lives in memory-distiller-grep-output-lang-directive.test.ts so
 //       that test file owns the dedicated source-layer guard surface.)
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   buildDistillerUserPrompt,
   DISTILLER_OUTPUT_LANG_DIRECTIVE,
@@ -22,11 +25,10 @@ import {
   type DistillerSpawnFn,
   type DistillerSpawnInput,
 } from '../src/modules/memory/application/distill/memoryDistiller'
-import { createInMemoryDb } from '../src/db/client'
-import { resolve } from 'node:path'
-import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
+import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
+import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
 const EMPTY_EVENTS = { clarify: [], review: [], feedback: [] }
 
@@ -75,76 +77,93 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
     expect(DISTILLER_OUTPUT_LANG_DIRECTIVE['zh-CN']).toContain('[category:xxx]')
   })
 
-  test('D3: runDistill reads outputLang from the job row (mid-batch config flip is ignored)', async () => {
-    const captured: DistillerSpawnInput[] = []
-    const spawnFn: DistillerSpawnFn = async (input) => {
-      captured.push(input)
-      return {
-        exitCode: 0,
-        stdout: emptyDistillerStdout(input),
-        stderr: '',
+  describeEachProvider('persisted job language', (harness) => {
+    let root: string
+    let previousHome: string | undefined
+    beforeEach(() => {
+      previousHome = process.env.AGENT_WORKFLOW_HOME
+      root = mkdtempSync(join(tmpdir(), 'memory-language-provider-'))
+      process.env.AGENT_WORKFLOW_HOME = root
+    })
+    afterEach(() => {
+      if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousHome
+      rmSync(root, { recursive: true, force: true })
+    })
+    test('D3: runDistill reads outputLang from the job row (mid-batch config flip is ignored)', async () => {
+      const captured: DistillerSpawnInput[] = []
+      const spawnFn: DistillerSpawnFn = async (input) => {
+        captured.push(input)
+        return {
+          exitCode: 0,
+          stdout: emptyDistillerStdout(input),
+          stderr: '',
+        }
       }
-    }
-    const db = createInMemoryDb(MIGRATIONS)
-    const memory = createSqliteMemoryDistillTestContext(db)
-    await runDistill({
-      store: memory.store,
-      reviewedArtifacts: memory.reviewedArtifacts,
-      spawnFn,
-      job: {
-        id: 'job-zh',
-        debounceKey: 'k',
-        sourceKind: 'feedback',
-        sourceEventId: 'evt',
-        taskId: null,
-        scopeResolved: {
-          agentIds: [],
-          workflowId: null,
-          repoId: null,
-          includeGlobal: true,
+      const db = harness.db
+      const memory = {
+        store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+        reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
+      }
+      await runDistill({
+        store: memory.store,
+        reviewedArtifacts: memory.reviewedArtifacts,
+        spawnFn,
+        job: {
+          id: 'job-zh',
+          debounceKey: 'k',
+          sourceKind: 'feedback',
+          sourceEventId: 'evt',
+          taskId: null,
+          scopeResolved: {
+            agentIds: [],
+            workflowId: null,
+            repoId: null,
+            includeGlobal: true,
+          },
+          status: 'running',
+          attempts: 0,
+          nextRunAt: 0,
+          lastError: null,
+          createdAt: 0,
+          startedAt: null,
+          finishedAt: null,
+          outputLang: 'zh-CN',
         },
-        status: 'running',
-        attempts: 0,
-        nextRunAt: 0,
-        lastError: null,
-        createdAt: 0,
-        startedAt: null,
-        finishedAt: null,
-        outputLang: 'zh-CN',
-      },
-      siblings: [],
-    })
-    await runDistill({
-      store: memory.store,
-      reviewedArtifacts: memory.reviewedArtifacts,
-      spawnFn,
-      job: {
-        id: 'job-null',
-        debounceKey: 'k2',
-        sourceKind: 'feedback',
-        sourceEventId: 'evt2',
-        taskId: null,
-        scopeResolved: {
-          agentIds: [],
-          workflowId: null,
-          repoId: null,
-          includeGlobal: true,
+        siblings: [],
+      })
+      await runDistill({
+        store: memory.store,
+        reviewedArtifacts: memory.reviewedArtifacts,
+        spawnFn,
+        job: {
+          id: 'job-null',
+          debounceKey: 'k2',
+          sourceKind: 'feedback',
+          sourceEventId: 'evt2',
+          taskId: null,
+          scopeResolved: {
+            agentIds: [],
+            workflowId: null,
+            repoId: null,
+            includeGlobal: true,
+          },
+          status: 'running',
+          attempts: 0,
+          nextRunAt: 0,
+          lastError: null,
+          createdAt: 0,
+          startedAt: null,
+          finishedAt: null,
+          outputLang: null,
         },
-        status: 'running',
-        attempts: 0,
-        nextRunAt: 0,
-        lastError: null,
-        createdAt: 0,
-        startedAt: null,
-        finishedAt: null,
-        outputLang: null,
-      },
-      siblings: [],
+        siblings: [],
+      })
+      expect(captured).toHaveLength(2)
+      expect(captured[0]!.userPrompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['zh-CN'])).toBe(true)
+      // null on the row → 'en-US' runtime fallback (RFC-041 baseline preserved).
+      expect(captured[1]!.userPrompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['en-US'])).toBe(true)
     })
-    expect(captured).toHaveLength(2)
-    expect(captured[0]!.userPrompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['zh-CN'])).toBe(true)
-    // null on the row → 'en-US' runtime fallback (RFC-041 baseline preserved).
-    expect(captured[1]!.userPrompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['en-US'])).toBe(true)
   })
 
   test('D4: DISTILLER_SYSTEM_PROMPT body has no CJK characters (still English-only)', () => {

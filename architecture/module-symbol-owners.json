@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1781,
+    "backendFiles": 1783,
     "frontendFiles": 622,
     "legacyFiles": 600,
-    "moduleFiles": 1181,
-    "productionFiles": 2558,
+    "moduleFiles": 1183,
+    "productionFiles": 2560,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24910
+    "symbolsIncludingFileRoots": 24913
   },
   "entries": [
     {
@@ -117941,6 +117941,54 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts#executeSourceTermination",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "executeSourceTermination",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts#fenceFor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "fenceFor",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/sourceTerminationExecution.ts#terminalCause",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "terminalCause",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#$file",
       "removeAfterWave": null,
@@ -119645,6 +119693,30 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts#composeGateContinuationPreDrive",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeGateContinuationPreDrive",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -121037,42 +121109,6 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts#createSqliteGateContinuationPreDriveStep",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "createSqliteGateContinuationPreDriveStep",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/composition/sqliteTaskCatalogSources.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/sqliteTaskCatalogSources.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -121150,6 +121186,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "composeTaskAutoResumeCommand",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/taskCatalogSources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskCatalogSources.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -121426,6 +121474,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#composeTaskExecutionPersistence",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeTaskExecutionPersistence",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -129870,34 +129930,10 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#fenceFor",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "fenceFor",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#revokeClaimedOwner",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "revokeClaimedOwner",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#terminalCause",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "terminalCause",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -132149,6 +132185,30 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTargets.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTargets.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTargets.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTargets.ts#listSourceTerminationTargets",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "listSourceTerminationTargets",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts#$file",
       "removeAfterWave": null,
@@ -132298,30 +132358,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createTaskSourceTerminationParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#fenceFor",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "fenceFor",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#terminalCause",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "terminalCause",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -299621,5 +299657,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d"
+  "sourceDigest": "sha256:7640774d0105b7331cf20895bd1003423f04eed2a18d587a5a340176dd4b9d1e"
 }

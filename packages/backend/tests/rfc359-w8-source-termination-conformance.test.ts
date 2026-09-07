@@ -1,10 +1,10 @@
 // RFC-359 W8 —— `SourceTerminationParticipant` 的**双引擎对拍**。
 //
-// 判定：**真重复**。两侧服务同一个 `TaskSourceTerminationParticipant` 端口、同一段算法
-// （扫描绑定 → 每目标一次 `applyOne` → 围栏/状态/节点取消/intent 终态化/owner 撤销 → 收据），
-// 连 `fenceFor` / `terminalCause` 两个私有函数都是逐字一样的两份。行数（485 / 473）在这一对
-// 上不误导：SQLite 侧那 485 行里确实转发给了 `services/lifecycle.ts` 的 `setTaskStatus` 内核，
-// 但 PG 侧把同一件事**手写内联**（第 302-348 行的条件 UPDATE + committed event），不是薄壳。
+// 判定：**真重复，尚未完全合一**。W12 已将扫描绑定、固定点重扫、收据投影和停止原因提取为
+// `sourceTerminationExecution` / `sourceTerminationTargets`，两侧调用同一份公共算法。
+// 每目标的 `applyOne` 仍有两份（合计 641 行）：SQLite cancel 分支依赖 `setTaskStatus` 的同步
+// onTransitionTx / 事件 collector；PG 侧的异步条件 UPDATE + committed event 仍是独立实现。
+// 本刀保留原事务与提交后顺序，不能据此将 provider pair 或命名文件账本销账。
 //
 // 「用户看到什么」这一层的判据（不是「两边都调了同一个函数」）：
 //   · MR/PR 关闭或合入后，任务以什么状态收场、错误摘要写的是哪句中文；
@@ -110,6 +110,8 @@ afterEach(() => {
 })
 
 interface SeedOverrides {
+  readonly taskId?: string
+  readonly invocationDepth?: number
   readonly status?: 'pending' | 'running' | 'done' | 'canceled'
   readonly launchRevision?: number
   readonly fence?: 'closed' | 'merged' | null
@@ -128,7 +130,7 @@ interface Seeded {
 }
 
 async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}): Promise<Seeded> {
-  const taskId = `task-${ulid()}`
+  const taskId = overrides.taskId ?? `task-${ulid()}`
   const openRunId = `run-open-${ulid()}`
   const doneRunId = `run-done-${ulid()}`
   const intentId = `intent-${ulid()}`
@@ -153,6 +155,7 @@ async function seed(db: ProviderNeutralDatabase, overrides: SeedOverrides = {}):
     runningMs: 0,
     finishedAt: null,
     parentTaskId: overrides.parentTaskId ?? null,
+    invocationDepth: overrides.invocationDepth ?? 0,
     spaceKind: overrides.spaceKind ?? 'remote',
     webhookTriggerId:
       overrides.webhookTriggerId === undefined ? 'trg-w8' : overrides.webhookTriggerId,
@@ -616,5 +619,68 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
       state: 'canceled',
       failureCode: 'webhook-mr-closed',
     })
+  })
+
+  test('⑰ 多目标收据按 invocationDepth 再按 id 排序，父层先于子层', async () => {
+    const parent = await seed(harness.db, { taskId: 'task-z-parent', status: 'done' })
+    const child = await seed(harness.db, {
+      taskId: 'task-a-child',
+      parentTaskId: parent.taskId,
+      invocationDepth: 1,
+      status: 'done',
+    })
+    const peer = await seed(harness.db, { taskId: 'task-b-peer', status: 'done' })
+
+    const receipts = await apply(harness, effect('fence-closed', 5))
+
+    expect(receipts.map((receipt) => receipt.taskId)).toEqual([
+      peer.taskId,
+      parent.taskId,
+      child.taskId,
+    ])
+  })
+
+  test('⑱ 处理首目标期间出现的子任务在固定点重扫中取消，每个目标仅有一条收据和终态事件', async () => {
+    const parent = await seed(harness.db, { taskId: 'task-fixed-point-parent' })
+    let inserted: Seeded | null = null
+    registerTerminalWorkspacePrunePolicy(async () => {
+      if (inserted === null) {
+        inserted = await seed(harness.db, {
+          taskId: 'task-fixed-point-child',
+          parentTaskId: parent.taskId,
+          invocationDepth: 1,
+        })
+      }
+      return { prune: false }
+    })
+
+    const receipts = await apply(harness, effect('fence-closed', 5))
+
+    expect(inserted).not.toBeNull()
+    expect(receipts.map((receipt) => receipt.taskId)).toEqual([
+      parent.taskId,
+      'task-fixed-point-child',
+    ])
+    for (const receipt of receipts) {
+      expect(receipt).toMatchObject({
+        cancelOutcome: 'canceled',
+        releaseOutcome: 'no-active-owner',
+      })
+      expect(await taskRow(harness.db, receipt.taskId)).toMatchObject({
+        status: 'canceled',
+        fence: 'closed',
+        effectRevision: 5,
+      })
+      const events = await harness.db
+        .select({ id: committedEvents.id })
+        .from(committedEvents)
+        .where(
+          and(
+            eq(committedEvents.aggregateId, receipt.taskId),
+            eq(committedEvents.eventType, 'task.lifecycle-transitioned.v1'),
+          ),
+        )
+      expect(events).toHaveLength(1)
+    }
   })
 })

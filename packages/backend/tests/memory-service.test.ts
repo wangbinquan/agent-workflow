@@ -5,14 +5,26 @@
 // non-candidate guard) / archiveMemory / unarchiveMemory / deleteMemory /
 // WS publication shape.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { memoryCatalogOf } from './helpers/memoryCatalog'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  composeMemoryCatalogOperations,
+  type MemoryCatalogTestHooks,
+} from '../src/modules/memory/composition'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { MemoryWsMessage } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+function memoryCatalogOf(db: ProviderNeutralDatabase, testHooks?: MemoryCatalogTestHooks) {
+  return composeMemoryCatalogOperations({
+    db,
+    contexts: composeIdentityAccess(db).contexts,
+    authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+    ...(testHooks === undefined ? {} : { testHooks }),
+  })
+}
 
 function captureBroadcasts(): { msgs: MemoryWsMessage[]; stop: () => void } {
   const msgs: MemoryWsMessage[] = []
@@ -22,10 +34,10 @@ function captureBroadcasts(): { msgs: MemoryWsMessage[]; stop: () => void } {
   return { msgs, stop }
 }
 
-describe('memory service — PR1 CRUD + supersede chain', () => {
-  let db: DbClient
+describeEachProvider('memory service — PR1 CRUD + supersede chain', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     resetBroadcastersForTests()
   })
 

@@ -10,7 +10,7 @@ import type { TaskCatalogVisibility } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows } from '../src/db/schema'
-import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/sqliteTaskCatalogSources'
+import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/taskCatalogSources'
 import { listTaskItems, listTasks } from '../src/services/task'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 

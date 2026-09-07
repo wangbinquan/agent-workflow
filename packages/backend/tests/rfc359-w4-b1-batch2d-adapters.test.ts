@@ -24,6 +24,8 @@ import {
   runWithTaskExecutionContext,
 } from '@/modules/task-execution/application/taskExecutionContext'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
+import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import {
   createOwnershipToken,
   createWorkerIdentity,
@@ -204,6 +206,49 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
     expect(await persistence.hasUndispatchedClarifyWork({ taskId, originNodeRunId: 'r' })).toBe(
       false,
     )
+  })
+
+  test('complete pre-drive composition reads the same claimed intent on both engines', async () => {
+    const db = harness.db
+    const taskId = await seedTask(db)
+    const { token } = await seedClaimedOwner(db, taskId)
+    const payloadJson = '{"v":1,"event":"resume"}'
+    const intentId = await seedIntent(db, taskId, { payloadJson })
+    const step = composeGateContinuationPreDrive({
+      db,
+      memoryDistillEnqueuer: {
+        async enqueue() {
+          throw new Error('a legacy continuation must not enqueue memory distillation')
+        },
+      },
+    })
+    const context = {
+      taskId,
+      execution: createTaskExecutionContext({
+        intentId,
+        token,
+        persistence: createTaskExecutionPersistence(db),
+      }),
+      signal: new AbortController().signal,
+      runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc359-composed-pre-drive' }),
+    }
+    expect(await step.run(context)).toEqual({ kind: 'ready' })
+    await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
+    expect(
+      (
+        await db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.id, intentId))
+      )[0],
+    ).toMatchObject({ state: 'claimed', claimedEpoch: 1, payloadJson })
+    await db
+      .update(taskExecutionIntents)
+      .set({ payloadJson: '{}' })
+      .where(eq(taskExecutionIntents.id, intentId))
+    await expect(step.run(context)).rejects.toThrow('invalid-human-gate-continuation-payload')
+    await db
+      .update(taskExecutionIntents)
+      .set({ state: 'pending', claimedEpoch: null, claimedAt: null })
+      .where(eq(taskExecutionIntents.id, intentId))
+    await expect(step.run(context)).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
   })
 
   test('releaseClarifyForRetry：按 token 围栏 + 精确 CAS 放回 pending；错 epoch 拒绝', async () => {

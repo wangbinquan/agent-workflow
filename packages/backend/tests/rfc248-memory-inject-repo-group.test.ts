@@ -12,56 +12,64 @@
 // 第 3 条是最容易在重构中被"顺手打通"的——看起来「这个仓属于那个组，那就注入吧」
 // 很自然，但那会把无关知识灌进单仓任务的 prompt。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { sql } from 'drizzle-orm'
+import { beforeEach, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { cachedRepos } from '../src/db/schema'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import { cachedRepos, memories } from '../src/db/schema'
 import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
-import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
+import { DrizzleMemoryInjectionReadStore } from '../src/modules/memory/infrastructure/memoryInjectionReadStore'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-let db: DbClient
-beforeEach(() => {
-  db = createInMemoryDb(MIGRATIONS)
-})
-
-function seedRepo(slug: string): string {
+async function seedRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(cachedRepos)
-    .values({
-      id,
-      urlHash: `${slug}00000000`.slice(0, 8),
-      urlRedacted: `https://git.example/${slug}.git`,
-      localPath: `/tmp/${slug}`,
-      defaultBranch: 'main',
-      lastFetchedAt: now,
-      createdAt: now,
-    })
-    .run()
+  await db.insert(cachedRepos).values({
+    id,
+    urlHash: `${slug}00000000`.slice(0, 8),
+    urlRedacted: `https://git.example/${slug}.git`,
+    localPath: `/tmp/${slug}`,
+    defaultBranch: 'main',
+    lastFetchedAt: now,
+    createdAt: now,
+  })
   return id
 }
 
-function seedMemory(scopeType: string, scopeId: string | null, title: string): void {
-  db.run(sql`
-    INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
-    VALUES (${ulid()}, ${scopeType}, ${scopeId}, ${title}, 'body', '[]', 'approved', 'manual', ${Date.now()}, 1)
-  `)
+async function seedMemory(
+  db: ProviderNeutralDatabase,
+  scopeType: typeof memories.$inferInsert.scopeType,
+  scopeId: string | null,
+  title: string,
+): Promise<void> {
+  await db.insert(memories).values({
+    id: ulid(),
+    scopeType,
+    scopeId,
+    title,
+    bodyMd: 'body',
+    tags: '[]',
+    status: 'approved',
+    sourceKind: 'manual',
+    createdAt: Date.now(),
+    version: 1,
+  })
 }
 
-describe('RFC-248 D4 —— 仓库组记忆注入', () => {
+describeEachProvider('RFC-248 D4 —— 仓库组记忆注入', (harness) => {
+  let db: ProviderNeutralDatabase
+  beforeEach(() => {
+    db = harness.db
+  })
   test('用组启动：注入组记忆 + 组内每个成员仓的 repo 记忆', async () => {
-    const fe = seedRepo('fe')
-    const be = seedRepo('be')
+    const fe = await seedRepo(db, 'fe')
+    const be = await seedRepo(db, 'be')
     const groupId = ulid()
-    seedMemory('repo_group', groupId, 'GROUP-RULE')
-    seedMemory('repo', fe, 'FE-RULE')
-    seedMemory('repo', be, 'BE-RULE')
+    await seedMemory(db, 'repo_group', groupId, 'GROUP-RULE')
+    await seedMemory(db, 'repo', fe, 'FE-RULE')
+    await seedMemory(db, 'repo', be, 'BE-RULE')
 
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [fe, be],
@@ -73,12 +81,12 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
   })
 
   test('单仓直启：**不**注入它所属组的记忆（repoGroupId=null）', async () => {
-    const fe = seedRepo('fe')
+    const fe = await seedRepo(db, 'fe')
     const groupId = ulid()
-    seedMemory('repo_group', groupId, 'GROUP-RULE')
-    seedMemory('repo', fe, 'FE-RULE')
+    await seedMemory(db, 'repo_group', groupId, 'GROUP-RULE')
+    await seedMemory(db, 'repo', fe, 'FE-RULE')
 
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [fe],
@@ -89,13 +97,13 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
   })
 
   test('别的组的记忆不会串进来', async () => {
-    const fe = seedRepo('fe')
+    const fe = await seedRepo(db, 'fe')
     const mine = ulid()
     const other = ulid()
-    seedMemory('repo_group', mine, 'MINE')
-    seedMemory('repo_group', other, 'OTHER')
+    await seedMemory(db, 'repo_group', mine, 'MINE')
+    await seedMemory(db, 'repo_group', other, 'OTHER')
 
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [fe],
@@ -106,14 +114,22 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
 
   test('只有 approved 的组记忆进注入——archived / candidate 不进', async () => {
     const groupId = ulid()
-    seedMemory('repo_group', groupId, 'OK')
-    for (const st of ['archived', 'candidate', 'rejected', 'superseded']) {
-      db.run(sql`
-        INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
-        VALUES (${ulid()}, 'repo_group', ${groupId}, ${'NO-' + st}, 'b', '[]', ${st}, 'manual', ${Date.now()}, 1)
-      `)
+    await seedMemory(db, 'repo_group', groupId, 'OK')
+    for (const st of ['archived', 'candidate', 'rejected', 'superseded'] as const) {
+      await db.insert(memories).values({
+        id: ulid(),
+        scopeType: 'repo_group',
+        scopeId: groupId,
+        title: 'NO-' + st,
+        bodyMd: 'b',
+        tags: '[]',
+        status: st,
+        sourceKind: 'manual',
+        createdAt: Date.now(),
+        version: 1,
+      })
     }
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -124,8 +140,8 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
 
   test('删组把记忆置 archived ⇒ 注入立即停止（G5 的闭环验证）', async () => {
     const groupId = ulid()
-    seedMemory('repo_group', groupId, 'RULE')
-    const before = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    await seedMemory(db, 'repo_group', groupId, 'RULE')
+    const before = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -133,8 +149,11 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
     })
     expect(before.byScope.repoGroup).toHaveLength(1)
 
-    db.run(sql`UPDATE memories SET status='archived' WHERE scope_type='repo_group'`)
-    const after = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    await db
+      .update(memories)
+      .set({ status: 'archived' })
+      .where(eq(memories.scopeType, 'repo_group'))
+    const after = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -144,8 +163,8 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
   })
 
   test('空 repoIds 跳过 repo 档（scratch 任务）', async () => {
-    seedMemory('global', null, 'G')
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    await seedMemory(db, 'global', null, 'G')
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -156,9 +175,9 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
   })
 
   test('同一个仓在组里出现两次（D14）不会把它的记忆注入两遍', async () => {
-    const app = seedRepo('app')
-    seedMemory('repo', app, 'APP-RULE')
-    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
+    const app = await seedRepo(db, 'app')
+    await seedMemory(db, 'repo', app, 'APP-RULE')
+    const set = await loadInjectableMemories(new DrizzleMemoryInjectionReadStore(db), {
       agentIds: [],
       workflowId: null,
       // 调用方已去重，但即便没去重，IN (...) 也只会命中一次行。

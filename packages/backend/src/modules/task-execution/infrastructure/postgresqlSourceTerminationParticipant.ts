@@ -7,7 +7,7 @@ import {
   allowedFromStatusesForEvent,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -22,6 +22,8 @@ import type {
   TaskSourceTerminationReceipt,
 } from '../application/applySourceTerminationEffect'
 import { sourceTerminationCapabilityMatches } from '../application/sourceTerminationCapability'
+import { executeSourceTermination, terminalCause } from '../application/sourceTerminationExecution'
+import { listSourceTerminationTargets } from './sourceTerminationTargets'
 import { taskExecutionModule } from '../composition'
 import type { InMemoryTaskRuntimeRegistry } from './inMemoryTaskRuntimeRegistry'
 import {
@@ -51,36 +53,6 @@ type AppliedTarget = Readonly<{
   ownerWithoutLocalToken: boolean
   eventRefs: readonly TaskExecutionPostCommitEventRef[]
 }>
-
-function fenceFor(input: TaskSourceTerminationEffectInput): 'closed' | 'merged' | null {
-  if (input.kind === 'fence-closed') return 'closed'
-  if (input.kind === 'fence-merged') return 'merged'
-  return null
-}
-
-function terminalCause(
-  input: TaskSourceTerminationEffectInput,
-  parentTaskId: string | null,
-): TaskStopCause | null {
-  const terminal = fenceFor(input)
-  if (terminal === null) return null
-  return parentTaskId === null
-    ? {
-        kind: 'webhook-terminal',
-        terminal,
-        deliveryId: input.deliveryId,
-        streamRevision: input.streamRevision,
-      }
-    : {
-        kind: 'parent-cascade',
-        parentTaskId,
-        rootCause: {
-          terminal,
-          deliveryId: input.deliveryId,
-          streamRevision: input.streamRevision,
-        },
-      }
-}
 
 async function cancelOpenNodeRuns(
   tx: PostgresqlTaskExecutionTransaction,
@@ -458,48 +430,19 @@ export function createPostgresqlTaskSourceTerminationParticipant(
           'source termination capability does not match the claimed durable effect',
         )
       }
-      const receipts = new Map<string, TaskSourceTerminationReceipt>()
-      const processed = new Set<string>()
-      for (;;) {
-        const rows = await db
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(
-            and(
-              eq(tasks.sourceTerminationBinding, input.binding),
-              lt(tasks.sourceTerminationLaunchRev, input.streamRevision),
-            ),
-          )
-          .orderBy(asc(tasks.invocationDepth), asc(tasks.id))
-        const pending = rows.filter((row) => !processed.has(row.id))
-        if (pending.length === 0) break
-        for (const row of pending) {
-          processed.add(row.id)
-          const applied = await applyOne(db, runtimeRegistry, row.id, input)
-          if (applied === null) continue
+      return await executeSourceTermination(
+        input,
+        () => listSourceTerminationTargets(db, input),
+        (taskId) => applyOne(db, runtimeRegistry, taskId, input),
+        async (applied) => {
           await publishCommittedEventsAfterCommit(applied.eventRefs)
-          let receipt = applied.receipt
-          if (applied.stopToken !== null && applied.stopCause !== null) {
-            const stopped = await runtimeRegistry.awaitStopped(
-              runtimeRegistry.requestStop(applied.stopToken, applied.stopCause),
-            )
-            receipt =
-              stopped.kind === 'released'
-                ? { ...receipt, releaseOutcome: 'released' }
-                : { ...receipt, releaseOutcome: 'unreaped', errorCode: stopped.code }
-          } else if (applied.ownerWithoutLocalToken) {
-            receipt = {
-              ...receipt,
-              releaseOutcome: 'unreaped',
-              errorCode: 'task-execution-recovery-required',
-            }
-          } else if (input.kind !== 'clear-closed') {
-            receipt = { ...receipt, releaseOutcome: 'no-active-owner' }
-          }
-          receipts.set(row.id, receipt)
-        }
-      }
-      return [...receipts.values()]
+          return applied.stopToken !== null && applied.stopCause !== null
+            ? await runtimeRegistry.awaitStopped(
+                runtimeRegistry.requestStop(applied.stopToken, applied.stopCause),
+              )
+            : null
+        },
+      )
     },
   }
 }

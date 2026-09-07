@@ -11,10 +11,10 @@
 //     and distillTick passes the head row's MemoryDistillJob.outputLang
 //     into runDistill; we lock the per-row capture invariant here.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { memoryDistillJobs } from '../src/db/schema'
 import {
   enqueueDistillJob,
@@ -22,19 +22,18 @@ import {
   setMemoryDistillLangProvider,
 } from '../src/modules/memory/application/distill/schedule'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
+import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
+import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
-  let db: DbClient
-  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
+describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (harness) => {
+  let db: ProviderNeutralDatabase
+  let memory: { store: DrizzleMemoryDistillWorkStore }
 
   beforeEach(() => {
     resetBroadcastersForTests()
     resetMemoryDistillLangProviderForTest()
-    db = createInMemoryDb(MIGRATIONS)
-    memory = createSqliteMemoryDistillTestContext(db)
+    db = harness.db
+    memory = { store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)) }
   })
 
   afterEach(() => {
@@ -49,7 +48,11 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
       taskId: null,
       outputLang: 'zh-CN',
     })
-    const row = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get()
+    const row = await db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, jobId))
+      .get()
     expect(row?.outputLang).toBe('zh-CN')
   })
 
@@ -60,7 +63,11 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
       sourceEventId: 'evt-2',
       taskId: null,
     })
-    const row = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get()
+    const row = await db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, jobId))
+      .get()
     expect(row?.outputLang).toBe('zh-CN')
   })
 
@@ -70,7 +77,11 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
       sourceEventId: 'evt-3',
       taskId: null,
     })
-    const row = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get()
+    const row = await db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, jobId))
+      .get()
     expect(row?.outputLang).toBeNull()
   })
 
@@ -82,7 +93,11 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
       taskId: null,
       outputLang: null,
     })
-    const row = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)).get()
+    const row = await db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, jobId))
+      .get()
     expect(row?.outputLang).toBeNull()
   })
 
@@ -108,8 +123,16 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
     })
     // (Same debounceKey because (taskId, sourceKind) identical for feedback.)
     expect(a.debounceKey).toBe(b.debounceKey)
-    const rowA = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, a.jobId)).get()
-    const rowB = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, b.jobId)).get()
+    const rowA = await db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, a.jobId))
+      .get()
+    const rowB = await db
+      .select()
+      .from(memoryDistillJobs)
+      .where(eq(memoryDistillJobs.id, b.jobId))
+      .get()
     expect(rowA?.outputLang).toBe('zh-CN')
     expect(rowB?.outputLang).toBe('en-US')
   })

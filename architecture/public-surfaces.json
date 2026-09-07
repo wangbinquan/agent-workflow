@@ -73775,7 +73775,7 @@
         "import:519c37546cf4d1f5cb2f",
         "import:9ef226b911cd4c382b5c",
         "import:bbb79d2718cda8147626",
-        "import:eba390715fb17d94b243"
+        "import:bfe5f8b8fa122582774c"
       ],
       "context": "memory",
       "dataClass": "metadata",
@@ -73832,9 +73832,9 @@
         },
         {
           "context": "task-execution",
-          "edgeId": "import:eba390715fb17d94b243",
-          "file": "packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts#$file"
+          "edgeId": "import:bfe5f8b8fa122582774c",
+          "file": "packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -161793,7 +161793,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d",
+  "sourceDigest": "sha256:7640774d0105b7331cf20895bd1003423f04eed2a18d587a5a340176dd4b9d1e",
   "targetContexts": [
     "collaboration",
     "development-automation",

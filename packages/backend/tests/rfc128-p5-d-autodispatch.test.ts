@@ -37,7 +37,7 @@ import {
   finishCommittedClarifyAutoDispatch,
 } from '../src/services/clarifyAutoDispatch'
 import { prepareClarifyDecision } from '../src/services/clarifyDecision'
-import { createSqliteGateContinuationPreDriveStep as createGateContinuationPreDriveStep } from '../src/modules/task-execution/composition/sqliteGateContinuationPreDrive'
+import { composeGateContinuationPreDrive as createGateContinuationPreDriveStep } from '../src/modules/task-execution/composition/gateContinuationPreDrive'
 import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
 import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'

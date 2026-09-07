@@ -13,6 +13,10 @@
   初始期间的迁移动作明确拒绝，避免自等待及提前读取 controller，初始窗口仍可立即读取。
 - resource-package apply journal 使用一份 DatabaseSession 算法，CAS 与外层回滚共享事务；
   SQLite/PG 的资源恢复机制仍保留各自实现，不将 journal 合一误记为整对机制退役。
+- 来源终止公共流程只负责稳定顺序、固定点重扫及收据；每目标的事务与提交后动作由原参与者
+  保持，不改成跨目标事务或并行处理。公共化不代表两侧 lifecycle atom 已合一。
+- taskExecutionPersistence 只维护一份按原顺序构造的成员聚合；所选恢复生命周期在原字段处
+  注入。continuation pre-drive 的三个参与者共用同一中立客户端，运行流程保持不变。
 - provider 文件改名只适用于已经中立的实现；真正重复的实现先合一，必要机制差异保持明确命名与对拍。
 
 ## 1. RFC-294 对齐（CLAUDE.md §RFC workflow 第 8 条）
