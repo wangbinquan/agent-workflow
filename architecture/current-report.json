@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 4814,
-    "backgroundJobs": 341,
-    "crossContextImports": 5358,
+    "architectureExceptions": 4792,
+    "backgroundJobs": 342,
+    "crossContextImports": 5333,
     "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25034,
-    "mutationEntrypoints": 1761,
+    "moduleSymbolOwners": 24988,
+    "mutationEntrypoints": 1758,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 980,
-    "transactionExternalEffects": 287
+    "transactionExternalEffects": 286
   },
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1802,
+    "backendProductionFiles": 1797,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 341,
+    "backgroundEntries": 342,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -59,7 +59,7 @@
       },
       {
         "context": "collaboration",
-        "files": 110
+        "files": 108
       },
       {
         "context": "development-automation",
@@ -99,7 +99,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 199
+        "files": 198
       },
       {
         "context": "runtime-management",
@@ -111,7 +111,7 @@
       },
       {
         "context": "system-operations",
-        "files": 40
+        "files": 39
       },
       {
         "context": "task-catalog",
@@ -122,7 +122,7 @@
         "files": 310
       }
     ],
-    "moduleFiles": 1194,
+    "moduleFiles": 1190,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284"
+  "sourceDigest": "sha256:7a09d44a2292828204c03df94435c63914d5c7712b0a9c4c839db670bef73d6d"
 }

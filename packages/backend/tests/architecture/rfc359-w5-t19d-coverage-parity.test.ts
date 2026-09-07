@@ -70,7 +70,7 @@ const PROVIDER_PREFIX = /^(sqlite|postgresql)(?=[A-Z])/
  */
 export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite 3/1, postgresql 3/2',
-  'modules/intent/infrastructure/IntentApplyOperations: sqlite 17/1, postgresql 3/1',
+  'modules/intent/infrastructure/IntentApplyOperations: sqlite 18/2, postgresql 3/1',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-resource-package-maintenance-conformance.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧的 journal + 恢复端口）。
   // RFC-359 W9：两侧各 +1 ref / +1 drive —— `rfc359-w9-resource-package-skill-recovery-conformance.test.ts`
@@ -102,7 +102,7 @@ export const REFERENCE_GAP_THRESHOLD = 3
  * 这是「先合谁」的排序依据：倒挂越深，合一时撞出行为差异的概率越大（D19b 实证）。
  */
 export const INVERTED_PAIRS: readonly string[] = [
-  'modules/intent/infrastructure/IntentApplyOperations: 17 vs 3',
+  'modules/intent/infrastructure/IntentApplyOperations: 18 vs 3',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 5',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 8 vs 5',

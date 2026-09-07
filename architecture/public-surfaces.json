@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 852,
+    "consumers": 851,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1062,
@@ -132644,7 +132644,6 @@
       },
       "consumerEdgeIds": [
         "import:2d5f1ee9b843f95781a7",
-        "import:315cba6c69fc0824fa95",
         "import:e4cc62b9b727e1947819"
       ],
       "context": "system-operations",
@@ -132666,8 +132665,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:2d5f1ee9b843f95781a7",
-            "import:315cba6c69fc0824fa95"
+            "import:2d5f1ee9b843f95781a7"
           ],
           "name": "countRunningTasks",
           "signatureDigest": "sha256:9281c8769a6ea7460a2584bbc93e4b24348f535cafda37fa1029a174955d9487"
@@ -132680,12 +132678,6 @@
           "edgeId": "import:2d5f1ee9b843f95781a7",
           "file": "packages/backend/src/routes/health.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/health.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:315cba6c69fc0824fa95",
-          "file": "packages/backend/src/platform/persistence/sqlite/systemHealthReadModel.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemHealthReadModel.ts#$file"
         },
         {
           "context": "legacy",
@@ -161686,7 +161678,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284",
+  "sourceDigest": "sha256:7a09d44a2292828204c03df94435c63914d5c7712b0a9c4c839db670bef73d6d",
   "targetContexts": [
     "collaboration",
     "development-automation",

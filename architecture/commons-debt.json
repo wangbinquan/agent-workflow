@@ -748,7 +748,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleLower.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#loadAclResourceNamesByIds"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#$file"
       ],
       "canonicalFacadeIds": []
     },
@@ -4442,17 +4442,12 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#getAclResourceAccessRow",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#$file",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#getAclResourceAccessRowInTx",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#getAclResourceIdentityRowInTx",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#getAclResourceOwner",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#getAclResourceOwnerInTx",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#listAclResourceIdentityRowsByIds",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#listAclResourceIdentityRowsByIdsInTx",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#listAclResourceIdentityRowsByNames",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#listAclResourceIdentityRowsByNamesInTx",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#listOwnedAclResourceNames",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#loadAclResourceNamesByIds"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#listAclResourceIdentityRowsByNamesInTx"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -8741,15 +8736,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284",
+    "sourceDigest": "sha256:7a09d44a2292828204c03df94435c63914d5c7712b0a9c4c839db670bef73d6d",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "f2657dd005d7de5c63f70dea2a6568f2552b5b0d",
-    "contentDigest": "sha256:0310b26529aaf2ba018962a0a47dcc85e1808ed2b71652b911b18876980e5ac0",
+    "currentSnapshotSha": "1b02bb557fc624a1ee48eb34e72cc76fdad58026",
+    "contentDigest": "sha256:d32c1f5cb713aee24d23f1ba34c97afb07ba261c69a9ebc7d0d2146a48b8a143",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
