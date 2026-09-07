@@ -89,9 +89,6 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 倒挂随之从 +1 变成 +2，但方向是「弱侧 PG 的那份原生重写更该退役」，不是新债。
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/3, postgresql 2/1',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 6/2',
-  // RFC-359 W8：这一对此前**两侧都是 0/0**（RFC-108 只测了注入式循环，provider 那一半从未被跑过）。
-  // `rfc359-w8-auto-repair-conformance.test.ts` 是它的第一份行为覆盖，两侧同时 0/0 → 1/1。
-  'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite 1/1, postgresql 1/1',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 6/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
@@ -123,9 +120,9 @@ interface Side {
 
 interface Scan {
   /** 扫到的 backend 源文件数——语料下限的分母（RFC-317 T13：扫空 = 假绿）。 */
-  readonly sourceCorpus: number
+  readonly sourceFiles: readonly string[]
   /** 扫到的测试文件数（不含 `architecture/`）——同上。 */
-  readonly testCorpus: number
+  readonly testFiles: readonly string[]
   /** 全树 provider 命名的实现文件数——判据「还咬得动」的证据（账本清空后仍非零）。 */
   readonly providerNamed: number
   /** `<对>: sqlite <ref>/<drive>, postgresql <ref>/<drive>`，字典序。 */
@@ -261,8 +258,8 @@ function scan(): Scan {
   }
 
   cached = {
-    sourceCorpus: sourceFiles.length,
-    testCorpus: testFiles.length,
+    sourceFiles,
+    testFiles,
     providerNamed,
     rows,
     inverted,
@@ -273,11 +270,11 @@ function scan(): Scan {
 describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，只降不升）', () => {
   test('语料非空：两棵树都扫到了，且 provider 命名匹配器仍咬得动（扫空 / 不咬 = 假绿）', () => {
     expect(
-      scan().sourceCorpus,
+      scan().sourceFiles.length,
       '扫到的 backend 源文件太少——扫描根多半失效了，此刻这条守卫零预言力。',
     ).toBeGreaterThanOrEqual(1_500)
     expect(
-      scan().testCorpus,
+      scan().testFiles.length,
       '扫到的 backend 测试文件太少——扫描根多半失效了，两个通道都会一起归零。',
     ).toBeGreaterThanOrEqual(1_500)
     expect(
@@ -287,17 +284,13 @@ describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，�
     ).toBeGreaterThanOrEqual(40)
   }, 30_000)
 
-  test('成对适配器数量有下限（一对都配不上 = 配对判据失效，账本会静默变空）', () => {
+  test('客户端机制对仍被识别（配对判据失效不能让账本静默变空）', () => {
     expect(
-      scan().rows.length,
-      '同目录 `sqliteX.ts` / `postgresqlX.ts` 一对都没配上——配对判据失效了。' +
-        'W4 真的把 pair 合光时，这条下限要连同账本一起显式改小，那必须是一次有记录的决定。',
-      // RFC-359 W7（2026-09-07）：26 → 15，本波合掉 11 对，下限随之从 20 显式改小到 10。
-      // 这是守卫注释要求的「一次有记录的决定」。**下调的是防假绿的地板，不是目标**——
-      // 目标仍是 0（见 `PROVIDER_PAIR_COUNT` 的注释）。
-      // 注意：真正证明「配对匹配器还咬人」的是上面那条 `>= 40` 的 provider 命名文件下限；
-      // 等这里逼近 0 时，本条应当整体让位给它，而不是继续往下调。
-    ).toBeGreaterThanOrEqual(10)
+      scan().rows.some((row) => row.startsWith('platform/persistence/LogicalSource:')),
+      '两侧已登记的 LogicalSource 客户端机制没有配上，先检查扫描根与前缀匹配器。',
+      // RFC-359 W12：自动修复合一使 10 → 9。固定债务下限会阻止真实收敛，改用必须保留的
+      // 客户端机制对作正向锚点；整树语料地板与精确账本继续独立生效。
+    ).toBe(true)
   }, 30_000)
 
   test('逐对的两侧引用 / 驱动数与账本逐字相等（倒挂加深了红，收敛了也红）', () => {

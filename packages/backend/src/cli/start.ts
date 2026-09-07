@@ -68,7 +68,12 @@ import {
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { composeSqliteAppDeps, composeSqliteDaemonProviderCore, createComposedApp } from '@/server'
+import {
+  composeSqliteAppDeps,
+  composeSqliteDaemonProviderCore,
+  createComposedApp,
+  type SqliteAppComposition,
+} from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
@@ -180,7 +185,7 @@ import {
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
-import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeSqliteCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeSqliteCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeSqliteDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
@@ -233,7 +238,7 @@ import { registerAfterCommitEventPump } from '@/platform/events/committed/runtim
 import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
 import { notifyTaskTerminal } from '@/services/execution/executionWatch'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
+import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
@@ -2365,7 +2370,10 @@ async function composeSqliteProviderSession(
   // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/
   // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
   // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
-  const digitalEmployeeWorkStart = createDeferredDigitalEmployeeWorkStart()
+  // The completed HTTP composition owns WorkStart; the OS worker keeps its separate instance.
+  const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
+    launch: (request) => appComposition.digitalEmployeeWorkStart.launch(request),
+  })
   const webhookTaskExecutions = taskExecutionProvider.trigger.taskExecutions
   const webhookDispatcher = createWebhookDispatcher({
     ...composeSqliteWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
@@ -2382,7 +2390,7 @@ async function composeSqliteProviderSession(
     terminalControl: webhookTerminalControl,
     ...createSqliteWebhookExecutionRuntime({
       taskExecutions: webhookTaskExecutions,
-      digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
+      digitalEmployeeWorkStart,
     }),
   })
   const developmentApprovalGateway = composeSqliteApprovalGatewayRunner(db)
@@ -2717,7 +2725,7 @@ async function composeSqliteProviderSession(
     registrations: developmentExecutionContractRegistrations,
     implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
   })
-  const codeHistoryQueries = composeSqliteCodeHistoryQueries(db)
+  const codeHistoryQueries = composeCodeHistoryQueries(db)
   const databaseMigration = composeDatabaseMigrationModule({
     admission: migrationAdmission,
     sqlitePath: Paths.db,
@@ -2736,7 +2744,7 @@ async function composeSqliteProviderSession(
   // 7. HTTP server.
   //
   // The authoring HTTP surface and the OS runtime must read ONE platform tool
-  // catalog. `createComposedApp` composes its own digital-employee module, so a
+  // catalog. `composeSqliteAppDeps` creates the HTTP digital-employee module, so a
   // catalog built later (for `employeeOs` alone) leaves every
   // `/work-items/:ref/tools` response empty and the job-template editor with no
   // built-in tool to bind.
@@ -2747,42 +2755,40 @@ async function composeSqliteProviderSession(
       developmentEmployeeTypePackage.descriptorJson,
     ],
   })
-  const app = createComposedApp(
-    composeSqliteAppDeps({
-      providerCore,
-      token,
-      digitalEmployeePlatformTools,
-      configPath: Paths.config,
-      daemonInfoPath: Paths.daemonInfo,
-      // RFC-226: runtime readiness is not daemon health. Startup never executes
-      // OpenCode; explicit runtime status/Test/use paths perform the version and
-      // RFC-227 byte-frozen runtime admission instead.
-      opencodeVersion: null,
-      dbVersion,
-      db,
-      executionContracts: employeeExecutionContracts,
-      codeHistoryQueries,
-      developmentAdmissionLookup,
-      identityAccess: integrationIdentityAccess,
-      maintenanceStatus: maintenanceService.status,
-      secretBox,
-      repositoryPublicationTransport,
-      developmentAutomation,
-      schedulerDriver: taskExecutionRuntime.schedulerDriver,
-      taskExecutionReadModels: taskExecutionRuntime.readModels,
-      taskRouteLaunch: taskExecutionProvider.routeLaunch,
-      memoryOperations,
-      databaseMigration: databaseMigration,
-      collaborationContext,
-      mcpRuntimeTests,
-      webhookDispatcher,
-      webhookTerminalControl,
-      digitalEmployeeEventCenter: employeeHttpEventCenter,
-      digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
-      digitalEmployeeWorkStart,
-      digitalEmployeeTypePackageDriftPolicy,
-    }),
-  )
+  const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    providerCore,
+    token,
+    digitalEmployeePlatformTools,
+    configPath: Paths.config,
+    daemonInfoPath: Paths.daemonInfo,
+    // RFC-226: runtime readiness is not daemon health. Startup never executes
+    // OpenCode; explicit runtime status/Test/use paths perform the version and
+    // RFC-227 byte-frozen runtime admission instead.
+    opencodeVersion: null,
+    dbVersion,
+    db,
+    executionContracts: employeeExecutionContracts,
+    codeHistoryQueries,
+    developmentAdmissionLookup,
+    identityAccess: integrationIdentityAccess,
+    maintenanceStatus: maintenanceService.status,
+    secretBox,
+    repositoryPublicationTransport,
+    developmentAutomation,
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
+    taskExecutionReadModels: taskExecutionRuntime.readModels,
+    taskRouteLaunch: taskExecutionProvider.routeLaunch,
+    memoryOperations,
+    databaseMigration: databaseMigration,
+    collaborationContext,
+    mcpRuntimeTests,
+    webhookDispatcher,
+    webhookTerminalControl,
+    digitalEmployeeEventCenter: employeeHttpEventCenter,
+    digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
+    digitalEmployeeTypePackageDriftPolicy,
+  })
+  const app = createComposedApp(appComposition)
 
   const ws = buildWebSocketAdapter({
     daemonToken: token,

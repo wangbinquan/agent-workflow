@@ -7,18 +7,17 @@
 // behind, and pins the source so a future refactor can't silently revert to the
 // non-atomic copy.
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('commitSkillVersion atomic publish', () => {
-  let db: DbClient
+describeEachProvider('commitSkillVersion atomic publish', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -26,7 +25,7 @@ describe('commitSkillVersion atomic publish', () => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-atomic-pub-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: '',
@@ -60,23 +59,23 @@ describe('commitSkillVersion atomic publish', () => {
     expect(entries.sort()).toEqual(['files', 'versions'])
     expect(entries.some((e) => e.includes('.op-') || e.startsWith('.staging-'))).toBe(false)
   })
+})
 
-  test('source uses swapInStaged, not the old non-atomic cpSync(staging → filesDir)', async () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'skillVersion.ts',
-      ),
-      'utf-8',
-    )
-    expect(src).toContain('swapInStaged(filesDir, publishId)')
-    // The old non-atomic publish pattern must not come back.
-    expect(src).not.toMatch(/cpSync\(\s*staging\s*,\s*filesDir/)
-  })
+test('source uses swapInStaged, not the old non-atomic cpSync(staging → filesDir)', async () => {
+  const src = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'skillVersion.ts',
+    ),
+    'utf-8',
+  )
+  expect(src).toContain('swapInStaged(filesDir, publishId)')
+  // The old non-atomic publish pattern must not come back.
+  expect(src).not.toMatch(/cpSync\(\s*staging\s*,\s*filesDir/)
 })

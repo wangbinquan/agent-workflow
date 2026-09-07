@@ -18,7 +18,8 @@ import { join, resolve } from 'node:path'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createUser } from '../src/services/users'
-import { createApp } from '../src/server'
+import { composeSqliteAppDeps, createComposedApp, type SqliteAppComposition } from '../src/server'
+import type { DigitalEmployeeWorkStartPort } from '../src/modules/integration/public/participants'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '../src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
@@ -31,8 +32,10 @@ const backendRoot = resolve(import.meta.dir, '..')
 describe('RFC-349 digital employee platform tool wiring', () => {
   let db: DbClient
   let appHome: string
-  let app: ReturnType<typeof createApp>
+  let composition: SqliteAppComposition
+  let app: ReturnType<typeof createComposedApp>
   let token: string
+  let actorUserId: string
   let typeRef: string
 
   beforeEach(async () => {
@@ -48,7 +51,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       typeRef: { typeId: string; revision: number }
     }
     typeRef = `${descriptor.typeRef.typeId}@${descriptor.typeRef.revision}`
-    app = createApp({
+    composition = composeSqliteAppDeps({
       token: 'd'.repeat(64),
       configPath: join(appHome, 'config.json'),
       opencodeVersion: null,
@@ -60,6 +63,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
         typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       }),
     })
+    app = createComposedApp(composition)
     const admin = await createUser(db, {
       username: 'platform_tools_admin',
       email: 'platform-tools@example.test',
@@ -68,6 +72,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       password: 'longEnoughPassword',
     })
     token = (await createSession({ db, userId: admin.id })).token
+    actorUserId = admin.id
   })
 
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
@@ -103,5 +108,113 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     expect(source).toContain('platformTools: digitalEmployeePlatformTools,')
     // 单一实例：不允许再出现第二次组装（两份目录 = 两种真值）。
     expect(source.split('composeDigitalEmployeeBuiltinToolCatalog(').length - 1).toBe(1)
+  })
+
+  test('the completed HTTP composition exposes a required WorkStart port without a bind phase', async () => {
+    const port: DigitalEmployeeWorkStartPort = composition.digitalEmployeeWorkStart
+    expect(Object.isFrozen(composition)).toBe(true)
+    expect(Object.isFrozen(port)).toBe(true)
+    // @ts-expect-error A completed WorkStart port has no mutable binding phase.
+    expect(port.bind).toBeUndefined()
+    expect('digitalEmployeeWorkStart' in composition.apiRoutes).toBe(false)
+    await expect(
+      port.launch({
+        employeeId: 'missing-employee',
+        intake: {
+          kind: 'body',
+          target: { repositoryId: 'repository-1' },
+          body: 'repair the pipeline',
+          externalId: null,
+          uploads: [],
+          idempotencyKey: 'event-delivery:missing-employee',
+        },
+        actorUserId,
+        origin: {
+          eventSubscriptionId: 'subscription-1',
+          eventDeliveryId: 'missing-employee',
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'employee-definition-not-found' })
+  })
+
+  test('WorkStart uses the HTTP employee and stays usable after the same routes mount again', async () => {
+    async function requestJson<T>(path: string, body?: unknown): Promise<T> {
+      const response = await app.request(path, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      })
+      const text = await response.text()
+      expect(response.ok, text).toBe(true)
+      return JSON.parse(text) as T
+    }
+    const base = `/api/digital-employee-types/${encodeURIComponent(typeRef)}`
+    const tools = await requestJson<{
+      items: Array<{
+        id: string
+        origin: string
+        publishedRevision: number | null
+        state: string
+        selection: string
+      }>
+    }>(`${base}/work-items/analyze-implement/tools`)
+    const tool = tools.items.find(
+      (item) =>
+        item.origin === 'platform' &&
+        item.state === 'published' &&
+        item.selection !== 'unavailable',
+    )
+    if (tool?.publishedRevision == null) throw new Error('fixture needs a published platform tool')
+    const job = await requestJson<{ id: string }>(`${base}/job-templates`, {
+      name: 'HTTP WorkStart role',
+      description: 'Run body intake through the completed application.',
+      defaultToolBindings: [
+        {
+          workItemRef: 'analyze-implement',
+          slotRef: 'default',
+          registrationRef: { id: tool.id, revision: tool.publishedRevision },
+        },
+      ],
+    })
+    const published = await requestJson<{ ref: { id: string; revision: number } }>(
+      `/api/digital-employee-job-templates/${job.id}/publish`,
+      {},
+    )
+    const employee = await requestJson<{ id: string }>(`${base}/employees`, {
+      name: 'HTTP WorkStart employee',
+      jobTemplateRef: published.ref,
+      workScope: { kind: 'repository', repositoryId: 'repository-1' },
+    })
+    const port = composition.digitalEmployeeWorkStart
+    const request: Parameters<DigitalEmployeeWorkStartPort['launch']>[0] = {
+      employeeId: employee.id,
+      intake: {
+        kind: 'body',
+        target: { repositoryId: 'repository-1' },
+        body: 'repair the pipeline through the HTTP employee',
+        externalId: null,
+        uploads: [],
+        idempotencyKey: 'event-delivery:delivery-1',
+      },
+      actorUserId,
+      origin: { eventSubscriptionId: 'subscription-1', eventDeliveryId: 'delivery-1' },
+    }
+    const first = await port.launch(request)
+    expect(first.caseId).toBeString()
+    app = createComposedApp(composition)
+    expect(composition.digitalEmployeeWorkStart).toBe(port)
+    expect(await port.launch(request)).toEqual(first)
+    const detail = await requestJson<{ case: Record<string, unknown> }>(
+      `/api/employee-cases/${first.caseId}`,
+    )
+    expect(detail.case).toMatchObject({
+      id: first.caseId,
+      employeeRef: { id: employee.id, revision: 1 },
+      ownerUserId: actorUserId,
+      launchOrigin: 'event',
+      name: request.intake.body,
+      state: 'active',
+      currentWorkItemRef: 'prepare-materials',
+    })
   })
 })

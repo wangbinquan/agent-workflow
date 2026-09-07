@@ -53,11 +53,10 @@ describe('RFC-187 §3-3 — source locks', () => {
 
   test('重跑一律铸 wg-protocol-retry：骨架里唯一一处决策，角色只给主 cause', () => {
     // 首轮用角色的主 cause，其余（协议重跑与「换进程」的传输重跑）一律 wg-protocol-retry。
-    expect(RUNNER).toMatch(
-      /attempt === 0 && !transientRetryPending \? spec\.primaryCause : 'wg-protocol-retry'/,
-    )
+    expect(RUNNER).toContain('const isFirstStart = attempt === 0 && !transientRetryPending')
+    expect(RUNNER).toMatch(/cause: isFirstStart \? spec\.primaryCause : 'wg-protocol-retry'/)
     // 决策点只有这一个——回潮出第二处就意味着有人绕开骨架自己铸行。
-    expect(RUNNER.split('cause: attempt === 0').length - 1).toBe(1)
+    expect(RUNNER.split('cause: isFirstStart').length - 1).toBe(1)
     // 领队 / 派单（单卡 + 批量）/ 消息回合四处主 cause 都还在。
     expect(RUNNER).toContain("primaryCause: 'wg-leader-round'")
     expect(RUNNER.split("primaryCause: 'wg-assignment'").length - 1).toBe(2)

@@ -1,59 +1,77 @@
-// RFC-317 T54（findings TP-04）—— 进程级 work-start 参与者不得被静默重绑。
-//
-// 为什么这条测试存在：RFC-344 前 `mountApiRoutes` 每进程被调用两次，第二套 MCP Hono
-// 会重绑进程级 participant。RFC-344 已删除那套 route root；once guard 仍保留，防止未来
-// 任何新入口重复绑定 `cli/start.ts` 交给 webhook dispatcher 的 participant。
-//
-// 改造前 `bind` 是一句裸赋值，没有 once 守卫：**一旦有人发过一次 MCP 请求**，此后所有
-// webhook / 事件驱动的工作启动都改道到 MCP 那套私有 runtime 上，无日志、无报错、
-// 无任何测试会红。这条测试锁住两件事：二次绑定必须炸，未绑定时调用必须炸。
+// RFC-317 T54 / RFC-359 W12 —— WorkStart keeps the HTTP employee instance for
+// the lifetime of the daemon. RFC-359 removes the deferred bind object entirely;
+// bootstrap passes complete ports whose closures resolve the completed owner.
+// SQLite deliberately retains its separate OS worker; PostgreSQL has one module.
 
 import { describe, expect, test } from 'bun:test'
-import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
-const participantOf = (tag: string) => ({
-  launch: async () => ({ caseId: `case-${tag}` }),
-})
+const source = (path: string) => readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
 
-describe('RFC-317 T54 —— work-start participant 的绑定是一次性的', () => {
-  test('未绑定就调用 ⇒ 抛（而不是静默返回什么都不做）', () => {
-    const deferred = createDeferredDigitalEmployeeWorkStart()
-    expect(() =>
-      deferred.participant.launch({
-        employeeId: 'e1',
-        intake: {} as never,
-        actorUserId: null,
-        origin: 'api',
-      } as never),
-    ).toThrow('is not bound')
+describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
+  test('the integration composer no longer exports a mutable bind holder', () => {
+    const integration = source('modules/integration/composition.ts')
+    expect(integration).not.toContain('DeferredDigitalEmployeeWorkStart')
+    expect(integration).not.toContain('DigitalEmployeeWorkStartPort | null')
   })
 
-  test('绑一次可用', async () => {
-    const deferred = createDeferredDigitalEmployeeWorkStart()
-    deferred.bind(participantOf('rest') as never)
-    await expect(
-      deferred.participant.launch({
-        employeeId: 'e1',
-        intake: {} as never,
-        actorUserId: null,
-        origin: 'api',
-      } as never),
-    ).resolves.toEqual({ caseId: 'case-rest' })
+  test('SQLite WorkStart resolves the completed HTTP owner while OS lifecycle keeps its instance', () => {
+    const sqlite = source('cli/start.ts')
+    const portAt = sqlite.indexOf('const digitalEmployeeWorkStart = Object.freeze<')
+    const dispatcherAt = sqlite.indexOf('const webhookDispatcher = createWebhookDispatcher(')
+    const appAt = sqlite.indexOf('const appComposition: SqliteAppComposition<')
+    const osAt = sqlite.indexOf('const employeeOs = composeDigitalEmployee(')
+    const workerAt = sqlite.indexOf('const employeeOsRuntimeFactory =')
+    expect(portAt).toBeGreaterThan(0)
+    expect(dispatcherAt).toBeGreaterThan(portAt)
+    expect(appAt).toBeGreaterThan(dispatcherAt)
+    expect(osAt).toBeGreaterThan(appAt)
+    expect(workerAt).toBeGreaterThan(osAt)
+    expect(sqlite.slice(portAt, dispatcherAt)).toContain(
+      'launch: (request) => appComposition.digitalEmployeeWorkStart.launch(request)',
+    )
+    expect(sqlite.slice(portAt, dispatcherAt)).not.toContain('employeeOs')
+    expect(sqlite).toContain('const app = createComposedApp(appComposition)')
+    expect(sqlite).toContain('runDigitalEmployeeOsCycle({ runtime: employeeOs.runtime.worker })')
+    expect(sqlite).toContain('    employeeOsRuntimeFactory,')
+    expect(sqlite).not.toContain('digitalEmployeeWorkStart.bind(')
+    expect(sqlite).not.toContain('digitalEmployeeWorkStart.participant')
   })
 
-  test('**绑第二次直接抛**——改造前它会静默覆盖，把 webhook 改道到另一套 runtime', async () => {
-    const deferred = createDeferredDigitalEmployeeWorkStart()
-    deferred.bind(participantOf('rest') as never)
-    expect(() => deferred.bind(participantOf('mcp') as never)).toThrow('already bound')
-    // 且第一次那份仍然有效——抛出之后不能留下半绑定的状态。
-    await expect(
-      deferred.participant.launch({
-        employeeId: 'e1',
-        intake: {} as never,
-        actorUserId: null,
-        origin: 'api',
-      } as never),
-    ).resolves.toEqual({ caseId: 'case-rest' })
+  test('the HTTP composition exports the same employee used by its routes', () => {
+    const server = source('server.ts')
+    const ownerAt = server.indexOf('const digitalEmployee = composeDigitalEmployee(')
+    const portAt = server.indexOf('const digitalEmployeeWorkStart = Object.freeze<', ownerAt)
+    expect(ownerAt).toBeGreaterThan(0)
+    expect(portAt).toBeGreaterThan(ownerAt)
+    expect(server.slice(portAt, server.indexOf('const taskCatalog =', portAt))).toContain(
+      'digitalEmployee.runtime.commands.launchWork({',
+    )
+    expect(server).toContain('digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart')
+    expect(server).toContain('return Object.freeze({ apiRoutes, digitalEmployeeWorkStart })')
+    expect(server.slice(portAt)).toMatch(
+      /mountDigitalEmployeeRoutes\(\s*app,\s*digitalEmployeePersistence,\s*digitalEmployee,/,
+    )
+    expect(server).not.toContain('deps.digitalEmployeeWorkStart')
+  })
+
+  test('PostgreSQL resolves its one completed employee directly without a binding step', () => {
+    const postgresql = source('cli/postgresqlDaemonApplication.ts')
+    const portAt = postgresql.indexOf('const digitalEmployeeWorkStart = Object.freeze<')
+    const ownerAt = postgresql.indexOf('const digitalEmployee = composePostgresqlDigitalEmployee(')
+    expect(portAt).toBeGreaterThan(0)
+    expect(ownerAt).toBeGreaterThan(portAt)
+    const port = postgresql.slice(
+      portAt,
+      postgresql.indexOf('const webhookDeliveryRuntime', portAt),
+    )
+    expect(port).toContain('await digitalEmployee.runtime.commands.launchWork({')
+    expect(port).toContain('eventOrigin: request.origin')
+    expect(port).toContain('return { caseId: result.caseRef.id }')
+    expect(postgresql).toContain('    digitalEmployee.runtime.worker,')
+    expect(postgresql).not.toContain('digitalEmployeeWorkStart.bind(')
+    expect(postgresql).not.toContain('digitalEmployeeWorkStart.participant')
   })
 })
 

@@ -44,7 +44,7 @@ import {
   PostgresqlRepositoryTransportCredentialRepository,
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
-import { composePostgresqlCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composePostgresqlLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import {
   composePostgresqlCapabilityTemplateOperations,
@@ -230,10 +230,10 @@ import { composePostgresqlWebhookDeliveryPersistence } from '@/modules/integrati
 import { composePostgresqlMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { createPostgresqlWebhookRepositoryResolver } from '@/modules/integration/infrastructure/webhookRepositoryResolver'
 import {
-  createDeferredDigitalEmployeeWorkStart,
   createPostgresqlCodeHostWebhookDeliveryConsumer,
   createPostgresqlCodeHostWebhookRoutingDirectory,
 } from '@/modules/integration/composition'
+import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import {
   composeDevelopmentApprovalEventObserver,
   composeDevelopmentCodeHostEventObserver,
@@ -630,7 +630,7 @@ export async function composePostgresqlDaemonApplication(
     pipeline: composePostgresqlPipelineEvidenceRunner(input.db),
   })
 
-  const codeHistoryQueries = composePostgresqlCodeHistoryQueries(input.db)
+  const codeHistoryQueries = composeCodeHistoryQueries(input.db)
   const executionContracts = composeExecutionContract({
     resources: createPostgresqlExecutionContractResourceAdapter(
       input.db,
@@ -1130,7 +1130,17 @@ export async function composePostgresqlDaemonApplication(
     integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
     taskExecutionResources,
   })
-  const digitalEmployeeWorkStart = createDeferredDigitalEmployeeWorkStart()
+  const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
+    async launch(request) {
+      const result = await digitalEmployee.runtime.commands.launchWork({
+        employeeId: request.employeeId,
+        intake: request.intake,
+        actorUserId: request.actorUserId,
+        eventOrigin: request.origin,
+      })
+      return { caseId: result.caseRef.id }
+    },
+  })
   const webhookDeliveryRuntime = composePostgresqlWebhookDeliveryRuntime(input.db)
   const webhookTerminalControl = composePostgresqlMrTerminalControl({
     db: input.db,
@@ -1176,7 +1186,7 @@ export async function composePostgresqlDaemonApplication(
     getDefaultRuntime: async () => loadConfig(input.configPath).defaultRuntime,
     ...createPostgresqlWebhookExecutionRuntime({
       taskExecutions: taskExecutionProvider.trigger.taskExecutions,
-      digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
+      digitalEmployeeWorkStart,
     }),
     resolveRepo: createPostgresqlWebhookRepositoryResolver(input.db, input.secretBox),
     admitLaunch: composeWebhookLaunchAdmission(scheduledTaskRuntime.operations),
@@ -1385,17 +1395,6 @@ export async function composePostgresqlDaemonApplication(
   })
   await composeDigitalEmployeeWriterCutoverFor(input.db).activate()
   await digitalEmployee.maintenance.settleAutomaticUpgrades()
-  digitalEmployeeWorkStart.bind({
-    async launch(request) {
-      const result = await digitalEmployee.runtime.commands.launchWork({
-        employeeId: request.employeeId,
-        intake: request.intake,
-        actorUserId: request.actorUserId,
-        eventOrigin: request.origin,
-      })
-      return { caseId: result.caseRef.id }
-    },
-  })
   // RFC-359 W11：worker 是必填实参，装配到此为止；此前是 `createDevelopmentActivityWorkerBinding()`
   // 加下一行一句 `.bind(...)`，两行之间那段「已经能被调用但还没装配」的窗口从来没有用处。
   const developmentActivityOperations = composeDevelopmentActivityOperations(

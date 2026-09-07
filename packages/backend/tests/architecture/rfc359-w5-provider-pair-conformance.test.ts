@@ -121,10 +121,8 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w8-source-termination-conformance.test.ts',
   // RFC-359 W8：判**不合**（两台 children 引擎 + 两个 registry，见对拍文件头注释），只补对拍。
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — verified by rfc359-w8-runtime-participants-conformance.test.ts',
-  // RFC-359 W8：判**真重复**，且 PG 侧还多养了第三份 S4（`postgresqlTaskRouteRepairOperations`
-  // 里同样有 `S4.kick-task`）。对拍 11 条一次同时绿——本波少见的零行为差。合一方向写在对拍
-  // 文件头：端口做成吃 `RepairOperations` 的一份中立壳；卡在 `providerRuntime.ts` 的装配改动。
-  'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite + postgresql — verified by rfc359-w8-auto-repair-conformance.test.ts',
+  // RFC-359 W12：TaskLifecycleAutoRepairCommand 已合为中立循环；PG 自动修复借用人工修复的
+  // 原选项/前置检查/执行引擎，第三份 S4 算法同时删除。W8 对拍继续锁用户可见结果与副作用。
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts',
   // RFC-359 W8：这一对多了第二份双引擎对拍——W7 只驱动到各方法的**前置门**为止，W8 补的是
   // 门后的语义（retry 的三道前置门 / sync 的 canceled 回滚 / delete 的父链排序列重算）。
@@ -136,7 +134,7 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
 ]
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
-export const PROVIDER_PAIR_COUNT = 10
+export const PROVIDER_PAIR_COUNT = 9
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

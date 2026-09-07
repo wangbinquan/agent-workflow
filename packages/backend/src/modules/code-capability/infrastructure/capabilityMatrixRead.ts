@@ -1,4 +1,4 @@
-// RFC-349 — PostgreSQL facts for the repository capability matrix.
+// RFC-359 W12 — one capability matrix reader for both database clients.
 //
 // This adapter batches the bounded matrix read into a constant number of SQL
 // statements. It deliberately returns facts, not a readiness verdict: the
@@ -6,6 +6,7 @@
 
 import { and, eq, inArray } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, capabilityTemplates, repoCapabilityConfig, webhookTriggers } from '@/db/schema'
 import type {
   CapabilityMatrixReadPort,
@@ -17,7 +18,6 @@ import {
   selectCapabilityTrigger,
 } from '@/modules/code-capability/application/readinessFacts'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createRepoEndpointRead } from './repoEndpointRead'
 
 function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
@@ -31,9 +31,7 @@ function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
   }
 }
 
-export function createPostgresqlCapabilityMatrixRead(
-  db: PostgresqlDatabaseClient,
-): CapabilityMatrixReadPort {
+export function createCapabilityMatrixRead(db: ProviderNeutralDatabase): CapabilityMatrixReadPort {
   const endpointReader = createRepoEndpointRead(db)
   return {
     async loadForRepo(repoId) {

@@ -122,10 +122,9 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // 的 7 个使用点全在 `runtimeService === null ? null : {…}` 的非 null 分支里（同批箭头里
   // `runtimeService.launchCase(…)` 本来就直接调、不判空），只是它自己声明在分支外、收窄够不着。
   // 改成显式接收已收窄的 service（`documentForCase(service, caseId)`），缺口无处可表达。
-  // RFC-359 W11 分类结论（未销账，留给下一刀）：`createDeferredDigitalEmployeeWorkStart()` 与
-  // `cli/daemonRealtimePolicy.ts` 同形——两个组合根消费它（PG daemon 与 SQLite daemon 入口），
-  // 拆它要同时改两个根，而 SQLite 那个根这一刀不许碰，故整条留着。
-  'modules/integration/composition.ts: marker=0, prose=1, holder=1',
+  // RFC-359 W12：WorkStart 的 deferred holder 与 bind 一起删除。两个 daemon 根用完整的
+  // 词法闭包引用后声明的模块，SQLite 的返回类型显式持有 HTTP 员工模块的 workStart 端口；
+  // 重复挂载不会覆盖已装配实例，实际调用仍落到原 HTTP 实例，与 OS worker 生命周期分开。
   // RFC-359 W5-T19b 销账：`modules/task-execution/composition.ts: prose=1` ——
   // `TaskExecutionModule.persistence?` 这个空槽与 `claimPersisted` 进门那句
   // `'task-execution persistence is not composed'` 一起拆成两个类型：基类不再持有空槽，

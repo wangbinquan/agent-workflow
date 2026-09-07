@@ -295,7 +295,7 @@ import {
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
 import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
-import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
   composeSqliteCapabilityTemplateOperations,
   createSqliteCapabilityTemplatePersistence,
@@ -418,7 +418,7 @@ import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import type { DeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
+import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -819,8 +819,6 @@ export interface AppDeps {
   digitalEmployeeCaseDetailProjection?: EmployeeCaseDetailProjectionParticipant
   /** Bun-dev only: serve the current type-package draft without rewriting its frozen DB row. */
   digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
-  /** Bootstrap-local late binding that makes orchestration and Employee Case peer work targets. */
-  digitalEmployeeWorkStart?: DeferredDigitalEmployeeWorkStart
   /**
    * RFC-269 — outbound `fetch` seam for code-host calls (connection tests and
    * the call-node executor). Production omits it and the real `fetch` is used;
@@ -1054,6 +1052,13 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
   readonly core: TCore
   readonly publicRoutes: AppPublicRouteMounts
   readonly apiRoutes: AppApiRouteMounts
+}
+
+/** The completed HTTP employee instance also serves this bootstrap WorkStart port. */
+export interface SqliteAppComposition<
+  TCore extends AppHttpProviderCore = AppHttpProviderCore,
+> extends ComposedAppDeps<TCore> {
+  readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
 }
 
 export type ProviderComposedAppDeps<
@@ -1775,9 +1780,9 @@ function composeFallbackDevelopmentAutomation(
 
 export function composeSqliteAppDeps(
   deps: AppDeps & { readonly providerCore: SelectedDaemonProviderCore<'sqlite'> },
-): ProviderComposedAppDeps<'sqlite'>
-export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps
-export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
+): SqliteAppComposition<SelectedDaemonProviderCore<'sqlite'>>
+export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition
+export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
   const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
   const identityAccess = withIntegrationTriggerResources(
@@ -1927,7 +1932,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
         registrations: developmentExecutionContractRegistrations,
         implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
       }),
-    codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db),
+    codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db),
     developmentAdmissionLookup:
       deps.developmentAdmissionLookup ?? composeDevelopmentAdmissionLookup(deps.db),
     memoryDistillCommands: memoryOperations.distillCommands,
@@ -2113,7 +2118,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     auth: effectiveDeps.authRuntime,
     afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
   })
-  const apiRoutes = composeSqliteApiRouteMounts(
+  const apiComposition = composeSqliteApiRouteMounts(
     effectiveDeps,
     identityAccess,
     identityUserOperations,
@@ -2134,7 +2139,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     intentApply,
     taskExecutionPersistence,
   )
-  return freezeComposedAppDeps({
+  const application = freezeComposedAppDeps({
     token: effectiveDeps.token,
     configPath: effectiveDeps.configPath,
     core:
@@ -2154,7 +2159,11 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       wellKnown: (app: Hono) => mountWellKnownRoutes(app, effectiveDeps),
       webhookIngress: (app: Hono) => mountWebhookIngressRoutes(app, effectiveDeps),
     }),
-    apiRoutes,
+    apiRoutes: apiComposition.apiRoutes,
+  })
+  return Object.freeze({
+    ...application,
+    digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart,
   })
 }
 
@@ -2312,6 +2321,11 @@ export function composeDigitalEmployeeRoutePersistence(input: {
   } satisfies DigitalEmployeeRoutePersistence)
 }
 
+interface SqliteApiRouteComposition {
+  readonly apiRoutes: AppApiRouteMounts
+  readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
+}
+
 /** SQLite compatibility composition used by direct `createApp({ db })` tests. */
 function composeSqliteApiRouteMounts(
   deps: SqliteComposedAppDeps,
@@ -2333,7 +2347,7 @@ function composeSqliteApiRouteMounts(
   overviewQuery: OverviewRouteQuery,
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createSqliteTaskExecutionPersistence>,
-): AppApiRouteMounts {
+): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
     join(appHome, 'artifacts', 'employee-inputs'),
@@ -2500,19 +2514,17 @@ function composeSqliteApiRouteMounts(
       }),
     },
   })
-  if (deps.digitalEmployeeWorkStart !== undefined && digitalEmployee.runtime !== null) {
-    deps.digitalEmployeeWorkStart.bind({
-      async launch(input) {
-        const result = await digitalEmployee.runtime.commands.launchWork({
-          employeeId: input.employeeId,
-          intake: input.intake,
-          actorUserId: input.actorUserId,
-          eventOrigin: input.origin,
-        })
-        return { caseId: result.caseRef.id }
-      },
-    })
-  }
+  const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
+    async launch(input) {
+      const result = await digitalEmployee.runtime.commands.launchWork({
+        employeeId: input.employeeId,
+        intake: input.intake,
+        actorUserId: input.actorUserId,
+        eventOrigin: input.origin,
+      })
+      return { caseId: result.caseRef.id }
+    },
+  })
   const taskCatalog = composeTaskCatalog({
     sources: [
       // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
@@ -2809,7 +2821,7 @@ function composeSqliteApiRouteMounts(
       ),
     }),
   })
-  return Object.freeze({
+  const apiRoutes = Object.freeze({
     config: (app) =>
       mountConfigRoutes(app, {
         configPath: deps.configPath,
@@ -3060,6 +3072,7 @@ function composeSqliteApiRouteMounts(
       ),
     docs: (app) => mountDocsRoutes(app, deps),
   } satisfies AppApiRouteMounts)
+  return Object.freeze({ apiRoutes, digitalEmployeeWorkStart })
 }
 
 /**

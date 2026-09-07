@@ -370,7 +370,7 @@
       "id": "rfc359-w5-composition-root-placeholder",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts",
       "symbol": "COMPOSITION_ROOT_PLACEHOLDER_DEBT",
-      "baseline": 7,
+      "baseline": 6,
       "why": "RFC-359 W5「防复辟」波次。组合根里的 `*-not-bound` / `*-not-composed` 占位与晚绑定 holder（fail-closed 那种）。语料含 `cli/**`、`**/composition*` 与 `server.ts`——把 server.ts 收进来照出了 `mcpCatalogRef` 在 HTTP 根与 daemon 根各存一份、而只有一份在守卫下。"
     },
     {
@@ -384,7 +384,7 @@
       "id": "rfc359-w5-coverage-parity",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "COVERAGE_PARITY_LEDGER",
-      "baseline": 10,
+      "baseline": 9,
       "why": "RFC-359 W5-T19d：成对适配器两侧的测试引用 / 驱动数。倒挂说明一侧几乎没有行为覆盖。"
     },
     {
@@ -447,14 +447,14 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 71,
+      "baseline": 65,
       "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts",
       "symbol": "PROVIDER_PAIR_CONFORMANCE_LEDGER",
-      "baseline": 10,
+      "baseline": 9,
       "why": "RFC-359：成对 provider 适配器的清单 + 对拍覆盖状态位。这个数就是合一进度，降到 0 是完工线。"
     },
     {
@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 896,
+      "baseline": 891,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -755,7 +755,7 @@
       "id": "rfc359-w8-name-blind-capability-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w8-capability-pair-conformance.test.ts",
       "symbol": "NAME_BLIND_CAPABILITY_PAIRS",
-      "baseline": 4,
+      "baseline": 2,
       "why": "RFC-359 W8：**按端口类型**（而非文件名）发现的 provider 能力对里，W5 的「同词干 + 同目录」判据结构上看不见的那些。W5 账本量「按文件名配到的对」，本账本量「按端口类型配到、而 W5 看不见的对」，两本互不包含、交集交给 W5 记以避免双重记账。条目只许降——降的方式是把两侧合一，或证明其中一侧是死代码。"
     },
     {
@@ -776,7 +776,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1735,
+      "baseline": 1731,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -811,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5313,
+      "baseline": 5292,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4772,
+      "baseline": 4757,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -867,12 +867,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24911,
+      "baseline": 24904,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
+    "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "41c7316a6f3f28a37b0f7af232aa1839a2ee8748",
-    "contentDigest": "sha256:1e248571d8bffda4a5a7132f57bd3893bcb97194688170dd348b5852af53112e",
+    "currentSnapshotSha": "ab6e36437443b826da58e098ca7f0c0d5abcb62f",
+    "contentDigest": "sha256:a72fabb2ae717549ef2a61b974fdb29816731333052a3eeef931d705e4278c1b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

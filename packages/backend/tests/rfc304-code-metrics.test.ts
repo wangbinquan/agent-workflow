@@ -24,8 +24,8 @@ import {
   createCodeMetricsQuery as createCodeMetricsQueryFromPort,
   DEFAULT_METRICS_WINDOW_MS,
 } from '../src/modules/code-capability/application/codeMetricsQuery'
-import { composeSqliteCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
-import { createSqliteCodeMetricsRead } from '../src/modules/code-capability/infrastructure/sqliteCodeMetricsRead'
+import { composeCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
+import { createCodeMetricsRead } from '../src/modules/code-capability/infrastructure/codeMetricsRead'
 import { mountCodeRoutes } from '../src/routes/code'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
 import { errorHandler } from '../src/util/errors'
@@ -34,7 +34,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 const createCodeMetricsQuery = (db: DbClient) =>
-  createCodeMetricsQueryFromPort(createSqliteCodeMetricsRead(db))
+  createCodeMetricsQueryFromPort(createCodeMetricsRead(db))
 
 describe('RFC-304 T58 — adoption buckets', () => {
   let db: DbClient
@@ -250,7 +250,7 @@ describe('RFC-304 T58 — the metrics route', () => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountCodeRoutes(app, composeSqliteCodeHistoryQueries(db))
+    mountCodeRoutes(app, composeCodeHistoryQueries(db))
     return app
   }
 

@@ -1,37 +1,7 @@
-// RFC-359 W8 —— `TaskLifecycleAutoRepairCommand` 的**双引擎对拍**。
-//
-// 这一对在账本里是 `sqlite 0/0, postgresql 0/0`——**两侧都没有任何行为覆盖**
-// （`rfc359-w5-t19d-coverage-parity`）。RFC-108 的 `rfc108-auto-repair.test.ts` 只测了
-// `runAutoRepairOnce` 这个**注入式循环**（resolveOptions / applyOption 全是 stub），
-// 也就是说「循环之外那一半」——两个 provider 各自的选项解析与 apply——从来没被跑过。
-//
-// 判定：**真重复，且 PostgreSQL 侧还多养了第三份**。
-// ----------------------------------------------------------------------------
-// 薄壳求和（先把「谁在替谁干活」算清楚，行数比值本身没有意义）：
-//   · SQLite 侧 `sqliteTaskLifecycleAutoRepairCommand.ts` 只有 65 行，是壳；它转发给
-//     `platform/persistence/sqlite/taskLifecycleRepair.ts`（513 行的引擎）+
-//     `taskLifecycleRepair/`（14 个 options-*.ts 共 2755 行）。**但求和不能就此打住**：
-//     这个端口只会自动应用 `autoApplyEligible` 的选项，而全家 14 条规则里**只有
-//     `options-S4.ts` 的 `S4.kick-task` 一个**带这个标（`rg autoApplyEligible` 全树唯一命中），
-//     `selectAutoApplyOption` 又要求「恰好一个 eligible 且 available」。所以这个壳的
-//     **有效**转发面是：引擎的两个入口（约 360 行）+ `options-S4.ts`（132 行）+
-//     `helpers.ts` 的调度器活性门（约 17 行）≈ **510 行**；其余约 2600 行服务的是**人工**
-//     修复路由（`POST /api/tasks/:id/alerts/:alertId/repair`），不属于这一对。
-//   · PostgreSQL 侧 `postgresqlTaskLifecycleAutoRepairCommand.ts` 是 198 行的**自建** S4 实现。
-//   于是这一对是 510 : 198 的真重复——不是「一侧缺整类能力」。
-//
-// 而且 PostgreSQL 上这 198 行是**第三份**：`postgresqlTaskRouteRepairOperations.ts`（1448 行）
-// 已经是 PG 自己的完整修复引擎，里面同样声明了 `'S4.kick-task': { …, autoApplyEligible: true }`
-// 与 `S4.cancel-task`，并且走的是同一个中立 `persistence.runtimeLifecycle.trySet`。也就是说
-// PG 上「S4 踢一脚」有两份互不知情的实现，一份给人工路由、一份给自动循环；SQLite 上则是
-// 同一个引擎同时服务两条路。**合一方向**（本刀未做，留给下一刀）：把这个端口做成一份中立壳，
-// 吃 `RepairOperations`（`repairOptions` / `applyRepair`）这个两侧都已实现的端口，
-// 装配处各自注入自己的修复引擎——这样 PG 的第三份直接消失，SQLite 的壳原样成立。
-// 拦路的是装配：`composition/providerRuntime.ts` 要改依赖形状，那个文件本波正被别的刀占着。
-//
-// 判据落在**用户可见契约**：自动修复这一轮**选了哪个选项、把任务改成了什么、跳过时给的是
-// 哪个理由**（`repaired[] / skipped[]` 就是运维在恢复时间线上看到的那两列），以及
-// `lifecycle_repair_audit` 里留下什么、告警有没有被销掉。
+// RFC-359: both providers use one automatic loop and their existing repair engine.
+// PostgreSQL manual and automatic repair share preflight, apply, audit and alert
+// reconciliation. The automatic binding retains null actor attribution and the
+// existing S4 audit snapshots and failure outcome.
 
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
@@ -42,22 +12,27 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, lifecycleRepairAudit, tasks } from '@/db/schema'
+import { lifecycleAlerts, lifecycleRepairAudit, tasks, users } from '@/db/schema'
+import { buildActor, type Actor } from '@/auth/actor'
+import type { LifecycleAlertRow } from '@/services/lifecycleInvariants'
+import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/taskRoutes'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import type {
   TaskLifecycleAutoRepairCommand,
   TaskLifecycleAutoRepairResult,
 } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
 import {
-  createPostgresqlTaskExecutionPersistence,
+  createTaskExecutionPersistence,
   createSqliteTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
-// 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里
-// （`tests/architecture/rfc359-w5-provider-pair-conformance.test.ts`）。
-import { createPostgresqlTaskLifecycleAutoRepairCommand } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand'
-import { createSqliteTaskLifecycleAutoRepairCommand } from '@/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand'
+import {
+  bindTaskLifecycleRepair,
+  createTaskLifecycleAutoRepairCommand,
+} from '@/modules/task-execution/composition/taskLifecycleRepair'
+import { createPostgresqlTaskRouteRepairOperations } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { StartTaskDeps } from '@/services/task'
+import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_788_600_000_000
@@ -94,33 +69,83 @@ function commandFor(harness: ProviderHarness, options: CommandOptions = {}): Com
       awaitScheduler: true,
     }
     return {
-      command: createSqliteTaskLifecycleAutoRepairCommand({
-        db,
-        appHome: deps.appHome ?? '',
-        deps,
+      command: createTaskLifecycleAutoRepairCommand({
+        ...bindTaskLifecycleRepair({
+          db,
+          appHome: deps.appHome ?? '',
+          deps,
+          operations: persistence.recoveryAdministration,
+          now: () => NOW,
+        }),
         operations: persistence.recoveryAdministration,
         now: () => NOW,
       }),
       resumeCalls: () => resumeCalls,
     }
   }
-  const db = harness.db as unknown as PostgresqlDatabaseClient
-  const persistence = createPostgresqlTaskExecutionPersistence(db)
-  const activity: ActiveTaskExecutionParticipant = {
-    isActive: () => false,
-    awaitReleasedSettled: async () => {},
-  }
+  const { persistence, repairs } = repairEngineFor(harness, { resume })
   return {
-    command: createPostgresqlTaskLifecycleAutoRepairCommand({
-      db,
+    command: createTaskLifecycleAutoRepairCommand({
+      ...repairs.automaticRepair({ resume: { resume }, now: () => NOW }),
       operations: persistence.recoveryAdministration,
-      lifecycle: persistence.runtimeLifecycle,
-      activity,
-      resume: { resume },
       now: () => NOW,
     }),
     resumeCalls: () => resumeCalls,
   }
+}
+
+function unused<T extends object>(methods: Partial<T> = {}): T {
+  return new Proxy(methods, {
+    get(target, key) {
+      if (Reflect.has(target, key)) return Reflect.get(target, key)
+      throw new Error(`unexpected repair dependency: ${String(key)}`)
+    },
+  }) as T
+}
+
+function repairEngineFor(
+  harness: ProviderHarness,
+  options: {
+    resume?: (taskId: string) => Promise<void>
+    isActive?: (taskId: string) => boolean
+    onManualActor?: (actor: Actor, taskId: string) => void
+    beforeTransition?: (taskId: string) => Promise<void>
+  } = {},
+) {
+  type Dependencies = Parameters<typeof createPostgresqlTaskRouteRepairOperations>[0]
+  const persistence = createTaskExecutionPersistence(harness.db)
+  if (options.beforeTransition !== undefined) {
+    const trySet = persistence.runtimeLifecycle.trySet.bind(persistence.runtimeLifecycle)
+    persistence.runtimeLifecycle.trySet = async (input) => {
+      await options.beforeTransition?.(input.taskId)
+      return await trySet(input)
+    }
+  }
+  const activity: ActiveTaskExecutionParticipant = {
+    isActive: options.isActive ?? (() => false),
+    awaitReleasedSettled: async () => {},
+  }
+  const repairs = createPostgresqlTaskRouteRepairOperations({
+    db: harness.db as unknown as PostgresqlDatabaseClient,
+    persistence,
+    activity,
+    children: unused<Dependencies['children']>({
+      resume: async ({ taskId }) => {
+        await options.resume?.(taskId)
+      },
+    }),
+    topology: unused(),
+    resumeRuntimeFor: (actor, taskId) => {
+      options.onManualActor?.(actor, taskId)
+      return unused()
+    },
+    collaborationRuntime: unused(),
+    clarify: unused(),
+    review: unused(),
+    appHome: tmpdir(),
+    now: () => NOW,
+  })
+  return { persistence, repairs }
 }
 
 interface SeedOverrides {
@@ -221,6 +246,18 @@ function forTask(result: TaskLifecycleAutoRepairResult, taskId: string) {
     repaired: result.repaired.filter((entry) => entry.taskId === taskId),
     skipped: result.skipped.filter((entry) => entry.taskId === taskId),
   }
+}
+
+async function manualActor(db: ProviderNeutralDatabase): Promise<Actor> {
+  const user = {
+    id: ulid(),
+    username: `repair-${ulid()}`,
+    displayName: 'Repair operator',
+    role: 'admin' as const,
+    status: 'active' as const,
+  }
+  await db.insert(users).values({ ...user, createdAt: NOW, updatedAt: NOW })
+  return buildActor({ user, source: 'session' })
 }
 
 describeEachProvider('RFC-359 W8 —— 任务生命周期自动修复在两个引擎上同形', (harness) => {
@@ -375,13 +412,277 @@ describeEachProvider('RFC-359 W8 —— 任务生命周期自动修复在两个�
   })
 })
 
+// The existing PG repair engine already uses neutral task persistence for S4.
+// Exercise both callers on each real database, alongside the selected-provider
+// baseline above, so a local SQLite run also covers this shared implementation.
+describeEachProvider('RFC-359 manual and automatic repair share the same engine', (harness) => {
+  test('options and execution are shared; manual audit keeps its actor and automatic audit stays null', async () => {
+    const actor = await manualActor(harness.db)
+    const manual = await seed(harness.db)
+    const automatic = await seed(harness.db)
+    const actors: Array<{ actor: Actor; taskId: string }> = []
+    const { persistence, repairs } = repairEngineFor(harness, {
+      onManualActor: (actor, taskId) => actors.push({ actor, taskId }),
+    })
+    const resumed: string[] = []
+    const binding = repairs.automaticRepair({
+      resume: {
+        resume: async (taskId) => {
+          resumed.push(taskId)
+        },
+      },
+      now: () => NOW,
+    })
+    const [alert] = await listOpenLifecycleAlertsForTask(
+      persistence.recoveryAdministration,
+      automatic.taskId,
+    )
+    expect(await binding.resolveOptions(alert!)).toEqual([
+      ...(
+        await repairs.repairOptions({ actor, taskId: automatic.taskId, alertId: automatic.alertId })
+      ).options,
+    ])
+    const result = await repairs.applyRepair({
+      actor,
+      ...manual,
+      optionId: 'S4.kick-task',
+      onAlert: () => {},
+      onResolved: () => {},
+    })
+    expect(result).toEqual({
+      ok: true,
+      auditId: expect.any(String),
+      outcome: 'success',
+      resolvedAlertIds: [manual.alertId],
+      newAlerts: [],
+    })
+    expect(await binding.applyOption(alert!, 'S4.kick-task')).toEqual({ outcome: 'success' })
+    expect(actors).toEqual([{ actor, taskId: manual.taskId }])
+    expect(resumed).toEqual([automatic.taskId])
+    expect((await auditRows(harness.db, manual.taskId))[0]).toMatchObject({
+      actorUserId: actor.user.id,
+      beforeSnapshotJson: JSON.stringify({ task: { id: manual.taskId, status: 'pending' } }),
+      afterSnapshotJson: JSON.stringify({ task: { id: manual.taskId, status: 'interrupted' } }),
+    })
+    expect((await auditRows(harness.db, automatic.taskId))[0]).toMatchObject({
+      actorUserId: null,
+      beforeSnapshotJson: JSON.stringify({ task: { status: 'pending' } }),
+      afterSnapshotJson: JSON.stringify({ task: { status: 'interrupted' } }),
+    })
+  })
+
+  test("resume failure preserves each caller's response and task diagnostics without resolving alerts", async () => {
+    const actor = await manualActor(harness.db)
+    const manual = await seed(harness.db)
+    const automatic = await seed(harness.db)
+    const resume = async () => {
+      throw new Error('scheduler refused the kick')
+    }
+    const { persistence, repairs } = repairEngineFor(harness, { resume })
+    expect(
+      await repairs.applyRepair({
+        actor,
+        ...manual,
+        optionId: 'S4.kick-task',
+        onAlert: () => {},
+        onResolved: () => {},
+      }),
+    ).toEqual({
+      ok: false,
+      auditId: expect.any(String),
+      outcome: 'apply-failed',
+      outcomeMessage: 'mutations applied but resume failed: scheduler refused the kick',
+      resolvedAlertIds: [],
+      newAlerts: [],
+    })
+    const command = createTaskLifecycleAutoRepairCommand({
+      ...repairs.automaticRepair({ resume: { resume }, now: () => NOW }),
+      operations: persistence.recoveryAdministration,
+      now: () => NOW,
+    })
+    expect(forTask(await command.run(OPEN_POLICY), automatic.taskId)).toEqual({
+      repaired: [
+        {
+          ...automatic,
+          optionId: 'S4.kick-task',
+          outcome: 'apply-failed: scheduler refused the kick',
+        },
+      ],
+      skipped: [],
+    })
+    for (const entry of [manual, automatic]) {
+      expect(await statusOf(harness.db, entry.taskId)).toBe('interrupted')
+      expect(await alertResolvedAt(harness.db, entry.alertId)).toBeNull()
+      // The committed kick survives a failed resume. Preserve its original
+      // diagnostic fields, including the automatic caller's alert reference.
+      expect(
+        await harness.db
+          .select({
+            finishedAt: tasks.finishedAt,
+            errorSummary: tasks.errorSummary,
+            errorMessage: tasks.errorMessage,
+            failedNodeId: tasks.failedNodeId,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, entry.taskId))
+          .get(),
+      ).toEqual({
+        finishedAt: NOW,
+        errorSummary: 'manual-repair-S4',
+        errorMessage:
+          entry === manual
+            ? 'RFC-057 repair S4.kick-task'
+            : `RFC-057 repair S4.kick-task via alert ${entry.alertId}`,
+        failedNodeId: null,
+      })
+    }
+    expect((await auditRows(harness.db, manual.taskId))[0]?.actorUserId).toBe(actor.user.id)
+    expect((await auditRows(harness.db, automatic.taskId))[0]?.actorUserId).toBeNull()
+  })
+
+  test('a stale automatic preflight uses the shared audit and reports apply-failed-or-lease-held', async () => {
+    const { taskId, alertId } = await seed(harness.db)
+    let resumes = 0
+    const { persistence, repairs } = repairEngineFor(harness)
+    const binding = repairs.automaticRepair({
+      resume: {
+        resume: async () => {
+          resumes += 1
+        },
+      },
+      now: () => NOW,
+    })
+    const command = createTaskLifecycleAutoRepairCommand({
+      ...binding,
+      resolveOptions: async (alert) => {
+        const options = await binding.resolveOptions(alert)
+        await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+        return options
+      },
+      operations: persistence.recoveryAdministration,
+      now: () => NOW,
+    })
+    expect(forTask(await command.run(OPEN_POLICY), taskId)).toEqual({
+      repaired: [],
+      skipped: [{ taskId, alertId, reason: 'apply-failed-or-lease-held' }],
+    })
+    expect(resumes).toBe(0)
+    expect(await alertResolvedAt(harness.db, alertId)).toBeNull()
+    expect((await auditRows(harness.db, taskId))[0]).toMatchObject({
+      actorUserId: null,
+      outcome: 'preflight-stale',
+      beforeSnapshotJson: JSON.stringify({ task: { status: 'pending' } }),
+      afterSnapshotJson: '{}',
+      outcomeMessage: 'task is no longer pending',
+    })
+  })
+
+  test('automatic callbacks receive complete alert rows while the manual route keeps its notice projection', async () => {
+    const actor = await manualActor(harness.db)
+    const manual = await seed(harness.db)
+    const automatic = await seed(harness.db)
+    const resume = async (taskId: string) => {
+      await harness.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    }
+    const { persistence, repairs } = repairEngineFor(harness, { resume })
+    const notices: TaskRouteLifecycleAlertNotice[] = []
+    const rows: LifecycleAlertRow[] = []
+    const resolved: string[] = []
+    await repairs.applyRepair({
+      actor,
+      ...manual,
+      optionId: 'S4.kick-task',
+      onAlert: (row) => notices.push(row),
+      onResolved: (taskId) => resolved.push(taskId),
+    })
+    const [alert] = await listOpenLifecycleAlertsForTask(
+      persistence.recoveryAdministration,
+      automatic.taskId,
+    )
+    await repairs
+      .automaticRepair({
+        resume: { resume },
+        onAlert: (row) => rows.push(row),
+        onResolved: (taskId) => resolved.push(taskId),
+        now: () => NOW + 123,
+      })
+      .applyOption(alert!, 'S4.kick-task')
+    expect(notices).toEqual([{ taskId: manual.taskId, rule: 'S4', severity: 'warning' }])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: expect.any(String),
+      taskId: automatic.taskId,
+      rule: 'S4',
+      severity: 'warning',
+      detail: expect.any(Object),
+      detectedAt: NOW + 123,
+      resolvedAt: null,
+    })
+    expect(rows[0]?.id).not.toBe(automatic.alertId)
+    expect(resolved).toContain(manual.taskId)
+    expect(resolved).toContain(automatic.taskId)
+    expect(await alertResolvedAt(harness.db, automatic.alertId)).toBe(NOW + 123)
+  })
+
+  test.each(['manual', 'automatic'] as const)(
+    '%s apply loses the task-status race: shared failure audit retains the caller and no resume runs',
+    async (caller) => {
+      const actor = await manualActor(harness.db)
+      const entry = await seed(harness.db)
+      let resumes = 0
+      const resume = async () => {
+        resumes += 1
+      }
+      const { persistence, repairs } = repairEngineFor(harness, {
+        resume,
+        beforeTransition: async (taskId) => {
+          // The real lifecycle CAS observes a row changed after the engine's preflight.
+          await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+        },
+      })
+      if (caller === 'manual') {
+        await expect(
+          repairs.applyRepair({
+            actor,
+            ...entry,
+            optionId: 'S4.kick-task',
+            onAlert: () => {},
+            onResolved: () => {},
+          }),
+        ).rejects.toMatchObject({ code: 'repair-preflight-stale' })
+      } else {
+        const command = createTaskLifecycleAutoRepairCommand({
+          ...repairs.automaticRepair({ resume: { resume }, now: () => NOW }),
+          operations: persistence.recoveryAdministration,
+          now: () => NOW,
+        })
+        expect(forTask(await command.run(OPEN_POLICY), entry.taskId)).toEqual({
+          repaired: [],
+          skipped: [{ ...entry, reason: 'apply-failed-or-lease-held' }],
+        })
+      }
+      expect((await auditRows(harness.db, entry.taskId))[0]).toMatchObject({
+        actorUserId: caller === 'manual' ? actor.user.id : null,
+        outcome: caller === 'manual' ? 'apply-failed' : 'preflight-stale',
+        beforeSnapshotJson: JSON.stringify({
+          task:
+            caller === 'manual' ? { id: entry.taskId, status: 'pending' } : { status: 'pending' },
+        }),
+        afterSnapshotJson: '{}',
+        outcomeMessage:
+          caller === 'manual'
+            ? `task ${entry.taskId} changed before S4.kick-task could apply`
+            : 'task is no longer pending',
+      })
+      expect(resumes).toBe(0)
+      expect(await statusOf(harness.db, entry.taskId)).toBe('running')
+      expect(await alertResolvedAt(harness.db, entry.alertId)).toBeNull()
+    },
+  )
+})
+
 // ---------------------------------------------------------------------------
-// 结论 + 两处**不该被硬拉齐**的不对称（记在这里，免得下一个人当成缺口去「抬齐」）
-// ---------------------------------------------------------------------------
-//
-// 结论：上面 11 条在**两个引擎上一次就同时绿**——这一对是本波少见的「纸面判成真重复、
-// 实测也确实没有行为差」。合一因此是纯粹的去重（省下 PG 那 198 行的第三份），
-// 不带任何「抬齐强侧」的动作。
+// 两侧既有修复引擎的注入缝仍不同：
 //
 // 不对称①（**注入缝**，不是行为差）：PG 的复活是构造参数 `resume`，SQLite 的复活是引擎里
 // 写死的 `resumeTask(db, taskId, deps)`。所以两侧的「复活」停在链路的不同深度：SQLite 会一路
@@ -395,4 +696,4 @@ describeEachProvider('RFC-359 W8 —— 任务生命周期自动修复在两个�
 // `activity.isActive`。两侧都拒，但只有 PG 的可注入。本文件不测它：SQLite 侧要让一个任务真的
 // 进 `activeTasks` 需要起真调度器 + 一个 parked 子进程 + 轮询等待（见
 // `rfc097-repair-liveness.test.ts`），那是墙钟依赖，本波已经因为墙钟在 CI 上假红过一次。
-// 这条差异是**可组合性**差异，合一时它自然消失（中立壳只认注入的那个）。
+// 自动循环通过绑定使用各引擎的既有活性来源。

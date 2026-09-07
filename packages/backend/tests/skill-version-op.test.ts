@@ -5,7 +5,7 @@
 // staged/version dirs; rollforward verifies the committed snapshot and publishes
 // canonical live before freeing the lock).
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import {
   cpSync,
@@ -18,13 +18,12 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getSkill } from './helpers/resourceLookup'
 import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
   skillFilesAbs,
@@ -43,11 +42,10 @@ import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastr
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { ConflictError } from '../src/util/errors'
 import { isSkillBootVerified } from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-170 T7② — version-write op', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -55,14 +53,14 @@ describe('RFC-170 T7② — version-write op', () => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-vw-op-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
-    await createManagedSkill(db, fsOpts, {
+    db = harness.db
+    const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd',
       bodyMd: 'body0',
       frontmatterExtra: {},
     })
-    skillId = (await getSkill(db, 'foo'))!.id
+    skillId = skill.id
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
@@ -157,7 +155,7 @@ describe('RFC-170 T7② — version-write op', () => {
       ),
     ).rejects.toThrow('producer-fault')
     expect((await getActiveOp(db, skillId))?.phase).toBe('intent')
-    expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
         /^files\.op-.*\.staged$/.test(name),
@@ -166,7 +164,7 @@ describe('RFC-170 T7② — version-write op', () => {
 
     await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
     expect(await getActiveOp(db, skillId)).toBeNull()
-    expect(db.select().from(skillOperationLocks).all()).toHaveLength(0)
+    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(0)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
         /^files\.op-.*\.(?:staged|backup|candidate)$/.test(name),
@@ -201,8 +199,9 @@ describe('RFC-170 T7② — version-write op', () => {
       async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
     )
     await databaseSessionFor(db).transaction(async (tx) => {
-      tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId)).run()
-      tx.insert(skillVersions)
+      await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, skillId)).run()
+      await tx
+        .insert(skillVersions)
         .values({
           id: ulid(),
           skillId,
@@ -250,7 +249,7 @@ describe('RFC-170 T7② — version-write op', () => {
       ),
     ).rejects.toThrow(/live publish does not match committed content hash/)
     expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
       'body0',
@@ -283,10 +282,10 @@ describe('RFC-170 T7② — version-write op', () => {
       ),
     ).rejects.toThrow('post-commit-fault')
     expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(
-      db
+      await db
         .select({ version: skills.contentVersion })
         .from(skills)
         .where(eq(skills.id, skillId))

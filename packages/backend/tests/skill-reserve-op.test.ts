@@ -3,21 +3,20 @@
 // is recovered — pre-db-committed drops the reserving row+files, post-db-committed
 // finishes (the skill stays a complete, visible skill).
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { skillOperationLocks, skills } from '../src/db/schema'
 import {
   createManagedSkill,
   createManagedSkillWithFiles,
   listSkills,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getSkill } from './helpers/resourceLookup'
 import {
   advancePhase,
   beginOperation,
@@ -26,29 +25,32 @@ import {
 import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { runSkillIdentityMigrationBarrier } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-170 reserve op', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 reserve op', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
 
   beforeEach(() => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-reserve-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-  const rowState = (id: string) =>
+  const rowState = async (id: string) =>
     (
-      db
+      await db
         .select({ reservationState: skills.reservationState })
         .from(skills)
         .where(eq(skills.id, id))
-        .get() as { reservationState: string } | undefined
+        .get()
     )?.reservationState
+
+  async function getSkill(name: string) {
+    return (await listSkills(db)).find((skill) => skill.name === name) ?? null
+  }
 
   test('createManagedSkill publishes a ready, visible skill with a v1', async () => {
     const s = await createManagedSkill(db, fsOpts, {
@@ -58,8 +60,8 @@ describe('RFC-170 reserve op', () => {
       frontmatterExtra: {},
     })
     expect(s.name).toBe('foo')
-    expect(rowState(s.id)).toBe('ready')
-    expect(await getSkill(db, 'foo')).not.toBeNull()
+    expect(await rowState(s.id)).toBe('ready')
+    expect(await getSkill('foo')).not.toBeNull()
     expect((await listSkills(db)).map((x) => x.name)).toContain('foo')
     // v1 archived.
     const dir = join(appHome, 'skills', s.id, 'versions', 'v1', 'files')
@@ -69,7 +71,8 @@ describe('RFC-170 reserve op', () => {
   test('a reserving skill is invisible to getSkill + listSkills', async () => {
     // Plant a row still at 'reserving'.
     const id = ulid()
-    db.insert(skills)
+    await db
+      .insert(skills)
       .values({
         id,
         name: 'pending',
@@ -77,7 +80,7 @@ describe('RFC-170 reserve op', () => {
         reservationState: 'reserving',
       })
       .run()
-    expect(await getSkill(db, 'pending')).toBeNull()
+    expect(await getSkill('pending')).toBeNull()
     expect((await listSkills(db)).map((x) => x.name)).not.toContain('pending')
   })
 
@@ -86,7 +89,8 @@ describe('RFC-170 reserve op', () => {
     const skillDir = join(appHome, 'skills', 'half')
     // Plant a crashed reserve at fs-staged: reserving row + files on disk.
     const opId = await databaseSessionFor(db).transaction(async (tx) => {
-      tx.insert(skills)
+      await tx
+        .insert(skills)
         .values({
           id,
           name: 'half',
@@ -110,14 +114,15 @@ describe('RFC-170 reserve op', () => {
     await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
 
     // Reserving row + files gone — the create never completed.
-    expect(db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
+    expect(await db.select().from(skills).where(eq(skills.id, id)).get()).toBeUndefined()
     expect(existsSync(skillDir)).toBe(false)
   })
 
   test('recovery ROLLFORWARD: crash after db-committed keeps the skill ready', async () => {
     const id = ulid()
     const opId = await databaseSessionFor(db).transaction(async (tx) => {
-      tx.insert(skills)
+      await tx
+        .insert(skills)
         .values({
           id,
           name: 'done1',
@@ -139,15 +144,15 @@ describe('RFC-170 reserve op', () => {
       async (tx) => await advancePhase(tx, opId, 'fs-published'),
     )
     await databaseSessionFor(db).transaction(async (tx) => {
-      tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
+      await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id)).run()
       await advancePhase(tx, opId, 'db-committed')
     })
 
     await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
 
     // Skill stays ready + visible; the op finishes.
-    expect(rowState(id)).toBe('ready')
-    expect(await getSkill(db, 'done1')).not.toBeNull()
+    expect(await rowState(id)).toBe('ready')
+    expect(await getSkill('done1')).not.toBeNull()
   })
 
   test('in-process fault after db-committed preserves ready row/root/op for rollforward', async () => {
@@ -169,15 +174,15 @@ describe('RFC-170 reserve op', () => {
         },
       ),
     ).rejects.toThrow('finish-fault')
-    const row = db.select().from(skills).where(eq(skills.name, 'committed-create')).get()!
+    const row = (await db.select().from(skills).where(eq(skills.name, 'committed-create')).get())!
     expect(row.reservationState).toBe('ready')
     expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
     expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
-    expect(db.select().from(skillOperationLocks).all()).toHaveLength(1)
+    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(1)
 
     await runSkillIdentityMigrationBarrier(db, { appHome })
     expect(await getActiveOp(db, row.id)).toBeNull()
-    expect(db.select().from(skillOperationLocks).all()).toHaveLength(0)
-    expect(await getSkill(db, 'committed-create')).not.toBeNull()
+    expect(await db.select().from(skillOperationLocks).all()).toHaveLength(0)
+    expect(await getSkill('committed-create')).not.toBeNull()
   })
 })

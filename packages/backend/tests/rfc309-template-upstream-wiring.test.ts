@@ -25,7 +25,7 @@ import {
   mergeFromUpstream as mergeFromUpstreamWithPort,
   readUpstreamReport as readUpstreamReportWithPort,
 } from '../src/modules/code-capability/application/templateUpstreamStatus'
-import { composeSqliteCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
+import { composeCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
 import {
   composeSqliteCapabilityTemplateOperations,
   createSqliteCapabilityTemplatePersistence,
@@ -432,7 +432,7 @@ describe('RFC-309 T16 — the merge endpoint says which thing went wrong', () =>
         }),
     }
     mountCapabilityTemplateRoutes(app, {
-      codeHistoryQueries: composeSqliteCodeHistoryQueries(db),
+      codeHistoryQueries: composeCodeHistoryQueries(db),
       capabilityTemplates: composeSqliteCapabilityTemplateOperations({
         db,
         access: {

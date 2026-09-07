@@ -1,5 +1,15 @@
 # RFC-359：技术设计
 
+## W12 已落地的装配约束（2026-09-08）
+
+- 同一 bootstrap 作用域内的依赖环用完整端口的词法闭包连接；闭包只在启动完成后的实际调用中求值。
+  不再用可空 holder 加第二次 bind 保存 realtime、scheduler、MCP、collaboration 或 development 实例。
+- `catalogBinding` / `runtime` 在输入中必有时，memory / digital-employee 的返回类型分别保证 catalog /
+  runtime 存在；省略或可选输入仍保留原不完整模块契约，不能用断言把两种类型混在一起。
+- WorkStart 闭合必须保持 SQLite HTTP 员工模块与 OS worker 的原实例关系；PG 保持原单实例。
+  是否构造过、是否真实调用过、是否在两个 provider 上完成行为验证，继续分开记账。
+- provider 文件改名只适用于已经中立的实现；真正重复的实现先合一，必要机制差异保持明确命名与对拍。
+
 ## 1. RFC-294 对齐（CLAUDE.md §RFC workflow 第 8 条）
 
 - **落层**：事务原语与 `DatabaseClient` 属 `platform`（RFC-294 `proposal.md:211` 明列

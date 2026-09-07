@@ -8,7 +8,7 @@ import {
   createCodeMetricsQuery,
   DEFAULT_METRICS_WINDOW_MS,
 } from '@/modules/code-capability/application/codeMetricsQuery'
-import { createPostgresqlCodeMetricsRead } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
+import { createCodeMetricsRead } from '@/modules/code-capability/infrastructure/codeMetricsRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -57,9 +57,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    query: createCodeMetricsQuery(
-      createPostgresqlCodeMetricsRead(createPostgresqlDatabaseClient(runtime)),
-    ),
+    query: createCodeMetricsQuery(createCodeMetricsRead(createPostgresqlDatabaseClient(runtime))),
     executions,
   }
 }

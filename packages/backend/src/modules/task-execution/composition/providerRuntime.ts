@@ -35,8 +35,11 @@ import {
 } from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
 import { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
-import { createPostgresqlTaskLifecycleAutoRepairCommand } from '../infrastructure/postgresqlTaskLifecycleAutoRepairCommand'
-import { createSqliteTaskLifecycleAutoRepairCommand } from '../infrastructure/sqliteTaskLifecycleAutoRepairCommand'
+import type { AutomaticTaskRepairOptions } from '../infrastructure/postgresqlTaskRouteRepairOperations'
+import {
+  bindTaskLifecycleRepair,
+  createTaskLifecycleAutoRepairCommand,
+} from './taskLifecycleRepair'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
 import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
 import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
@@ -186,10 +189,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies {
   readonly routes: (
     context: TaskExecutionProviderRouteContext,
   ) => Omit<SqliteTaskRouteOperationsDependencies, 'db' | 'recovery'>
-  readonly lifecycleRepair: Omit<
-    Parameters<typeof createSqliteTaskLifecycleAutoRepairCommand>[0],
-    'db' | 'operations'
-  >
+  readonly lifecycleRepair: Omit<Parameters<typeof bindTaskLifecycleRepair>[0], 'db' | 'operations'>
   readonly fusion: Omit<
     Parameters<typeof createSqliteFusionEngineTaskOperations>[0],
     'db' | 'schedulerDriver'
@@ -247,10 +247,16 @@ export function composeSqliteTaskExecutionProviderRuntime(
     resume,
     repositoryPreparation: dependencies.repositoryPreparationRetry,
   })
-  const lifecycleRepair = createSqliteTaskLifecycleAutoRepairCommand({
-    db,
+  const lifecycleRepair = createTaskLifecycleAutoRepairCommand({
+    ...bindTaskLifecycleRepair({
+      db,
+      operations: persistence.recoveryAdministration,
+      ...dependencies.lifecycleRepair,
+    }),
     operations: persistence.recoveryAdministration,
-    ...dependencies.lifecycleRepair,
+    ...(dependencies.lifecycleRepair.now === undefined
+      ? {}
+      : { now: dependencies.lifecycleRepair.now }),
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
@@ -315,10 +321,7 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
     | 'launch'
     | 'repair'
   >
-  readonly lifecycleRepair: Omit<
-    Parameters<typeof createPostgresqlTaskLifecycleAutoRepairCommand>[0],
-    'db' | 'operations' | 'lifecycle' | 'activity' | 'resume'
-  >
+  readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Readonly<{ appHome: string }>
   readonly workgroupTaskRoom: Readonly<{
     readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
@@ -401,13 +404,12 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     resume,
     repositoryPreparation: repositoryPreparationRetry,
   })
-  const lifecycleRepair = createPostgresqlTaskLifecycleAutoRepairCommand({
-    db,
+  const lifecycleRepair = createTaskLifecycleAutoRepairCommand({
+    ...taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair }),
     operations: persistence.recoveryAdministration,
-    lifecycle: persistence.runtimeLifecycle,
-    activity: participants.activity,
-    resume,
-    ...dependencies.lifecycleRepair,
+    ...(dependencies.lifecycleRepair.now === undefined
+      ? {}
+      : { now: dependencies.lifecycleRepair.now }),
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({

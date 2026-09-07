@@ -32,7 +32,7 @@ import {
   deriveRoundStatus,
 } from '../src/modules/code-capability/application/codeMatrixQuery'
 import { repairActionsFor } from '../src/modules/code-capability/domain/repairActions'
-import { createSqliteCapabilityMatrixRead } from '../src/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { createCapabilityMatrixRead } from '../src/modules/code-capability/infrastructure/capabilityMatrixRead'
 import { createRoundAttemptsRead } from '../src/modules/code-capability/infrastructure/roundAttemptsRead'
 import { createWorkItemProjectionRead } from '../src/modules/code-capability/infrastructure/workItemProjectionRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
@@ -43,7 +43,7 @@ const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
 
 const createCodeMatrixQuery = (db: DbClient) =>
-  createCodeMatrixQueryFromPort(createSqliteCapabilityMatrixRead(db))
+  createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db))
 const createCodeWorkItemProjectionQuery = (db: DbClient) =>
   createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(db))
 const createCodeRoundAttemptsQuery = (db: DbClient) =>

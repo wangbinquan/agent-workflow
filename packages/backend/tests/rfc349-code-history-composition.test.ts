@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composePostgresqlCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -64,12 +64,12 @@ function postgresqlHistoryFixture() {
     async close() {},
   }
   return {
-    history: composePostgresqlCodeHistoryQueries(createPostgresqlDatabaseClient(runtime)),
+    history: composeCodeHistoryQueries(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }
 
-function appWithHistory(history: ReturnType<typeof composePostgresqlCodeHistoryQueries>): Hono {
+function appWithHistory(history: ReturnType<typeof composeCodeHistoryQueries>): Hono {
   const app = new Hono()
   const actor = buildActor({
     user: {
@@ -109,10 +109,10 @@ describe('RFC-349 code-history composition', () => {
     expect(routeSource).not.toContain('sqliteCodeHistoryFallback')
     expect(routeSource).not.toContain('deps.db')
     expect(serverSource).toContain(
-      'codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db)',
+      'codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db)',
     )
     expect(serverSource).toContain('mountCodeRoutes(app, deps.codeHistoryQueries)')
-    expect(startSource).toContain('const codeHistoryQueries = composeSqliteCodeHistoryQueries(db)')
+    expect(startSource).toContain('const codeHistoryQueries = composeCodeHistoryQueries(db)')
     expect(startSource).toContain('codeHistoryQueries,')
   })
 

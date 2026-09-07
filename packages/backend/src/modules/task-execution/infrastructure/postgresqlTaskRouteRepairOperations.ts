@@ -40,8 +40,37 @@ import type {
 import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskRouteLifecycleAlertNotice, TaskRouteOperations } from '../public/taskRoutes'
+import type { TaskLifecycleAutoRepairBinding } from './taskLifecycleAutoRepairCommand'
 
 type RepairOperations = Pick<TaskRouteOperations, 'repairOptions' | 'applyRepair'>
+
+export interface AutomaticTaskRepairOptions {
+  readonly resume: Readonly<{ resume(taskId: string): Promise<void> }>
+  readonly onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  readonly onResolved?: (taskId: string) => void
+  readonly now?: () => number
+}
+
+export type PostgresqlTaskRepairOperations = RepairOperations & {
+  automaticRepair(options: AutomaticTaskRepairOptions): TaskLifecycleAutoRepairBinding
+}
+
+interface RepairExecutionInput {
+  readonly taskId: string
+  readonly alertId: string
+  readonly optionId: string
+  readonly actorUserId: string | null
+  readonly resume: (taskId: string) => Promise<void>
+  readonly onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
+  readonly onResolved?: (taskId: string) => void
+  readonly now?: () => number
+}
+
+interface RepairExecutionResult {
+  readonly response: RepairResponse
+  /** Kept separately so each caller preserves its existing failure response. */
+  readonly resumeError?: string
+}
 
 interface ParsedAlert {
   readonly id: string
@@ -75,7 +104,6 @@ interface RepairNodeRun {
 interface RepairContext {
   readonly alert: ParsedAlert
   readonly task: RepairTask
-  readonly actor: Actor
   readonly definition: WorkflowDefinition | null
 }
 
@@ -990,6 +1018,7 @@ async function setTask(
     to: TaskStatus
     allowTerminal?: boolean
     finishedAt: number | null
+    errorMessage: string
   }>,
 ): Promise<void> {
   const won = await dependencies.persistence.runtimeLifecycle.trySet({
@@ -1000,7 +1029,7 @@ async function setTask(
     extra: {
       finishedAt: input.finishedAt,
       errorSummary: `manual-repair-${ruleForOptionId(input.optionId) ?? 'unknown'}`,
-      errorMessage: `RFC-057 repair ${input.optionId}`,
+      errorMessage: input.errorMessage,
       failedNodeId: null,
     },
     now: dependencies.now?.() ?? Date.now(),
@@ -1019,6 +1048,7 @@ async function applyAction(
   ctx: RepairContext,
   optionId: RepairOptionId,
   action: RepairAction,
+  taskErrorMessage: string,
 ): Promise<AppliedRepair> {
   const now = dependencies.now ?? Date.now
   switch (action.kind) {
@@ -1036,6 +1066,7 @@ async function applyAction(
         to: action.to,
         ...(action.allowTerminal === true ? { allowTerminal: true } : {}),
         finishedAt: action.finishedAt === 'clear' ? null : now(),
+        errorMessage: taskErrorMessage,
       })
       return {
         before: { task: { id: ctx.task.id, status: ctx.task.status } },
@@ -1075,6 +1106,7 @@ async function applyAction(
         from: action.taskFrom,
         to: 'interrupted',
         finishedAt: now(),
+        errorMessage: taskErrorMessage,
       })
       return {
         before: {
@@ -1214,6 +1246,18 @@ async function writeAudit(
   }>,
 ): Promise<string> {
   const auditId = dependencies.id?.() ?? ulid()
+  // Automatic S4 history predates the route's task-id snapshots. Preserve its
+  // persisted JSON format while both callers use this same audit writer.
+  const automaticKick = input.actorUserId === null && input.optionId === 'S4.kick-task'
+  const staleAutomaticTask =
+    automaticKick &&
+    input.outcome === 'preflight-stale' &&
+    (input.outcomeMessage === 'diagnose.repair.S4.unavailable.taskNotPending' ||
+      input.outcomeMessage === 'task is no longer pending')
+  const snapshot = (value: Readonly<Record<string, unknown>>) =>
+    automaticKick && input.outcome === 'success'
+      ? { task: { status: recordValue(value['task'], 'status') } }
+      : value
   await dependencies.db
     .insert(lifecycleRepairAudit)
     .values({
@@ -1224,10 +1268,14 @@ async function writeAudit(
       alertDetailJson: JSON.stringify(input.alert.detail),
       optionId: input.optionId,
       actorUserId: input.actorUserId,
-      beforeSnapshotJson: JSON.stringify(input.before),
-      afterSnapshotJson: JSON.stringify(input.after),
+      beforeSnapshotJson: JSON.stringify(
+        staleAutomaticTask ? { task: { status: 'pending' } } : snapshot(input.before),
+      ),
+      afterSnapshotJson: JSON.stringify(staleAutomaticTask ? {} : snapshot(input.after)),
       outcome: input.outcome,
-      outcomeMessage: input.outcomeMessage ?? null,
+      outcomeMessage: staleAutomaticTask
+        ? 'task is no longer pending'
+        : (input.outcomeMessage ?? null),
       appliedAt: dependencies.now?.() ?? Date.now(),
     })
     .run()
@@ -1272,10 +1320,8 @@ function optionForPreflight(definition: OptionDefinition, result: Preflight): Re
  */
 export function createPostgresqlTaskRouteRepairOperations(
   dependencies: PostgresqlTaskRouteRepairOperationsDependencies,
-): RepairOperations {
-  const now = dependencies.now ?? Date.now
-
-  async function context(actor: Actor, taskId: string, alertId: string): Promise<RepairContext> {
+): PostgresqlTaskRepairOperations {
+  async function context(taskId: string, alertId: string): Promise<RepairContext> {
     const [alert, task] = await Promise.all([
       loadAlert(dependencies.db, taskId, alertId),
       loadTask(dependencies.db, taskId),
@@ -1286,162 +1332,214 @@ export function createPostgresqlTaskRouteRepairOperations(
         `lifecycle alert ${alertId} is already resolved`,
       )
     }
-    return { alert, task, actor, definition: parseDefinition(task.workflowSnapshot) }
+    return { alert, task, definition: parseDefinition(task.workflowSnapshot) }
   }
 
-  return Object.freeze({
-    async repairOptions(input): Promise<RepairOptionsResponse> {
-      const ctx = await context(input.actor, input.taskId, input.alertId)
-      const options: RepairOption[] = []
-      for (const optionId of REPAIR_OPTION_IDS[ctx.alert.rule]) {
-        const definition = OPTION_DEFINITIONS[optionId]
-        if (isTurnEngineWorkgroupTask(ctx.task) && definition.revivesExecution === true) {
-          options.push({
-            ...definition,
-            available: false,
-            unavailableReasonKey: 'diagnose.repair.common.workgroupUnsupported',
-            previewSteps: [],
-          })
-          continue
-        }
-        options.push(optionForPreflight(definition, await preflight(dependencies, optionId, ctx)))
-      }
-      return { alertId: ctx.alert.id, alertRule: ctx.alert.rule, options }
-    },
-
-    async applyRepair(input): Promise<RepairResponse> {
-      const ctx = await context(input.actor, input.taskId, input.alertId)
-      const expectedRule = ruleForOptionId(input.optionId)
-      if (expectedRule === null) {
-        throw new ValidationError(
-          'unknown-repair-option',
-          `optionId '${input.optionId}' is not a registered repair option`,
-        )
-      }
-      if (expectedRule !== ctx.alert.rule) {
-        throw new ValidationError(
-          'repair-option-rule-mismatch',
-          `optionId '${input.optionId}' belongs to '${expectedRule}', not '${ctx.alert.rule}'`,
-        )
-      }
-      const optionId = REPAIR_OPTION_IDS[expectedRule].find(
-        (candidate) => candidate === input.optionId,
-      )
-      if (optionId === undefined) {
-        throw new ValidationError(
-          'repair-option-not-implemented',
-          `optionId '${input.optionId}' is not implemented`,
-        )
-      }
+  async function repairOptions(input: {
+    taskId: string
+    alertId: string
+  }): Promise<RepairOptionsResponse> {
+    const ctx = await context(input.taskId, input.alertId)
+    const options: RepairOption[] = []
+    for (const optionId of REPAIR_OPTION_IDS[ctx.alert.rule]) {
       const definition = OPTION_DEFINITIONS[optionId]
       if (isTurnEngineWorkgroupTask(ctx.task) && definition.revivesExecution === true) {
-        throw new ValidationError(
-          'workgroup-repair-unsupported',
-          `repair option '${optionId}' cannot revive a turn-engine workgroup task`,
-        )
-      }
-      const prepared = await preflight(dependencies, optionId, ctx)
-      if (!prepared.available) {
-        await writeAudit(dependencies, {
-          alert: ctx.alert,
-          optionId,
-          actorUserId: ctx.actor.user.id,
-          before: { reason: prepared.unavailableReasonKey },
-          after: {},
-          outcome: 'preflight-stale',
-          outcomeMessage: prepared.unavailableReasonKey,
+        options.push({
+          ...definition,
+          available: false,
+          unavailableReasonKey: 'diagnose.repair.common.workgroupUnsupported',
+          previewSteps: [],
         })
-        throw new ConflictError(
-          'repair-preflight-stale',
-          `preflight for '${optionId}' is no longer available (${prepared.unavailableReasonKey})`,
-        )
+        continue
       }
+      options.push(optionForPreflight(definition, await preflight(dependencies, optionId, ctx)))
+    }
+    return { alertId: ctx.alert.id, alertRule: ctx.alert.rule, options }
+  }
 
-      let applied: AppliedRepair
-      try {
-        applied = await applyAction(dependencies, ctx, optionId, prepared.action)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        await writeAudit(dependencies, {
-          alert: ctx.alert,
-          optionId,
-          actorUserId: ctx.actor.user.id,
-          before: { task: { id: ctx.task.id, status: ctx.task.status } },
-          after: {},
-          outcome: 'apply-failed',
-          outcomeMessage: message,
-        })
-        if (error instanceof ConflictError) throw error
-        throw error
-      }
-
-      const auditId = await writeAudit(dependencies, {
+  async function applyRepair(input: RepairExecutionInput): Promise<RepairExecutionResult> {
+    const engine = input.now === undefined ? dependencies : { ...dependencies, now: input.now }
+    const now = engine.now ?? Date.now
+    const ctx = await context(input.taskId, input.alertId)
+    const expectedRule = ruleForOptionId(input.optionId)
+    if (expectedRule === null) {
+      throw new ValidationError(
+        'unknown-repair-option',
+        `optionId '${input.optionId}' is not a registered repair option`,
+      )
+    }
+    if (expectedRule !== ctx.alert.rule) {
+      throw new ValidationError(
+        'repair-option-rule-mismatch',
+        `optionId '${input.optionId}' belongs to '${expectedRule}', not '${ctx.alert.rule}'`,
+      )
+    }
+    const optionId = REPAIR_OPTION_IDS[expectedRule].find(
+      (candidate) => candidate === input.optionId,
+    )
+    if (optionId === undefined) {
+      throw new ValidationError(
+        'repair-option-not-implemented',
+        `optionId '${input.optionId}' is not implemented`,
+      )
+    }
+    const definition = OPTION_DEFINITIONS[optionId]
+    if (isTurnEngineWorkgroupTask(ctx.task) && definition.revivesExecution === true) {
+      throw new ValidationError(
+        'workgroup-repair-unsupported',
+        `repair option '${optionId}' cannot revive a turn-engine workgroup task`,
+      )
+    }
+    const prepared = await preflight(engine, optionId, ctx)
+    if (!prepared.available) {
+      await writeAudit(engine, {
         alert: ctx.alert,
         optionId,
-        actorUserId: ctx.actor.user.id,
-        before: applied.before,
-        after: applied.after,
-        outcome: 'success',
+        actorUserId: input.actorUserId,
+        before: { reason: prepared.unavailableReasonKey },
+        after: {},
+        outcome: 'preflight-stale',
+        outcomeMessage: prepared.unavailableReasonKey,
       })
+      throw new ConflictError(
+        'repair-preflight-stale',
+        `preflight for '${optionId}' is no longer available (${prepared.unavailableReasonKey})`,
+      )
+    }
 
-      if (applied.resume) {
-        try {
-          await dependencies.children.resume(
-            {
-              taskId: ctx.task.id,
-              runtime: dependencies.resumeRuntimeFor(ctx.actor, ctx.task.id),
-            },
-            dependencies.topology,
-          )
-        } catch (error) {
-          return {
+    let applied: AppliedRepair
+    const automaticKick = input.actorUserId === null && optionId === 'S4.kick-task'
+    const taskErrorMessage = automaticKick
+      ? `RFC-057 repair ${optionId} via alert ${ctx.alert.id}`
+      : `RFC-057 repair ${optionId}`
+    try {
+      applied = await applyAction(engine, ctx, optionId, prepared.action, taskErrorMessage)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const staleAutomaticTask =
+        automaticKick && error instanceof ConflictError && error.code === 'repair-preflight-stale'
+      await writeAudit(engine, {
+        alert: ctx.alert,
+        optionId,
+        actorUserId: input.actorUserId,
+        before: { task: { id: ctx.task.id, status: ctx.task.status } },
+        after: {},
+        outcome: staleAutomaticTask ? 'preflight-stale' : 'apply-failed',
+        outcomeMessage: staleAutomaticTask ? 'task is no longer pending' : message,
+      })
+      if (error instanceof ConflictError) throw error
+      throw error
+    }
+
+    const auditId = await writeAudit(engine, {
+      alert: ctx.alert,
+      optionId,
+      actorUserId: input.actorUserId,
+      before: applied.before,
+      after: applied.after,
+      outcome: 'success',
+    })
+
+    if (applied.resume) {
+      try {
+        await input.resume(ctx.task.id)
+      } catch (error) {
+        const resumeError = error instanceof Error ? error.message : String(error)
+        return {
+          response: {
             ok: false,
             auditId,
             outcome: 'apply-failed',
-            outcomeMessage: `mutations applied but resume failed: ${error instanceof Error ? error.message : String(error)}`,
+            outcomeMessage: `mutations applied but resume failed: ${resumeError}`,
             resolvedAlertIds: [],
             newAlerts: [],
-          }
+          },
+          resumeError,
         }
       }
+    }
 
-      const before = await openAlerts(dependencies.db, ctx.task.id)
-      await dependencies.db
-        .update(lifecycleAlerts)
-        .set({ resolvedAt: now() })
-        .where(and(eq(lifecycleAlerts.id, ctx.alert.id), isNull(lifecycleAlerts.resolvedAt)))
-        .run()
-      input.onResolved(ctx.task.id)
-      const onAlert = noticeCallback(input.onAlert)
-      await runLifecycleInvariants({
-        operations: dependencies.persistence.recoveryAdministration,
-        scope: { taskId: ctx.task.id },
-        now,
-        ...(onAlert === undefined ? {} : { onAlert }),
-        onResolved: input.onResolved,
-      })
-      await runStuckTaskDetector({
-        operations: dependencies.persistence.recoveryAdministration,
-        taskIdFilter: [ctx.task.id],
-        now,
-        ...(onAlert === undefined ? {} : { onAlert }),
-        onResolved: input.onResolved,
-      })
-      const after = await openAlerts(dependencies.db, ctx.task.id)
-      const afterIds = new Set(after.map((row) => row.id))
-      const beforeIds = new Set(before.map((row) => row.id))
-      const newAlerts: Array<{ id: string; rule: LifecycleAlertRule }> = []
-      for (const row of after) {
-        if (!beforeIds.has(row.id) && isLifecycleAlertRule(row.rule)) {
-          newAlerts.push({ id: row.id, rule: row.rule })
-        }
+    const before = await openAlerts(dependencies.db, ctx.task.id)
+    await dependencies.db
+      .update(lifecycleAlerts)
+      .set({ resolvedAt: now() })
+      .where(and(eq(lifecycleAlerts.id, ctx.alert.id), isNull(lifecycleAlerts.resolvedAt)))
+      .run()
+    input.onResolved?.(ctx.task.id)
+    const onAlert = input.onAlert
+    await runLifecycleInvariants({
+      operations: dependencies.persistence.recoveryAdministration,
+      scope: { taskId: ctx.task.id },
+      now,
+      ...(onAlert === undefined ? {} : { onAlert }),
+      ...(input.onResolved === undefined ? {} : { onResolved: input.onResolved }),
+    })
+    await runStuckTaskDetector({
+      operations: dependencies.persistence.recoveryAdministration,
+      taskIdFilter: [ctx.task.id],
+      now,
+      ...(onAlert === undefined ? {} : { onAlert }),
+      ...(input.onResolved === undefined ? {} : { onResolved: input.onResolved }),
+    })
+    const after = await openAlerts(dependencies.db, ctx.task.id)
+    const afterIds = new Set(after.map((row) => row.id))
+    const beforeIds = new Set(before.map((row) => row.id))
+    const newAlerts: Array<{ id: string; rule: LifecycleAlertRule }> = []
+    for (const row of after) {
+      if (!beforeIds.has(row.id) && isLifecycleAlertRule(row.rule)) {
+        newAlerts.push({ id: row.id, rule: row.rule })
       }
-      return {
+    }
+    return {
+      response: {
         ok: true,
         auditId,
         outcome: 'success',
         resolvedAlertIds: before.filter((row) => !afterIds.has(row.id)).map((row) => row.id),
         newAlerts,
+      },
+    }
+  }
+  return Object.freeze({
+    repairOptions,
+    async applyRepair(input: Parameters<RepairOperations['applyRepair']>[0]) {
+      const onAlert = noticeCallback(input.onAlert)
+      const result = await applyRepair({
+        taskId: input.taskId,
+        alertId: input.alertId,
+        optionId: input.optionId,
+        actorUserId: input.actor.user.id,
+        resume: async (taskId) => {
+          await dependencies.children.resume(
+            { taskId, runtime: dependencies.resumeRuntimeFor(input.actor, taskId) },
+            dependencies.topology,
+          )
+        },
+        ...(onAlert === undefined ? {} : { onAlert }),
+        onResolved: input.onResolved,
+      })
+      return result.response
+    },
+    automaticRepair(options: AutomaticTaskRepairOptions): TaskLifecycleAutoRepairBinding {
+      return {
+        resolveOptions: async (alert) =>
+          (await repairOptions({ taskId: alert.taskId, alertId: alert.id })).options.slice(),
+        applyOption: async (alert, optionId) => {
+          const result = await applyRepair({
+            ...options,
+            taskId: alert.taskId,
+            alertId: alert.id,
+            optionId,
+            actorUserId: null,
+            resume: (taskId) => options.resume.resume(taskId),
+          })
+          return {
+            outcome:
+              result.resumeError === undefined
+                ? result.response.outcome
+                : `apply-failed: ${result.resumeError}`,
+          }
+        },
       }
     },
   })

@@ -74,7 +74,7 @@ describe('RFC-349 code-capability provider boundary', () => {
     ])
   })
 
-  // RFC-359 W4-B5a/b：十个家族已合一为单文件（两个 provider 共用一份实现），其余仍是 sqlite/postgresql 孪生对。
+  // RFC-359 W12：这十二个读面家族均已合一为单文件，两个 provider 共用一份实现。
   test('SQLite and PostgreSQL own the same closed live adapter families', () => {
     const infrastructure = new Set(
       files(join(MODULE, 'infrastructure')).map((file) =>
@@ -82,8 +82,8 @@ describe('RFC-349 code-capability provider boundary', () => {
       ),
     )
     const families = [
-      ['sqliteCapabilityMatrix.ts', 'postgresqlCapabilityMatrixRead.ts'],
-      ['sqliteCodeMetricsRead.ts', 'postgresqlCodeMetricsQuery.ts'],
+      ['capabilityMatrixRead.ts'],
+      ['codeMetricsRead.ts'],
       ['deliveryChainRead.ts'],
       ['roundAttemptsRead.ts'],
       ['workItemProjectionRead.ts'],

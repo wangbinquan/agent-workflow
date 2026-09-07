@@ -7,8 +7,8 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor } from '@/auth/actor'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeMatrixQuery } from '@/modules/code-capability/application/codeMatrixQuery'
-import { composePostgresqlCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
-import { createPostgresqlCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead'
+import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import { createCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/capabilityMatrixRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -62,7 +62,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
 
-function appWithHistory(history: ReturnType<typeof composePostgresqlCodeHistoryQueries>): Hono {
+function appWithHistory(history: ReturnType<typeof composeCodeHistoryQueries>): Hono {
   const app = new Hono()
   const actor = buildActor({
     user: {
@@ -109,7 +109,7 @@ describe('RFC-349 PostgreSQL code capability matrix adapter', () => {
       ],
       [['agent-1']],
     ])
-    const app = appWithHistory(composePostgresqlCodeHistoryQueries(fake.db))
+    const app = appWithHistory(composeCodeHistoryQueries(fake.db))
 
     const response = await app.request(`/api/code/matrix/${REPO}`)
     expect(response.status).toBe(200)
@@ -142,7 +142,7 @@ describe('RFC-349 PostgreSQL code capability matrix adapter', () => {
 
   test('missing PostgreSQL prerequisites remain actionable rather than throwing', async () => {
     const fake = fixture([[[REPO, 'mr-review', null, true]], []])
-    const query = createCodeMatrixQuery(createPostgresqlCapabilityMatrixRead(fake.db))
+    const query = createCodeMatrixQuery(createCapabilityMatrixRead(fake.db))
 
     const [row] = await query.forRepo(REPO)
     expect(row?.readiness).toBe('misconfigured')

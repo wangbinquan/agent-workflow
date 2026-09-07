@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
-- 状态：**Draft（2026-09-04，待用户批准）**
-- current-source pin：`01e4b1b7b`
+- 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
+- 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）
 - 影响域：全后端持久化面
@@ -120,7 +120,7 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
   换句话说：本 RFC 要消灭的是「**同一件事两份实现会漂**」，不是「文件数」。文件数为零是手段，
   「任一能力在两个引擎上行为一致且被钉住」才是目的；机制必须不同的那几对，用对拍替代合一。
 
-  **当前实测（as of `fa92150c7`）**：成对文件数 **153 → 11**，其中判定为机制分叉、以对拍替代合一的
+  **历史实测（as of `fa92150c7`）**：成对文件数 **153 → 11**，其中判定为机制分叉、以对拍替代合一的
   **7 对**；仍缺双引擎对拍见证的 **5 对**。距达成还差：把那 5 对补上对拍，把其余可合的合掉。
 - **AC-2**（G2）`cli/start.ts` 不再有 `provider === 'sqlite'` 的执行分支；boot 序列只有一份，
   两个 provider 走同一条；`servePostgresqlDaemon` 那个永不返回的函数删除。
@@ -158,9 +158,20 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
   前者删、后者改名。**登记在册的真分叉保留其 provider 名**，因为改成中立名反而会掩盖
   「这份实现只服务一个引擎」这个必须一眼可见的事实。
 
-  **当前实测（as of `1b5e74339`）**：账本 `PROVIDER_NAMED_FILE_DEBT` 共 **88** 条，其中
+  **历史实测（as of `1b5e74339`）**：账本 `PROVIDER_NAMED_FILE_DEBT` 共 **88** 条，其中
   **18 条**属于 9 对已登记机制分叉（第 10 对 `LogicalSource` 本就在 `platform/persistence/` 下，
   不在本款范围内）；**70 条**不属于任何登记对，即本款真正要处置的面。
+
+### W12 验收事实更正（2026-09-08）
+
+- 已登记的同目录 provider 对不等于全部可保留机制差异；`SourceTerminationParticipant` 和
+  `TaskLifecycleAutoRepairCommand` 的登记本身仍注明真重复待合。跨目录、内联实现也必须按实际端口核验。
+- AC-6 仍未达成：CI 的真 PG 服务已经到位，但仍有大量行为用例直接创建 SQLite 内存库。
+  W12 开始参数化技能事务与恢复用例，并补上真实任务 launch 到 done 的双引擎执行链。
+- AC-11 原条款未变：当前结构成本守卫和 P95 诊断不能证明“PG 各端点 P95 不劣于 SQLite”。
+  验收不得用前者替代后者，也不得仅凭 CI 绿色把本 RFC 标为 Done。
+- AC-12 继续按实际装配能力收口；完整构造参数、精确返回类型与后声明闭包已经替代多处可漏绑空槽。
+  未清偿项及每次基线以 `plan.md` 为准。
 
 ## 8. 用户裁决点（呈确认）
 

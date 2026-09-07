@@ -1,45 +1,10 @@
-// RFC-359 W8 —— code-capability 上下文两对成对适配器的双引擎对拍。
-//
-// 被两本既有账本同时漏掉的两对
-// ============================
-//   · `CapabilityMatrixReadPort`
-//       SQLite     —— `modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts`
-//       PostgreSQL —— `modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts`
-//   · `CodeMetricsReadPort`
-//       SQLite     —— `modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts`
-//       PostgreSQL —— `modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts`
-//
-// W5 的成对账本按「去掉引擎前缀后**词干相同**且同目录」配对，而这两对的词干本来就不同
-// （`CapabilityMatrix` vs `CapabilityMatrixRead`、`CodeMetricsRead` vs `CodeMetricsQuery`），
-// 所以按名字配对的判据结构上抓不到它们。W8 的能力级账本
-// （`architecture/rfc359-w8-capability-pair-conformance.test.ts`）靠**端口类型**把它们登记了下来，
-// 但登记不是对拍——本文件才是。
-//
-// 此前的覆盖是**单引擎倒挂 + 假库**
-// --------------------------------
-//   · `rfc304-code-queries.test.ts` / `rfc304-code-metrics.test.ts` 只跑 SQLite 那一份；
-//   · `rfc349-code-matrix-postgresql-adapter.test.ts` / `rfc349-code-metrics-postgresql-adapter.test.ts`
-//     跑的是**手喂行元组的假连接池**——它们断言的是「适配器把我塞进去的元组原样转出来」，
-//     真库返回什么类型、两侧对同一份数据是否给出同一个答案，一条都没问过。
-//
-// 判据落在**用户可见契约**上，不是实现层
-// --------------------------------------
-//   · 能力矩阵 = 「仓库设置页的能力矩阵这张表显示了什么」：每个能力的 readiness 徽标、
-//     缺什么（issues）、点哪儿去修（repairActions）。
-//   · 代码度量 = 「/code 指标面板返回了什么」：采纳四桶与运行计数。
-//
-// 形状：`describeEachProvider` 在 SQLite 内存库与真 PostgreSQL 上各跑一遍同一段 body，
-// 而 body 里把**两份实现都构造在同一个库上**（两侧都是 provider-中立的 drizzle query
-// builder，跑得起来），于是每个用例同时锁住两件事：
-//   ① 跨实现——同一个库、同一份数据，两份实现给出同一张表；
-//   ② 跨引擎——同一段期望值在两个引擎上都要成立（harness 强制，写不出「PG 上不一样也算过」）。
-//
-// **正向对照是必需的**：只断言「两侧相等」的用例，被一对「永远返回空」的实现也能满足。
-// 所以每条对拍都先逐字钉住期望内容（ready / 缺哪一项 / 四桶各是多少），再拿它去比两侧。
+// RFC-359 W8 / W12 —— 能力矩阵与代码度量的双引擎行为对拍。
+// W8 钉住的页面内容在 W12 合一后仍须成立：两个真实数据库通过同一个
+// code-history 组合层返回相同的 readiness、issues、repairActions 和度量计数。
+// 矩阵还保留批读上界：增加格子数量不能退回逐格查询；空仓库只读取配置表。
 
 import { expect, test } from 'bun:test'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   agents,
@@ -53,17 +18,9 @@ import {
   webhookEndpoints,
   webhookTriggers,
 } from '@/db/schema'
-import { createCodeMatrixQuery } from '@/modules/code-capability/application/codeMatrixQuery'
-import {
-  createCodeMetricsQuery,
-  DEFAULT_METRICS_WINDOW_MS,
-} from '@/modules/code-capability/application/codeMetricsQuery'
-import { createPostgresqlCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead'
-import { createPostgresqlCodeMetricsRead } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
-import { createSqliteCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
-import { createSqliteCodeMetricsRead } from '@/modules/code-capability/infrastructure/sqliteCodeMetricsRead'
+import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
+import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import type { CodeMatrixRow, CodeMetricsSummary } from '@/modules/code-capability/public/queries'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000
@@ -72,42 +29,18 @@ const GITLAB_ENDPOINT = 'ep-gitlab'
 const GITHUB_ENDPOINT = 'ep-github'
 
 // ---------------------------------------------------------------------------
-// 两份实现，同一个库
+// 两个真实数据库使用同一个生产组合层
 // ---------------------------------------------------------------------------
 
-/** 能力矩阵：`<实现名> → 该实现渲染出的矩阵行`。 */
-async function matrixByImplementation(
+async function renderMatrix(
   harness: ProviderHarness,
   repoId: string,
-): Promise<Record<'sqliteCapabilityMatrix' | 'postgresqlCapabilityMatrixRead', CodeMatrixRow[]>> {
-  const db = harness.db
-  return {
-    sqliteCapabilityMatrix: [
-      ...(await createCodeMatrixQuery(
-        createSqliteCapabilityMatrixRead(db as unknown as DbClient),
-      ).forRepo(repoId)),
-    ],
-    postgresqlCapabilityMatrixRead: [
-      ...(await createCodeMatrixQuery(
-        createPostgresqlCapabilityMatrixRead(db as unknown as PostgresqlDatabaseClient),
-      ).forRepo(repoId)),
-    ],
-  }
+): Promise<readonly CodeMatrixRow[]> {
+  return composeCodeHistoryQueries(harness.db).matrix.forRepo(repoId)
 }
 
-/** 代码度量：`<实现名> → 该实现算出的指标面板`。 */
-async function metricsByImplementation(
-  harness: ProviderHarness,
-): Promise<Record<'sqliteCodeMetricsRead' | 'postgresqlCodeMetricsQuery', CodeMetricsSummary>> {
-  const db = harness.db
-  return {
-    sqliteCodeMetricsRead: await createCodeMetricsQuery(
-      createSqliteCodeMetricsRead(db as unknown as DbClient),
-    ).summary({ now: NOW }),
-    postgresqlCodeMetricsQuery: await createCodeMetricsQuery(
-      createPostgresqlCodeMetricsRead(db as unknown as PostgresqlDatabaseClient),
-    ).summary({ now: NOW }),
-  }
+async function renderMetrics(harness: ProviderHarness): Promise<CodeMetricsSummary> {
+  return composeCodeHistoryQueries(harness.db).metrics.summary({ now: NOW })
 }
 
 /** 页面按能力名读这张表；比较前按能力名排定，免得「顺序」把「内容」的红盖住。 */
@@ -268,7 +201,7 @@ async function seedWorkItem(
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎对拍', (harness) => {
-  test('能力矩阵：同一个库上两份实现渲染出同一张表', async () => {
+  test('能力矩阵：两引擎的统一读面渲染出相同的 readiness 和修复入口', async () => {
     const db = harness.db
     await seedGitlabDeployment(db)
     await seedAgent(db, 'agent-reviewer')
@@ -417,14 +350,51 @@ describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎�
       },
     ]
 
-    const rendered = await matrixByImplementation(harness, REPO)
-    expect(byCapability(rendered.sqliteCapabilityMatrix)).toEqual(expected)
-    expect(byCapability(rendered.postgresqlCapabilityMatrixRead)).toEqual(expected)
-    // 顺序也是用户可见的：页面按读回来的顺序渲染这张表。
-    expect(rendered.postgresqlCapabilityMatrixRead).toEqual(rendered.sqliteCapabilityMatrix)
+    const rendered = await renderMatrix(harness, REPO)
+    expect(byCapability(rendered)).toEqual(expected)
   })
 
-  test('能力矩阵：仓库 URL 认不出归属哪个代码托管时，两份实现给出同一个 code-host 结论', async () => {
+  test('能力矩阵：增加格子仍保持五次批量读取', async () => {
+    const db = harness.db
+    await seedGitlabDeployment(db)
+    await seedAgent(db, 'agent-reviewer')
+    await seedTemplate(db, {
+      id: 'tpl-review',
+      capability: 'mr-review',
+      agentBySlot: { reviewer: 'agent-reviewer' },
+    })
+    await seedCell(db, { capability: 'mr-review', templateId: 'tpl-review', enabled: true })
+
+    const singleRecording = harness.recordStatements()
+    try {
+      const rows = await renderMatrix(harness, REPO)
+      expect(rows.map((row) => row.capability)).toEqual(['mr-review'])
+      expect(singleRecording.selects()).toHaveLength(5)
+    } finally {
+      singleRecording.stop()
+    }
+
+    for (const capability of ['ci-fix', 'mr-comment-fix', 'requirement', 'mr-monitor']) {
+      await seedCell(db, { capability, templateId: 'tpl-review', enabled: true })
+    }
+
+    const multipleRecording = harness.recordStatements()
+    try {
+      const rows = await renderMatrix(harness, REPO)
+      expect(byCapability(rows).map((row) => row.capability)).toEqual([
+        'ci-fix',
+        'mr-comment-fix',
+        'mr-monitor',
+        'mr-review',
+        'requirement',
+      ])
+      expect(multipleRecording.selects()).toHaveLength(5)
+    } finally {
+      multipleRecording.stop()
+    }
+  })
+
+  test('能力矩阵：仓库 URL 认不出归属哪个代码托管时返回 code-host 缺口', async () => {
     const db = harness.db
     // 两个 provider 都配了 endpoint（真实部署：一边 GitLab 一边 GitHub），
     // 而这个仓库的 URL 哪个连接的前缀都不匹配 —— `resolveRepoEndpoint` 无法判定归属。
@@ -470,24 +440,24 @@ describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎�
     })
     await seedCell(db, { capability: 'mr-review', templateId: 'tpl-review', enabled: true })
 
-    const rendered = await matrixByImplementation(harness, REPO)
+    const rendered = await renderMatrix(harness, REPO)
     // 归属判不出来 = 「结果发不出去」，页面必须显示 code-host-unconfigured 并给出去哪儿修。
-    // 同一个部署、同一个仓库，两份实现不能一个说通一个说不通。
-    expect(rendered.postgresqlCapabilityMatrixRead).toEqual(rendered.sqliteCapabilityMatrix)
-    const [row] = rendered.sqliteCapabilityMatrix
+    const [row] = rendered
     expect(row?.readiness).toBe('misconfigured')
     expect(row?.issues.map((issue) => issue.code)).toEqual(['no-trigger', 'code-host-unconfigured'])
   })
 
-  test('能力矩阵：一个格子都没有的仓库两侧都是空表', async () => {
-    // 正向对照的反面：空输入两侧都得是空 —— 但它单独证明不了任何事，
-    // 所以只作为上面两条**有内容**的对拍的边界补充。
-    const rendered = await matrixByImplementation(harness, 'group/never-configured')
-    expect(rendered.sqliteCapabilityMatrix).toEqual([])
-    expect(rendered.postgresqlCapabilityMatrixRead).toEqual([])
+  test('能力矩阵：一个格子都没有的仓库只读配置后返回空表', async () => {
+    const recording = harness.recordStatements()
+    try {
+      expect(await renderMatrix(harness, 'group/never-configured')).toEqual([])
+      expect(recording.selects()).toHaveLength(1)
+    } finally {
+      recording.stop()
+    }
   })
 
-  test('代码度量：同一个库上两份实现算出同一块指标面板', async () => {
+  test('代码度量：两引擎的统一读面保留四桶、分组计数、顺序与窗口', async () => {
     const db = harness.db
     const inWindow = NOW - 1_000
 
@@ -624,19 +594,16 @@ describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎�
       ],
     }
 
-    const rendered = await metricsByImplementation(harness)
-    expect(rendered.sqliteCodeMetricsRead).toEqual(expected)
-    expect(rendered.postgresqlCodeMetricsQuery).toEqual(expected)
+    expect(await renderMetrics(harness)).toEqual(expected)
   })
 
-  test('代码度量：一行都没有时两侧都是空面板', async () => {
-    const rendered = await metricsByImplementation(harness)
+  test('代码度量：一行都没有时返回空面板', async () => {
+    const rendered = await renderMetrics(harness)
     const empty: CodeMetricsSummary = {
       windowMs: DEFAULT_METRICS_WINDOW_MS,
       adoption: [],
       runs: [],
     }
-    expect(rendered.sqliteCodeMetricsRead).toEqual(empty)
-    expect(rendered.postgresqlCodeMetricsQuery).toEqual(empty)
+    expect(rendered).toEqual(empty)
   })
 })

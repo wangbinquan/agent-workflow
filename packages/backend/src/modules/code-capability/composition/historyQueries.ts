@@ -1,8 +1,7 @@
-// RFC-349 — provider-neutral composition for the four code-history read
-// surfaces. HTTP receives one aggregate and never selects a database provider;
-// bootstrap owns the explicit SQLite/PostgreSQL choice.
+// RFC-359 W12 — one composition for all code-history read surfaces. Both
+// database clients supply the same readers and application projections.
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createCodeMatrixQuery,
   createCodeDeliveryChainQuery,
@@ -15,21 +14,18 @@ import {
   createTemplateUpstreamOperations,
   type TemplateUpstreamOperations,
 } from '@/modules/code-capability/application/templateUpstreamStatus'
-import { createPostgresqlCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead'
-import { createPostgresqlCodeMetricsRead } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
+import { createCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/capabilityMatrixRead'
+import { createCodeMetricsRead } from '@/modules/code-capability/infrastructure/codeMetricsRead'
 import { createDeliveryChainRead } from '@/modules/code-capability/infrastructure/deliveryChainRead'
 import { createRoundAttemptsRead } from '@/modules/code-capability/infrastructure/roundAttemptsRead'
 import { createTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/templateUpstreamPersistence'
 import { createWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/workItemProjectionRead'
-import { createSqliteCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
-import { createSqliteCodeMetricsRead } from '@/modules/code-capability/infrastructure/sqliteCodeMetricsRead'
 import type {
   CodeMetricsQuery,
   CodeMatrixQuery,
   CodeRoundAttemptsQuery,
   CodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/public/queries'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 export interface CodeHistoryQueries {
   readonly matrix: CodeMatrixQuery
@@ -40,26 +36,13 @@ export interface CodeHistoryQueries {
   readonly templateUpstream: TemplateUpstreamOperations
 }
 
-export function composeSqliteCodeHistoryQueries(db: DbClient): CodeHistoryQueries {
+export function composeCodeHistoryQueries(db: ProviderNeutralDatabase): CodeHistoryQueries {
   return Object.freeze({
-    matrix: createCodeMatrixQuery(createSqliteCapabilityMatrixRead(db)),
+    matrix: createCodeMatrixQuery(createCapabilityMatrixRead(db)),
     workItems: createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(db)),
     attempts: createCodeRoundAttemptsQuery(createRoundAttemptsRead(db)),
     deliveries: createCodeDeliveryChainQuery(createDeliveryChainRead(db)),
-    metrics: createCodeMetricsQuery(createSqliteCodeMetricsRead(db)),
-    templateUpstream: createTemplateUpstreamOperations(createTemplateUpstreamPersistence(db)),
-  })
-}
-
-export function composePostgresqlCodeHistoryQueries(
-  db: PostgresqlDatabaseClient,
-): CodeHistoryQueries {
-  return Object.freeze({
-    matrix: createCodeMatrixQuery(createPostgresqlCapabilityMatrixRead(db)),
-    workItems: createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(db)),
-    attempts: createCodeRoundAttemptsQuery(createRoundAttemptsRead(db)),
-    deliveries: createCodeDeliveryChainQuery(createDeliveryChainRead(db)),
-    metrics: createCodeMetricsQuery(createPostgresqlCodeMetricsRead(db)),
+    metrics: createCodeMetricsQuery(createCodeMetricsRead(db)),
     templateUpstream: createTemplateUpstreamOperations(createTemplateUpstreamPersistence(db)),
   })
 }

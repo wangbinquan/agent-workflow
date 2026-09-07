@@ -1596,7 +1596,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 139
+      "lines": 140
     },
     {
       "id": "rfc349-config-route-provider-boundary",
@@ -1789,7 +1789,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 508
+      "lines": 506
     },
     {
       "id": "rfc359-w5-provider-runtime-exercised",
@@ -1813,7 +1813,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 312
+      "lines": 306
     },
     {
       "id": "rfc359-w5-t18-bare-transaction",
@@ -1849,7 +1849,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 416
+      "lines": 415
     },
     {
       "id": "rfc359-w5-t19c-startup-sequence",
@@ -1869,11 +1869,11 @@
       "runner": "bun",
       "mechanism": "ast",
       "corpusScanner": true,
-      "minCorpusFiles": 10,
+      "minCorpusFiles": 1500,
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 352
+      "lines": 345
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -1885,7 +1885,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 930
+      "lines": 1024
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -1969,7 +1969,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 525
+      "lines": 509
     },
     {
       "id": "rfc359-w8-ci-dual-engine-wiring",
@@ -2393,14 +2393,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
+    "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "9a093736b52e47dce5fb953c6e9e0a40e5d594f7",
-    "contentDigest": "sha256:3f12be75a6cdbfc7bdbe14293fefbde75640ae6fae5feb8604929039c83befea",
+    "currentSnapshotSha": "ab6e36437443b826da58e098ca7f0c0d5abcb62f",
+    "contentDigest": "sha256:d79841fb596ce1e5d87e855fcfdd744e2e88652a25090d0df460f7d0f2df9d1c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

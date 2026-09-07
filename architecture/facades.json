@@ -149,11 +149,11 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:15a1ef66c2362a90a833",
+        "import:495835a307dde7f80dfb",
         "import:60662be0866b39dd4ae0",
-        "import:6582c3384488daf47324",
         "import:7563170b30fd6bf6fd6a",
-        "import:9e3cbde8da8e17611093",
-        "import:c410cf0505f51c0e7bb9"
+        "import:9e3cbde8da8e17611093"
       ],
       "exportedSymbols": [
         "AutoRepairDeps",
@@ -2153,11 +2153,8 @@
         "import:07f604cbab2738c73f76",
         "import:2e11076ab7aaa560c5f3",
         "import:50121922b49b69574d13",
-        "import:7613089ecc5495d86398",
         "import:a2da5465581e13c11a23",
-        "import:a4268bb4b5a992d5a95b",
-        "import:b8265360db9c6ec38f39",
-        "import:cf340e4b970bca9ff7c8"
+        "import:b8265360db9c6ec38f39"
       ],
       "exportedSymbols": [
         "INVARIANT_RULES",
@@ -5470,7 +5467,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:331a754ea03555b72d71",
         "import:80e1fad735aa55bc8af3",
         "import:b6f56abdbc7a6e52ef83",
         "import:ea16f33ebc0599101087"
@@ -5593,7 +5589,6 @@
         "import:1368b8515d7120021dff",
         "import:1467a5627b744c1b480c",
         "import:1ac037d6b40fb7371921",
-        "import:1d262624da38a87e949a",
         "import:1edd3409bce4c47d0853",
         "import:215752dd60b398f634c1",
         "import:22d95f653425a0679593",
@@ -5753,9 +5748,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:61c3007c50a360217311",
-        "import:ce2e8db36b4a2a9402c0",
-        "import:ecf74a95826974e5aaea"
+        "import:ce2e8db36b4a2a9402c0"
       ],
       "exportedSymbols": [
         "OpenLifecycleAlert",
@@ -6769,5 +6762,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6"
+  "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826"
 }

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 853,
+    "consumers": 856,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1062,
@@ -52347,7 +52347,11 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:9685e0b4320ee4e1d853",
+        "import:eef4555596dae03ef9f2",
+        "import:fe5ad7cf165ba3d4935f"
+      ],
       "context": "integration",
       "dataClass": "metadata",
       "direction": "offered",
@@ -52364,12 +52368,18 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:eef4555596dae03ef9f2",
+            "import:fe5ad7cf165ba3d4935f"
+          ],
           "fieldPath": "$method:launch.$parameter:input.employeeId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:eef4555596dae03ef9f2",
+            "import:fe5ad7cf165ba3d4935f"
+          ],
           "fieldPath": "$method:launch.$parameter:input.intake",
           "type": "Extract<WorkStartTarget, { readonly kind: 'digital-employee' }>['intake']"
         },
@@ -52389,7 +52399,10 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:eef4555596dae03ef9f2",
+            "import:fe5ad7cf165ba3d4935f"
+          ],
           "fieldPath": "$method:launch.$return.caseId",
           "type": "string"
         }
@@ -52401,13 +52414,36 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:9685e0b4320ee4e1d853",
+            "import:eef4555596dae03ef9f2",
+            "import:fe5ad7cf165ba3d4935f"
+          ],
           "name": "launch",
           "signatureDigest": "sha256:0be0c21156cbb1ab4bc5fc16656c492c0fb2baf707c22aaa24c01738ad1872ac"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/public/participants.ts#DigitalEmployeeWorkStartPort",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:9685e0b4320ee4e1d853",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:eef4555596dae03ef9f2",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:fe5ad7cf165ba3d4935f",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -161757,7 +161793,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
+  "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
   "targetContexts": [
     "collaboration",
     "development-automation",

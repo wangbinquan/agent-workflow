@@ -97,7 +97,10 @@ import {
   createPostgresqlTaskExecutionLaunchParticipant,
   type PostgresqlTaskRouteLaunchDependencies,
 } from './postgresqlTaskRouteLaunchOperations'
-import { createPostgresqlTaskRouteRepairOperations } from './postgresqlTaskRouteRepairOperations'
+import {
+  createPostgresqlTaskRouteRepairOperations,
+  type PostgresqlTaskRepairOperations,
+} from './postgresqlTaskRouteRepairOperations'
 import {
   withPostgresqlSerializableTaskExecution,
   withPostgresqlTaskAggregateTransaction,
@@ -2462,7 +2465,7 @@ async function deleteTask(
 /** Complete PostgreSQL binding for the classic `/api/tasks` surface. */
 export function createPostgresqlTaskRouteOperations(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
-): TaskRouteOperations {
+): TaskRouteOperations & Pick<PostgresqlTaskRepairOperations, 'automaticRepair'> {
   const authorization = createTaskAuthorizationQueries(dependencies.db)
   const launches = createPostgresqlTaskExecutionLaunchParticipant({
     db: dependencies.db,
@@ -2585,5 +2588,5 @@ export function createPostgresqlTaskRouteOperations(
     repairOptions: (input) => repairs.repairOptions(input),
     applyRepair: (input) => repairs.applyRepair(input),
   }
-  return Object.freeze(operations)
+  return Object.freeze({ ...operations, automaticRepair: repairs.automaticRepair })
 }

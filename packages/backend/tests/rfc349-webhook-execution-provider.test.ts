@@ -7,6 +7,7 @@ import {
   createWebhookDispatchOrchestrationRuntime,
 } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import type { WebhookExecutionRuntimeDependencies } from '@/modules/integration/infrastructure/webhookExecutionRuntime'
+import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 
 const actor: Actor = buildActor({
   user: {
@@ -24,6 +25,24 @@ const triggerContext = Object.freeze({
     webhook: Object.freeze({ event_type: 'push', repo_path: 'group/repo' }),
   }),
 })
+
+const employeeTarget = {
+  kind: 'digital-employee',
+  refId: 'employee-1',
+  intake: {
+    kind: 'body',
+    target: { repositoryId: 'repository-1' },
+    body: 'repair the pipeline',
+    externalId: null,
+    uploads: [],
+  },
+} as const
+const eventInvoker = {
+  type: 'event',
+  eventSubscriptionId: 'subscription-1',
+  eventDeliveryId: 'delivery-1',
+  triggerContext,
+} as const
 
 function guard(events: string[]): ProtectedMrLaunchGuard {
   return {
@@ -97,42 +116,53 @@ describe('RFC-349 Webhook execution provider composition', () => {
     }
   })
 
-  test('Digital Employee work stays outside TaskExecution and keeps Event Center idempotency', async () => {
+  test('construction keeps the later WorkStart owner lazy and launch retains its receiver and event input', async () => {
     const events: string[] = []
+    // Bootstrap creates this full port before its owner. Constructor-time launch
+    // would throw a TDZ error; retaining the owner call also preserves `this`.
+    const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
+      launch: (input) => httpEmployee.launch(input),
+    })
     const runtime = createWebhookDispatchExecutionRuntime({
       taskExecutions: taskExecutions(events),
-      digitalEmployeeWorkStart: {
-        async launch(input) {
-          events.push(`employee:${input.intake.idempotencyKey}`)
-          return { caseId: 'case-1' }
-        },
-      },
+      digitalEmployeeWorkStart,
     })
+    const httpEmployee: DigitalEmployeeWorkStartPort = {
+      async launch(input) {
+        expect(this).toBe(httpEmployee)
+        expect(input).toEqual({
+          employeeId: employeeTarget.refId,
+          actorUserId: actor.user.id,
+          intake: { ...employeeTarget.intake, idempotencyKey: 'event-delivery:delivery-1' },
+          origin: { eventSubscriptionId: 'subscription-1', eventDeliveryId: 'delivery-1' },
+        })
+        events.push(`employee:${input.intake.idempotencyKey}`)
+        return { caseId: 'case-1' }
+      },
+    }
+    expect(events).toEqual([])
 
     await expect(
-      runtime.launch(
-        actor,
-        {
-          kind: 'digital-employee',
-          refId: 'employee-1',
-          intake: {
-            kind: 'body',
-            target: {},
-            body: 'repair the pipeline',
-            externalId: null,
-            uploads: [],
-          },
-        },
-        {
-          type: 'event',
-          eventSubscriptionId: 'subscription-1',
-          eventDeliveryId: 'delivery-1',
-          triggerContext,
-        },
-        Object.freeze({}) as never,
-      ),
+      runtime.launch(actor, employeeTarget, eventInvoker, Object.freeze({}) as never),
     ).resolves.toEqual({ kind: 'digital-employee', caseId: 'case-1' })
     expect(events).toEqual(['employee:event-delivery:delivery-1'])
+  })
+
+  test('a completed WorkStart failure propagates without an orchestration fallback or receipt', async () => {
+    const events: string[] = []
+    const failure = new Error('employee-definition-not-found')
+    const runtime = createWebhookDispatchExecutionRuntime({
+      taskExecutions: taskExecutions(events),
+      digitalEmployeeWorkStart: Object.freeze({
+        async launch() {
+          throw failure
+        },
+      }),
+    })
+    await expect(
+      runtime.launch(actor, employeeTarget, eventInvoker, Object.freeze({}) as never),
+    ).rejects.toBe(failure)
+    expect(events).toEqual([])
   })
 
   test('orchestration-only PostgreSQL runtime fails closed for Digital Employee targets', async () => {

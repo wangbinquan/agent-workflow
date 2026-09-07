@@ -1,11 +1,11 @@
-// RFC-349 — SQLite rows behind the shared code metrics projection.
+// RFC-359 W12 — one row reader behind the shared code metrics projection.
 
 import { and, count, eq, gte, isNotNull } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { codeFindings, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import type { CodeMetricsReadPort } from '../application/ports/codeMetricsRead'
 
-export function createSqliteCodeMetricsRead(db: DbClient): CodeMetricsReadPort {
+export function createCodeMetricsRead(db: ProviderNeutralDatabase): CodeMetricsReadPort {
   return {
     async loadSince(since) {
       // Only findings that were actually published count. An unpublished one

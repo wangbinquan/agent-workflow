@@ -269,7 +269,7 @@ export function renderPair(pair: CapabilityPair): string {
 /**
  * `<端口声明文件>:<端口>: <sqlite 侧实现> + <postgresql 侧实现> — <状态位>`，按端口字典序。
  *
- * 这四对的共同点：两侧的名字对不上，所以**按名字配对的账本永远看不到它们**。
+ * 这两对的共同点：两侧的名字对不上，所以**按名字配对的账本永远看不到它们**。
  * 状态位 `verified by …` = 存在一个测试文件对两侧各有至少一条值 import；否则 `unverified`。
  */
 export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
@@ -279,31 +279,15 @@ export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
   // 标记损坏 / 隔离清单），并据此把 SQLite 侧抬齐到 PostgreSQL 侧。
   'modules/system-operations/application/ports/adminBackupCoordinator.ts:AdminBackupCoordinatorPort: modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts + modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts — verified by rfc359-w8-system-operations-recovery-conformance.test.ts',
   'modules/system-operations/application/ports/adminRestoreCoordinator.ts:AdminRestoreCoordinatorPort: modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts + modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator.ts — verified by rfc359-w8-system-operations-recovery-conformance.test.ts',
-  // 代码能力矩阵：`postgresqlCapabilityMatrixRead` vs `sqliteCapabilityMatrix`——**词干就不同**
-  // （`CapabilityMatrixRead` vs `CapabilityMatrix`），W5 的同名判据对不上。
-  // 现有的 `rfc349-code-capability-provider-boundary.test.ts` 是源码文本守卫（两侧名字写在
-  // roster 数组里），不构造任何一份实现，因此不是见证。
-  // RFC-359 W8 已补上行为对拍，并据此把 SQLite 侧抬齐到 PostgreSQL 侧：SQLite 那一份把
-  // `resolveRepoEndpoint` 的**拒绝**丢掉、改问 `provider ?? 'gitlab'`，于是同时配了 GitLab 与
-  // GitHub endpoint 的部署里，一个 URL 谁都认不出的仓库在 SQLite 上看不到
-  // `code-host-unconfigured`，在 PostgreSQL 上看得到。
-  'modules/code-capability/application/ports/capabilityMatrixRead.ts:CapabilityMatrixReadPort: modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts + modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts — verified by rfc359-w8-code-capability-read-conformance.test.ts',
-  // 代码度量：`postgresqlCodeMetricsQuery` vs `sqliteCodeMetricsRead`——同样词干不同。
-  // 同一次对拍照出：SQLite 那一份用裸 ``sql<number>`count(*)` ``（只有类型、没有 `.mapWith(Number)`），
-  // 在 PostgreSQL 上 `count(*)` 回的是 bigint 字符串，指标面板的运行计数被拼成 `"021"`。
-  'modules/code-capability/application/ports/codeMetricsRead.ts:CodeMetricsReadPort: modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts + modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts — verified by rfc359-w8-code-capability-read-conformance.test.ts',
 ]
 
 /**
  * W5 看不见的能力对数。**只降不升**——合一掉一对、或改名让 W5 也能看见，都算进展。
  *
- * RFC-359 W8 结论：code-capability 那两对**本可以合一**（两侧全是 provider-中立的 drizzle
- * query builder，没有一行引擎专属 SQL；矩阵那对的差别只是 N+1 vs 批量，度量那对逐字重复），
- * 但合一要改文件名 / 符号名，而 `architecture/mutation-entrypoints.json` 与
- * `architecture/cross-context-imports.json` 按 `file#symbol` 逐条钉着这四个文件——重生成账本
- * 不在本刀的授权范围内。于是本刀只做**行为抬齐**，把合一留给能一并重采账本的那一刀。
+ * RFC-359 W12：代码矩阵与度量两对已合一，两个引擎共用有界批量算法与同一 composer。
+ * W8 对拍继续驱动实际查询，保留计数数值化、拒绝结果和空矩阵/扩容时的恒定语句数断言。
  */
-export const NAME_BLIND_PAIR_COUNT = 4
+export const NAME_BLIND_PAIR_COUNT = 2
 
 /** 其中「连一份对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const NAME_BLIND_UNVERIFIED_COUNT = 0
@@ -314,7 +298,7 @@ export const NAME_BLIND_UNVERIFIED_COUNT = 0
  * 这里用**松棘轮**（`<=`）而不是逐字相等：其余 8 对由 W5 逐字记账，并行的合一刀随时会把
  * 它们合掉，逐字钉死会让别人的进展在这里红成「回归」。
  */
-export const CAPABILITY_PAIR_CEILING = 12
+export const CAPABILITY_PAIR_CEILING = 10
 
 // ---------------------------------------------------------------------------
 

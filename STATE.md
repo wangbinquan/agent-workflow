@@ -3,11 +3,11 @@
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
 > **RFC-359 W12 接续（2026-09-08）**：裸驱动事务守卫按 TypeScript 接收者类型识别，账本归零。
-> 第二批拆除 realtime / scheduler / collaboration / MCP / development / maintenance 的可漏绑槽，
-> 强化 memory 与 digital-employee 完整输入的返回类型；provider 命名文件 88 → 71，装配占位 32 → 15。
-> 补真实任务跑到 done 的双引擎用例，以及工作组成员瞬态重试 CAS 卡住的修复与红绿回归。
-> **仍为 In Progress**：AST 清点有 815 个测试文件直接建 SQLite 内存库，真 PG 服务存在并不代表
-> 全量行为覆盖；真实孪生、剩余装配与原始 P95 判据尚未闭合。当前验收事实与逐批 CI 见 `plan.md` §0b/§0c。
+> 第二/三批拆除 realtime / scheduler / collaboration / MCP / development / maintenance / WorkStart
+> 的可漏绑槽，provider 命名文件 88 → 65，装配占位 32 → 13；代码矩阵/度量与自动修复实现合一。
+> 真实任务跑到 done 的双引擎用例已接入，修复工作组成员瞬态重试 CAS 卡住；5 个技能行为套件改为双引擎。
+> **仍为 In Progress**：810 个测试文件还有实际 SQLite 内存库构造（含机制专属测试，待逐项分类）；
+> 真实孪生、剩余装配与原始 P95 判据尚未闭合。当前验收事实与逐批 CI 见 `plan.md` §0b/§0c。
 
 > 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
 > **进度（2026-09-07，W7 成对适配器收尾）**：本波按 W5 的成对账本逐对收 W4 的剩余部分。

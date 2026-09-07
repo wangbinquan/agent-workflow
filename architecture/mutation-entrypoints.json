@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1735,
+    "entries": 1731,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -2401,6 +2401,28 @@
       "controls": {
         "audit": false,
         "authority": "internal-family",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/capabilityMatrixRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/capabilityMatrixRead.ts#createCapabilityMatrixRead",
+      "missingControls": [
+        "audit",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityMatrixRead.ts#createCapabilityMatrixRead",
+      "symbol": "createCapabilityMatrixRead",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -2487,6 +2509,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePersistence.ts#createCapabilityTemplatePersistence",
       "symbol": "createCapabilityTemplatePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/codeMetricsRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/codeMetricsRead.ts#createCodeMetricsRead",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/codeMetricsRead.ts#createCodeMetricsRead",
+      "symbol": "createCodeMetricsRead",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -2592,28 +2637,6 @@
         "audit": false,
         "authority": "internal-family",
         "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts#createPostgresqlCapabilityMatrixRead",
-      "missingControls": [
-        "audit",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts#createPostgresqlCapabilityMatrixRead",
-      "symbol": "createPostgresqlCapabilityMatrixRead",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": true
@@ -2628,31 +2651,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts#createPostgresqlCapabilityTemplatePackageMutationOwner",
       "symbol": "createPostgresqlCapabilityTemplatePackageMutationOwner",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts#createPostgresqlCodeMetricsRead",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts#createPostgresqlCodeMetricsRead",
-      "symbol": "createPostgresqlCodeMetricsRead",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -2725,53 +2723,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/roundAttemptsRead.ts#createRoundAttemptsRead",
       "symbol": "createRoundAttemptsRead",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts#createSqliteCapabilityMatrixRead",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts#createSqliteCapabilityMatrixRead",
-      "symbol": "createSqliteCapabilityMatrixRead",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts#createSqliteCodeMetricsRead",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts#createSqliteCodeMetricsRead",
-      "symbol": "createSqliteCodeMetricsRead",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -10996,30 +10947,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/composition.ts#createCodeHostWebhookRoutingDirectoryWithPersistence",
       "symbol": "createCodeHostWebhookRoutingDirectoryWithPersistence",
-      "targetContext": "integration",
-      "targetLayer": "composition"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/composition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/composition.ts#createDeferredDigitalEmployeeWorkStart",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition.ts#createDeferredDigitalEmployeeWorkStart",
-      "symbol": "createDeferredDigitalEmployeeWorkStart",
       "targetContext": "integration",
       "targetLayer": "composition"
     },
@@ -26813,27 +26740,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts#createPostgresqlTaskLifecycleAutoRepairCommand",
-      "missingControls": [
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts#createPostgresqlTaskLifecycleAutoRepairCommand",
-      "symbol": "createPostgresqlTaskLifecycleAutoRepairCommand",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
@@ -27564,30 +27470,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#createSqliteTaskExecutionRuntimeParticipants",
       "symbol": "createSqliteTaskExecutionRuntimeParticipants",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts#createSqliteTaskLifecycleAutoRepairCommand",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts#createSqliteTaskLifecycleAutoRepairCommand",
-      "symbol": "createSqliteTaskLifecycleAutoRepairCommand",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -28363,6 +28245,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
       "symbol": "createTaskIdleTimeoutPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleAutoRepairCommand.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleAutoRepairCommand.ts#createTaskLifecycleAutoRepairCommand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleAutoRepairCommand.ts#createTaskLifecycleAutoRepairCommand",
+      "symbol": "createTaskLifecycleAutoRepairCommand",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -41445,7 +41352,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
+  "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42753,8 +42660,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1806:tasks",
-        "line": 1806,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1809:tasks",
+        "line": 1809,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42769,8 +42676,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2047:tasks",
-        "line": 2047,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2050:tasks",
+        "line": 2050,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42785,8 +42692,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2412:tasks",
-        "line": 2412,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2415:tasks",
+        "line": 2415,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42801,8 +42708,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2437:tasks",
-        "line": 2437,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#2440:tasks",
+        "line": 2440,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -42817,8 +42724,8 @@
         "controlSubtype": "membership-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#789:tasks",
-        "line": 789,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#792:tasks",
+        "line": 792,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#replaceTaskMembers",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
