@@ -41,6 +41,14 @@ const RUNTIME = resolve(
   'postgresqlRuntime.ts',
 )
 const SCHEMA = resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts')
+const CAPABILITIES = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'platform',
+  'persistence',
+  'capabilities.ts',
+)
 
 function pageSource(): string {
   return readdirSync(PAGE_DIR)
@@ -154,20 +162,26 @@ describe('RFC-357 delta 6 — the SQLite functions the query calls have PostgreS
   })
 
   // 真库 lane 第一次跑就抓到的那条：shim 转发 `jsonb_typeof`，词汇表与 SQLite 的
-  // `json_type` 几乎不重叠（'string' vs 'text'）。只写 = 'text' 会让 PostgreSQL 上的
-  // 工作组名恒为 NULL。这里两头都钉：shim 确实还是 jsonb_typeof、查询确实两种都收。
-  // 哪天 shim 被修成 SQLite 词汇（要连带一套 schema digest 的迁移故事），上面那条会先红，
-  // 提醒下一个人「查询里的双拼法从此只是保险，不再是必需」。
-  test('json_type speaks a different vocabulary on each side, and the query accepts both', () => {
+  // `json_type` 几乎不重叠（'string' vs 'text'）。当时的处置是让**同一段查询文本**同时收
+  // 两种拼法（`IN ('text', 'string')`）——那是「一份 SQL 喂两个方言」的必然代价。
+  //
+  // **RFC-359 W6-T24 起不再需要**：JSON 取值收进了能力矩阵（`EngineCapabilities.jsonMemberText`），
+  // 每个引擎各渲染各的——SQLite 用自己的 `json_type(...) = 'text'`，PostgreSQL 根本不再调
+  // `json_type`，改走原生 `jsonb_typeof(... -> ...) = 'string'` 与 `->>`（真库实测 `q` 搜索
+  // 160.7ms → 78.0ms）。于是这一条从「查询必须收两种拼法」翻转成「**查询里不许再出现任何
+  // JSON shim 调用**」，双拼法的账挪到矩阵里由 `rfc359-w6-t24-json-member-text` 的 19 格对拍钉住。
+  test('the JSON vocabulary split now lives in the capability matrix, not in one shared query text', () => {
+    // shim 仍在基线里（`json_valid` 还被 schema 的 CHECK 约束用着），也仍转发 jsonb_typeof。
     expect(baseline).toContain('RETURN jsonb_typeof(item);')
-    const source = pageSource()
-    expect(source).not.toMatch(/json_type\([^)]*\)\s*=\s*'text'/u)
-    // 四处（filters.ts 的派生列 + query.ts 的三条页形状）都必须收两种拼法。
-    expect((source.match(/json_type\(/gu) ?? []).length).toBe(4)
-    expect((source.match(/IN \('text', 'string'\)/gu) ?? []).length).toBe(4)
+
+    const matrix = readFileSync(CAPABILITIES, 'utf8')
+    // SQLite 侧说 SQLite 的词汇；PostgreSQL 侧说 jsonb 的词汇。各自单拼，不再有 `IN (…)`。
+    expect(matrix).toContain("json_type(${document}, ${sql.raw(path)}) = 'text'")
+    expect(matrix).toContain("jsonb_typeof((${document})::jsonb -> ${sql.raw(key)}) = 'string'")
+    expect(pageSource()).not.toMatch(/IN \('text', 'string'\)/u)
   })
 
-  test('the query calls exactly those four and no other SQLite-only function', () => {
+  test('the query itself now calls only `instr`, and no other SQLite-only function', () => {
     const source = pageSource()
     const called = new Set(
       [
@@ -176,7 +190,10 @@ describe('RFC-357 delta 6 — the SQLite functions the query calls have PostgreS
         ),
       ].map((match) => match[1]!),
     )
-    expect([...called].sort()).toEqual(['instr', 'json_extract', 'json_type', 'json_valid'])
+    expect(
+      [...called].sort(),
+      'JSON 取值必须经能力矩阵渲染；页源码里再出现 shim 调用就是又手写了一份方言',
+    ).toEqual(['instr'])
   })
 })
 

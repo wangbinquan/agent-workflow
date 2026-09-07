@@ -1,10 +1,11 @@
 // RFC-359 W4-B1 批 2f —— node run 执行投影（快照 / 输出 / 事件）：一份实现，两个 provider 共用。
 // 写路径是产品里最热的（agent 每吐一行就 appendEvents 一次）：统一写事务 + owner 围栏 + 聚合根行锁。
 
-import { and, asc, count, eq, inArray, isNotNull, isNull, notLike } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, isNotNull, isNull, notLike, sql } from 'drizzle-orm'
 
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
 import type {
@@ -157,28 +158,36 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         input.now ?? Date.now(),
       )
       if (taskId === null) return
-      for (const output of input.outputs) {
-        await tx
+      // RFC-359 W6-T25 —— 端口逐行 upsert 改按批。`set` 走 `excluded.*` 而不是逐行字面量：
+      // 一条语句里每行要更新成**自己那行**的值，只有 excluded 伪表能表达（两个引擎同一关键字）。
+      // 同批重复端口名先按「后写覆盖先写」压平——逐行写本来就是这个语义，而 PG 对同一冲突行在
+      // 一条语句里被改两次会直接抛。
+      const rows = lastPerKey(
+        input.outputs.map((output) => ({
+          nodeRunId: input.nodeRunId,
+          portName: output.portName,
+          content: output.content,
+          kind: output.kind ?? null,
+          archiveJson: output.archiveJson ?? null,
+          active: output.active ?? true,
+        })),
+        (row) => row.portName,
+      )
+      await insertInBatches(tx, nodeRunOutputs, rows, (batch) =>
+        tx
           .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: input.nodeRunId,
-            portName: output.portName,
-            content: output.content,
-            kind: output.kind ?? null,
-            archiveJson: output.archiveJson ?? null,
-            active: output.active ?? true,
-          })
+          .values([...batch])
           .onConflictDoUpdate({
             target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
             set: {
-              content: output.content,
-              kind: output.kind ?? null,
-              archiveJson: output.archiveJson ?? null,
-              active: output.active ?? true,
+              content: sql`excluded.${sql.identifier(nodeRunOutputs.content.name)}`,
+              kind: sql`excluded.${sql.identifier(nodeRunOutputs.kind.name)}`,
+              archiveJson: sql`excluded.${sql.identifier(nodeRunOutputs.archiveJson.name)}`,
+              active: sql`excluded.${sql.identifier(nodeRunOutputs.active.name)}`,
             },
           })
-          .run()
-      }
+          .run(),
+      )
     })
   }
 
@@ -232,19 +241,25 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         input.events[input.events.length - 1]!.ts,
       )
       if (taskId === null) return
-      await tx
-        .insert(nodeRunEvents)
-        .values(
-          input.events.map((event) => ({
-            nodeRunId: input.nodeRunId,
-            ts: event.ts,
-            kind: event.kind,
-            payload: event.payload,
-            sessionId: event.sessionId ?? null,
-            parentSessionId: event.parentSessionId ?? null,
-          })),
-        )
-        .run()
+      // RFC-359 W6-T25 —— 事件按批落库。切批在同一笔事务里，原子性不变；行数上限由能力矩阵
+      // 给（`batchInsertMax(列数)`），调用方不再自带一份「多少行一批」的推导。
+      await insertInBatches(
+        tx,
+        nodeRunEvents,
+        input.events.map((event) => ({
+          nodeRunId: input.nodeRunId,
+          ts: event.ts,
+          kind: event.kind,
+          payload: event.payload,
+          sessionId: event.sessionId ?? null,
+          parentSessionId: event.parentSessionId ?? null,
+        })),
+        (batch) =>
+          tx
+            .insert(nodeRunEvents)
+            .values([...batch])
+            .run(),
+      )
     })
   }
 

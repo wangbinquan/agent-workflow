@@ -71,6 +71,16 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(cap.maxBindParameters).toBe(32_766)
   })
 
+  // RFC-359 W6-T25 —— batchInsertMax 的真实执行断言在
+  // `tests/rfc359-t25-batch-insert.test.ts`（双引擎 harness，含跨批 / 回滚 / 对拍）。
+  // 这里只钉「参数预算 ÷ 列数」与「行数甜点」的取小关系，避免两处各写一份推导。
+  test('batchInsertMax 取「参数预算 ÷ 列数」与行数甜点的较小值', () => {
+    expect(cap.batchInsertMax(7)).toBe(500)
+    expect(cap.batchInsertMax(100)).toBe(Math.floor(32_766 / 100))
+    expect(cap.batchInsertMax(40_000)).toBe(1)
+    expect(() => cap.batchInsertMax(0)).toThrow('positive column count')
+  })
+
   test('lockAggregateRoot 与 advisoryLock 是 no-op，claimLockClause 为空', async () => {
     const db = scratch()
     const session = createSqliteDatabaseSession(db)
@@ -239,6 +249,11 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         expect(cap.provider).toBe('postgresql')
         expect(cap.isolation).toBe('read-committed')
         expect(cap.maxBindParameters).toBe(65_535)
+        // RFC-359 W6-T25 —— 与 SQLite 侧同一条关系；真实执行断言在 rfc359-t25-batch-insert。
+        expect(cap.batchInsertMax(7)).toBe(500)
+        expect(cap.batchInsertMax(200)).toBe(Math.floor(65_535 / 200))
+        expect(cap.batchInsertMax(80_000)).toBe(1)
+        expect(() => cap.batchInsertMax(0)).toThrow('positive column count')
 
         // ② 行锁与 advisory lock 真的执行
         await session.transaction(async (tx) => {

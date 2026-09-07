@@ -1298,10 +1298,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // （`managedProcess.pump` 的 `onChunkEnd`）：它在同一个 await 内写完才让出事件循环，
     // pump 的下一次 read 之前一定已落库，所以读点（countAgentTextEvents / 会话租约 retag /
     // WS 回放 / 详情页）**不需要任何 flush 屏障**，也不引入额外的崩溃丢失窗口。
-    /** 单条多行 INSERT 的行数上限：6 列 × 100 行 = 600 个绑定参数，低于仓内 900 护栏线
-     *  （SQLite 硬上限 32766；归档器曾因无界 IN 撞上它而每小时失败）。 */
+    // RFC-359 W6-T25 —— 「一批多少行」的推导从这里删掉了。原先这儿写着
+    // `EVENT_INSERT_MAX_ROWS = 100`（附一份「6 列 × 100 行 = 600 个绑定参数」的手推），
+    // 于是同一件事在仓里有两份推导，而这一份还把整批切成了 N 笔**各自独立的事务**。
+    // 现在整批一次交给 `appendEvents`：切批由能力矩阵的 `batchInsertMax(列数)` 在持久化层
+    // 做，且全部批次落在**同一笔事务**里——语句更少、事务更少，冲刷仍是全有或全无。
     type NodeRunEventInsert = NodeExecutionEventWrite & { readonly nodeRunId: string }
-    const EVENT_INSERT_MAX_ROWS = 100
     const makeEventBuffer = (
       operation: string,
     ): { push: (row: NodeRunEventInsert) => void; flush: () => Promise<void> } => {
@@ -1314,15 +1316,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           if (rows.length === 0) return
           // splice 之前没有 await：两条流各有自己的缓冲，且这一步对并发的另一条泵是原子的。
           const batch = rows.splice(0, rows.length)
-          for (let i = 0; i < batch.length; i += EVENT_INSERT_MAX_ROWS) {
-            const slice = batch.slice(i, i + EVENT_INSERT_MAX_ROWS)
-            await persistRunnerWrite(operation, () =>
-              opts.persistence.nodeExecution.appendEvents({
-                nodeRunId: opts.nodeRunId,
-                events: slice,
-              }),
-            )
-          }
+          await persistRunnerWrite(operation, () =>
+            opts.persistence.nodeExecution.appendEvents({
+              nodeRunId: opts.nodeRunId,
+              events: batch,
+            }),
+          )
         },
       }
     }

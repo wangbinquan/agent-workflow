@@ -1,0 +1,24 @@
+-- RFC-359 W6 —— 退役 `node_runs` 的 lineage 补齐触发器，改由插入点显式写这两列。
+--
+-- 迁移 0210 建的 `rfc328_node_runs_lineage_after_insert` 在 `continuation_slot_key` 或
+-- `lineage_slot_path_json` 为 NULL 时把它们补齐。它**只存在于 SQLite**：PostgreSQL 的 DDL
+-- 由 `db/schema.ts` 投影而来（`platform/persistence/postgresqlSchema.ts`），一行触发器都没有。
+--
+-- 那不是「PG 少了一层可有可无的保险」。铸行工厂 `buildNodeRunMintRecord` 对
+-- `lineageSlotPathJson` 的默认值是 `overrides ?? inherited ?? null`，而全 `src` 没有任何调用点
+-- 传 `overrides.lineageSlotPathJson`——于是任务的**首个** node_run 在两个引擎上落出的行不同：
+-- SQLite 由触发器补成「任务路径 + 本节点一帧」，PostgreSQL 留 null。下游按
+-- `run?.lineageSlotPathJson ?? intent.slotPathJson ?? task.lineageSlotPathJson ?? '[]'` 回落，
+-- 所以 PostgreSQL 上同一任务的不同节点会回落到**同一条**任务级路径，effect 的
+-- `slot_path_digest` 在节点之间撞车。2026-09-07 双引擎实测复现。
+--
+-- 处置：推导搬进应用层（`application/buildNodeRunMintRecord.ts` 的
+-- `nodeRunLineageSlotPathJson`，两个引擎共用一份，帧的形状与本触发器逐字对齐），两个铸行
+-- 适配器都显式写这一列；「插入点必须显式写」改由架构守卫兜底
+-- （`tests/architecture/rfc359-w6-node-run-insert-lineage-completeness.test.ts`）。
+-- **守卫对两个引擎同时生效，触发器天生只属于一个方言**——这正是留着它反而危险的原因：
+-- 它会让 SQLite 侧的遗漏被静默补上，于是「PG 上产出 null 行」这类缺陷只在换引擎时才暴露。
+--
+-- `tasks` 上的同名触发器（`rfc328_tasks_lineage_after_insert`）**不动**：那条路径的四个插入点
+-- 早已由 `rfc359-w7-task-insert-lineage-completeness` 钉着显式写三列，触发器本就够不着。
+DROP TRIGGER IF EXISTS `rfc328_node_runs_lineage_after_insert`;

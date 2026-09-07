@@ -213,15 +213,15 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     id: 'json-arrow',
     pattern: /->>?|#>>?/u,
     dialect: 'postgresql-only',
-    capability: [],
-    why: 'PG 的 JSON 取值算子（走得了 GIN）；SQLite 只有 json_extract。矩阵的 jsonExtract 归 W6-T24。',
+    capability: ['jsonMemberText'],
+    why: 'PG 的 JSON 取值算子；SQLite 只有 json_extract。W6-T24 已收进矩阵的 jsonMemberText——PG 渲染 `->` / `->>`（`pg_input_is_valid` 守住 `::jsonb`），SQLite 渲染三个内建 JSON 函数。',
   },
   {
     id: 'jsonb-contains',
     pattern: /@>|<@/u,
     dialect: 'postgresql-only',
     capability: [],
-    why: 'PG 的 JSONB 包含算子；SQLite 要 json_each 展开。矩阵的 jsonContains 归 W6-T24。',
+    why: 'PG 的 JSONB 包含算子；SQLite 要 json_each 展开。**W6-T24 判定不进矩阵**：`@>` 需要 jsonb 列，而 json-text 列必须保字节（rfc359-w6-t23-json-column-storage）；且全仓 14 处包含形状的过滤全打在几十到几百行的资源目录小表上，量不出收益。',
   },
   {
     id: 'pg-cast',

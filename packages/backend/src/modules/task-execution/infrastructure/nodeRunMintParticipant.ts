@@ -6,9 +6,12 @@
 
 import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm'
 
-import { nodeRuns } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
-import { buildNodeRunMintRecord } from '../application/buildNodeRunMintRecord'
+import {
+  buildNodeRunMintRecord,
+  nodeRunLineageColumns,
+} from '../application/buildNodeRunMintRecord'
 import type { NodeRunMintInput } from '../application/ports/nodeRunLifecyclePersistence'
 import { childScopePath } from '../domain/environmentChain'
 
@@ -47,7 +50,28 @@ export function createNodeRunMintParticipantInTx(
             ? ''
             : childScopePath(container.scopePath, container.nodeId, record.iteration)
       }
-      const values = { ...record, scopePath }
+      // RFC-359 W6 —— 两个 lineage 列必须由**插入点显式写出**。此前它们在 SQLite 上由迁移 0210 的
+      // 触发器补齐、PostgreSQL 上留 null（那个触发器已随迁移 0224 退役）；推导现在两个引擎共用
+      // 一份，见 `nodeRunLineageColumns` 的头注释。
+      const lineage = nodeRunLineageColumns(
+        record,
+        record.lineageSlotPathJson !== null
+          ? undefined
+          : await tx
+              .select({
+                lineageSlotPathJson: tasks.lineageSlotPathJson,
+                workflowVersion: tasks.workflowVersion,
+              })
+              .from(tasks)
+              .where(eq(tasks.id, record.taskId))
+              .get(),
+      )
+      const values = {
+        ...record,
+        scopePath,
+        continuationSlotKey: lineage.continuationSlotKey,
+        lineageSlotPathJson: lineage.lineageSlotPathJson,
+      }
       // Prior generations of the SAME frame are superseded by this mint. The frame is part of
       // the key: a nested loop's round-0 row under outer round 1 must never abandon the round-0
       // row under outer round 0.

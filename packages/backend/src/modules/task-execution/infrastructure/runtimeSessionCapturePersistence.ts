@@ -5,6 +5,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 
 import { nodeRunEvents, nodeRuns } from '@/db/schema'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { RuntimeSessionCapturePersistence } from '../application/ports/runtimeSessionCapturePersistence'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
@@ -49,19 +50,25 @@ export function createRuntimeSessionCapturePersistence(
       if (input.events.length === 0) return
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId: input.taskId })
-        await tx
-          .insert(nodeRunEvents)
-          .values(
-            input.events.map((event: (typeof input.events)[number]) => ({
-              nodeRunId: input.nodeRunId,
-              ts: event.ts,
-              kind: event.kind,
-              payload: event.payload,
-              sessionId: event.sessionId,
-              parentSessionId: event.parentSessionId,
-            })),
-          )
-          .run()
+        // RFC-359 W6-T25 —— 会话回捕的事件按批落库：一次 capture 的行数由子会话 transcript 决定，
+        // 无界。切批在同一笔事务里，原子性不变；行数上限由能力矩阵给。
+        await insertInBatches(
+          tx,
+          nodeRunEvents,
+          input.events.map((event: (typeof input.events)[number]) => ({
+            nodeRunId: input.nodeRunId,
+            ts: event.ts,
+            kind: event.kind,
+            payload: event.payload,
+            sessionId: event.sessionId,
+            parentSessionId: event.parentSessionId,
+          })),
+          (batch) =>
+            tx
+              .insert(nodeRunEvents)
+              .values([...batch])
+              .run(),
+        )
       })
     },
   })

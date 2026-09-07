@@ -24,12 +24,13 @@ import {
   list,
   nonViewCondition,
   viewCondition,
+  workgroupNameExpression,
   type ParsedTaskOperationsQuery,
   type TaskPageCursorV1,
 } from './filters'
 
 const MAX_TREE_DEPTH = 64
-export function baseCtes(authorizedIds: SQL, nonView: SQL, view: SQL): SQL {
+export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, view: SQL): SQL {
   return sql`
     authorized_ids AS MATERIALIZED (${authorizedIds}),
     base AS MATERIALIZED (
@@ -56,12 +57,7 @@ export function baseCtes(authorizedIds: SQL, nonView: SQL, view: SQL): SQL {
         t.scheduled_task_id,
         t.launch_origin,
         t.workgroup_id,
-        CASE WHEN json_valid(t.workgroup_config_json) THEN
-          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') IN ('text', 'string')
-            THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
-            ELSE NULL
-          END
-        ELSE NULL END AS workgroup_name,
+        ${workgroupNameExpression(db, 't')} AS workgroup_name,
         t.space_kind,
         t.parent_task_id,
         t.invocation_depth,
@@ -164,6 +160,7 @@ export function rootQuery(
     WHERE ${auth} AND ${catalogVisibilityCondition('t', catalogVisibility)}
   `
   const base = baseCtes(
+    db,
     authorizedIds,
     nonViewCondition(db, viewer, parsed.filters),
     viewCondition(parsed.filters.view),
@@ -232,6 +229,7 @@ export function childQuery(
       AND ${catalogVisibilityCondition('t', catalogVisibility)}
   `
   const base = baseCtes(
+    db,
     authorizedIds,
     nonViewCondition(db, viewer, parsed.filters),
     viewCondition(parsed.filters.view),
@@ -350,12 +348,7 @@ export function fastDefaultRootQuery(
       t.scheduled_task_id,
       t.launch_origin,
       t.workgroup_id,
-      CASE WHEN json_valid(t.workgroup_config_json) THEN
-        CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') IN ('text', 'string')
-          THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
-          ELSE NULL
-        END
-      ELSE NULL END AS workgroup_name,
+      ${workgroupNameExpression(db, 't')} AS workgroup_name,
       t.space_kind,
       t.parent_task_id,
       t.invocation_depth,
@@ -592,12 +585,7 @@ export function fastFilteredRootQuery(
         t.scheduled_task_id,
         t.launch_origin,
         t.workgroup_id,
-        CASE WHEN json_valid(t.workgroup_config_json) THEN
-          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') IN ('text', 'string')
-            THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
-            ELSE NULL
-          END
-        ELSE NULL END AS workgroup_name,
+        ${workgroupNameExpression(db, 't')} AS workgroup_name,
         t.space_kind,
         t.parent_task_id,
         t.invocation_depth,

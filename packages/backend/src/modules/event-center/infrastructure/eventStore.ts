@@ -5,6 +5,7 @@ import { and, asc, count, desc, eq, inArray, isNull, lte, or, sql } from 'drizzl
 import { TriggerContextSchema } from '@agent-workflow/shared'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   eventDeliveries,
@@ -752,28 +753,27 @@ export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
             if (row !== undefined) filteredSubscriptions.push(row)
           }
           const subscriptions = [...exactSubscriptions, ...filteredSubscriptions]
-          const deliveryIds: string[] = []
-          for (const subscription of subscriptions) {
-            const deliveryId = input.nextId()
-            await tx.insert(eventDeliveries).values({
-              id: deliveryId,
-              eventId: input.eventId,
-              subscriptionId: subscription.id,
-              subscriberKind: subscription.subscriberKind,
-              subscriberRef: subscription.subscriberRef,
-              deliveryClass: input.eventType.deliveryClass,
-              state: 'pending',
-              attemptCount: 0,
-              nextAttemptAt: input.observedAt,
-              createdAt: input.observedAt,
-            })
-            deliveryIds.push(deliveryId)
-          }
+          // RFC-359 W6-T25 —— 投递扇出按批。id 仍按订阅顺序逐个铸造，落库行与顺序不变。
+          const deliveryRows = subscriptions.map((subscription) => ({
+            id: input.nextId(),
+            eventId: input.eventId,
+            subscriptionId: subscription.id,
+            subscriberKind: subscription.subscriberKind,
+            subscriberRef: subscription.subscriberRef,
+            deliveryClass: input.eventType.deliveryClass,
+            state: 'pending' as const,
+            attemptCount: 0,
+            nextAttemptAt: input.observedAt,
+            createdAt: input.observedAt,
+          }))
+          await insertInBatches(tx, eventDeliveries, deliveryRows, (batch) =>
+            tx.insert(eventDeliveries).values([...batch]),
+          )
           return {
             eventId: input.eventId,
             duplicate: false,
             deliveryCount: subscriptions.length,
-            deliveryIds,
+            deliveryIds: deliveryRows.map((row) => row.id),
           }
         },
       )
@@ -1347,20 +1347,24 @@ export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
             if (row !== undefined) filteredSubscriptions.push(row)
           }
           const subscriptions = [...exactSubscriptions, ...filteredSubscriptions]
-          for (const subscription of subscriptions) {
-            await tx.insert(eventDeliveries).values({
+          // RFC-359 W6-T25 —— 投递扇出按批（一次观测轮的行数 = 观测数 × 订阅数）。
+          await insertInBatches(
+            tx,
+            eventDeliveries,
+            subscriptions.map((subscription) => ({
               id: input.nextId(),
               eventId: item.eventId,
               subscriptionId: subscription.id,
               subscriberKind: subscription.subscriberKind,
               subscriberRef: subscription.subscriberRef,
               deliveryClass: item.eventType.deliveryClass,
-              state: 'pending',
+              state: 'pending' as const,
               attemptCount: 0,
               nextAttemptAt: input.now,
               createdAt: input.now,
-            })
-          }
+            })),
+            (batch) => tx.insert(eventDeliveries).values([...batch]),
+          )
         }
 
         await tx

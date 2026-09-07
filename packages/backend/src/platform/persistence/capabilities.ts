@@ -41,7 +41,13 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 
 import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
+import { SQL_IN_CHUNK } from '@/util/sqlChunk'
 import type { DatabaseTransaction } from './databaseTransaction'
+
+/** SQLite 的绑定参数预算：保守值，见 `EngineCapabilities.batchInsertMax` 的注释。 */
+const SQLITE_MAX_BIND_PARAMETERS = 32_766
+/** PostgreSQL 的绑定参数预算：wire protocol 的 int16 参数计数上限。 */
+const POSTGRESQL_MAX_BIND_PARAMETERS = 65_535
 
 export type EngineErrorClass = 'unique-violation' | 'serialization' | 'busy' | 'other'
 
@@ -50,8 +56,29 @@ export interface EngineCapabilities {
   readonly provider: DatabaseProvider
   /** 事务体看到的隔离形态：PG 是多写并发（须显式行锁）；SQLite 在 BEGIN IMMEDIATE 下独占。 */
   readonly isolation: 'read-committed' | 'exclusive'
-  /** 一条语句可带的绑定参数上限；批量写按它切批。 */
+  /** 一条语句可带的绑定参数**预算**（保守值，不是实测硬顶——见 `batchInsertMax`）。 */
   readonly maxBindParameters: number
+
+  /**
+   * RFC-359 W6-T25 —— 一条多行 INSERT 最多能带几行。
+   *
+   * 它与 `maxBindParameters` **不是同一个概念**，关系是「取小」：
+   *   ① 参数预算：一行占 `columnCount` 个绑定参数 ⇒ `floor(maxBindParameters / columnCount)`；
+   *   ② 引擎自己的行数甜点：再大也不会更快，而单条语句越大、失败时回滚的代价越高。
+   * 两者的**推导只写一次**（`batchInsertMaxRows`），每个引擎只提供自己的两个数。
+   *
+   * 甜点两侧都取仓内既有的 `SQL_IN_CHUNK`（500）——不新造常量。2026-09-07 双引擎实测
+   * （node_run_events，6 列，单事务内插 n 行）：
+   *   SQLite   n=1000  逐行 28.0ms / 每批 100 行 11.6ms / **每批 500 行 9.0ms** / 整批 9.9ms
+   *   PostgreSQL n=1000 逐行 428.2ms / 每批 100 行 24.4ms / **每批 500 行 21.8ms** / 整批 23.2ms
+   *   两个引擎在 500 行处都已到平台期，100 行反而慢（PG n=5000：105.7ms vs 89.8ms）。
+   *
+   * **参数预算是保守值而不是实测硬顶**：同日实测本机 bun 1.3.13 上两个引擎的真实上限都是
+   * 65535 个参数（10922×6=65532 过、10923×6=65538 抛）——SQLite 侧是 bun:sqlite 绑定层的限制、
+   * PostgreSQL 侧是 wire protocol 的 int16 参数计数。`util/sqlChunk.ts` 已记过「SQLite 的上限
+   * 随构建而变」，所以矩阵继续按保守预算切批，不去贴那个会飘的天花板。
+   */
+  batchInsertMax(columnCount: number): number
 
   /**
    * 锁住聚合根，供「读—改—写」用。PG 渲染 `SELECT … FOR UPDATE`；SQLite no-op（已独占）。
@@ -93,6 +120,30 @@ export interface EngineCapabilities {
    */
   greatest(left: SQLWrapper, right: SQLWrapper): SQL
 
+  /**
+   * RFC-359 W6-T24 —— 取 JSON 文档**顶层某个成员的字符串值**。
+   *
+   * 闭合语义（`rfc359-w6-t24-json-member-text.test.ts` 的 19 格矩阵在两个引擎上各钉一遍）：
+   * 文档为 NULL / 文档不是合法 JSON / 文档不是对象 / 成员缺失 / 成员是 JSON null /
+   * 成员不是字符串（数字 / 布尔 / 数组 / 对象）⇒ 一律 NULL；只有「成员存在且是字符串」才给值。
+   * 空字符串成员**照原样给回空串**——「空名字视同没有」是产品判据，留在调用方的 `NULLIF`。
+   *
+   * 为什么要进矩阵：PostgreSQL 侧的 `agent_workflow.json_extract` / `json_type` / `json_valid`
+   * 是三个 **plpgsql + EXCEPTION 块**的 shim，而带 EXCEPTION 的 plpgsql 块每次调用都要开一个
+   * 子事务——它是**逐行**付的。2026-09-07 真库实测（PostgreSQL 17.11，5 万行任务语料，
+   * 单条 `count(表达式)`）：三个 shim 串起来 297ms，换成本条渲染的原生算子 91ms（3.2×）；
+   * 换成真 jsonb 列只要 15ms（20×），但 jsonb 会改写存进去的字节，本仓的 json-text 列不允许
+   * ——判据与证据见 `rfc359-w6-t23-json-column-storage.test.ts`。
+   *
+   * 渲染：
+   *   · SQLite —— `json_valid` + `json_type` + `json_extract` 三个**内建 C 函数**，与本条落地前
+   *     的查询文本逐字相同（所以 SQLite 侧不可能因这条改动而变慢）。
+   *   · PostgreSQL —— `pg_input_is_valid(…, 'jsonb')`（PG 16+，无异常路径）守住 `::jsonb` 转换，
+   *     再走原生 `->` / `->>`。**守卫必须写成嵌套 CASE，不能写成 `AND`**：PostgreSQL 明确不保证
+   *     `AND` 的求值顺序（planner 会按代价重排），只有 `CASE` 才保证非法 JSON 上不去做那次转换。
+   */
+  jsonMemberText(document: SQLWrapper, member: string): SQL
+
   /** `ORDER BY col ASC`，按 SQLite 的 NULL 落位（NULL 最前）。 */
   ascNullsFirst(column: SQLWrapper): SQL
   /** `ORDER BY col DESC`，按 SQLite 的 NULL 落位（NULL 最后）。 */
@@ -129,6 +180,39 @@ export interface EngineCapabilities {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LIKE_ESCAPE = '\\'
+
+/**
+ * `jsonMemberText` 的成员名闭集。两个引擎的 JSON 取值都要把成员名嵌进 SQL 文本
+ * （SQLite 是路径 `'$.name'`、PostgreSQL 是键 `'name'`），所以先把它收进一个**不需要转义**
+ * 的字符集里再嵌，越界直接抛。判据与两个 shim 自己的路径正则同形
+ * （`postgresqlSchema.ts` 的 `'^\\$\\.[A-Za-z_][A-Za-z0-9_]*$'`）。
+ */
+export function jsonMemberSqlLiterals(member: string): {
+  readonly path: string
+  readonly key: string
+} {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(member)) {
+    throw new Error(
+      `jsonMemberText: 成员名必须匹配 [A-Za-z_][A-Za-z0-9_]*（要嵌进 SQL 文本），收到 ${JSON.stringify(member)}`,
+    )
+  }
+  return { path: `'$.${member}'`, key: `'${member}'` }
+}
+
+/**
+ * `batchInsertMax` 的**唯一**推导：参数预算 ÷ 每行列数，与引擎的行数甜点取小，下界 1 行
+ * （宽到一行就吃光预算的表仍然写得进去——只是退化成逐行）。
+ */
+function batchInsertMaxRows(
+  maxBindParameters: number,
+  rowCap: number,
+  columnCount: number,
+): number {
+  if (!Number.isSafeInteger(columnCount) || columnCount < 1) {
+    throw new Error(`batchInsertMax needs a positive column count, got ${String(columnCount)}`)
+  }
+  return Math.max(1, Math.min(rowCap, Math.floor(maxBindParameters / columnCount)))
+}
 
 function escapeLikeTerm(term: string): string {
   // 先转义转义符本身，再转义两个通配符；顺序不能反。
@@ -212,7 +296,9 @@ export function createSqliteCapabilities(): EngineCapabilities {
   return Object.freeze({
     provider: 'sqlite',
     isolation: 'exclusive',
-    maxBindParameters: 32_766,
+    maxBindParameters: SQLITE_MAX_BIND_PARAMETERS,
+    batchInsertMax: (columnCount) =>
+      batchInsertMaxRows(SQLITE_MAX_BIND_PARAMETERS, SQL_IN_CHUNK, columnCount),
     async lockAggregateRoot() {
       // BEGIN IMMEDIATE 已独占整个库；行锁没有对应物，也不需要。
     },
@@ -222,6 +308,19 @@ export function createSqliteCapabilities(): EngineCapabilities {
     },
     indexHint: (indexName) => sql`INDEXED BY ${sql.identifier(indexName)}`,
     greatest: (left, right) => sql`max(${left}, ${right})`,
+    jsonMemberText: (document, member) => {
+      // 三个都是 SQLite 内建 C 函数，逐行调用很便宜——这段与 RFC-357 落地时的查询文本
+      // 逐字相同（只把 `IN ('text', 'string')` 收成 `= 'text'`：那个双拼法当初是因为
+      // **同一段文本**要同时喂给 PostgreSQL 的 `jsonb_typeof` shim，现在每个引擎各渲染
+      // 各的，SQLite 这侧只会看到自己的词汇表）。
+      const { path } = jsonMemberSqlLiterals(member)
+      return sql`CASE WHEN json_valid(${document}) THEN
+        CASE WHEN json_type(${document}, ${sql.raw(path)}) = 'text'
+          THEN json_extract(${document}, ${sql.raw(path)})
+          ELSE NULL
+        END
+      ELSE NULL END`
+    },
     async reclaimScrubbedStorage(db) {
       await db.run(sql`PRAGMA secure_delete = ON`)
       await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
@@ -291,7 +390,9 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
   return Object.freeze({
     provider: 'postgresql',
     isolation: 'read-committed',
-    maxBindParameters: 65_535,
+    maxBindParameters: POSTGRESQL_MAX_BIND_PARAMETERS,
+    batchInsertMax: (columnCount) =>
+      batchInsertMaxRows(POSTGRESQL_MAX_BIND_PARAMETERS, SQL_IN_CHUNK, columnCount),
     async lockAggregateRoot(tx, table, idColumn, id) {
       await tx.run(sql`select 1 from ${table} where ${idColumn} = ${id} for update`)
     },
@@ -301,6 +402,19 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     },
     indexHint: () => sql``,
     greatest: (left, right) => sql`greatest(${left}, ${right})`,
+    jsonMemberText: (document, member) => {
+      // **嵌套 CASE，不是 `AND`**：PostgreSQL 不保证 `AND` 的子表达式求值顺序（planner 按
+      // 代价重排），只有 `CASE` 保证「合法性判据为假时不去做那次 `::jsonb`」。写成
+      // `pg_input_is_valid(...) AND ((...)::jsonb -> ...)` 在非法 JSON 行上会抛
+      // `invalid input syntax for type json`。
+      const { key } = jsonMemberSqlLiterals(member)
+      return sql`CASE WHEN pg_input_is_valid(${document}, 'jsonb') THEN
+        CASE WHEN jsonb_typeof((${document})::jsonb -> ${sql.raw(key)}) = 'string'
+          THEN (${document})::jsonb ->> ${sql.raw(key)}
+          ELSE NULL
+        END
+      ELSE NULL END`
+    },
     async reclaimScrubbedStorage() {
       // PostgreSQL 由 autovacuum 回收页面；凭据单元格是事务内改写的，daemon 侧不做 VACUUM。
     },

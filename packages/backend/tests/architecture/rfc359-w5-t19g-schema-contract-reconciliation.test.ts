@@ -373,11 +373,24 @@ export const SQLITE_ONLY_PROTECTIONS: readonly string[] = [
   'code_work_observations :: UNIQUE(EVENT_ID) WHERE EVENT_ID IS NOT NULL',
   'intent_turn_events :: UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID) WHERE EXTERNAL_EVENT_ID IS NOT NULL',
   // —— M4：触发器——逻辑契约里**没有触发器这个概念**，`postgresqlSchema.ts` 也不产出触发器 ——
-  // 所以这 8 个整类只在 SQLite 生效：审计表禁改禁删、承诺态不可变、血缘落表、子任务启动来源
+  // 所以这 7 个整类只在 SQLite 生效：审计表禁改禁删、承诺态不可变、任务血缘落表、子任务启动来源
   // 继承、运行时会话 `reset_pending` 形状（最后这条在 PG 侧由契约的两条 CHECK 承担，
   // 见 CONTRACT_ONLY_PROTECTIONS 的 N1）。
   //
-  // **W7 裁决：这 8 条不补，也不算活着的功能缺口。** 实测（2026-09-07，活库
+  // **W6 勘误（2026-09-07 实测推翻下面 W7 裁决的一半）**：原来是 8 条，其中
+  // `node_runs :: TRIGGER rfc328_node_runs_lineage_after_insert` 被判成「触发条件在任何生产路径上
+  // 都不成立」。**那是错的**——`insert(tasks)` 四个站点确实都显式写了三列，但 `node_runs` 的铸行
+  // 工厂对 `lineageSlotPathJson` 的默认值是 `overrides ?? inherited ?? null`，而全 `src` 没有任何
+  // 调用点传 `overrides.lineageSlotPathJson`，于是任务的**首个** node_run 一定命中 NULL 分支：
+  // SQLite 由触发器补出「任务路径 + 本节点一帧」、PostgreSQL 留 null，下游回落到任务级路径后
+  // effect 的 `slot_path_digest` 在节点之间撞车。已按下面「残余风险」段给出的正解收口：
+  // 推导搬进 `application/buildNodeRunMintRecord.ts` 的 `nodeRunLineageColumns`（两个引擎共用），
+  // 两个铸行适配器显式写这两列，触发器随迁移 0224 退役，并立了守卫
+  // `tests/architecture/rfc359-w6-node-run-insert-lineage-completeness.test.ts`。
+  // 教训：「AST 清点说插入点都写了」只对**对象字面量**的插入点成立；`.values(变量)` 那种写法
+  // 清点不出来，得去看构造那个变量的工厂。
+  //
+  // **W7 裁决（对剩下 7 条仍然成立）：不补，也不算活着的功能缺口。** 实测（2026-09-07，活库
   // `select … from pg_trigger … where nspname='agent_workflow'` 返回 **0**）确认 PG 侧一个触发器
   // 都没有；但逐条追写入路径后，它们要维持的不变量**应用层已经自己维持了**：
   //   · 血缘两列（`rfc328_*_lineage_after_insert`）与 `trg_tasks_launch_origin_inherit_child`
@@ -396,7 +409,6 @@ export const SQLITE_ONLY_PROTECTIONS: readonly string[] = [
   // 与本 RFC 的方向相反），而是**加一条守卫钉住「`insert(tasks)` 的每个站点都显式提供这三列」**。
   // 本刀不做。
   'collaboration_gate_operations :: TRIGGER trg_collaboration_gate_operations_committed_immutable',
-  'node_runs :: TRIGGER rfc328_node_runs_lineage_after_insert',
   'runtime_session_leases :: TRIGGER runtime_session_leases_reset_pending_insert',
   'runtime_session_leases :: TRIGGER runtime_session_leases_reset_pending_update',
   'tasks :: TRIGGER rfc328_tasks_lineage_after_insert',
@@ -455,7 +467,7 @@ describe('RFC-359 W5-T19g —— 迁移后的实际 schema 与逻辑契约逐项
     expect(
       MASTER.filter((row) => row.type === 'index' && row.sql !== null).length,
     ).toBeGreaterThanOrEqual(340)
-    expect(MASTER.filter((row) => row.type === 'trigger').length).toBeGreaterThanOrEqual(8)
+    expect(MASTER.filter((row) => row.type === 'trigger').length).toBeGreaterThanOrEqual(7)
     expect(ACTUAL.length).toBeGreaterThanOrEqual(500)
     expect(EXPECTED.length).toBeGreaterThanOrEqual(390)
     expect(

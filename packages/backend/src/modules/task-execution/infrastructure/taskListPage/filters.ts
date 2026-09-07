@@ -26,6 +26,7 @@ import {
 import { sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { taskListOwnershipScopeCondition, type TaskListViewer } from './authorization'
@@ -233,19 +234,15 @@ export function nonViewCondition(
     const pattern = `%${escapeLike(filters.q.toLocaleLowerCase('en-US'))}%`
     const escape = '\\'
     // `base` 里的两个**派生**列在裸 tasks 上不存在，快路径按同一定义还原：
-    // workflow_name 是 workflows 的 JOIN，workgroup_name 是 workgroup_config_json
-    // 的 json_extract（与 baseCtes 逐字同源，改一处必须改两处——由 oracle 锁）。
+    // workflow_name 是 workflows 的 JOIN，workgroup_name 走 `workgroupNameExpression`
+    // ——RFC-359 W6-T24 之前这里与 `baseCtes` 各写了一遍同一段三层 CASE（注释里写着
+    // 「改一处必须改两处」），现在四处共用一份，那条纪律不再需要人来遵守。
     const derived = (name: 'workflow_name' | 'workgroup_name'): SQL => {
       if (alias === 'b') return col(name)
       if (name === 'workflow_name') {
         return sql`(SELECT w_q.name FROM workflows w_q WHERE w_q.id = ${col('workflow_id')})`
       }
-      return sql`CASE WHEN json_valid(${col('workgroup_config_json')}) THEN
-          CASE WHEN json_type(${col('workgroup_config_json')}, '$.workgroupName') IN ('text', 'string')
-            THEN NULLIF(json_extract(${col('workgroup_config_json')}, '$.workgroupName'), '')
-            ELSE NULL
-          END
-        ELSE NULL END`
+      return workgroupNameExpression(db, alias)
     }
     conditions.push(sql`(
       lower(${col('name')}) LIKE ${pattern} ESCAPE ${escape}
@@ -267,6 +264,28 @@ export function nonViewCondition(
   }
   return andConditions(conditions)
 }
+/**
+ * RFC-359 W6-T24 —— 列表页唯一的 JSON 取值：工作组名。
+ *
+ * 四处共用一份（`baseCtes` 的物化列 + 两条快路径 `paged` 投影 + 上面 `q` 搜索的派生列）。
+ * 表达式本身由能力矩阵的 `jsonMemberText` 按引擎渲染：SQLite 仍是三个内建 JSON 函数、
+ * PostgreSQL 换成原生 `->>`（此前走的是 `agent_workflow.json_extract` 等 plpgsql shim，
+ * 带 EXCEPTION 块 ⇒ 每行一个子事务）。
+ *
+ * **实测（2026-09-07，PostgreSQL 17.11，2 万任务 / 95% 有 workgroup_config_json）**：
+ *   · `q` 搜索（过滤快路径，谓词逐行求值）  160.7ms → **78.0ms**（2.06×）
+ *   · 默认视图首页（只对返回的 21 行求值）    7.8ms →   7.9ms（0.99×，本来就不热）
+ * 三处 `paged` 投影是冷的，但它们与热的那处**是同一段表达式**——分开写才是风险。
+ *
+ * 外层 `NULLIF(…, '')` 是产品判据（空名字视同没有），不进矩阵。
+ */
+export function workgroupNameExpression(db: TaskListPageDb, alias: string): SQL {
+  return sql`NULLIF(${engineOf(db).jsonMemberText(
+    sql.raw(`${alias}.workgroup_config_json`),
+    'workgroupName',
+  )}, '')`
+}
+
 /** `openAlert` 覆盖 attention 视图里「有未结告警」这一半：旧管线读已物化的
  *  `open_alert_count`，快路径直接打裸 tasks，只能用 EXISTS 子查询。其余分支
  *  两条路径逐字相同。 */

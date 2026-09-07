@@ -4,6 +4,8 @@
 //   2. Updating the corresponding zod schemas in packages/shared/src/schemas/
 //   3. `bun run db:rfc349-postgresql-schema` to regenerate the PostgreSQL baseline
 //      (`db/postgresql-migrations/0000_rfc349_baseline.sql` + `meta/_journal.json`).
+//      **Run it from `packages/backend`** — the script is registered in
+//      `packages/backend/package.json`, not in the repository-root one.
 //      Skip it and `verifyPostgresqlMigrationHistory` kills EVERY PostgreSQL test at
 //      `beforeAll` with `postgresql-migration-history-drift`.
 //

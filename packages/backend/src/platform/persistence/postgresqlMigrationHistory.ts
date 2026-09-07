@@ -158,7 +158,9 @@ export async function verifyPostgresqlMigrationHistory(input: {
       'postgresql-migration-history-drift',
       `PostgreSQL migration history does not match this binary schema plan (${drifted} drifted). ` +
         'If you just changed db/schema.ts, regenerate the on-disk history with ' +
-        '`bun run db:rfc349-postgresql-schema`.',
+        '`bun run db:rfc349-postgresql-schema` — that script is registered in ' +
+        'packages/backend/package.json, so run it FROM packages/backend ' +
+        '(from the repository root it is not a known script).',
     )
   }
   return Object.freeze({
