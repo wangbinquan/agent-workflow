@@ -4501,12 +4501,10 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#$file",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listGrantedResourceIds",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listGrantedResourceIdsInTx",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listResourceGrantUserIdsInTx",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listResourceGrants",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listWritableGrantedResourceIds",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#loadGrantLevel"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listWritableGrantedResourceIds"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -5430,6 +5428,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
+        "import:0b34cb2312a6b6708fe7",
         "import:0f41e9705ed1572f6dcf",
         "import:1ac037d6b40fb7371921",
         "import:2b3bd7a4f1c1b2bface2",
@@ -5443,7 +5442,6 @@
         "import:64746f05d652dbf0ec5c",
         "import:70e2c384abc62cae8ab5",
         "import:7ec17b34194429ad862d",
-        "import:8b99eb0dbe099388260b",
         "import:8c4ac449d9754e21ddec",
         "import:a2b3e36a2be24b42b10d",
         "import:ae8758c4e6927f99f72c",
@@ -8736,15 +8734,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7a09d44a2292828204c03df94435c63914d5c7712b0a9c4c839db670bef73d6d",
+    "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "1b5e743395848d1913bbdb0c4c31f88311b049d4",
-    "contentDigest": "sha256:d32c1f5cb713aee24d23f1ba34c97afb07ba261c69a9ebc7d0d2146a48b8a143",
+    "currentSnapshotSha": "36c3d0adf5cc02cc7017487b4c11e68b53036f27",
+    "contentDigest": "sha256:ce91ae1c6b16bc752cbaab7ced5baaa236857a0173e5d24e055048230d88357f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

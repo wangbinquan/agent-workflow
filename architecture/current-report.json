@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 4792,
-    "backgroundJobs": 342,
-    "crossContextImports": 5333,
+    "architectureExceptions": 4771,
+    "backgroundJobs": 339,
+    "crossContextImports": 5312,
     "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24988,
-    "mutationEntrypoints": 1758,
+    "moduleSymbolOwners": 24959,
+    "mutationEntrypoints": 1752,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 980,
-    "transactionExternalEffects": 286
+    "publicSurfaces": 982,
+    "transactionExternalEffects": 278
   },
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1797,
+    "backendProductionFiles": 1789,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 342,
+    "backgroundEntries": 339,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -99,7 +99,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 198
+        "files": 199
       },
       {
         "context": "runtime-management",
@@ -119,10 +119,10 @@
       },
       {
         "context": "task-execution",
-        "files": 310
+        "files": 302
       }
     ],
-    "moduleFiles": 1190,
+    "moduleFiles": 1183,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7a09d44a2292828204c03df94435c63914d5c7712b0a9c4c839db670bef73d6d"
+  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d"
 }

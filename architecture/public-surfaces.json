@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 851,
+    "consumers": 853,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1062,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20460,
-    "symbols": 980
+    "symbols": 982
   },
   "entries": [
     {
@@ -21028,8 +21028,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:a6679ec78d68f71f76ea",
-        "import:b87c56f4d906291d6c31"
+        "import:a6679ec78d68f71f76ea"
       ],
       "context": "development-automation",
       "dataClass": "metadata",
@@ -21135,12 +21134,6 @@
           "edgeId": "import:a6679ec78d68f71f76ea",
           "file": "packages/backend/src/routes/digitalEmployees.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:b87c56f4d906291d6c31",
-          "file": "packages/backend/src/server.ts",
-          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -145210,7 +145203,52 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:4822a4c5ffa0b6aee6ff"
+        "import:9b52076344e4d0aad288"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:appendTaskCreatedCommittedEvent",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#appendTaskCreatedCommittedEvent",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9b52076344e4d0aad288",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b723c34ddee3cbacedbaf9bca7cd65e4b634bdce9f059a805f9f9b7a742490fd",
+      "status": "target-context-current-surface",
+      "symbol": "appendTaskCreatedCommittedEvent",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -145228,12 +145266,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:4822a4c5ffa0b6aee6ff",
-          "file": "packages/backend/src/services/task.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -151841,6 +151873,52 @@
         "Record",
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:f9c0f42c30b13bf58133"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:setNodeRunStatusInTransaction",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#setNodeRunStatusInTransaction",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f9c0f42c30b13bf58133",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:59bf38e770d5ffe8e095ecd40599ca185ac59872742eace604974cd155f5d649",
+      "status": "target-context-current-surface",
+      "symbol": "setNodeRunStatusInTransaction",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -158987,6 +159065,7 @@
         {
           "consumerEdgeIds": [
             "import:626c3def43acd81cc9c4",
+            "import:e12d9dac1ebc36c2c0d4",
             "import:fd64b0a73c1d0aa0acb1"
           ],
           "name": "find",
@@ -161678,7 +161757,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7a09d44a2292828204c03df94435c63914d5c7712b0a9c4c839db670bef73d6d",
+  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
   "targetContexts": [
     "collaboration",
     "development-automation",
