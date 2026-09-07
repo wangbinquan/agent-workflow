@@ -37,8 +37,23 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 这是墙钟允许量，不是对 refresh 变慢的容忍。
 //
 // 2026-09-06 把 60s 抬到 120s：同一 commit 的同一 run 里，ubuntu 分片 3.86s 过，而 macOS 分片 2/4 上
-// 同文件的另一条同步慢到 9.8s（绿时基线 2.4–4.6s）、这一条撞满 60s 判超时——是整台 runner 慢了
-// 2–4×，不是 refresh 变慢。仍然是墙钟允许量：真挂住照样红。
+// 同文件的另一条同步慢到 9.8s（绿时基线 2.4–4.6s）、这一条撞满 60s 判超时——当时判成「整台 runner 慢了
+// 2–4×」。仍然是墙钟允许量：真挂住照样红。
+//
+// **2026-09-08 订正：上面那句「整台 runner 慢了」是误诊，不要再据它抬超时。**
+// CI run 34146373904 → 后继 run（macOS shard 4/4）实测：
+//   · 本文件第一条 `background refresh …` **4100.73ms 通过**，正落在 2.7–4.6s 基线上；
+//   · 本条 `manual refresh …` **120089.25ms 撞满超时**；
+//   · 同分片其余用例除一条 11.6s 的架构守卫外**全部 ≤4.1s**。
+// 同一台机器、同一个文件、相邻两条，一条基线速度、一条挂死 —— **runner 没有慢，是这一条挂住了**。
+// 原始日志里 118 秒的空窗夹在「`cloned new cached repo` 冷克隆成功」与 bun 的
+// `killed 1 dangling process` 之间，且确实**悬着一个 git 子进程**：挂点在冷克隆之后的那次 refresh fetch。
+//
+// 机理（`src/util/gitCredentialLease.ts`）：一次性租约是通过 `credential.helper=<bun 脚本>` 交进去的，
+// **git 对凭据助手没有任何超时**——它会无限期等待该子进程写出 stdout 并退出。于是 macOS runner 上
+// Bun 启动一旦卡住，git 就永久阻塞，表现为「墙钟无限大」而不是「慢」。`GIT_TERMINAL_PROMPT=0` /
+// `credential.interactive=false` 只挡住了 tty 提示，挡不住这一条。
+// 详情与处置建议记在 `docs/audit-backlog.md`。**再撞请去修挂起，不要抬这个数字。**
 setDefaultTimeout(120_000)
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))

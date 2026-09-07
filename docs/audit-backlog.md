@@ -4306,3 +4306,23 @@ W6 只把 harness 的 `poolMax` 从 4 改成 16（与生产默认一致），那
 改完把棘轮降到结构目标并删掉那段注释。
 
 **判据**：本条的签名是 20 行一页的任务列表取回行数 > 2 万。
+
+## RFC-321 私有仓 refresh：git 等凭据助手**无超时**，可无限期挂住（2026-09-08 取证，未修）
+
+**证据**：CI run 34146373904 后继 run，macOS shard 4/4。同一台机器、同一个文件、相邻两条用例：
+`background refresh …` **4100.73ms 绿**（基线 2.7–4.6s），`manual refresh unseals the URL for one fetch`
+**120089.25ms 挂死**；同分片其余用例除一条 11.6s 架构守卫外全部 ≤4.1s。日志里 118 秒空窗夹在
+「冷克隆成功」与 bun 的 `killed 1 dangling process` 之间，**悬着一个 git 子进程**。
+本机同一份源码跑同一文件：**5.22s / 2 pass 0 fail**。
+
+**机理**：`src/util/gitCredentialLease.ts` 把一次性租约通过 `credential.helper=<bun 脚本>` 交给 git。
+**git 对凭据助手没有任何超时**，会无限期等它写出 stdout 并退出。`GIT_TERMINAL_PROMPT=0` /
+`credential.interactive=false` 只挡 tty 提示，挡不住助手进程本身卡住。
+
+**为什么要修而不是继续抬超时**：该用例的超时已被抬过两次（5s → 60s → 120s），两次的理由都写成
+「整台 runner 慢了 2–4×」——**上面的数据推翻了这个诊断**。这不是墙钟不够，是没有上界。
+
+**生产影响面**：daemon 的 `refreshCachedRepo` 走同一条路径，助手卡住则该次 refresh **永久挂起**
+而不是失败退出。`runGit` 已支持 `opts.signal`，可行的处置方向是给凭据租约路径接一个有界的
+AbortSignal，让它超时后以可诊断的错误收场。**未实施，未立项。**
+
