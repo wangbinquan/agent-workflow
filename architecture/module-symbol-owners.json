@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1824,
+    "backendFiles": 1823,
     "frontendFiles": 622,
     "legacyFiles": 610,
-    "moduleFiles": 1214,
-    "productionFiles": 2601,
+    "moduleFiles": 1213,
+    "productionFiles": 2600,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25226
+    "symbolsIncludingFileRoots": 25219
   },
   "entries": [
     {
@@ -123413,6 +123413,18 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/ownedTaskMutation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/ownedTaskMutation.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -123886,18 +123898,6 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "createSqliteGateContinuationPreDriveStep",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/composition/sqliteOwnedTaskMutation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/sqliteOwnedTaskMutation.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "$file",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -135773,66 +135773,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#withCurrentTaskExecutionMutation",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withCurrentTaskExecutionMutation",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#withCurrentTaskExecutionTransaction",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withCurrentTaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#withTaskExecutionMutation",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withTaskExecutionMutation",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#withTaskExecutionTransaction",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withTaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts#$file",
       "removeAfterWave": null,
@@ -140641,6 +140581,19 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#fenceTaskWrite",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:378dd0107f5412d46acc3e2870eba3ee20f7084b8b8284144ea7548e845bfc0e",
+      "status": "current-module",
+      "symbol": "fenceTaskWrite",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#finalizeTaskExecutionRecovery",
       "removeAfterWave": null,
       "signatureDigest": "sha256:f7dc3c85678308742bc9942e522e1711f80e71cf00e4b23d05b716c30375e11d",
@@ -140976,50 +140929,11 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withCurrentTaskExecutionMutation",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withTaskExecutionWrite",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:f33cd23937e19c9d5cfbe974df49ba55231359c615cb05f69b0a9031852337bd",
+      "signatureDigest": "sha256:cf731638fcbfde32f7f827bbf7860f46e5a05750f7399d6ae8f7168477d9a2ca",
       "status": "current-module",
-      "symbol": "withCurrentTaskExecutionMutation",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withCurrentTaskExecutionTransaction",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:4f92024ad91bbb65e5286a803cbe93f61dd49d8757a3edf415dc8766ab40c585",
-      "status": "current-module",
-      "symbol": "withCurrentTaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withTaskExecutionMutation",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:e9fcda9eb7b737e9305c644f257bd580c03dd7834788ecd0fe2f8478398dbfb8",
-      "status": "current-module",
-      "symbol": "withTaskExecutionMutation",
-      "targetContext": "task-execution",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withTaskExecutionTransaction",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:e7ff43babb15e8cf4ab29c9f05504c7f6340e390d6d929367420fc94638f53ee",
-      "status": "current-module",
-      "symbol": "withTaskExecutionTransaction",
+      "symbol": "withTaskExecutionWrite",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -303412,5 +303326,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1f394631cefe9ced5b023674b11d539fbe7435846e710dadfe7baef9b605fbe"
+  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22"
 }

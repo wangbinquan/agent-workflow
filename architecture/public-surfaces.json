@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 857,
+    "consumers": 856,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1049,
+    "methods": 1050,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20379,
-    "symbols": 979
+    "recursiveFields": 20381,
+    "symbols": 978
   },
   "entries": [
     {
@@ -139676,7 +139676,7 @@
         "public:task-execution:commands:requireSchedulerDriver",
         "public:task-execution:operations:assertTaskExecutionContext",
         "public:task-execution:operations:currentTaskExecutionContext",
-        "public:task-execution:operations:withTaskExecutionMutation",
+        "public:task-execution:operations:fenceTaskWrite",
         "public:task-execution:participants:SchedulerRuntimeTopology",
         "public:task-execution:participants:TaskRuntimeLifecyclePersistence"
       ],
@@ -145079,6 +145079,120 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:4a374a20533330c96f1a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "operations",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4a374a20533330c96f1a"
+          ],
+          "fieldPath": "$call.$parameter:input.context.$variant:0.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.context.$variant:1",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4a374a20533330c96f1a"
+          ],
+          "fieldPath": "$call.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4a374a20533330c96f1a"
+          ],
+          "fieldPath": "$call.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:tx",
+          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/operations.ts",
+      "id": "public:task-execution:operations:fenceTaskWrite",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:67e9856ddee76515060e7e03d2037fc361f641dbe07465c21987afb6713e9812"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/operations.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:4a374a20533330c96f1a",
+          "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:35c35ee267dab792d5b427e3ecc9b9a7a3304f511a2d7127b206d3b8e34d73e4",
+      "status": "target-context-current-surface",
+      "symbol": "fenceTaskWrite",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "BaseSQLiteDatabase"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:a7e3c12b7aaac7de2130"
       ],
       "context": "task-execution",
@@ -145323,7 +145437,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:4763a97009fd65130dee"
+        "import:a80dc58034db0d8fb7aa"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -145332,76 +145446,18 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.context.intentId",
-          "type": "string"
+          "fieldPath": "$call.$parameter:body.$parameter:tx",
+          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.context.token.daemonGeneration",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.context.token.epoch",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.context.token.leaseUntil",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.context.token.ownerId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.context.token.ownerRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:4763a97009fd65130dee"
-          ],
-          "fieldPath": "$call.$parameter:input.context.token.taskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:4763a97009fd65130dee"
-          ],
-          "fieldPath": "$call.$parameter:input.db",
-          "type": "ReturnType<typeof drizzle<typeof schema>>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:4763a97009fd65130dee"
-          ],
-          "fieldPath": "$call.$parameter:input.now",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.run.$parameter:tx.$variant:0",
-          "type": "Parameters<Parameters<DbClient['transaction']>[0]>[0]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.run.$parameter:tx.$variant:1",
-          "type": "ReturnType<typeof drizzle<typeof schema>>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.run.$return",
+          "fieldPath": "$call.$parameter:body.$return",
           "type": "T"
         },
         {
-          "consumerEdgeIds": [
-            "import:4763a97009fd65130dee"
-          ],
-          "fieldPath": "$call.$parameter:input.taskId",
-          "type": "string"
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:db",
+          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
         },
         {
           "consumerEdgeIds": [],
@@ -145410,20 +145466,20 @@
         }
       ],
       "file": "packages/backend/src/modules/task-execution/public/operations.ts",
-      "id": "public:task-execution:operations:withTaskExecutionMutation",
+      "id": "public:task-execution:operations:withTaskExecutionWrite",
       "members": [],
       "methods": [
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:c4c569b72357975f8cc3b82de9388917a282683cd41e53029cc8ea8ed53d6d46"
+          "signatureDigest": "sha256:014cddf947ac0d4514a9f9bbab82d2f797701368faf69b42639dccda1b942608"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/operations.ts#$file",
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:4763a97009fd65130dee",
+          "edgeId": "import:a80dc58034db0d8fb7aa",
           "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file"
         }
@@ -145431,12 +145487,12 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:0851713c18d793de00d4912755b812498d046a3eddc8b1ad94e8de8312ca6dbd",
+      "signatureDigest": "sha256:c7dfba68f79898ca3e34e55346c0f3840a6d3007376bb394afb38a41756424a8",
       "status": "target-context-current-surface",
-      "symbol": "withTaskExecutionMutation",
+      "symbol": "withTaskExecutionWrite",
       "transaction": "own-tx",
       "unresolvedTypeRefs": [
-        "ReturnType"
+        "BaseSQLiteDatabase"
       ],
       "version": 1
     },
@@ -149773,6 +149829,45 @@
       "entrypoint": "participants",
       "fields": [],
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:fenceTaskWrite",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#fenceTaskWrite",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:378dd0107f5412d46acc3e2870eba3ee20f7084b8b8284144ea7548e845bfc0e",
+      "status": "target-context-current-surface",
+      "symbol": "fenceTaskWrite",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "public:task-execution:participants:finalizeTaskExecutionRecovery",
       "members": [],
       "methods": [],
@@ -150987,7 +151082,7 @@
         "public:task-execution:commands:requireSchedulerDriver",
         "public:task-execution:operations:assertTaskExecutionContext",
         "public:task-execution:operations:currentTaskExecutionContext",
-        "public:task-execution:operations:withTaskExecutionMutation",
+        "public:task-execution:operations:fenceTaskWrite",
         "public:task-execution:participants:SchedulerRuntimeTopology",
         "public:task-execution:participants:TaskRuntimeLifecyclePersistence"
       ],
@@ -154900,10 +154995,10 @@
       "entrypoint": "participants",
       "fields": [],
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:withCurrentTaskExecutionMutation",
+      "id": "public:task-execution:participants:withTaskExecutionWrite",
       "members": [],
       "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withCurrentTaskExecutionMutation",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withTaskExecutionWrite",
       "productionConsumers": [
         {
           "context": "legacy",
@@ -154915,126 +155010,9 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:f33cd23937e19c9d5cfbe974df49ba55231359c615cb05f69b0a9031852337bd",
+      "signatureDigest": "sha256:cf731638fcbfde32f7f827bbf7860f46e5a05750f7399d6ae8f7168477d9a2ca",
       "status": "target-context-current-surface",
-      "symbol": "withCurrentTaskExecutionMutation",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:withCurrentTaskExecutionTransaction",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withCurrentTaskExecutionTransaction",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:4f92024ad91bbb65e5286a803cbe93f61dd49d8757a3edf415dc8766ab40c585",
-      "status": "target-context-current-surface",
-      "symbol": "withCurrentTaskExecutionTransaction",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:withTaskExecutionMutation",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withTaskExecutionMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:e9fcda9eb7b737e9305c644f257bd580c03dd7834788ecd0fe2f8478398dbfb8",
-      "status": "target-context-current-surface",
-      "symbol": "withTaskExecutionMutation",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:withTaskExecutionTransaction",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#withTaskExecutionTransaction",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:e7ff43babb15e8cf4ab29c9f05504c7f6340e390d6d929367420fc94638f53ee",
-      "status": "target-context-current-surface",
-      "symbol": "withTaskExecutionTransaction",
+      "symbol": "withTaskExecutionWrite",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -161254,6 +161232,7 @@
   "kind": "public-surfaces",
   "opaqueTypeRefAllowlist": [
     "AbortSignal",
+    "BaseSQLiteDatabase",
     "Blob",
     "Exclude",
     "Extract",
@@ -161263,13 +161242,12 @@
     "ReadonlyMap",
     "Record",
     "RegExp",
-    "ReturnType",
     "Uint8Array",
     "extends:Error",
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1f394631cefe9ced5b023674b11d539fbe7435846e710dadfe7baef9b605fbe",
+  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22",
   "targetContexts": [
     "collaboration",
     "development-automation",

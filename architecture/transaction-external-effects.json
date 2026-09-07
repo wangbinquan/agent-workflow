@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 37,
-    "transactionCallbacks": 317
+    "transactionCallbacks": 315
   },
   "entries": [
     {
@@ -355,8 +355,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2546",
-      "line": 2546,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2527",
+      "line": 2527,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewCommentUnlocked",
       "status": "clear",
       "symbol": "addReviewCommentUnlocked",
@@ -367,8 +367,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2694",
-      "line": 2694,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2675",
+      "line": 2675,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentTextUnlocked",
       "status": "clear",
       "symbol": "updateReviewCommentTextUnlocked",
@@ -379,8 +379,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2779",
-      "line": 2779,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2760",
+      "line": 2760,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewCommentUnlocked",
       "status": "clear",
       "symbol": "deleteReviewCommentUnlocked",
@@ -394,8 +394,8 @@
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:3529",
-      "line": 3529,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:3510",
+      "line": 3510,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
       "status": "co-located-risk",
       "symbol": "submitReviewDecisionUnlocked",
@@ -406,8 +406,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:4290",
-      "line": 4290,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:4271",
+      "line": 4271,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelectionUnlocked",
       "status": "clear",
       "symbol": "setDocumentSelectionUnlocked",
@@ -3148,30 +3148,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#dbTxSync:59",
-      "line": 59,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#withTaskExecutionTransaction",
-      "status": "clear",
-      "symbol": "withTaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#dbTxSync:77",
-      "line": 77,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts#withCurrentTaskExecutionTransaction",
-      "status": "clear",
-      "symbol": "withCurrentTaskExecutionTransaction",
-      "targetContext": "task-execution",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#dbTxSync:106",
@@ -3729,8 +3705,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#dbTxSync:958",
-      "line": 958,
+      "id": "tx:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#dbTxSync:959",
+      "line": 959,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
       "status": "clear",
       "symbol": "setTaskStatus",
@@ -3894,7 +3870,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1f394631cefe9ced5b023674b11d539fbe7435846e710dadfe7baef9b605fbe",
+  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

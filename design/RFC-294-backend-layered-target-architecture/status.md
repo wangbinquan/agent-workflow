@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d1f394631cefe9ced5b023674b11d539fbe7435846e710dadfe7baef9b605fbe`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1824 |
+| backend production TS 文件 | 1823 |
 | `services/` 文件 | 323 |
-| `modules/**` 文件 / 非空 context | 1214 / 17 |
+| `modules/**` 文件 / 非空 context | 1213 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 4920 |
+| `architectureExceptions` | 4915 |
 | `backgroundJobs` | 352 |
-| `crossContextImports` | 5513 |
+| `crossContextImports` | 5508 |
 | `facades` | 323 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25226 |
+| `moduleSymbolOwners` | 25219 |
 | `mutationEntrypoints` | 1794 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 979 |
-| `transactionExternalEffects` | 317 |
+| `publicSurfaces` | 978 |
+| `transactionExternalEffects` | 315 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 119 |
+| task-execution / infrastructure | 118 |
 | resource-catalog / infrastructure | 98 |
 | task-execution / application | 86 |
 | task-execution / composition | 58 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3285 |
-| legacy-inbound | 1449 |
+| legacy-outbound | 3279 |
+| legacy-inbound | 1450 |
 | infrastructure-external | 292 |
 | offered-consumption | 164 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3285 |
-| legacy-inbound | 1449 |
+| legacy-outbound | 3279 |
+| legacy-inbound | 1450 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 87 |
 | no-circular | 6 |
@@ -227,8 +227,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2535 |
-| W4-E1 | 830 |
+| W9 | 2532 |
+| W4-E1 | 828 |
 | W4-C | 409 |
 | W4-E0 | 220 |
 | W4 | 202 |
@@ -253,7 +253,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 248 |
-| task-execution | 205 |
+| task-execution | 204 |
 | collaboration | 125 |
 | system-operations | 63 |
 | identity-access | 62 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 142 / 979）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 142 / 978）
 
 | context | 数量 |
 | --- | --- |
