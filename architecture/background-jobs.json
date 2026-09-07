@@ -542,9 +542,9 @@
     {
       "callee": "installMaintenanceWorkerErrorBoundary",
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:175",
+      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:169",
       "kind": "register-call",
-      "line": 175,
+      "line": 169,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
@@ -5443,11 +5443,11 @@
   "denominator": {
     "ambientWiring": 493,
     "disabled": 9,
-    "entries": 349,
-    "executionLocal": 49,
-    "longRunning": 77,
+    "entries": 341,
+    "executionLocal": 43,
+    "longRunning": 76,
     "managed": 11,
-    "periodic": 214
+    "periodic": 213
   },
   "entries": [
     {
@@ -8639,6 +8639,27 @@
     {
       "dependencies": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#projectRecoveredCodeHostNodeRunTx",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#projectRecoveredCodeHostNodeRunTx",
+      "phase": "execution",
+      "symbol": "projectRecoveredCodeHostNodeRunTx",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#recoveredManagedProcessEvidence",
       "kind": "long-running",
@@ -8728,29 +8749,6 @@
     },
     {
       "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#recoverCompletedIo",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#recoverCompletedIo",
-      "phase": "after-ready",
-      "symbol": "recoverCompletedIo",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
         "timer"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
@@ -8794,158 +8792,26 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#assertRecoveryOwner",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#assertRecoveryOwner",
-      "phase": "execution",
-      "symbol": "assertRecoveryOwner",
-      "targetContext": "task-execution"
-    },
-    {
       "dependencies": [
         "db"
       ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#PostgresqlTaskExecutionRecoveryPersistence",
-      "kind": "execution-local",
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#recoverClaimedArchives",
+      "kind": "periodic",
       "lifecycle": {
         "health": false,
         "readiness": false,
         "run": true,
         "start": false,
         "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#PostgresqlTaskExecutionRecoveryPersistence",
-      "phase": "execution",
-      "symbol": "PostgresqlTaskExecutionRecoveryPersistence",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#MANAGED_PROCESS_RECOVERY_CLASS",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
         "stop": false
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#MANAGED_PROCESS_RECOVERY_CLASS",
-      "phase": "unknown",
-      "symbol": "MANAGED_PROCESS_RECOVERY_CLASS",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#recoveredManagedProcessEvidence",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#recoveredManagedProcessEvidence",
-      "phase": "execution",
-      "symbol": "recoveredManagedProcessEvidence",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts#finalizeTaskExecutionRecovery",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts#finalizeTaskExecutionRecovery",
-      "phase": "execution",
-      "symbol": "finalizeTaskExecutionRecovery",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts#prepareTaskExecutionRecovery",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts#prepareTaskExecutionRecovery",
-      "phase": "execution",
-      "symbol": "prepareTaskExecutionRecovery",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecoveryPersistence.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecoveryPersistence.ts#SqliteTaskExecutionRecoveryPersistence",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecoveryPersistence.ts#SqliteTaskExecutionRecoveryPersistence",
-      "phase": "execution",
-      "symbol": "SqliteTaskExecutionRecoveryPersistence",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#recoverClaimedArchives",
+      "phase": "after-ready",
+      "symbol": "recoverClaimedArchives",
       "targetContext": "task-execution"
     },
     {
@@ -9041,6 +8907,29 @@
     },
     {
       "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts#DrizzleTaskExecutionRecoveryPersistence",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts#DrizzleTaskExecutionRecoveryPersistence",
+      "phase": "before-ready",
+      "symbol": "DrizzleTaskExecutionRecoveryPersistence",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
         "config",
         "db"
       ],
@@ -9049,7 +8938,7 @@
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
       "kind": "periodic",
       "lifecycle": {
-        "health": false,
+        "health": true,
         "readiness": false,
         "run": true,
         "start": false,
@@ -9103,48 +8992,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#codeHostRecoveryBaseUrlDigest",
       "phase": "unknown",
       "symbol": "codeHostRecoveryBaseUrlDigest",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/public/participants.ts#finalizeTaskExecutionRecovery",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#finalizeTaskExecutionRecovery",
-      "phase": "execution",
-      "symbol": "finalizeTaskExecutionRecovery",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/public/participants.ts#prepareTaskExecutionRecovery",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#prepareTaskExecutionRecovery",
-      "phase": "execution",
-      "symbol": "prepareTaskExecutionRecovery",
       "targetContext": "task-execution"
     },
     {
@@ -9499,7 +9346,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:739",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:733",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9513,7 +9360,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:739",
+      "symbol": "$setInterval:733",
       "targetContext": "platform"
     },
     {
@@ -9522,7 +9369,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:741",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:735",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9536,7 +9383,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:741",
+      "symbol": "$setInterval:735",
       "targetContext": "platform"
     },
     {
@@ -9545,7 +9392,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:230",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:224",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9559,7 +9406,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:230",
+      "symbol": "$setTimeout:224",
       "targetContext": "platform"
     },
     {
@@ -10997,27 +10844,6 @@
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts#SQLITE_LOGICAL_SOURCE_WORKER_ENTRY",
       "phase": "unknown",
       "symbol": "SQLITE_LOGICAL_SOURCE_WORKER_ENTRY",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/persistence/sqliteLogicalTarget.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqliteLogicalTarget.ts#hasMatchingCheckpoint",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteLogicalTarget.ts#hasMatchingCheckpoint",
-      "phase": "unknown",
-      "symbol": "hasMatchingCheckpoint",
       "targetContext": "platform"
     },
     {
@@ -12602,7 +12428,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5742",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5769",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12616,7 +12442,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5742",
+      "symbol": "$setTimeout:5769",
       "targetContext": "task-execution"
     },
     {
@@ -13146,5 +12972,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d80a97476480b87ec69227f1e2ac4ca127b6629fb9642d63814c29edc19a50f5"
+  "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e"
 }

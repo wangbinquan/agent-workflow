@@ -2,35 +2,22 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 4838,
-    "backgroundJobs": 349,
-    "crossContextImports": 5389,
+    "architectureExceptions": 4807,
+    "backgroundJobs": 341,
+    "crossContextImports": 5351,
     "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25069,
-    "mutationEntrypoints": 1766,
+    "moduleSymbolOwners": 25022,
+    "mutationEntrypoints": 1761,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 982,
-    "transactionExternalEffects": 298
+    "publicSurfaces": 980,
+    "transactionExternalEffects": 287
   },
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1809,
+    "backendProductionFiles": 1801,
     "backendValueSccs": [
-      [
-        "packages/backend/src/modules/collaboration/composition.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/collaborationRouteOperations.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-        "packages/backend/src/services/clarify/service.ts",
-        "packages/backend/src/services/humanGateComposition.ts",
-        "packages/backend/src/services/taskQuestions.ts"
-      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -38,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 349,
+    "backgroundEntries": 341,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -63,12 +50,12 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 277,
-    "knownViolations": 17,
+    "inboundBoundaryEdges": 285,
+    "knownViolations": 8,
     "moduleContexts": [
       {
         "context": "code-capability",
-        "files": 54
+        "files": 53
       },
       {
         "context": "collaboration",
@@ -132,10 +119,10 @@
       },
       {
         "context": "task-execution",
-        "files": 316
+        "files": 310
       }
     ],
-    "moduleFiles": 1201,
+    "moduleFiles": 1194,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,19 +148,6 @@
     "outboundBoundaryEdges": 35,
     "repoValueSccs": [
       [
-        "packages/backend/src/modules/collaboration/composition.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/collaborationRouteOperations.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-        "packages/backend/src/services/clarify/service.ts",
-        "packages/backend/src/services/humanGateComposition.ts",
-        "packages/backend/src/services/taskQuestions.ts"
-      ],
-      [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
@@ -194,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d80a97476480b87ec69227f1e2ac4ca127b6629fb9642d63814c29edc19a50f5"
+  "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e"
 }

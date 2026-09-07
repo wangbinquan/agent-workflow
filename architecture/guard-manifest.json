@@ -1948,6 +1948,18 @@
       "lines": 182
     },
     {
+      "id": "rfc359-w8-capability-pair-conformance",
+      "file": "packages/backend/tests/architecture/rfc359-w8-capability-pair-conformance.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 1,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 525
+    },
+    {
       "id": "rfc359-w8-ci-dual-engine-wiring",
       "file": "packages/backend/tests/architecture/rfc359-w8-ci-dual-engine-wiring.test.ts",
       "runner": "bun",
@@ -1958,6 +1970,18 @@
       "negativeFixture": true,
       "classified": true,
       "lines": 196
+    },
+    {
+      "id": "rfc359-w8-t29-unnormalized-unique-insert",
+      "file": "packages/backend/tests/architecture/rfc359-w8-t29-unnormalized-unique-insert.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 1500,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 854
     },
     {
       "id": "runtime-parameter-ratchet",
@@ -2357,14 +2381,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d80a97476480b87ec69227f1e2ac4ca127b6629fb9642d63814c29edc19a50f5",
+    "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "77971ceeec99e068f2585a741eaf991b7caa0de5",
-    "contentDigest": "sha256:af053e8bc10ef6040637de1ee804c8efd20770cea242133d3fa80a212fc395f8",
+    "currentSnapshotSha": "1a099379c37040c801947bd5f25738da2518510e",
+    "contentDigest": "sha256:3e2c983571ec0cd9aa17b7ca7828b05979e292512215c2b89512e3234062483d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

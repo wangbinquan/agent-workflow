@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 853,
+    "consumers": 852,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1063,
+    "methods": 1062,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20496,
-    "symbols": 982
+    "recursiveFields": 20460,
+    "symbols": 980
   },
   "entries": [
     {
@@ -46884,7 +46884,9 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f4bbeed18f5ade6b0a66"
+          ],
           "fieldPath": "$method:forCall.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -47081,7 +47083,9 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f4bbeed18f5ade6b0a66"
+          ],
           "fieldPath": "$method:forSchedule.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -47257,7 +47261,9 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f4bbeed18f5ade6b0a66"
+          ],
           "fieldPath": "$method:forTaskExecution.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -47441,7 +47447,9 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f4bbeed18f5ade6b0a66"
+          ],
           "fieldPath": "$method:forWebhook.$return.$variant:0.actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -135886,369 +135894,6 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 63,
-        "maxUnionVariants": 32
-      },
-      "consumerEdgeIds": [],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "commands",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.cause",
-          "type": "'clarify-deferred-answer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.expectedStatus",
-          "type": "'awaiting_human'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.finishedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.correlationRef",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.eventGroupId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.eventGroupOrdinal",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.identity.operationRef",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.nodeId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.nodeRunId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.occurredAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.status",
-          "type": "'done'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$parameter:input.taskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.kind",
-          "type": "(typeof COMMITTED_EVENT_AGGREGATE_KINDS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.aggregate.seq",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.deliveryMode",
-          "type": "Exclude<CommittedEventCutoverMode, 'legacy'>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.eventGroupId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.eventGroupOrdinal",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.eventId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.family",
-          "type": "(typeof COMMITTED_EVENT_FAMILIES)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.payloadDigest",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.producer",
-          "type": "(typeof COMMITTED_EVENT_PRODUCERS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:0.producerEpoch",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:completeClarifyNode.$return.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.allowedFrom",
-          "type": "readonly NodeRunStatus[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.allowTerminal",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.consumedUpstreamRunsJson.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.consumedUpstreamRunsJson.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.errorMessage.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.errorMessage.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.exitCode.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.exitCode.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.failureCode.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.failureCode.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.finishedAt.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.finishedAt.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.opencodeSessionId.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.opencodeSessionId.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.pid.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.pid.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.preSnapshot.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.preSnapshot.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.reviewIteration",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.rolledBack",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.startedAt.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.startedAt.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.supersededByReview.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.supersededByReview.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokCacheCreate.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokCacheCreate.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokCacheRead.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokCacheRead.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokInput.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokInput.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokOutput.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokOutput.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokTotal.$variant:0",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.extra.tokTotal.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.nodeRunId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.reason",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$parameter:input.to",
-          "type": "z.infer<typeof NodeRunStatusSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$return.from",
-          "type": "z.infer<typeof NodeRunStatusSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:set.$return.to",
-          "type": "z.infer<typeof NodeRunStatusSchema>"
-        }
-      ],
-      "file": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "id": "public:task-execution:commands:NodeRunLifecycleParticipantInTx",
-      "members": [
-        "completeClarifyNode",
-        "set"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "completeClarifyNode",
-          "signatureDigest": "sha256:c9a3a4124f21a4fdf3c9709b4b1bdb2617c8f821a781c1aaa37b1a860f7b9497"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "set",
-          "signatureDigest": "sha256:13713c87043d89f7bff32f042ea17a1a831e50feaa5b6ea1025ee02010ee397a"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#NodeRunLifecycleParticipantInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:55d4210b0b2e9f6795fdfc1c639941b646e3ab932205f9b9794ed027656d9c8b",
-      "status": "target-context-current-surface",
-      "symbol": "NodeRunLifecycleParticipantInTx",
-      "transaction": "own-tx",
-      "unresolvedTypeRefs": [
-        "Exclude",
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -144560,7 +144205,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 31,
+        "maxTransitiveLeafFields": 32,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
@@ -144571,6 +144216,11 @@
       "direction": "offered",
       "entrypoint": "operations",
       "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.continuationHandoff",
+          "type": "boolean"
+        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.errorSummary.$variant:0",
@@ -150166,45 +149816,6 @@
       "entrypoint": "participants",
       "fields": [],
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:finalizeTaskExecutionRecovery",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#finalizeTaskExecutionRecovery",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:f7dc3c85678308742bc9942e522e1711f80e71cf00e4b23d05b716c30375e11d",
-      "status": "target-context-current-surface",
-      "symbol": "finalizeTaskExecutionRecovery",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "public:task-execution:participants:GateContinuationEffectStep",
       "members": [],
       "methods": [],
@@ -151428,45 +151039,6 @@
       "signatureDigest": "sha256:36320db8ef6d312083192c8fcd4943d9d1acff007b7cd9b737d6e9fa63721830",
       "status": "target-context-current-surface",
       "symbol": "ownershipTokenKey",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
-      ],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:prepareTaskExecutionRecovery",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#prepareTaskExecutionRecovery",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:075f63d0c44a4eb0cc24",
-          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:ae42b2689ceb04a997f479f55dedb859848fd520ba1208f0223291740a0ad1c6",
-      "status": "target-context-current-surface",
-      "symbol": "prepareTaskExecutionRecovery",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -157003,6 +156575,202 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 26,
+        "maxUnionVariants": 18
+      },
+      "consumerEdgeIds": [
+        "import:24ceb5dbbf49c553205a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:parent.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:parent.invocationDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.ownerUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.ownerUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.sourceTerminationFence.$variant:0.$variant:0",
+          "type": "'closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.sourceTerminationFence.$variant:0.$variant:1",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.sourceTerminationFence.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:parent.status",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parentRun.childTaskId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parentRun.childTaskId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:parentRun.status",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:parentRun.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:request.childTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:request.invocationDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:request.launchActorUserId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$parameter:request.parentNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:0",
+          "type": "'parent-task-not-running'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:1",
+          "type": "'task-source-terminal-closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:2",
+          "type": "'task-source-terminal-merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:3",
+          "type": "'parent-node-run-task-mismatch'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:4",
+          "type": "'parent-node-run-not-running'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:5",
+          "type": "'child-task-reservation-mismatch'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:6",
+          "type": "'child-invocation-depth-mismatch'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.code.$variant:7",
+          "type": "'child-launch-actor-mismatch'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:24ceb5dbbf49c553205a"
+          ],
+          "fieldPath": "$call.$return.$variant:0.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:childLaunchAdmissionIssue",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:950507458754cc28b82c67e525f88fd613b92d76e46aec69a0b56a686c133a35"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:24ceb5dbbf49c553205a",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b12c6d89ffd4602d413f4cff09c478dc40b0542a6b54487cafcbab38bb97d461",
+      "status": "target-context-current-surface",
+      "symbol": "childLaunchAdmissionIssue",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -157174,6 +156942,7 @@
         "public:task-execution:types:SourceTerminationSnapshot",
         "public:task-execution:types:TaskStopCause",
         "public:task-execution:types:WebhookTerminalCause",
+        "public:task-execution:types:childLaunchAdmissionIssue",
         "public:task-execution:types:taskStopProjection"
       ],
       "removeAfterWave": null,
@@ -161917,7 +161686,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d80a97476480b87ec69227f1e2ac4ca127b6629fb9642d63814c29edc19a50f5",
+  "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e",
   "targetContexts": [
     "collaboration",
     "development-automation",
