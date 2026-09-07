@@ -335,7 +335,15 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
   test('transitionNodeRunStatus delegates to transitionNodeRunStatusTx and writes nothing itself', () => {
     const src = readFileSync(SQLITE_TASK_LIFECYCLE, 'utf8')
     const body = bodyOf(src, 'export async function transitionNodeRunStatus(')
-    expect(body).toContain('transitionNodeRunStatusTx({ tx: args.db, ...args })')
+    // RFC-359 W8：委托目标从同步孪生 `transitionNodeRunStatusTx` 换成了**中立异步孪生**
+    // `transitionNodeRunStatusInTransaction`（同步事务面 4 → 2 的那一步）。本条的**意图没变**——
+    // 「这个 async 原件只是壳，自己不写」——变的只是它委托给谁；下面三条 `not.toContain`
+    // 才是「自己不写」的判据，一字未动。
+    //
+    // 计数写成 2 是有意的：函数分「无执行上下文（独立 CAS）」与「有上下文（围栏 + CAS）」两条
+    // 分支，**两条都必须委托**。谁把其中一条改成就地写，计数掉到 1，本条当场红——
+    // 只断言 `toContain` 抓不住这件事。
+    expect(body.match(/transitionNodeRunStatusInTransaction\(\{/g)?.length ?? 0).toBe(2)
     expect(body).not.toContain('.update(nodeRuns)')
     // A standalone CAS is one statement: the wrapper must NOT open a transaction
     // of its own (an extra BEGIN/COMMIT per transition changed the session-lease

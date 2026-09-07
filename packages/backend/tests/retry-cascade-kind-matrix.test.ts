@@ -532,8 +532,16 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
     // `db.transaction` boundary; the child itself still exhausts all eight
     // cancellation attempts. RFC-359 T7b moved the managed-process quiescence
     // step onto the unified explicit-BEGIN primitive, which this proxy cannot
-    // see (13 → 12).
-    expect(cancelCasAttempts).toBe(12)
+    // see (13 → 12)。**RFC-359 W8 又挪走一笔**（`platform/persistence/sqlite/taskLifecycle.ts`
+    // 的两处 `withOwnedTaskTx` 转成中立异步事务原语，同步事务面 4 → 2），代理同样看不见，
+    // 12 → 11：现在是「子任务 8 次 + 3 笔更早的事务」。
+    //
+    // **承重的不是这个数**：子任务耗尽八次取消尝试、以及下面那几条（父任务 failed +
+    // `retry-child-cancel-failed`、子任务未被取消、node_run 留下 "queued for retry"）才是本条锁的行为。
+    // 这个计数是附带观测量，会随「哪些事务走统一原语」而降——它降是**收敛的信号**，
+    // 但降到 8 以下就说明子任务的取消尝试本身少了，那才是真回归。
+    expect(cancelCasAttempts).toBe(11)
+    expect(cancelCasAttempts).toBeGreaterThanOrEqual(8)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(parent.status).toBe('failed')

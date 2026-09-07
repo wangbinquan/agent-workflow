@@ -102,7 +102,8 @@ const PROVIDER_FORK_LEDGER = {
   // `FrameBackfillDatabase` union — a third provider cannot be passed in
   // without its own variant.
   // modules/task-execution/composition/frameBackfill.ts：RFC-359 W4-B1 后存储只有一份实现，不再按 provider 分叉。
-  'modules/task-execution/composition/providerRuntime.ts': { forks: 2, fence: 'fenced-dispatch' },
+  // RFC-359 W8 销账：`providerRuntime.ts` 的品牌分派整段消失——归档维护命令那一对合一后，
+  // 装配点直接构造同一个中立实现，两个 provider 共用；此处不再有 fork，条目随之退役。
   // RFC-359 W4-D24：运行时会话租约合一后这里少了一处按品牌的分派（4 → 2；租约那两支收成一行转出口）。
   'modules/task-execution/composition/taskExecutionPersistence.ts': {
     forks: 2,
@@ -113,12 +114,9 @@ const PROVIDER_FORK_LEDGER = {
   'platform/persistence/databaseProviderRuntime.ts': { forks: 1, fence: 'fenced-dispatch' },
   // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。
   'platform/persistence/databaseTransaction.ts': { forks: 2, fence: 'fenced-dispatch' },
-  // RFC-359 W1-T2b：自澄清回滚的 effect 账本在两个 provider 上各有一份 persistence（W4 待合一），
-  // 观察者按客户端品牌挑一份，残余分支沉入 never 汇。
-  'modules/task-execution/infrastructure/legacySqliteNodeRollback.ts': {
-    forks: 2,
-    fence: 'fenced-dispatch',
-  },
+  // RFC-359 W8 销账：`legacySqliteNodeRollback.ts` 的 `rollbackEffectPersistence` 品牌分派已删除——
+  // effect 持久化那一对合一为单份 `DrizzleTaskExecutionEffectPersistence`，观察者不再需要按品牌挑；
+  // W1-T2b 记的「两个 provider 各有一份 persistence」这个前提至此不成立，条目退役。
 } as const
 
 function providerForkCounts(): Record<string, number> {
