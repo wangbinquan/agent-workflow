@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5313,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W12：PG daemon 显式引用 DigitalEmployeeModuleWithRuntime 返回契约，取消运行时判空并在类型层保证已装配能力，新增一条 type-only composition 导入；其余增长不获豁免。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4772,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W12：PG daemon 显式引用 DigitalEmployeeModuleWithRuntime 返回契约，取消运行时判空并在类型层保证已装配能力，新增一条 type-only composition 导入；其余增长不获豁免。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -891,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9a093736b52e47dce5fb953c6e9e0a40e5d594f7",
-    "contentDigest": "sha256:79e8f422e680ce7c548f44394c3df67158ffc51650fefbfe022d4ca9129c2bba",
+    "currentSnapshotSha": "41c7316a6f3f28a37b0f7af232aa1839a2ee8748",
+    "contentDigest": "sha256:1e248571d8bffda4a5a7132f57bd3893bcb97194688170dd348b5852af53112e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

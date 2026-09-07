@@ -80,16 +80,16 @@ interface CodecSiteException {
  */
 const CODEC_SITE_EXCEPTIONS: readonly CodecSiteException[] = [
   {
-    file: 'packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts',
-    why: 'SQLite 评审适配器的分支不只是「怎么切」，还要区分**切出来的是文档正文还是工作区路径**（inlineBodies vs itemPaths，后者随后要去读文件）。它按字符串形态的 upstreamKind 判断，手上没有 ParsedKind，收进统一入口需要先把评审输入的 kind 解析面一起改。',
+    file: 'packages/backend/src/modules/collaboration/infrastructure/review.ts',
+    why: '评审适配器的分支不只是「怎么切」，还要区分**切出来的是文档正文还是工作区路径**（inlineBodies vs itemPaths，后者随后要去读文件）。它按字符串形态的 upstreamKind 判断，手上没有 ParsedKind，收进统一入口需要先把评审输入的 kind 解析面一起改。',
     removeWhen:
       'RFC-317 B10 或评审域的下一个 RFC：把 review 的 upstreamKind 从字符串换成 ParsedKind，届时这里改走 splitPortItems 并把「正文/路径」的判断交给 handler 的 isReviewableBody。',
   },
   // RFC-359 W7 销账：`postgresqlCollaborationRuntimeMechanics.ts` 这一条已删除。
   // 它的 removeWhen 写的是「两套 provider adapter 同步移除此例外」——现在 PostgreSQL 那份
-  // 原生重写整体退役（两个引擎共用 `collaborationRuntimeMechanics.ts` + `legacySqliteReview.ts`），
-  // 于是直接调用点从 2 降到 1，例外自然作废。**剩下的那一条仍然有效**：它记的是 SQLite
-  // 评审适配器需要区分「正文 vs 工作区路径」，与 provider 无关，仍等 upstreamKind 收窄为 ParsedKind。
+  // 原生重写整体退役（两个引擎共用 `collaborationRuntimeMechanics.ts` + `review.ts`），
+  // 于是直接调用点从 2 降到 1，例外自然作废。**剩下的那一条仍然有效**：它记的是评审
+  // 适配器需要区分「正文 vs 工作区路径」，与 provider 无关，仍等 upstreamKind 收窄为 ParsedKind。
 ]
 
 const ROOTS = [
