@@ -132,7 +132,7 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 142,
+      "baseline": 141,
       "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。"
     },
     {
@@ -349,7 +349,7 @@
       "id": "rfc359-sync-transaction-surface",
       "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
       "symbol": "SYNC_TRANSACTION_DEBT",
-      "baseline": 9,
+      "baseline": 8,
       "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 28（调用点合计 72）；账本正文逐文件记着各自的调用点数，逐字相等。 RFC-359 W4-D28b：`sqliteOwnedTaskMutation.ts`（2 处 `dbTxSync` + 2 处 `withOwnedTaskTx`）整份退役，5 处调用点迁到中立的 `withTaskExecutionWrite` + `fenceTaskWrite`，30 → 29（调用点 81 → 77）。 RFC-359 W4-D28b 第二刀：runtime 注册表两份 provider 实现合成一份中立实现，`sqliteRuntimeRegistryPersistence.ts`（5 处 `dbTxSync`）随之退役，29 → 28（调用点 77 → 72）。"
     },
     {
@@ -461,7 +461,7 @@
       "id": "rfc359-w5-provider-runtime-unexercised",
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-runtime-exercised.test.ts",
       "symbol": "PROVIDER_RUNTIME_UNEXERCISED",
-      "baseline": 19,
+      "baseline": 17,
       "why": "RFC-359 W5：只被装配、从没被任何测试真正构造过的组合根。没跑起来 = 那条装配链的正确性无人知晓。"
     },
     {
@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 891,
+      "baseline": 881,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -776,7 +776,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1731,
+      "baseline": 1730,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5292,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5293,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W12：两份 resource package journal 合一为一份中立实现，退役旧表/dbTxSync 导入，新增中立客户端与事务绑定使观察边净增1；不新增业务分叉，资源恢复仍保留原机制。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4757,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4758,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W12：两份 resource package journal 合一为一份中立实现，退役旧表/dbTxSync 导入，新增中立客户端与事务绑定使观察边净增1；不新增业务分叉，资源恢复仍保留原机制。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -867,12 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24904,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24910,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W12：完整异步 daemon bootstrap 新增初始 generation、生命周期端口和完整返回类型，移除 deferred holder；journal 两工厂合一，生产声明净增6，运行时不新增可空装配能力。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
+    "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ab6e36437443b826da58e098ca7f0c0d5abcb62f",
-    "contentDigest": "sha256:a72fabb2ae717549ef2a61b974fdb29816731333052a3eeef931d705e4278c1b",
+    "currentSnapshotSha": "2e68b5a353153ee4904be74b30e60284b0f9addd",
+    "contentDigest": "sha256:08fb2d9278c7692aa5b3b6c686725e7531c14a6e0a047ef61cca8b1f6ff17a38",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

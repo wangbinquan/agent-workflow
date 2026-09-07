@@ -6,11 +6,11 @@
 // paused SkillFileTree can't clobber a save that landed in between.
 
 import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -19,11 +19,10 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { restoreSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ConflictError, ValidationError } from '../src/util/errors'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-170 F3 — file/restore composite-token OCC', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 F3 — file/restore composite-token OCC', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -31,7 +30,7 @@ describe('RFC-170 F3 — file/restore composite-token OCC', () => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-f3-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd',
@@ -80,7 +79,7 @@ describe('RFC-170 F3 — file/restore composite-token OCC', () => {
   test('restoreSkillVersion with a STALE token → 409', async () => {
     const t0 = await token()
     await writeSkillFile(db, fsOpts, skillId, 'a.txt', 'aaa', 'u', undefined, t0) // v2, advances
-    expect(() =>
+    await expect(
       restoreSkillVersion(
         db,
         fsOpts,
@@ -92,7 +91,7 @@ describe('RFC-170 F3 — file/restore composite-token OCC', () => {
         undefined,
         t0,
       ),
-    ).toThrow(ConflictError)
+    ).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('no token → file writes remain unfenced (backward compatible)', async () => {

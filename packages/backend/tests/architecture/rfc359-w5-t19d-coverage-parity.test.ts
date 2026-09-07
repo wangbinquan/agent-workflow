@@ -78,7 +78,8 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 是 `describeEachProvider`，一条 body 同时驱动两侧的 journal + 恢复端口）。
   // RFC-359 W9：两侧各 +1 ref / +1 drive —— `rfc359-w9-resource-package-skill-recovery-conformance.test.ts`
   // 同时驱动两侧的恢复端口（判据缺口 13b 的对拍）。两侧同步上涨，倒挂没有加深。
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 4/3, postgresql 4/4',
+  // W12：journal 合一后 oracle 改 import 中立文件，剩余 artifact 两侧各少一条直接引用。
+  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 3/2, postgresql 3/3',
   // RFC-359 W8：两侧各 +1 ref —— `rfc359-w8-runtime-participants-conformance.test.ts` 的
   // 不合一判定用源码文本钉住了「drive 里两侧各挂一台子任务启动引擎」这条锚点。
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite 6/2, postgresql 8/1',
@@ -88,8 +89,10 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // SQLite 命名的参与者（它跑得动 PostgreSQL 正是转换成功的判据），于是它的引用/驱动数上涨。
   // 倒挂随之从 +1 变成 +2，但方向是「弱侧 PG 的那份原生重写更该退役」，不是新债。
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/3, postgresql 2/1',
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 6/2',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 6/2',
+  // W12：真实执行夹具提升到 providerRuntime 整体装配，底层 PG participants / launch 的
+  // 直接 import 各少一条，但 factory 的返回对象驱动同一真实任务；不以直接引用数冒充行为覆盖。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 5/1',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 5/1',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 7/2, postgresql 9/2',
@@ -108,8 +111,8 @@ export const REFERENCE_GAP_THRESHOLD = 3
 export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 W11：18 vs 3 → 18 vs 4（PG 侧补了事务边界的双引擎判据）。仍在观察名单内。
   'modules/intent/infrastructure/IntentApplyOperations: 18 vs 4',
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 6',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 6',
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 5',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 8 vs 5',
 ]
 

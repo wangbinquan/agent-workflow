@@ -5,20 +5,25 @@
 // silently overwriting a concurrent change / a delete-recreate ABA.
 
 import { buildActor } from '../src/auth/actor'
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   createManagedSkill,
   deleteSkill,
+  listSkills,
   readSkillContent,
   saveSkillWithToken,
   writeSkillContent,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getSkill } from './helpers/resourceLookup'
+import { describeEachProvider } from './helpers/eachProvider'
 import { ConflictError, ValidationError } from '../src/util/errors'
+
+async function getSkill(db: ProviderNeutralDatabase, name: string) {
+  return (await listSkills(db)).find((skill) => skill.name === name) ?? null
+}
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -27,10 +32,8 @@ const T6_ACTOR = buildActor({
   source: 'session',
 })
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-170 T4 — combined save with token OCC', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 T4 — combined save with token OCC', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -38,7 +41,7 @@ describe('RFC-170 T4 — combined save with token OCC', () => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-combined-save-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd0',

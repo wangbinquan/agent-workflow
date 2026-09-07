@@ -28,13 +28,13 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                              | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                           | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                    | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 810 个测试文件、1857 次实际 `createInMemoryDb` 调用，其中 807 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 800 个测试文件、1847 次实际 `createInMemoryDb` 调用，其中 797 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；W12 增补生产启动内核到 task done 的双引擎完整执行链                                                                                          | 进行中 |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                    | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                   | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                    | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 5 个性能守卫已双引擎化；当前主要锁语句数、行数与参数，墙钟 P95 仍为诊断输出，尚未满足 proposal 原条款                                                               | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 占位 32 → 13，未构造根账本 19 项；provider 命名文件 88 → 65（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 17 项；provider 命名文件 88 → 65（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -105,6 +105,31 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
 - AC-11 实测仍未达原文：同一 run / job `101871886117` 的 8 路径 PG/SQLite P95 比值为
   1.3–3.5 倍（overview 9.18ms / 2.60ms）。结构守卫通过不等于原 P95 条款通过，条款没有被改写。
 
+
+### W12 第四批：初始迁移装配、资源包 journal 与完整执行工厂
+
+- `composeDaemonProviderBootstrap` 在初始 session 前构造真实迁移 admission，初始化期间的
+  sourceWriteWindow 直接读取它的 open phase；session、唯一 controller 和 router 齐备才返回。
+  删除外部 deferred/bind；composing/ready/failed 是初始化状态，过早迁移动作明确拒绝，不能
+  自等待或进入词法暂存区。错 generation 关闭已创建 session，关闭失败保留两个原错误；
+  21 条初始装配/迁移/重试关闭回归通过，移除阶段门的变异先红。统一类型检查含 3 个负例通过。
+- 资源包 journal 两份工厂合为 `resourcePackageApplyJournal.ts`，列表次序、冻结字段、expected
+  state CAS 保持；资源恢复算法保持原样。同步事务账本减 1；双引擎语句数、竞争 CAS、外层回滚
+  用例随 CI 执行。SQLite 定向 17 pass / 100 expect，生产源码净减 35 行。
+- 真实 launch 到 done 用例改用完整的 SQLite/PG provider 工厂，实际驱动、owner、overview 与
+  repair 命令共用该工厂返回的实例；PG workflow launch 也取自工厂，SQLite 保留原 startTask
+  入口。原 11 项断言保留，新增完成统计和修复查询两项；SQLite 1 pass / 13 expect，PG 待本批 CI。
+  未构造根账本 19 → 17，源码导入覆盖计数的减少按实际消费者变更同步，不能等同于行为覆盖回退。
+- 再迁 10 个技能、MCP、内建工具缓存和 memory 状态测试：55 个数据库场景接入双引擎，13 个
+  纯函数/文件/源码场景继续单跑；68 个测试名称、原顺序和 166 项断言保留，其中异步 ConflictError
+  断言修为 await rejects。SQLite 68 pass / 166 expect。AST 清点 1881 个测试文件中有
+  800 文件 / 1847 次 SQLite 构造，157 文件调用双引擎 harness；797 个无 harness 的文件仍含
+  机制专属用例，不能直接等同于 797 个业务套件遗漏。
+- 第三批 `2e68b5a35` / CI `34166445153` 暴露三条守卫漂移：RFC244 自动修复工厂旧名、
+  WorkStart 已有消费者未销账、数值投影把注释内 SQL 误报。第四批逐项修复，保留原生产判据；
+  该 run 终态 failure，不记全绿（两个 OS 的相同旧守卫失败，Ubuntu shard 3 被取消）。此前 `ab6e36437` / CI `34164925590` 终态 failure，只有两个
+  shard 1 的旧 R1/RFC187 锁失败；第三批已修，其他任务通过。
+- 本批完整本地门禁未启动；RFC 仍 In Progress，AC-11 原 P95 条款保留，最终整仓结论等 exact-SHA CI。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

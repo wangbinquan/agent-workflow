@@ -1,19 +1,16 @@
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb, type DbClient } from '@/db/client'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { readPersistedDigitalEmployeeTypePackageDescriptorJsons } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('digital employee builtin tool catalog boot snapshot', () => {
+describeEachProvider('digital employee builtin tool catalog boot snapshot', (harness) => {
   test('repeated catalog reads do not issue SQLite selects after composition', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await ensureDigitalEmployeeAgentTemplates(
       composeDigitalEmployeeAgentTemplateCatalogFor(
         db,
@@ -33,7 +30,7 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
         }
         return Reflect.get(target, property, target)
       },
-    }) as DbClient
+    })
 
     const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
       countedDb,

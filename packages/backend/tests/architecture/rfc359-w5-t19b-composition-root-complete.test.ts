@@ -94,7 +94,11 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // （同 `taskEngineApplication.ts` 留下那 2 处的理由）。
   // 行为判据见 `tests/rfc359-w11-composition-root-lexical-binding.test.ts`。
   'cli/postgresqlDaemonApplication.ts: marker=1, prose=0, holder=0',
-  'cli/start.ts: marker=2, prose=0, holder=1',
+  // W12：迁移 admission 在初始 session 前完整构造；只有一次 const controller，
+  // bootstrap 仅在 session/controller/router 全部完成后返回，取消 deferred admission/bind。
+  // 初始化阶段门明确拒绝过早迁移动作；sourceWriteWindow 始终读取实际 admission。
+  // 剩余 marker 是每请求的 intent context 身份检查，并非晚绑定依赖。
+  'cli/start.ts: marker=1, prose=0, holder=0',
   // RFC-359 W5-T19b 销账：`commandContext.ts` prose 6 → 5，且
   // `reviewNodeReviewerDependencies.ts: prose=1` 整行消失 —— `CollaborationCommandDependencies.reviewTaskAccess`
   // 从 `?:` 改成必填。这个槽从来没有第二个来源：两个工厂都是 `createReviewTaskAccessPort(input.db)`

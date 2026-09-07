@@ -1,20 +1,19 @@
 // RFC-030 T5 — persistence layer tests for mcp_probes.
 
-import { describe, expect, test, beforeEach } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test, beforeEach } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { mcps } from '../../src/db/schema'
 import { composeMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
 import type { McpProbeStore } from '../../src/modules/resource-catalog/public/participants'
 import type { ProbeResult } from '../../src/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
+import { describeEachProvider } from '../helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
-
-function seedMcp(db: DbClient, name: string): string {
+async function seedMcp(db: ProviderNeutralDatabase, name: string): Promise<string> {
   const id = ulid()
-  db.insert(mcps)
+  await db
+    .insert(mcps)
     .values({ id, name, type: 'local', config: JSON.stringify({ command: ['true'] }) })
     .run()
   return id
@@ -42,21 +41,21 @@ function okResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
   }
 }
 
-describe('mcpProbeStore', () => {
-  let db: DbClient
+describeEachProvider('mcpProbeStore', (harness) => {
+  let db: ProviderNeutralDatabase
   let store: McpProbeStore
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     store = composeMcpProbeStore(db)
   })
 
   test('getProbeByMcpId returns null when never probed', async () => {
-    const id = seedMcp(db, 'pg')
+    const id = await seedMcp(db, 'pg')
     expect(await getProbeByMcpId(store, id)).toBeNull()
   })
 
   test('upsert inserts first time; getProbeByMcpId round-trips full shape', async () => {
-    const id = seedMcp(db, 'pg')
+    const id = await seedMcp(db, 'pg')
     const inserted = await upsertProbe(store, id, 'pg', okResult())
     expect(inserted.status).toBe('ok')
     expect(inserted.tools).toEqual([{ name: 't1' }])
@@ -68,7 +67,7 @@ describe('mcpProbeStore', () => {
   })
 
   test('upsert is idempotent — second call overwrites without throwing', async () => {
-    const id = seedMcp(db, 'pg')
+    const id = await seedMcp(db, 'pg')
     const first = await upsertProbe(store, id, 'pg', okResult({ latencyMs: 100 }))
     const second = await upsertProbe(store, id, 'pg', okResult({ latencyMs: 9999 }))
     // Same row identity (UNIQUE(mcp_id) implies row id is reused via update).
@@ -77,8 +76,8 @@ describe('mcpProbeStore', () => {
   })
 
   test('listProbes returns rows sorted by mcpName', async () => {
-    const idB = seedMcp(db, 'beta')
-    const idA = seedMcp(db, 'alpha')
+    const idB = await seedMcp(db, 'beta')
+    const idA = await seedMcp(db, 'alpha')
     await upsertProbe(store, idB, 'beta', okResult())
     await upsertProbe(store, idA, 'alpha', okResult())
     const all = await listProbes(store)
@@ -86,7 +85,7 @@ describe('mcpProbeStore', () => {
   })
 
   test('listProbes is empty when no probes exist', async () => {
-    seedMcp(db, 'pg') // no probe row
+    await seedMcp(db, 'pg') // no probe row
     expect(await listProbes(store)).toEqual([])
   })
 
@@ -97,7 +96,7 @@ describe('mcpProbeStore', () => {
   })
 
   test('error-shape probe persists with null lists + errorCode + errorDetail', async () => {
-    const id = seedMcp(db, 'broken')
+    const id = await seedMcp(db, 'broken')
     const errResult: ProbeResult = {
       status: 'error',
       latencyMs: 30_010,

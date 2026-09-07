@@ -250,7 +250,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:integration:events:codeHostBusinessEventTypeRef', removeAfterWave: 'W4-B' },
   { id: 'public:integration:events:codeHostEventObservation', removeAfterWave: 'W4-B' },
   { id: 'public:integration:events:codeHostEventTypeRef', removeAfterWave: 'W4-B' },
-  { id: 'public:integration:participants:DigitalEmployeeWorkStartPort', removeAfterWave: 'W4-B' },
   { id: 'public:source-control:commands:WorkspaceClaimFinalizationCommand', removeAfterWave: 'W5' },
   {
     id: 'public:source-control:commands:OwnRepositoryTransportCredentialCommands',

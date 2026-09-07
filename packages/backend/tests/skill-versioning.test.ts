@@ -13,17 +13,18 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { skills } from '../src/db/schema'
 import {
   createManagedSkill,
   deleteSkillFile,
+  listSkills,
   readSkillContent,
   writeSkillContent,
   writeSkillFile,
   type SkillFsOptions,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getSkill } from './helpers/resourceLookup'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   commitSkillVersion,
   diffSkillVersions,
@@ -38,18 +39,20 @@ import {
   type TreeEntry,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+async function getSkill(db: ProviderNeutralDatabase, name: string) {
+  return (await listSkills(db)).find((skill) => skill.name === name) ?? null
+}
 
 interface H {
-  db: DbClient
+  db: ProviderNeutralDatabase
   fsOpts: SkillFsOptions
   cleanup: () => void
 }
 
-function build(): H {
+function build(db: ProviderNeutralDatabase): H {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-ver-'))
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db,
     fsOpts: { appHome },
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
   }
@@ -114,9 +117,9 @@ describe('gitStyleDirDiff', () => {
 
 describe('hashDir', () => {
   test('is deterministic and content-sensitive', async () => {
-    const h = build()
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-ver-'))
     try {
-      const d = join(h.fsOpts.appHome, 'x')
+      const d = join(appHome, 'x')
       mkdirSync(d, { recursive: true })
       writeFileSync(join(d, 'a.txt'), 'hello')
       const h1 = hashDir(d)
@@ -124,229 +127,239 @@ describe('hashDir', () => {
       writeFileSync(join(d, 'a.txt'), 'world')
       expect(hashDir(d)).not.toBe(h1) // content change detected
     } finally {
-      h.cleanup()
+      rmSync(appHome, { recursive: true, force: true })
     }
   })
 })
 
 // --- the funnel + history --------------------------------------------------
 
-describe('skill versioning funnel', () => {
-  let h: H
-  beforeEach(() => {
-    h = build()
-  })
-  afterEach(() => h.cleanup())
-
-  test('createManagedSkill establishes v1', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'v1 body',
-      frontmatterExtra: {},
+describeEachProvider('RFC-101 skill version persistence', (harness) => {
+  describe('skill versioning funnel', () => {
+    let h: H
+    beforeEach(() => {
+      h = build(harness.db)
     })
-    const skill = await getSkill(h.db, 'lint')
-    expect(skill?.contentVersion).toBe(1)
-    const versions = await listSkillVersions(h.db, h.fsOpts, created.id)
-    expect(versions).toHaveLength(1)
-    expect(versions[0]?.versionIndex).toBe(1)
-    expect(versions[0]?.source).toBe('initial')
-    // disk snapshot exists
-    expect(existsSync(join(h.fsOpts.appHome, skillVersionRelPath(created.id, 1), 'SKILL.md'))).toBe(
-      true,
-    )
-  })
+    afterEach(() => h.cleanup())
 
-  test('writeSkillContent bumps to v2; old version preserved', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'v1 body',
-      frontmatterExtra: {},
-    })
-    await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'v2 body' }, 'user-1')
-    const skill = await getSkill(h.db, 'lint')
-    expect(skill?.contentVersion).toBe(2)
-    const versions = await listSkillVersions(h.db, h.fsOpts, created.id)
-    expect(versions.map((v) => v.versionIndex)).toEqual([2, 1]) // newest first
-    expect(versions[0]?.source).toBe('editor')
-    expect(versions[0]?.authorUserId).toBe('user-1')
-    // v1 snapshot still holds the original body
-    expect((await getSkillVersionContent(h.db, h.fsOpts, created.id, 1)).content.bodyMd).toContain(
-      'v1 body',
-    )
-    expect((await getSkillVersionContent(h.db, h.fsOpts, created.id, 2)).content.bodyMd).toContain(
-      'v2 body',
-    )
-    expect(liveSkillMd(h, created.id)).toContain('v2 body')
-  })
-
-  test('empty editor write does not inflate history', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'stable',
-      frontmatterExtra: {},
-    })
-    // re-save identical content
-    await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'stable', description: 'd' }, 'u')
-    expect(await listSkillVersions(h.db, h.fsOpts, created.id)).toHaveLength(1)
-    expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(1)
-  })
-
-  test('support-file write + delete each version the tree', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'b',
-      frontmatterExtra: {},
-    })
-    await writeSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'ref content', 'u')
-    expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(2)
-    const v2 = await getSkillVersionContent(h.db, h.fsOpts, created.id, 2)
-    expect(v2.files.some((f) => f.path === 'references/x.md')).toBe(true)
-    // delete it
-    await deleteSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'u')
-    expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(3)
-    expect(
-      existsSync(join(h.fsOpts.appHome, 'skills', created.id, 'files', 'references', 'x.md')),
-    ).toBe(false)
-    // but v2 snapshot still has it
-    expect(
-      existsSync(join(h.fsOpts.appHome, skillVersionRelPath(created.id, 2), 'references', 'x.md')),
-    ).toBe(true)
-  })
-
-  test('diffSkillVersions returns a git-style diff DiffViewer can split', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'alpha',
-      frontmatterExtra: {},
-    })
-    await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'alpha\nbeta' }, 'u')
-    const { diff } = await diffSkillVersions(h.db, h.fsOpts, created.id, 1, 2)
-    expect(diff).toContain('diff --git a/SKILL.md b/SKILL.md')
-    expect(diff).toContain('+beta')
-  })
-
-  test('restoreSkillVersion is forward-only and reverts content', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'original',
-      frontmatterExtra: {},
-    })
-    await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'changed' }, 'u')
-    expect(liveSkillMd(h, created.id)).toContain('changed')
-    const { version } = await restoreSkillVersion(
-      h.db,
-      h.fsOpts,
-      created.id,
-      1,
-      'admin',
-      TEST_SKILL_RESTORE_MEMBERSHIP,
-      'rollback',
-    )
-    expect(version.versionIndex).toBe(3) // new version, never destructive
-    expect(version.source).toBe('restore')
-    expect(version.restoredFromVersion).toBe(1)
-    expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(3)
-    expect(liveSkillMd(h, created.id)).toContain('original') // content reverted
-    expect(readSkillContent(h.db, h.fsOpts, created.id).then((c) => c.bodyMd)).resolves.toContain(
-      'original',
-    )
-  })
-
-  test('OCC: commitSkillVersion rejects a stale expectedVersion', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'b',
-      frontmatterExtra: {},
-    })
-    let code: string | undefined
-    try {
-      await commitSkillVersion(h.db, h.fsOpts, created.id, () => {}, {
-        source: 'editor',
-        authorUserId: 'u',
-        expectedVersion: 99,
+    test('createManagedSkill establishes v1', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'v1 body',
+        frontmatterExtra: {},
       })
-    } catch (err) {
-      code = (err as { code?: string }).code
+      const skill = await getSkill(h.db, 'lint')
+      expect(skill?.contentVersion).toBe(1)
+      const versions = await listSkillVersions(h.db, h.fsOpts, created.id)
+      expect(versions).toHaveLength(1)
+      expect(versions[0]?.versionIndex).toBe(1)
+      expect(versions[0]?.source).toBe('initial')
+      // disk snapshot exists
+      expect(
+        existsSync(join(h.fsOpts.appHome, skillVersionRelPath(created.id, 1), 'SKILL.md')),
+      ).toBe(true)
+    })
+
+    test('writeSkillContent bumps to v2; old version preserved', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'v1 body',
+        frontmatterExtra: {},
+      })
+      await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'v2 body' }, 'user-1')
+      const skill = await getSkill(h.db, 'lint')
+      expect(skill?.contentVersion).toBe(2)
+      const versions = await listSkillVersions(h.db, h.fsOpts, created.id)
+      expect(versions.map((v) => v.versionIndex)).toEqual([2, 1]) // newest first
+      expect(versions[0]?.source).toBe('editor')
+      expect(versions[0]?.authorUserId).toBe('user-1')
+      // v1 snapshot still holds the original body
+      expect(
+        (await getSkillVersionContent(h.db, h.fsOpts, created.id, 1)).content.bodyMd,
+      ).toContain('v1 body')
+      expect(
+        (await getSkillVersionContent(h.db, h.fsOpts, created.id, 2)).content.bodyMd,
+      ).toContain('v2 body')
+      expect(liveSkillMd(h, created.id)).toContain('v2 body')
+    })
+
+    test('empty editor write does not inflate history', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'stable',
+        frontmatterExtra: {},
+      })
+      // re-save identical content
+      await writeSkillContent(
+        h.db,
+        h.fsOpts,
+        created.id,
+        { bodyMd: 'stable', description: 'd' },
+        'u',
+      )
+      expect(await listSkillVersions(h.db, h.fsOpts, created.id)).toHaveLength(1)
+      expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(1)
+    })
+
+    test('support-file write + delete each version the tree', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'b',
+        frontmatterExtra: {},
+      })
+      await writeSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'ref content', 'u')
+      expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(2)
+      const v2 = await getSkillVersionContent(h.db, h.fsOpts, created.id, 2)
+      expect(v2.files.some((f) => f.path === 'references/x.md')).toBe(true)
+      // delete it
+      await deleteSkillFile(h.db, h.fsOpts, created.id, 'references/x.md', 'u')
+      expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(3)
+      expect(
+        existsSync(join(h.fsOpts.appHome, 'skills', created.id, 'files', 'references', 'x.md')),
+      ).toBe(false)
+      // but v2 snapshot still has it
+      expect(
+        existsSync(
+          join(h.fsOpts.appHome, skillVersionRelPath(created.id, 2), 'references', 'x.md'),
+        ),
+      ).toBe(true)
+    })
+
+    test('diffSkillVersions returns a git-style diff DiffViewer can split', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'alpha',
+        frontmatterExtra: {},
+      })
+      await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'alpha\nbeta' }, 'u')
+      const { diff } = await diffSkillVersions(h.db, h.fsOpts, created.id, 1, 2)
+      expect(diff).toContain('diff --git a/SKILL.md b/SKILL.md')
+      expect(diff).toContain('+beta')
+    })
+
+    test('restoreSkillVersion is forward-only and reverts content', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'original',
+        frontmatterExtra: {},
+      })
+      await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'changed' }, 'u')
+      expect(liveSkillMd(h, created.id)).toContain('changed')
+      const { version } = await restoreSkillVersion(
+        h.db,
+        h.fsOpts,
+        created.id,
+        1,
+        'admin',
+        TEST_SKILL_RESTORE_MEMBERSHIP,
+        'rollback',
+      )
+      expect(version.versionIndex).toBe(3) // new version, never destructive
+      expect(version.source).toBe('restore')
+      expect(version.restoredFromVersion).toBe(1)
+      expect((await getSkill(h.db, 'lint'))?.contentVersion).toBe(3)
+      expect(liveSkillMd(h, created.id)).toContain('original') // content reverted
+      await expect(
+        readSkillContent(h.db, h.fsOpts, created.id).then((c) => c.bodyMd),
+      ).resolves.toContain('original')
+    })
+
+    test('OCC: commitSkillVersion rejects a stale expectedVersion', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'b',
+        frontmatterExtra: {},
+      })
+      let code: string | undefined
+      try {
+        await commitSkillVersion(h.db, h.fsOpts, created.id, () => {}, {
+          source: 'editor',
+          authorUserId: 'u',
+          expectedVersion: 99,
+        })
+      } catch (err) {
+        code = (err as { code?: string }).code
+      }
+      expect(code).toBe('resource-operation-stale')
+    })
+  })
+
+  // --- legacy backfill + reconcile -------------------------------------------
+
+  describe('lazy backfill + reconcile', () => {
+    let h: H
+    beforeEach(() => {
+      h = build(harness.db)
+    })
+    afterEach(() => h.cleanup())
+
+    async function seedLegacySkill(name: string, body: string): Promise<string> {
+      // Simulate a skill created before RFC-101: a DB row + files/ on disk, no
+      // skill_versions rows.
+      const id = ulid()
+      const filesDir = join(h.fsOpts.appHome, 'skills', id, 'files')
+      mkdirSync(filesDir, { recursive: true })
+      writeFileSync(
+        join(filesDir, 'SKILL.md'),
+        `---\nname: ${name}\ndescription: d\n---\n${body}\n`,
+        'utf-8',
+      )
+      await h.db
+        .insert(skills)
+        .values({
+          id,
+          name,
+          managedPath: `skills/${id}/files`,
+        })
+        .run()
+      return id
     }
-    expect(code).toBe('resource-operation-stale')
-  })
-})
 
-// --- legacy backfill + reconcile -------------------------------------------
-
-describe('lazy backfill + reconcile', () => {
-  let h: H
-  beforeEach(() => {
-    h = build()
-  })
-  afterEach(() => h.cleanup())
-
-  function seedLegacySkill(name: string, body: string): string {
-    // Simulate a skill created before RFC-101: a DB row + files/ on disk, no
-    // skill_versions rows.
-    const id = ulid()
-    const filesDir = join(h.fsOpts.appHome, 'skills', id, 'files')
-    mkdirSync(filesDir, { recursive: true })
-    writeFileSync(
-      join(filesDir, 'SKILL.md'),
-      `---\nname: ${name}\ndescription: d\n---\n${body}\n`,
-      'utf-8',
-    )
-    h.db
-      .insert(skills)
-      .values({
-        id,
-        name,
-        managedPath: `skills/${id}/files`,
-      })
-      .run()
-    return id
-  }
-
-  test('ensureInitialSkillVersion backfills v1 from current files on first access', async () => {
-    const id = seedLegacySkill('legacy', 'legacy body')
-    expect(await listSkillVersions(h.db, h.fsOpts, id)).toHaveLength(1)
-    expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
-      'legacy body',
-    )
-  })
-
-  test('a legacy skill then edited keeps legacy content as v1, edit as v2', async () => {
-    const id = seedLegacySkill('legacy', 'legacy body')
-    await writeSkillContent(h.db, h.fsOpts, id, { bodyMd: 'edited body' }, 'u')
-    expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
-      'legacy body',
-    )
-    expect((await getSkillVersionContent(h.db, h.fsOpts, id, 2)).content.bodyMd).toContain(
-      'edited body',
-    )
-  })
-
-  test('reconcileSkillLiveFiles restores live files/ ONLY when it is lost entirely', async () => {
-    const created = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'good',
-      frontmatterExtra: {},
+    test('ensureInitialSkillVersion backfills v1 from current files on first access', async () => {
+      const id = await seedLegacySkill('legacy', 'legacy body')
+      expect(await listSkillVersions(h.db, h.fsOpts, id)).toHaveLength(1)
+      expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
+        'legacy body',
+      )
     })
-    const filesDir = join(h.fsOpts.appHome, 'skills', created.id, 'files')
-    // Live present but DIFFERENT (e.g. an out-of-funnel ZIP overwrite): must NOT
-    // be clobbered by the snapshot (Codex P1 — that would lose the write).
-    writeFileSync(join(filesDir, 'SKILL.md'), 'EXTERNAL EDIT', 'utf-8')
-    await reconcileSkillLiveFiles(h.db, h.fsOpts)
-    expect(liveSkillMd(h, created.id)).toContain('EXTERNAL EDIT') // preserved
 
-    // Live lost entirely (files/ deleted): restored from the current snapshot.
-    rmSync(filesDir, { recursive: true, force: true })
-    await reconcileSkillLiveFiles(h.db, h.fsOpts)
-    expect(liveSkillMd(h, created.id)).toContain('good')
+    test('a legacy skill then edited keeps legacy content as v1, edit as v2', async () => {
+      const id = await seedLegacySkill('legacy', 'legacy body')
+      await writeSkillContent(h.db, h.fsOpts, id, { bodyMd: 'edited body' }, 'u')
+      expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
+        'legacy body',
+      )
+      expect((await getSkillVersionContent(h.db, h.fsOpts, id, 2)).content.bodyMd).toContain(
+        'edited body',
+      )
+    })
+
+    test('reconcileSkillLiveFiles restores live files/ ONLY when it is lost entirely', async () => {
+      const created = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'good',
+        frontmatterExtra: {},
+      })
+      const filesDir = join(h.fsOpts.appHome, 'skills', created.id, 'files')
+      // Live present but DIFFERENT (e.g. an out-of-funnel ZIP overwrite): must NOT
+      // be clobbered by the snapshot (Codex P1 — that would lose the write).
+      writeFileSync(join(filesDir, 'SKILL.md'), 'EXTERNAL EDIT', 'utf-8')
+      await reconcileSkillLiveFiles(h.db, h.fsOpts)
+      expect(liveSkillMd(h, created.id)).toContain('EXTERNAL EDIT') // preserved
+
+      // Live lost entirely (files/ deleted): restored from the current snapshot.
+      rmSync(filesDir, { recursive: true, force: true })
+      await reconcileSkillLiveFiles(h.db, h.fsOpts)
+      expect(liveSkillMd(h, created.id)).toContain('good')
+    })
   })
 })
 

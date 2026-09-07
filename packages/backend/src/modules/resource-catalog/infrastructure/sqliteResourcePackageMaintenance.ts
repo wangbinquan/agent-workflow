@@ -1,15 +1,13 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { plugins, resourceBundleApplies, skillOperations, skills } from '@/db/schema'
+import { plugins, skillOperations, skills } from '@/db/schema'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
-  ResourcePackageApplyJournalPort,
   ResourcePackageApplyJournalSnapshot,
   ResourcePackageApplyMaintenanceLog,
 } from '../application/resourcePackageMaintenance'
@@ -259,45 +257,6 @@ async function rollForwardArtifacts(input: {
     }
   }
   if (failure !== undefined) throw failure
-}
-
-export function createSqliteResourcePackageApplyJournalPort(
-  db: DbClient,
-): ResourcePackageApplyJournalPort {
-  return Object.freeze({
-    async list(): Promise<readonly ResourcePackageApplyJournalSnapshot[]> {
-      const rows = await db.select().from(resourceBundleApplies)
-      return Object.freeze(
-        rows.map((row) =>
-          Object.freeze({
-            id: row.id,
-            state: row.state,
-            preparedArtifactsJson: row.preparedArtifactsJson,
-            receiptJson: row.receiptJson,
-            updatedAt: row.updatedAt,
-          }),
-        ),
-      )
-    },
-    async settleFailed(
-      command: Parameters<ResourcePackageApplyJournalPort['settleFailed']>[0],
-    ): Promise<boolean> {
-      return dbTxSync<boolean>(db, (tx) => {
-        const settled = tx
-          .update(resourceBundleApplies)
-          .set({ state: 'failed', error: command.error, updatedAt: command.updatedAt })
-          .where(
-            and(
-              eq(resourceBundleApplies.id, command.id),
-              eq(resourceBundleApplies.state, command.expectedState),
-            ),
-          )
-          .returning({ id: resourceBundleApplies.id })
-          .get()
-        return settled !== undefined
-      })
-    },
-  })
 }
 
 export function createSqliteResourcePackageApplyArtifactRecovery(input: {

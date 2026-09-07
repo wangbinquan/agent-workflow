@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1780,
+    "backendFiles": 1781,
     "frontendFiles": 622,
     "legacyFiles": 600,
-    "moduleFiles": 1180,
-    "productionFiles": 2557,
+    "moduleFiles": 1181,
+    "productionFiles": 2558,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24904
+    "symbolsIncludingFileRoots": 24910
   },
   "entries": [
     {
@@ -2607,6 +2607,42 @@
       "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#composeDaemonProviderBootstrap",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "composeDaemonProviderBootstrap",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#ComposeDaemonProviderBootstrapInput",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "ComposeDaemonProviderBootstrapInput",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#ComposedDaemonProviderInitialSession",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "ComposedDaemonProviderInitialSession",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#createDaemonProviderBootstrap",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -2635,6 +2671,30 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "DaemonProviderBootstrap",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#DaemonProviderBootstrapBindings",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderBootstrapBindings",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#DaemonProviderBootstrapInitialization",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderBootstrapInitialization",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -2677,6 +2737,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#CurrentDaemonProviderMigrationAdmissionInput",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "CurrentDaemonProviderMigrationAdmissionInput",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#DaemonProviderMigrationAdmission",
@@ -2691,10 +2763,46 @@
       "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#DaemonProviderMigrationInitialGeneration",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderMigrationInitialGeneration",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#DaemonProviderMigrationLifecycle",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderMigrationLifecycle",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#DatabaseMigrationDaemonAdmissionFactory",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "DatabaseMigrationDaemonAdmissionFactory",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#InitialDaemonProviderMigrationAdmissionInput",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "InitialDaemonProviderMigrationAdmissionInput",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -4491,18 +4599,6 @@
       "currentLayer": "cli",
       "exported": false,
       "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#_createDeferredDatabaseMigrationAdmission",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "_createDeferredDatabaseMigrationAdmission",
-      "targetContext": "bootstrap",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/start.ts",
       "id": "owner:packages/backend/src/cli/start.ts#$file",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -4519,18 +4615,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "acquireStartLock",
-      "targetContext": "bootstrap",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#BoundDatabaseMigrationBootstrap",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "BoundDatabaseMigrationBootstrap",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -4675,18 +4759,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DbCorruptionFailure",
-      "targetContext": "bootstrap",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#DeferredDatabaseMigrationAdmission",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "DeferredDatabaseMigrationAdmission",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -97853,18 +97925,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#createPostgresqlResourcePackageApplyJournalPort",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlResourcePackageApplyJournalPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#errorValue",
@@ -98243,6 +98303,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "runResourceCatalogTransaction",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts#createResourcePackageApplyJournalPort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createResourcePackageApplyJournalPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -99047,18 +99131,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSqliteResourcePackageApplyArtifactRecovery",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#createSqliteResourcePackageApplyJournalPort",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteResourcePackageApplyJournalPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -299549,5 +299621,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826"
+  "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d"
 }

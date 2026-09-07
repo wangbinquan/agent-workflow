@@ -118,13 +118,22 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
 
   test('the daemon binds the live window, not the always-writable default', () => {
     const start = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
-    // RFC-359 W3-T16：startCommand 只准备一份 sessionInput，两个 provider 的会话装配器从它拿同一个窗口。
+    const bootstrap = readFileSync(
+      resolve(backendRoot, 'src/cli/daemonProviderBootstrap.ts'),
+      'utf8',
+    )
+    // RFC-359 W12：bootstrap 先构造真实 admission，再把同一组 bindings 交给初始/切换会话。
     const sessionInput = start.indexOf('const sessionInput = Object.freeze({')
     expect(sessionInput).toBeGreaterThan(-1)
     expect(
-      start.slice(sessionInput, sessionInput + 400),
-      'startCommand 没把 deferred holder 的真窗口放进 sessionInput ⇒ 两个 provider 都拿到空转窗口',
-    ).toContain('sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow')
+      start.slice(sessionInput, sessionInput + 700),
+      '初始会话必须接收 bootstrap 提供的真实迁移窗口',
+    ).toMatch(
+      /await composeDaemonProviderBootstrap\([\s\S]*composeInitial: \(bindings\)[\s\S]*\.\.\.bindings/u,
+    )
+    const nextSession = start.indexOf('async create(lifecycleInput, bindings)')
+    expect(nextSession).toBeGreaterThan(-1)
+    expect(start.slice(nextSession, nextSession + 1600)).toContain('...bindings,')
     // SQLite daemon: the provider core must receive that window (destructured from the input).
     const core = start.indexOf('composeSqliteDaemonProviderCore({')
     expect(core).toBeGreaterThan(-1)
@@ -134,7 +143,10 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
     ).toMatch(/sourceWriteWindow,|sourceWriteWindow: sourceWriteWindow/u)
     // PostgreSQL daemon: same window, threaded through the session composer.
     expect(start, 'PG 装配没接上同一个窗口').toContain('sourceWriteWindow: input.sourceWriteWindow')
-    // The window itself must read the bound admission phase, not a constant.
-    expect(start).toContain("writable: () => bound === null || bound.live().phase === 'open'")
+    // The window reads the actual admission even while the first session is composing.
+    expect(bootstrap).toContain("writable: () => admission.live().phase === 'open'")
+    expect(
+      bootstrap.indexOf('const admission = createDaemonProviderMigrationAdmission('),
+    ).toBeLessThan(bootstrap.indexOf('const initial = await input.composeInitial(bindings)'))
   })
 })

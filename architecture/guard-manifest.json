@@ -984,7 +984,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 413
+      "lines": 479
     },
     {
       "id": "rfc294-review-status-projection",
@@ -1801,7 +1801,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 600
+      "lines": 563
     },
     {
       "id": "rfc359-w5-t17-provider-file-location",
@@ -1849,7 +1849,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 415
+      "lines": 419
     },
     {
       "id": "rfc359-w5-t19c-startup-sequence",
@@ -1873,7 +1873,7 @@
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 345
+      "lines": 348
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -1885,7 +1885,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 1024
+      "lines": 1014
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -2393,14 +2393,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
+    "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "ab6e36437443b826da58e098ca7f0c0d5abcb62f",
-    "contentDigest": "sha256:d79841fb596ce1e5d87e855fcfdd744e2e88652a25090d0df460f7d0f2df9d1c",
+    "currentSnapshotSha": "2e68b5a353153ee4904be74b30e60284b0f9addd",
+    "contentDigest": "sha256:553d2ddac5e697feeff62be4677d4dc8ac43b5ad45081350eced713b24d03b8b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -74,14 +74,20 @@ describe('RFC-244 lifecycle alert resolution boot wiring', () => {
     expect(workerConsumer).toContain('broadcastResolved(taskId)')
     // RFC-349 moved the timer into the selected-provider TaskExecution
     // background participant. Bootstrap still injects the one broadcaster;
-    // both SQLite and PostgreSQL runtime factories bind it to the real repair
-    // command, and the background loop invokes that command.
+    // both runtime factories pass it through the selected repair engine to the
+    // shared automatic command, and the background loop invokes that command.
     expect(START_SOURCE).toContain('onResolved: broadcastResolved')
     expect(
       TASK_PROVIDER_RUNTIME_SOURCE.match(
-        /const lifecycleRepair = create(?:Sqlite|Postgresql)TaskLifecycleAutoRepairCommand/g,
+        /const lifecycleRepair = createTaskLifecycleAutoRepairCommand/g,
       ),
     ).toHaveLength(2)
+    expect(TASK_PROVIDER_RUNTIME_SOURCE).toMatch(
+      /bindTaskLifecycleRepair\(\{[\s\S]*?\.\.\.dependencies\.lifecycleRepair,/,
+    )
+    expect(TASK_PROVIDER_RUNTIME_SOURCE).toContain(
+      'taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair })',
+    )
     expect(TASK_PROVIDER_BACKGROUND_SOURCE).toContain('await runtime.lifecycleRepair.run({')
   })
 })

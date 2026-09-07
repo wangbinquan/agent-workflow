@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1731,
+    "entries": 1730,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -19341,31 +19341,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#createPostgresqlResourcePackageApplyJournalPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#createPostgresqlResourcePackageApplyJournalPort",
-      "symbol": "createPostgresqlResourcePackageApplyJournalPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -19429,6 +19404,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourceCatalogTransaction.ts#runResourceCatalogTransaction",
       "symbol": "runResourceCatalogTransaction",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts#createResourcePackageApplyJournalPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts#createResourcePackageApplyJournalPort",
+      "symbol": "createResourcePackageApplyJournalPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -19576,30 +19575,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#createSqliteResourcePackageApplyArtifactRecovery",
       "symbol": "createSqliteResourcePackageApplyArtifactRecovery",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#createSqliteResourcePackageApplyJournalPort",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#createSqliteResourcePackageApplyJournalPort",
-      "symbol": "createSqliteResourcePackageApplyJournalPort",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -41352,7 +41327,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cfd90d8e0084bd4ac1c5eafd8ea0b1d64226a6817d8e651901018b25487ac826",
+  "sourceDigest": "sha256:ba091208d0674dce5102690b0532ffbd3e0596b485954d212ce83b4923d4b05d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

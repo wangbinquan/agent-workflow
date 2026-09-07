@@ -2,26 +2,29 @@
 // composite precondition token that decodes to (skillId, contentVersion,
 // metaRevision). The client echoes it on the eventual combined-save (T4) for OCC.
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   createManagedSkill,
+  listSkills,
   getSkillPreconditionTokenById,
   readSkillContent,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getSkill } from './helpers/resourceLookup'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   decodeSkillToken,
   encodeSkillToken,
 } from '../src/modules/resource-catalog/application/skills/skillToken'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+async function getSkill(db: ProviderNeutralDatabase, name: string) {
+  return (await listSkills(db)).find((skill) => skill.name === name) ?? null
+}
 
-describe('RFC-170 T3 — read-path composite token', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 T3 — read-path composite token', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -29,7 +32,7 @@ describe('RFC-170 T3 — read-path composite token', () => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-read-token-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: 'd',

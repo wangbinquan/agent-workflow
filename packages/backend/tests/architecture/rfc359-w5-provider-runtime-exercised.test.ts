@@ -102,6 +102,8 @@ const PROVIDER_ROOT_PREFIX = /(?:compose|create)(?:Sqlite|Postgresql)/
  * 至少可执行）的 db 客户端调用它，然后对它交出来的东西断言行为。把 `toContain('composeXxx(')`
  * 改成真调用即可摘掉对应行；`readFileSync` + 文本断言无论写多少条都不算。
  */
+// W12：真实任务执行夹具改由两个 providerRuntime 工厂完整装配，驱动到 done 后
+// 再通过同一工厂的 overview 与 repair 端口读取该库，两个工厂从本账本移除。
 export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
   'modules/collaboration/composition/collaborationRouteOperations.ts#composePostgresqlCollaborationRouteOperations: 只有源码文本锁',
   'modules/collaboration/composition/collaborationRouteOperations.ts#composeSqliteCollaborationRouteOperations: 只有源码文本锁',
@@ -120,8 +122,6 @@ export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageProvider: 只有源码文本锁',
   'modules/runtime-management/composition.ts#composePostgresqlRealtimeRuntime: 只有源码文本锁',
   'modules/task-execution/composition/digitalEmployeeExecution.ts#composePostgresqlDigitalEmployeeExecution: 零引用',
-  'modules/task-execution/composition/providerRuntime.ts#composePostgresqlTaskExecutionProviderRuntime: 零引用',
-  'modules/task-execution/composition/providerRuntime.ts#composeSqliteTaskExecutionProviderRuntime: 只有源码文本锁',
 ]
 
 interface ProviderRoot {

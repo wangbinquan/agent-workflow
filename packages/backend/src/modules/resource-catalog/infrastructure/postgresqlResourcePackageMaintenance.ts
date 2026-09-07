@@ -4,12 +4,11 @@ import { BUNDLE_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import { plugins, resourceBundleApplies, skills, skillVersions } from '@/db/schema'
+import { plugins, skills, skillVersions } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { safeJoin } from '@/util/safePath'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
-  ResourcePackageApplyJournalPort,
   ResourcePackageApplyJournalSnapshot,
 } from '../application/resourcePackageMaintenance'
 import {
@@ -283,43 +282,6 @@ function compensateSkillArtifact(input: {
   rmSync(opCandidateDir(versionDirectory, input.artifact.operationId), {
     recursive: true,
     force: true,
-  })
-}
-
-export function createPostgresqlResourcePackageApplyJournalPort(
-  db: PostgresqlDatabaseClient,
-): ResourcePackageApplyJournalPort {
-  return Object.freeze({
-    async list(): Promise<readonly ResourcePackageApplyJournalSnapshot[]> {
-      const rows = await db.select().from(resourceBundleApplies)
-      return Object.freeze(
-        rows.map((row) =>
-          Object.freeze({
-            id: row.id,
-            state: row.state,
-            preparedArtifactsJson: row.preparedArtifactsJson,
-            receiptJson: row.receiptJson,
-            updatedAt: row.updatedAt,
-          }),
-        ),
-      )
-    },
-    async settleFailed(
-      command: Parameters<ResourcePackageApplyJournalPort['settleFailed']>[0],
-    ): Promise<boolean> {
-      const settled = await db
-        .update(resourceBundleApplies)
-        .set({ state: 'failed', error: command.error, updatedAt: command.updatedAt })
-        .where(
-          and(
-            eq(resourceBundleApplies.id, command.id),
-            eq(resourceBundleApplies.state, command.expectedState),
-          ),
-        )
-        .returning({ id: resourceBundleApplies.id })
-        .get()
-      return settled !== undefined
-    },
   })
 }
 

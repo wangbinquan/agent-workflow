@@ -11,10 +11,10 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   createResourcePackageApplyMaintenanceCommand,
   type ResourcePackageApplyArtifactRecoveryPort,
+  type ResourcePackageApplyJournalPort,
   type ResourcePackageApplyJournalSnapshot,
 } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
-import { createPostgresqlResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
-import { createSqliteResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
+import { createResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/resourcePackageApplyJournal'
 import type { MaintenanceRunStore } from '@/platform/background/maintenanceRunStorePort'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import type { CommittedEventDeliveryPersistencePort } from '@/platform/events/committed/persistence'
@@ -601,7 +601,7 @@ const APPLY_ROWS: readonly ApplyFixtureRow[] = [
 ]
 
 function postgresqlApplyJournal(): Readonly<{
-  journal: ReturnType<typeof createPostgresqlResourcePackageApplyJournalPort>
+  journal: ResourcePackageApplyJournalPort
   assertExhausted: () => void
 }> {
   const fixture = createScriptedPostgresqlFixture('apply-recovery', [
@@ -619,7 +619,7 @@ function postgresqlApplyJournal(): Readonly<{
     COMMIT,
   ])
   return {
-    journal: createPostgresqlResourcePackageApplyJournalPort(fixture.db),
+    journal: createResourcePackageApplyJournalPort(fixture.db),
     assertExhausted: fixture.assertExhausted,
   }
 }
@@ -635,11 +635,7 @@ function recoveryRecorder(log: string[]): ResourcePackageApplyArtifactRecoveryPo
   }
 }
 
-async function applyRecoveryTranscript(
-  journal:
-    | ReturnType<typeof createSqliteResourcePackageApplyJournalPort>
-    | ReturnType<typeof createPostgresqlResourcePackageApplyJournalPort>,
-) {
+async function applyRecoveryTranscript(journal: ResourcePackageApplyJournalPort) {
   const effects: string[] = []
   const command = createResourcePackageApplyMaintenanceCommand({
     journal,
@@ -674,7 +670,7 @@ describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
           events,
         ),
         applyRecovery: await applyRecoveryTranscript(
-          createSqliteResourcePackageApplyJournalPort(sqliteApplyDb),
+          createResourcePackageApplyJournalPort(sqliteApplyDb),
         ),
       }
 

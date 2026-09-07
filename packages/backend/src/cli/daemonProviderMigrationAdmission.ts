@@ -21,18 +21,49 @@ export interface DaemonProviderMigrationAdmission {
   stop(): Promise<void>
 }
 
+export type DaemonProviderMigrationLifecycle = Pick<
+  DaemonProviderSessionController<ManagedDaemonProviderSession>,
+  'pauseBackgroundWriters' | 'switchProviderComposition' | 'resumeBackgroundWriters' | 'stop'
+>
+
+export interface DaemonProviderMigrationInitialGeneration {
+  readonly provider: ManagedDaemonProviderSession['provider']
+  readonly generationId: string
+}
+
+interface CurrentDaemonProviderMigrationAdmissionInput<
+  Session extends ManagedDaemonProviderSession,
+> {
+  readonly controller: DaemonProviderSessionController<Session>
+  readonly createAdmission?: DatabaseMigrationDaemonAdmissionFactory
+}
+
+interface InitialDaemonProviderMigrationAdmissionInput {
+  readonly initial: DaemonProviderMigrationInitialGeneration
+  readonly controller: DaemonProviderMigrationLifecycle
+  readonly createAdmission?: DatabaseMigrationDaemonAdmissionFactory
+}
+
 /**
- * Bind the migration state machine to the controller's exact current provider
- * generation. Provider switching remains owned by the controller; this bridge
- * adds no provider policy and never receives a database client.
+ * Existing callers derive the generation from their current session. Bootstrap
+ * can instead construct admission before opening the initial session, with an
+ * exact generation and a complete lifecycle port. Both share the same state
+ * machine and retryable shutdown sequence.
  */
 export function createDaemonProviderMigrationAdmission<
   Session extends ManagedDaemonProviderSession,
->(input: {
-  readonly controller: DaemonProviderSessionController<Session>
-  readonly createAdmission?: DatabaseMigrationDaemonAdmissionFactory
-}): DaemonProviderMigrationAdmission {
-  const initial = input.controller.current()
+>(input: CurrentDaemonProviderMigrationAdmissionInput<Session>): DaemonProviderMigrationAdmission
+export function createDaemonProviderMigrationAdmission(
+  input: InitialDaemonProviderMigrationAdmissionInput,
+): DaemonProviderMigrationAdmission
+export function createDaemonProviderMigrationAdmission<
+  Session extends ManagedDaemonProviderSession,
+>(
+  input:
+    | CurrentDaemonProviderMigrationAdmissionInput<Session>
+    | InitialDaemonProviderMigrationAdmissionInput,
+): DaemonProviderMigrationAdmission {
+  const initial = 'initial' in input ? input.initial : input.controller.current()
   const admission = (input.createAdmission ?? createDatabaseMigrationDaemonAdmission)({
     initialProvider: initial.provider,
     initialGenerationId: initial.generationId,

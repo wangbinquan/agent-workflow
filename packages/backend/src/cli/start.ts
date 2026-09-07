@@ -290,7 +290,7 @@ import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integrat
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
-  createDaemonProviderBootstrap,
+  composeDaemonProviderBootstrap,
   type DaemonProviderBootstrap,
 } from './daemonProviderBootstrap'
 import {
@@ -401,24 +401,6 @@ interface DaemonProviderRuntimeComposition {
 
 type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModule>[0]['admission']
 
-/** The bootstrap face this holder needs: the module port plus the live phase. */
-interface BoundDatabaseMigrationBootstrap {
-  readonly databaseMigration: DatabaseMigrationAdmission
-  readonly live: () => { readonly phase: string }
-}
-
-interface DeferredDatabaseMigrationAdmission {
-  readonly admission: DatabaseMigrationAdmission
-  /**
-   * RFC-349 T10 — the request path's own writes (session/PAT last-used, token
-   * call audit) must stop while a migration has frozen the source. They run in
-   * authentication, before the route gate, and on the deliberately exempt
-   * `/api/database/*` path, so nothing else can see them.
-   */
-  readonly sourceWriteWindow: DatabaseSourceWriteWindow
-  readonly bind: (bootstrap: BoundDatabaseMigrationBootstrap) => void
-}
-
 function _bindTaskExecutionProviderBackground(
   background: TaskExecutionBackgroundControl,
   dependencies: TaskExecutionBackgroundStartDependencies,
@@ -428,44 +410,6 @@ function _bindTaskExecutionProviderBackground(
     closeParticipantId: 'task-execution-final-close',
     service: background,
     start: () => background.start(dependencies),
-  })
-}
-
-/**
- * Break the intentional app/bootstrap cycle without exposing an ambient
- * registry. Migration routes are composed before the provider controller, but
- * remain fail-closed until this exact daemon binds its controller-owned port.
- */
-function _createDeferredDatabaseMigrationAdmission(): DeferredDatabaseMigrationAdmission {
-  let bound: BoundDatabaseMigrationBootstrap | null = null
-  const requireBound = (): DatabaseMigrationAdmission => {
-    if (bound === null) throw new Error('database-migration-admission-not-bound')
-    return bound.databaseMigration
-  }
-  return Object.freeze({
-    admission: Object.freeze({
-      freezeAndDrain: (input: Parameters<DatabaseMigrationAdmission['freezeAndDrain']>[0]) =>
-        requireBound().freezeAndDrain(input),
-      reopenSqlite: (input: Parameters<DatabaseMigrationAdmission['reopenSqlite']>[0]) =>
-        requireBound().reopenSqlite(input),
-      activatePostgresql: (
-        input: Parameters<DatabaseMigrationAdmission['activatePostgresql']>[0],
-      ) => requireBound().activatePostgresql(input),
-      openPostgresqlAdmission: (
-        input: Parameters<DatabaseMigrationAdmission['openPostgresqlAdmission']>[0],
-      ) => requireBound().openPostgresqlAdmission(input),
-    }),
-    // Before bootstrap binds there is no operation and therefore no freeze, so
-    // "writable" is the honest answer rather than a fail-closed guess.
-    sourceWriteWindow: Object.freeze({
-      writable: () => bound === null || bound.live().phase === 'open',
-    }),
-    bind(bootstrap: BoundDatabaseMigrationBootstrap) {
-      if (bound !== null && bound !== bootstrap) {
-        throw new Error('database-migration-admission-already-bound')
-      }
-      bound = bootstrap
-    },
   })
 }
 
@@ -1496,8 +1440,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const dbVersion = existsSync(migrationsFolder)
     ? readdirSync(migrationsFolder).filter((file) => file.endsWith('.sql')).length
     : 0
-  const deferredDatabaseMigrationAdmission = _createDeferredDatabaseMigrationAdmission()
-
   // 5. DB — resolve the verified live generation before opening any provider
   // client. The pointer is authoritative; config may supply mechanism settings
   // but cannot silently select a different database.
@@ -1531,22 +1473,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     token,
     secretBox,
     dbVersion,
-    migrationAdmission: deferredDatabaseMigrationAdmission.admission,
-    sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
     log,
     lock,
     migrationsFolder,
     digitalEmployeeTypePackageDriftPolicy,
   })
-  const initial = await composeDaemonProviderSession({
-    ...sessionInput,
-    provider: databaseProvider,
-    lifecycle,
-  })
-  const daemonProviderBootstrap = createDaemonProviderBootstrap({
-    initialSession: initial.session,
+  const { initial, bootstrap: daemonProviderBootstrap } = await composeDaemonProviderBootstrap({
+    initial: lifecycle,
+    composeInitial: (bindings) =>
+      composeDaemonProviderSession({
+        ...sessionInput,
+        ...bindings,
+        provider: databaseProvider,
+        lifecycle,
+      }),
     sessionFactory: {
-      async create(lifecycleInput) {
+      async create(lifecycleInput, bindings) {
         // 只有迁移目标才会被重新装配；源 provider（SQLite）在割接后退役，不能再被当作
         // 新会话的来源——判据取自 provider 特征表，不在这里写 provider 字面量。
         if (databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target') {
@@ -1570,6 +1512,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         return (
           await composeDaemonProviderSession({
             ...sessionInput,
+            ...bindings,
             config: nextConfig,
             provider: nextProvider,
             lifecycle: lifecycleInput,
@@ -1585,7 +1528,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     // composition 上，成功与失败两条路径都对。
     onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
   })
-  deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
   await initial.session.resume(lifecycle)
   await serveDaemon({
     bootstrap: daemonProviderBootstrap,

@@ -1,9 +1,11 @@
-// RFC-359 W5-T21b: real launch, ownership, driver and persistence on each engine.
+// RFC-359 W5-T21b: construct the complete provider runtime, then use its real
+// launch, ownership, driver, read model and maintenance bindings on each engine.
 // The caller owns the temporary Git directory. Both launchers borrow it using
 // the same production lease used by development-automation host tasks.
 
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -23,12 +25,17 @@ import {
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
-import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import {
+  composePostgresqlTaskExecutionProviderRuntime,
+  composeSqliteTaskExecutionProviderRuntime,
+  type SelectedPostgresqlTaskExecutionProviderRuntime,
+  type SelectedSqliteTaskExecutionProviderRuntime,
+} from '@/modules/task-execution/composition/providerRuntime'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
-import { createPostgresqlTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants'
-import { createPostgresqlRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
+import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { startTask } from '@/services/task'
@@ -36,10 +43,8 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { createLogger } from '@/util/log'
 import { admitTestDirectAuthority } from './identityAccessAuthority'
 import type { ProviderHarness } from './eachProvider'
-import {
-  composeTaskExecutionTestRuntime,
-  createTestRepositoryPublicationTransport,
-} from './taskExecutionTestTopology'
+import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
+import { sqliteMemoryInjectionQueries } from './memoryInjection'
 
 /** The tested workflow has no code-host, dynamic-workflow or child-launch node.
  * Unexpected use fails explicitly; database and task execution are never mocked. */
@@ -77,12 +82,70 @@ export async function createEachProviderTaskExecution(
     resources,
   })
   const persistence = createTaskExecutionPersistence(db)
+  const appHome = runConfig.appHome
+  const configPath = join(appHome, 'config.json')
+  const collaborationRuntime = createCollaborationRuntimeMechanics(db)
+  const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
+  const workgroupTurns = composeWorkgroupTurnsOperations(
+    db,
+    composeWorkgroupHostLedgerParticipantFactory({ collaboration: workgroupClarify }),
+    createWorkgroupClarifyAskGate(db),
+  )
+  const runtimeIdentity = {
+    delegatedRequests: identityAccess.delegatedRequests,
+    taskExecutionResources: resources,
+  }
+  const rootResumeRuntime = () => ({ runConfig, actorUserId: actor.user.id })
+  const unavailable = (name: string): never => {
+    throw new Error(`execution-chain fixture unexpectedly invoked ${name}`)
+  }
 
   if (harness.capabilities.isolation === 'exclusive') {
     const sqlite = db as unknown as DbClient
-    const runtime = composeTaskExecutionTestRuntime(sqlite)
+    const provider: SelectedSqliteTaskExecutionProviderRuntime =
+      composeSqliteTaskExecutionProviderRuntime(sqlite, {
+        runtime: {
+          identityAccess: runtimeIdentity,
+          memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
+          collaborationRuntime,
+          workgroupTurns,
+          runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
+          runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
+          repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+          codeHostConnections: unusedCapability('code-host connection'),
+        },
+        routeLaunch: {
+          configPath,
+          executionFor: () => unavailable('agent/workgroup route launch'),
+        },
+        routes: () => ({
+          collaboration: unusedCapability('collaboration route'),
+          startDepsFor: () => unavailable('task route launch'),
+          multipart: unusedCapability('multipart upload'),
+          resourceAuthorityFor: () => launchResources,
+          assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
+          appHome,
+        }),
+        lifecycleRepair: {
+          appHome,
+          deps: {
+            db: sqlite,
+            ...runConfig,
+            schedulerDriver: {
+              drive: (request) => provider.runtime.schedulerDriver.drive(request),
+            },
+          },
+        },
+        fusion: { appHome },
+        trigger: { executionFor: () => unavailable('trigger launch') },
+        rootResumeRuntime,
+        repositoryPreparationRetry: {
+          retry: async () => unavailable('repository preparation retry'),
+        },
+      })
     return {
-      persistence,
+      provider,
+      persistence: provider.persistence,
       async launch(
         task: StartTask,
         workspace: { readonly workspacePath: string; readonly baselineSha: string },
@@ -90,8 +153,8 @@ export async function createEachProviderTaskExecution(
         return await startTask(task, {
           db: sqlite,
           ...runConfig,
-          schedulerDriver: runtime.schedulerDriver,
-          taskRecoveryOperations: persistence.recoveryAdministration,
+          schedulerDriver: provider.runtime.schedulerDriver,
+          taskRecoveryOperations: provider.recovery,
           identityAccess,
           launchResources,
           actorUserId: actor.user.id,
@@ -111,42 +174,61 @@ export async function createEachProviderTaskExecution(
           },
         })
       },
-      isActive: runtime.schedulerDriver.isTaskActive,
+      isActive: provider.runtime.schedulerDriver.isTaskActive,
+      overview: () => provider.overview.load({ actor, since: 0 }),
       shutdown: () => identityAccess.shutdown(),
     }
   }
 
   const postgresql = db as unknown as PostgresqlDatabaseClient
   const log = createLogger('rfc359-execution-chain')
-  const participants = createPostgresqlTaskExecutionRuntimeParticipants(postgresql, {
-    persistence,
-    taskDagCollaboration: createTaskDagCollaborationOperations(db),
-    collaborationRuntime: createCollaborationRuntimeMechanics(db),
-    workgroupTurns: composeWorkgroupTurnsOperations(
-      db,
-      composeWorkgroupHostLedgerParticipantFactory({
-        collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+  const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
+    composePostgresqlTaskExecutionProviderRuntime(postgresql, {
+      runtime: {
+        persistence,
+        taskDagCollaboration: createTaskDagCollaborationOperations(db),
+        collaborationRuntime,
+        workgroupTurns,
+        identityAccess: runtimeIdentity,
+        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+        codeHostConnections: unusedCapability('code-host connection'),
+        processConcurrencyScope: {},
+        daemonGeneration: `rfc359-execution-chain-${ulid()}`,
+        finalizeWorkspace: async () => {},
+        log,
+      },
+      routeLaunch: {
+        configPath,
+        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+        resourceAuthorityFor: () => launchResources,
+        coordinator: {
+          submit: (request) => coordinator.submit({ ...request, completionMode: 'await-settle' }),
+        },
+        agent: {
+          resources: unusedCapability('agent route resources'),
+          integrity: unusedCapability('agent route integrity'),
+        },
+        workgroup: unusedCapability('workgroup route resources'),
+      },
+      routeWorkspace: { appHome },
+      routes: () => ({
+        collaboration: unusedCapability('collaboration route'),
+        users: unusedCapability('task user directory'),
+        owners: unusedCapability('task owner directory'),
+        membershipEvents: unusedCapability('task member events'),
+        deletionEvents: unusedCapability('task deletion events'),
+        appHome,
       }),
-      createWorkgroupClarifyAskGate(db),
-    ),
-    childLaunchWorkgroup: unusedCapability('child workgroup launch'),
-    identityAccess: {
-      delegatedRequests: identityAccess.delegatedRequests,
-      taskExecutionResources: resources,
-    },
-    repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-    codeHostConnections: unusedCapability('code-host connection'),
-    processConcurrencyScope: {},
-    daemonGeneration: `rfc359-execution-chain-${ulid()}`,
-    finalizeWorkspace: async () => {},
-    log,
-  })
-  const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
+      lifecycleRepair: {},
+      fusion: { appHome },
+      rootResumeRuntime,
+      workgroupTaskRoom: { collaboration: workgroupClarify },
+    })
   const coordinator = new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(runConfig),
     lifecycle: createPostgresqlTaskDriverLifecyclePort({
       db: postgresql,
-      module: participants.executionModule,
+      module: provider.executionModule,
       persistence,
       log,
       finalizeWorkspace: async () => {},
@@ -154,7 +236,7 @@ export async function createEachProviderTaskExecution(
     repositoryPreparation: skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {
-        await runtime.schedulerDriver.drive({
+        await provider.runtime.schedulerDriver.drive({
           taskId: context.taskId,
           appHome: context.runtime.appHome,
           ...context.runtime.runtime,
@@ -182,7 +264,8 @@ export async function createEachProviderTaskExecution(
     },
   })
   return {
-    persistence,
+    provider,
+    persistence: provider.persistence,
     async launch(
       task: StartTask,
       workspace: { readonly workspacePath: string; readonly baselineSha: string },
@@ -193,21 +276,12 @@ export async function createEachProviderTaskExecution(
         .where(eq(workflows.id, task.workflowId))
         .limit(1)
       if (workflow === undefined) throw new Error('execution-chain fixture workflow missing')
-      const kernel = createPostgresqlRootTaskLaunchKernel({
-        db: postgresql,
-        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-        workspace: borrowedPostgresqlWorkspace(workspace),
-        coordinator: {
-          // Await the real driver and release protocol, without polling or
-          // rewriting task status. Production HTTP uses background completion.
-          submit: (request) => coordinator.submit({ ...request, completionMode: 'await-settle' }),
-        },
-      })
-      return await kernel.launch({
+      return await provider.routeLaunch.workflow.launch({
         actor,
         resourceAuthority: launchResources,
         invoker: { type: 'user', launchKind: 'direct-json' },
         task,
+        internal: { workspace: borrowedPostgresqlWorkspace(workspace) },
         subject: {
           workflowId: workflow.id,
           workflowName: workflow.name,
@@ -216,7 +290,8 @@ export async function createEachProviderTaskExecution(
         },
       })
     },
-    isActive: participants.activity.isActive,
+    isActive: provider.participants.activity.isActive,
+    overview: () => provider.overview.load({ actor, since: 0 }),
     shutdown: () => identityAccess.shutdown(),
   }
 }

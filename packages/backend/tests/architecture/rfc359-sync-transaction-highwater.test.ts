@@ -86,8 +86,8 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/legacy/importRefs.ts: 1',
   'modules/resource-catalog/infrastructure/legacy/workflow.ts: 3',
   'modules/resource-catalog/infrastructure/legacy/workgroups.ts: 3',
-  // 口径修正后首次现身（此前唯一的调用点是 `dbTxSync<boolean>(…)`，被旧正则漏掉）。
-  'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts: 1',
+  // RFC-359 W12：资源包 journal 合一为 resourcePackageApplyJournal.ts，settleFailed 的
+  // expectedState CAS 走同一中立事务；两侧 artifact recovery 格式继续独立保留。
   // RFC-359 W10 销账：`sqliteProcessEffectObserver.ts: 1` —— 三份 SQLite 效应观察者
   // （local / process / code-host，共 903 行）自 RFC-349 起就只剩一个同样零调用方的
   // composition 再导出壳指着它们，生产路径转出的是 `application/{local,process,codeHost}

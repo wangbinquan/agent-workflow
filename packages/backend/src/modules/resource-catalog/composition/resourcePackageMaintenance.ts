@@ -9,14 +9,9 @@ import {
   type ResourcePackageApplyActivityTracker,
   type ResourcePackageApplyMaintenanceLog,
 } from '../application/resourcePackageMaintenance'
-import {
-  createPostgresqlResourcePackageApplyArtifactRecovery,
-  createPostgresqlResourcePackageApplyJournalPort,
-} from '../infrastructure/postgresqlResourcePackageMaintenance'
-import {
-  createSqliteResourcePackageApplyArtifactRecovery,
-  createSqliteResourcePackageApplyJournalPort,
-} from '../infrastructure/sqliteResourcePackageMaintenance'
+import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../infrastructure/postgresqlResourcePackageMaintenance'
+import { createResourcePackageApplyJournalPort } from '../infrastructure/resourcePackageApplyJournal'
+import { createSqliteResourcePackageApplyArtifactRecovery } from '../infrastructure/sqliteResourcePackageMaintenance'
 import type { ResourcePackageApplyMaintenanceCommand } from '../public/commands'
 import type { ResourcePackageApplyActivityQuery } from '../public/queries'
 
@@ -49,7 +44,7 @@ export function composeSqliteResourcePackageApplyMaintenance(input: {
   const log = input.log ?? createLogger('resourcePackageMaintenance')
   return Object.freeze({
     command: createResourcePackageApplyMaintenanceCommand({
-      journal: createSqliteResourcePackageApplyJournalPort(input.db),
+      journal: createResourcePackageApplyJournalPort(input.db),
       artifacts: createSqliteResourcePackageApplyArtifactRecovery({
         db: input.db,
         appHome: input.appHome,
@@ -74,7 +69,7 @@ export function composePostgresqlResourcePackageApplyMaintenance(input: {
   const log = input.log ?? createLogger('resourcePackageMaintenance')
   return Object.freeze({
     command: createResourcePackageApplyMaintenanceCommand({
-      journal: createPostgresqlResourcePackageApplyJournalPort(input.db),
+      journal: createResourcePackageApplyJournalPort(input.db),
       artifacts: createPostgresqlResourcePackageApplyArtifactRecovery({
         db: input.db,
         appHome: input.appHome,

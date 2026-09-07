@@ -150,6 +150,10 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       join(root, 'src/modules/resource-catalog/composition/resourcePackageMaintenance.ts'),
       'utf8',
     )
+    const journalSource = readFileSync(
+      join(root, 'src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts'),
+      'utf8',
+    )
     const sqlite = readFileSync(
       join(root, 'src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts'),
       'utf8',
@@ -169,9 +173,9 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
     expect(composition).toContain('composeSqliteResourcePackageApplyMaintenance')
     expect(composition).toContain('composePostgresqlResourcePackageApplyMaintenance')
     expect(composition).toContain('activityTracker: activity.tracker')
-    expect(sqlite).toContain('.from(resourceBundleApplies)')
+    expect(composition.match(/journal: createResourcePackageApplyJournalPort\(/g)).toHaveLength(2)
+    expect(journalSource).toContain('.from(resourceBundleApplies)')
     expect(sqlite).toContain('swapInStaged(filesDir, staged.publishId)')
-    expect(postgresql).toContain('.from(resourceBundleApplies)')
     expect(postgresql).toContain('restoreFromBackup(liveDirectory, input.artifact.operationId)')
     expect(postgresql).toContain("disposition === 'cleanup-superseded'")
     expect(postgresql).toContain('hashRegularFileTree(liveDirectory)')

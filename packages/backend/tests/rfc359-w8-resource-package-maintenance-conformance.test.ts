@@ -2,18 +2,14 @@
 //
 // 这一对是「资源包应用的崩溃收敛」：进程在把技能目录 / 插件 generation 落盘的半路上死掉之后，
 // 由 `createResourcePackageApplyMaintenanceCommand`（application 层，两侧共用）读 journal、
-// 按 `state` 决定 roll-forward 还是补偿 + 结算成 failed。两侧各出**两个端口**：
+// 按 `state` 决定 roll-forward 还是补偿 + 结算成 failed。两种端口分别收口：
 //
-//   · `ResourcePackageApplyJournalPort`（`list` / `settleFailed`）——**几乎重复，但不是白送的合一**。
-//     两侧读同一张 `resource_bundle_applies`、投影同一个 `ResourcePackageApplyJournalSnapshot`
-//     （`list` 的 11 行两侧逐字相同）、`settleFailed` 是同一条带 `expectedState` 的 CAS。唯一的
-//     差别是事务包装，而它**不是**冗余：SQLite 侧的 `dbTxSync` 同时兜着
-//     `foreignExplicitTransactionOpen` 那道跨上下文守卫——bun:sqlite 是单连接，别的 async 上下文
-//     正持着一笔显式 `BEGIN IMMEDIATE` 时，一条裸写会**静默落进它并随它回滚**
-//     （`db/txSync.ts:34-38` 的 2026-09-04 实测）；PostgreSQL 每笔事务各占一条预留连接，没有这个
-//     形态，所以那一侧裸写是对的。要合就得走中立事务原语，而那会给 PG 侧再套一层 BEGIN/COMMIT、
-//     改动 `rfc349-dual-provider-behavior-oracle.test.ts` 里那份脚本化语句流水。本刀因此**只补对拍
-//     不合一**：真正能退役这一对的是下面那半边的桥接，合一该跟着它一起做，那时这份对拍原样还能跑。
+//   · `ResourcePackageApplyJournalPort`（`list` / `settleFailed`）——W12 合一到
+//     `resourcePackageApplyJournal.ts`，保留原快照与 expectedState CAS。事务走统一会话，
+//     SQLite 写者排队，已有会话中的结算随外层回滚。PG 原来的单条写已经由客户端
+//     `withWriteFence` 包在 BEGIN/COMMIT 中；统一事务交出的连接带 transactional 标记，
+//     不会再套一层。下面的真库语句录制锁住一次 BEGIN、一次 UPDATE、一次 COMMIT。
+//     W8 已在两份旧实现上验证的页面行为继续逐字断言，新增竞争结算与中止回滚。
 //   · `ResourcePackageApplyArtifactRecoveryPort`（`rollForward` / `compensate`）——**机制本质不同**，
 //     不该合。`prepared_artifacts_json` 这一列被两套互不认识的格式写着（写出点
 //     `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts:287` vs
@@ -80,14 +76,9 @@ import {
 // 两侧实现各值 import 一条：这一对的对拍见证判据锁在这里
 // （`tests/architecture/rfc359-w5-provider-pair-conformance.test.ts`），走 composition 的再导出
 // 会让这份对拍在账本里看不见。
-import {
-  createPostgresqlResourcePackageApplyArtifactRecovery,
-  createPostgresqlResourcePackageApplyJournalPort,
-} from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
-import {
-  createSqliteResourcePackageApplyArtifactRecovery,
-  createSqliteResourcePackageApplyJournalPort,
-} from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
+import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
+import { createResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/resourcePackageApplyJournal'
+import { createSqliteResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -110,16 +101,17 @@ interface Warning {
   readonly fields: Readonly<Record<string, string>>
 }
 
-/** 按引擎取本引擎的那份适配器。`describeEachProvider` 有意不给 provider 名，只给能力矩阵。 */
+/** Journal 两引擎共用；artifact recovery 继续读取本引擎的工件格式。 */
 function portsFor(
   db: ProviderNeutralDatabase,
   isolation: 'exclusive' | 'read-committed',
   paths: { readonly appHome: string; readonly pluginsDir: string },
 ): Ports {
+  const journal = createResourcePackageApplyJournalPort(db)
   if (isolation === 'exclusive') {
     const client = db as unknown as DbClient
     return {
-      journal: createSqliteResourcePackageApplyJournalPort(client),
+      journal,
       artifacts: createSqliteResourcePackageApplyArtifactRecovery({
         db: client,
         appHome: paths.appHome,
@@ -129,7 +121,7 @@ function portsFor(
   }
   const client = db as unknown as PostgresqlDatabaseClient
   return {
-    journal: createPostgresqlResourcePackageApplyJournalPort(client),
+    journal,
     artifacts: createPostgresqlResourcePackageApplyArtifactRecovery({
       db: client,
       appHome: paths.appHome,
@@ -279,9 +271,9 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       })
 
       const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
-      const listed = [...(await ports.journal.list())].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      )
+      const snapshots = await ports.journal.list()
+      expect(Object.isFrozen(snapshots)).toBe(true)
+      const listed = [...snapshots].sort((left, right) => left.id.localeCompare(right.id))
       expect(listed.map((row) => row.id)).toEqual(['w8rpm-a', 'w8rpm-b'])
       expect(listed.map((row) => row.state)).toEqual(['prepared', 'committed'])
       expect(listed[0]!.receiptJson).toBeNull()
@@ -354,6 +346,106 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       expect((await readJournal(harness, 'w8rpm-cas'))?.error).toBe(
         'converged: crashed before commit',
       )
+    } finally {
+      cleanup()
+    }
+  })
+
+  test('settleFailed 的真实语句只有一笔事务和一次条件更新', async () => {
+    const paths = makePaths()
+    try {
+      await insertJournal(harness, { id: 'w8rpm-statement', state: 'prepared' })
+      const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
+      const recording = harness.recordStatements()
+      try {
+        expect(
+          await ports.journal.settleFailed({
+            id: 'w8rpm-statement',
+            expectedState: 'prepared',
+            error: 'settled once',
+            updatedAt: NOW,
+          }),
+        ).toBe(true)
+        const statements = recording.statements.map((statement) => statement.sql)
+        expect(statements.filter((sql) => /^\s*begin\b/i.test(sql))).toHaveLength(1)
+        expect(
+          statements.filter((sql) =>
+            /^\s*update\s+(?:"[^"]+"\.)?"resource_bundle_applies"\s+set\b/i.test(sql),
+          ),
+        ).toHaveLength(1)
+        expect(statements.filter((sql) => /^\s*commit\b/i.test(sql))).toHaveLength(1)
+        expect(statements.filter((sql) => /^\s*rollback\b/i.test(sql))).toHaveLength(0)
+      } finally {
+        recording.stop()
+      }
+      expect(await readJournal(harness, 'w8rpm-statement')).toEqual({
+        state: 'failed',
+        error: 'settled once',
+        updatedAt: NOW,
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
+  test('竞争结算只允许一个调用成功，失败者不覆盖获胜者的错误和时间', async () => {
+    const paths = makePaths()
+    try {
+      await insertJournal(harness, { id: 'w8rpm-race', state: 'applying' })
+      const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
+      const commands = [
+        {
+          id: 'w8rpm-race',
+          expectedState: 'applying' as const,
+          error: 'first settlement',
+          updatedAt: NOW,
+        },
+        {
+          id: 'w8rpm-race',
+          expectedState: 'applying' as const,
+          error: 'second settlement',
+          updatedAt: NOW + 1,
+        },
+      ]
+      const settled = await Promise.all(
+        commands.map((command) => ports.journal.settleFailed(command)),
+      )
+      expect(settled.filter(Boolean)).toHaveLength(1)
+      const winner = commands[settled.indexOf(true)]!
+      expect(await readJournal(harness, 'w8rpm-race')).toEqual({
+        state: 'failed',
+        error: winner.error,
+        updatedAt: winner.updatedAt,
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
+  test('同一 session 中结算后中止，journal 随外层事务完整回滚', async () => {
+    const paths = makePaths()
+    try {
+      await insertJournal(harness, { id: 'w8rpm-rollback', state: 'applying' })
+      const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
+      const aborted = new Error('abort journal settlement')
+      await expect(
+        harness.session.transaction(async () => {
+          expect(
+            await ports.journal.settleFailed({
+              id: 'w8rpm-rollback',
+              expectedState: 'applying',
+              error: 'must roll back',
+              updatedAt: NOW,
+            }),
+          ).toBe(true)
+          throw aborted
+        }),
+      ).rejects.toBe(aborted)
+      expect(await readJournal(harness, 'w8rpm-rollback')).toEqual({
+        state: 'applying',
+        error: null,
+        updatedAt: OLD,
+      })
     } finally {
       cleanup()
     }

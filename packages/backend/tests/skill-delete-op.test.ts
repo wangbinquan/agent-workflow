@@ -5,18 +5,19 @@
 
 import { buildActor } from '../src/auth/actor'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { skills } from '../src/db/schema'
 import {
   createManagedSkill,
   deleteSkill,
+  listSkills,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import { getSkill } from './helpers/resourceLookup'
+import { describeEachProvider } from './helpers/eachProvider'
 import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
 import {
   advancePhase,
@@ -26,6 +27,10 @@ import {
 import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 
+async function getSkill(db: ProviderNeutralDatabase, name: string) {
+  return (await listSkills(db)).find((skill) => skill.name === name) ?? null
+}
+
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
 const T6_ACTOR = buildActor({
@@ -33,10 +38,8 @@ const T6_ACTOR = buildActor({
   source: 'session',
 })
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-170 delete op', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 delete op', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: { appHome: string }
   let skillId: string
@@ -44,7 +47,7 @@ describe('RFC-170 delete op', () => {
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-del-op-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',
       description: '',
@@ -127,7 +130,7 @@ describe('RFC-170 delete op', () => {
     )
     // Simulate db-committed reached (row deleted) but crash before trash cleanup.
     await databaseSessionFor(db).transaction(async (tx) => {
-      tx.delete(skills).where(eq(skills.id, currentSkillId)).run()
+      await tx.delete(skills).where(eq(skills.id, currentSkillId)).run()
       await advancePhase(tx, opId, 'db-committed')
     })
     expect(existsSync(trash)).toBe(true)

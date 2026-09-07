@@ -11,13 +11,18 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { memories } from '../src/db/schema'
-import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
+import {
+  composeMemoryCatalogOperations,
+  composeSkillMemoryFusionParticipantFactory,
+} from '../src/modules/memory/composition'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
-import { memoryCatalogOf } from './helpers/memoryCatalog'
+import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   createManagedSkill,
   writeSkillContent,
@@ -25,25 +30,27 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { restoreSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface H {
-  db: DbClient
+  db: ProviderNeutralDatabase
   fsOpts: SkillFsOptions
   cleanup: () => void
 }
-function build(): H {
+function build(db: ProviderNeutralDatabase): H {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-mem-fused-'))
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db,
     fsOpts: { appHome },
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
   }
 }
 
-function insertApprovedGlobalMemory(db: DbClient, title: string): string {
+async function insertApprovedGlobalMemory(
+  db: ProviderNeutralDatabase,
+  title: string,
+): Promise<string> {
   const id = ulid()
-  db.insert(memories)
+  await db
+    .insert(memories)
     .values({
       id,
       scopeType: 'global',
@@ -64,7 +71,7 @@ function insertApprovedGlobalMemory(db: DbClient, title: string): string {
 // 不再有 SQLite 专属的 `the fusion participant`。
 const FUSION = composeSkillMemoryFusionParticipantFactory()
 async function fuse(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   args: {
     memoryIds: readonly string[]
     skillId: string
@@ -89,195 +96,197 @@ async function fuse(
   )
 }
 
-function statusOf(db: DbClient, id: string): string {
-  const rows = db.select().from(memories).where(eqId(id)).all() as Array<{ status: string }>
+async function statusOf(db: ProviderNeutralDatabase, id: string): Promise<string> {
+  const rows = await db.select().from(memories).where(eqId(id)).all()
   return rows[0]!.status
 }
 function eqId(id: string) {
   return eq(memories.id, id)
 }
 
-describe('fusion participant markFused', () => {
-  let h: H
-  beforeEach(() => (h = build()))
-  afterEach(() => h.cleanup())
+describeEachProvider('RFC-101 memory fusion and skill restore', (harness) => {
+  describe('fusion participant markFused', () => {
+    let h: H
+    beforeEach(() => (h = build(harness.db)))
+    afterEach(() => h.cleanup())
 
-  test('only approved memories transition to fused (+ provenance); others skipped', async () => {
-    const a = insertApprovedGlobalMemory(h.db, 'a')
-    const b = insertApprovedGlobalMemory(h.db, 'b')
-    // archive b so it is no longer 'approved'
-    h.db.update(memories).set({ status: 'archived' }).where(eqId(b)).run()
+    test('only approved memories transition to fused (+ provenance); others skipped', async () => {
+      const a = await insertApprovedGlobalMemory(h.db, 'a')
+      const b = await insertApprovedGlobalMemory(h.db, 'b')
+      // archive b so it is no longer 'approved'
+      await h.db.update(memories).set({ status: 'archived' }).where(eqId(b)).run()
 
-    const fused = await fuse(h.db, {
-      memoryIds: [a, b],
-      skillId: 'skill-lint',
-      skillName: 'lint',
-      skillVersion: 4,
-      fusionId: 'fus_1',
-      userId: 'u1',
-      now: Date.now(),
+      const fused = await fuse(h.db, {
+        memoryIds: [a, b],
+        skillId: 'skill-lint',
+        skillName: 'lint',
+        skillVersion: 4,
+        fusionId: 'fus_1',
+        userId: 'u1',
+        now: Date.now(),
+      })
+      expect(fused).toEqual([a])
+      expect(await statusOf(h.db, a)).toBe('fused')
+      expect(await statusOf(h.db, b)).toBe('archived') // untouched
+      const rowA = await h.db.select().from(memories).where(eqId(a)).all()
+      expect(rowA[0]!.fusedIntoSkill).toBe('lint')
+      expect(rowA[0]!.fusedIntoSkillId).toBe('skill-lint')
+      expect(rowA[0]!.fusedIntoSkillVersion).toBe(4)
     })
-    expect(fused).toEqual([a])
-    expect(statusOf(h.db, a)).toBe('fused')
-    expect(statusOf(h.db, b)).toBe('archived') // untouched
-    const rowA = h.db.select().from(memories).where(eqId(a)).all() as Array<{
-      fusedIntoSkill: string | null
-      fusedIntoSkillId: string | null
-      fusedIntoSkillVersion: number | null
-    }>
-    expect(rowA[0]!.fusedIntoSkill).toBe('lint')
-    expect(rowA[0]!.fusedIntoSkillId).toBe('skill-lint')
-    expect(rowA[0]!.fusedIntoSkillVersion).toBe(4)
-  })
-})
-
-describe('fused⟺provenance DB CHECK', () => {
-  let h: H
-  beforeEach(() => (h = build()))
-  afterEach(() => h.cleanup())
-
-  test('status=fused without provenance is rejected', async () => {
-    expect(() =>
-      h.db
-        .insert(memories)
-        .values({
-          id: ulid(),
-          scopeType: 'global',
-          scopeId: null,
-          title: 't',
-          bodyMd: 'b',
-          tags: '[]',
-          status: 'fused', // no fusedIntoSkill -> CHECK fails
-          sourceKind: 'manual',
-          createdAt: Date.now(),
-          version: 1,
-        })
-        .run(),
-    ).toThrow()
   })
 
-  test('non-fused status with provenance set is rejected', async () => {
-    expect(() =>
-      h.db
-        .insert(memories)
-        .values({
-          id: ulid(),
-          scopeType: 'global',
-          scopeId: null,
-          title: 't',
-          bodyMd: 'b',
-          tags: '[]',
-          status: 'approved',
-          fusedIntoSkill: 'lint', // provenance without fused -> CHECK fails
-          sourceKind: 'manual',
-          createdAt: Date.now(),
-          version: 1,
-        })
-        .run(),
-    ).toThrow()
-  })
-})
+  describe('fused⟺provenance DB CHECK', () => {
+    let h: H
+    beforeEach(() => (h = build(harness.db)))
+    afterEach(() => h.cleanup())
 
-describe('fused is terminal', () => {
-  let h: H
-  beforeEach(() => (h = build()))
-  afterEach(() => h.cleanup())
-
-  test('patchMemory refuses to edit a fused memory', async () => {
-    const a = insertApprovedGlobalMemory(h.db, 'a')
-    await fuse(h.db, {
-      memoryIds: [a],
-      skillId: 'skill-lint',
-      skillName: 'lint',
-      skillVersion: 2,
-      fusionId: 'f',
-      userId: 'u',
-      now: Date.now(),
-    })
-    let code: string | undefined
-    try {
-      await memoryCatalogOf(h.db).commands.patch(a, { title: 'new title' })
-    } catch (err) {
-      code = (err as { code?: string }).code
-    }
-    expect(code).toBe('memory-terminal-status')
-  })
-})
-
-describe('restore un-fuses memories fused after the target version', () => {
-  let h: H
-  beforeEach(() => (h = build()))
-  afterEach(() => h.cleanup())
-
-  test('restore to v1 un-fuses a memory fused at v2; keeps one fused at v1', async () => {
-    const skill = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'lint',
-      description: 'd',
-      bodyMd: 'v1',
-      frontmatterExtra: {},
-    })
-    await writeSkillContent(h.db, h.fsOpts, skill.id, { bodyMd: 'v2' }, 'u') // -> v2
-
-    const fusedAtV1 = insertApprovedGlobalMemory(h.db, 'old')
-    const fusedAtV2 = insertApprovedGlobalMemory(h.db, 'new')
-    await fuse(h.db, {
-      memoryIds: [fusedAtV1],
-      skillId: skill.id,
-      skillName: 'lint',
-      skillVersion: 1,
-      fusionId: 'f1',
-      userId: 'u',
-      now: Date.now(),
-    })
-    await fuse(h.db, {
-      memoryIds: [fusedAtV2],
-      skillId: skill.id,
-      skillName: 'lint',
-      skillVersion: 2,
-      fusionId: 'f2',
-      userId: 'u',
-      now: Date.now(),
+    test('status=fused without provenance is rejected', async () => {
+      await expect(
+        (async () => {
+          await h.db
+            .insert(memories)
+            .values({
+              id: ulid(),
+              scopeType: 'global',
+              scopeId: null,
+              title: 't',
+              bodyMd: 'b',
+              tags: '[]',
+              status: 'fused', // no fusedIntoSkill -> CHECK fails
+              sourceKind: 'manual',
+              createdAt: Date.now(),
+              version: 1,
+            })
+            .run()
+        })(),
+      ).rejects.toThrow()
     })
 
-    const res = await restoreSkillVersion(
-      h.db,
-      h.fsOpts,
-      skill.id,
-      1,
-      'admin',
-      TEST_SKILL_RESTORE_MEMBERSHIP,
-      'rollback',
-    )
-    expect(res.unfusedMemoryIds).toEqual([fusedAtV2])
-    expect(statusOf(h.db, fusedAtV2)).toBe('approved') // un-fused, re-injectable
-    expect(statusOf(h.db, fusedAtV1)).toBe('fused') // still in v1 content
+    test('non-fused status with provenance set is rejected', async () => {
+      await expect(
+        (async () => {
+          await h.db
+            .insert(memories)
+            .values({
+              id: ulid(),
+              scopeType: 'global',
+              scopeId: null,
+              title: 't',
+              bodyMd: 'b',
+              tags: '[]',
+              status: 'approved',
+              fusedIntoSkill: 'lint', // provenance without fused -> CHECK fails
+              sourceKind: 'manual',
+              createdAt: Date.now(),
+              version: 1,
+            })
+            .run()
+        })(),
+      ).rejects.toThrow()
+    })
   })
 
-  test('unfuseAboveVersion 清掉 provenance（RFC-359 W4-D23b：同步那份已退役，改用中立参与者）', async () => {
-    const m = insertApprovedGlobalMemory(h.db, 'm')
-    await fuse(h.db, {
-      memoryIds: [m],
-      skillId: 'skill-lint',
-      skillName: 'lint',
-      skillVersion: 9,
-      fusionId: 'f',
-      userId: 'u',
-      now: Date.now(),
+  describe('fused is terminal', () => {
+    let h: H
+    beforeEach(() => (h = build(harness.db)))
+    afterEach(() => h.cleanup())
+
+    test('patchMemory refuses to edit a fused memory', async () => {
+      const a = await insertApprovedGlobalMemory(h.db, 'a')
+      await fuse(h.db, {
+        memoryIds: [a],
+        skillId: 'skill-lint',
+        skillName: 'lint',
+        skillVersion: 2,
+        fusionId: 'f',
+        userId: 'u',
+        now: Date.now(),
+      })
+      let code: string | undefined
+      try {
+        await composeMemoryCatalogOperations({
+          db: h.db,
+          contexts: composeIdentityAccess(h.db).contexts,
+          authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+        }).commands.patch(a, { title: 'new title' })
+      } catch (err) {
+        code = (err as { code?: string }).code
+      }
+      expect(code).toBe('memory-terminal-status')
     })
-    const unfused = await databaseSessionFor(h.db).transaction(
-      async (tx) =>
-        await composeSkillMemoryFusionParticipantFactory()
-          .inTransaction(tx)
-          .unfuseAboveVersion({ skillId: 'skill-lint', aboveVersion: 0 }),
-    )
-    expect(unfused).toEqual([m])
-    const row = h.db.select().from(memories).where(eqId(m)).all() as Array<{
-      status: string
-      fusedIntoSkill: string | null
-      fusedIntoSkillId: string | null
-    }>
-    expect(row[0]!.status).toBe('approved')
-    expect(row[0]!.fusedIntoSkill).toBeNull()
-    expect(row[0]!.fusedIntoSkillId).toBeNull()
+  })
+
+  describe('restore un-fuses memories fused after the target version', () => {
+    let h: H
+    beforeEach(() => (h = build(harness.db)))
+    afterEach(() => h.cleanup())
+
+    test('restore to v1 un-fuses a memory fused at v2; keeps one fused at v1', async () => {
+      const skill = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'lint',
+        description: 'd',
+        bodyMd: 'v1',
+        frontmatterExtra: {},
+      })
+      await writeSkillContent(h.db, h.fsOpts, skill.id, { bodyMd: 'v2' }, 'u') // -> v2
+
+      const fusedAtV1 = await insertApprovedGlobalMemory(h.db, 'old')
+      const fusedAtV2 = await insertApprovedGlobalMemory(h.db, 'new')
+      await fuse(h.db, {
+        memoryIds: [fusedAtV1],
+        skillId: skill.id,
+        skillName: 'lint',
+        skillVersion: 1,
+        fusionId: 'f1',
+        userId: 'u',
+        now: Date.now(),
+      })
+      await fuse(h.db, {
+        memoryIds: [fusedAtV2],
+        skillId: skill.id,
+        skillName: 'lint',
+        skillVersion: 2,
+        fusionId: 'f2',
+        userId: 'u',
+        now: Date.now(),
+      })
+
+      const res = await restoreSkillVersion(
+        h.db,
+        h.fsOpts,
+        skill.id,
+        1,
+        'admin',
+        TEST_SKILL_RESTORE_MEMBERSHIP,
+        'rollback',
+      )
+      expect(res.unfusedMemoryIds).toEqual([fusedAtV2])
+      expect(await statusOf(h.db, fusedAtV2)).toBe('approved') // un-fused, re-injectable
+      expect(await statusOf(h.db, fusedAtV1)).toBe('fused') // still in v1 content
+    })
+
+    test('unfuseAboveVersion 清掉 provenance（RFC-359 W4-D23b：同步那份已退役，改用中立参与者）', async () => {
+      const m = await insertApprovedGlobalMemory(h.db, 'm')
+      await fuse(h.db, {
+        memoryIds: [m],
+        skillId: 'skill-lint',
+        skillName: 'lint',
+        skillVersion: 9,
+        fusionId: 'f',
+        userId: 'u',
+        now: Date.now(),
+      })
+      const unfused = await databaseSessionFor(h.db).transaction(
+        async (tx) =>
+          await composeSkillMemoryFusionParticipantFactory()
+            .inTransaction(tx)
+            .unfuseAboveVersion({ skillId: 'skill-lint', aboveVersion: 0 }),
+      )
+      expect(unfused).toEqual([m])
+      const row = await h.db.select().from(memories).where(eqId(m)).all()
+      expect(row[0]!.status).toBe('approved')
+      expect(row[0]!.fusedIntoSkill).toBeNull()
+      expect(row[0]!.fusedIntoSkillId).toBeNull()
+    })
   })
 })

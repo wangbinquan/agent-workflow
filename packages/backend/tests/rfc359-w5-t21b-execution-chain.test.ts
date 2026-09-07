@@ -1,5 +1,6 @@
 // RFC-359 W5-T21b: the root launch command must actually drive a task to done
-// on each real database. The runtime is a real child process using the existing
+// on each real database. The full provider composer supplies the driver and
+// database participants. The runtime is a real child process using the existing
 // mock-opencode fixture; task/node state and output rows are never fabricated.
 // Ubuntu push-CI backend shards provide PostgreSQL through eachProvider.ts.
 
@@ -166,6 +167,19 @@ describeEachProvider(
           state: 'released',
         })
         expect(execution.isActive(launched.id)).toBe(false)
+        expect(await execution.overview()).toEqual({
+          running: 0,
+          awaiting: 0,
+          done7d: 1,
+          failed7d: 0,
+        })
+        expect(
+          await execution.provider.lifecycleRepair.run({
+            enabledRules: [],
+            maxPerWindow: 10,
+            windowMs: 60_000,
+          }),
+        ).toEqual({ repaired: [], skipped: [] })
         const intents = await harness.db
           .select({ kind: taskExecutionIntents.kind, state: taskExecutionIntents.state })
           .from(taskExecutionIntents)

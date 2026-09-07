@@ -5,13 +5,11 @@
 // the closure collects + hydrates by id.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 function fakeAgent(name: string, mcp: string[] = []): Agent {
   return {
@@ -67,10 +65,10 @@ describe('collectMcpIdsFromClosure', () => {
   })
 })
 
-describe('loadMcpsByIds', () => {
-  let db: DbClient
+describeEachProvider('loadMcpsByIds', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('empty input does not hit DB', async () => {

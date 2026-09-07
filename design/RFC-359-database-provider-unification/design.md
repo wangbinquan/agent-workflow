@@ -8,6 +8,11 @@
   runtime 存在；省略或可选输入仍保留原不完整模块契约，不能用断言把两种类型混在一起。
 - WorkStart 闭合必须保持 SQLite HTTP 员工模块与 OS worker 的原实例关系；PG 保持原单实例。
   是否构造过、是否真实调用过、是否在两个 provider 上完成行为验证，继续分开记账。
+- 初始会话的迁移窗口来自已经构造的真实 admission。异步 bootstrap 使用 composing/ready/failed
+  状态表达生命周期，只在唯一 controller、session 与 router 完成后返回；迁移端口不再外部 bind。
+  初始期间的迁移动作明确拒绝，避免自等待及提前读取 controller，初始窗口仍可立即读取。
+- resource-package apply journal 使用一份 DatabaseSession 算法，CAS 与外层回滚共享事务；
+  SQLite/PG 的资源恢复机制仍保留各自实现，不将 journal 合一误记为整对机制退役。
 - provider 文件改名只适用于已经中立的实现；真正重复的实现先合一，必要机制差异保持明确命名与对拍。
 
 ## 1. RFC-294 对齐（CLAUDE.md §RFC workflow 第 8 条）

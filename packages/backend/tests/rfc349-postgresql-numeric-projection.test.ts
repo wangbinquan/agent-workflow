@@ -21,6 +21,7 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { count } from 'drizzle-orm'
+import ts from 'typescript'
 
 import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
 
@@ -74,6 +75,43 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
  */
 const AGGREGATE = /\bsql(?:<[^>]*>)?`[^`]*\b(?:count|sum|avg|max|min)\(/giu
 
+function aggregateProjections(text: string) {
+  const source = ts.createSourceFile('projection.ts', text, ts.ScriptTarget.Latest, true)
+  const templateStarts = new Set<number>()
+  const visit = (node: ts.Node): void => {
+    if (ts.isTaggedTemplateExpression(node)) {
+      const tag = node.tag
+      if (ts.isIdentifier(tag) && tag.text === 'sql') {
+        templateStarts.add(tag.getStart(source))
+      } else if (ts.isPropertyAccessExpression(tag) && tag.name.text === 'sql') {
+        templateStarts.add(tag.name.getStart(source))
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+
+  // A comment or string can quote the exact broken SQL syntax. Only real
+  // tagged templates are projections; keep their original offsets for diagnostics.
+  return [...text.matchAll(AGGREGATE)]
+    .filter((match) => templateStarts.has(match.index ?? 0))
+    .map((match) => {
+      const start = match.index ?? 0
+      const closing = text.indexOf('`', text.indexOf('`', start) + 1)
+      const tail = text.slice(closing + 1, closing + 12)
+      const template = text.slice(start, closing)
+      return {
+        line: text.slice(0, start).split('\n').length,
+        // The key introduces the expression, or comes from a raw template's alias.
+        key:
+          /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*$/u.exec(text.slice(0, start))?.[1] ??
+          /\bAS\s+([A-Za-z_][A-Za-z0-9_]*)/iu.exec(template)?.[1] ??
+          '?',
+        mapped: tail.startsWith('.mapWith('),
+      }
+    })
+}
+
 /**
  * 语料是**类型可达**的 PG 执行面，不是文件名前缀。
  *
@@ -84,6 +122,35 @@ const AGGREGATE = /\bsql(?:<[^>]*>)?`[^`]*\b(?:count|sum|avg|max|min)\(/giu
  */
 
 describe('RFC-349 PostgreSQL aggregates come back as numbers', () => {
+  test('SQL examples in comments and strings are not executable projections', () => {
+    const source = [
+      '// The old projection was sql<number>`count(*)`.',
+      '/* sql<number>`SUM(total)` is another unmapped example. */',
+      'const example = "sql<number>`count(*)`"',
+    ].join('\n')
+    expect(aggregateProjections(source)).toEqual([])
+  })
+
+  test('executable aggregates still require a mapper or a caller decoder after examples', () => {
+    const source = [
+      '// The old projection was sql<number>`count(*)`.',
+      'const columns = {',
+      '  total: sql<number>`count(*)`,',
+      '  latest: sql<number | null>`MAX(updated_at)`,',
+      '  mapped: sql<number>`sum(tokens)`.mapWith(Number),',
+      '}',
+      'const raw = sql`select avg(total) AS average from rounds`',
+      'const namespaced = drizzle.sql<number>`min(total) AS minimum`',
+    ].join('\n')
+    expect(aggregateProjections(source)).toEqual([
+      { line: 3, key: 'total', mapped: false },
+      { line: 4, key: 'latest', mapped: false },
+      { line: 5, key: 'mapped', mapped: true },
+      { line: 7, key: 'average', mapped: false },
+      { line: 8, key: 'minimum', mapped: false },
+    ])
+  })
+
   test("drizzle's count() carries the Number mapper that a raw template lacks", () => {
     const decoder = (
       count() as unknown as { decoder: { mapFromDriverValue(value: unknown): unknown } }
@@ -106,21 +173,8 @@ describe('RFC-349 PostgreSQL aggregates come back as numbers', () => {
     for (const file of postgresqlExecutionSurface(srcRoot)) {
       const relative = file.path
       const text = file.text
-      for (const match of text.matchAll(AGGREGATE)) {
-        const start = match.index ?? 0
-        // The template ends at the next backtick that closes it; `.mapWith(` must
-        // follow immediately for the projection to decode.
-        const closing = text.indexOf('`', text.indexOf('`', start) + 1)
-        const tail = text.slice(closing + 1, closing + 12)
-        if (tail.startsWith('.mapWith(')) continue
-        const line = text.slice(0, start).split('\n').length
-        // The projection key is the `name:` that introduces the expression, or —
-        // for a raw template — the first `AS <alias>` inside it.
-        const template = text.slice(closing === -1 ? start : start, closing)
-        const key =
-          /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*$/u.exec(text.slice(0, start))?.[1] ??
-          /\bAS\s+([A-Za-z_][A-Za-z0-9_]*)/iu.exec(template)?.[1] ??
-          '?'
+      for (const { line, key, mapped } of aggregateProjections(text)) {
+        if (mapped) continue
         const proof = DECODED_BY_CALLER[relative]?.[key]
         if (proof !== undefined) {
           staleProofs.get(relative)?.delete(key)
