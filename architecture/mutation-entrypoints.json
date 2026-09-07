@@ -42740,7 +42740,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3ec25851ef3d24c2a03fba13a752a46130b909fc3e3133dca18cfd3351da67bb",
+  "sourceDigest": "sha256:62e7d483da01877f1b6c1b1105756b6e081fbeba4e148ad9b88f28293ee539b8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46064,8 +46064,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#233:tasks",
-        "line": 233,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#238:tasks",
+        "line": 238,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -46080,8 +46080,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#251:tasks",
-        "line": 251,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#256:tasks",
+        "line": 256,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
