@@ -1440,7 +1440,22 @@ push CI 的四个 ubuntu 分片**早就带真 PostgreSQL**（W5-T21 已落），
 - **T26** RFC-311 基准库在 PG 上跑 `EXPLAIN (ANALYZE, BUFFERS)`，逐热查询审执行计划，补 PG 独有索引
   （partial / expression / GIN）并经矩阵声明。
 - **T27** 5 个性能守卫改 `describeEachProvider`；两个引擎各取 P95 基线；**PG 不劣于 SQLite**（AC-11）。
-- **T28** 写法纪律审计：全仓「读—改—写中间不锁」的形状清单，逐条改成 `lockAggregateRoot`（design §10.1）。
+- **T28** 写法纪律审计：全仓「读—改—写中间不锁」的形状清单（`READ_MODIFY_WRITE_DEBT`，8 文件 / 19 处）。
+  **用户 2026-09-07 裁决：「功能问题就做」。** 判据因此**不是「有没有加锁」，而是「并发能不能
+  产出用户可见的错结果」**——丢一次计数、少一行、状态被覆盖，这些是功能缺陷，做；判不可达的
+  （调用方本就在同一把写锁内串行 / 单一写者 / 该路径即将退役）写清理由留在账本里，不改。
+  实施纪律：**先写双引擎并发用例把错的结果演出来（红），再加 `lockAggregateRoot`（绿）**；
+  演不出错结果 ⇒ 该处不可达，回去重判。用能力矩阵的 `lockAggregateRoot`，不得裸写
+  `SELECT … FOR UPDATE`（会掉进 T20 的裸方言账本）。
+  **勘误（2026-09-07 实测推翻）**：本条原写「19 处里 17 处两个引擎都有 ⇒ 不是 provider 分叉」。
+  **那是错的。** 代码形状确实两侧都有，但**缺陷只在 PostgreSQL 上成立**——W8 的变异验证
+  6/6 全是「PG 红、SQLite 绿」。原因是 `createSqliteDatabaseSession` 是**进程内单写者租约 +
+  `BEGIN IMMEDIATE`**，两笔写事务之间没有任何交错窗口；SQLite 上连**表达**这类时序都不行
+  （旁观者语句会被 `CrossContextTransactionError` 当场拦下，用例因此要按 capabilities 分叉）。
+  所以 T28 **正中本 RFC 的靶心**：同一份实现搬到另一个引擎才暴雷。
+  推论：这类用例的 SQLite 那一遍**不是冗余**——它钉住的正是「换个引擎才炸」这件事本身。
+  变异验证时若**只在 PostgreSQL 上红**（SQLite 的 `BEGIN IMMEDIATE` + 写者租约本就全序列化），
+  那是结论不是缺陷，要如实记录。
   这类代码在 SQLite 上碰巧正确、在 PG 上是竞态——合一时必须改形状，不能原样搬。
 
 ## 5c. W7 —— 成对适配器收尾（并发波次）

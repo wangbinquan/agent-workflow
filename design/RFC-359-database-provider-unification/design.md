@@ -241,6 +241,35 @@ export interface EngineCapabilities {
 **反面**：任何「读出来判断再写回、中间不锁」的形状在 SQLite 上碰巧正确（独占）、在 PG 上就是竞态——
 这类代码今天在 SQLite 侧存在，合一时必须改成并发正确的形状，而不是原样搬。
 
+**勘误（W8 实测，2026-09-07）：上一段的「读—改—写必须先 `lockAggregateRoot`」不是充分条件。**
+当事务是 **SERIALIZABLE**（`runResourceCatalogTransaction` 在 PG 上就是）时，快照在**第一条语句**
+即冻结；`FOR UPDATE` 只让输家**排队等锁**，等到之后**不重取快照**。于是「读 `max(seq)` → 写
+`seq+1` 进唯一键」这一子类，加了行锁**照样** `23505`——实测给 session 行加锁后
+`mcp_runtime_test_events` 仍稳定重复键。行锁能救 `acceptMessage` 是因为那里聚合根行本身被并发
+UPDATE、SSI 抛 40001 触发**整段重放**；**救它的是重放，不是锁**。
+
+因此纪律补一条：**单聚合的读—改—写，判据是「输家会不会重新读一遍」**，不是「有没有加锁」。
+序号分配 / 版本号自增这类形状要走**新事务重放**——本仓的
+`runCatalogTransactionRetryingUniqueViolations`（资源目录事务 + `classifyError === 'unique-violation'`
+时有界重试），新事务取新快照，前置检查这次才会命中，收敛到 SQLite 的结果。
+
+**由此暴露出的一整类 provider 分叉（W8 普查，见 §10.1.1）**：「先查存在、再插入唯一键表」的写法，
+SQLite 上前置检查恒命中、返回域内 4xx；PG 上两个用户并发时前置检查双双落空、唯一键抛 23505，
+用户拿到 **500**。这正是本 RFC 要消灭的「一个引擎好一个引擎不好」。
+
+#### 10.1.1 唯一键未归一普查（W8）
+
+判据：`insert(<带 uniqueIndex / 复合主键的表>)`，在事务作用域内，排除 `onConflictDo*`，且所在文件
+**没有**唯一键归一（`classifyError` / `uniqueViolationTarget`）。全量 AST 扫描结果：带唯一约束的表
+125 张；符合上述插入点 180 处；其中无归一 77 处；其中**同作用域先读同一张表**（即「PG 500 /
+SQLite 4xx」的确切形状）**23 处**。
+
+Tier A（前置检查本就返回域内 4xx，两个普通用户即可撞上）4 处：`repositoryWorkspaceStore.ts`
+建组 / 改名（409 `repo-group-name-conflict`）、`taskContinuationAdmission.ts`（`task-continuation-conflict`）、
+`humanGateOpenParticipant.ts`（`HumanGateOperationError`）、`legacy/skillVersion.ts` 版本号自增。
+Tier B 为被进程内锁 / 单写者挡着的同形状，逐条记在守卫账本里，其中
+`platform/events/committed/` 的 `reserveAggregateSequence` 是事件骨干、优先复核。
+
 ### 10.2 引擎优势必须真的用上
 
 | 优势 | 今天 | 目标 |

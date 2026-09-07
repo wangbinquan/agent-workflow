@@ -327,7 +327,14 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
         `${family} semantic reads missing from validation-context projection`,
       ).toEqual([])
     }
-  }, 20_000)
+    // 预算给得很宽，理由：本条要建**带 type checker 的完整 TS program**。root 虽然只有一个
+    // 文件，TypeScript 仍会拉进它的整个传递 import 图（validator 住在
+    // `modules/resource-catalog/infrastructure/legacy/`，图上基本等于整个 backend + shared），
+    // 于是**耗时随代码库增长单调上升**。原预算 20s 在 2026-09-07 的 CI 上被 26s 击穿
+    // （run 34113817894, macos shard 2/4），而那次红与提交内容毫无关系——RFC-359 只是在持续
+    // 加文件。窄预算在这种用例上迟早假红，且假红会掩盖真红。见
+    // `docs/dev-gotchas.md` §「『扫全源码树』的守卫用例要显式给超时」。
+  }, 120_000)
 
   test('projection keeps prompt, secret configuration and runtime paths out', () => {
     const projection = canonicalJson(projectWorkflowValidationContext(fixtureContext()))

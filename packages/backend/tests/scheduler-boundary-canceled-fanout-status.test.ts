@@ -162,19 +162,50 @@ describe('regression: cancelling a running wrapper-fanout must mark the wrapper 
     h.cleanup()
   })
 
-  // Three readonly shards each sleep 1000ms. We abort the controller ~200ms in —
-  // well before any shard finishes — so all live shards are SIGTERMed and their
-  // runNode returns 'canceled'. The task short-circuits to 'canceled', but the
-  // fanout maps the canceled shards → kind:'failed' → markWrapperTerminal('failed').
-  // DELAY (1000ms) >> abort delay (200ms) gives ample timing margin: the shards
-  // cannot complete before the abort fires.
+  // Three readonly shards each sleep 1000ms. We abort once the fanout is
+  // demonstrably live, so all live shards are SIGTERMed and their runNode returns
+  // 'canceled'. The task short-circuits to 'canceled', but the fanout maps the
+  // canceled shards → kind:'failed' → markWrapperTerminal('failed').
   test('aborting mid-fanout leaves task=canceled but wrapper row must NOT be failed', async () => {
     await seedAgent(h.db, 'worker', ['result'])
     const def = fanoutDef()
     const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md\nb.md\nc.md' })
 
     const controller = new AbortController()
-    const abortTimer = setTimeout(() => controller.abort(), 200)
+    // The abort is **condition-based, not wall-clock**. It used to be a flat
+    // `setTimeout(..., 200)`, which went red on a loaded CI runner (macOS shard
+    // 4/4 of run 34111036055): task startup outran the 200ms budget, the abort
+    // landed *before* the 'fan' row was ever inserted, and the headline assertion
+    // read `undefined`. That is a perfectly correct product outcome — a node
+    // aborted before it starts leaves no run row behind — but it is **not** the
+    // defect this file locks, which surfaces as 'failed'. So a wall-clock abort
+    // could silently retarget the test onto a path that can never observe the
+    // regression. Waiting for the precondition (wrapper row present + a shard
+    // actually running) keeps it on the intended path at any machine speed; the
+    // 1000ms shard sleep still leaves ample margin after that point.
+    let abortFailure: unknown
+    const abortOnceFanoutIsLive = (async () => {
+      const deadline = Date.now() + 20_000
+      for (;;) {
+        const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        const wrapperStarted = rows.some((row) => row.nodeId === 'fan')
+        const shardRunning = rows.some((row) => row.nodeId === 'inner' && row.status === 'running')
+        if (wrapperStarted && shardRunning) break
+        if (Date.now() > deadline) {
+          throw new Error(
+            `fanout never reached a running shard; rows=${JSON.stringify(
+              rows.map((row) => [row.nodeId, row.status]),
+            )}`,
+          )
+        }
+        await new Promise((done) => setTimeout(done, 10))
+      }
+      controller.abort()
+    })().catch((error: unknown) => {
+      // Abort anyway so runTask cannot outlive the test, and re-raise below.
+      abortFailure = error
+      controller.abort()
+    })
 
     await withEnv(
       {
@@ -190,7 +221,8 @@ describe('regression: cancelling a running wrapper-fanout must mark the wrapper 
           signal: controller.signal,
         }),
     )
-    clearTimeout(abortTimer)
+    await abortOnceFanoutIsLive
+    if (abortFailure !== undefined) throw abortFailure
 
     // Sanity: the task itself ends 'canceled' via the signal short-circuit.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]

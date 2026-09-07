@@ -1377,6 +1377,59 @@ insert」的事务，必现。
 该危害登记」。把理由做成机器可验的多字段（本例把值从 `number` 升成 `{ count, why }`，守卫断言
 每条 `why` 同时命中两组关键词），比写一段自然语言注释可靠得多：漏答一类当场红。
 
+## `FOR UPDATE` 拿到锁**不刷新快照**：SERIALIZABLE 下的「读最大值 +1」照撞唯一键（RFC-359 W8 实测，2026-09-07）
+
+`runResourceCatalogTransaction` 在 PostgreSQL 上是 SERIALIZABLE。事务的快照在**第一条语句**就
+冻住了，此后整段事务看到的都是那一刻的世界。于是这类形状：
+
+```
+seq = select max(event_seq) from … where session_id = ?   -- 读
+insert … values (session_id, seq + 1)                     -- 改写
+```
+
+**加 `lockAggregateRoot`（行级 `FOR UPDATE`）救不了它**。实测：给 session 行加锁后
+`mcp_runtime_test_events` 仍然稳定 `23505 duplicate key`。原因是 `FOR UPDATE` 只让输家**排队等
+锁**，等到了并不会重取快照——它醒来读到的还是**旧的** `max(event_seq)`，于是算出同一个 seq、
+再撞一次。行锁之所以能救 `acceptMessage`，是因为那里聚合根行**本身**被并发 UPDATE 了，SSI 因此
+抛 40001，而 40001 会触发**整段事务重放**——重放才是关键，锁不是。
+
+**能用的形状**：让冲突走一次**新事务**（新快照）。本仓的
+`runCatalogTransactionRetryingUniqueViolations` = 资源目录事务 + 命中
+`engineOf(db).classifyError(e) === 'unique-violation'` 时有界重放（5 次）。新事务的新快照能看到
+已提交的那一行，于是「已存在」的前置检查这次会命中，收敛到 SQLite 的同一个结果。
+
+**判据别写成「有没有加锁」**：单聚合的读—改—写，问的是「输家会不会重新读一遍」。
+`FOR UPDATE` 回答不了这个问题；只有重放（40001 自动重放，或显式的唯一键重试）才回答。
+相关：本文件 §「SERIALIZABLE 的 predicate lock 是索引页粒度」讲的是同一层的另一半——
+那条说的是**冲突率**，这条说的是**加了锁也仍然错**。
+
+**顺带一条测试学**：这类缺陷**按构造逃避手测**。PG 的 SSI 有时把它转成 40001（被重放层吃掉、
+看着是好的），有时让 23505 先冒出来。同一份代码，`appendEvent` 是每轮必现、`create()` 却是
+3 轮全过 / 40 轮 3/3 现——所以这种用例要**跑够轮数**，并把轮数的理由写在注释里。
+
+## 墙钟「跑到一半打断」的用例会**悄悄改跑另一条路**，红出来的还不是它锁的那个缺陷（2026-09-07 实撞）
+
+`scheduler-boundary-canceled-fanout-status.test.ts` 锁的是「取消 fanout 时 wrapper 行被写成
+`failed`，应为 `canceled`」。它的打断是 `setTimeout(() => controller.abort(), 200)`，注释还写着
+「1000ms 的分片睡眠 >> 200ms，余量充足」。**那句话只护住了一头**——护的是「分片别提前跑完」，
+没护住另一头：**启动本身超过 200ms**。
+
+CI 上（macOS shard 4/4）真的超了。abort 在 `fan` 这行 node_run 插入**之前**就到，于是查出来
+0 行，断言读到 `Received: undefined`。而**`undefined` 是完全正确的产品行为**——节点还没开始就被
+取消，本来就不该留下 run 行。任务照样 `canceled`，上一条断言还是绿的。
+
+**危害不在这次红，在于它平时是绿的**：一旦启动慢过预算，这条用例就跑到了「节点从未启动」那条
+路上——那条路**永远观察不到**它要锁的缺陷（缺陷长成 `'failed'`）。也就是说它可能一边显示绿、
+一边根本没在守。
+
+**怎么认**：看失败值是不是「压根没有」而不是「值不对」。`Received: undefined` / 空数组，多半是
+**用例跑偏了**，不是产品坏了；`Received: "failed"` 才是它真要抓的。
+
+**怎么修**：打断点改成**条件触发**，不要墙钟——轮询到「前置条件确已成立」（这里是 wrapper 行已
+存在 **且** 至少一个分片处于 `running`）再 abort。本机空载实测从启动到该条件成立要 **84ms**，
+对 200ms 预算只有 2.4× 余量，而那一步要建 3 个 worktree + spawn 3 个进程；macOS runner 上翻倍
+毫不稀奇。条件触发之后与机器快慢无关。
+
 ## git / 多人协作（共享工作树）
 
 - **`git commit -- <路径>` 提交的是「工作树」内容，不是 index —— 你精心 `git add` 的那一版会被静默忽略**（2026-08-25 实撞，同一个坑连着把 main 弄红两次）。
