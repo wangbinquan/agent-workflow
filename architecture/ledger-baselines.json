@@ -20,8 +20,11 @@
       "id": "depcheck-known-violations",
       "file": "scripts/depcheck.ts",
       "symbol": "KNOWN_VIOLATIONS",
-      "baseline": 8,
-      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。"
+      "baseline": 17,
+      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。",
+      "allowGrowth": {
+        "why": "RFC-359 W7：+9。合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环，闭合点是 `nodeRunLifecycleTransition.ts` → `@/services/lifecycle`（三处 legacy 站点从同步 `setNodeRunStatus` 切到中立 `setNodeRunStatusTx` 所致）。已把这三处改成经 `@/services/taskExecutionParticipants` 的 exact public 合同取用（RFC-294 方向，与同批 `createTerminalMaintenanceStore` 同形），但 re-export 只挪边不消环。**根治是把那两个中立异步孪生下沉到 `platform/persistence/`**——它同时是同步事务面第二批（`taskLifecycle.ts` 4 处全钉死在这两个符号上）的前置，已记为 W8。九条各自带 why + removeWhen，指向同一个工作包。"
+      }
     },
     {
       "id": "frontend-form-error-allowlist",
@@ -133,10 +136,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
       "baseline": 143,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。",
-      "allowGrowth": {
-        "why": "RFC-359 W7：+1。`public:task-execution:commands:NodeRunLifecycleParticipantInTx` 随 `CollaborationRuntimeMechanics` 合一失去生产消费者——它是当初为 collaboration 的 serializable 原子而开的 task-execution 接缝，两个引擎现在跑同一份中立实现，接缝不再需要。**这不是新写的死声明，是合一让一条既有接缝失去了理由**；清理连同 `composePostgresqlNodeRunLifecycleParticipantFactory` 一起放在 W8 死代码批。"
-      }
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。"
     },
     {
       "id": "rfc310-top-level-allowed-dirs",
@@ -395,10 +395,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts",
       "symbol": "DEAD_PROVIDER_ADAPTER_DEBT",
       "baseline": 19,
-      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。",
-      "allowGrowth": {
-        "why": "RFC-359 W7：净 +1。本波合一让 3 个适配器的生产消费者归零（`composeSqliteIntentContextResourceAuthorizationSyncFactory` / `composePostgresqlNodeRunLifecycleParticipantFactory` / `createSqliteTaskAuthorizationQueries`），同时删掉了 2 条（两个 repair participant 的 SQLite 侧）。三条新增都已按账本要求标注「改指」并给出中立替代者的 `file:line`；删除属第二波死代码清理（其中一条有 rfc345 源码文本断言钉着）。"
-      }
+      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。"
     },
     {
       "id": "rfc359-w5-dual-engine-predicate-gaps",
@@ -517,10 +514,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
       "baseline": 896,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。",
-      "allowGrowth": {
-        "why": "RFC-359 W7：**不是新增了债，是判据加宽了**。原判据只数 `createInMemoryDb(`，绕过那个夹具直接 `new Database(` 的写法整类在网外——实测非迁移测试里还有 95 处 / 55 个文件。把 `new Database(` 一并计入后存量从 821 涨到 896（净 +75，已扣掉本波 W6 收敛的 8 处）。只堵一个入口的守卫等于没堵，这次上涨换来的是**后门关闭**。"
-      }
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -611,10 +605,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 44,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。",
-      "allowGrowth": {
-        "why": "RFC-359 W6-T26：+1。新增 `rfc359-w6-t26-postgresql-plan-audit.test.ts#skip` —— PostgreSQL 执行计划审计（EXPLAIN ANALYZE + buffers/loops 账本）读的是 PG 自己给出的计划节点，SQLite 上没有对应物。本地 `AW_TEST_PROVIDERS=sqlite` 时留一条**可见的** skip，而不是静默让整份计划账本变绿——静默通过会让「计划退化」这类回归在只跑 SQLite 的通道上永远发现不了。缺 `AW_TEST_POSTGRESQL_URL`（而非显式只选 sqlite）时仍判红不 skip，与 `describeEachProvider` 同一条硬判据。"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。"
     },
     {
       "id": "ux-embedded-table-allowlist",
@@ -740,10 +731,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 982,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 W7 成对适配器合一：`sqliteTerminalMaintenance.ts`（519 行）整体退役后，它的三个同步消费者（`services/taskArchive.ts` / `services/taskDelete.ts` / `platform/persistence/sqlite/systemWorkspaceGc.ts`）改从 task-execution 的 `public/participants.ts` 取中立入口——新增 `createTerminalMaintenanceStore` / `assertTerminalMaintenanceClaimTx` 等 4 个公开符号。**这是把跨模块耦合从「直接 import owner 内部实现」搬到 exact public 合同上**，正是 RFC-294 的方向：public 面涨 4，换掉的是三条内部 import 边。合一本身让净生产代码少了约 5000 行。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -782,7 +770,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "5197f64d2fbcb6dc05eadf3d2ed27b4b6e99545a",
-    "contentDigest": "sha256:7e188bcd16c3e76bf69deb9ce167d9b3960f8e4f55586159024e15fd28427015",
+    "contentDigest": "sha256:e8c972ef39a9163894d042bb35cdb9259e80fb99918866dbfe5c0894f125b62d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

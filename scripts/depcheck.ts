@@ -87,6 +87,87 @@ const S = 'packages/shared/src'
  * 按文件排除的写法会连带放过未来经过同一文件的新环，故迁到这里逐条精确匹配）。
  */
 export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/composition.ts`,
+    to: `${B}/modules/collaboration/infrastructure/collaborationRouteOperations.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/composition.ts`,
+    to: `${B}/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/collaborationRouteOperations.ts`,
+    to: `${B}/modules/collaboration/infrastructure/legacySqliteReview.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/collaborationRouteOperations.ts`,
+    to: `${B}/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts`,
+    to: `${B}/modules/collaboration/infrastructure/legacySqliteReview.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts`,
+    to: `${B}/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts`,
+    to: `${B}/services/taskQuestions.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts`,
+    to: `${B}/services/humanGateComposition.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
+  {
+    rule: 'no-circular',
+    from: `${B}/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts`,
+    to: `${B}/services/taskQuestions.ts`,
+    why: 'RFC-359 W7 合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环。闭合点是 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` → `@/services/lifecycle`：collaboration 的三处 legacy 站点从同步 `setNodeRunStatus`（`withOwnedTaskTx`，bun:sqlite 独有）切到中立的 `setNodeRunStatusTx` 后，依赖图经 services/ 绕回 collaboration 闭合。已把这三处从**跨 context 内部 import** 改成经 `@/services/taskExecutionParticipants` 取用（RFC-294 要的 exact public 合同，与同批 `createTerminalMaintenanceStore` 同形）——方向修对了，但 re-export 只挪动边、不消除环。惰性 import 使其没有顶层初始化顺序风险。',
+    removeWhen:
+      '把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 这两个**中立异步孪生**从 `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` **下沉到 `platform/persistence/`**：它们不再回指 `@/services/lifecycle`，环随之消失。这一步同时是 RFC-359 同步事务面第二批的前置（`platform/persistence/sqlite/taskLifecycle.ts` 的 4 处 `withOwnedTaskTx`/`dbTxSync` 全部钉死在这两个符号上，见 plan.md §同步事务面）。',
+    removeWave: 'W8',
+  },
   // ── util/git ↔ services/git*（分层倒置：util 应是叶子，架构审视 RC-4）──
   {
     rule: 'no-circular',
