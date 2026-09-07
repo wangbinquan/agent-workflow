@@ -1948,6 +1948,18 @@
       "lines": 182
     },
     {
+      "id": "rfc359-w8-ci-dual-engine-wiring",
+      "file": "packages/backend/tests/architecture/rfc359-w8-ci-dual-engine-wiring.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 1,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 196
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
