@@ -932,6 +932,30 @@ commit → repin provenance → **立刻 push**。推之前再 `git fetch` 确�
    [ $ok -eq 1 ] && echo "逐字节一致"
    ```
 
+**第三种失败模式：拷回会覆盖别人**​**未提交的手写账本条目**（2026-09-07 实撞）。
+上面两条讲的都是「自己的产物没落地」，这一条反过来——**落地过头了**。导出树是从 HEAD 采的，
+不含任何人的在制品；而 `architecture/ledger-baselines.json` 里的 `why` / 新增条目是**手写**的，
+并发 session 可能刚往里加了十几条还没提交。一次 `cp` 就把它们整段抹掉，而且**悄无声息**：
+文件仍然 modified、`cmp` 也说逐字节一致（一致于导出树那份），两条既有判据都发现不了。
+实撞：某 session 加的 14 条被这样抹掉，靠它自己复查条目数（121 → 107）才发现，用幂等 upsert 补回。
+
+**判据**：拷回**之后**、提交**之前**，把工作树的条目 id 集合与 HEAD 的做一次差集，
+`少:` 一栏必须为空——为空才说明你只是叠加了产物，没有削掉别人的手写条目：
+
+```bash
+python3 -c "
+import json,subprocess
+head=json.loads(subprocess.check_output(['git','show','HEAD:architecture/ledger-baselines.json']).decode())
+wt=json.load(open('architecture/ledger-baselines.json'))
+h={e['id'] for e in head['ledgers']}; w={e['id'] for e in wt['ledgers']}
+print('多:',sorted(w-h)); print('少:',sorted(h-w))
+"
+```
+
+注意 `多:` 非空是**正常**的（别人在制品带来的新账本），不要去删；`少:` 非空才是事故。
+反过来，**自己提交的那一份**只包含 HEAD 的条目是对的——HEAD 的源码里就没有那些新账本，
+两者各自自洽；等别人的改动落了 commit，下一次重采自然会把它们算进去。
+
 **顺带一条相关的**：共用同一个 `.git` 时，别人的 commit 一落，你的 `HEAD` 就跟着动了。
 如果你正拿着**从旧 sha 导出的树**往回拷，就会把对方刚提交的账本整段回退（`why` 文本连同基线）。
 2026-09-04 实撞：差点把并发 session 的一整笔重采覆盖掉，靠 `git diff` 里出现了自己没写过的
@@ -1429,6 +1453,33 @@ CI 上（macOS shard 4/4）真的超了。abort 在 `fan` 这行 node_run 插入
 存在 **且** 至少一个分片处于 `running`）再 abort。本机空载实测从启动到该条件成立要 **84ms**，
 对 200ms 预算只有 2.4× 余量，而那一步要建 3 个 worktree + spawn 3 个进程；macOS runner 上翻倍
 毫不稀奇。条件触发之后与机器快慢无关。
+
+## 账本的 `removeWhen` 是**假设**，不是事实：动手前先验它（2026-09-07 实撞，9 条一起错）
+
+本仓的债务账本（`scripts/depcheck.ts` 的 `KNOWN_VIOLATIONS`、各 `*_DEBT`、predicate 缺口表…）
+每条都要求写 `why` + `removeWhen`。这条纪律是对的，但它有个副作用：**`removeWhen` 读起来像结论，
+其实只是当时那个人的诊断**。诊断可以错，而错了之后**没有任何机制会发现**——账本的守卫只校验
+「条目数对不对」「格式全不全」，从不校验「这条药方治得好这个病吗」。
+
+实撞：`depcheck` 的 9 条循环依赖，`removeWhen` 全都指向同一个根治方案（把两个中立异步孪生下沉），
+并把某条边称作「闭合点」。三条独立证据证明**那条边根本不在任何环上**：①复刻 dependency-cruiser
+语义（排除 type-only 边）的图论模拟，删掉该边后 9 条环原封不动；②把那行 import 真改掉再跑
+`bun run depcheck`，仍是 `已接受 17 / 17`，一条没退；③探针直接判定该边无环。真正的闭合点是
+另一族——W7 新建的合一文件被 barrel re-export 之后，barrel 的成员经 `services/` 绕回 barrel。
+
+**最值得记的一点：写这份账本的提交自己就带着反证。** 那笔 commit message 里白纸黑字写着
+「让 X 绕开那个 barrel、直接从定义处取那三个符号（**环照旧**）」——观察到「环照旧」，
+下一段却把「下沉这两个符号」写成了 removeWhen。**同一封 message 里，实验结论与药方互相矛盾。**
+按那张药方照做的结果是：改完删掉 9 条，`depcheck` 当场红 9 条未列违规。
+
+**规矩**：拿到一条 `removeWhen` 就去执行之前，先花几分钟**验证这张药方**——
+- 能模拟就模拟（图论类的债写个探针复现基线，再看「按药方改」之后基线动没动）；
+- 不能模拟就**做最小真改**再跑真门（改一行 import 跑一次 `depcheck`，比读三小时代码可靠）；
+- **验完不成立就停手报告，不要将就着做一半**——半截的结构改动加上被删的账本条目，
+  比原样不动更糟。
+
+反过来，写 `removeWhen` 的人也要自觉：**你写的是一个待验证的假设**。如果你在那次改动里已经
+试过某条路径并且失败了，把「试过、没用」写进 `why`，别把同一条路径又写成 removeWhen。
 
 ## git / 多人协作（共享工作树）
 

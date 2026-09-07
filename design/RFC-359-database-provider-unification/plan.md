@@ -16,6 +16,34 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | **W6** | PostgreSQL 性能：JSONB + GIN 投影、`EXPLAIN (ANALYZE)` 热查询审计、双引擎性能基线 | 放 W4 之后——合一前给 PG 调优就是在给一份即将删除的实现调优 |
 | **W7** | W4 的收尾：把 W5 守卫点出来的**剩余成对适配器**逐对合一 | 见 §5c——W4 当时没有「还剩哪些对、每对验没验过」的清单，是 W5 的成对账本把它变成了可排期的有限集 |
 
+## 0b. 验收记分板（as of `fa92150c7`，2026-09-07）
+
+「完整落地」= proposal §7 的 12 条 AC 全部达成。逐条实测状态如下——**数字都是跑出来的，不是估的**；
+本波仍有多刀在跑，未达成项的数字会继续动。
+
+| AC | 判据 | 实测 | 状态 |
+|---|---|---|---|
+| AC-1 | 成对文件数 → 0（**已按实测修订**，见 proposal §7 的修订段） | 153 → **11**；其中机制分叉以对拍替代合一 **7 对**，仍缺对拍见证 **5 对** | 进行中 |
+| AC-2 | `cli/start.ts` 无 `provider === 'sqlite'` 分支；`servePostgresqlDaemon` 删除 | 分支 **0**；该函数已删，仅注释里留历史引用 | ✅ |
+| AC-3 | 统一事务原语的双引擎原子性对拍；裸 `db.transaction(` 收敛 | 裸事务账本 17 → **5** | 进行中 |
+| AC-4 | 方言表 exact 清单，每条两个 provider 各真实执行一次 | `RAW_DIALECT_DEBT` 在册；`UNSHIMMED_FUNCTION_DEBT` **0** | 进行中 |
+| AC-5 | 防复辟守卫锁死新增 | W5 一整套守卫已落（T17/T18/T19/T19b–g/T20） | ✅ |
+| AC-6 | **全量** backend 行为套件在**真 PostgreSQL** 上进 push CI | ubuntu 4 分片跑 `bun test --isolate --shard=N/4`，`AW_TEST_POSTGRESQL_URL` 指向真 postgres:17 服务；macOS 是唯一显式 `AW_TEST_PROVIDERS=sqlite` 的 lane（Actions 在 macOS 上起不了服务容器） | ✅ |
+| AC-7 | 前置对账 12 条 P0 全消失，各带先红后绿 + 变异实证 | W1 已收 | ✅ |
+| AC-8 | 用户可见行为逐字不变 | 各波对拍持续验证中 | 进行中 |
+| AC-9 | exact-SHA CI 全绿（含真 PG 全量），取证 sha + run id 写回 | **未取证** | 待办 |
+| AC-10 | 业务代码里 `provider === '<literal>'` 为零 | **0** | ✅ |
+| AC-11 | 两引擎各取 P95 基线，PG 不劣于 SQLite | 5 个性能守卫全 `describeEachProvider`；`rfc311-perf-guards` 有跨引擎 P95 对比 + 塌方探测断言 | ✅ |
+| AC-12 | 组合根全量，`*-not-bound` 为零 | 组合根 70 → **20** | 进行中 |
+
+**已知仍在路上的**：W6 的 T23（JSONB + GIN）/ T24（`->>`·`@>`）/ T25（批量写）——T23 要改
+`db/schema.ts`，会开一个全仓 PG 迁移漂移窗口（所有 PG 泳道同时假红），必须在**没有其他刀在跑**
+的安静工作树上做；T25 的热路径落在并发最密的 `task-execution/infrastructure`。三件一并压到本波排空后。
+
+**AC-9 的取证纪律**：取证 sha 必须是**含全部 RFC-359 改动的那一笔**，且要看**含该 commit 的
+superseding run** 的绿（共享 main 上并发 push 会取消你的 run），并按失败测试的 owning commit 归属。
+被 supersede 取消的 run **不是绿**。详见 `docs/dev-gotchas.md` 对应两条。
+
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 
 | 任务 | 内容 | 证据 |
@@ -1437,9 +1465,22 @@ push CI 的四个 ubuntu 分片**早就带真 PostgreSQL**（W5-T21 已落），
 - **T23** DDL 投影：JSON 列在 PG 上渲染为 JSONB；热查询列建 GIN（D6，存量 PG 部署一次迁移）。
 - **T24** 矩阵的 `jsonExtract` / `jsonContains` 渲染成 `->>` / `@>`；替换 `json_extract` shim 的热路径调用。
 - **T25** 批量写：矩阵给出 `batchInsertMax`，逐行 INSERT 的热路径改按批。
-- **T26** RFC-311 基准库在 PG 上跑 `EXPLAIN (ANALYZE, BUFFERS)`，逐热查询审执行计划，补 PG 独有索引
-  （partial / expression / GIN）并经矩阵声明。
-- **T27** 5 个性能守卫改 `describeEachProvider`；两个引擎各取 P95 基线；**PG 不劣于 SQLite**（AC-11）。
+- **T26 ✅ 已完成**（W8）。三条计划缺口全部销账，`PLAN_GAPS` 现为空。实测：任务目录
+  `facet_attention` loops 10000 → 1、84.053ms（含 JIT 32.419ms）/ 107,042 buf → 22.006ms / 2,098 buf；
+  `/api/cached-repos` facets loops 10000×3 → 1、122.262ms（含 JIT 63.606ms）/ 200,820 buf →
+  35.214ms / 5,191 buf。整条路径墙钟（50k 语料）：任务目录 99.8 → 27.8ms、仓库页 149.9 → 27.7ms，
+  **两条路径的 JIT 编译都消失**（估算代价掉到 `jit_above_cost` 以下，未动任何 JIT 参数）。
+  **过程中推翻了本账本自己写的「正解」**：原方案「两个 EXISTS 改成预聚合 UNION + LEFT JOIN」在 PG 上确实快，
+  但它把代价从 O(仓库数) 换成 O(任务数)，而生产里任务表大几个数量级——实测 SQLite 侧 **退化 80×**
+  （0.2ms → 16.3ms），并当场把 `rfc311-perf-guards` [sqlite] 打红（`SCAN tasks` 裸扫无界表）。
+  最终形状是把 `exists` 送回 **WHERE 子句**（两个 planner 都会上提成 semi/anti join）+ 三格互斥标量子查询，
+  **让每个引擎各自选计划**：PG 选 hash semi join、SQLite 选索引探，两种表比例下都不退化。
+  教训：「PG 上更快」不等于「该这么写」——本 RFC 的判据是**两个引擎都不退化**。
+- **T27 ✅ 已完成**。5 个性能守卫（`rfc311-perf-guards` / `rfc311-perf-foundation` /
+  `rfc244-task-operations-benchmark` / `rfc311-task-page-fastpath` / `rfc311-task-page-filtered-fastpath`）
+  全部走 `describeEachProvider`；`rfc311-perf-guards` 里有真正的**跨引擎对比**——两个引擎各取 P95、
+  打印比值作诊断，并带一条 AC-11「塌方探测」断言。注意判据本身已按 RFC-244 的教训从**墙钟**
+  换成**取回行数**（墙钟测不出真回归、机器一忙又假红），墙钟仅作诊断基线保留。
 - **T28** 写法纪律审计：全仓「读—改—写中间不锁」的形状清单（`READ_MODIFY_WRITE_DEBT`，8 文件 / 19 处）。
   **用户 2026-09-07 裁决：「功能问题就做」。** 判据因此**不是「有没有加锁」，而是「并发能不能
   产出用户可见的错结果」**——丢一次计数、少一行、状态被覆盖，这些是功能缺陷，做；判不可达的
