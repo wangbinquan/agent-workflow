@@ -5,7 +5,7 @@
 // 此前只有 SQLite 有，PG 版漏了——现在两边同一份。
 // `legacy/mcpRuntimeTestTransitions.ts` 的同步版仍服务 runtime / user 写者（它们尚未迁到统一事务），随其各自合一退役。
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
 import {
   normalizeStoredAdditionalPermissions,
   resolveEffectiveAccountPermissions,
@@ -15,6 +15,7 @@ import {
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestSessions,
   mcpRuntimeTestSessionLeases,
+  runtimes,
   userPermissionGrants,
   users,
 } from '@/db/schema'
@@ -27,7 +28,12 @@ type SessionRow = typeof mcpRuntimeTestSessions.$inferSelect
 async function endNow(
   transaction: DatabaseTransaction,
   session: SessionRow,
-  reason: 'mcp-disabled' | 'mcp-deleted' | 'access-revoked',
+  reason:
+    | 'mcp-disabled'
+    | 'mcp-deleted'
+    | 'access-revoked'
+    | 'runtime-disabled'
+    | 'runtime-deleted',
   now: number,
 ): Promise<void> {
   await transaction
@@ -45,6 +51,7 @@ async function endNow(
 async function blockAfterTurn(
   transaction: DatabaseTransaction,
   session: SessionRow,
+  reason: 'mcp-config-changed' | 'runtime-profile-changed',
   now: number,
 ): Promise<void> {
   await transaction
@@ -53,14 +60,14 @@ async function blockAfterTurn(
       session.inFlightTurnId === null
         ? {
             status: 'ending',
-            endReason: 'mcp-config-changed',
-            continuationBlockedReason: 'mcp-config-changed',
+            endReason: reason,
+            continuationBlockedReason: reason,
             idleDeadlineAt: null,
             sessionVersion: session.sessionVersion + 1,
             updatedAt: now,
           }
         : {
-            continuationBlockedReason: 'mcp-config-changed',
+            continuationBlockedReason: reason,
             sessionVersion: session.sessionVersion + 1,
             updatedAt: now,
           },
@@ -89,7 +96,8 @@ export async function transitionMcpRuntimeTests(
   },
 ): Promise<void> {
   for (const session of await activeSessionsOf(transaction, input.mcpId)) {
-    if (input.reason === 'mcp-config-changed') await blockAfterTurn(transaction, session, input.now)
+    if (input.reason === 'mcp-config-changed')
+      await blockAfterTurn(transaction, session, input.reason, input.now)
     else await endNow(transaction, session, input.reason, input.now)
   }
 }
@@ -141,7 +149,7 @@ export async function transitionMcpAclRuntimeTests(
         input,
       )
     if (!stillVisible) await endNow(transaction, session, 'access-revoked', input.now)
-    else await blockAfterTurn(transaction, session, input.now)
+    else await blockAfterTurn(transaction, session, 'mcp-config-changed', input.now)
   }
 }
 
@@ -182,4 +190,61 @@ export async function deletePreparedMcpRuntimeTests(
   await transaction
     .delete(mcpRuntimeTestCreateReceipts)
     .where(eq(mcpRuntimeTestCreateReceipts.mcpId, mcpId))
+}
+
+/**
+ * RFC-359 W4-D28b —— runtime 写者的会话失效：一份实现，两个 provider 共用。
+ *
+ * 此前 SQLite 走 `legacy/mcpRuntimeTestTransitions.ts` 的同步版，PostgreSQL 则在
+ * `postgresqlRuntimeRegistryPersistence.ts` 里**内联重写了一份**（本地 `transitionRuntimeTests` /
+ * `transitionRuntimeTest`）。两份逐字段对过账：`runtime-profile-changed` 走「本回合后阻塞」、
+ * 其余两个原因走「立即结束」，写入的列与取值完全一致——属纯重复，合一到这里。
+ */
+export async function transitionRuntimeTests(
+  transaction: DatabaseTransaction,
+  input: {
+    readonly runtimeName: string
+    readonly reason: 'runtime-profile-changed' | 'runtime-disabled' | 'runtime-deleted'
+    readonly now: number
+  },
+): Promise<void> {
+  const sessions = await transaction
+    .select()
+    .from(mcpRuntimeTestSessions)
+    .where(
+      and(
+        eq(mcpRuntimeTestSessions.runtimeName, input.runtimeName),
+        eq(mcpRuntimeTestSessions.status, 'active'),
+      ),
+    )
+  for (const session of sessions) {
+    if (input.reason === 'runtime-profile-changed')
+      await blockAfterTurn(transaction, session, input.reason, input.now)
+    else await endNow(transaction, session, input.reason, input.now)
+  }
+}
+
+/**
+ * 继承型 runtime（没有自己的 `binaryPath`，跟着协议默认走）在协议侧变更时一并失效。
+ * 原因固定为 `runtime-profile-changed`——变的是它继承的那份画像，不是它自己被停用或删除。
+ */
+export async function transitionInheritedRuntimeTests(
+  transaction: DatabaseTransaction,
+  input: {
+    readonly protocols: readonly ('opencode' | 'claude-code')[]
+    readonly now: number
+  },
+): Promise<void> {
+  if (input.protocols.length === 0) return
+  const inherited = await transaction
+    .select({ name: runtimes.name })
+    .from(runtimes)
+    .where(and(inArray(runtimes.protocol, [...input.protocols]), isNull(runtimes.binaryPath)))
+  for (const row of inherited) {
+    await transitionRuntimeTests(transaction, {
+      runtimeName: row.name,
+      reason: 'runtime-profile-changed',
+      now: input.now,
+    })
+  }
 }

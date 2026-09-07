@@ -8,12 +8,12 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, runtimes } from '../src/db/schema'
-import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import {
   createRuntime,
   deleteRuntime,
@@ -33,12 +33,12 @@ function freshDb(): DbClient {
   return createInMemoryDb(MIGRATIONS)
 }
 
-const registryByDb = new WeakMap<DbClient, SqliteRuntimeRegistryPersistence>()
+const registryByDb = new WeakMap<DbClient, DrizzleRuntimeRegistryPersistence>()
 
-function registryFor(db: DbClient): SqliteRuntimeRegistryPersistence {
+function registryFor(db: DbClient): DrizzleRuntimeRegistryPersistence {
   const existing = registryByDb.get(db)
   if (existing !== undefined) return existing
-  const registry = new SqliteRuntimeRegistryPersistence(db)
+  const registry = new DrizzleRuntimeRegistryPersistence(db)
   registryByDb.set(db, registry)
   return registry
 }
@@ -365,49 +365,34 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
     expect(await getRuntime(registryFor(db), 'claude-code')).toBeNull()
   })
 
-  test('RFC-153 impl-gate 2nd pass: each provider deletes inside one atomic transaction', async () => {
-    // The last-row + reference guards are race-free only when each provider keeps
-    // count, checks, MCP-test transitions and delete in one transaction. Lock both
-    // implementations so a cutover cannot accidentally split the sequence.
-    const sqlite = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'platform',
-        'runtime-registry',
-        'infrastructure',
-        'sqliteRuntimeRegistryPersistence.ts',
-      ),
-      'utf-8',
+  test('RFC-153 impl-gate 2nd pass: 删除序列仍在一笔事务里，且实现只剩一份', () => {
+    // last-row + reference 两道判据只有在「计数 / 检查 / MCP 试跑失效 / 删除」同处一笔事务时才是
+    // 无竞态的。RFC-359 W4-D28b 把两份 provider 实现合成一份，这条锁因此从「两份各自原子」改成
+    // 「只剩一份 + 它仍然原子」——**不是放宽**：再长出任何一份 provider 专属实现都会红。
+    const dir = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'platform',
+      'runtime-registry',
+      'infrastructure',
     )
-    const postgresql = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'platform',
-        'runtime-registry',
-        'infrastructure',
-        'postgresqlRuntimeRegistryPersistence.ts',
-      ),
-      'utf-8',
+    const providerSpecific = readdirSync(dir).filter((name) => /^(sqlite|postgresql)/i.test(name))
+    expect(
+      providerSpecific,
+      'runtime 注册表又长出了 provider 专属实现；RFC-359 之后它只应有一份中立实现',
+    ).toEqual([])
+
+    const source = readFileSync(resolve(dir, 'runtimeRegistryPersistence.ts'), 'utf-8')
+    const start = source.indexOf('  async deleteRuntime(')
+    const deleteBody = source.slice(start, source.indexOf('\n  async seedBuiltinRuntimes(', start))
+    // 序列化边界：PG 抬到 SERIALIZABLE 并按 40001 重放整笔，SQLite 的 BEGIN IMMEDIATE 本就全库独占。
+    expect(deleteBody).toContain(
+      'await databaseSessionFor(this.db).serializable(async (transaction) => {',
     )
-    const sqliteStart = sqlite.indexOf('  async deleteRuntime(')
-    const sqliteDelete = sqlite.slice(
-      sqliteStart,
-      sqlite.indexOf('\n  async seedBuiltinRuntimes(', sqliteStart),
-    )
-    const postgresqlStart = postgresql.indexOf('  async deleteRuntime(')
-    const postgresqlDelete = postgresql.slice(
-      postgresqlStart,
-      postgresql.indexOf('\n  async seedBuiltinRuntimes(', postgresqlStart),
-    )
-    expect(sqliteDelete).toContain('return dbTxSync(this.db, (transaction) => {')
-    expect(postgresqlDelete).toContain(
-      'return await serializable(this.db, async (transaction) => {',
-    )
-    expect(postgresql).toContain('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')
+    // 计数 / 引用检查 / 试跑失效 / 删除四件事都必须落在那一笔事务体内。
+    expect(deleteBody).toContain('await transitionRuntimeTests(transaction, {')
+    expect(deleteBody).toContain('await transaction.delete(runtimes)')
   })
 
   test('RFC-153 impl-gate 3rd pass: missing built-in default resolves to itself, not opencode', async () => {

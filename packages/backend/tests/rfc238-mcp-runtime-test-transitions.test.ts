@@ -7,7 +7,7 @@ import { mcps, mcpRuntimeTestSessions, resourceGrants, runtimes, users } from '.
 import { mcpAclRuntimeTestLifecycle } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createMcpTransactionLifecycle } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import {
   composeMcpServiceBindingForTest,
   deleteMcpForTest as deleteMcp,
@@ -250,7 +250,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
   test('runtime profile, inherited binary, and user disable mutations persist end intent', async () => {
     {
       const db = createInMemoryDb(MIGRATIONS)
-      const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
+      const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
       insertMcp(db)
       insertRuntime(db)
       insertIdleSession(db, { id: 'session-profile' })
@@ -264,7 +264,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
 
     {
       const db = createInMemoryDb(MIGRATIONS)
-      const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
+      const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
       insertMcp(db)
       insertRuntime(db, { binaryPath: null })
       insertIdleSession(db, { id: 'session-inherited' })

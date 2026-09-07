@@ -804,13 +804,13 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
+      "from": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions",
+      "specifier": "@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "why": "RFC-359 W4-D28b：runtime 注册表两份 provider 实现合成一份中立实现后，会话失效改消费 resource-catalog 的**中立** infrastructure 实现（不再是 legacy 同步版，那两个同步导出已随之删除）。边的形状不变——仍是 platform 直接消费 owner 内部实现，须继续收敛到 owner public/composition 合同。",
       "introducedByRFC": "RFC-349（provider cutover current-source census）",
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
@@ -818,10 +818,10 @@
         "import:68acda66b63b01cb26bb",
         "import:c4af1982c02edef63165"
       ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#$file",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTestsInTx",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionRuntimeTestsInTx"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTests",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionRuntimeTests"
       ],
       "canonicalFacadeIds": []
     },

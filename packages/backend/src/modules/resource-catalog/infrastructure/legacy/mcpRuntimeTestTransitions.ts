@@ -4,7 +4,7 @@
 // own mutation. They only write durable intent; the daemon-scoped coordinator
 // performs abort/reap/cleanup after commit.
 
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import {} from '@agent-workflow/shared'
 import { listResourceGrantUserIdsInTx } from '../sqliteResourceGrantRepository'
 import type { DbTxSync } from '@/db/txSync'
@@ -12,7 +12,6 @@ import {
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestSessions,
   mcpRuntimeTestSessionLeases,
-  runtimes,
 } from '@/db/schema'
 import { ConflictError } from '@/util/errors'
 
@@ -91,64 +90,6 @@ export function transitionMcpRuntimeTestsInTx(
       blockAfterTurn(tx, session, input.reason, input.now)
     } else {
       endNow(tx, session, input.reason, input.now)
-    }
-  }
-}
-
-export function transitionRuntimeTestsInTx(
-  tx: DbTxSync,
-  input: {
-    runtimeName: string
-    reason: 'runtime-profile-changed' | 'runtime-disabled' | 'runtime-deleted'
-    now: number
-  },
-): void {
-  const sessions = tx
-    .select()
-    .from(mcpRuntimeTestSessions)
-    .where(
-      and(
-        eq(mcpRuntimeTestSessions.runtimeName, input.runtimeName),
-        eq(mcpRuntimeTestSessions.status, 'active'),
-      ),
-    )
-    .all()
-  for (const session of sessions) {
-    if (input.reason === 'runtime-profile-changed') {
-      blockAfterTurn(tx, session, input.reason, input.now)
-    } else {
-      endNow(tx, session, input.reason, input.now)
-    }
-  }
-}
-
-export function transitionInheritedRuntimeTestsInTx(
-  tx: DbTxSync,
-  input: {
-    protocols: readonly ('opencode' | 'claude-code')[]
-    now: number
-  },
-): void {
-  if (input.protocols.length === 0) return
-  const inheritedRuntimeNames = tx
-    .select({ name: runtimes.name })
-    .from(runtimes)
-    .where(and(inArray(runtimes.protocol, [...input.protocols]), isNull(runtimes.binaryPath)))
-    .all()
-    .map((row) => row.name)
-  for (const runtimeName of inheritedRuntimeNames) {
-    const sessions = tx
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.runtimeName, runtimeName),
-          eq(mcpRuntimeTestSessions.status, 'active'),
-        ),
-      )
-      .all()
-    for (const session of sessions) {
-      blockAfterTurn(tx, session, 'runtime-profile-changed', input.now)
     }
   }
 }

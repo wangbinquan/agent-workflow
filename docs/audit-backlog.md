@@ -4124,6 +4124,31 @@ CI 今天是绿的，因为分片把这些文件分到了不同 job；**分片�
 判据：上面两条的用例名 + `skill-not-found`；复现方式是
 `bun test $(ls tests/*.test.ts | grep -i skill)`。
 
+## 283 个文件同进程跑时，5 条 HTTP 用例红成「declared operation has no mounted binding」（2026-09-07 实撞，先于本次改动）
+
+与上一条同族（跨文件的进程级状态串味），签名不同、值得单记一笔：把
+`runtime-registry + rfc238-* + rfc349-* + rfc251 + rfc359-* + architecture/` 一次性交给同一个
+bun 进程（283 文件 / 1800+ 用例）跑，稳定红这 5 条：
+
+- `RFC-238 MCP runtime playground HTTP contract > creates, restores, resumes, renders, and immediately ends one private session`
+- `RFC-238 MCP runtime playground HTTP contract > all playground endpoints remain authenticated`
+- `RFC-349 MCP runtime playground daemon identity > a queued turn still loads its MCP after first-admin bootstrap closes the daemon token`
+- `RFC-349 REST launch ownership > an agent launch stamps the launching user as owner and stays readable to them`
+- `RFC-349 REST launch ownership > the Agent/Workgroup route launch keeps its synchronous repo-preparation contract`
+
+五条的签名都一样：`createComposedApp` 里 `assertOperationCatalogClosed` 抛
+`system-operations.get-database-runtime.v1: declared operation has no mounted binding`
+（`platform/operations/catalog.ts:719`）。也就是**操作目录在这一批里没被装满**——声明还在、
+路由绑定没挂上，嫌疑同样是模块级注册表被前面的文件改过状态（目录是进程级的）。
+
+**归属排除**：这 5 条在**单跑时全绿**（`bun test tests/rfc238-mcp-runtime-test-http.test.ts
+tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新增的
+`rfc359-w4-d28b-runtime-registry-conformance.test.ts` **拿掉照红、加上也照红**（10 fail 两次
+逐条相同），所以与 RFC-359 W4-D28b 的 runtime 注册表合一无关。CI 是绿的，因为分片把这些文件
+分到不同 job；**分片一变就会暴露**，同上一条，不能当作不存在。
+
+判据：上面五条的用例名 + `declared operation has no mounted binding`。
+
 ## `workgroup-matrix` 的领队回合计数在 Windows e2e 上偶发多出几轮（2026-09-06 一次）
 
 `e2e/workgroup-matrix.spec.ts:348` 断言第二道门之前领队恰好跑过 5 轮

@@ -50,7 +50,6 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   'platform/persistence/sqlite/maintenanceRunStore.ts: 4',
   'platform/persistence/sqlite/systemWorkspaceGc.ts: 1',
   'platform/persistence/sqlite/taskLifecycle.ts: 4',
-  'platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts: 5',
   'services/task.ts: 3',
   'services/taskArchive.ts: 1',
   'services/taskDelete.ts: 1',

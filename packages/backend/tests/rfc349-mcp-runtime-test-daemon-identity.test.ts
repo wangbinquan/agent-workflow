@@ -26,7 +26,7 @@ import { McpRuntimeTestSessionDtoSchema } from '@agent-workflow/shared'
 import { loadConfig } from '../src/config'
 import { createInMemoryDb } from '../src/db/client'
 import { runtimes } from '../src/db/schema'
-import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import {
   emptySystemAgentOutputEvidence,
@@ -57,7 +57,7 @@ async function bootstrappedApp(): Promise<{ app: Hono; sessionToken: string }> {
   // `bootstrap: 'required'` 是关键：它既保留「首个管理员未创建」的初态，也**不**
   // 把这个 db 加入 legacy daemon-token 白名单——与真实安装一致。
   const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-  await seedBuiltinRuntimes(new SqliteRuntimeRegistryPersistence(db))
+  await seedBuiltinRuntimes(new DrizzleRuntimeRegistryPersistence(db))
   db.update(runtimes).set({ model: 'openai/test-model' }).where(eq(runtimes.name, 'opencode')).run()
 
   const runFn = async (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> => {

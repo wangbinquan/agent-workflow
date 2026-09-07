@@ -19,7 +19,7 @@ import type { CreateWorkflow } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { RuntimeRegistryPersistence } from '../src/platform/runtime-registry/application/runtimeRegistryOperations'
-import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
@@ -80,7 +80,7 @@ async function workflowForAgent(agent: { id: string; name: string }, name: strin
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
-  runtimes = new SqliteRuntimeRegistryPersistence(db)
+  runtimes = new DrizzleRuntimeRegistryPersistence(db)
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc251-plugins-'))
   resetNpmProbeCacheForTests()
   await createRuntime(runtimes, {

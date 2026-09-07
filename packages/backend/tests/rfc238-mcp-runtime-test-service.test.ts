@@ -13,7 +13,7 @@ import {
   composeMcpRuntimeTestPersistence,
   composeMcpRuntimeTestProvider,
 } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import {
   mcps,
   mcpRuntimeTestCreateReceipts,
@@ -79,7 +79,7 @@ function mcpBinding(db: DbClient): McpServiceBinding {
 }
 
 function runtimeTestDependencies(db: DbClient, root: string): McpRuntimeTestDependencies {
-  const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
+  const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
   const mcp = mcpBinding(db)
   return {
     ...composeMcpRuntimeTestProvider(db),

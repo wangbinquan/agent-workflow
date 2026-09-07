@@ -1,12 +1,25 @@
+// RFC-359 W4-D28b —— runtime 注册表持久化：一份实现，两个 provider 共用。
+//
+// 合一前是 247 行（SQLite，`dbTxSync`）对 336 行（PostgreSQL，`SET TRANSACTION ISOLATION LEVEL
+// SERIALIZABLE` + 40001 重放），十二个方法逐个同名同序、业务判据逐行相同——纯重复。PG 那份还把
+// 会话失效逻辑（`transitionRuntimeTests` / `transitionRuntimeTest`）**内联重写了一遍**，与
+// `legacy/mcpRuntimeTestTransitions.ts` 的同步版并存；两份逐字段对过账后合并进中立的
+// `infrastructure/mcpRuntimeTestTransitions.ts`。
+//
+// **隔离级别按 PG 那份逐方法保留**（SQLite 的 `BEGIN IMMEDIATE` 本就全库独占，两种都满足）：
+//   · `updateRuntime` / `invalidateInheritedRuntimeProbeReceipts` —— 普通写事务；
+//   · `setRuntimeEnabled` / `deleteRuntime` / `seedBuiltinRuntimes` —— `serializable`
+//     （都是「先查后写」跨行判据：默认 runtime 不能停用、最后一个 runtime 不能删、种子只种一次）。
+
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, runtimes } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import {
-  transitionInheritedRuntimeTestsInTx,
-  transitionRuntimeTestsInTx,
-} from '@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions'
+  transitionInheritedRuntimeTests,
+  transitionRuntimeTests,
+} from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   RuntimeRegistryPersistence,
   RuntimeRow,
@@ -18,32 +31,32 @@ function runtimePatch(patch: RuntimeUpdateRecord): Record<string, unknown> {
   return incrementProbeFence ? { ...values, probeFence: sql`${runtimes.probeFence} + 1` } : values
 }
 
-export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersistence {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async listRuntimes(): Promise<readonly RuntimeRow[]> {
-    return this.db.select().from(runtimes).all()
+    return await this.db.select().from(runtimes).all()
   }
 
   async getRuntime(name: string): Promise<RuntimeRow | null> {
-    return this.db.select().from(runtimes).where(eq(runtimes.name, name)).get() ?? null
+    return (await this.db.select().from(runtimes).where(eq(runtimes.name, name)).get()) ?? null
   }
 
   async insertRuntime(record: Parameters<RuntimeRegistryPersistence['insertRuntime']>[0]) {
-    this.db.insert(runtimes).values(record).run()
+    await this.db.insert(runtimes).values(record).run()
   }
 
   async updateRuntime(
     input: Parameters<RuntimeRegistryPersistence['updateRuntime']>[0],
   ): Promise<void> {
-    dbTxSync(this.db, (transaction) => {
-      transaction
+    await databaseSessionFor(this.db).transaction(async (transaction) => {
+      await transaction
         .update(runtimes)
         .set(runtimePatch(input.patch))
         .where(eq(runtimes.name, input.name))
         .run()
       if (input.executionProfileChanged) {
-        transitionRuntimeTestsInTx(transaction, {
+        await transitionRuntimeTests(transaction, {
           runtimeName: input.name,
           reason: 'runtime-profile-changed',
           now: input.patch.updatedAt,
@@ -56,7 +69,7 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
     input: Parameters<RuntimeRegistryPersistence['cacheRuntimeProbe']>[0],
   ): Promise<boolean> {
     const fingerprint = input.target.fingerprint
-    const updated = this.db
+    const updated = await this.db
       .update(runtimes)
       .set({ lastProbeJson: input.lastProbeJson, updatedAt: input.updatedAt })
       .where(
@@ -101,8 +114,8 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
     input: Parameters<RuntimeRegistryPersistence['invalidateInheritedRuntimeProbeReceipts']>[0],
   ): Promise<number> {
     if (input.protocols.length === 0) return 0
-    return dbTxSync(this.db, (transaction) => {
-      const updated = transaction
+    return await databaseSessionFor(this.db).transaction(async (transaction) => {
+      const updated = await transaction
         .update(runtimes)
         .set({
           probeFence: sql`${runtimes.probeFence} + 1`,
@@ -112,7 +125,7 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
         .where(and(inArray(runtimes.protocol, [...input.protocols]), isNull(runtimes.binaryPath)))
         .returning({ id: runtimes.id })
         .all()
-      transitionInheritedRuntimeTestsInTx(transaction, {
+      await transitionInheritedRuntimeTests(transaction, {
         protocols: input.protocols,
         now: input.now,
       })
@@ -123,8 +136,8 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
   async setRuntimeEnabled(
     input: Parameters<RuntimeRegistryPersistence['setRuntimeEnabled']>[0],
   ): ReturnType<RuntimeRegistryPersistence['setRuntimeEnabled']> {
-    return dbTxSync(this.db, (transaction) => {
-      const row = transaction
+    return await databaseSessionFor(this.db).serializable(async (transaction) => {
+      const row = await transaction
         .select({ enabled: runtimes.enabled })
         .from(runtimes)
         .where(eq(runtimes.name, input.name))
@@ -134,13 +147,13 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
         return { status: 'default-cannot-disable' as const }
       }
       if (row.enabled === input.enabled) return { status: 'unchanged' as const }
-      transaction
+      await transaction
         .update(runtimes)
         .set({ enabled: input.enabled, updatedAt: input.now })
         .where(eq(runtimes.name, input.name))
         .run()
       if (!input.enabled) {
-        transitionRuntimeTestsInTx(transaction, {
+        await transitionRuntimeTests(transaction, {
           runtimeName: input.name,
           reason: 'runtime-disabled',
           now: input.now,
@@ -153,8 +166,8 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
   async deleteRuntime(
     input: Parameters<RuntimeRegistryPersistence['deleteRuntime']>[0],
   ): ReturnType<RuntimeRegistryPersistence['deleteRuntime']> {
-    return dbTxSync(this.db, (transaction) => {
-      const all = transaction
+    return await databaseSessionFor(this.db).serializable(async (transaction) => {
+      const all = await transaction
         .select({ name: runtimes.name, binaryPath: runtimes.binaryPath })
         .from(runtimes)
         .all()
@@ -182,7 +195,7 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
       if (input.refs.changeNarrativeRuntime === input.name) {
         references.push('config.changeNarrativeRuntime')
       }
-      const referencedAgents = transaction
+      const referencedAgents = await transaction
         .select({ name: agents.name })
         .from(agents)
         .where(eq(agents.runtime, input.name))
@@ -190,12 +203,12 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
       references.push(...referencedAgents.map((agent) => `agent '${agent.name}'`))
       if (references.length > 0) return { status: 'in-use' as const, references }
 
-      transitionRuntimeTestsInTx(transaction, {
+      await transitionRuntimeTests(transaction, {
         runtimeName: input.name,
         reason: 'runtime-deleted',
         now: input.now,
       })
-      transaction.delete(runtimes).where(eq(runtimes.name, input.name)).run()
+      await transaction.delete(runtimes).where(eq(runtimes.name, input.name)).run()
       return { status: 'deleted' as const, binaryPath: row.binaryPath }
     })
   }
@@ -203,17 +216,17 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
   async seedBuiltinRuntimes(
     builtins: Parameters<RuntimeRegistryPersistence['seedBuiltinRuntimes']>[0],
   ): Promise<void> {
-    dbTxSync(this.db, (transaction) => {
-      const exists = transaction.select({ id: runtimes.id }).from(runtimes).limit(1).get()
+    await databaseSessionFor(this.db).serializable(async (transaction) => {
+      const exists = await transaction.select({ id: runtimes.id }).from(runtimes).limit(1).get()
       if (exists !== undefined) return
-      for (const builtin of builtins) transaction.insert(runtimes).values(builtin).run()
+      for (const builtin of builtins) await transaction.insert(runtimes).values(builtin).run()
     })
   }
 
   async backfillBuiltinBinary(
     input: Parameters<RuntimeRegistryPersistence['backfillBuiltinBinary']>[0],
   ): Promise<void> {
-    this.db
+    await this.db
       .update(runtimes)
       .set({ binaryPath: input.binaryPath, updatedAt: input.updatedAt })
       .where(
@@ -230,7 +243,7 @@ export class SqliteRuntimeRegistryPersistence implements RuntimeRegistryPersiste
     names: Parameters<RuntimeRegistryPersistence['listBuiltinProfiles']>[0],
   ): ReturnType<RuntimeRegistryPersistence['listBuiltinProfiles']> {
     if (names.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         name: runtimes.name,
         protocol: runtimes.protocol,
