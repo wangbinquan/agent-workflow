@@ -10,7 +10,7 @@ import {
   type MaintenanceStatus,
 } from '@agent-workflow/shared'
 
-import { createSession } from '@/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '@/db/client'
 import { createApp } from '@/server'
 import { createUser } from '@/services/users'

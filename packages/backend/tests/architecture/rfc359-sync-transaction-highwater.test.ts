@@ -25,13 +25,13 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
 /** `<相对 src 的路径>: <同步事务调用点数>`，按路径字典序。只降不升。 */
 export const SYNC_TRANSACTION_DEBT: readonly string[] = [
-  // RFC-359 W7 销账：`legacySqliteClarifyRounds.ts: 1`（澄清草稿的读改写）+
-  // `legacySqliteTaskQuestions.ts: 3`（改派的三处 CAS/读改写）+
-  // `sqliteCollaborationWorkgroupClarify.ts: 1`（自治遣散）—— 三个文件是
+  // RFC-359 W7 销账：`clarifyRounds.ts: 1`（澄清草稿的读改写）+
+  // `taskQuestions.ts: 3`（改派的三处 CAS/读改写）+
+  // `collaborationWorkgroupClarify.ts: 1`（自治遣散）—— 三个文件是
   // `CollaborationRouteOperations` / `CollaborationRuntimeMechanics` 两对适配器合一时被
   // 转发到的正典实现，写事务改走 `databaseSessionFor(db).transaction(...)` + 中立的
   // `setNodeRunStatusTx`，于是 PG 侧那两份共 4016 行的原生重写整体退役。
-  // RFC-359 W9 销账：`legacySqliteTaskCollab.ts: 1 → 0` —— 任务成员全量替换
+  // RFC-359 W9 销账：`taskCollab.ts: 1 → 0` —— 任务成员全量替换
   // （`updateTaskMembersLocked`：读一批成员 → 全量 delete → insert 回去）改走
   // `databaseSessionFor(db).transaction(...)`，事务体开头 `lockAggregateRoot(tasks)`。
   // 同批删掉 RFC-326 的同步孪生 `hasActingMembershipTx`（自 W1-T2c 起生产零调用方，

@@ -10,7 +10,7 @@
 //
 // 唯一被丢掉的是 SQLite 那份多出来的 `questionIds` 前置过滤：`reruns[].entryIds` 由
 // `dispatchedReruns` 生成、`questionIds = dispatchIds ∪ deferredEntryIds`
-// （`legacySqliteTaskQuestionDispatch.ts:1566` / `:1624`），因此
+// （`taskQuestionDispatch.ts:1566` / `:1624`），因此
 // `reruns[].entryIds ⊆ questionIds` 恒成立，那道过滤**可证冗余**。
 //
 // 两处 NULL 排序必须显式写出 SQLite 语义（能力矩阵的 `ascNullsFirst` / `descNullsLast`；

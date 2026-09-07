@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'

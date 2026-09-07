@@ -19,7 +19,7 @@ import {
   type Permission,
 } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {

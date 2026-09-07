@@ -253,7 +253,7 @@ describe('RFC-347 exact production source locks', () => {
     expect(callPaths('createIdentityAccessRuntime(')).toEqual([
       'src/main.ts',
       'src/modules/identity-access/composition.ts',
-      'src/modules/identity-access/infrastructure/legacySqliteUserService.ts',
+      'src/modules/identity-access/infrastructure/legacyUserService.ts',
       'src/server.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([

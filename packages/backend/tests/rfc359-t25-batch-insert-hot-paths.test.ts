@@ -15,7 +15,7 @@
 //      而它跑在 `withTaskExecutionSerializable` 里：SQLite 上那是全库独占，N 次往返阻塞的是所有任务。
 //   A2 `humanGateOperationJournal.ts` 的 collaboration_gate_artifacts —— 与 A1 **同一个 n**
 //      （两者由同一份 documents 派生、长度相等），所以一次 review-open 此前要付 2n 条逐行 INSERT。
-//   A3 `legacySqliteTaskQuestions.ts` 的 task_questions —— 唯一挂在 **GET** 上的写放大
+//   A3 `taskQuestions.ts` 的 task_questions —— 唯一挂在 **GET** 上的写放大
 //      （看板每次轮询都 lazy-reconcile 一遍）；cross 模式的问题数无界。
 //   A4 `eventStore.ts` settleObserver 的 event_subscriptions —— 观测数 × 匹配订阅数，1 Hz。
 //   A5 `eventStore.ts` recordObservation 的 event_subscriptions —— 每个入站 webhook 请求跑 2 次。
@@ -61,7 +61,7 @@ import {
 import { preparedHumanGateRef } from '@/modules/collaboration/domain/humanGateOperation'
 import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/infrastructure/humanGateOpenParticipant'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
-import { reconcileTaskQuestionsForRound } from '@/modules/collaboration/infrastructure/legacySqliteTaskQuestions'
+import { reconcileTaskQuestionsForRound } from '@/modules/collaboration/infrastructure/taskQuestions'
 import type { CustomEventSourceDraft } from '@/modules/event-center/domain/customEventSource'
 import {
   eventContentDigest,

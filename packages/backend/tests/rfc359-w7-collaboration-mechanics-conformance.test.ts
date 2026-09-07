@@ -7,9 +7,9 @@
 // 假客户端。本文件把端口契约写成**同一段断言**，`describeEachProvider` 在两个引擎上各跑一遍。
 //
 // 判据来源：`application/ports/collaborationRuntimeMechanics.ts` 的端口契约，语义注释在
-// `legacySqliteClarify/service.ts`（RFC-056 cross-clarify 短路 / 澄清轮开启）、
-// `sqliteCollaborationWorkgroupClarify.ts`（RFC-172/181 反问许可与自治遣散）、
-// `legacySqliteClarify/queue.ts`（澄清队列上下文）与 `legacySqliteReview.ts`（评审提示上下文）。
+// `clarify/service.ts`（RFC-056 cross-clarify 短路 / 澄清轮开启）、
+// `collaborationWorkgroupClarify.ts`（RFC-172/181 反问许可与自治遣散）、
+// `clarify/queue.ts`（澄清队列上下文）与 `review.ts`（评审提示上下文）。
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

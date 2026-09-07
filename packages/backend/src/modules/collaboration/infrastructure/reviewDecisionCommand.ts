@@ -2,7 +2,7 @@
 //
 // 此前只有 `createSqliteReviewDecisionCommand`（`legacySqliteReviewDecisionComposition.ts`），
 // PostgreSQL daemon 从未注入 `reviewDecisions`，路由一到就 500；决定事务体
-// （`legacySqliteReview.ts#submitReviewDecisionUnlocked`）现在跑在 `DatabaseSession` 上，
+// （`review.ts#submitReviewDecisionUnlocked`）现在跑在 `DatabaseSession` 上，
 // 评论 / 选择 / 决定的五个事务体两个 provider 共用。
 //
 // 保留动态 import：命令端口由 bootstrap 一次性组合，静态 import 评审域会经
@@ -24,7 +24,7 @@ export function createReviewDecisionCommand(input: {
 }): ReviewDecisionCommandPort {
   return {
     async submit(command) {
-      const { submitReviewDecision } = await import('./legacySqliteReview')
+      const { submitReviewDecision } = await import('./review')
       const decided = await submitReviewDecision({
         db: input.db,
         appHome: input.appHome,

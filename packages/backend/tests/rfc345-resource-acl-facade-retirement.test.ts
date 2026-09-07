@@ -320,7 +320,7 @@ const edge = (
 const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   edge(
     'services/agent.ts',
-    'modules/collaboration/infrastructure/legacySqliteReview.ts',
+    'modules/collaboration/infrastructure/review.ts',
     ['snapshotNodeAgentWhere'],
     'review node Agent snapshot',
     REMOVE_OWNERS.agentQueries,
@@ -350,7 +350,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   // resource-catalog 自己的中立实现（createMcpTransactionLifecycle），两条边随之销账。
   edge(
     'services/resourceAcl.ts',
-    'modules/collaboration/infrastructure/legacySqliteReview.ts',
+    'modules/collaboration/infrastructure/review.ts',
     ['resolveTaskRole'],
     'review task role projection',
     REMOVE_OWNERS.collaboration,
@@ -574,14 +574,14 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workgroup/askerKey.ts',
-    'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
+    'modules/collaboration/infrastructure/clarify/seal.ts',
     ['wgClarifyAskerKeyForRound'],
     'workgroup clarify asker identity',
     REMOVE_OWNERS.collaborationQuestions,
   ),
   edge(
     'services/workgroup/constants.ts',
-    'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+    'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
     ['WG_LEADER_NODE_ID', 'WG_MEMBER_NODE_ID'],
     'workgroup question dispatch node identities',
     REMOVE_OWNERS.collaborationQuestions,

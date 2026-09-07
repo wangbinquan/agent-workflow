@@ -239,7 +239,7 @@ test('源码锁：每个 PG owner 围栏都先读环境上下文；effect 账本
       'modules',
       'collaboration',
       'infrastructure',
-      'legacySqliteClarify',
+      'clarify',
       'service.ts',
     ),
     'utf8',

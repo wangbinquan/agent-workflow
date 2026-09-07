@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   lifecycleRepairAudit,

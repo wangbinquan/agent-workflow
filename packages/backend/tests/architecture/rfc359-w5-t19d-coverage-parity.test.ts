@@ -88,11 +88,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // SQLite 命名的参与者（它跑得动 PostgreSQL 正是转换成功的判据），于是它的引用/驱动数上涨。
   // 倒挂随之从 +1 变成 +2，但方向是「弱侧 PG 的那份原生重写更该退役」，不是新债。
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/3, postgresql 2/1',
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 5/1',
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 6/2',
   // RFC-359 W8：这一对此前**两侧都是 0/0**（RFC-108 只测了注入式循环，provider 那一半从未被跑过）。
   // `rfc359-w8-auto-repair-conformance.test.ts` 是它的第一份行为覆盖，两侧同时 0/0 → 1/1。
   'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite 1/1, postgresql 1/1',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 5/1',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 6/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
   'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 7/2, postgresql 9/2',
@@ -111,8 +111,8 @@ export const REFERENCE_GAP_THRESHOLD = 3
 export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 W11：18 vs 3 → 18 vs 4（PG 侧补了事务边界的双引擎判据）。仍在观察名单内。
   'modules/intent/infrastructure/IntentApplyOperations: 18 vs 4',
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 5',
-  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 6',
+  'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 6',
   'platform/persistence/LogicalSource: 8 vs 5',
 ]
 

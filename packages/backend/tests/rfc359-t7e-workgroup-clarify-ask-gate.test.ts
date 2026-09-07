@@ -14,7 +14,7 @@ import { wgClarifyAskerKey, type WorkgroupRuntimeConfig } from '@agent-workflow/
 
 import { clarifyRounds } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { setNodeClarifyDirective } from '@/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective'
+import { setNodeClarifyDirective } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import {
   renderWgProtocolBlock,

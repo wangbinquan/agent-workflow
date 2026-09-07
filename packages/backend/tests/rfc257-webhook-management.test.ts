@@ -11,7 +11,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import {
   webhookDeliveries,
   webhookTriggerFires,

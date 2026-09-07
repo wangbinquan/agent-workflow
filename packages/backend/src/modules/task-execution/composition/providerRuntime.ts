@@ -126,10 +126,15 @@ interface SelectedTaskExecutionProviderRuntimeBase {
 
 export interface SelectedSqliteTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
   readonly provider: 'sqlite'
+  /** The route context constructed in this same provider graph. */
+  readonly collaboration: SqliteTaskRouteOperationsDependencies['collaboration']
 }
 
 export interface SelectedPostgresqlTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
   readonly provider: 'postgresql'
+  readonly routeLaunch: SelectedTaskExecutionProviderRuntimeBase['routeLaunch'] & {
+    readonly workflow: PostgresqlRootTaskLaunchKernel
+  }
   /**
    * RFC-359 W5-T19b —— PG 这一支的模块**必定**已经拿到持久化：它由
    * `createPostgresqlTaskExecutionRuntimeParticipants` 用 `createProviderTaskExecutionModule`
@@ -258,6 +263,7 @@ export function composeSqliteTaskExecutionProviderRuntime(
   })
   return Object.freeze({
     provider: 'sqlite',
+    collaboration: routeDependencies.collaboration,
     participants,
     persistence,
     runtime,

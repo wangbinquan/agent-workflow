@@ -7,7 +7,7 @@ export {
   createCollaborationTaskAccessPort as createSqliteCollaborationTaskAccessPort,
   createCollaborationTaskAccessPort as createPostgresqlCollaborationTaskAccessPort,
 } from './infrastructure/collaborationTaskAccess'
-export { planMembersReplacement } from './infrastructure/legacySqliteTaskCollab'
+export { planMembersReplacement } from './infrastructure/taskCollab'
 // RFC-359 W7：RFC-057 修复的两个协作侧端口也各只剩一份实现；provider 具名导出只做绑定。
 export {
   createClarifyRepairParticipant,

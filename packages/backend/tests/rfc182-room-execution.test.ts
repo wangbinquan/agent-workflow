@@ -23,7 +23,7 @@ const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', '
 
 describe('RFC-182 — pending 帧源级锁', () => {
   test('taskQuestionDispatch：wg 宿主 pending 投影随提交事件在 commit 后发布', () => {
-    const src = SRC('modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts')
+    const src = SRC('modules/collaboration/infrastructure/taskQuestionDispatch.ts')
     const block = src.slice(src.indexOf('if (!committed) return EMPTY_RESULT'))
     expect(src).toContain('const pendingProjectionNodeChanges = mintPlans')
     expect(src).toContain('plan.input.nodeId === WG_LEADER_NODE_ID')

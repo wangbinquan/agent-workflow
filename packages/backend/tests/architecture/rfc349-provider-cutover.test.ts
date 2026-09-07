@@ -21,10 +21,6 @@ const units = backendUnits(REPO_ROOT)
  * port from bootstrap instead of importing another SQLite/PostgreSQL factory.
  */
 const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
-  'packages/backend/src/auth/loginPolicy.ts -> ./infrastructure/legacySqliteLoginPolicy :: export:*',
-  'packages/backend/src/auth/patStore.ts -> ./infrastructure/legacySqlitePatStore :: export:*',
-  'packages/backend/src/auth/session.ts -> @/auth/infrastructure/legacySqliteAuthRuntime :: LegacySqliteAuthRuntimeBinding,LegacySqliteAuthRuntimeInput,legacySqliteAuthRuntimeOf',
-  'packages/backend/src/auth/sessionStore.ts -> ./infrastructure/legacySqliteSessionStore :: export:*',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlLogicalTarget :: PostgresqlLogicalTarget',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlPreflight :: preflightPostgresqlTarget',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlRuntime :: PostgresqlDatabaseRuntime',
@@ -37,15 +33,12 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/code-capability/infrastructure/capabilityTemplatePackageCommit :: createSqliteCapabilityTemplatePackageCommitSync',
   'packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: getAclResourceOwnerInTx',
   'packages/backend/src/services/bundle/postgresqlApply.ts -> @/platform/persistence/postgresqlResourcePackageAtomicApply :: export:*',
-  'packages/backend/src/services/clarify/rounds.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyRounds :: export:*',
-  'packages/backend/src/services/clarifyDecision.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyDecision :: export:*',
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
   'packages/backend/src/services/nodeRollback.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRollback :: LegacySqliteRollbackDatabase,createLegacySqliteRollbackEffectObserver,loadLegacySqliteRollbackTarget',
   'packages/backend/src/services/nodeRunMint.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRunOperations :: LegacySqliteNodeRunDatabase,LegacySqliteNodeRunTransaction,createLegacySqliteNodeRunOperations,mintLegacySqliteNodeRunInTx',
   'packages/backend/src/services/pendingRestore.ts -> @/platform/persistence/sqlite/systemProviderRestore :: SqlitePostRestoreRecovery',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: export:getAclResourceAccessRow,export:getAclResourceAccessRowInTx,export:getAclResourceIdentityRowInTx,export:getAclResourceOwner,export:getAclResourceOwnerInTx,export:listAclResourceIdentityRowsByIds,export:listAclResourceIdentityRowsByIdsInTx,export:listAclResourceIdentityRowsByNames,export:listAclResourceIdentityRowsByNamesInTx,export:listOwnedAclResourceNames,export:loadAclResourceNamesByIds',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository :: export:AclColumnRef,export:grantsOfResourceWhere,export:listGrantedResourceIds,export:listGrantedResourceIdsInTx,export:listResourceGrantUserIdsInTx,export:listResourceGrants,export:listWritableGrantedResourceIds,export:loadGrantLevel,export:visibleRowsCondition',
-  'packages/backend/src/services/review.ts -> @/modules/collaboration/infrastructure/legacySqliteReview :: export:*',
   'packages/backend/src/services/runtime/opencode/distillSessionCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/sessionCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/sessionWalk.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase',
@@ -60,13 +53,8 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/taskArchive.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacySqliteTaskDatabase,and,asc,clarifyRounds,collaborationGateArtifacts,collaborationGateOperations,docVersions,eq,inArray,isNull,lifecycleAlerts,lte,nodeRunEvents,nodeRunOutputs,nodeRuns,or,recoveryEvents,reviewComments,reviewNodeReviewers,sql,taskArchiveAudit,taskCollaborators,taskExecutionEffectAttempts,taskExecutionEffectFences,taskExecutionEffects,taskExecutionIntents,taskExecutionLineageOperationRecords,taskExecutionMaintenanceClaims,taskExecutionMaintenanceMembers,taskExecutionOwners,taskFeedback,taskNodeClarifyDirectives,taskQuestions,taskRepos,taskSpaceNodes,tasks,workgroupAssignments,workgroupMemberCursors,workgroupMessages,workgroupTaskState',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: legacySqliteDefaultTaskAuthorizationRef,legacySqliteTaskAuthorizationCondition,legacySqliteTaskOwnershipScopeCondition,legacySqliteVisibleTaskIdsOf',
-  'packages/backend/src/services/taskClarifyDirective.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective :: export:getNodeClarifyDirective,export:getNodeClarifyDirectiveRow,export:isAskingNodeInSnapshot,export:listNodeClarifyDirectives,export:setNodeClarifyDirective,export:setNodeClarifyDirectiveTx',
-  'packages/backend/src/services/taskCollab.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskCollab :: export:*',
   'packages/backend/src/services/taskDelete.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacySqliteTaskDatabase,eq,inArray,sql,taskCollaborators,taskFeedback,taskRepos,tasks',
   'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
-  'packages/backend/src/services/taskQuestionDispatch.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch :: export:*',
-  'packages/backend/src/services/taskQuestions.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestions :: export:*',
-  'packages/backend/src/services/users.ts -> @/modules/identity-access/composition/legacySqliteUserService :: legacySqliteUserService',
 ] as const
 
 /** Only these roots may resolve the durable provider generation. */

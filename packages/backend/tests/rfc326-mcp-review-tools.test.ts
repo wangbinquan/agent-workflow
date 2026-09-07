@@ -31,7 +31,7 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { DEFAULT_CONFIG, SubmitReviewDecisionSchema, type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createPat } from '../src/auth/patStore'
+import { createPat } from './helpers/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -44,7 +44,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import { createReviewDecisionCommand } from '../src/modules/collaboration/composition/legacySqliteDecisionCommands'
+import { createReviewDecisionCommand } from '../src/modules/collaboration/composition/decisionCommands'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,

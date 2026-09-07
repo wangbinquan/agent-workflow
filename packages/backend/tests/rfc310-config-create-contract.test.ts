@@ -37,7 +37,7 @@ import {
   type DevelopmentConfigKind,
 } from '@agent-workflow/shared'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { AGENT_CAPABILITY_IDS } from '../src/modules/development-automation/domain/capabilityDefinition'
 import { createApp } from '../src/server'

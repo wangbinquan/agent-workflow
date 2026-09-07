@@ -132,12 +132,25 @@ export interface MemoryCatalogBinding {
   readonly testHooks?: MemoryCatalogTestHooks
 }
 
-export function composeMemoryOperationsFor(input: {
+export interface ComposeMemoryOperationsOptions {
   readonly db: ProviderNeutralDatabase
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly injectionQueries?: MemoryInjectionQueries
   readonly catalogBinding?: MemoryCatalogBinding
-}): MemoryOperations {
+}
+
+export interface MemoryOperationsWithCatalog extends MemoryOperations {
+  readonly catalog: MemoryCatalogOperations
+}
+
+/** A supplied catalog binding constructs the catalog in this call, for either provider. */
+export function composeMemoryOperationsFor(
+  input: ComposeMemoryOperationsOptions & { readonly catalogBinding: MemoryCatalogBinding },
+): MemoryOperationsWithCatalog
+export function composeMemoryOperationsFor(input: ComposeMemoryOperationsOptions): MemoryOperations
+export function composeMemoryOperationsFor(
+  input: ComposeMemoryOperationsOptions,
+): MemoryOperations {
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db),
     workStore: new DrizzleMemoryDistillWorkStore(

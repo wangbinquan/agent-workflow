@@ -276,8 +276,8 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
   test('结构锁：五文件全部经 nextRetryIndex，手写 max-over-retryIndex 归零', () => {
     const files = [
       'services/task.ts',
-      'modules/collaboration/infrastructure/legacySqliteReview.ts',
-      'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+      'modules/collaboration/infrastructure/review.ts',
+      'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
       'modules/task-execution/composition/nodeMechanics.ts',
     ]
     for (const f of files) {

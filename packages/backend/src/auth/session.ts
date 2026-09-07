@@ -10,10 +10,10 @@ import type { Context, MiddlewareHandler } from 'hono'
 import { PAT_TOKEN_PREFIX, SESSION_TOKEN_PREFIX, type Permission } from '@agent-workflow/shared'
 import { hashAuthToken, type AuthRuntime } from '@/auth/application/authRuntime'
 import {
-  legacySqliteAuthRuntimeOf,
-  type LegacySqliteAuthRuntimeBinding,
-  type LegacySqliteAuthRuntimeInput,
-} from '@/auth/infrastructure/legacySqliteAuthRuntime'
+  compatibleAuthRuntimeOf,
+  type CompatibleAuthRuntimeBinding,
+  type CompatibleAuthRuntimeInput,
+} from '@/auth/infrastructure/compatibleAuthRuntime'
 import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
 import { createInFlightCoalescer } from '@/util/inFlight'
@@ -36,7 +36,7 @@ interface MultiAuthBaseDeps {
 }
 
 export type MultiAuthDeps = MultiAuthBaseDeps &
-  ({ readonly auth: AuthRuntime; readonly db?: never } | LegacySqliteAuthRuntimeBinding)
+  ({ readonly auth: AuthRuntime; readonly db?: never } | CompatibleAuthRuntimeBinding)
 
 export type DirectAuthorityAdmissionRuntime = Readonly<{
   directAuthority: DirectAuthorityAdmission
@@ -165,7 +165,7 @@ export interface ResolvedUpgradeIdentity {
 }
 
 export async function resolveActorWithWsCredential(
-  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
+  authOrDb: AuthRuntime | CompatibleAuthRuntimeInput,
   raw: string,
   daemonTokenBuf: Buffer,
   identityAccess: DirectAuthorityAdmissionRuntime,
@@ -230,7 +230,7 @@ export async function resolveActorWithWsCredential(
 }
 
 export async function resolveIdentity(
-  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
+  authOrDb: AuthRuntime | CompatibleAuthRuntimeInput,
   raw: string,
   daemonTokenBuf: Buffer,
   identityAccess: DirectAuthorityAdmissionRuntime,
@@ -326,7 +326,7 @@ export function actorOfDirectAuthority(identity: DirectAuthorityIdentity): Actor
 }
 
 export async function resolveActor(
-  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
+  authOrDb: AuthRuntime | CompatibleAuthRuntimeInput,
   raw: string,
   daemonTokenBuf: Buffer,
   identityAccess: DirectAuthorityAdmissionRuntime,
@@ -346,7 +346,7 @@ export async function resolveActor(
  * still closes the socket.
  */
 export async function reresolveIdentity(
-  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
+  authOrDb: AuthRuntime | CompatibleAuthRuntimeInput,
   credential: WsCredentialFingerprint,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
@@ -381,7 +381,7 @@ export async function reresolveIdentity(
 }
 
 export async function reresolveActor(
-  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
+  authOrDb: AuthRuntime | CompatibleAuthRuntimeInput,
   credential: WsCredentialFingerprint,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
@@ -420,7 +420,7 @@ function safeEqual(a: Buffer, b: Buffer): boolean {
 }
 
 function authRuntimeOf(
-  input: MultiAuthDeps | AuthRuntime | LegacySqliteAuthRuntimeInput,
+  input: MultiAuthDeps | AuthRuntime | CompatibleAuthRuntimeInput,
 ): AuthRuntime {
-  return legacySqliteAuthRuntimeOf(input)
+  return compatibleAuthRuntimeOf(input)
 }

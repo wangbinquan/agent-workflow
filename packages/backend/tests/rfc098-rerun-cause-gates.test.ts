@@ -173,7 +173,7 @@ describe('RFC-098 WP-10 — producers mint the cause the gates consume', () => {
         'modules',
         'collaboration',
         'infrastructure',
-        'legacySqliteClarify',
+        'clarify',
         'rerunLedger.ts',
       ),
       'utf8',
@@ -196,7 +196,7 @@ describe('RFC-098 WP-10 — producers mint the cause the gates consume', () => {
         'modules',
         'collaboration',
         'infrastructure',
-        'legacySqliteTaskQuestionDispatch.ts',
+        'taskQuestionDispatch.ts',
       ),
       'utf8',
     )

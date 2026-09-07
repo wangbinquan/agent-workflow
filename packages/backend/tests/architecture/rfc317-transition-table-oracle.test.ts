@@ -229,7 +229,7 @@ interface OffTableDeviation {
  */
 const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   {
-    site: 'modules/collaboration/infrastructure/legacySqliteClarify/service.ts:done',
+    site: 'modules/collaboration/infrastructure/clarify/service.ts:done',
     offTable: ['pending'],
     why: 'clarify run 在**还没开跑**时就收到答案：直接从 pending 收成 done，不经过 running。表里 `resume-clarify` 只允许从 awaiting_human 出发。',
   },
@@ -294,12 +294,12 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     why: 'T3 修复：把误判为完成的任务打成 failed。表里 `fail` 不接受 done 出发。',
   },
   {
-    site: 'modules/collaboration/infrastructure/legacySqliteReview.ts:canceled',
+    site: 'modules/collaboration/infrastructure/review.ts:canceled',
     offTable: ['done'],
     why: '评审 supersede：新一轮评审到来时把上一轮已完成的 run 作废。**这是正常用户流程**——与 lifecycle.ts 头注释「never in normal flows」冲突，见 allowTerminal 账本同址条目。',
   },
   {
-    site: 'modules/collaboration/infrastructure/legacySqliteReview.ts:pending',
+    site: 'modules/collaboration/infrastructure/review.ts:pending',
     offTable: ['awaiting_human', 'done', 'pending', 'running'],
     why: '评审兄弟级联：一条被打回时，同批兄弟 run 一并重置为 pending，无论它们当前处在哪一态。',
   },

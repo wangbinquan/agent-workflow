@@ -1072,10 +1072,7 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
   // closes it structurally.)
   test('②(b) — sealRoundQuestions runs its tx under getTaskQuestionWriteSem (lock B)', () => {
     const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '../src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
-      ),
+      resolve(import.meta.dir, '../src/modules/collaboration/infrastructure/clarify/seal.ts'),
       'utf8',
     )
     const fn = fnBody(src, 'export async function sealRoundQuestions')

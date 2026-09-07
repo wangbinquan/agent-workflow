@@ -11,12 +11,12 @@
 //     独立提交，外层回滚**带不走**它的写（实测：SQLite 回滚后 'unselected' / 无草稿，
 //     PG 回滚后 'accepted' / 草稿仍在）。SQLite 侧走 `databaseSessionFor` 则两边都正确。
 //
-// 正典是被转发的那批实现——`legacySqliteReview.ts` / `legacySqliteTaskQuestions.ts` /
-// `legacySqliteClarifyRounds.ts` / `legacySqliteClarify/seal.ts`。它们的写事务已经全部跑在
+// 正典是被转发的那批实现——`review.ts` / `taskQuestions.ts` /
+// `clarifyRounds.ts` / `clarify/seal.ts`。它们的写事务已经全部跑在
 // `databaseSessionFor(db).transaction` 上（RFC-359 W1-T2a/b/c 把同一批文件里的决定 / 派发 /
 // 快速澄清三条命令链路合一时就是这么做的，PostgreSQL daemon 今天就在用它们），本刀只补上
 // 剩下的四处 `dbTxSync`（reassign ×3、saveDraft ×1）。
-//（那些文件名的 `legacySqlite` 前缀早已名不副实，改名会牵动别的守卫，留给后续刀口。）
+// RFC-359 W12：这些正典文件与消费路径已统一使用中立名称。
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
@@ -26,10 +26,10 @@ import type {
 
 // 决定 / 评审域的实现经 `services/humanGateComposition` 绕回 collaboration 的 composition
 // barrel，静态 import 会形成值环——与合一前的 SQLite 工厂同样保留惰性 import。
-const loadReviewOperations = () => import('./legacySqliteReview')
-const loadQuestionOperations = () => import('./legacySqliteTaskQuestions')
-const loadClarifyOperations = () => import('./legacySqliteClarifyRounds')
-const loadClarifySeal = () => import('./legacySqliteClarify/seal')
+const loadReviewOperations = () => import('./review')
+const loadQuestionOperations = () => import('./taskQuestions')
+const loadClarifyOperations = () => import('./clarifyRounds')
+const loadClarifySeal = () => import('./clarify/seal')
 
 export interface CreateCollaborationRouteOperationsInput {
   readonly db: ProviderNeutralDatabase

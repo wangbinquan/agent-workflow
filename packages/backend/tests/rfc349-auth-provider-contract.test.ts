@@ -1,6 +1,6 @@
 // RFC-349 — authentication exposes one Promise application runtime while
-// SQLite remains an infrastructure adapter with transactional policy/session
-// and revocation behavior.
+// its historical SQLite-only fixtures live under tests/helpers/auth.
+// Production persistence is shared by both database clients.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -34,11 +34,11 @@ describe('RFC-349 auth provider contract', () => {
     }
   })
 
-  test('legacy auth names are thin facades over explicit SQLite infrastructure', () => {
+  test('legacy auth fixtures stay in tests while middleware consumes the shared runtime', () => {
     const facades = [
-      'src/auth/loginPolicy.ts',
-      'src/auth/patStore.ts',
-      'src/auth/sessionStore.ts',
+      'tests/helpers/auth/loginPolicy.ts',
+      'tests/helpers/auth/patStore.ts',
+      'tests/helpers/auth/sessionStore.ts',
       'src/auth/session.ts',
       'src/services/accountAuthPolicy.ts',
     ]
@@ -52,7 +52,7 @@ describe('RFC-349 auth provider contract', () => {
     }
 
     const sqlitePolicy = readFileSync(
-      resolve(import.meta.dir, '..', 'src/auth/infrastructure/legacySqliteLoginPolicy.ts'),
+      resolve(import.meta.dir, '..', 'tests/helpers/auth/legacySqliteLoginPolicy.ts'),
       'utf8',
     )
     expect(sqlitePolicy).toContain('DbClient')

@@ -1,11 +1,11 @@
-// RFC-349 -- the selected provider core is composed before cross-owner
-// realtime visibility/redaction policy. The bootstrap binding must remain
-// request-local, fail closed before admission, and accept exactly one policy.
+// RFC-359: each provider core receives a complete policy. Constructor callbacks
+// retain their owning session and resolve later lexical bindings only when called;
+// there is no optional slot or post-construction bind step to omit.
 
 import { describe, expect, test } from 'bun:test'
 
 import { buildActor } from '../src/auth/actor'
-import { createDaemonRealtimePolicyBinding } from '../src/cli/daemonRealtimePolicy'
+import { composeDaemonRealtimePolicy } from '../src/cli/daemonRealtimePolicy'
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
 import type { RealtimeCompositionPolicy } from '../src/modules/runtime-management/public/participants'
 
@@ -50,72 +50,40 @@ function policy(label: string, calls: string[]): RealtimeCompositionPolicy {
   }
 }
 
-describe('RFC-349 daemon realtime policy binding', () => {
-  test('exposes one frozen closed policy reference before provider composition', () => {
-    const binding = createDaemonRealtimePolicyBinding()
-
-    expect(Object.keys(binding).sort()).toEqual(['bind', 'policy'])
-    expect(Object.keys(binding.policy).sort()).toEqual([
+describe('RFC-359 complete daemon realtime policy', () => {
+  test('constructs one frozen policy with all four capabilities', () => {
+    const composed = composeDaemonRealtimePolicy(policy('primary', []))
+    expect(Object.keys(composed).sort()).toEqual([
       'memoryVisibility',
       'redactTaskEventPayload',
       'repoImportOwnerUserId',
       'resourceVisibility',
     ])
-    expect(Object.isFrozen(binding)).toBe(true)
-    expect(Object.isFrozen(binding.policy)).toBe(true)
-    expect(Object.isFrozen(binding.policy.resourceVisibility)).toBe(true)
-    expect(Object.isFrozen(binding.policy.memoryVisibility)).toBe(true)
+    expect(Object.isFrozen(composed)).toBe(true)
+    expect(Object.isFrozen(composed.resourceVisibility)).toBe(true)
+    expect(Object.isFrozen(composed.memoryVisibility)).toBe(true)
   })
 
-  test('fails every policy capability closed until the complete policy is bound', async () => {
-    const { policy: deferredPolicy } = createDaemonRealtimePolicyBinding()
-
-    await expect(
-      deferredPolicy.resourceVisibility.canViewResource(actor, 'workflow', {
-        id: 'workflow-1',
-        ownerUserId: actor.user.id,
-        visibility: 'private',
-      }),
-    ).rejects.toThrow('daemon-realtime-policy-not-bound')
-    await expect(
-      deferredPolicy.memoryVisibility.canViewMemory(authority, actor, {
-        scopeType: 'global',
-        scopeId: null,
-      }),
-    ).rejects.toThrow('daemon-realtime-policy-not-bound')
-    expect(() => deferredPolicy.repoImportOwnerUserId('batch-1')).toThrow(
-      'daemon-realtime-policy-not-bound',
-    )
-    expect(() => deferredPolicy.redactTaskEventPayload({ token: 'secret' }, 'session')).toThrow(
-      'daemon-realtime-policy-not-bound',
-    )
-  })
-
-  test('activates the retained reference once and rejects replacement', async () => {
-    const binding = createDaemonRealtimePolicyBinding()
-    const retainedPolicy = binding.policy
+  test('forwards complete inputs and results without a later bind step', async () => {
     const calls: string[] = []
-
-    binding.bind(policy('primary', calls))
-
-    expect(binding.policy).toBe(retainedPolicy)
+    const retained = composeDaemonRealtimePolicy(policy('primary', calls))
     await expect(
-      retainedPolicy.resourceVisibility.canViewResource(actor, 'workgroup', {
+      retained.resourceVisibility.canViewResource(actor, 'workgroup', {
         id: 'workgroup-1',
         ownerUserId: actor.user.id,
         visibility: 'private',
       }),
     ).resolves.toBe(true)
     await expect(
-      retainedPolicy.memoryVisibility.canViewMemory(authority, actor, {
+      retained.memoryVisibility.canViewMemory(authority, actor, {
         scopeType: 'repo',
         scopeId: 'repo-1',
       }),
     ).resolves.toBe(true)
-    expect(retainedPolicy.repoImportOwnerUserId('batch-1')).toBe('primary:batch-1')
-    expect(retainedPolicy.redactTaskEventPayload({ token: 'secret' }, 'pat')).toEqual({
+    expect(retained.repoImportOwnerUserId('batch-1')).toBe('primary:batch-1')
+    expect(retained.redactTaskEventPayload({ value: 'payload' }, 'pat')).toEqual({
       label: 'primary',
-      payload: { token: 'secret' },
+      payload: { value: 'payload' },
     })
     expect(calls).toEqual([
       'resource:realtime-user:workgroup:workgroup-1',
@@ -123,26 +91,35 @@ describe('RFC-349 daemon realtime policy binding', () => {
       'repo:batch-1',
       'redact:pat',
     ])
-
-    expect(() => binding.bind(policy('replacement', []))).toThrow(
-      'daemon-realtime-policy-already-bound',
-    )
-    expect(retainedPolicy.repoImportOwnerUserId('batch-2')).toBe('primary:batch-2')
   })
 
-  test('keeps bindings isolated per daemon session without ambient state', () => {
-    const first = createDaemonRealtimePolicyBinding()
-    const second = createDaemonRealtimePolicyBinding()
+  test('captures methods with their receivers and does not replace a retained policy', () => {
+    const original = {
+      ...policy('primary', []),
+      label: 'owner',
+      repoImportOwnerUserId(batch: string) {
+        return `${this.label}:${batch}`
+      },
+    }
+    const retained = composeDaemonRealtimePolicy(original)
+    original.repoImportOwnerUserId = () => 'replacement'
+    expect(retained.repoImportOwnerUserId('batch')).toBe('owner:batch')
+  })
 
-    first.bind(policy('first', []))
+  test('keeps independent daemon sessions on their own owners', () => {
+    const first = composeDaemonRealtimePolicy(policy('first', []))
+    const second = composeDaemonRealtimePolicy(policy('second', []))
+    expect(first.repoImportOwnerUserId('batch')).toBe('first:batch')
+    expect(second.repoImportOwnerUserId('batch')).toBe('second:batch')
+    expect(first.repoImportOwnerUserId('batch')).toBe('first:batch')
+  })
 
-    expect(first.policy.repoImportOwnerUserId('batch')).toBe('first:batch')
-    expect(() => second.policy.repoImportOwnerUserId('batch')).toThrow(
-      'daemon-realtime-policy-not-bound',
-    )
-
-    second.bind(policy('second', []))
-    expect(second.policy.repoImportOwnerUserId('batch')).toBe('second:batch')
-    expect(first.policy.repoImportOwnerUserId('batch')).toBe('first:batch')
+  test('constructs callbacks before their lexical owner without evaluating that owner', () => {
+    const composed = composeDaemonRealtimePolicy({
+      ...policy('primary', []),
+      repoImportOwnerUserId: (batch) => owner.repoImportOwnerUserId(batch),
+    })
+    const owner = policy('later', [])
+    expect(composed.repoImportOwnerUserId('batch')).toBe('later:batch')
   })
 })

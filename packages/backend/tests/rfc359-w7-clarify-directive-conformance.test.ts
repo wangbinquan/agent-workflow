@@ -11,7 +11,7 @@
 // 一遍。任何一侧再长出私有分支，这里立刻红。
 //
 // 判据来源：`application/ports/clarifyDirectiveStore.ts` 的端口契约，语义注释在
-// `infrastructure/legacySqliteTaskClarifyDirective.ts`（RFC-122 覆盖、RFC-123 recency、
+// `infrastructure/taskClarifyDirective.ts`（RFC-122 覆盖、RFC-123 recency、
 // RFC-207 per-asker 行与节点级 continue 的「解除全部静音」手势）。
 
 import { expect, test } from 'bun:test'

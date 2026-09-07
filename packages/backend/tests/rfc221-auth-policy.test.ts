@@ -18,7 +18,7 @@ import {
   getAuthLoginPolicy,
   setOidcDefaultRole,
   setPasswordLoginEnabled,
-} from '../src/auth/loginPolicy'
+} from './helpers/auth/loginPolicy'
 import { createUser } from '../src/services/users'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 import { DomainError } from '../src/util/errors'

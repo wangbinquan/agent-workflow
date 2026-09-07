@@ -15,7 +15,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor, type Actor } from '@/auth/actor'
 import { errorHandler, ForbiddenError, ValidationError } from '@/util/errors'
 import { registerRoute, resetRouteMetaRegistry, type RouteMeta } from '@/routes/registry'
-import { assertMatrixGrantable, PatMatrixError } from '@/auth/patStore'
+import { assertMatrixGrantable, PatMatrixError } from './helpers/auth/patStore'
 
 describe('RFC-247 AC-7 — an over-reaching matrix is refused, not narrowed', () => {
   test('a plain user cannot grant a repos verb', () => {

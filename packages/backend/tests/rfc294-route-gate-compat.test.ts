@@ -14,7 +14,7 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { createSession } from '@/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import {
   docVersions,

@@ -147,7 +147,7 @@ describe('RFC-333 T2 current human-gate inventory', () => {
 describe('RFC-333 human-gate open/park cutover inventory', () => {
   test('T6 review target: complete preparation precedes one TaskParkTx and post-commit finalization', () => {
     const dispatch = declaredFunction(
-      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/review.ts',
       'dispatchReviewNodeUnlocked',
     )
     const callInventory = calls('review-dispatch-snippet.ts', dispatch)
@@ -203,7 +203,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
 
   test('T7 clarify target: complete preparation precedes one TaskParkTx and committed projection', () => {
     const create = declaredFunction(
-      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts',
       'createClarifyRound',
     )
     const callInventory = calls('clarify-create-snippet.ts', create)
@@ -249,11 +249,9 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
   })
 
   test('T7 new rounds project eager questions while historical lazy reconciliation remains', () => {
-    const seal = read(
-      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
-    )
+    const seal = read('packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts')
     const questions = read(
-      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts',
     )
     const participant = read(
       'packages/backend/src/modules/collaboration/infrastructure/humanGateOpenParticipant.ts',
@@ -265,7 +263,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
 
   test('T7 manual questions persist one operation and defer active-owner park to settle', () => {
     const create = declaredFunction(
-      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts',
       'createManualTaskQuestion',
     )
     const createCalls = calls('manual-question-create-snippet.ts', create)

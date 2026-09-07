@@ -31,7 +31,7 @@ import {
   WorkflowDefinitionSchema,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'

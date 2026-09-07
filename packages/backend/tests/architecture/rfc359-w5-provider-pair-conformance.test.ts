@@ -334,11 +334,9 @@ describe('RFC-359 W5 —— 成对 provider 适配器：合一进度 + 对拍覆
         TEST_FILES.length,
         '扫到的 backend 测试文件太少——扫描根多半失效了，状态位会整列塌成 unverified。',
       ).toBeGreaterThanOrEqual(1500)
-      expect(
-        PROVIDER_NAMED_SOURCES.length,
-        '一个 provider 命名文件都没扫到——前缀匹配器已经不咬人了；' +
-          '账本清空后这条守卫会变成永久假绿，先修匹配器再说。',
-      ).toBeGreaterThanOrEqual(100)
+      // 业务文件会随合一持续减少，不能拿债务数充当语料分母。上面锁完整源码树，
+      // 这里以始终存在的驱动本体证明前缀匹配器仍能识别真实文件。
+      expect(PROVIDER_NAMED_SOURCES).toContain('platform/persistence/postgresqlDatabaseClient.ts')
       expect(
         DUAL_ENGINE_TESTS.length,
         '一个跑 `describeEachProvider` 的测试都没认出来——harness 判据失效了；' +

@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'

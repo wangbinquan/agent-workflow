@@ -6,7 +6,7 @@
 // 看上去是「薄壳 + 重写」的典型形态。逐方法核对后不是：
 //
 //   · SQLite 那 292 行**不是**实现，是一层转发；它背后的实现是 `services/task.ts`（7,742 行，
-//     其中约 2,500 行服务本端口）+ `services/taskDelete.ts`(399) + `legacySqliteTaskCollab.ts`(516)
+//     其中约 2,500 行服务本端口）+ `services/taskDelete.ts`(399) + `taskCollab.ts`(516)
 //     + `platform/persistence/sqlite/taskLifecycleRepair.ts`(513)。那台机器带**模块级可变全局**
 //     （`taskDriverRegistry` / `isTaskActive` / `materializingSpaces` / 列表的 in-flight 合流表）、
 //     两处 `dbTxSync`，并且**自己驱动进程内 scheduler**（`createTaskDriveCoordinator` + 续跑意图）。

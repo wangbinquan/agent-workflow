@@ -13,7 +13,7 @@ import {
   revokeAllSessionsForUser,
   revokeSession,
   SESSION_DEFAULT_TTL_MS,
-} from '../src/auth/sessionStore'
+} from './helpers/auth/sessionStore'
 import { users, userSessions } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

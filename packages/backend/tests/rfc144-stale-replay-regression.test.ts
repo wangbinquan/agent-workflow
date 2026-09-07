@@ -746,13 +746,7 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
 
   test('taskQuestionDispatch：同步 tx 内 mint 前同参 abandon（RFC-120 原子 claim+mint 通道）', () => {
     const src = readFileSync(
-      join(
-        BACKEND_SRC,
-        'modules',
-        'collaboration',
-        'infrastructure',
-        'legacySqliteTaskQuestionDispatch.ts',
-      ),
+      join(BACKEND_SRC, 'modules', 'collaboration', 'infrastructure', 'taskQuestionDispatch.ts'),
       'utf-8',
     )
     // RFC-359：派发事务跑在 DatabaseSession 上（两引擎一份），铸造参与者是中立的 createNodeRunMintParticipantInTx。

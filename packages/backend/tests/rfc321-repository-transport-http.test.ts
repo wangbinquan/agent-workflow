@@ -9,9 +9,9 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
 import { buildActor } from '../src/auth/actor'
-import { createPat } from '../src/auth/patStore'
+import { createPat } from './helpers/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import {
   codeHostConnections,

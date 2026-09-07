@@ -441,7 +441,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *       `lockAggregateRoot(tasks)` 再查活跃操作 → `human-gate-operation-conflict`）。
  *     removeWhen —— 该文件迁到 `.transaction()`（READ COMMITTED）时必须在读之前补串行化；
  *       在那之前这条只是形状登记。
- *   modules/collaboration/infrastructure/legacySqliteTaskCollab.ts: 1
+ *   modules/collaboration/infrastructure/taskCollab.ts: 1
  *     :435 taskCollaborators（复合主键）。why —— 同步事务面（`dbTxSync`），PG 上不可达。
  *     removeWhen —— 随 `rfc359-sync-transaction-highwater` 归零一起消失。
  *   modules/digital-employee/infrastructure/runtimeStore.ts: 5
@@ -537,7 +537,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  */
 export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/collaboration/infrastructure/humanGateOpenParticipant.ts: 1',
-  'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts: 1',
+  'modules/collaboration/infrastructure/taskCollab.ts: 1',
   'modules/digital-employee/infrastructure/runtimeStore.ts: 5',
   'modules/event-center/infrastructure/eventStore.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',

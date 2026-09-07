@@ -25,8 +25,7 @@ export function createClarifyDecisionCommand(
 ): ClarifyDecisionCommandPort {
   return {
     async submit(command) {
-      const { autoDispatchClarifyRoundWithDecision } =
-        await import('./legacySqliteClarify/autoDispatch')
+      const { autoDispatchClarifyRoundWithDecision } = await import('./clarify/autoDispatch')
       const decided = await autoDispatchClarifyRoundWithDecision({
         db,
         originNodeRunId: command.nodeRunId,

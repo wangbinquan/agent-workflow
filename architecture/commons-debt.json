@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 285,
+    "inboundEdges": 272,
     "outboundEdges": 35,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -2347,167 +2347,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/autoDispatch.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:384c37b2d0db0ec5b6b0"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/autoDispatch.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/autoDispatch.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/queue.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/queue",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarify/queue",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a5979e4ab1c117962680"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/queue.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/queue.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/queue.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/rerunLedger.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/rerunLedger",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarify/rerunLedger",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:ae2d1a7bae7e0489acf3"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rerunLedger.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/rerunLedger.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/rerunLedger.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/rounds.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarifyRounds",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:165427f0844a73544f2f"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rounds.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/rounds.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/seal.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarify/seal",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9f1f79ddd422a4f11a04"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/seal.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarify/service.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarify/service",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:90c9acac608df199eb4a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/service.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarify/service.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/clarifyDecision.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecision",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteClarifyDecision",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:ba13e2e59820479b14be"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/clarifyDecision.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/clarifyDecisionComposition.ts",
       "to": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand",
       "specifier": "@/modules/collaboration/infrastructure/clarifyDecisionCommand",
@@ -4127,7 +3966,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:e37cd1b332c58e6648eb"
+        "import:3c0250cc924f10907396"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/ownerScopedName.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -4554,29 +4393,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceRefs.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/review.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteReview",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:82fe8360538897bd89c9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/review.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/review.ts"
       ]
     },
     {
@@ -5674,62 +5490,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskClarifyDirective.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:038192e5762d49048a1a",
-        "import:2e4fa425450f2f1815dc",
-        "import:61b4476efa4e5161f7e4",
-        "import:933534def1f2b4e925df",
-        "import:9581fc7610c242e9416d",
-        "import:98ea23ff792d56e3f8e8"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskClarifyDirective.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#getNodeClarifyDirective",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#getNodeClarifyDirectiveRow",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#isAskingNodeInSnapshot",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#listNodeClarifyDirectives",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirective",
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirectiveTx"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskClarifyDirective.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskCollab.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteTaskCollab",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:66a75b2847c476732a2f"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskCollab.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskDelete.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
@@ -5857,52 +5617,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskQuestionDispatch.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:bcaf0b190dfbac44dd63"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskQuestionDispatch.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskQuestions.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteTaskQuestions",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:15ef60f50f16bd574df9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskQuestions.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskWorkspacePhase.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations",
       "specifier": "@/modules/task-execution/application/ports/taskRecoveryOperations",
@@ -5970,29 +5684,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/userIdentities.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/users.ts",
-      "to": "packages/backend/src/modules/identity-access/composition/legacySqliteUserService",
-      "specifier": "@/modules/identity-access/composition/legacySqliteUserService",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "identity-access",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:8e0ae7062094b7bae2cb"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/users.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/identity-access/composition/legacySqliteUserService.ts#legacySqliteUserService"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/users.ts"
       ]
     },
     {
@@ -8734,15 +8425,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
+    "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "b5347f30bd8785e78870a4eb7bb1116d7ae6bebe",
-    "contentDigest": "sha256:ce91ae1c6b16bc752cbaab7ced5baaa236857a0173e5d24e055048230d88357f",
+    "currentSnapshotSha": "9a093736b52e47dce5fb953c6e9e0a40e5d594f7",
+    "contentDigest": "sha256:b9aeaaae7d3b3757a384d22773539d053590a0213c107b13f3a4054b78b16a05",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

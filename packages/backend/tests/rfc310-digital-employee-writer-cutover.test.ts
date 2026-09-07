@@ -137,7 +137,7 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
 
   test('HTTP refuses new legacy Missions after cutover while exposing the drain report', async () => {
     const [{ createSession }, { createApp }, { createUser }] = await Promise.all([
-      import('@/auth/sessionStore'),
+      import('./helpers/auth/sessionStore'),
       import('@/server'),
       import('@/services/users'),
     ])

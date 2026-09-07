@@ -224,13 +224,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // behavior is locked by rfc096-designer-rerun-pick.test.ts and the
     // cross-clarify suite).
     const dispatchSrc = readFileSync(
-      join(
-        SRC_ROOT,
-        'modules',
-        'collaboration',
-        'infrastructure',
-        'legacySqliteTaskQuestionDispatch.ts',
-      ),
+      join(SRC_ROOT, 'modules', 'collaboration', 'infrastructure', 'taskQuestionDispatch.ts'),
       'utf-8',
     )
     // RFC-172 (route 2, S3): the inheritance source is now `scoped` (targetRuns filtered to the

@@ -3,7 +3,7 @@
 // 此前 `sqliteTaskDagCollaborationOperations.ts` 与 `postgresqlTaskDagCollaborationOperations.ts`
 // 各一份；PostgreSQL 那份的 `autoDispatchDeferredQuestions` 委托给一个从未被 bind 的 holder，
 // 生产上每次 tick 抛 `deferred-question-dispatcher-not-bound`（dual-provider-parity-audit P0-7）。
-// 派发管线（`legacySqliteTaskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
+// 派发管线（`taskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
 
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm'
 
@@ -138,7 +138,7 @@ export function createTaskDagCollaborationOperations(
     // 动态 import：本文件从 collaboration 的 composition barrel 导出，而派发管线经
     // services/humanGateComposition 绕回同一个 barrel——静态 import 会形成值环（TDZ）。
     autoDispatchDeferredQuestions: async (taskId: string) => {
-      const { autoDispatchDeferredQuestions } = await import('./legacySqliteClarify/autoDispatch')
+      const { autoDispatchDeferredQuestions } = await import('./clarify/autoDispatch')
       await autoDispatchDeferredQuestions(db, taskId)
     },
     loadOpenClarifyEvidence: (taskId: string) => loadOpenClarifyEvidence(db, taskId),

@@ -53,7 +53,7 @@ const REVIEW_SOURCE_PATH = resolve(
   'modules',
   'collaboration',
   'infrastructure',
-  'legacySqliteReview.ts',
+  'review.ts',
 )
 const PATCH_MD_PATH = resolve(
   import.meta.dir,

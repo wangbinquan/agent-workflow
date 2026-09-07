@@ -20,7 +20,7 @@ import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { initialGrantsForRole } from '../src/modules/identity-access/domain/initialGrants'
 import type { Role } from '@agent-workflow/shared'
-import { setOidcDefaultRole } from '../src/auth/loginPolicy'
+import { setOidcDefaultRole } from './helpers/auth/loginPolicy'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

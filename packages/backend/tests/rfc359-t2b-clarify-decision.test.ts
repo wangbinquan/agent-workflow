@@ -18,8 +18,8 @@ import {
   tasks,
 } from '@/db/schema'
 import { createClarifyDecisionCommand } from '@/modules/collaboration/infrastructure/clarifyDecisionCommand'
-import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/legacySqliteClarify/seal'
-import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
+import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/public/types'
 import type { EnqueueMemoryDistillJobInput } from '@/modules/memory/public/commands'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'

@@ -1590,7 +1590,7 @@ const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
 // an added or retired finding changes this list, while the target fixtures
 // above continue to prove real cast/serialization/forge mutations turn red.
 const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
-  'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts: constructs ClarifySealDecisionParticipantInTx outside owner factory',
+  'modules/collaboration/infrastructure/clarifyDecision.ts: constructs ClarifySealDecisionParticipantInTx outside owner factory',
   'modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#createWorkgroupTaskRoomClarifyParticipantInTx: factory is outside capability owner',
   'modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts: casts/rewraps WorkgroupTaskRoomClarifyParticipantInTx outside owner factory',
   'modules/collaboration/public/types.ts: ReviewActor leaks through public/types',

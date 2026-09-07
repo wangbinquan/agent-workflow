@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:448",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:460",
       "kind": "register-call",
-      "line": 448,
+      "line": 460,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlDaemonApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlDaemonApplication",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2670",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2615",
       "kind": "register-call",
-      "line": 2670,
+      "line": 2615,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2676",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2621",
       "kind": "register-call",
-      "line": 2676,
+      "line": 2621,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:764",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:725",
       "kind": "register-call",
-      "line": 764,
+      "line": 725,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:770",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:731",
       "kind": "register-call",
-      "line": 770,
+      "line": 731,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2975",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2920",
       "kind": "register-call",
-      "line": 2975,
+      "line": 2920,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:937",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:895",
       "kind": "register-call",
-      "line": 937,
+      "line": 895,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1699",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1657",
       "kind": "register-call",
-      "line": 1699,
+      "line": 1657,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:3015",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2960",
       "kind": "global-setter",
-      "line": 3015,
+      "line": 2960,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:779",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:740",
       "kind": "global-setter",
-      "line": 779,
+      "line": 740,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -509,9 +509,9 @@
     {
       "callee": "registerMint",
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:571",
+      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:573",
       "kind": "register-call",
-      "line": 571,
+      "line": 573,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#executeHostTurn",
       "removeAfterWave": "W6/W9",
       "symbol": "executeHostTurn",
@@ -5338,9 +5338,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3113",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3110",
       "kind": "register-call",
-      "line": 3113,
+      "line": 3110,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2907",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2904",
       "kind": "register-call",
-      "line": 2907,
+      "line": 2904,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3173",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3170",
       "kind": "register-call",
-      "line": 3173,
+      "line": 3170,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createComposedApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createComposedApp",
@@ -5443,11 +5443,11 @@
   "denominator": {
     "ambientWiring": 493,
     "disabled": 9,
-    "entries": 339,
+    "entries": 338,
     "executionLocal": 43,
     "longRunning": 76,
     "managed": 11,
-    "periodic": 211
+    "periodic": 210
   },
   "entries": [
     {
@@ -5469,29 +5469,6 @@
       "ownerEntryId": "owner:packages/backend/src/auth/application/tokenCallAudit.ts#TOKEN_AUDIT_PRUNE_BATCH",
       "phase": "unknown",
       "symbol": "TOKEN_AUDIT_PRUNE_BATCH",
-      "targetContext": "identity-access"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#sweepExpiredSessions",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#sweepExpiredSessions",
-      "phase": "unknown",
-      "symbol": "sweepExpiredSessions",
       "targetContext": "identity-access"
     },
     {
@@ -5870,6 +5847,50 @@
       "targetContext": "collaboration"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#RECOVERABLE_DISPATCH_CONFLICTS",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#RECOVERABLE_DISPATCH_CONFLICTS",
+      "phase": "execution",
+      "symbol": "RECOVERABLE_DISPATCH_CONFLICTS",
+      "targetContext": "collaboration"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#countAwaitingClarifyRounds",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#countAwaitingClarifyRounds",
+      "phase": "unknown",
+      "symbol": "countAwaitingClarifyRounds",
+      "targetContext": "collaboration"
+    },
+    {
       "dependencies": [
         "db"
       ],
@@ -5916,56 +5937,12 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#RECOVERABLE_DISPATCH_CONFLICTS",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#RECOVERABLE_DISPATCH_CONFLICTS",
-      "phase": "execution",
-      "symbol": "RECOVERABLE_DISPATCH_CONFLICTS",
-      "targetContext": "collaboration"
-    },
-    {
       "dependencies": [
         "db"
       ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#countAwaitingClarifyRounds",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#countAwaitingClarifyRounds",
-      "phase": "unknown",
-      "symbol": "countAwaitingClarifyRounds",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#iterateSiblingCascadeApplies",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/review.ts#iterateSiblingCascadeApplies",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -5977,53 +5954,9 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#iterateSiblingCascadeApplies",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#iterateSiblingCascadeApplies",
       "phase": "unknown",
       "symbol": "iterateSiblingCascadeApplies",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reconcileRoundEntriesTx",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reconcileRoundEntriesTx",
-      "phase": "execution",
-      "symbol": "reconcileRoundEntriesTx",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reconcileTaskQuestionsForRound",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reconcileTaskQuestionsForRound",
-      "phase": "execution",
-      "symbol": "reconcileTaskQuestionsForRound",
       "targetContext": "collaboration"
     },
     {
@@ -6047,6 +5980,50 @@
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
       "phase": "unknown",
       "symbol": "createTaskDagCollaborationOperations",
+      "targetContext": "collaboration"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reconcileRoundEntriesTx",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reconcileRoundEntriesTx",
+      "phase": "execution",
+      "symbol": "reconcileRoundEntriesTx",
+      "targetContext": "collaboration"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reconcileTaskQuestionsForRound",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reconcileTaskQuestionsForRound",
+      "phase": "execution",
+      "symbol": "reconcileTaskQuestionsForRound",
       "targetContext": "collaboration"
     },
     {
@@ -12930,5 +12907,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d"
+  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6"
 }

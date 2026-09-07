@@ -18,9 +18,9 @@ import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import { createPat } from '../src/auth/patStore'
+import { createPat } from './helpers/auth/patStore'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tokenAudit, tokenDeleteSnapshot } from '../src/db/schema'
 import { createApp } from '../src/server'
@@ -481,7 +481,7 @@ describe('RFC-247 D8 — who can read the audit', () => {
     // …and Bob's token is still live.
     const stillThere = await listTokenAudit(h.db)
     expect(Array.isArray(stillThere)).toBe(true)
-    const bobsPats = await (await import('../src/auth/patStore')).listPatsForUser(h.db, bob.id)
+    const bobsPats = await (await import('./helpers/auth/patStore')).listPatsForUser(h.db, bob.id)
     expect(bobsPats[0]?.revokedAt).toBeNull()
   })
 })

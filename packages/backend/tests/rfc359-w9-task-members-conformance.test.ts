@@ -1,6 +1,6 @@
 // RFC-359 W9 —— 任务成员面（`GET/PUT /api/tasks/:id/members`）的双引擎对拍。
 //
-// **为什么存在**：`modules/collaboration/infrastructure/legacySqliteTaskCollab.ts` 是本刀 12 个
+// **为什么存在**：`modules/collaboration/infrastructure/taskCollab.ts` 是本刀 12 个
 // 文件里**唯一名副其实**的那个——W9 之前它的类型面是 `DbClient`（bun:sqlite 同步客户端），
 // 成员全量替换跑在 `dbTxSync` 上，那是 PostgreSQL 上根本不存在的事务面。PG 部署下这条能力
 // 由 `modules/task-execution/infrastructure/` 下 `TaskRouteOperations` 端口 PostgreSQL 那一侧的
@@ -31,7 +31,7 @@ import { encodeLineageSlotPath } from '@/modules/task-execution/domain/execution
 import {
   getTaskMembers,
   updateTaskMembers,
-} from '@/modules/collaboration/infrastructure/legacySqliteTaskCollab'
+} from '@/modules/collaboration/infrastructure/taskCollab'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'

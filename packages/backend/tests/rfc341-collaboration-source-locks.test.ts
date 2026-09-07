@@ -26,15 +26,15 @@ describe('RFC-341 collaboration owner source locks', () => {
   test('compiled restart barriers stop after commit and before every immediate event wake', () => {
     const cases = [
       {
-        path: 'modules/collaboration/infrastructure/legacySqliteReview.ts',
+        path: 'modules/collaboration/infrastructure/review.ts',
         publish: 'publishCommittedEventsAfterCommit(committed.eventRefs)',
       },
       {
-        path: 'modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+        path: 'modules/collaboration/infrastructure/clarify/autoDispatch.ts',
         publish: 'publishCommittedEventsAfterCommit(prepared.capture.eventRefs)',
       },
       {
-        path: 'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+        path: 'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
         publish: 'publishCommittedEventsAfterCommit(committedEventRefs)',
       },
     ] as const
@@ -55,10 +55,8 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('clarify commit barrier precedes nested dispatch and replay never enters the seam', () => {
-    const autoDispatch = source(
-      'modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
-    )
-    const seal = source('modules/collaboration/infrastructure/legacySqliteClarify/seal.ts')
+    const autoDispatch = source('modules/collaboration/infrastructure/clarify/autoDispatch.ts')
+    const seal = source('modules/collaboration/infrastructure/clarify/seal.ts')
     const wrapperAt = autoDispatch.indexOf(
       'export async function autoDispatchClarifyRoundWithDecision',
     )
@@ -109,17 +107,15 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('fresh, replay and claimed pre-drive share durable clarify convergence', () => {
-    const autoDispatch = source(
-      'modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
-    )
+    const autoDispatch = source('modules/collaboration/infrastructure/clarify/autoDispatch.ts')
     const preDrive = source('services/humanGateContinuationEffects.ts')
     const convergence = source(
-      'modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts',
+      'modules/collaboration/infrastructure/clarifyContinuationConvergence.ts',
     )
     const preDrivePersistence = source(
       'modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts',
     )
-    const seal = source('modules/collaboration/infrastructure/legacySqliteClarify/seal.ts')
+    const seal = source('modules/collaboration/infrastructure/clarify/seal.ts')
     const replayAt = autoDispatch.indexOf('if (replay !== null)')
     const freshAt = autoDispatch.indexOf('committedOperationId: prepared.operationId')
     const finishAt = autoDispatch.indexOf(
@@ -153,11 +149,11 @@ describe('RFC-341 collaboration owner source locks', () => {
 
   test('covered collaboration writers have no legacy direct broadcaster', () => {
     for (const path of [
-      'modules/collaboration/infrastructure/legacySqliteReview.ts',
-      'modules/collaboration/infrastructure/legacySqliteClarify/service.ts',
-      'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
-      'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts',
-      'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+      'modules/collaboration/infrastructure/review.ts',
+      'modules/collaboration/infrastructure/clarify/service.ts',
+      'modules/collaboration/infrastructure/clarify/seal.ts',
+      'modules/collaboration/infrastructure/clarifyDecision.ts',
+      'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
     ]) {
       const value = source(path)
       expect(value).not.toContain("from '@/ws/broadcaster'")

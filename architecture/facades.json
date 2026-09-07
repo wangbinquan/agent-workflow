@@ -22,7 +22,7 @@
     {
       "boundaryEdgeIds": [
         "import:1c67086598d7bdb3102d",
-        "import:3e3249b91d5e1e9743d0",
+        "import:27c7dced4b9c333cf59a",
         "import:582010bd11a8e1414cf8",
         "import:cb1b84ca9a78f2e5bb72"
       ],
@@ -445,8 +445,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:36f1b9cf8b4af5a660ea",
-        "import:384c37b2d0db0ec5b6b0"
+        "import:131784d3ea32ff70d97e",
+        "import:f6b9fd76c605f45413c5"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/autoDispatch.ts",
@@ -459,7 +459,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:a5979e4ab1c117962680"
+        "import:e3d02e672e65a31d5503"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/queue.ts",
@@ -472,7 +472,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:ae2d1a7bae7e0489acf3"
+        "import:946ddb4e215e0a81a5ff"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/rerunLedger.ts",
@@ -485,7 +485,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:165427f0844a73544f2f"
+        "import:84e9f2fb6dba3ae8f27a"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/rounds.ts",
@@ -498,7 +498,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:9f1f79ddd422a4f11a04"
+        "import:0b76042bc52dcd93814b"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/seal.ts",
@@ -511,12 +511,12 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0466a26499aa71daabf3",
-        "import:2b7cd7539b30c65dfbb9",
-        "import:31714eacb6aaef616a5d",
+        "import:35a6f7214e346ae2b5be",
+        "import:44016521f3fee7a7740a",
         "import:45b01ecd102b27588a3b",
-        "import:5eb03cb753c725f4df46",
-        "import:90c9acac608df199eb4a"
+        "import:632a945c9c5d80f4b61d",
+        "import:67a00c0444b7620b46e4",
+        "import:9c230dafc9c857f6eba1"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/service.ts",
@@ -540,10 +540,10 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:216b28769f4a1420236e",
-        "import:47a69846f25e4102958c",
-        "import:8fcb93ac90e49df25e9f",
-        "import:ba13e2e59820479b14be"
+        "import:289c54122dd0c76ea3e9",
+        "import:2d99d27466041e2c59b6",
+        "import:463af4002cb04feb0842",
+        "import:59c27ea6ac2bee44a704"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarifyDecision.ts",
@@ -580,9 +580,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0f2beb756ff1c383c60a",
-        "import:2369ff84a7491b50ff4f",
-        "import:a2e8856e3d0eb3e61bf8"
+        "import:26906364f6faf5874996",
+        "import:67cc328be0fc3a9c899d",
+        "import:d730aa7e1916a0f8e67f"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarifyRerunLedger.ts",
@@ -1781,22 +1781,22 @@
       "boundaryEdgeIds": [
         "import:0bbab9bb56ef096c8101",
         "import:0fb88f3544e800a5e388",
+        "import:172d50fef3cf7269e4b7",
+        "import:1e1318c00e5a2ae13adb",
         "import:32a7c14ea579504f17e1",
-        "import:3b81f60e6dc54cc2965a",
         "import:3f1fe872794501929a62",
         "import:4a67c1e929e15639fb62",
         "import:6a829e7597089611db6a",
         "import:7bf881b1d6bf6dbc60d2",
-        "import:8ac235c9ca49c7fb6740",
         "import:8fa0cefd9187c7b74c6c",
         "import:9c662fbdd1cde667a744",
-        "import:a7fb717c45645aaebc2c",
         "import:bdd930e07461a3c22528",
         "import:be68824a30c5412a865c",
         "import:cabe6f7a7a5e3921737e",
+        "import:d08b0ebe17b988c55edc",
         "import:d863fa65afbe8ee2bf0f",
         "import:dc14c72c6a4153225141",
-        "import:e19e61021ff44889ad66",
+        "import:e3c29f599f7c0cdfa921",
         "import:f4da5521fe5af45cecdf"
       ],
       "exportedSymbols": [
@@ -1935,34 +1935,34 @@
     {
       "boundaryEdgeIds": [
         "import:0597b8f799a048db847b",
+        "import:06bb6ca7404d736116cc",
         "import:0845d95bcea27d2f47d7",
-        "import:197746371c0b741a84d9",
         "import:2253032b8cbf89c3e554",
+        "import:267bdac4579f71620d43",
+        "import:27b121a608a7b10507c7",
         "import:2b5527139e693cc02602",
-        "import:2bb49d49ad90ea062d7a",
         "import:2cad8b73b382ab2a79a4",
         "import:32cfb50a4882cf6ae543",
+        "import:3dd83fafbe06826e17fb",
         "import:40790cfbca1b449884df",
         "import:49746881a328452b412d",
-        "import:49ebfa7a0a3a34fb2e9a",
         "import:4bef31ad6fc6dfc264c9",
+        "import:580eb422526e05c49956",
         "import:588adb4bd97ecc841ada",
-        "import:5a8a07991d9cc0292f30",
+        "import:618a40f0239de3ee1605",
         "import:634c9ffe1f6bf8543c14",
-        "import:6bc0d96a18cff27716d2",
         "import:72267875e5c685fddc56",
+        "import:7365ed9a3b43a0aaf0df",
+        "import:7ae00fb5883cf82c445d",
+        "import:801d1d1d54d7b87ceccf",
         "import:80e3f5c0e2aaf628e121",
-        "import:825b4b88080cd39aef0f",
-        "import:92195b19fe7bee30e397",
         "import:9c00f40f59476cc5c353",
         "import:a6fb29466922acb140fb",
         "import:acc3961448df8b2eabe6",
-        "import:cb4b8a61e7514e0be033",
+        "import:c79d26b53bda678977e0",
         "import:cec3edcdb48a1c4c4030",
         "import:d28b461e2355d9f997a9",
-        "import:d4f1961f3c32d9cb3e55",
         "import:ee8ff02d31b79c21b21b",
-        "import:eedf787c3638e608ffcf",
         "import:f10c28a99aae008bd8a9",
         "import:f5801c035004c8c704c8",
         "import:fa3a3e2fe4c96d074832"
@@ -2031,9 +2031,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:448e10911ca18cb6f434",
-        "import:5615f0c6850fa34233ed",
-        "import:d3eeb340c6191d1ab1e2"
+        "import:7cdf6997e106f6366606",
+        "import:9647fa24ec0a486fa0a5",
+        "import:c2efc63796e2f3f2cfa4"
       ],
       "exportedSymbols": [
         "HumanGateDecisionBarrierKind",
@@ -2130,14 +2130,14 @@
       "boundaryEdgeIds": [
         "import:009e88a4a9f3e53cffc7",
         "import:12552376491df8078377",
-        "import:27fe8529b8b27e8358dc",
         "import:49b4198c95812210b3fd",
         "import:68d6c53f2c736245e139",
         "import:81f0724a2b3b2f064811",
         "import:a579a49c45a6a96924ac",
         "import:b5ebd46dc2c269e19a17",
         "import:c85245f39054f279586b",
-        "import:ebf4fb21e04c518d9719"
+        "import:ebf4fb21e04c518d9719",
+        "import:ffd664b643781659cc27"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/lifecycle.ts",
@@ -2718,20 +2718,20 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:1752c3fec470dee560f6",
         "import:1f3d8e6dcca872f59b38",
-        "import:2c60564d99168bd5cec9",
         "import:2ee8db50244e2d468365",
         "import:53533672fe0d660b70db",
         "import:5a363d172c4c62473920",
-        "import:605af8dbed288cb8ee27",
         "import:6133af78893426a061d6",
         "import:714602f179c3ce9ed3be",
         "import:88914d884f2803e2d0a7",
+        "import:8e569ddadff3d51b6e9a",
         "import:9847b98735db84703ad4",
-        "import:a16d8e5a9a4bd2c0e890",
         "import:b5d44617eeddcf857eee",
-        "import:ca9962aa7eee3f8767b4",
-        "import:d6138ae2ff4d2f57d68b"
+        "import:d6138ae2ff4d2f57d68b",
+        "import:d9127123cdef27f883d8",
+        "import:e05ad997158ac33d4288"
       ],
       "exportedSymbols": [
         "PlannedNodeRunRollbackTarget",
@@ -2968,11 +2968,11 @@
     {
       "boundaryEdgeIds": [
         "import:070619c3407581132aec",
+        "import:3c0250cc924f10907396",
         "import:3f97d1e355d74e8dcf69",
         "import:566d3e48f702bb099327",
         "import:ab7baa69e9b7f4b80c65",
         "import:d23fbb5a994de5346875",
-        "import:e37cd1b332c58e6648eb",
         "import:e43e06e0e3e06bfcc494",
         "import:edc60cd7b6b723cceb68"
       ],
@@ -3152,12 +3152,12 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:11a64a75815f379d7fdd",
+        "import:15bf3b2a26000f8d046c",
         "import:22e7ecb03088176f205e",
+        "import:5bb90ea16f5c4e98fc50",
         "import:60b0a330db182265df8e",
         "import:8303f4df4e211ab55aab",
-        "import:b85921ca5f10863c7523",
-        "import:b91c838c39a33aef8bb2"
+        "import:e8a3a3b86bd2e67722b8"
       ],
       "exportedSymbols": [
         "ArchivePortArtifactsResult",
@@ -3466,7 +3466,6 @@
         "import:2d63b721547484271a65",
         "import:36208ac1b75a47c06dbc",
         "import:3f35d2c9577e6f3f0408",
-        "import:42bc72194ff5d4265fce",
         "import:4670e3e0fba296cd1cca",
         "import:5699b094e3f16fefbf5e",
         "import:5e3c73beac359f1fc7d3",
@@ -3494,6 +3493,7 @@
         "import:b0ecdcab33388947972c",
         "import:b4a9de4fed53d8d7b7af",
         "import:b7b21e97abbd88e6b9b3",
+        "import:cf94799de7177986f893",
         "import:d22b0e1611484dc669d9",
         "import:d3068c88753231fb992a",
         "import:d4695af9b1d63c7ef100",
@@ -3785,7 +3785,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:82fe8360538897bd89c9"
+        "import:fb030ff3342ef90b9ddc"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/review.ts",
@@ -3812,14 +3812,14 @@
     {
       "boundaryEdgeIds": [
         "import:108240d5bcde47fd951d",
-        "import:223f36144e1b271ab512",
+        "import:1d110524dbcf9359cbb3",
         "import:3558bcec570b7c83b887",
-        "import:8e63927ebbfd898982a3",
+        "import:6b77f3d782a1e18e57de",
         "import:c1a0be9d0441ca517d40",
         "import:c9f407795bed572c0bf9",
         "import:da94ead1e9d351175e8f",
         "import:e7277e67125b1c4b2aa9",
-        "import:f1d4259ba539e47f26e4"
+        "import:f77344f0c020ab10d52e"
       ],
       "exportedSymbols": [
         "__hasTaskReviewMutationQueueForTesting",
@@ -5864,14 +5864,14 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:038192e5762d49048a1a",
-        "import:09f2f1780074863dc26d",
-        "import:2e4fa425450f2f1815dc",
-        "import:4d1391141be3a4ec4ea0",
-        "import:61b4476efa4e5161f7e4",
-        "import:933534def1f2b4e925df",
-        "import:9581fc7610c242e9416d",
-        "import:98ea23ff792d56e3f8e8"
+        "import:1ec2bded2975d5aa8797",
+        "import:2bc44eb66d701cd6ea84",
+        "import:5cc49056a76dec58869d",
+        "import:62756ed9820ba91d63e1",
+        "import:8fe36055ba7d950453a7",
+        "import:bbcbafdbaf594ac2befe",
+        "import:e07c5f4dbc8edfa0cbe8",
+        "import:fab68cb5dbb481641952"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/taskClarifyDirective.ts",
@@ -5887,7 +5887,7 @@
         "import:3be29c6fccbc96539368",
         "import:47060ef7e265dde0fdd7",
         "import:56584bfddf18aed8607e",
-        "import:66a75b2847c476732a2f",
+        "import:5b3e497b08867a624a12",
         "import:7d89c25c20c826a2655c",
         "import:d999123f1203e84cac30",
         "import:df189dbac11a61cd26d1"
@@ -5935,24 +5935,24 @@
         "import:075f63d0c44a4eb0cc24",
         "import:0e32fd246c587fe46b1a",
         "import:326be4be0131afd9376f",
-        "import:3f52ada12e4d148dfb14",
-        "import:559d8193d7ceaa20bc09",
+        "import:38011687fcacff23132a",
         "import:5af1d7f41e548afc4039",
         "import:5c19ced6a46fc4648046",
         "import:7554c5e3084264ee6df6",
         "import:866ffe525e1682d2ca3e",
-        "import:8bacdd49d1ca5b04f094",
+        "import:87d0196cb2e342542c3a",
         "import:93aa74aea542bf463a9a",
-        "import:986c8b7ccefee49a09be",
+        "import:94e7873ff45304e04238",
+        "import:98f5877ee0704b671fae",
+        "import:99ad299e3ac4927ca21a",
         "import:a53830967e380aa35491",
         "import:b15e1d6e1083f78ba6a1",
-        "import:b677e65abab8f384ef73",
         "import:bf5205f4186a1c4387a9",
-        "import:caf11ae9e0f2e62e6a18",
-        "import:d0d7ad0a27002117fd3a",
+        "import:bfc0dcb1ddccf4c91262",
         "import:d1363fa7a1b360a87ce7",
         "import:dbdc9d8483fabd8dd9f6",
         "import:dfca015826eecaaa8b83",
+        "import:e85f8a7b7ff0032220e4",
         "import:ed1679a048f2aad20582",
         "import:f0f61dc055dab82c8722"
       ],
@@ -6041,9 +6041,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:715626a81152d4d72f2b",
-        "import:92e4583b4909290c596a",
-        "import:f77ddf57a440d90cafdb"
+        "import:7d6ce109d70a0111d1d7",
+        "import:caafa8f31064e0af8366",
+        "import:e61f8a3d4480909d0e5d"
       ],
       "exportedSymbols": [
         "TASK_QUESTION_CONFLICT",
@@ -6059,11 +6059,11 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0cc942259033b0a4d7b5",
-        "import:2ee30e92acf176a08414",
-        "import:bcaf0b190dfbac44dd63",
-        "import:c2d20f277d3e2ac6ad27",
-        "import:ff5b154e84fd77b2d606"
+        "import:6c421288e558d9f93da5",
+        "import:9774f9eba1f617b0b6d6",
+        "import:9e6c5467b2561868527c",
+        "import:a92c294f210c9afd9670",
+        "import:adaa8534dbbb3b872de1"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/taskQuestionDispatch.ts",
@@ -6076,12 +6076,12 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:15ef60f50f16bd574df9",
-        "import:1b957d079993b7509a7f",
-        "import:49abe3206860aa9dc70b",
-        "import:56c5a2f3226f4f87e8c1",
-        "import:c1a4f5042e1a69f3f5e5",
-        "import:e29a353f54b54a9b8788"
+        "import:37a01d45af78c9e99bf7",
+        "import:58445b307f83900befb6",
+        "import:9e4961d0157ccb6e2a1c",
+        "import:ab9cf5a2c64ff46f8dc8",
+        "import:f5b4970663e8118ddffd",
+        "import:f94df273491524fb4884"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/taskQuestions.ts",
@@ -6109,14 +6109,14 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:00f7ce026f657f311dba",
         "import:056b8180f3891e026164",
-        "import:3d074b49b3307ad23dfb",
-        "import:4ff12450da8a9c16aeec",
+        "import:10e5f674139ef2b65dbe",
+        "import:22e1f6e8a7e363d11c03",
         "import:511af838198ce69d4b85",
-        "import:6a9e803375844b33bec1",
+        "import:6cd9f9cf0bfd72aea144",
         "import:788e1b53c25af15910cd",
-        "import:ac21d51c81c4efcc1855",
-        "import:bdf5fb046d0e484eabd6"
+        "import:d310135ba2e15f6dacc8"
       ],
       "exportedSymbols": [
         "gcTaskWriteSem",
@@ -6245,7 +6245,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:8e0ae7062094b7bae2cb"
+        "import:507e67635d962917f4c9"
       ],
       "exportedSymbols": [
         "CreateUserInput",
@@ -6644,7 +6644,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:c6b0c69fb318c54e3bc9",
+        "import:b5f8c0915f1a90b433cb",
         "import:f081aee9b72d893622e2"
       ],
       "exportedSymbols": [],
@@ -6658,9 +6658,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:4f4a46292f88a0143bf4",
         "import:7955b349117dc96f652b",
-        "import:fd1f36680b852ded4170"
+        "import:ba3349ac219ff7048292",
+        "import:d134981fd2c4a9f7e50a"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/workgroup/constants.ts",
@@ -6769,5 +6769,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d"
+  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6"
 }

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1752,
+    "entries": 1735,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -291,372 +291,6 @@
       "symbol": "createAuthPersistence",
       "targetContext": "identity-access",
       "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#createPasswordLoginSession",
-      "missingControls": [
-        "audit",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#createPasswordLoginSession",
-      "symbol": "createPasswordLoginSession",
-      "targetContext": "identity-access",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#CreatePasswordLoginSessionInput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#CreatePasswordLoginSessionInput",
-      "symbol": "CreatePasswordLoginSessionInput",
-      "targetContext": "identity-access",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#setOidcDefaultRole",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#setOidcDefaultRole",
-      "symbol": "setOidcDefaultRole",
-      "targetContext": "identity-access",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#setPasswordLoginEnabled",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#setPasswordLoginEnabled",
-      "symbol": "setPasswordLoginEnabled",
-      "targetContext": "identity-access",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#updateAuthLoginPolicy",
-      "missingControls": [
-        "audit",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#updateAuthLoginPolicy",
-      "symbol": "updateAuthLoginPolicy",
-      "targetContext": "identity-access",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#createPat",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#createPat",
-      "symbol": "createPat",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#CreatePatInput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#CreatePatInput",
-      "symbol": "CreatePatInput",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#CreatePatResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#CreatePatResult",
-      "symbol": "CreatePatResult",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#revokePat",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqlitePatStore.ts#revokePat",
-      "symbol": "revokePat",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createLoginSession",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createLoginSession",
-      "symbol": "createLoginSession",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createSession",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createSession",
-      "symbol": "createSession",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#CreateSessionInput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#CreateSessionInput",
-      "symbol": "CreateSessionInput",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#CreateSessionResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#CreateSessionResult",
-      "symbol": "CreateSessionResult",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#revokeAllSessionsForUser",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#revokeAllSessionsForUser",
-      "symbol": "revokeAllSessionsForUser",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#revokeSession",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#revokeSession",
-      "symbol": "revokeSession",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -1216,29 +850,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/cli/daemonRealtimePolicy.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/cli/daemonRealtimePolicy.ts#createDaemonRealtimePolicyBinding",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/cli/daemonRealtimePolicy.ts#createDaemonRealtimePolicyBinding",
-      "symbol": "createDaemonRealtimePolicyBinding",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -1378,30 +989,6 @@
       "symbol": "createDaemonProviderHttpAdmission",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/cli/start.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/cli/start.ts#createDeferredSchedulerDriver",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#createDeferredSchedulerDriver",
-      "symbol": "createDeferredSchedulerDriver",
-      "targetContext": "bootstrap",
-      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -4031,6 +3618,317 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#sealRoundAsWholeFinalize",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#sealRoundAsWholeFinalize",
+      "symbol": "sealRoundAsWholeFinalize",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#runIdsWithOutput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#runIdsWithOutput",
+      "symbol": "runIdsWithOutput",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#sealRoundQuestions",
+      "missingControls": [
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#sealRoundQuestions",
+      "symbol": "sealRoundQuestions",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#SealRoundQuestionsArgs",
+      "missingControls": [
+        "authority",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#SealRoundQuestionsArgs",
+      "symbol": "SealRoundQuestionsArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#SealRoundQuestionsResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#SealRoundQuestionsResult",
+      "symbol": "SealRoundQuestionsResult",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#createClarifyRound",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#createClarifyRound",
+      "symbol": "createClarifyRound",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateClarifyRoundArgs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateClarifyRoundArgs",
+      "symbol": "CreateClarifyRoundArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateClarifyRoundResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateClarifyRoundResult",
+      "symbol": "CreateClarifyRoundResult",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateCrossRoundArgs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateCrossRoundArgs",
+      "symbol": "CreateCrossRoundArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateRoundCommon",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateRoundCommon",
+      "symbol": "CreateRoundCommon",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateSelfRoundArgs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#CreateSelfRoundArgs",
+      "symbol": "CreateSelfRoundArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#sealAnswersServerSide",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#sealAnswersServerSide",
+      "symbol": "sealAnswersServerSide",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts#createClarifyContinuationConvergence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts#createClarifyContinuationConvergence",
+      "symbol": "createClarifyContinuationConvergence",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -4121,6 +4019,77 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRepairParticipant.ts#createClarifyRepairParticipant",
       "symbol": "createClarifyRepairParticipant",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#saveClarifyDraft",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#saveClarifyDraft",
+      "symbol": "saveClarifyDraft",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#SaveClarifyDraftArgs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#SaveClarifyDraftArgs",
+      "symbol": "SaveClarifyDraftArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#SaveClarifyDraftResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#SaveClarifyDraftResult",
+      "symbol": "SaveClarifyDraftResult",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -4392,1040 +4361,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#sealRoundAsWholeFinalize",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#sealRoundAsWholeFinalize",
-      "symbol": "sealRoundAsWholeFinalize",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/queue.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/queue.ts#runIdsWithOutput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/queue.ts#runIdsWithOutput",
-      "symbol": "runIdsWithOutput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#sealRoundQuestions",
-      "missingControls": [
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#sealRoundQuestions",
-      "symbol": "sealRoundQuestions",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#SealRoundQuestionsArgs",
-      "missingControls": [
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#SealRoundQuestionsArgs",
-      "symbol": "SealRoundQuestionsArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#SealRoundQuestionsResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#SealRoundQuestionsResult",
-      "symbol": "SealRoundQuestionsResult",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#createClarifyRound",
-      "missingControls": [
-        "audit",
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#createClarifyRound",
-      "symbol": "createClarifyRound",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateClarifyRoundArgs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateClarifyRoundArgs",
-      "symbol": "CreateClarifyRoundArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateClarifyRoundResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateClarifyRoundResult",
-      "symbol": "CreateClarifyRoundResult",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateCrossRoundArgs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateCrossRoundArgs",
-      "symbol": "CreateCrossRoundArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateRoundCommon",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateRoundCommon",
-      "symbol": "CreateRoundCommon",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateSelfRoundArgs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#CreateSelfRoundArgs",
-      "symbol": "CreateSelfRoundArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#sealAnswersServerSide",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#sealAnswersServerSide",
-      "symbol": "sealAnswersServerSide",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#saveClarifyDraft",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#saveClarifyDraft",
-      "symbol": "saveClarifyDraft",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#SaveClarifyDraftArgs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#SaveClarifyDraftArgs",
-      "symbol": "SaveClarifyDraftArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#SaveClarifyDraftResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#SaveClarifyDraftResult",
-      "symbol": "SaveClarifyDraftResult",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewComment",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewComment",
-      "symbol": "addReviewComment",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#AddReviewCommentArgs",
-      "missingControls": [
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#AddReviewCommentArgs",
-      "symbol": "AddReviewCommentArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#AddReviewCommentResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#AddReviewCommentResult",
-      "symbol": "AddReviewCommentResult",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewCommentUnlocked",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewCommentUnlocked",
-      "symbol": "addReviewCommentUnlocked",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#createDocVersion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#createDocVersion",
-      "symbol": "createDocVersion",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#CreateDocVersionArgs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#CreateDocVersionArgs",
-      "symbol": "CreateDocVersionArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewComment",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewComment",
-      "symbol": "deleteReviewComment",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewCommentUnlocked",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewCommentUnlocked",
-      "symbol": "deleteReviewCommentUnlocked",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelection",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelection",
-      "symbol": "setDocumentSelection",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelectionUnlocked",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelectionUnlocked",
-      "symbol": "setDocumentSelectionUnlocked",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecision",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecision",
-      "symbol": "submitReviewDecision",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#SubmitReviewDecisionArgs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#SubmitReviewDecisionArgs",
-      "symbol": "SubmitReviewDecisionArgs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#SubmitReviewDecisionResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#SubmitReviewDecisionResult",
-      "symbol": "SubmitReviewDecisionResult",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
-      "missingControls": [
-        "audit"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
-      "symbol": "submitReviewDecisionUnlocked",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentText",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentText",
-      "symbol": "updateReviewCommentText",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentTextUnlocked",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentTextUnlocked",
-      "symbol": "updateReviewCommentTextUnlocked",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirective",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirective",
-      "symbol": "setNodeClarifyDirective",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirectiveTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirectiveTx",
-      "symbol": "setNodeClarifyDirectiveTx",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#updateTaskMembers",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#updateTaskMembers",
-      "symbol": "updateTaskMembers",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#updateTaskMembersLocked",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#updateTaskMembersLocked",
-      "symbol": "updateTaskMembersLocked",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "internal-family",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#commitDispatchPlan",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#commitDispatchPlan",
-      "symbol": "commitDispatchPlan",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#OpenDispatchBlocker",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#OpenDispatchBlocker",
-      "symbol": "OpenDispatchBlocker",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#OpenDispatchInputs",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#OpenDispatchInputs",
-      "symbol": "OpenDispatchInputs",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#runIdsWithOutput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#runIdsWithOutput",
-      "symbol": "runIdsWithOutput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#confirmTaskQuestion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#confirmTaskQuestion",
-      "symbol": "confirmTaskQuestion",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#createManualTaskQuestion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#createManualTaskQuestion",
-      "symbol": "createManualTaskQuestion",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#CreateManualTaskQuestionInput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#CreateManualTaskQuestionInput",
-      "symbol": "CreateManualTaskQuestionInput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#runIdsWithOutput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#runIdsWithOutput",
-      "symbol": "runIdsWithOutput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#stageTaskQuestion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#stageTaskQuestion",
-      "symbol": "stageTaskQuestion",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -5467,6 +4402,380 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommandContext",
       "symbol": "createQuestionDispatchCommandContext",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#addReviewComment",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#addReviewComment",
+      "symbol": "addReviewComment",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#AddReviewCommentArgs",
+      "missingControls": [
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#AddReviewCommentArgs",
+      "symbol": "AddReviewCommentArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#AddReviewCommentResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#AddReviewCommentResult",
+      "symbol": "AddReviewCommentResult",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#addReviewCommentUnlocked",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#addReviewCommentUnlocked",
+      "symbol": "addReviewCommentUnlocked",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#createDocVersion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#createDocVersion",
+      "symbol": "createDocVersion",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#CreateDocVersionArgs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#CreateDocVersionArgs",
+      "symbol": "CreateDocVersionArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#deleteReviewComment",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#deleteReviewComment",
+      "symbol": "deleteReviewComment",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#deleteReviewCommentUnlocked",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#deleteReviewCommentUnlocked",
+      "symbol": "deleteReviewCommentUnlocked",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#setDocumentSelection",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#setDocumentSelection",
+      "symbol": "setDocumentSelection",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#setDocumentSelectionUnlocked",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#setDocumentSelectionUnlocked",
+      "symbol": "setDocumentSelectionUnlocked",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecision",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecision",
+      "symbol": "submitReviewDecision",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#SubmitReviewDecisionArgs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#SubmitReviewDecisionArgs",
+      "symbol": "SubmitReviewDecisionArgs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#SubmitReviewDecisionResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#SubmitReviewDecisionResult",
+      "symbol": "SubmitReviewDecisionResult",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecisionUnlocked",
+      "missingControls": [
+        "audit"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecisionUnlocked",
+      "symbol": "submitReviewDecisionUnlocked",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#updateReviewCommentText",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#updateReviewCommentText",
+      "symbol": "updateReviewCommentText",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/review.ts#updateReviewCommentTextUnlocked",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#updateReviewCommentTextUnlocked",
+      "symbol": "updateReviewCommentTextUnlocked",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -5573,21 +4882,87 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": false
+        "transaction": true
       },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts#createSqliteClarifyContinuationConvergence",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirective",
       "missingControls": [
         "audit",
         "authority",
         "authorization",
         "event",
-        "fenceOrOcc",
-        "transaction"
+        "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts#createSqliteClarifyContinuationConvergence",
-      "symbol": "createSqliteClarifyContinuationConvergence",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirective",
+      "symbol": "setNodeClarifyDirective",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirectiveTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirectiveTx",
+      "symbol": "setNodeClarifyDirectiveTx",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#updateTaskMembers",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#updateTaskMembers",
+      "symbol": "updateTaskMembers",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#updateTaskMembersLocked",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#updateTaskMembersLocked",
+      "symbol": "updateTaskMembersLocked",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -5613,6 +4988,218 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
       "symbol": "createTaskDagCollaborationOperations",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "finalCriterion": "controls-complete",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#commitDispatchPlan",
+      "missingControls": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#commitDispatchPlan",
+      "symbol": "commitDispatchPlan",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#OpenDispatchBlocker",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#OpenDispatchBlocker",
+      "symbol": "OpenDispatchBlocker",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#OpenDispatchInputs",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#OpenDispatchInputs",
+      "symbol": "OpenDispatchInputs",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#runIdsWithOutput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#runIdsWithOutput",
+      "symbol": "runIdsWithOutput",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#confirmTaskQuestion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#confirmTaskQuestion",
+      "symbol": "confirmTaskQuestion",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#createManualTaskQuestion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#createManualTaskQuestion",
+      "symbol": "createManualTaskQuestion",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#CreateManualTaskQuestionInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#CreateManualTaskQuestionInput",
+      "symbol": "CreateManualTaskQuestionInput",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#runIdsWithOutput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#runIdsWithOutput",
+      "symbol": "runIdsWithOutput",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#stageTaskQuestion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#stageTaskQuestion",
+      "symbol": "stageTaskQuestion",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -10652,9 +10239,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#createLegacyIdentityAccessRuntime",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#createLegacyIdentityAccessRuntime",
       "missingControls": [
         "audit",
         "authority",
@@ -10662,7 +10249,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#createLegacyIdentityAccessRuntime",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#createLegacyIdentityAccessRuntime",
       "symbol": "createLegacyIdentityAccessRuntime",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
@@ -10676,16 +10263,16 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#createUser",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#createUser",
       "missingControls": [
         "audit",
         "event",
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#createUser",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#createUser",
       "symbol": "createUser",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
@@ -10699,9 +10286,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#CreateUserInput",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#CreateUserInput",
       "missingControls": [
         "audit",
         "authority",
@@ -10709,7 +10296,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#CreateUserInput",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#CreateUserInput",
       "symbol": "CreateUserInput",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
@@ -10723,9 +10310,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#disableUser",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#disableUser",
       "missingControls": [
         "audit",
         "authority",
@@ -10733,7 +10320,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#disableUser",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#disableUser",
       "symbol": "disableUser",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
@@ -10747,9 +10334,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#enableUser",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#enableUser",
       "missingControls": [
         "audit",
         "authority",
@@ -10757,7 +10344,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#enableUser",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#enableUser",
       "symbol": "enableUser",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
@@ -10771,9 +10358,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts",
+      "file": "packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#patchUser",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#patchUser",
       "missingControls": [
         "audit",
         "authority",
@@ -10781,7 +10368,7 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacySqliteUserService.ts#patchUser",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#patchUser",
       "symbol": "patchUser",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
@@ -41858,7 +41445,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
+  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41977,6 +41564,22 @@
         "allowedTables": [
           "nodeRuns"
         ],
+        "authorityKind": "control-revision",
+        "consumer": "runSealTx",
+        "controlSubtype": "gate-control",
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#428:nodeRuns",
+        "line": 428,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#sealRoundQuestions",
+        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
+        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
+        "symbol": "sealRoundQuestions"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
         "authorityKind": "worker-epoch",
         "consumer": "projectReviewGateOpen",
         "controlSubtype": null,
@@ -42071,32 +41674,16 @@
       },
       {
         "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "runSealTx",
-        "controlSubtype": "gate-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#428:nodeRuns",
-        "line": 428,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#sealRoundQuestions",
-        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
-        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
-        "symbol": "sealRoundQuestions"
-      },
-      {
-        "allowedTables": [
           "nodeRunOutputs"
         ],
         "authorityKind": "control-revision",
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1012:nodeRunOutputs",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1012:nodeRunOutputs",
         "line": 1012,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42109,10 +41696,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1037:nodeRunEvents",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1037:nodeRunEvents",
         "line": 1037,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42125,10 +41712,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1161:nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1161:nodeRuns",
         "line": 1161,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42141,10 +41728,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1301:nodeRunOutputs",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1301:nodeRunOutputs",
         "line": 1301,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42157,10 +41744,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1314:nodeRunOutputs",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1314:nodeRunOutputs",
         "line": 1314,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42173,10 +41760,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1334:nodeRunEvents",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1334:nodeRunEvents",
         "line": 1334,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42189,10 +41776,10 @@
         "consumer": "submitReviewDecisionUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#3726:nodeRunOutputs",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#3726:nodeRunOutputs",
         "line": 3726,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecisionUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "submitReviewDecisionUnlocked"
@@ -42205,10 +41792,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#974:nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#974:nodeRuns",
         "line": 974,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"
@@ -42221,10 +41808,10 @@
         "consumer": "dispatchReviewNodeUnlocked",
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#999:nodeRunOutputs",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#999:nodeRunOutputs",
         "line": 999,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
         "symbol": "dispatchReviewNodeUnlocked"

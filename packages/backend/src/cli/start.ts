@@ -243,7 +243,7 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
-import { createDaemonRealtimePolicyBinding } from './daemonRealtimePolicy'
+import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
 import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import type { SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
@@ -257,7 +257,7 @@ import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
-} from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
+} from '@/modules/collaboration/composition/decisionCommands'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
@@ -414,38 +414,6 @@ interface DeferredDatabaseMigrationAdmission {
   readonly bind: (bootstrap: BoundDatabaseMigrationBootstrap) => void
 }
 
-interface DeferredSchedulerDriver {
-  readonly driver: SchedulerDriverPort
-  readonly bind: (driver: SchedulerDriverPort) => void
-}
-
-/** Bootstrap-local cycle breaker for the one TaskExecution composition. */
-function createDeferredSchedulerDriver(): DeferredSchedulerDriver {
-  let bound: SchedulerDriverPort | null = null
-  const requireBound = (): SchedulerDriverPort => {
-    if (bound === null) throw new Error('task-execution-scheduler-not-bound')
-    return bound
-  }
-  return Object.freeze({
-    driver: Object.freeze({
-      drive: (request: Parameters<SchedulerDriverPort['drive']>[0]) =>
-        requireBound().drive(request),
-      cancelChild: (input: Parameters<SchedulerDriverPort['cancelChild']>[0]) =>
-        requireBound().cancelChild(input),
-      resumeChild: (input: Parameters<SchedulerDriverPort['resumeChild']>[0]) =>
-        requireBound().resumeChild(input),
-      isTaskActive: (taskId: Parameters<SchedulerDriverPort['isTaskActive']>[0]) =>
-        requireBound().isTaskActive(taskId),
-    }),
-    bind(driver: SchedulerDriverPort) {
-      if (bound !== null && bound !== driver) {
-        throw new Error('task-execution-scheduler-already-bound')
-      }
-      bound = driver
-    },
-  })
-}
-
 function _bindTaskExecutionProviderBackground(
   background: TaskExecutionBackgroundControl,
   dependencies: TaskExecutionBackgroundStartDependencies,
@@ -570,7 +538,6 @@ async function composePostgresqlProviderSession(
     },
   })
 
-  let boundMaintenanceStatus: ReturnType<typeof startMaintenanceService>['status'] | null = null
   const application = await composePostgresqlDaemonApplication({
     provider: input.provider,
     db,
@@ -584,12 +551,7 @@ async function composePostgresqlProviderSession(
     sourceWriteWindow: input.sourceWriteWindow,
     databaseMigration,
     dbVersion: input.dbVersion,
-    maintenanceStatus() {
-      if (boundMaintenanceStatus === null) {
-        throw new Error('postgresql-maintenance-status-not-bound')
-      }
-      return boundMaintenanceStatus()
-    },
+    maintenanceStatus: () => maintenanceService.status(),
   })
   await initializeRuntimeRegistryBoot({
     operations: application.core.runtimeRegistry,
@@ -603,7 +565,7 @@ async function composePostgresqlProviderSession(
   })
   const runtime = application.runtime
 
-  const maintenanceService = startMaintenanceService({
+  const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
     provider: 'postgresql',
     generationId: input.provider.generation.payload.generationId,
     database: input.config.database,
@@ -642,7 +604,6 @@ async function composePostgresqlProviderSession(
       })
     },
   })
-  boundMaintenanceStatus = maintenanceService.status
 
   const maintenanceBindings = await createPausableDaemonRuntimeServiceBindings({
     runtimeId: 'maintenance',
@@ -813,9 +774,6 @@ async function composePostgresqlProviderSession(
       })
     },
   })
-  if (runtime.digitalEmployee.runtime === null) {
-    throw new Error('postgresql-digital-employee-runtime-not-composed')
-  }
   const employeeRuntime = runtime.digitalEmployee.runtime
   const digitalEmployeeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
@@ -1723,7 +1681,18 @@ async function composeSqliteProviderSession(
   // before any recovery, seeder, scheduler, or HTTP behavior can observe the
   // database. The provider-independent SecretBox was created before provider
   // selection and is reused by this selected SQLite graph.
-  const realtimePolicy = createDaemonRealtimePolicyBinding()
+  const realtimePolicy = composeDaemonRealtimePolicy({
+    resourceVisibility: {
+      canViewResource: (actor, type, row) =>
+        resourceCatalog.authorization.canViewResource(actor, type, row),
+    },
+    memoryVisibility: {
+      canViewMemory: (authority, actor, scope) =>
+        memoryCatalog.queries.canView({ authority, actor }, scope),
+    },
+    repoImportOwnerUserId: batchOwnerUserId,
+    redactTaskEventPayload: redactEventPayload,
+  })
   const providerCore = composeSqliteDaemonProviderCore({
     db,
     sourceWriteWindow: sourceWriteWindow,
@@ -1731,7 +1700,7 @@ async function composeSqliteProviderSession(
     dbPath: Paths.db,
     lockPath: Paths.lock,
     secretBox,
-    realtimePolicy: realtimePolicy.policy,
+    realtimePolicy,
     onCredentialRevoked: triggerRevalidation,
     identityEvents: {
       authorityRevisionChanged({ userId, revision, onFailure }) {
@@ -1816,19 +1785,12 @@ async function composeSqliteProviderSession(
   const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(db)
   const runtimeRegistry = providerCore.runtimeRegistry
-  let collaborationContext: ReturnType<typeof createCollaborationCommandContext> | null = null
-  const requireCollaborationContext = (): ReturnType<typeof createCollaborationCommandContext> => {
-    if (collaborationContext === null) {
-      throw new Error('collaboration-command-context-not-bound')
-    }
-    return collaborationContext
-  }
   const memoryOperations = composeSqliteMemoryOperations({
     db,
     injectionQueries: memoryInjectionQueries,
     reviewedArtifacts: {
       read: async (finalPath) =>
-        await readCommittedReviewArtifactBody(requireCollaborationContext(), finalPath),
+        await readCommittedReviewArtifactBody(taskExecutionProvider.collaboration, finalPath),
     },
     catalogBinding: {
       contexts: identityAccess.contexts,
@@ -1836,7 +1798,6 @@ async function composeSqliteProviderSession(
     },
   })
   const memoryCatalog = memoryOperations.catalog
-  if (memoryCatalog === undefined) throw new Error('memory-catalog-not-composed')
 
   const broadcastAlert = (
     row: { taskId: string; rule: string; severity: 'warning' | 'error' },
@@ -1857,11 +1818,18 @@ async function composeSqliteProviderSession(
     })
   }
 
-  const deferredScheduler = createDeferredSchedulerDriver()
+  // The provider graph captures these methods without evaluating its later runtime.
+  // No post-construction bind can be forgotten in one provider's bootstrap.
+  const schedulerDriver = Object.freeze<SchedulerDriverPort>({
+    drive: (request) => taskExecutionProvider.runtime.schedulerDriver.drive(request),
+    cancelChild: (request) => taskExecutionProvider.runtime.schedulerDriver.cancelChild(request),
+    resumeChild: (request) => taskExecutionProvider.runtime.schedulerDriver.resumeChild(request),
+    isTaskActive: (taskId) => taskExecutionProvider.runtime.schedulerDriver.isTaskActive(taskId),
+  })
   const taskStartDepsFor = (actorUserId: string) => ({
     ...buildStartTaskDeps(
       db,
-      deferredScheduler.driver,
+      schedulerDriver,
       Paths.config,
       actorUserId,
       secretBox,
@@ -1929,14 +1897,13 @@ async function composeSqliteProviderSession(
           questionDispatches: createQuestionDispatchCommand(db),
           clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
         })
-        collaborationContext = routeCollaborationContext
         return {
           collaboration: routeCollaborationContext,
           startDepsFor: (actor) => taskStartDepsFor(actor.user.id),
           multipart: {
             secretBox,
             configPath: Paths.config,
-            schedulerDriver: deferredScheduler.driver,
+            schedulerDriver: schedulerDriver,
             identityAccess: Object.freeze({
               directAuthority: identityAccess.directAuthority,
               taskExecutionResources,
@@ -1983,12 +1950,9 @@ async function composeSqliteProviderSession(
         },
       }),
     })
-  deferredScheduler.bind(taskExecutionProvider.runtime.schedulerDriver)
   const taskExecutionPersistence = taskExecutionProvider.persistence
   const taskExecutionRuntime = taskExecutionProvider.runtime
-  if (collaborationContext === null) {
-    throw new Error('collaboration-command-context-not-composed')
-  }
+  const collaborationContext = taskExecutionProvider.collaboration
   const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
     db,
     resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
@@ -2015,16 +1979,6 @@ async function composeSqliteProviderSession(
     appHome: Paths.root,
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
-  })
-  realtimePolicy.bind({
-    resourceVisibility: resourceCatalog.authorization,
-    memoryVisibility: {
-      async canViewMemory(authority, actor, scope) {
-        return await memoryCatalog.queries.canView({ authority, actor }, scope)
-      },
-    },
-    repoImportOwnerUserId: batchOwnerUserId,
-    redactTaskEventPayload: redactEventPayload,
   })
   const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
   if (removedCredentialLeases > 0) {
@@ -2282,21 +2236,19 @@ async function composeSqliteProviderSession(
 
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes resolve the same DB-keyed daemon singleton.
-  let mcpCatalogRef: McpCatalogModule | null = null
   const mcpRuntimeTests = getMcpRuntimeTestService({
     ...composeMcpRuntimeTestProvider(db),
     async loadMcp(mcpId) {
-      if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
       const identity = await admitDaemonIdentity(identityAccess)
       if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
-      return mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
+      return mcpCatalog.queries.get(identity.actor, { id: mcpId })
     },
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
     configPath: Paths.config,
     appHome: Paths.root,
   })
   const mcpProbeStore = composeMcpProbeStore(db)
-  const mcpCatalog = composeMcpCatalog({
+  const mcpCatalog: McpCatalogModule = composeMcpCatalog({
     db,
     lifecycle: createMcpTransactionLifecycle(),
     resourceCatalog,
@@ -2314,7 +2266,6 @@ async function composeSqliteProviderSession(
       reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
     }),
   })
-  mcpCatalogRef = mcpCatalog
   const agentCatalog = composeDatabaseAgentCatalog({
     db,
     resourceCatalog,
@@ -2444,16 +2395,11 @@ async function composeSqliteProviderSession(
   // development-automation composition. HTTP and MCP receive this participant;
   // boot recovery, terminal callbacks and wake sweeps drive the same instance.
   const developmentAdmissionLookup = composeDevelopmentAdmissionLookup(db)
-  const developmentAutomationRef: {
-    current: ReturnType<typeof composeDevelopmentAutomation> | null
-  } = { current: null }
   const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db,
     async drive(missionId) {
-      const current = developmentAutomationRef.current
-      if (current === null) throw new Error('development-automation-not-composed')
       try {
-        const outcome = await current.drive(missionId)
+        const outcome = await developmentAutomation.drive(missionId)
         if (outcome.stop === 'step-budget') {
           log.warn('development mission drive reached its bounded step budget', {
             missionId,
@@ -2529,7 +2475,6 @@ async function composeSqliteProviderSession(
     }),
     approvalGateway: developmentApprovalGateway,
   })
-  developmentAutomationRef.current = developmentAutomation
   const employeeHttpEventCenter = await composeEventCenter({
     db,
     typePackageDescriptorJsons: [
@@ -3259,15 +3204,12 @@ async function composeSqliteProviderSession(
   const queuedBeforeIntentComposition = [...pendingIntentSessionIds]
   pendingIntentSessionIds.clear()
   resumeIntentSessions(queuedBeforeIntentComposition)
-  if (employeeOs.runtime === null) {
-    throw new Error('digital employee runtime composition unexpectedly unavailable')
-  }
   const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
     runImmediately: true,
     async run() {
-      const result = await runDigitalEmployeeOsCycle({ runtime: employeeOs.runtime!.worker })
+      const result = await runDigitalEmployeeOsCycle({ runtime: employeeOs.runtime.worker })
       if (result.steps >= 32) {
         log.warn('digital employee OS cycle reached its bounded step budget', { ...result })
       }

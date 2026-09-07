@@ -509,7 +509,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
-      'packages/backend/src/services/users.ts -> @/modules/identity-access/composition/legacySqliteUserService',
+      'packages/backend/src/services/users.ts -> @/modules/identity-access/composition/legacyUserService',
       'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/ws/connections.ts -> @/modules/identity-access/public/participants',

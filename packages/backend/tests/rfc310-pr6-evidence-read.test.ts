@@ -20,7 +20,7 @@ import type { Hono } from 'hono'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import {
   EVIDENCE_READ_MAX_BYTES,

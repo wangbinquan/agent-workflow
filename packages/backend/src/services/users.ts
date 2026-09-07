@@ -1,8 +1,8 @@
 // RFC-349 — compatibility facade. User persistence lives in identity-access;
-// production callers use its Promise operations while legacy SQLite tests keep
+// production callers use its Promise operations while compatibility callers keep
 // their established fixture helpers during the cutover.
 
-import { legacySqliteUserService } from '@/modules/identity-access/composition/legacySqliteUserService'
+import { legacyUserService } from '@/modules/identity-access/composition/legacyUserService'
 
 export const {
   countNonSystemUsers,
@@ -17,7 +17,7 @@ export const {
   patchUser,
   resetPassword,
   searchUsersPublic,
-} = legacySqliteUserService
+} = legacyUserService
 
 export type UserRow = NonNullable<Awaited<ReturnType<typeof findById>>>
 export type CreateUserInput = Parameters<typeof createUser>[1]

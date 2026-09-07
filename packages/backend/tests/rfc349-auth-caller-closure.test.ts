@@ -27,7 +27,7 @@ describe('RFC-349 auth caller closure', () => {
     const userOperations = source('src/modules/identity-access/composition/userOperations.ts')
     const usersService = source('src/services/users.ts')
     const sqliteUserFixture = source(
-      'src/modules/identity-access/infrastructure/legacySqliteUserService.ts',
+      'src/modules/identity-access/infrastructure/legacyUserService.ts',
     )
 
     expect(oidcRoute).not.toContain("from '@/server'")

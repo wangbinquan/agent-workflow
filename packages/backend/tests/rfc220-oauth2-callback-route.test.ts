@@ -24,7 +24,7 @@ import { createApp } from '../src/server'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { clearPendingFlows } from '../src/auth/oidc/flow'
-import { setOidcDefaultRole } from '../src/auth/loginPolicy'
+import { setOidcDefaultRole } from './helpers/auth/loginPolicy'
 import { userIdentities, userSessions, users } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -10,7 +10,7 @@ import { ROLE_PERMISSIONS } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import { agents, resourceGrants } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'

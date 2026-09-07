@@ -2,7 +2,7 @@
 //
 // 这是 dual-provider-parity-audit-2026-09-04 里第一条被真机实证的 P0：PostgreSQL 上每个调度 tick
 // 抛 `deferred-question-dispatcher-not-bound`，任务的 node_runs 永远是 0 行。派发管线现在跑在
-// `DatabaseSession` 上（`legacySqliteTaskQuestionDispatch.ts`），`createTaskDagCollaborationOperations`
+// `DatabaseSession` 上（`taskQuestionDispatch.ts`），`createTaskDagCollaborationOperations`
 // 两个 provider 共用。场景移植自 `rfc140-one-click-dispatch-all.test.ts`（SQLite 黄金锁，仍保留）。
 
 import { beforeEach, expect, test } from 'bun:test'

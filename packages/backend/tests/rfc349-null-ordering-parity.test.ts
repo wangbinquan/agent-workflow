@@ -41,13 +41,13 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
   'modules/collaboration/infrastructure/humanGateOperationJournal.ts': {
     resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
   },
-  'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts': {
+  'modules/collaboration/infrastructure/clarifyDecision.ts': {
     resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
   },
-  'modules/collaboration/infrastructure/legacySqliteReview.ts': {
+  'modules/collaboration/infrastructure/review.ts': {
     resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
   },
-  'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts': {
+  'modules/collaboration/infrastructure/taskQuestionDispatch.ts': {
     resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
   },
   'modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts': {

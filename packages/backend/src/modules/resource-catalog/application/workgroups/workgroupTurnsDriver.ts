@@ -548,6 +548,8 @@ async function executeHostTurn<T>(
     } else {
       const runId = ulid()
       const operationKey = `mint-host-run:${runId}`
+      // 瞬态重跑不增加协议 attempt，但卡片已处于 running；此时只改指新 run，不能重做派单认领。
+      const isFirstStart = attempt === 0 && !transientRetryPending
       const started = await commit(persistence, spec.taskId, [
         {
           kind: 'mint-host-run',
@@ -555,14 +557,14 @@ async function executeHostTurn<T>(
           runId,
           nodeId: spec.nodeId,
           status: 'pending',
-          cause: attempt === 0 && !transientRetryPending ? spec.primaryCause : 'wg-protocol-retry',
+          cause: isFirstStart ? spec.primaryCause : 'wg-protocol-retry',
           retryIndex: retryBase + freshMintOffset,
           shardKey: spec.shardKey,
           agentOverrideName: spec.agent.name,
           agentOverrideId: spec.agent.id,
           wgRound: spec.wgRound,
         },
-        ...(attempt === 0 ? spec.firstStartOperations(runId) : spec.retryStartOperations(runId)),
+        ...(isFirstStart ? spec.firstStartOperations(runId) : spec.retryStartOperations(runId)),
       ])
       const minted = mintedRun(started, operationKey)
       if (minted === null) return { kind: 'lost' }

@@ -73733,8 +73733,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:1305b058d0978399e0e8",
-        "import:3c82747f51b70331ec56",
+        "import:15108117b5e5cd030fe2",
+        "import:17b8f82bb8ff085da3a0",
         "import:40ecd9ddf2322c0c523f",
         "import:519c37546cf4d1f5cb2f",
         "import:9ef226b911cd4c382b5c",
@@ -73760,15 +73760,15 @@
       "productionConsumers": [
         {
           "context": "collaboration",
-          "edgeId": "import:1305b058d0978399e0e8",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts#$file"
+          "edgeId": "import:15108117b5e5cd030fe2",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts#$file"
         },
         {
           "context": "collaboration",
-          "edgeId": "import:3c82747f51b70331ec56",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file"
+          "edgeId": "import:17b8f82bb8ff085da3a0",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#$file"
         },
         {
           "context": "collaboration",
@@ -139115,7 +139115,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:783f6e0f3d355ee0e704",
+        "import:77f74b40d8a8f2a308a5",
         "import:8560dbf0705aecf7cb91",
         "import:92d3f50261db6473c22b",
         "import:9b02fcd413b316fbfdf6"
@@ -139157,7 +139157,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:783f6e0f3d355ee0e704",
+            "import:77f74b40d8a8f2a308a5",
             "import:8560dbf0705aecf7cb91",
             "import:92d3f50261db6473c22b",
             "import:9b02fcd413b316fbfdf6"
@@ -139174,9 +139174,9 @@
       "productionConsumers": [
         {
           "context": "collaboration",
-          "edgeId": "import:783f6e0f3d355ee0e704",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts#$file"
+          "edgeId": "import:77f74b40d8a8f2a308a5",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#$file"
         },
         {
           "context": "legacy",
@@ -150503,8 +150503,8 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:3bd6523f47ed7e7ff124",
-        "import:e28036b7dc86418c4e4d"
+        "import:5304f1c342f2ee833577",
+        "import:c50d47f1e6c226cc43b6"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -150525,15 +150525,15 @@
         },
         {
           "context": "collaboration",
-          "edgeId": "import:3bd6523f47ed7e7ff124",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#$file"
+          "edgeId": "import:5304f1c342f2ee833577",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file"
         },
         {
           "context": "collaboration",
-          "edgeId": "import:e28036b7dc86418c4e4d",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts#$file"
+          "edgeId": "import:c50d47f1e6c226cc43b6",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -155808,7 +155808,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:a2bde85a15db7720cf96"
+        "import:a00fe682ef9ad4652f16"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -155827,7 +155827,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$parameter:frame.iteration",
           "type": "number"
@@ -155849,21 +155849,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$parameter:read.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$parameter:read.$return.$variant:0.iteration",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$parameter:read.$return.$variant:0.nodeId",
           "type": "string"
@@ -155895,21 +155895,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$return.lookup.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$return.lookup.$return.$variant:0.iteration",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$return.lookup.$return.$variant:0.nodeId",
           "type": "string"
@@ -155921,7 +155921,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:a2bde85a15db7720cf96"
+            "import:a00fe682ef9ad4652f16"
           ],
           "fieldPath": "$call.$return.rows",
           "type": "ReadonlyMap<string, ContainerRunRow>"
@@ -155941,9 +155941,9 @@
       "productionConsumers": [
         {
           "context": "collaboration",
-          "edgeId": "import:a2bde85a15db7720cf96",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file"
+          "edgeId": "import:a00fe682ef9ad4652f16",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -156228,7 +156228,7 @@
         "maxUnionVariants": 15
       },
       "consumerEdgeIds": [
-        "import:11b302232665bbbaf928"
+        "import:15e735f8334a350740ec"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -156252,21 +156252,21 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.containerRowById.$return.$variant:0.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.containerRowById.$return.$variant:0.iteration",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.containerRowById.$return.$variant:0.nodeId",
           "type": "string"
@@ -156288,28 +156288,28 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.frame.iteration",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.parents",
           "type": "ReadonlyMap<string, string>"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.sourceNodeId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$parameter:args.targetNodeId",
           "type": "string"
@@ -156326,7 +156326,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$return.$variant:0.frame.iteration",
           "type": "number"
@@ -156338,14 +156338,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$return.$variant:0.ok",
           "type": "true"
         },
         {
           "consumerEdgeIds": [
-            "import:11b302232665bbbaf928"
+            "import:15e735f8334a350740ec"
           ],
           "fieldPath": "$call.$return.$variant:1.ok",
           "type": "false"
@@ -156390,9 +156390,9 @@
       "productionConsumers": [
         {
           "context": "collaboration",
-          "edgeId": "import:11b302232665bbbaf928",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file"
+          "edgeId": "import:15e735f8334a350740ec",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161757,7 +161757,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
+  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
   "targetContexts": [
     "collaboration",
     "development-automation",

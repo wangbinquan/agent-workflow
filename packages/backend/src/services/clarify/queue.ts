@@ -1,2 +1,2 @@
 // RFC-349 compatibility export for SQLite execution callers.
-export * from '@/modules/collaboration/infrastructure/legacySqliteClarify/queue'
+export * from '@/modules/collaboration/infrastructure/clarify/queue'

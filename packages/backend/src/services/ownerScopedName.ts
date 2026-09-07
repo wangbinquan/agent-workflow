@@ -1,4 +1,4 @@
-import { sqliteOwnerScopedNameWhere } from '@/modules/identity-access/composition/providerOperations'
+import { ownerScopedNameCondition } from '@/modules/identity-access/composition/providerOperations'
 import { isOwnerScopedNameConflict } from '@/modules/identity-access/public/operations'
 
 /**
@@ -6,9 +6,9 @@ import { isOwnerScopedNameConflict } from '@/modules/identity-access/public/oper
  * unique indexes created by migration 0118 (`COALESCE(owner_user_id, ''), name`).
  */
 export function ownerScopedNameWhere(
-  ...args: Parameters<typeof sqliteOwnerScopedNameWhere>
-): ReturnType<typeof sqliteOwnerScopedNameWhere> {
-  return sqliteOwnerScopedNameWhere(...args)
+  ...args: Parameters<typeof ownerScopedNameCondition>
+): ReturnType<typeof ownerScopedNameCondition> {
+  return ownerScopedNameCondition(...args)
 }
 
 /**

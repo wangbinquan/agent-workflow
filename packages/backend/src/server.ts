@@ -347,7 +347,7 @@ import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
-} from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
+} from '@/modules/collaboration/composition/decisionCommands'
 import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
@@ -2503,7 +2503,7 @@ function composeSqliteApiRouteMounts(
   if (deps.digitalEmployeeWorkStart !== undefined && digitalEmployee.runtime !== null) {
     deps.digitalEmployeeWorkStart.bind({
       async launch(input) {
-        const result = await digitalEmployee.runtime!.commands.launchWork({
+        const result = await digitalEmployee.runtime.commands.launchWork({
           employeeId: input.employeeId,
           intake: input.intake,
           actorUserId: input.actorUserId,
@@ -2512,9 +2512,6 @@ function composeSqliteApiRouteMounts(
         return { caseId: result.caseRef.id }
       },
     })
-  }
-  if (digitalEmployee.runtime === null) {
-    throw new Error('task catalog requires the digital employee runtime')
   }
   const taskCatalog = composeTaskCatalog({
     sources: [

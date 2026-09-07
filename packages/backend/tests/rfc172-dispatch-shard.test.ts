@@ -316,7 +316,7 @@ describe('RFC-172 S2a — dispatch mint-loop shard wiring (source lock)', () => 
       'modules',
       'collaboration',
       'infrastructure',
-      'legacySqliteTaskQuestionDispatch.ts',
+      'taskQuestionDispatch.ts',
     ),
     'utf8',
   )
@@ -499,7 +499,7 @@ describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member
         'modules',
         'collaboration',
         'infrastructure',
-        'legacySqliteTaskQuestions.ts',
+        'taskQuestions.ts',
       ),
       'utf8',
     )
@@ -514,7 +514,7 @@ describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member
         'modules',
         'collaboration',
         'infrastructure',
-        'legacySqliteTaskQuestionDispatch.ts',
+        'taskQuestionDispatch.ts',
       ),
       'utf8',
     )

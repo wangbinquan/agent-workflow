@@ -223,7 +223,7 @@ describe('RFC-133 causeClassForEntry — single shared definition', () => {
     const src = await Bun.file(
       fileURLToPath(
         new URL(
-          '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+          '../src/modules/collaboration/infrastructure/taskQuestionDispatch.ts',
           import.meta.url,
         ),
       ),

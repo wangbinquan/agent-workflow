@@ -241,7 +241,7 @@ export function topLevelSchemaColumnCaptures(
  */
 export const TOPLEVEL_COLUMN_CAPTURE_DEBT: readonly string[] = [
   'auth/infrastructure/tokenCallAudit.ts: 2',
-  'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts: 23',
+  'modules/collaboration/infrastructure/taskQuestionDispatch.ts: 23',
   'modules/development-automation/infrastructure/missionReadModels.ts: 18',
   'modules/identity-access/infrastructure/userAccessPersistence.ts: 5',
   'modules/resource-catalog/infrastructure/mcpRepository.ts: 5',

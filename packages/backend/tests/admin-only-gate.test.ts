@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
@@ -233,7 +233,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
   // the user baseline. users:read is the new canonical admin-only scope.
   test('PAT carrying users:read but issued for a regular user is still 403', async () => {
     const { db, app } = await buildHarness()
-    const { createPat } = await import('../src/auth/patStore')
+    const { createPat } = await import('./helpers/auth/patStore')
     const { findByUsername } = await import('../src/services/users')
     const bob = await findByUsername(db, 'bob')
     const { token } = await createPat({
@@ -255,7 +255,7 @@ describe('PAT-bearing actor cannot escape role limits', () => {
   // in server.ts → these two go 200.)
   test('admin PAT scoped without backup:run is still 403 on the restore subtree', async () => {
     const { db, app } = await buildHarness()
-    const { createPat } = await import('../src/auth/patStore')
+    const { createPat } = await import('./helpers/auth/patStore')
     const { createUser } = await import('../src/services/users')
     const admin = await createUser(db, {
       username: 'adm',

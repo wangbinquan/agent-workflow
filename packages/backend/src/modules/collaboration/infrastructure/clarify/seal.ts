@@ -49,7 +49,7 @@ import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
 import { wgClarifyAskerKeyForRound } from '@/services/workgroup/askerKey'
 import { setNodeClarifyDirectiveTx } from '@/services/taskClarifyDirective'
-import { freezeAnswerAttributions } from '../legacySqliteClarifyRounds'
+import { freezeAnswerAttributions } from '../clarifyRounds'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   mergeSealedAnswers,

@@ -18,7 +18,7 @@ import { resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { resolveActorWithWsCredential } from '../src/auth/session'
 import { userSessions } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'

@@ -9,6 +9,7 @@
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -269,6 +270,140 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     expect(revived).toHaveLength(1)
     expect(revived[0]?.nodeId).toBe(WORKGROUP_TURN_LEADER_NODE_ID)
     expect(revived[0]?.retryIndex).toBe(1)
+  })
+
+  test.each(['runtime-stream-interrupted', 'runtime-session-identity-invalid'] as const)(
+    '成员瞬态故障 %s 后重跑：卡片改指新 run 并交付，领队继续收敛',
+    async (failureCode) => {
+      const db = harness.db as unknown as ProviderNeutralDatabase
+      const taskId = await seedTask(db)
+      const { hooks, requests } = scriptedHost({
+        leader: [
+          {
+            status: 'done',
+            outputs: {
+              wg_decision: JSON.stringify({ action: 'continue' }),
+              wg_assignments: JSON.stringify([
+                { member: 'worker', title: 'recover the assignment', brief: 'finish after retry' },
+              ]),
+            },
+          },
+          {
+            status: 'done',
+            outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'recovered' }) },
+          },
+        ],
+        member: [
+          { status: 'failed', outputs: {}, failureCode, errorMessage: 'transient member failure' },
+          {
+            status: 'done',
+            outputs: { wg_result: JSON.stringify({ summary: 'member recovered' }) },
+          },
+        ],
+      })
+
+      const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
+
+      const memberRequests = requests.filter(
+        (request) => request.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID,
+      )
+      expect(memberRequests).toHaveLength(2)
+      expect(outcome.kind).toBe('ok')
+      expect(memberRequests[1]?.promptTemplate).not.toContain(
+        '## Protocol errors in your previous reply',
+      )
+      const cards = await db
+        .select()
+        .from(workgroupAssignments)
+        .where(eq(workgroupAssignments.taskId, taskId))
+      expect(cards).toHaveLength(1)
+      expect(cards[0]).toMatchObject({
+        status: 'done',
+        nodeRunId: memberRequests[1]?.nodeRunId,
+      })
+      const memberRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .filter((run) => run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID)
+        .sort((a, b) => a.retryIndex - b.retryIndex)
+      expect(memberRuns.map((run) => [run.retryIndex, run.rerunCause])).toEqual([
+        [0, 'wg-assignment'],
+        [1, 'wg-protocol-retry'],
+      ])
+      const messages = await db
+        .select()
+        .from(workgroupMessages)
+        .where(eq(workgroupMessages.taskId, taskId))
+      expect(messages.find((message) => message.id === cards[0]?.resultMessageId)).toMatchObject({
+        kind: 'result',
+        authorMemberId: 'm-worker',
+        bodyMd: 'member recovered',
+      })
+      expect(messages.some((message) => message.templateKey === 'leaderNudge')).toBe(false)
+    },
+  )
+
+  test('成员瞬态故障重试耗尽：卡片落为 failed 并通知领队，不遗留 running 卡片', async () => {
+    const db = harness.db as unknown as ProviderNeutralDatabase
+    const taskId = await seedTask(db)
+    const { hooks, requests } = scriptedHost({
+      leader: [
+        {
+          status: 'done',
+          outputs: {
+            wg_decision: JSON.stringify({ action: 'continue' }),
+            wg_assignments: JSON.stringify([
+              {
+                member: 'worker',
+                title: 'exhausted assignment',
+                brief: 'report permanent failure',
+              },
+            ]),
+          },
+        },
+        {
+          status: 'done',
+          outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'failure reviewed' }) },
+        },
+      ],
+      member: [
+        ...Array.from({ length: DEFAULT_PROTOCOL_RETRY_BUDGET + 1 }, () => ({
+          status: 'failed' as const,
+          outputs: {},
+          failureCode: 'runtime-stream-interrupted' as const,
+          errorMessage: 'member stream kept failing',
+        })),
+        { status: 'done', outputs: { wg_messages: '[]' } },
+      ],
+    })
+
+    const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
+
+    expect(outcome.kind).toBe('ok')
+    const cards = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(cards).toHaveLength(1)
+    // 卡片失败之后成员还可能响应未读消息；按卡片血缘只数这次派单的重跑。
+    const assignmentRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      .filter((run) => run.shardKey === cards[0]?.id)
+      .sort((a, b) => a.retryIndex - b.retryIndex)
+    const assignmentRunIds = new Set(assignmentRuns.map((run) => run.id))
+    expect(requests.filter((request) => assignmentRunIds.has(request.nodeRunId))).toHaveLength(
+      DEFAULT_PROTOCOL_RETRY_BUDGET + 1,
+    )
+    expect(cards[0]).toMatchObject({
+      status: 'failed',
+      nodeRunId: assignmentRuns.at(-1)?.id,
+      resultMessageId: null,
+    })
+    const messages = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    const failures = messages.filter((message) => message.templateKey === 'assignmentFailed')
+    expect(failures).toHaveLength(1)
+    expect(failures[0]?.bodyMd).toContain('member stream kept failing')
+    expect(messages.some((message) => message.templateKey === 'leaderNudge')).toBe(false)
   })
 
   test('运行时流中断的重跑不吃协议预算，但必须自己进账本（两个引擎同一条转轨）', async () => {

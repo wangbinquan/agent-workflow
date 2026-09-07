@@ -1,6 +1,6 @@
 // 回归防护 —— clarify 续跑载荷的解码必须认得**问题派发**那一种血统。
 //
-// 为什么这条测试存在：`legacySqliteTaskQuestionDispatch` 释放的是同一个 clarify
+// 为什么这条测试存在：`taskQuestionDispatch` 释放的是同一个 clarify
 // park（`gate.kind === 'clarify'`），但它写下的血统是
 // `{ sourceNodeRunIds: [], rerunNodeRunIds }`——没有单一 origin run。
 // `decodeClaimedClarifyContinuation` 却只接受「答复」那一种形状（恰好一个 source、

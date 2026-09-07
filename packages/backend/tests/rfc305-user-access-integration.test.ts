@@ -24,8 +24,8 @@ import {
   createUserAccessTransactionRunner,
 } from '../src/modules/identity-access/infrastructure/userAccessPersistence'
 import { createUser, patchUser } from '../src/services/users'
-import { createSession } from '../src/auth/sessionStore'
-import { createPat } from '../src/auth/patStore'
+import { createSession } from './helpers/auth/sessionStore'
+import { createPat } from './helpers/auth/patStore'
 import { resolveActor } from '../src/auth/session'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

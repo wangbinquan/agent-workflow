@@ -64,7 +64,7 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       'done→failed（workgroup host 的 ask-back 被晚到策略关闭）与 pending|interrupted|canceled→running（call child adoption 复用既有行）。',
   },
   {
-    file: 'packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts',
+    file: 'packages/backend/src/modules/collaboration/infrastructure/review.ts',
     count: 2,
     rewrites:
       'done→canceled（评审被 supersede，旧轮次作废）、done→pending（兄弟级联重开）。**这两处是正常用户流程**，与 lifecycle.ts 头注释「never in normal flows」直接冲突——账本先如实记下，语义处置另立决策。',

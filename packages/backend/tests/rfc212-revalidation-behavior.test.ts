@@ -16,12 +16,12 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { readFileSync, readdirSync } from 'node:fs'
 import { createLogger } from '../src/util/log'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, taskCollaborators, userSessions, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
-import { revokeSession } from '../src/auth/sessionStore'
+import { revokeSession } from './helpers/auth/sessionStore'
 import { disableUser, patchUser } from '../src/services/users'
 import {
   liveConnections,
@@ -454,17 +454,17 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
     // lazy statement regex span from the wrong function into the right one.
     const points: Array<{ file: string; marker: RegExp; reason: string }> = [
       {
-        file: 'auth/infrastructure/legacySqliteSessionStore.ts',
+        file: '../tests/helpers/auth/legacySqliteSessionStore.ts',
         marker: /export async function revokeSession\(/,
         reason: 'session-revoked',
       },
       {
-        file: 'auth/infrastructure/legacySqliteSessionStore.ts',
+        file: '../tests/helpers/auth/legacySqliteSessionStore.ts',
         marker: /export async function revokeAllSessionsForUser\(/,
         reason: 'sessions-revoked-bulk',
       },
       {
-        file: 'auth/infrastructure/legacySqlitePatStore.ts',
+        file: '../tests/helpers/auth/legacySqlitePatStore.ts',
         marker: /export async function revokePat\(/,
         reason: 'pat-revoked',
       },
@@ -474,7 +474,7 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
         reason: 'identity-deleted',
       },
       {
-        file: 'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts',
+        file: 'modules/collaboration/infrastructure/taskCollab.ts',
         marker: /export async function updateTaskMembers\(/,
         reason: 'task-members-changed',
       },

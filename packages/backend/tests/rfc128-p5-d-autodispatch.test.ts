@@ -1137,7 +1137,7 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
-        '../src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+        '../src/modules/collaboration/infrastructure/clarify/autoDispatch.ts',
       ),
       'utf8',
     )
@@ -1508,7 +1508,7 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     const service = readFileSync(
       resolve(
         import.meta.dir,
-        '../src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+        '../src/modules/collaboration/infrastructure/clarify/autoDispatch.ts',
       ),
       'utf8',
     )

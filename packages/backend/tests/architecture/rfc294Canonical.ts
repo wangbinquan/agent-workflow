@@ -2586,8 +2586,8 @@ function classifyTaskExecutionAuthority(input: {
   // deliberately named.
   if (
     // RFC-359 W7：`reviewRepairParticipant` 合一后是中立文件名，provider 前缀那两份已删；
-    // `CollaborationRuntimeMechanics` 同样合一（PG 那份原生重写已退役，写手回到 legacySqliteReview）。
-    /modules\/collaboration\/infrastructure\/(?:legacySqliteClarify\/seal|legacySqliteReview|humanGateOpenParticipant|reviewRepairParticipant)/.test(
+    // `CollaborationRuntimeMechanics` 同样合一（PG 那份原生重写已退役，写手回到 review）。
+    /modules\/collaboration\/infrastructure\/(?:clarify\/seal|review|humanGateOpenParticipant|reviewRepairParticipant)/.test(
       value,
     )
   ) {

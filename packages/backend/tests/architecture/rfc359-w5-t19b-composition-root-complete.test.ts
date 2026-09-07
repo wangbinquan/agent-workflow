@@ -56,12 +56,15 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  * 先造出双方都依赖的那个纯端口，再由 bootstrap 把两个实例一次性交齐。
  */
 export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
+  // W12：realtime policy 改为构造参数，两个根都交齐词法闭包，不再有 bind 步骤。
+  // SQLite 根的 scheduler / collaboration / MCP / development 与 PG maintenance status
+  // 空槽同步拆除；明确传 catalogBinding/runtime 的返回类型保证相应成员存在。
+  // 下面 W11 的“本刀不碰 SQLite 根”是当时的分工记录，相关占位本轮已退役。
   // RFC-359 W11 分类结论（未销账，留给下一刀）：这一条**不是**声明位置造成的假占位。
   // `createDaemonRealtimePolicyBinding()` 有两个组合根消费它（PG daemon 与 SQLite daemon 入口），
   // 两处都把 `.policy` 先交给 provider core、待 Resource Catalog / Memory / transport 三个 owner
   // 建好之后才 `bind`——真的是跨阶段的环。拆它要同时改两个根，而 SQLite 那个根这一刀不许碰，
   // 于是只能整条留着（单改一侧等于把两个 daemon 的装配序拆成两种形状，比现状更糟）。
-  'cli/daemonRealtimePolicy.ts: marker=1, prose=0, holder=1',
   // RFC-359 W5-T19b 销账：`cli/package.ts: marker=1` —— `packageCommand` 的 `bootstrapFactory`
   // 从可选变必填，缺省时那句「把没装配当成一种命令输出返回给用户」（`identity-access-runtime-not-composed`）
   // 随之删除。这处占位的代价是**实测到的**：`tests/rfc271-cli.test.ts` 的「--plan 与 --on-conflict
@@ -90,8 +93,8 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // 目录铸出来的 context，与「依赖没装配」无关，只是错误码里恰好带 `not-bound` 才被本守卫计入
   // （同 `taskEngineApplication.ts` 留下那 2 处的理由）。
   // 行为判据见 `tests/rfc359-w11-composition-root-lexical-binding.test.ts`。
-  'cli/postgresqlDaemonApplication.ts: marker=4, prose=0, holder=0',
-  'cli/start.ts: marker=10, prose=0, holder=5',
+  'cli/postgresqlDaemonApplication.ts: marker=1, prose=0, holder=0',
+  'cli/start.ts: marker=2, prose=0, holder=1',
   // RFC-359 W5-T19b 销账：`commandContext.ts` prose 6 → 5，且
   // `reviewNodeReviewerDependencies.ts: prose=1` 整行消失 —— `CollaborationCommandDependencies.reviewTaskAccess`
   // 从 `?:` 改成必填。这个槽从来没有第二个来源：两个工厂都是 `createReviewTaskAccessPort(input.db)`

@@ -3,10 +3,10 @@
 //
 // RFC-359 W8 —— 这里**不走** `@/modules/collaboration/composition` 那个 barrel，逐个从定义模块取。
 // 不是风格偏好，是它闭掉了 9 条 `no-circular`：W7 把合一后的 `collaborationRouteOperations` /
-// `collaborationRuntimeMechanics` 挂上 barrel 之后，barrel 的成员（`legacySqliteReview` /
-// `legacySqliteTaskQuestions` / `legacySqliteTaskQuestionDispatch` / `legacySqliteClarify/seal`）
+// `collaborationRuntimeMechanics` 挂上 barrel 之后，barrel 的成员（`review` /
+// `taskQuestions` / `taskQuestionDispatch` / `clarify/seal`）
 // 经本文件绕回 barrel 闭合：
-//   composition.ts → collaborationRouteOperations.ts → legacySqliteReview.ts
+//   composition.ts → collaborationRouteOperations.ts → review.ts
 //     → services/humanGateComposition.ts → composition.ts
 // 本文件要的全是 collaboration 的 domain / application 纯函数与一个 inspector，一条都不需要
 // 那些 legacy sqlite 实现——经 barrel 取用只是把整个 context 的实现面一起拖进依赖图。

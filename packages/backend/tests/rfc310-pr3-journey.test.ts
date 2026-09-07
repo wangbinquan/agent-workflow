@@ -33,7 +33,7 @@ import {
   type StartedRequirementProviderMock,
 } from '@agent-workflow/system-mocks/development/requirement-provider'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import {

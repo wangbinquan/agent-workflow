@@ -503,7 +503,7 @@ test('source lock: taskQuestionDispatch threads mintCauseByTarget into BOTH gate
   const src = await Bun.file(
     fileURLToPath(
       new URL(
-        '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+        '../src/modules/collaboration/infrastructure/taskQuestionDispatch.ts',
         import.meta.url,
       ),
     ),

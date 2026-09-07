@@ -33,10 +33,6 @@ const PROVIDER_NAMED = /^(sqlite|postgresql|legacySqlite|legacyPostgresql)/
 
 /** 还落在 `platform/persistence/` 之外的 provider 命名文件（相对 `src`），按路径字典序。只降不升。 */
 export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
-  'auth/infrastructure/legacySqliteAuthRuntime.ts',
-  'auth/infrastructure/legacySqliteLoginPolicy.ts',
-  'auth/infrastructure/legacySqlitePatStore.ts',
-  'auth/infrastructure/legacySqliteSessionStore.ts',
   'cli/postgresqlDaemonApplication.ts',
   'db/postgresqlSerializationRetry.ts',
   'db/sqliteMigrator.ts',
@@ -46,19 +42,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts',
   'modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts',
   'modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts',
-  'modules/collaboration/composition/legacySqliteDecisionCommands.ts',
-  'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts',
-  'modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts',
-  'modules/collaboration/infrastructure/legacySqliteReview.ts',
-  'modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts',
-  'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts',
-  'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
-  'modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts',
-  'modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts',
-  'modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
-  'modules/identity-access/composition/legacySqliteUserService.ts',
-  'modules/identity-access/infrastructure/legacySqliteUserService.ts',
-  'modules/identity-access/infrastructure/sqliteOwnerScopedName.ts',
   'modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts',
   'modules/intent/composition/postgresqlApplyMaintenance.ts',
   'modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts',
@@ -212,7 +195,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
  * 这些目录里的文件自己不带 provider 前缀，逃得过上面那条账本，分叉却是同一种。
  */
 export const PROVIDER_NAMED_DIRECTORY_DEBT: readonly string[] = [
-  'modules/collaboration/infrastructure/legacySqliteClarify',
   'modules/resource-catalog/infrastructure/postgresql',
 ]
 

@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 31,
-    "transactionCallbacks": 278
+    "coLocatedCandidates": 30,
+    "transactionCallbacks": 274
   },
   "entries": [
     {
@@ -69,56 +69,6 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#transaction:114",
-      "line": 114,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#updateAuthLoginPolicy",
-      "status": "co-located-risk",
-      "symbol": "updateAuthLoginPolicy",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#transaction:211",
-      "line": 211,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#createPasswordLoginSession",
-      "status": "clear",
-      "symbol": "createPasswordLoginSession",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#transaction:57",
-      "line": 57,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteLoginPolicy.ts#getAuthMethodDiscovery",
-      "status": "clear",
-      "symbol": "getAuthMethodDiscovery",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#transaction:109",
-      "line": 109,
-      "ownerEntryId": "owner:packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts#createLoginSession",
-      "status": "clear",
-      "symbol": "createLoginSession",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
       "effectTokens": [],
       "file": "packages/backend/src/db/txSync.ts",
       "finalCriterion": "no-external-effect-observed",
@@ -152,6 +102,46 @@
       "status": "clear",
       "symbol": "createTemplateUpstreamPersistence",
       "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "push"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#transaction:202",
+      "line": 202,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#sealRoundQuestions",
+      "status": "co-located-risk",
+      "symbol": "sealRoundQuestions",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#transaction:602",
+      "line": 602,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#saveClarifyDraft",
+      "status": "clear",
+      "symbol": "saveClarifyDraft",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "push"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts#transaction:110",
+      "line": 110,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts#dismissOpenClarifyParksForAutonomous",
+      "status": "co-located-risk",
+      "symbol": "dismissOpenClarifyParksForAutonomous",
+      "targetContext": "collaboration",
       "transactionCallee": "transaction"
     },
     {
@@ -326,38 +316,12 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#transaction:202",
-      "line": 202,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#sealRoundQuestions",
-      "status": "co-located-risk",
-      "symbol": "sealRoundQuestions",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#transaction:602",
-      "line": 602,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts#saveClarifyDraft",
-      "status": "clear",
-      "symbol": "saveClarifyDraft",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2532",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2532",
       "line": 2532,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewCommentUnlocked",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#addReviewCommentUnlocked",
       "status": "clear",
       "symbol": "addReviewCommentUnlocked",
       "targetContext": "collaboration",
@@ -365,11 +329,11 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2680",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2680",
       "line": 2680,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentTextUnlocked",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#updateReviewCommentTextUnlocked",
       "status": "clear",
       "symbol": "updateReviewCommentTextUnlocked",
       "targetContext": "collaboration",
@@ -377,11 +341,11 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2765",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2765",
       "line": 2765,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewCommentUnlocked",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#deleteReviewCommentUnlocked",
       "status": "clear",
       "symbol": "deleteReviewCommentUnlocked",
       "targetContext": "collaboration",
@@ -392,11 +356,11 @@
         "publish",
         "push"
       ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:3515",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:3515",
       "line": 3515,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecisionUnlocked",
       "status": "co-located-risk",
       "symbol": "submitReviewDecisionUnlocked",
       "targetContext": "collaboration",
@@ -404,101 +368,13 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:4276",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:4276",
       "line": 4276,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelectionUnlocked",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#setDocumentSelectionUnlocked",
       "status": "clear",
       "symbol": "setDocumentSelectionUnlocked",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#transaction:107",
-      "line": 107,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirective",
-      "status": "clear",
-      "symbol": "setNodeClarifyDirective",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#transaction:387",
-      "line": 387,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#updateTaskMembersLocked",
-      "status": "co-located-risk",
-      "symbol": "updateTaskMembersLocked",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "fetch"
-      ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#transaction:1260",
-      "line": 1260,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#commitDispatchPlan",
-      "status": "co-located-risk",
-      "symbol": "commitDispatchPlan",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#transaction:1015",
-      "line": 1015,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
-      "status": "clear",
-      "symbol": "reassignTaskQuestion",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#transaction:1069",
-      "line": 1069,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
-      "status": "clear",
-      "symbol": "reassignTaskQuestion",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#transaction:1108",
-      "line": 1108,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
-      "status": "clear",
-      "symbol": "reassignTaskQuestion",
-      "targetContext": "collaboration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#transaction:211",
-      "line": 211,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reconcileTaskQuestionsForRound",
-      "status": "clear",
-      "symbol": "reconcileTaskQuestionsForRound",
       "targetContext": "collaboration",
       "transactionCallee": "transaction"
     },
@@ -527,16 +403,90 @@
       "transactionCallee": "transaction"
     },
     {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#transaction:107",
+      "line": 107,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskClarifyDirective.ts#setNodeClarifyDirective",
+      "status": "clear",
+      "symbol": "setNodeClarifyDirective",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
       "effectTokens": [
         "push"
       ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts#transaction:110",
-      "line": 110,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts#dismissOpenClarifyParksForAutonomous",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#transaction:387",
+      "line": 387,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#updateTaskMembersLocked",
       "status": "co-located-risk",
-      "symbol": "dismissOpenClarifyParksForAutonomous",
+      "symbol": "updateTaskMembersLocked",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "fetch"
+      ],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#transaction:1260",
+      "line": 1260,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#commitDispatchPlan",
+      "status": "co-located-risk",
+      "symbol": "commitDispatchPlan",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#transaction:1015",
+      "line": 1015,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reassignTaskQuestion",
+      "status": "clear",
+      "symbol": "reassignTaskQuestion",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#transaction:1069",
+      "line": 1069,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reassignTaskQuestion",
+      "status": "clear",
+      "symbol": "reassignTaskQuestion",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#transaction:1108",
+      "line": 1108,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reassignTaskQuestion",
+      "status": "clear",
+      "symbol": "reassignTaskQuestion",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#transaction:211",
+      "line": 211,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reconcileTaskQuestionsForRound",
+      "status": "clear",
+      "symbol": "reconcileTaskQuestionsForRound",
       "targetContext": "collaboration",
       "transactionCallee": "transaction"
     },
@@ -3409,7 +3359,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
+  "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { developmentAdapterDefinitions } from '../src/db/schema'
 import { createApp } from '../src/server'

@@ -20,7 +20,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { TaskWsMessage, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {

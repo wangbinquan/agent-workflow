@@ -23,8 +23,8 @@ type AnyServer = Server<unknown>
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users } from '../src/db/schema'
-import { createSession } from '../src/auth/sessionStore'
-import { createPat } from '../src/auth/patStore'
+import { createSession } from './helpers/auth/sessionStore'
+import { createPat } from './helpers/auth/patStore'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'

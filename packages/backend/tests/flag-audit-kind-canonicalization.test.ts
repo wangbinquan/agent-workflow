@@ -33,7 +33,7 @@ describe('normalizeKindString（持久化 canonical 口）', () => {
 
 describe('写入点不再倒灌别名（源码锁）', () => {
   test('Collaboration owner 的 approve 路径写 canonical path<md>', () => {
-    const src = SRC('modules/collaboration/infrastructure/legacySqliteReview.ts')
+    const src = SRC('modules/collaboration/infrastructure/review.ts')
     expect(src).toContain("const approvedDocKind = hasSourcePath ? 'path<md>' : null")
     expect(src).not.toContain("hasSourcePath ? 'markdown_file'")
   })

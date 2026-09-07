@@ -5,7 +5,7 @@
 // 上快速澄清命令根本没有实现。现在 replay / prepare 跑在 `ProviderNeutralDatabase` 上，
 // 参与者在 seal 的 `DatabaseTransaction` 里复用已合一的原子：`DatabaseHumanGateOperationJournal`
 // / `acceptHumanGateDecisionTx` / `appendHumanGateDecisionCommittedEvent`。
-// 文件名沿用（多条源锁钉住路径），W4 pair-deletion 时统一改名。
+// RFC-359 W12：实现与源锁统一改为中立路径，两个引擎继续共用同一事务参与者。
 
 import { and, desc, eq, isNotNull, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -16,7 +16,7 @@ import type { DatabaseTransaction } from '@/platform/persistence/databaseTransac
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/public/types'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
-import type { ClarifySealDecisionParticipantInTx } from './legacySqliteClarify/seal'
+import type { ClarifySealDecisionParticipantInTx } from './clarify/seal'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyAnswer, ClarifyDirective, TaskActorRole } from '@agent-workflow/shared'

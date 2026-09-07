@@ -168,7 +168,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 256
+      "lines": 279
     },
     {
       "id": "lifecycle-invariants-clarify",
@@ -324,7 +324,7 @@
       "assertsAbsence": true,
       "negativeFixture": false,
       "classified": true,
-      "lines": 122
+      "lines": 128
     },
     {
       "id": "rfc070-aging-stamp-grep-guards",
@@ -396,7 +396,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 453
+      "lines": 471
     },
     {
       "id": "rfc108-s6-member-deadlock",
@@ -444,7 +444,7 @@
       "assertsAbsence": true,
       "negativeFixture": false,
       "classified": true,
-      "lines": 504
+      "lines": 513
     },
     {
       "id": "rfc145-error-message-machine-read-guard",
@@ -624,7 +624,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 404
+      "lines": 445
     },
     {
       "id": "rfc222-resource-admin-guard",
@@ -924,7 +924,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 1469
+      "lines": 1733
     },
     {
       "id": "rfc294-background-worker-boundary",
@@ -972,7 +972,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 250
+      "lines": 768
     },
     {
       "id": "rfc294-review-public-consumer-ledger",
@@ -1032,7 +1032,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 801
+      "lines": 960
     },
     {
       "id": "rfc310-architecture-lock",
@@ -1128,7 +1128,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 203
+      "lines": 239
     },
     {
       "id": "rfc317-architecture-ledgers",
@@ -1368,7 +1368,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 409
+      "lines": 412
     },
     {
       "id": "rfc317-workspace-phase",
@@ -1524,7 +1524,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 566
+      "lines": 636
     },
     {
       "id": "rfc329-mcp-surface-guard",
@@ -1548,7 +1548,7 @@
       "assertsAbsence": true,
       "negativeFixture": false,
       "classified": true,
-      "lines": 306
+      "lines": 320
     },
     {
       "id": "rfc334-node-executor-boundary",
@@ -1584,7 +1584,7 @@
       "assertsAbsence": true,
       "negativeFixture": false,
       "classified": true,
-      "lines": 110
+      "lines": 222
     },
     {
       "id": "rfc349-code-capability-provider-boundary",
@@ -1693,7 +1693,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 377
+      "lines": 395
     },
     {
       "id": "rfc349-resource-catalog-acl-provider-boundary",
@@ -1741,7 +1741,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 131
+      "lines": 270
     },
     {
       "id": "rfc359-w5-adapter-production-consumer",
@@ -1789,7 +1789,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 509
+      "lines": 508
     },
     {
       "id": "rfc359-w5-provider-runtime-exercised",
@@ -1813,7 +1813,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 294
+      "lines": 312
     },
     {
       "id": "rfc359-w5-t18-bare-transaction",
@@ -1822,10 +1822,10 @@
       "mechanism": "ast",
       "corpusScanner": true,
       "minCorpusFiles": 800,
-      "assertsAbsence": false,
-      "negativeFixture": false,
+      "assertsAbsence": true,
+      "negativeFixture": true,
       "classified": true,
-      "lines": 204
+      "lines": 264
     },
     {
       "id": "rfc359-w5-t19-provider-branch",
@@ -1849,7 +1849,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 324
+      "lines": 416
     },
     {
       "id": "rfc359-w5-t19c-startup-sequence",
@@ -1873,7 +1873,7 @@
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 344
+      "lines": 352
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -1945,7 +1945,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 617
+      "lines": 652
     },
     {
       "id": "rfc359-w7-task-insert-lineage-completeness",
@@ -1993,7 +1993,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 854
+      "lines": 856
     },
     {
       "id": "runtime-parameter-ratchet",
@@ -2017,7 +2017,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 287
+      "lines": 308
     },
     {
       "id": "scheduler-boundary-canceled-fanout-status",
@@ -2393,14 +2393,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f4f327c09f70ea294d71c574ddd2acc136e336c7761be6509d6484b4a690bd4d",
+    "sourceDigest": "sha256:c15a5dac8ef99be993ac7373f8853b9f8995f74bc847ea25b33c548a04e9a6d6",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "b5347f30bd8785e78870a4eb7bb1116d7ae6bebe",
-    "contentDigest": "sha256:c4ad35f7132068c817b7a755c02a53c68de67cd9ca51f84c4c522a8c6247d149",
+    "currentSnapshotSha": "9a093736b52e47dce5fb953c6e9e0a40e5d594f7",
+    "contentDigest": "sha256:3f12be75a6cdbfc7bdbe14293fefbde75640ae6fae5feb8604929039c83befea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

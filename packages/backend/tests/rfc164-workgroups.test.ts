@@ -26,7 +26,7 @@ import {
   type WorkgroupDetail,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, users } from '../src/db/schema'

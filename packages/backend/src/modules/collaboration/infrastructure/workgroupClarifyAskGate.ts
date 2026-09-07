@@ -17,7 +17,7 @@ import { and, eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds } from '@/db/schema'
 import { WORKGROUP_TURN_LEADER_NODE_ID } from '@/modules/task-execution/public/commands'
-import { getNodeClarifyDirective } from './legacySqliteTaskClarifyDirective'
+import { getNodeClarifyDirective } from './taskClarifyDirective'
 
 export interface WorkgroupClarifyAskInput {
   readonly taskId: string

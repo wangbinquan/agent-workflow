@@ -63,7 +63,7 @@ describe('RFC-349 collaboration route operations', () => {
       /\bPostgresqlDatabaseClient\b|\bDbClient\b|\$provider|'postgresql'|'sqlite'/,
     )
     // 惰性 import 是为了断开 `services/humanGateComposition` 绕回 composition barrel 的值环。
-    expect(factory).toContain("() => import('./legacySqliteReview')")
+    expect(factory).toContain("() => import('./review')")
     expect(() =>
       source('src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts'),
     ).toThrow()
@@ -97,9 +97,7 @@ describe('RFC-349 collaboration route operations', () => {
   test('SQLite daemon composition wires every collaboration decision port without a root cycle', () => {
     const start = source('src/cli/start.ts')
     const root = source('src/modules/collaboration/composition.ts')
-    const composition = source(
-      'src/modules/collaboration/composition/legacySqliteDecisionCommands.ts',
-    )
+    const composition = source('src/modules/collaboration/composition/decisionCommands.ts')
 
     for (const factory of [
       'createReviewDecisionCommand',

@@ -29,7 +29,7 @@ import type {
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { createApp } from '../src/server'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 

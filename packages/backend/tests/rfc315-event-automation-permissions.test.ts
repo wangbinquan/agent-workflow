@@ -9,9 +9,9 @@ import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { eventResponseRules, eventSources, eventTypeCatalog } from '@/db/schema'
 import { createApp } from '@/server'
-import { createPat } from '@/auth/patStore'
+import { createPat } from './helpers/auth/patStore'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { createSession } from '@/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '@/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

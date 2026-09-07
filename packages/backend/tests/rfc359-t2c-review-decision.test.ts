@@ -1,7 +1,7 @@
 // RFC-359 W1-T2c（F-H2-1 之三）—— 评审决定命令在两个引擎上各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 F-H2-1：PostgreSQL daemon 从未注入 `reviewDecisions`，
-// 路由一到就 500；而 SQLite 那份（`legacySqliteReview.ts` 的五个 dbTxSync 事务体）在 PG 上跑不
+// 路由一到就 500；而 SQLite 那份（`review.ts` 的五个 dbTxSync 事务体）在 PG 上跑不
 // 起来。现在决定 / 评论 / 选择跑在 `DatabaseSession` 上，node_run 状态 CAS、任务成员判定、
 // 正文读取、互斥作用域各只剩一份实现。场景对照 SQLite 黄金锁 `review-decision-full-asserts.test.ts`。
 
@@ -22,7 +22,7 @@ import {
   deleteReviewComment,
   setDocumentSelection,
   updateReviewCommentText,
-} from '@/modules/collaboration/infrastructure/legacySqliteReview'
+} from '@/modules/collaboration/infrastructure/review'
 import { createReviewDecisionCommand } from '@/modules/collaboration/infrastructure/reviewDecisionCommand'
 import type { ReviewDecisionCommandPort } from '@/modules/collaboration/public/types'
 import { ConflictError } from '@/util/errors'

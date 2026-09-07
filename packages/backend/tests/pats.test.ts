@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createPat, listPatsForUser, lookupActivePat, revokePat } from '../src/auth/patStore'
+import { createPat, listPatsForUser, lookupActivePat, revokePat } from './helpers/auth/patStore'
 import { users } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

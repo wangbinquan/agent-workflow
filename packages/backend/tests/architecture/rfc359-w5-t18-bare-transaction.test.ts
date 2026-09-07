@@ -34,7 +34,7 @@
 // W12 收口：裸驱动调用已归零；保留 exact 空账本，任何新调用都会让 CI 转红。
 // 接收者按 TypeScript 类型解析，SQL 程序 runner 的中立事务编排不属于裸驱动。
 
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
@@ -105,8 +105,11 @@ function countBareTransactions(source: ts.SourceFile, checker: ts.TypeChecker): 
 }
 
 let sourceProgram: ts.Program | undefined
+const transactionCounts = new Map<string, number>()
 
 function bareTransactionSites(rel: string): number {
+  const cached = transactionCounts.get(rel)
+  if (cached !== undefined) return cached
   if (sourceProgram === undefined) {
     const configPath = resolve(SRC, '..', 'tsconfig.json')
     const config = ts.readConfigFile(configPath, ts.sys.readFile)
@@ -120,7 +123,9 @@ function bareTransactionSites(rel: string): number {
   }
   const source = sourceProgram.getSourceFile(join(SRC, rel))
   if (source === undefined) throw new Error(`RFC-359 transaction corpus missing ${rel}`)
-  return countBareTransactions(source, sourceProgram.getTypeChecker())
+  const count = countBareTransactions(source, sourceProgram.getTypeChecker())
+  transactionCounts.set(rel, count)
+  return count
 }
 
 /** 扫到的全部 backend 源文件——语料下限的分母（RFC-317 T13：扫空 = 假绿）。 */
@@ -176,6 +181,12 @@ function fixtureBareTransactions(body: string): number {
 }
 
 describe('RFC-359 W5-T18 —— 裸 `db.transaction(` 只降不升', () => {
+  // 真实语料需要构造完整类型图；CI macOS 上约 15 秒。集中扫描一次，
+  // 不把 TypeScript 建图成本算进每个默认 5 秒的断言预算。
+  beforeAll(() => {
+    for (const rel of corpusFiles()) bareTransactionSites(rel)
+  }, 60_000)
+
   test.each([
     'function write(db: DatabaseClient) { db.transaction(() => 1) }',
     'function write(session: DatabaseClient) { session.transaction(() => 1) }',

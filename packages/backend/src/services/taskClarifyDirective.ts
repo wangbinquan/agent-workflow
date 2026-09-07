@@ -9,4 +9,4 @@ export {
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
   setNodeClarifyDirectiveTx,
-} from '@/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective'
+} from '@/modules/collaboration/infrastructure/taskClarifyDirective'

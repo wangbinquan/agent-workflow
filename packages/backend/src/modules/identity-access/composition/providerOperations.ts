@@ -7,4 +7,4 @@
 
 export { composeOidcIdentityOperations } from '../infrastructure/oidcIdentityCrossContext'
 export { composeOwnerIdentityQueries } from './ownerIdentityQueries'
-export { sqliteOwnerScopedNameWhere } from '../infrastructure/sqliteOwnerScopedName'
+export { ownerScopedNameCondition } from '../infrastructure/ownerScopedName'

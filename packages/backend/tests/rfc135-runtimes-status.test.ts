@@ -28,8 +28,8 @@ import {
   setRuntimeEnabled,
 } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { createSession } from '../src/auth/sessionStore'
-import { createPat } from '../src/auth/patStore'
+import { createSession } from './helpers/auth/sessionStore'
+import { createPat } from './helpers/auth/patStore'
 import { createUser } from '../src/services/users'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 

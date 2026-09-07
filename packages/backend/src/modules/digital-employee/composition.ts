@@ -432,6 +432,14 @@ export interface DigitalEmployeeCompositionOptions {
   readonly id?: () => string
 }
 
+export interface DigitalEmployeeModuleWithRuntime extends DigitalEmployeeModule {
+  readonly runtime: NonNullable<DigitalEmployeeModule['runtime']>
+}
+
+type DigitalEmployeeRuntimeBinding = {
+  readonly runtime: NonNullable<DigitalEmployeeCompositionOptions['runtime']>
+}
+
 export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   /** 两个 provider 同一份持久化（RFC-359 W4-D6c/D7a/D7b），装配入口收中立句柄。 */
   readonly db: ProviderNeutralDatabase
@@ -1084,6 +1092,12 @@ function composeDigitalEmployeeFromPersistence(
 
 /** Provider-neutral composition（SQLite 与 PostgreSQL 同一份）。 */
 export function composeDigitalEmployee(
+  options: ComposeDigitalEmployeeOptions & DigitalEmployeeRuntimeBinding,
+): DigitalEmployeeModuleWithRuntime
+export function composeDigitalEmployee(
+  options: ComposeDigitalEmployeeOptions,
+): DigitalEmployeeModule
+export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
   const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
@@ -1099,6 +1113,12 @@ export function composeDigitalEmployee(
 }
 
 /** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
+export function composePostgresqlDigitalEmployee(
+  options: ComposePostgresqlDigitalEmployeeOptions & DigitalEmployeeRuntimeBinding,
+): DigitalEmployeeModuleWithRuntime
+export function composePostgresqlDigitalEmployee(
+  options: ComposePostgresqlDigitalEmployeeOptions,
+): DigitalEmployeeModule
 export function composePostgresqlDigitalEmployee(
   options: ComposePostgresqlDigitalEmployeeOptions,
 ): DigitalEmployeeModule {

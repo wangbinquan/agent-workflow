@@ -8,12 +8,12 @@
 // `databaseSessionFor`，于是它**不可重入**：在外层显式事务里调用 `set` 会另开一条连接、
 // 独立提交，外层回滚也带不走它（2026-09-06 双引擎实测：SQLite 回滚后 0 行、PG 回滚后 1 行）。
 //
-// 正典是 `legacySqliteTaskClarifyDirective.ts`——它早已是中立实现（`ProviderNeutralDatabase`
+// 正典是 `taskClarifyDirective.ts`——它早已是中立实现（`ProviderNeutralDatabase`
 // 上的 drizzle query builder + `databaseSessionFor(db).transaction`），还额外导出
 // `setNodeClarifyDirectiveTx`（RFC-341 的澄清决定 seal 拿它当事务参与者）与
 // `isAskingNodeInSnapshot`。本工厂只是把那三个中立函数适配到 `ClarifyDirectiveStore` 端口
 // 的形状上，装配点因此对两个引擎是同一个工厂。
-//（那个文件名的 `legacySqlite` 前缀早已名不副实，改名会牵动别的守卫，留给后续刀口。）
+// RFC-359 W12：正典文件及其消费路径已统一使用中立名称。
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ClarifyDirectiveStore } from '../application/ports/clarifyDirectiveStore'
@@ -21,7 +21,7 @@ import {
   getNodeClarifyDirectiveRow,
   listNodeClarifyDirectives,
   setNodeClarifyDirective,
-} from './legacySqliteTaskClarifyDirective'
+} from './taskClarifyDirective'
 
 export function createClarifyDirectiveStore(db: ProviderNeutralDatabase): ClarifyDirectiveStore {
   const store: ClarifyDirectiveStore = {

@@ -119,7 +119,7 @@ describe('RFC-064 C4 — services exports', () => {
     const src = readFileSync(
       resolve(
         REPO_ROOT,
-        'packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts',
+        'packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts',
       ),
       'utf8',
     )

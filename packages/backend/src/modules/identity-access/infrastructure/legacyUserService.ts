@@ -1,8 +1,8 @@
-// RFC-036/RFC-349 — explicit SQLite compatibility fixture for legacy tests and
-// setup helpers. Production callers consume IdentityAccessRuntime operations;
-// provider selection never reaches this adapter.
+// RFC-036/RFC-349/RFC-359 — compatibility helpers over the shared async query
+// and IdentityAccessRuntime contracts. Both database clients use this one
+// implementation; daemon callers receive their bootstrap-owned runtime.
 
-import { inArray, and, eq, like, ne, or } from 'drizzle-orm'
+import { inArray, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   type GitCommitIdentity,
@@ -15,14 +15,14 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { hashPassword } from '@/auth/passwords'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { users } from '@/db/schema'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 export type UserRow = typeof users.$inferSelect
 
-async function createLegacyIdentityAccessRuntime(db: DbClient) {
+async function createLegacyIdentityAccessRuntime(db: ProviderNeutralDatabase) {
   // Lazy solely to keep the compatibility namespace out of the production
   // composition module's initialization cycle. The module is cached after the
   // first test/setup call.
@@ -34,7 +34,7 @@ async function createLegacyIdentityAccessRuntime(db: DbClient) {
  * bootstrap-owned query directly; callers without a runtime are test/setup
  * fixtures that receive a short-lived explicit instance. */
 export async function getUserGitCommitIdentity(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   userId: string,
 ): Promise<GitCommitIdentity> {
   const runtime = await createLegacyIdentityAccessRuntime(db)
@@ -45,17 +45,20 @@ export async function getUserGitCommitIdentity(
   }
 }
 
-export async function countNonSystemUsers(db: DbClient): Promise<number> {
+export async function countNonSystemUsers(db: ProviderNeutralDatabase): Promise<number> {
   const rows = await db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
   return rows.length
 }
 
-export async function findById(db: DbClient, id: string): Promise<UserRow | null> {
+export async function findById(db: ProviderNeutralDatabase, id: string): Promise<UserRow | null> {
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1)
   return rows[0] ?? null
 }
 
-export async function findByUsername(db: DbClient, username: string): Promise<UserRow | null> {
+export async function findByUsername(
+  db: ProviderNeutralDatabase,
+  username: string,
+): Promise<UserRow | null> {
   const rows = await db.select().from(users).where(eq(users.username, username)).limit(1)
   return rows[0] ?? null
 }
@@ -74,7 +77,10 @@ export interface CreateUserInput extends Omit<CreateUserBody, 'additionalPermiss
   status?: 'active' | 'disabled' | 'invited'
 }
 
-export async function createUser(db: DbClient, input: CreateUserInput): Promise<UserRow> {
+export async function createUser(
+  db: ProviderNeutralDatabase,
+  input: CreateUserInput,
+): Promise<UserRow> {
   const now = input.now ?? Date.now()
   const passwordHash = input.password ? await hashPassword(input.password) : null
   const status = input.status ?? (passwordHash ? 'active' : 'invited')
@@ -118,7 +124,7 @@ export interface ResetPasswordInput {
 }
 
 export async function resetPassword(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   input: ResetPasswordInput,
   auth: AuthRuntime = createAuthRuntimeFor({ db }),
@@ -139,7 +145,7 @@ export async function resetPassword(
 }
 
 export async function disableUser(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   now: number = Date.now(),
   actorId?: string,
@@ -159,7 +165,7 @@ export async function disableUser(
  * admin, and a disabled user can't be logged in to re-enable themselves.
  */
 export async function enableUser(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   now: number = Date.now(),
 ): Promise<void> {
@@ -170,7 +176,7 @@ export async function enableUser(
 }
 
 export async function patchUser(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   patch: PatchUserBody,
   now: number = Date.now(),
@@ -237,7 +243,10 @@ export interface SearchInput {
  * sentinel drop out silently. Disabled users ARE returned — historic
  * attribution chips must keep rendering after an account is disabled.
  */
-export async function lookupUsersPublic(db: DbClient, ids: string[]): Promise<UserPublic[]> {
+export async function lookupUsersPublic(
+  db: ProviderNeutralDatabase,
+  ids: string[],
+): Promise<UserPublic[]> {
   const wanted = [...new Set(ids)].filter((id) => id !== SYSTEM_USER_ID)
   if (wanted.length === 0) return []
   const rows = await db.select().from(users).where(inArray(users.id, wanted))
@@ -252,44 +261,31 @@ export async function lookupUsersPublic(db: DbClient, ids: string[]): Promise<Us
   )
 }
 
-export async function searchUsersPublic(db: DbClient, input: SearchInput): Promise<UserPublic[]> {
-  const q = (input.q ?? '').trim().toLowerCase()
+export async function searchUsersPublic(
+  db: ProviderNeutralDatabase,
+  input: SearchInput,
+): Promise<UserPublic[]> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100)
-  const rows = q
-    ? await db
-        .select()
-        .from(users)
-        .where(
-          and(
-            ne(users.id, SYSTEM_USER_ID),
-            // Prefix match on both username and display_name per design §5.4.
-            or(like(users.username, `${q}%`), like(users.displayName, `${q}%`)),
-          ),
-        )
-    : await db.select().from(users).where(ne(users.id, SYSTEM_USER_ID))
-  const excluded = new Set(input.excludeIds ?? [])
-  return rows
-    .filter((r) => !excluded.has(r.id))
-    .filter((r) => input.status === undefined || r.status === input.status)
-    .filter((r) => input.status !== undefined || r.status !== 'disabled' || excluded.size === 0)
-    .slice(0, limit)
-    .map(
-      (r): UserPublic => ({
-        id: r.id,
-        username: r.username,
-        displayName: r.displayName,
-        role: r.role as Role,
-        status: r.status as 'active' | 'disabled' | 'invited',
-      }),
-    )
+  const runtime = await createLegacyIdentityAccessRuntime(db)
+  try {
+    return [
+      ...(await runtime.userDirectory.search({
+        ...input,
+        limit,
+        excludeIds: input.excludeIds ?? [],
+      })),
+    ]
+  } finally {
+    runtime.shutdown()
+  }
 }
 
-export async function listAllUsers(db: DbClient): Promise<UserRow[]> {
+export async function listAllUsers(db: ProviderNeutralDatabase): Promise<UserRow[]> {
   return db.select().from(users)
 }
 
 /** Type-only shape exported to the lazy legacy facade in composition. */
-export interface LegacySqliteUserService {
+export interface LegacyUserService {
   readonly countNonSystemUsers: typeof countNonSystemUsers
   readonly createUser: typeof createUser
   readonly disableUser: typeof disableUser

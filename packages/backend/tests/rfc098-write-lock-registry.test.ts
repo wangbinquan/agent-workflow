@@ -124,7 +124,7 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
     // current rollback executors use the same registry and must never gc.
     // RFC-284 T27 改锚：clarify 正体迁 services/clarify/（旧路径为 facade）。
     for (const f of [
-      '../modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+      '../modules/collaboration/infrastructure/clarify/autoDispatch.ts',
       'humanGateContinuationEffects.ts',
     ]) {
       const src = readFileSync(SRC(f), 'utf-8')

@@ -105,7 +105,7 @@ describe('RFC-127 AC-9 — borrow 残余 prompt isolation(attribution never ente
         'modules',
         'collaboration',
         'infrastructure',
-        'legacySqliteTaskQuestionDispatch.ts',
+        'taskQuestionDispatch.ts',
       ),
       'utf8',
     )

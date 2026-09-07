@@ -27,7 +27,7 @@ import {
   trackConnection,
 } from '../src/ws/connections'
 import { createUser } from '../src/services/users'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
 import type { WsCredential } from '../src/ws/registry'
 import { createLogger } from '../src/util/log'

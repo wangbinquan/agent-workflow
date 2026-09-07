@@ -138,7 +138,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
         'modules',
         'collaboration',
         'infrastructure',
-        'legacySqliteClarifyRounds.ts',
+        'clarifyRounds.ts',
       ),
       'utf8',
     )

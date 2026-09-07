@@ -1,8 +1,8 @@
 import { and, eq, isNull, ne, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
-/** SQLite expression matching the NULL-normalized owner/name unique indexes. */
-export function sqliteOwnerScopedNameWhere(
+/** Shared expression matching the NULL-normalized owner/name unique indexes. */
+export function ownerScopedNameCondition(
   ownerColumn: AnySQLiteColumn,
   nameColumn: AnySQLiteColumn,
   ownerUserId: string | null,

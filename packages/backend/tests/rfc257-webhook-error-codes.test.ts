@@ -12,7 +12,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from '../src/services/users'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers, workflows } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 

@@ -5,7 +5,7 @@
 // 「这个人看不看得见这个任务 / 能不能对它动手」是**用户直接看得见**的判定：看不见就是列表少一行、
 // 详情 404；不能动手就是取消 / 续跑 / 加协作者被拒。它的唯一实现是
 // `infrastructure/taskAuthorization.ts`，两个引擎共用——PostgreSQL 侧由该引擎的任务路由适配器
-// 调用，SQLite 侧走 `legacySqliteReview.ts` 等 legacy 路径。
+// 调用，SQLite 侧走 `review.ts` 等 legacy 路径。
 //
 // （这段刻意不写出 PG 那份路由适配器的**文件名**：`rfc359-w5-t19d-coverage-parity.test.ts` 的
 // `ref` 口径是「测试文件提到该侧模块名或其导出符号」，一句注释就能把它的覆盖数顶高一格，

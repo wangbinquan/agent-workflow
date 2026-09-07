@@ -6,8 +6,8 @@
 // 的前提；本文件把端口契约写成**同一段断言**，`describeEachProvider` 在两个引擎上各跑一遍。
 //
 // 判据来源：`application/ports/collaborationRouteOperations.ts` 的端口契约，语义注释在
-// `infrastructure/legacySqliteReview.ts`（RFC-005 评论锚 / RFC-079 多文档 / RFC-158 摘要装配）、
-// `legacySqliteTaskQuestions.ts`（RFC-140 问题条目）与 `legacySqliteClarifyRounds.ts`（草稿）。
+// `infrastructure/review.ts`（RFC-005 评论锚 / RFC-079 多文档 / RFC-158 摘要装配）、
+// `taskQuestions.ts`（RFC-140 问题条目）与 `clarifyRounds.ts`（草稿）。
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

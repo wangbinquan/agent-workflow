@@ -415,7 +415,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     const auto = await Bun.file(
       fileURLToPath(
         new URL(
-          '../src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+          '../src/modules/collaboration/infrastructure/clarify/autoDispatch.ts',
           import.meta.url,
         ),
       ),
@@ -427,7 +427,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     const dispatch = await Bun.file(
       fileURLToPath(
         new URL(
-          '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+          '../src/modules/collaboration/infrastructure/taskQuestionDispatch.ts',
           import.meta.url,
         ),
       ),
@@ -444,7 +444,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     const src = await Bun.file(
       fileURLToPath(
         new URL(
-          '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+          '../src/modules/collaboration/infrastructure/taskQuestionDispatch.ts',
           import.meta.url,
         ),
       ),
@@ -460,10 +460,7 @@ describe('RFC-140 W2 deferred 登记 + 自动补发', () => {
     expect(wrapper).not.toContain('.select()') // no reads before the lock
     const stageSrc = await Bun.file(
       fileURLToPath(
-        new URL(
-          '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts',
-          import.meta.url,
-        ),
+        new URL('../src/modules/collaboration/infrastructure/taskQuestions.ts', import.meta.url),
       ),
     ).text()
     const stageFn = stageSrc.slice(

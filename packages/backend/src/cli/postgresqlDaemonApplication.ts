@@ -4,12 +4,13 @@
 // are captured while owner modules are built and never cross into HTTP, WS or
 // public route contracts.
 
+import type { DigitalEmployeeModuleWithRuntime } from '@/modules/digital-employee/composition'
 import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
   createTaskDagCollaborationOperations,
-} from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
+} from '@/modules/collaboration/composition/decisionCommands'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
@@ -313,7 +314,7 @@ import type { FusedIntoSkillMemory, MemoryScopeAuthority } from '@/modules/memor
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
-import { createDaemonRealtimePolicyBinding } from './daemonRealtimePolicy'
+import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { ConflictError } from '@/util/errors'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -378,7 +379,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly scheduledTaskIdentityAccess: TaskExecutionBackgroundStartDependencies['scheduled']['identityAccess']
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
   readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
-  readonly digitalEmployee: ReturnType<typeof composePostgresqlDigitalEmployee>
+  readonly digitalEmployee: DigitalEmployeeModuleWithRuntime
   readonly eventCenter: Awaited<ReturnType<typeof composePostgresqlEventCenter>>
   readonly fusion: ReturnType<typeof composePostgresqlFusionOperations>
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
@@ -407,7 +408,18 @@ export interface PostgresqlDaemonApplicationRuntime {
 export async function composePostgresqlDaemonApplication(
   input: PostgresqlDaemonApplicationInput,
 ): Promise<PostgresqlDaemonApplication> {
-  const realtimePolicy = createDaemonRealtimePolicyBinding()
+  const realtimePolicy = composeDaemonRealtimePolicy({
+    resourceVisibility: {
+      canViewResource: (actor, type, row) =>
+        resourceCatalog.authorization.canViewResource(actor, type, row),
+    },
+    memoryVisibility: {
+      canViewMemory: (authority, actor, scope) =>
+        memoryCatalog.queries.canView({ authority, actor }, scope),
+    },
+    repoImportOwnerUserId: batchOwnerUserId,
+    redactTaskEventPayload: redactEventPayload,
+  })
   const core = composePostgresqlDaemonProviderCore({
     db: input.db,
     ...(input.sourceWriteWindow === undefined
@@ -418,7 +430,7 @@ export async function composePostgresqlDaemonApplication(
     appHome: input.appHome,
     lockPath: input.lockPath,
     secretBox: input.secretBox,
-    realtimePolicy: realtimePolicy.policy,
+    realtimePolicy,
     onCredentialRevoked: triggerRevalidation,
     identityEvents: {
       authorityRevisionChanged({ userId, revision, onFailure }) {
@@ -504,7 +516,6 @@ export async function composePostgresqlDaemonApplication(
     },
   })
   const memoryCatalog = memoryOperations.catalog
-  if (memoryCatalog === undefined) throw new Error('postgresql-memory-catalog-not-composed')
   const classicCatalogs = composePostgresqlClassicCatalogs({
     db: input.db,
     appHome: input.appHome,
@@ -1280,9 +1291,6 @@ export async function composePostgresqlDaemonApplication(
     },
   })
   const taskLaunchKernel = taskExecutionProvider.routeLaunch.workflow
-  if (taskLaunchKernel === undefined) {
-    throw new Error('postgresql-task-launch-kernel-not-composed')
-  }
   const resourceLimitOperations = composePostgresqlResourceLimitOperations({
     db: input.db,
     cancelTask: (taskId) =>
@@ -1377,12 +1385,9 @@ export async function composePostgresqlDaemonApplication(
   })
   await composeDigitalEmployeeWriterCutoverFor(input.db).activate()
   await digitalEmployee.maintenance.settleAutomaticUpgrades()
-  if (digitalEmployee.runtime === null) {
-    throw new Error('postgresql-digital-employee-runtime-not-composed')
-  }
   digitalEmployeeWorkStart.bind({
     async launch(request) {
-      const result = await digitalEmployee.runtime!.commands.launchWork({
+      const result = await digitalEmployee.runtime.commands.launchWork({
         employeeId: request.employeeId,
         intake: request.intake,
         actorUserId: request.actorUserId,
@@ -1980,17 +1985,6 @@ export async function composePostgresqlDaemonApplication(
       operations: input.databaseMigration.operations,
       identityAccess,
     }),
-  })
-
-  realtimePolicy.bind({
-    resourceVisibility: resourceCatalog.authorization,
-    memoryVisibility: {
-      async canViewMemory(authority, actor, scope) {
-        return await memoryCatalog.queries.canView({ authority, actor }, scope)
-      },
-    },
-    repoImportOwnerUserId: batchOwnerUserId,
-    redactTaskEventPayload: redactEventPayload,
   })
 
   const composition: PostgresqlAppCompositionInput = Object.freeze({

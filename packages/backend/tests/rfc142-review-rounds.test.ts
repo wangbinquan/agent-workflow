@@ -21,7 +21,7 @@ import { dirname, join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Hono } from 'hono'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import {

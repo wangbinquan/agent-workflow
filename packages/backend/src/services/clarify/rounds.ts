@@ -3,4 +3,4 @@
 // commands/queries. Pure clarify decision helpers remain available at their
 // historical import path while callers are cut over.
 
-export * from '@/modules/collaboration/infrastructure/legacySqliteClarifyRounds'
+export * from '@/modules/collaboration/infrastructure/clarifyRounds'

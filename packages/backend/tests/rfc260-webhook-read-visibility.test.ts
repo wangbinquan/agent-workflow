@@ -13,8 +13,8 @@ import { createInMemoryDb } from '../src/db/client'
 import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
-import { createSession } from '../src/auth/sessionStore'
-import { createPat } from '../src/auth/patStore'
+import { createSession } from './helpers/auth/sessionStore'
+import { createPat } from './helpers/auth/patStore'
 import {
   tasks,
   webhookDeliveries,

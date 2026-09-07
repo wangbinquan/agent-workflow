@@ -21,7 +21,7 @@ import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { employeeCaseMembers, employeeCases } from '../src/db/schema'
 import { createApp } from '../src/server'

@@ -6,9 +6,9 @@
 // 9 个方法一一对应、**没有能力缺口**；正典是被转发的那批实现——它们的写事务已经跑在
 // `databaseSessionFor` / `withTaskExecutionWrite` 上（RFC-359 W1-T2a/b/c 合一决定 / 派发 /
 // 快速澄清三条命令链路时就是这么做的），本刀补上剩下的三处 bun:sqlite 独有面：
-//   · `sqliteCollaborationWorkgroupClarify.ts` 的 `dbTxSync` + 同步 `setNodeRunStatusTx`；
-//   · `legacySqliteClarify/service.ts` 的两处同步 `.get()` 与短路 stop 的同步 `withOwnedTaskTx`；
-//   · `legacySqliteReview.ts` 里那一处 defensive park 的同步 `transitionNodeRunStatus`。
+//   · `collaborationWorkgroupClarify.ts` 的 `dbTxSync` + 同步 `setNodeRunStatusTx`；
+//   · `clarify/service.ts` 的两处同步 `.get()` 与短路 stop 的同步 `withOwnedTaskTx`；
+//   · `review.ts` 里那一处 defensive park 的同步 `transitionNodeRunStatus`。
 //
 // 合一顺带抹平的实测差异（2026-09-07 双引擎对拍）：PG 那份把 cross-clarify 短路的诊断标签写成
 // `'cross-clarify-stop'`，SQLite 侧是 `'cross-clarify-persistent-stop'`；统一取后者。
@@ -21,22 +21,22 @@ import type { CollaborationRuntimeMechanics } from '../application/ports/collabo
 import {
   dismissOpenClarifyParksForAutonomous,
   isTaskClarifySuppressed,
-} from './sqliteCollaborationWorkgroupClarify'
+} from './collaborationWorkgroupClarify'
 
 export function createCollaborationRuntimeMechanics(
   db: ProviderNeutralDatabase,
 ): CollaborationRuntimeMechanics {
   return Object.freeze({
     async dispatchReviewNode(input) {
-      const { dispatchReviewNode } = await import('./legacySqliteReview')
+      const { dispatchReviewNode } = await import('./review')
       return dispatchReviewNode({ db, ...input })
     },
     async inspectCrossClarify(input) {
-      const { dispatchCrossClarifyNode } = await import('./legacySqliteClarify/service')
+      const { dispatchCrossClarifyNode } = await import('./clarify/service')
       return dispatchCrossClarifyNode({ db, ...input })
     },
     async openAgentClarify(input) {
-      const { createClarifyRound } = await import('./legacySqliteClarify/service')
+      const { createClarifyRound } = await import('./clarify/service')
       const common = {
         db,
         taskId: input.taskId,
@@ -71,11 +71,11 @@ export function createCollaborationRuntimeMechanics(
       return { intermediaryNodeRunId: result.intermediaryNodeRunId }
     },
     async resolveBorrowForNode(input) {
-      const { resolveBorrowForNode } = await import('./legacySqliteTaskQuestionDispatch')
+      const { resolveBorrowForNode } = await import('./taskQuestionDispatch')
       return resolveBorrowForNode(db, input.taskId, input.nodeId, input.iteration, input.definition)
     },
     async buildReviewPromptContext(input) {
-      const { buildReviewPromptContext } = await import('./legacySqliteReview')
+      const { buildReviewPromptContext } = await import('./review')
       return buildReviewPromptContext(
         db,
         input.appHome,
@@ -85,11 +85,11 @@ export function createCollaborationRuntimeMechanics(
       )
     },
     async getNodeClarifyDirective(input) {
-      const { getNodeClarifyDirective } = await import('./legacySqliteTaskClarifyDirective')
+      const { getNodeClarifyDirective } = await import('./taskClarifyDirective')
       return getNodeClarifyDirective(db, input.taskId, input.nodeId, input.shardKey)
     },
     async buildClarifyQueueContext(input) {
-      const { buildClarifyQueueContext } = await import('./legacySqliteClarify/queue')
+      const { buildClarifyQueueContext } = await import('./clarify/queue')
       return buildClarifyQueueContext({ db, ...input })
     },
     isTaskClarifySuppressed: (input) => isTaskClarifySuppressed(db, input),

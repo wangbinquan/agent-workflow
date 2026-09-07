@@ -197,10 +197,10 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
   test('taskQuestionDispatch 第四变体删除，改共享谓词', () => {
     const facade = read('packages/backend/src/services/taskQuestionDispatch.ts')
     const implementation = read(
-      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts',
     )
     expect(facade).toContain(
-      "export * from '@/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch'",
+      "export * from '@/modules/collaboration/infrastructure/taskQuestionDispatch'",
     )
     expect(implementation).not.toMatch(/function isChannelEdge\(/)
     expect(implementation).toContain('isClarifyChannelEdge')

@@ -35,7 +35,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   actionTemplates,

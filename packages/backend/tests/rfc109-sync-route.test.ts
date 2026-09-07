@@ -13,7 +13,7 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createSession } from '../src/auth/sessionStore'
+import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskCollaborators, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'

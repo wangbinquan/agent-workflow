@@ -14,10 +14,10 @@ import type {
  * （它的 `db` 就是 `ProviderNeutralDatabase`）；`DbClient` 是这条链上唯一残留的引擎断言，
  * 而它在 PostgreSQL 上照样跑：`services/task.ts` 的 `createTaskDriveCoordinator` 把
  * `gateContinuationPreDrive` 默认成 `createSqliteGateContinuationPreDriveStep(...)`，
- * 五个 drive 入口没有一个注入替代品，PG daemon 走的也是这一份。名字里的 `sqlite`
- * 因此名不副实——改名会牵动 provider 命名账本，留给后续刀口。
+ * 五个 drive 入口没有一个注入替代品，PG daemon 走的也是这一份。
+ * RFC-359 W12：实现与调用方统一改为中立名称。
  */
-export function createSqliteClarifyContinuationConvergence(input: {
+export function createClarifyContinuationConvergence(input: {
   readonly db: ProviderNeutralDatabase
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): ClarifyContinuationConvergence {

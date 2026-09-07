@@ -249,7 +249,7 @@ describe('RFC-247 D2 — the purpose gate does not fire on its own channel', () 
     // and this proves both doors read the field the way they should.
     const h = await harness()
     const app = createApp(h.deps)
-    const { createPat } = await import('../src/auth/patStore')
+    const { createPat } = await import('./helpers/auth/patStore')
     const { token } = await createPat({
       db: h.db,
       userId: h.userId,
