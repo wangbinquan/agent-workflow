@@ -21,10 +21,7 @@
       "file": "scripts/depcheck.ts",
       "symbol": "KNOWN_VIOLATIONS",
       "baseline": 17,
-      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。",
-      "allowGrowth": {
-        "why": "RFC-359 W7：+9。合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环，闭合点是 `nodeRunLifecycleTransition.ts` → `@/services/lifecycle`（三处 legacy 站点从同步 `setNodeRunStatus` 切到中立 `setNodeRunStatusTx` 所致）。已把这三处改成经 `@/services/taskExecutionParticipants` 的 exact public 合同取用（RFC-294 方向，与同批 `createTerminalMaintenanceStore` 同形），但 re-export 只挪边不消环。**根治是把那两个中立异步孪生下沉到 `platform/persistence/`**——它同时是同步事务面第二批（`taskLifecycle.ts` 4 处全钉死在这两个符号上）的前置，已记为 W8。九条各自带 why + removeWhen，指向同一个工作包。"
-      }
+      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。 RFC-359 W7 上涨 +9（31 → 17 的口径变更后基线为 17）：合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环，闭合点是 `nodeRunLifecycleTransition.ts` → `@/services/lifecycle`（三处 legacy 站点从同步 `setNodeRunStatus` 切到中立 `setNodeRunStatusTx` 所致）。已改成经 `@/services/taskExecutionParticipants` 的 exact public 合同取用（RFC-294 方向），但 re-export 只挪边不消环；根治是把那两个中立异步孪生下沉到 `platform/persistence/`，已记为 W8，九条各自的 why + removeWhen 都指向该工作包。"
     },
     {
       "id": "frontend-form-error-allowlist",
@@ -716,8 +713,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4829,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4838,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W7 收尾：**不是真涨，是上一提的基线被测低了 9**。上一提（a630ef625）的普查跑在共享工作树上，当时别的 session 已经删掉了一批 provider 适配器文件但尚未提交，于是那次普查按「删掉之后」的树计数，写进账本的 4829 低于该 commit 的真值。本次按 `docs/dev-gotchas.md` §「重采 architecture/ 别在共享工作树上跑」的姿势，在 `git archive HEAD` 的只读导出上重采得 4838。**已实测证实**：对 a630ef625 自己做一次同样的干净重采，得到的也是 4838——即 4838 是这两个 commit 共同的真值，4829 是污染读数。本许可是一次性的，下一提必须删除。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -756,7 +756,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:55f876a7b5e58416c1a424ca5b741dc0e466612c9c9db0173a562b434b50ef08",
+    "sourceDigest": "sha256:d80a97476480b87ec69227f1e2ac4ca127b6629fb9642d63814c29edc19a50f5",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -769,8 +769,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5197f64d2fbcb6dc05eadf3d2ed27b4b6e99545a",
-    "contentDigest": "sha256:e8c972ef39a9163894d042bb35cdb9259e80fb99918866dbfe5c0894f125b62d",
+    "currentSnapshotSha": "77971ceeec99e068f2585a741eaf991b7caa0de5",
+    "contentDigest": "sha256:6e468726e4bae1f94450ce8e365e3e3c3784f73ee6ddaf5729c54f21f797d165",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

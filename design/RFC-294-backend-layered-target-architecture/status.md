@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:55f876a7b5e58416c1a424ca5b741dc0e466612c9c9db0173a562b434b50ef08`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d80a97476480b87ec69227f1e2ac4ca127b6629fb9642d63814c29edc19a50f5`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -14,7 +14,7 @@
 | `services/` 文件 | 323 |
 | `modules/**` 文件 / 非空 context | 1201 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 2 / 4 |
-| `KNOWN_VIOLATIONS` | 8 |
+| `KNOWN_VIOLATIONS` | 17 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 493 |
@@ -30,7 +30,7 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 4829 |
+| `architectureExceptions` | 4838 |
 | `backgroundJobs` | 349 |
 | `crossContextImports` | 5389 |
 | `facades` | 323 |
@@ -219,7 +219,7 @@
 | legacy-inbound | 1447 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 82 |
-| no-circular | 6 |
+| no-circular | 15 |
 | external-layer-debt | 3 |
 | no-util-to-upper | 2 |
 
@@ -242,6 +242,7 @@
 | W4-E4b | 37 |
 | W4-E3 | 27 |
 | W9-E | 11 |
+| W8 | 9 |
 | W2-D/W3/W5 | 7 |
 | W4-E10 | 3 |
 | W4-E5 | 2 |
