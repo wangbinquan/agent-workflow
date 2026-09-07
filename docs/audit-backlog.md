@@ -4180,3 +4180,31 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 同一台机器上的**相对**耗时，负载被两次测量共同吸收。
 
 **判据**：本条的签名是 `分组回到了 O(k²)：1 万个分片花了 <1xx>ms`，且同用例本机单跑亚毫秒级。
+
+## `rfc338-maintenance-settings` 在 Windows 前端分片上偶发假红（2026-09-07 实撞，未定位）
+
+`packages/frontend/tests/rfc338-maintenance-settings.test.tsx` 的第二条用例
+（`renders current, last, next, progress, backlog, and degraded errors from status API`）在
+`7cbe8f51f` 的 **windows-latest 前端分片 1/3** 上红：`Unable to find an element by:
+[data-testid="maintenance-worker-state"]`，而 dump 出来的 DOM 停在
+`data-testid="maintenance-status-loading"`——即 `/api/maintenance/status` 那条 `useQuery`
+在断言窗口内没有落地。**同一提交是纯文档改动**（`STATE.md` / RFC plan / dev-gotchas），碰不到前端。
+
+**已排除的解释**：不是超时预算太小。`tests/setup.ts:108` 的 `asyncUtilTimeout` 是 5000ms，
+`vitest.config.ts` 的 `testTimeout` 是 30000ms；该用例报的总时长 **17906ms**，减去 findBy 的 5s
+预算，意味着 `renderGc()` 一步就吃掉了约 13s。而同一分片整体只跑了约 3 分钟、2307/2308 通过，
+**runner 不是普遍性慢**——所以这不是 `vitest.config.ts` 里已记录的「病态慢 runner」那一类
+（那次是整个 shard setup 就 223s）。本机连跑 6 次全绿，每次 225ms。
+
+**没有证据之前不动这条用例**：fetch 是 `beforeEach` 里的 `vi.spyOn` 立即 resolve 的，
+`retry: false`、每次 render 新建 `QueryClient`，纸面上没有能卡住的地方；在拿到复现之前
+调高预算或加 `waitFor` 只会把信号盖掉。
+
+**下次再红时要抓的证据**：① `renderGc()` 那 13s 花在哪——嫌疑是 `settings.tsx` 里
+`browserTimezone()` / `isValidIanaTz()` 触发的 ICU 时区枚举在 Windows 上的开销；
+② 那条 query 最终是 pending 还是 error（DOM 里是 `maintenance-status-loading` 还是
+`maintenance-status-error`）；③ `refetchInterval: 5_000` 在 happy-dom 下
+`document.visibilityState` 为 hidden 时是否被暂停，从而让一次被取消的首发请求再也不重试。
+
+**判据**：本条的签名是该用例找不到 `maintenance-worker-state` 且 DOM 停在
+`maintenance-status-loading`。

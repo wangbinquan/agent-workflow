@@ -4489,3 +4489,27 @@ replace 掉、不会再出现，只能挂满 30s 超时。满载 runner 更容�
   正是 `07c7d37b4`（2026-08-28）加规范化时只就地修了 rfc310 那一处、漏掉其余四处留下的，潜伏
   了十天才随 runner 负载显形。收口做法见 `e2e/employee-case-url.ts`：把「等 URL + 取 id」抽成
   一个 helper，规范化形态只写一遍，下次再加 tab 也只有一处要改。
+
+## 改 `db/schema.ts` 不同步重生成 PG 基线 ⇒ **全仓**双引擎用例的 PostgreSQL 分支一起死（2026-09-07 实撞）
+
+`src/db/schema.ts` 的 drizzle 声明是 **PostgreSQL DDL 的唯一来源**（经
+`buildLogicalSchemaContract()` → `postgresqlSchema.ts` 投影）。盘上的
+`packages/backend/db/postgresql-migrations/0000_rfc349_baseline.sql` 与 `meta/_journal.json`
+是它的**已落盘快照**，`verifyPostgresqlMigrationHistory` 每次建库都比一次摘要。
+
+**后果的量级容易被低估**：这条校验是在 `describeEachProvider` 的 `beforeAll` 里跑的，一旦漂移，
+**全仓每一个双引擎用例的 PG 分支都在 `beforeAll` 就抛**——包括与那次 schema 改动毫无关系的用例。
+本次实撞：一个作业往 `schema.ts` 补了索引没重生成基线，另外五个并发作业的 PG 验证全部失效，
+各自排查了很久才定位到不是自己的问题。
+
+**规矩**：
+
+- **改 `db/schema.ts` 的那一步就跑 `bun run db:rfc349-postgresql-schema`**，不要攒到最后。
+  分批补声明时，每批落地当步重生成，别留漂移窗口。
+- 顺带刷新契约文档：`bun run db:rfc349-contract`。
+- 看到 `postgresql-migration-history-drift` 时**先怀疑基线没同步**，不要去改测试、更不要绕过校验
+  （`postgresqlMigrator.ts` 里显式传 `plan` 能跳过这道校验——那是给别的用途的分支，拿它来消红
+  等于把 PG 的 schema 正确性关掉）。
+- 报错消息现在会自己说清「哪一半漂了 + 该跑哪条命令」，由
+  `rfc349-postgresql-migration-history.test.ts` 的 `drift message names which half drifted…`
+  锁住。**别把它改回一句笼统的「does not match」**——那正是这次排查慢的原因。
