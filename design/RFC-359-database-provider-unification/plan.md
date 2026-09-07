@@ -1378,6 +1378,59 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   实测写回 proposal §6。按 D5 不打折。
 - **T22** 退役 `rfc349-dual-provider-predicate-drift`（对象已消失），退役 `dbTxSync`（**C-1**）。
 
+### W5 落地记录（2026-09-07，`e0be514a3` + `604b0a184`）
+
+16 条守卫一次上线，全部只降不升棘轮 + 变异验证，`tests/architecture/` 571 pass / 0 fail。
+账本值全部用 census 的 `ledgerEntryCount` / `corpusFloor` 实算。
+
+| 守卫 | 账本 | 值 |
+| --- | --- | --- |
+| T17 provider 命名文件位置 | `PROVIDER_NAMED_FILE_DEBT` / `..._DIRECTORY_DEBT` | 136 / 2 |
+| T18 裸 `db.transaction(` | `BARE_TRANSACTION_DEBT` | 17 |
+| T19 provider 条件分叉 | `PROVIDER_BRANCH_DEBT` / `..._RELOCATION_DEBT` | 16 / 1 |
+| T19b 组合根占位 | `COMPOSITION_ROOT_PLACEHOLDER_DEBT` | 13 |
+| T19c 启动序列 | `PROVIDER_EXECUTION_BRANCH_DEBT` | 1 |
+| T19d 覆盖对等 | `COVERAGE_PARITY_LEDGER` / `INVERTED_PAIRS` | 26 / 6 |
+| T19f 测试写死引擎 | `TEST_ENGINE_HARDCODING_DEBT` | 821 |
+| T19f 顶层捕获表列 | `TOPLEVEL_COLUMN_CAPTURE_DEBT` | 8 文件 / 83 处 |
+| T19g schema 契约对账 | `SQLITE_ONLY_PROTECTIONS` 等三份 | 149 / 7 / 4 |
+| T20 方言完备性 | `RAW_DIALECT_DEBT` / `UNSHIMMED_FUNCTION_DEBT` | 12 / 0 |
+| W6-T28 读—改—写不加锁 | `READ_MODIFY_WRITE_DEBT` | 9 文件 / 20 处 |
+| 判据缺口账本（新） | `DUAL_ENGINE_PREDICATE_GAPS` | 17 |
+| 成对适配器对拍（新） | `PROVIDER_PAIR_CONFORMANCE_LEDGER` | 26 对 / 25 未验证 |
+| 组合根被测试构造（新） | `PROVIDER_RUNTIME_UNEXERCISED` | 70 / 102 |
+| 死适配器（新） | `DEAD_PROVIDER_ADAPTER_DEBT` | 18 |
+| 工件格式可移植性（新） | `ARTIFACT_FORMAT_PORTABILITY` | 12 格真值表 |
+
+**已知缺口**：RFC-317 的中央高水位网按符号名只认 `*_DEBT`，所以 `SQLITE_ONLY_PROTECTIONS`(149)、
+`PROVIDER_RUNTIME_UNEXERCISED`(70)、`DUAL_ENGINE_PREDICATE_GAPS`(17)、`COVERAGE_PARITY_LEDGER`(26)
+**不在中央网里**——各自文件内有逐字相等断言、并非无人看守，但少了跨守卫统一视图。统一改名进网是独立一刀。
+
+### 计划勘误（本轮实测推翻，动手前先读这一节）
+
+**① T21b 的 `prepareSoakDataset` 断言：字面属实，危害不成立，不要改。**
+计划写「它把在飞任务归一成 done」。那两条 UPDATE 确实存在（`tests/helpers/rfc349PostgresqlHostedEvidence.ts:1143-1172`），
+但改的是 `scripts/perf-seed.ts` 秒级前刚播的**合成 fixture 行**——唯一调用点紧跟 `daemon.stop()` 之后，
+库里没有任何进程跑过的行，那条 lane 也从不起任务，报告里没有一条判据依赖任务状态。
+**而且删掉它换不来「在飞状态」**：daemon 一启动，boot recovery 就把同一批行逐行 reap 成 `interrupted`
+（weekly 档约 6 万 runs、full 档约 60 万），可能顶穿 300s/600s 的 ready 超时——姊妹脚本
+`scripts/rfc338-maintenance-soak.ts:246-251` 已经写过这个理由。
+
+**② T22 前半「`rfc349-dual-provider-predicate-drift` 对象已消失」：不成立，现在不可执行。**
+26 对适配器仍在盘上，该守卫今天跑绿（在扫，不是空转），且它自己写着退役条件——「W5-T17 棘轮到 0 时
+随之退役」，而 T17 今天是 136 行。**它要等 W4 收敛完才能退役**，不是现在。
+
+**③ T19f「存量逐条改为函数内取列后钉 0」把 0 当成了起点。** 实测上线当天存量就是 83 处 / 8 文件
+（RFC-311 列表页投影常量那一轮留下的）。「钉 0」是终点。
+
+### T21b 的正确落点（调研结论，未实施）
+
+push CI 的四个 ubuntu 分片**早就带真 PostgreSQL**（W5-T21 已落），所以这条守卫**一行 YAML 都不用改**——
+缺的是一个 `describeEachProvider` 后端集成测试。真正的代价在测试本身：唯一的驱动 harness
+`tests/helpers/taskExecutionTestTopology.ts` 整个是 SQLite 硬编码，PG 侧要另攒一份端口束（约 150–250 行）。
+而且**全仓今天没有任何测试真的在 PostgreSQL 上跑过执行链**，这条守卫大概率会当场挖出真缺陷——
+它是一个 RFC 子任务的体量，不是 CI 接线。
+
 ## 5b. W6 —— PostgreSQL 最高性能（design §10）
 
 - **T23** DDL 投影：JSON 列在 PG 上渲染为 JSONB；热查询列建 GIN（D6，存量 PG 部署一次迁移）。

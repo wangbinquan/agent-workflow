@@ -4424,6 +4424,33 @@ macOS runner 跑 3800+ 后端用例时负载很重，`pumpUntil exhausted` / 60s
 **75ms 通过**、本地整文件 1.79s。700 倍的差距不可能来自代码，判为 runner 负载，`gh run rerun --failed`
 后转绿。反过来说：**如果 ubuntu 那边也红，就不许当 flaky 处理**。
 
+## `architecture/guard-manifest.json` 是**手工维护的种子**，不是普查产物（2026-09-07 实撞，四个 agent 同时判错）
+
+新增架构守卫后 `rfc317-guard-corpus-floor` / `rfc317-guard-negative-fixture` /「守卫清单两向钉死」会红，
+提示「不在账本里」。很自然的推论是「跑一次 `bun run architecture:write` 就会自动收录」——**错的**。
+
+`scripts/architecture-census.ts:143` 对该文件做的是 `upsertCanonicalGuard(readSeedJson(...))`，而
+`:94-123` 里那个函数**只 upsert 一条自指条目**（`rfc294-canonical-manifests`），其余原样透传、只重排序。
+也就是说这份清单是**手工种子**：新守卫必须自己写进去，普查只负责保持它有序并自我登记。
+
+对比 `architecture/ledger-baselines.json`：那份的**手写条目会被普查保留**（实测 14 条全留），所以两份
+文件的心智模型不一样，别混。
+
+**怎么写对**：四个被元守卫两向钉死的字段不要估，用 census 自己的函数实算，否则填错照样红：
+
+```ts
+import { isCorpusScanner, corpusFloor, assertsAbsence, negativeFixtureAssertions, sourceUnit } from './tests/architecture/census'
+const unit = sourceUnit(relPath, text)
+// corpusScanner / minCorpusFiles / assertsAbsence / negativeFixture 全部由它们算
+```
+
+实测同一批 16 条守卫算出来的 `minCorpusFiles` 从 20 到 3001 都有——那是各自语料面的真实差异，
+拍脑袋填一个统一值必然对不上。`id` 取文件名去掉 `.test.ts`。
+
+**为什么值得单记一条**：2026-09-07 这一轮并行落 16 条守卫，**四个独立 agent 各自在报告里写了
+「等一次 `architecture:write` 就会对齐」**——同一个错误推论出现四次，说明它非常自然。真跑完普查后
+清单里 W5 守卫仍是 0 条，五条元守卫照红。
+
 ## 路由挂载后「把默认 search 参数规范化进 URL」⇒ e2e 里用 `$` 锚死裸路径的 `waitForURL` 是竞态（2026-09-07 实撞，主干红）
 
 `page.waitForURL(/…\/[0-9A-Z]+$/)` 看着人畜无害，但只要目标路由在挂载后把一个默认 search
