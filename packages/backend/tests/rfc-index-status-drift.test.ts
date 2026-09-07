@@ -153,6 +153,9 @@ describe('RFC 索引状态漂移守卫', () => {
     // 一改成表格就落进本守卫的被测面（`rows.size > 0`），必须显式登记——同 RFC-329 的规则，
     // 缺口是 0 也不能漏登记。
     'RFC-351-sqlite-write-transaction-immediate-cutover': 0,
+    // RFC-359 W8：proposal §7 的 12 条 AC 与 plan §0b 的验收记分板同批落地，逐条都有证据行，
+    // 缺口为 0。**缺口为 0 也必须登记**——本条按「measured 与台账逐字相等」判定。
+    'RFC-359-database-provider-unification': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

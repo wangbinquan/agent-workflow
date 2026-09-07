@@ -1658,6 +1658,45 @@ defense-in-depth but are no longer written here」。全 `src` 扫过一遍，�
 `insert(tasks)` 的三个 lineage 列。②更符合「面向代码最合理」：安全网写在守卫里对两个引擎同时生效，
 而触发器天然只能属于一个方言。
 
+### W8 交接：两条「该合但今天不该合」的对，各有确切阻塞点
+
+**`ResourcePackageMaintenance` 的 `JournalPort`——几乎逐字重复，但合一不是白送。**
+`list()` 11 行两侧逐字相同，`settleFailed` 的差别只在事务包装——而**那层包装不是冗余**：
+SQLite 的 `dbTxSync` 兜的是 `foreignExplicitTransactionOpen`（`db/txSync.ts:34-38`：bun:sqlite
+单连接下，一笔裸写会**静默落进别人的显式事务**并随它一起回滚）；PG 每笔事务独占预留连接，
+不存在这个形态。合一要走中立事务原语，那会给 PG 再套一层 BEGIN/COMMIT，并改动
+`rfc349-dual-provider-behavior-oracle.test.ts` 里脚本化的语句流水。
+**结论**：合一应跟着同模块 `ArtifactRecoveryPort` 的桥接**一起做**，不要单独动。
+（`ArtifactRecoveryPort` 本身是机制本质不同——两套互不认识的落盘工件格式，已由
+`rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵钉住，不重复造对拍。）
+
+**`LogicalSource`——读出面该合，冻结围栏不该合。**
+读出引擎 267 vs 283 行、近 1:1，`readChunk` 的 limit 上下界 / cursor 校验 / `encodeLogicalRow`
+出口是同一份逻辑写了两遍。但**冻结围栏是两台机器**：SQLite 用 `PRAGMA data_version` /
+`page_count` / 文件字节做**文件级代号**，PG 用 `database_generations` 活跃代 + `REPEATABLE READ`
+快照。这一半按能力差异入账，不合。
+注：那 432 行的 `sqliteLogicalSourceProtocol/Worker/WorkerSupervisor` 是 Worker **传输层**
+（postMessage 协议 + 监督器），**不是「真实现在别处」**——薄壳求和时别把它算成隐藏实现。
+
+**一个留给合一那一刀的活标本**：`sqliteResourcePackageMaintenance.ts:201-205` 读
+`skillOperations` **漏了 `await`**。今天无害（drizzle bun-sqlite 的 `.get()` 是同步的），
+但一旦这段被合成中立实现，PG 上 `operation` 会是一个 Promise、`operation?.active === 1`
+**恒为 false**，于是静默改走告警分支。合一时先修它。
+
+### 一条排序规则的守卫盲区（W8 实测，我的判断被推翻）
+
+原以为「DDL 里的 `COLLATE "C"` 掉了会让两引擎行顺序不同」——**那一层掉不了**：
+实测注释掉 `postgresqlSchema.ts:79` 之后，`verifyPostgresqlMigrationHistory` 在迁移器里就抛
+`postgresql-migration-history-drift`，schema 根本建不起来。
+
+**真正没人守的是另一半**：`postgresqlLogicalSource.readChunk` 里 **`ORDER BY` 子句自己**的排序规则。
+把它换成 locale 排序（列的 DDL 排序规则不变），于是 `WHERE (key) > (cursor)` 按 C 比较、
+`ORDER BY` 按 locale 比较——**两个比较用了不同规则**，keyset 分页当场**漏一行、重一行**
+（实测：`w8src-punct` 整行消失、`w8srcalower` 重复两次）。
+
+一般规律：**keyset 分页的正确性依赖「游标比较」与「排序」用同一套规则**，而这两处在源码里
+往往相隔很远、由不同的东西决定（一个在列 DDL，一个在查询文本）。守住其中一处不等于守住这件事。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；
