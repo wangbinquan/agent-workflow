@@ -18,10 +18,6 @@ export {
   type WorkgroupHostLedgerParticipantFactory,
 } from './workgroupHostLedger'
 export {
-  composePostgresqlNodeRunLifecycleParticipantFactory,
-  type PostgresqlNodeRunLifecycleParticipantFactory,
-} from './nodeRunLifecycle'
-export {
   composeWorkgroupTaskRoomTaskParticipantFactory,
   type WorkgroupTaskRoomClarifyParticipantFactory,
   type WorkgroupTaskRoomTaskParticipantFactory,

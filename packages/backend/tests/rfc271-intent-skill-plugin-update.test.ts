@@ -22,7 +22,7 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { plugins, skills } from '../src/db/schema'
 import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants'
-import { createSqliteResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
+import { createResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/aclReadRepository'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // RFC-355 T7：锚点跟着实现走。这条断言当年打在 `services/intent/applyChangeset.ts` 上，
@@ -84,7 +84,7 @@ async function copyOnlyTargetsFor(
 ) {
   return (
     await resolveIntentApplyResourcePreflight(
-      createSqliteResourceCatalogAclIdentityReadPort(db),
+      createResourceCatalogAclIdentityReadPort(db),
       actor.user.id,
       manifest,
       changeset,

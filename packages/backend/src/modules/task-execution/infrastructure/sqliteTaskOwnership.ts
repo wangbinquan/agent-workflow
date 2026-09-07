@@ -1,9 +1,19 @@
+// RFC-359 W8 —— bun:sqlite 专属的**同步**归属 store。
+//
+// 归属端口本身已经合一（`taskOwnershipPersistence.ts`，一份实现两个引擎共用）。这里剩下的
+// 只为那些签名钉死在 `DbTxSync` 上的参与者与它们的同步调用方服务：
+//   · `withOwnedTaskTx` —— 回调签名是 `(tx: DbTxSync, owned: OwnedTaskTx) => T`，
+//     `platform/persistence/sqlite/taskLifecycle.ts`、`services/task.ts`、
+//     `sqliteTaskExecutionEffect.ts`、`sqliteProcessEffectObserver.ts` 等 8 处生产调用点依赖它同步；
+//   · `revokeExactTx` —— `sqliteSourceTerminationParticipant.ts` / `services/task.ts` 在自己的
+//     同步事务里当参与者调用；
+//   · `claimPendingIntent` —— `taskExecutionModule.claim` → `taskDriverLifecycle.ts` 的同步认领。
+// `releaseAfterStop` / `releaseRecovered` / `revokeOldDaemon` 已随 W8 合一删除：它们唯一的
+// 调用方（合一前的 SQLite 恢复流程与 43 行端口适配器）都没有了。
+
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import {
-  taskExecutionEffectAttempts,
-  taskExecutionEffectFences,
-  taskExecutionEffects,
   taskExecutionIntents,
   taskExecutionMaintenanceMembers,
   taskExecutionOwners,
@@ -11,25 +21,18 @@ import {
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import type { TaskOwnershipStore } from './taskOwnershipTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import { terminalizeTaskExecutionIntentsTx } from './sqliteTerminalizeExecutionIntent'
 import {
-  assertExclusiveDaemonLockProof,
   assertOwnershipToken,
-  assertVerifiedStopProof,
-  assertVerifiedTakeoverProof,
   assertWorkerIdentity,
   createOwnedTaskTx,
   createOwnershipToken,
   decideOwnerTransition,
   ownershipTuple,
   refreshOwnershipToken,
-  type ExclusiveDaemonLockProof,
   type OwnedTaskTx,
   type OwnerSnapshot,
   type OwnershipToken,
   type OwnershipTuple,
-  type VerifiedStopProof,
-  type VerifiedTakeoverProof,
   type WorkerIdentity,
 } from '../domain/ownership'
 
@@ -310,26 +313,6 @@ export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
     return snapshot(row)
   }
 
-  revokeOldDaemon(input: {
-    db: DbClient
-    owner: OwnershipTuple
-    expectedRevision: number
-    lockProof: ExclusiveDaemonLockProof
-    now: number
-  }): OwnerSnapshot {
-    assertExclusiveDaemonLockProof(input.lockProof)
-    if (input.lockProof.daemonGeneration === input.owner.daemonGeneration) {
-      throw new Error('new-daemon revoke requires a successor daemon generation')
-    }
-    return this.revokeExact({
-      db: input.db,
-      owner: input.owner,
-      expectedRevision: input.expectedRevision,
-      now: input.now,
-      recoveryCode: 'daemon-lock-successor',
-    })
-  }
-
   markRecoveryRequired(input: {
     db: DbClient
     token: OwnershipToken
@@ -364,187 +347,6 @@ export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
       throw staleOwner(`task '${input.token.taskId}' recovery transition was fenced`)
     }
     return snapshot(row)
-  }
-
-  releaseAfterStop(input: {
-    db: DbClient
-    token: OwnershipToken
-    intentId: string
-    proof: VerifiedStopProof
-    now: number
-  }): OwnerSnapshot {
-    assertOwnershipToken(input.token)
-    assertVerifiedStopProof(input.proof)
-    if (input.proof.taskId !== input.token.taskId || input.proof.epoch !== input.token.epoch) {
-      throw new Error('stop proof does not match ownership token')
-    }
-    return dbTxSync(input.db, (tx) => {
-      const unresolved = tx
-        .select({ id: taskExecutionEffectAttempts.id })
-        .from(taskExecutionEffectAttempts)
-        .innerJoin(
-          taskExecutionEffects,
-          eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-        )
-        .where(
-          and(
-            eq(taskExecutionEffects.taskId, input.token.taskId),
-            inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-          ),
-        )
-        .get()
-      const activeHold = tx
-        .select({ id: taskExecutionEffectFences.effectAttemptId })
-        .from(taskExecutionEffectFences)
-        .innerJoin(
-          taskExecutionEffectAttempts,
-          eq(taskExecutionEffectAttempts.id, taskExecutionEffectFences.effectAttemptId),
-        )
-        .innerJoin(
-          taskExecutionEffects,
-          eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-        )
-        .where(
-          and(
-            eq(taskExecutionEffects.taskId, input.token.taskId),
-            isNull(taskExecutionEffectFences.releasedAt),
-          ),
-        )
-        .get()
-      // An open effect whose latest attempt is retry-authorized is a durable
-      // continuation point, not an acting writer: its resource holds were
-      // released in the same settlement transaction.  Allow the owner to
-      // yield so the next legitimate continuation can perform the already-
-      // authorized same-generation retry. Prepared/acting/recovery-required
-      // attempts and any surviving hold still block release above/below.
-      if (unresolved !== undefined || activeHold !== undefined) {
-        throw new TaskExecutionError(
-          'task-execution-recovery-required',
-          `task '${input.token.taskId}' still has unresolved effects or resource holds`,
-        )
-      }
-      const row = tx
-        .update(taskExecutionOwners)
-        .set({
-          state: 'released',
-          revision: sql`${taskExecutionOwners.revision} + 1`,
-          recoveryCode: null,
-          recoveryProofDigest: input.proof.evidenceDigest,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.token.taskId),
-            eq(taskExecutionOwners.ownerId, input.token.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.token.epoch),
-            eq(taskExecutionOwners.revision, input.proof.ownerRevision),
-            inArray(taskExecutionOwners.state, ['claimed', 'revoked', 'recovery-required']),
-          ),
-        )
-        .returning()
-        .get()
-      if (row === undefined) throw staleOwner(`task '${input.token.taskId}' release was fenced`)
-      tx.update(taskExecutionIntents)
-        .set({ state: 'completed', completedAt: input.now, updatedAt: input.now })
-        .where(
-          and(
-            eq(taskExecutionIntents.id, input.intentId),
-            eq(taskExecutionIntents.claimedEpoch, input.token.epoch),
-            eq(taskExecutionIntents.state, 'claimed'),
-          ),
-        )
-        .run()
-      return snapshot(row)
-    })
-  }
-
-  releaseRecovered(input: {
-    db: DbClient
-    owner: OwnershipTuple
-    expectedRevision: number
-    proof: VerifiedTakeoverProof
-    now: number
-  }): OwnerSnapshot {
-    assertVerifiedTakeoverProof(input.proof)
-    if (
-      input.proof.taskId !== input.owner.taskId ||
-      input.proof.oldEpoch !== input.owner.epoch ||
-      input.proof.oldOwnerRevision !== input.expectedRevision
-    ) {
-      throw new Error('takeover proof does not match recovered owner')
-    }
-    return dbTxSync(input.db, (tx) => {
-      const unresolved = tx
-        .select({ id: taskExecutionEffectAttempts.id })
-        .from(taskExecutionEffectAttempts)
-        .innerJoin(
-          taskExecutionEffects,
-          eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-        )
-        .where(
-          and(
-            eq(taskExecutionEffects.taskId, input.owner.taskId),
-            inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-          ),
-        )
-        .get()
-      const activeHold = tx
-        .select({ id: taskExecutionEffectFences.effectAttemptId })
-        .from(taskExecutionEffectFences)
-        .innerJoin(
-          taskExecutionEffectAttempts,
-          eq(taskExecutionEffectAttempts.id, taskExecutionEffectFences.effectAttemptId),
-        )
-        .innerJoin(
-          taskExecutionEffects,
-          eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-        )
-        .where(
-          and(
-            eq(taskExecutionEffects.taskId, input.owner.taskId),
-            isNull(taskExecutionEffectFences.releasedAt),
-          ),
-        )
-        .get()
-      if (unresolved !== undefined || activeHold !== undefined) {
-        throw new TaskExecutionError(
-          'task-execution-recovery-required',
-          `task '${input.owner.taskId}' still has unresolved effects`,
-        )
-      }
-      terminalizeTaskExecutionIntentsTx({
-        tx,
-        taskId: input.owner.taskId,
-        state: 'failed',
-        failureCode: 'daemon-restart-recovered',
-        now: input.now,
-        claimedOwnerEpoch: input.owner.epoch,
-      })
-      const row = tx
-        .update(taskExecutionOwners)
-        .set({
-          state: 'released',
-          revision: input.expectedRevision + 1,
-          recoveryCode: 'daemon-restart-recovered',
-          recoveryProofDigest: input.proof.evidenceDigest,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.owner.taskId),
-            eq(taskExecutionOwners.ownerId, input.owner.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.owner.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.owner.epoch),
-            eq(taskExecutionOwners.revision, input.expectedRevision),
-            inArray(taskExecutionOwners.state, ['revoked', 'recovery-required']),
-          ),
-        )
-        .returning()
-        .get()
-      if (row === undefined) throw staleOwner(`task '${input.owner.taskId}' recovery release lost`)
-      return snapshot(row)
-    })
   }
 
   read(db: DbClient, taskId: string): OwnerSnapshot | null {

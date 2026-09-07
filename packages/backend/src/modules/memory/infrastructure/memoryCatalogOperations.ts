@@ -657,6 +657,11 @@ export function composeMemoryCatalogOperations(input: {
     },
     async promote(id, command, administratorUserId) {
       const committed = await session.transaction(async (tx) => {
+        // 读—改—写：`status === 'candidate'` 的裁决判据、写回的 `version` 与 `tags` 都由这次读
+        // 决定，而 UPDATE 的 where 只有 id。不先锁住候选行，PG 的 READ COMMITTED 下两个管理员
+        // 同时批准 / 拒绝同一条候选会**双双拿到 200**，库里只留后写的那个
+        // （tests/rfc359-w8-t28-lost-update.test.ts L4）。
+        await engineOf(tx).lockAggregateRoot(tx, memories, memories.id, id)
         const rows = await tx.select().from(memories).where(eq(memories.id, id)).limit(1).all()
         const candidate = rows[0]
         if (candidate === undefined)

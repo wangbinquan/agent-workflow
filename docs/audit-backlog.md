@@ -9,19 +9,19 @@
 
 ## 审计报告索引（`design/`）
 
-| 报告                                                                                   | 主题                                | 状态 / 未决                                                                                                                                                                                                                                                   |
-| -------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design/scheduler-audit-2026-06-10.md`                                                 | 调度专项深查                        | 2 P0 + 9 P1；WP-1~10 路线；重构走 RFC                                                                                                                                                                                                                         |
-| `design/task-execution-architecture-audit-2026-08-03.md`                               | 任务执行**架构**审视                | 7 维 + 对抗复核；72 存活 → 12 issue（2 P0）+ 5 根因 + WP-0~10 路线；**WP-0 是一行配置修依赖门禁失明，必须先做**                                                                                                                                               |
-| `design/dedup-audit-2026-06-13.md`                                                     | 全仓重复实现                        | 68 确认 + 4 伪重复；9 处已漂成 bug；路线 §5                                                                                                                                                                                                                   |
-| `design/flag-audit-2026-07-07.md`                                                      | 标志位控流                          | 六大 P0 + ≥12 真 bug + RFC-G1~G10；**§8 有 3 决策点待用户拍板**                                                                                                                                                                                               |
-| `design/frontend-primitive-audit-2026-07-21.md`                                        | 前端公共原语                        | 160 确认 / 91 驳回；头号=三态闸门 + ErrorBanner 缺 onRetry；5-RFC 路线（部分已落 RFC-214）                                                                                                                                                                    |
-| `design/test-guard-audit-2026-07-21/`                                                  | 测试防护缺口                        | 131 缺口 / 9 逃逸机制 / 15 结构守卫；加固批已落 + RFC-212（WS 授权撤销，方案 D）                                                                                                                                                                              |
-| `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md`                      | UX / 功能                           | 见报告                                                                                                                                                                                                                                                        |
-| `design/workgroup-e2e-audit.md`                                                        | 工作组 e2e                          | 见报告                                                                                                                                                                                                                                                        |
-| `design/codex-impl-gate-misc-2026-07-22.md`                                            | Codex 实现门杂项                    | 见报告                                                                                                                                                                                                                                                        |
-| `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决            | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中                                                                                                                                                                            |
-| `design/system-commons-unification-audit-2026-08-12.md`                                | 系统公共功能全局归一审计            | 11 路并行审计；31 新发现 + 9 处登记面失真对账 + 22 条决策台账（D1-D22）；处置=包①随批落地 + RFC-284…289 路线                                                                                                                                                  |
+| 报告                                                                                   | 主题                                | 状态 / 未决                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design/scheduler-audit-2026-06-10.md`                                                 | 调度专项深查                        | 2 P0 + 9 P1；WP-1~10 路线；重构走 RFC                                                                                                                                                                                                                                                                                                 |
+| `design/task-execution-architecture-audit-2026-08-03.md`                               | 任务执行**架构**审视                | 7 维 + 对抗复核；72 存活 → 12 issue（2 P0）+ 5 根因 + WP-0~10 路线；**WP-0 是一行配置修依赖门禁失明，必须先做**                                                                                                                                                                                                                       |
+| `design/dedup-audit-2026-06-13.md`                                                     | 全仓重复实现                        | 68 确认 + 4 伪重复；9 处已漂成 bug；路线 §5                                                                                                                                                                                                                                                                                           |
+| `design/flag-audit-2026-07-07.md`                                                      | 标志位控流                          | 六大 P0 + ≥12 真 bug + RFC-G1~G10；**§8 有 3 决策点待用户拍板**                                                                                                                                                                                                                                                                       |
+| `design/frontend-primitive-audit-2026-07-21.md`                                        | 前端公共原语                        | 160 确认 / 91 驳回；头号=三态闸门 + ErrorBanner 缺 onRetry；5-RFC 路线（部分已落 RFC-214）                                                                                                                                                                                                                                            |
+| `design/test-guard-audit-2026-07-21/`                                                  | 测试防护缺口                        | 131 缺口 / 9 逃逸机制 / 15 结构守卫；加固批已落 + RFC-212（WS 授权撤销，方案 D）                                                                                                                                                                                                                                                      |
+| `design/ux-audit.md` · `design/ux-functional-audit-2026-07-16.md`                      | UX / 功能                           | 见报告                                                                                                                                                                                                                                                                                                                                |
+| `design/workgroup-e2e-audit.md`                                                        | 工作组 e2e                          | 见报告                                                                                                                                                                                                                                                                                                                                |
+| `design/codex-impl-gate-misc-2026-07-22.md`                                            | Codex 实现门杂项                    | 见报告                                                                                                                                                                                                                                                                                                                                |
+| `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决            | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中                                                                                                                                                                                                                                                    |
+| `design/system-commons-unification-audit-2026-08-12.md`                                | 系统公共功能全局归一审计            | 11 路并行审计；31 新发现 + 9 处登记面失真对账 + 22 条决策台账（D1-D22）；处置=包①随批落地 + RFC-284…289 路线                                                                                                                                                                                                                          |
 | `design/dual-provider-parity-audit-2026-09-04.md`                                      | 双 provider 语义对账（SQLite ↔ PG） | 153 对全覆盖；**7 P0**——**已端到端实证：真 PostgreSQL 上每个任务在铸出任何 node_run 之前必 failed**（P0-7 延迟提问自动派发子系统在 PG 未实现、占位符运行时抛错；SQLite 对照组正常）+ ~28 P1 + ~21 P2 + 5 存疑；其中 6 条已由 RFC-357 PR-3 修复，**~49 条待处置**；底座层 13 对零缺陷；**workgroupTurns 两套引擎未对拍，建议单独一轮** |
 
 ## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
@@ -4241,6 +4241,37 @@ tests/rfc349-rest-launch-ownership.test.ts` → 4 pass 0 fail）；把本轮新�
 
 **判据**：本条的签名是上面 13 个 `<文件>|<常量>` 不在 `architecture/ledger-baselines.json` 里、
 也不在 `NOT_A_LEDGER` 里。
+
+### 已收口（2026-09-07，RFC-359 W7 第二波）——判据 C + 逐条登记
+
+上面 13 处**已全部入网**，做法是「登记 + 补判据」两件一起：
+
+- **登记**：13 处 + 判据 C 上线时**新查出来的**第 14 处（`rfc331-task-execution-topology.test.ts`
+  的 `REGISTERED_PREEXISTING_DEEP_IMPORTS`，存量跨模块深 import 的在册清单，人工清单里没有它）
+  逐条进 `architecture/ledger-baselines.json`。
+- **判据 C**（`ledgerShapedSymbols` 的目录外分支，与 A 取并集）：顶层「一批同形条目」的常量，
+  被等值断言、声明后不再就地改动，且同一条断言的**另一侧**取自**仓库锚点**
+  （`import.meta.dir(name)` / `__dirname` …，沿声明与扫描累加器做一次不动点传播）。
+
+**为什么这次能上**：上面担心的「探测器又是一张词汇表」是真的，但那是因为它想认「**怎么**读仓库」
+（`readdirSync` / `listSourceFiles` / `migrateSqlite` / `spawnSync('git')` …——必然漏词）。判据 C 改认
+「**从哪儿**读起」：一个测试要谈论仓库自己的存量，就必须先把自己在仓库里的位置变成一条路径，而
+路径的起点只有那几种写法，且值从锚点流到断言是可追的。这与 RFC-349 `postgresqlSurface.ts` 把
+「文件名前缀」换成「类型可达」是同一个动作。
+
+**实测数字**（外部语料 ~2900 个文件）：判据 B 直接外推 = 152 个未登记（139 个是夹具，不可维护）；
+加「另一侧取自仓库锚点」降到 27；再加「一批同形条目」（对象字面量须按数据键或值本身是集合——
+`{ kind: 'ok', summary: '', message: '' }` 是一条领域记录、不是一批条目）降到 **16**，其中 12 处是
+上面那份人工清单、4 处是新暴露的。4 处逐条判定：`REGISTERED_PREEXISTING_DEEP_IMPORTS` 是真债
+（已登记），`intent-teaching-registry` 的三条 `*_BASELINE` 是**双向**漂移基线（文件头注释自己写着
+「drift is visible in either direction」，只降不升会在正常演进时假红）、`rfc326-mcp-review-tools` 的
+`READ_TOOLS` 走 `expect.arrayContaining` 部分匹配，四条进 `NOT_A_LEDGER`。
+
+**已知残留**（两条，都是「漏」不是「误判」，与收口前相比不会更差）：
+① `OVERLAY_FAMILY_OWNERS` 对账的是**另一份账本的投影**而不是扫描结果本身，判据 C 认不出，
+靠逐条登记入网；② 锚点住在被 import 的 helper 里的守卫认不出（判据 C 是纯文本判据，不解析
+import、不碰磁盘，以便扫描与自证共用同一份实现）。
+判据 C 在守卫目录内**一条都不多认**（C ⊆ B，实测 0 条），目录内口径完全没动。
 
 ## PostgreSQL 连接池饥饿会**挂死**：并发扇出宽于 `poolMax` 时排队的查询永不返回（RFC-359 W6 实撞）
 

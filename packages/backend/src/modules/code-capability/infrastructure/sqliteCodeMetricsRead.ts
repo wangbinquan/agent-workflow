@@ -1,6 +1,6 @@
 // RFC-349 — SQLite rows behind the shared code metrics projection.
 
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm'
+import { and, count, eq, gte, isNotNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { codeFindings, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import type { CodeMetricsReadPort } from '../application/ports/codeMetricsRead'
@@ -24,7 +24,13 @@ export function createSqliteCodeMetricsRead(db: DbClient): CodeMetricsReadPort {
           capability: codeWorkItems.capability,
           outcome: codeWorkRounds.outcome,
           endedAt: codeWorkRounds.endedAt,
-          n: sql<number>`count(*)`,
+          // RFC-359 W8 — drizzle's `count()` carries `.mapWith(Number)`; the
+          // bare ``sql<number>`count(*)` `` this replaces carried only the TYPE.
+          // SQLite's driver happens to hand back a JS number so the lie was
+          // invisible here, but PostgreSQL returns `count(*)` as bigint, i.e. a
+          // STRING — and the projection adds these (`counts.rounds += row.n`),
+          // so the /code metrics panel rendered `rounds: "021"` instead of 3.
+          n: count(),
         })
         .from(codeWorkRounds)
         .innerJoin(codeWorkItems, eq(codeWorkRounds.workItemId, codeWorkItems.id))

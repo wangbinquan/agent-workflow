@@ -80,6 +80,7 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
       repoId: REPO,
       capability: 'mr-review',
       endpointId: ENDPOINT,
+      provider: 'gitlab',
       templateId: over.templateId === undefined ? 'binding-1' : over.templateId,
       enabled: true,
     })
@@ -162,6 +163,7 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
       repoId: REPO,
       capability: 'ci-fix',
       endpointId: ENDPOINT,
+      provider: 'gitlab',
       templateId: 'binding-1',
       enabled: true,
     })
@@ -185,6 +187,7 @@ describe('RFC-304 — facts feed the verdict', () => {
       repoId: 'never-configured',
       capability: 'mr-review',
       endpointId: 'ep-none',
+      provider: 'gitlab',
       templateId: null,
       enabled: true,
     })
@@ -204,6 +207,7 @@ describe('RFC-304 — facts feed the verdict', () => {
       repoId: 'never-configured',
       capability: 'mr-review',
       endpointId: 'ep-none',
+      provider: 'gitlab',
       templateId: null,
       enabled: false,
     })

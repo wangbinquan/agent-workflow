@@ -2564,7 +2564,14 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'VerifiedStopProofOrExactControlTuple',
     }
   }
-  if (/sqliteTaskOwnership|sqliteTaskExecutionEffect|processEffectObserver/.test(value)) {
+  // RFC-359 W8：归属端口合一成 `taskOwnershipPersistence.ts`（两引擎共用），认领 / 心跳这两个
+  // worker-epoch 写点跟着搬家；同文件的 revoke / markRecoveryRequired / releaseAfterStop /
+  // releaseRecovered 仍由上面的终止控制 / 恢复证明两条规则先行认领。
+  if (
+    /sqliteTaskOwnership|taskOwnershipPersistence|sqliteTaskExecutionEffect|processEffectObserver/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'worker-epoch',
       controlSubtype: null,
@@ -2726,7 +2733,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskExecutionEffectPersistence|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)|nodeRunMintParticipant|humanGateTaskTransition|workspaceRollbackEffect|nodeRunLifecycleTransition|ownedTaskExecution|wrapperRunPersistence|nodeRunRuntimePersistence|schedulerCompletionPersistence|runtimeSessionCapturePersistence|gateContinuationPreDrivePersistence|mergeStateLifecyclePersistence|taskEngineApplicationPersistence|nodeExecutionPersistence|nodeRunLifecyclePersistence|workgroupHostLedgerParticipant|runtimeSessionLeaseOperations|humanGateTaskLifecyclePersistence)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)|nodeRunMintParticipant|humanGateTaskTransition|workspaceRollbackEffect|nodeRunLifecycleTransition|ownedTaskExecution|wrapperRunPersistence|nodeRunRuntimePersistence|schedulerCompletionPersistence|runtimeSessionCapturePersistence|gateContinuationPreDrivePersistence|mergeStateLifecyclePersistence|taskEngineApplicationPersistence|taskExecutionEffectPersistence|nodeExecutionPersistence|nodeRunLifecyclePersistence|workgroupHostLedgerParticipant|runtimeSessionLeaseOperations|humanGateTaskLifecyclePersistence)/.test(
       value,
     )
   ) {

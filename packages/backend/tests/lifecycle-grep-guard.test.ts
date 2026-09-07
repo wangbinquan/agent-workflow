@@ -177,7 +177,9 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts': 1,
   // RFC-359 W1-T2c：node_run 状态 CAS 的一份中立事务内内核（setNodeRunStatusTx / transitionNodeRunStatusTx）。
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts': 2,
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts': 1,
+  // RFC-359 W8：code-host 恢复的 node_run 投影随成对适配器合一收进两引擎共用的清算模块
+  // （此前 PG 侧在 postgresqlTaskExecutionRecovery.ts、SQLite 侧在 onAppliedTx 回调里各写一份）。
+  'modules/task-execution/infrastructure/effectQuiescence.ts': 1,
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
 }
 
@@ -186,7 +188,7 @@ const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
+  'modules/task-execution/infrastructure/effectQuiescence.ts',
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
 ])
 

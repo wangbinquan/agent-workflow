@@ -769,7 +769,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-null-ordering-parity.test.ts: 1',
   'rfc349-owner-identity-provider.test.ts: 1',
   'rfc349-postgresql-daemon-system-identity.test.ts: 1',
-  'rfc349-postgresql-logical-migration.integration.test.ts: 2',
+  'rfc349-postgresql-logical-migration.integration.test.ts: 1',
   'rfc349-provider-search-case-parity.test.ts: 1',
   'rfc349-repository-workspace-provider.test.ts: 2',
   'rfc349-rest-launch-ownership.test.ts: 1',
@@ -778,7 +778,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-safety-backup-off-thread-verify.test.ts: 1',
   'rfc349-source-control-provider-adapters.test.ts: 2',
   'rfc349-sqlite-logical-source.test.ts: 3',
-  'rfc349-sqlite-logical-target.test.ts: 1',
   'rfc349-sqlite-migration-compatibility.test.ts: 2',
   'rfc349-task-catalog-facets-ignore-view.test.ts: 1',
   'rfc349-task-execution-provider-adapters.test.ts: 3',
@@ -808,6 +807,13 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-engine-capabilities.test.ts: 1',
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
+  // RFC-359 W8：这一格**不是**本守卫要防的那种债，但照样入账，因为判据是纯文本、不该为它开洞。
+  // `rfc359-w8-logical-source-conformance.test.ts` 整份判据都跑在 `describeEachProvider` 里
+  // （两个引擎各一遍）；这条 `new Database(` 在它 SQLite 能力分支的**里面**——`openSqliteLogicalSource`
+  // 按**路径**开只读连接，而「冻结窗漏进一个写手、围栏必须点名」这条判据非得有第二条写连接不可，
+  // PostgreSQL 那一支根本没有「文件」这个概念（它的围栏守的是活跃生成代）。
+  // 用别名 / 动态 import 把它藏过文本判据是本文件注释亲口点名的绕法，所以宁可占一格。
+  'rfc359-w8-logical-source-conformance.test.ts: 1',
   'routes-clarify.test.ts: 1',
   'routes-cross-clarify.test.ts: 1',
   'routes-inventory.test.ts: 1',

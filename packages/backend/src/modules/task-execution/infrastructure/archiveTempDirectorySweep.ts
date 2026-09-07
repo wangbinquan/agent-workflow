@@ -1,6 +1,6 @@
 // RFC-359 W3-T15-B —— 归档 `.tmp-*` 残留目录的收尾：纯文件系统，一份实现，两个 provider 的归档
-// 恢复都调它（SQLite `services/taskArchive.ts` 的 `recoverInterruptedArchives` 与 PostgreSQL 的
-// `createPostgresqlTaskArchiveMaintenanceCommand().recover`）。
+// 恢复都调它（RFC-359 W8-A 合一后的唯一调用点是
+// `taskArchiveMaintenanceCommand.ts` 的 `createDrizzleTaskArchiveMaintenanceCommand().recover`）。
 //
 // 规则（RFC-311 crash branch B）：RFC-328 认领已经接管的根不碰；其余 `.tmp-{rootTaskId}`——
 //   · 任务行还在库里 ⇒ 崩在删库之前：先把挪走的 runs / logs 目录放回原处，全部放回才丢弃 tmp，下轮重做；

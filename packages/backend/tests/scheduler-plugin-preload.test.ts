@@ -11,10 +11,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import {
-  createSqliteLegacyAgentDependencyLookup,
-  resolveInjection,
-} from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -74,7 +72,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins).toEqual([])
@@ -86,7 +84,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-root'])
@@ -106,7 +104,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-extra', 'p-root', 'p-leaf'])
@@ -122,7 +120,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-root'])
@@ -139,7 +137,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(result).toMatchObject({ kind: 'failed', message: 'plugin-not-found' })
   })

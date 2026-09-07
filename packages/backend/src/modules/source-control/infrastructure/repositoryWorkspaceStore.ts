@@ -1,7 +1,12 @@
 // RFC-359 W4-B6 —— 仓库工作区存储：一份实现，两个 provider 共用。
 // 仓库组的图版本核对 + 改写在统一事务里做，PG 侧原本的 `LOCK TABLE … SHARE ROW EXCLUSIVE` 改为引擎能力矩阵的
 // 事务级 advisory lock（所有仓库组写入都经本存储，写者之间互斥即等价；SQLite 单写者下 no-op）；
-// 聚合的索引提示与凭据擦除后的存储回收也走能力矩阵。
+// 凭据擦除后的存储回收也走能力矩阵。
+//
+// RFC-359 W8-T26：facets 聚合原本靠 `engine.indexHint()` 在 SQLite 侧渲染 `INDEXED BY` 压住
+// 一个逐行相关子查询，PostgreSQL 无对应语法只能硬吃。改成「每格一条标量子查询、`exists` 回到
+// WHERE 里」（形状与实测见 `repositoryWorkspaceSqlStore.referencedFacetCounts`）之后两个引擎
+// 各自都能上提成 semi/anti join，索引提示随之退场——两个引擎都自选到了覆盖索引。
 
 import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm'
 
@@ -37,7 +42,6 @@ import {
 const REPOSITORY_GROUP_GRAPH_LOCK = 'source-control:repository-groups'
 
 function executor(db: ProviderNeutralDatabase): RepositoryWorkspaceSqlExecutor {
-  const engine = engineOf(db)
   return {
     async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
       return (await db.all(query)) as readonly T[]
@@ -46,18 +50,32 @@ function executor(db: ProviderNeutralDatabase): RepositoryWorkspaceSqlExecutor {
       return affectedRows(await db.run(query))
     },
     async cachedRepoFacets(input) {
+      // 每格一条标量子查询：`exists` 回到 WHERE 子句里，两个 planner 都会把它上提成
+      // semi/anti join；外层是一行常量，所以每格只求值一次。为什么不是一次聚合扫描、
+      // 也不是预聚合 + LEFT JOIN，见 `repositoryWorkspaceSqlStore.referencedFacetCounts`。
       const rows = await db.all<{
         all_count: number
-        referenced_count: number
+        explicit_count: number
+        legacy_count: number
+        scheduled_count: number
         attention_count: number
       }>(sql`
         SELECT
-          count(*) AS all_count,
-          sum(case when ${input.referenced} then 1 else 0 end) AS referenced_count,
-          sum(case when ${input.attention} then 1 else 0 end) AS attention_count
-        FROM ${cachedRepos} ${engine.indexHint('idx_cached_repos_fetched_id')}
+          (SELECT count(*) FROM ${cachedRepos}) AS all_count,
+          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.explicit}) AS explicit_count,
+          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.legacyOnly}) AS legacy_count,
+          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.scheduledOnly}) AS scheduled_count,
+          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.attention}) AS attention_count
       `)
-      return rows[0] ?? { all_count: 0, referenced_count: 0, attention_count: 0 }
+      return (
+        rows[0] ?? {
+          all_count: 0,
+          explicit_count: 0,
+          legacy_count: 0,
+          scheduled_count: 0,
+          attention_count: 0,
+        }
+      )
     },
   }
 }

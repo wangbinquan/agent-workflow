@@ -5,17 +5,14 @@ import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProvid
 import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
-import { PostgresqlTaskOwnershipPersistence } from '../infrastructure/postgresqlTaskOwnershipPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '../infrastructure/taskExecutionIntentPersistence'
-import { SqliteTaskOwnershipPersistence } from '../infrastructure/sqliteTaskOwnershipPersistence'
+import { DrizzleTaskOwnershipPersistence } from '../infrastructure/taskOwnershipPersistence'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
-import { SqliteTaskExecutionEffectPersistence } from '../infrastructure/sqliteTaskExecutionEffectPersistence'
-import { PostgresqlTaskExecutionEffectPersistence } from '../infrastructure/postgresqlTaskExecutionEffectPersistence'
+import { DrizzleTaskExecutionEffectPersistence } from '../infrastructure/taskExecutionEffectPersistence'
 import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
 import { DrizzleGateContinuationEffectPersistence } from '../infrastructure/gateContinuationEffectPersistence'
 import { DrizzleTaskExecutionIntentTerminalPersistence } from '../infrastructure/taskExecutionIntentTerminalPersistence'
-import { PostgresqlTaskExecutionRecoveryPersistence } from '../infrastructure/postgresqlTaskExecutionRecovery'
-import { SqliteTaskExecutionRecoveryPersistence } from '../infrastructure/sqliteTaskExecutionRecoveryPersistence'
+import { DrizzleTaskExecutionRecoveryPersistence } from '../infrastructure/taskExecutionRecovery'
 import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'
 import { DrizzleTaskEngineApplicationPersistence } from '../infrastructure/taskEngineApplicationPersistence'
 import { DrizzleGateContinuationPreDrivePersistence } from '../infrastructure/gateContinuationPreDrivePersistence'
@@ -159,10 +156,10 @@ function createSqliteRecoveryAdministration(db: DbClient) {
 }
 
 export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutionPersistence {
-  const effects = new SqliteTaskExecutionEffectPersistence(db)
+  const effects = new DrizzleTaskExecutionEffectPersistence(db)
   return Object.freeze({
     drive: new DrizzleTaskEngineApplicationPersistence(db),
-    ownership: new SqliteTaskOwnershipPersistence(db),
+    ownership: new DrizzleTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
@@ -179,7 +176,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     wrapperRuns: new DrizzleWrapperRunPersistence(db),
     runtimeLifecycle: new DrizzleTaskRuntimeLifecyclePersistence(db),
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
-    recovery: new SqliteTaskExecutionRecoveryPersistence(db),
+    recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
@@ -192,10 +189,10 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
 export function createPostgresqlTaskExecutionPersistence(
   db: PostgresqlDatabaseClient,
 ): TaskExecutionPersistence {
-  const effects = new PostgresqlTaskExecutionEffectPersistence(db)
+  const effects = new DrizzleTaskExecutionEffectPersistence(db)
   return Object.freeze({
     drive: new DrizzleTaskEngineApplicationPersistence(db),
-    ownership: new PostgresqlTaskOwnershipPersistence(db),
+    ownership: new DrizzleTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
@@ -212,7 +209,7 @@ export function createPostgresqlTaskExecutionPersistence(
     wrapperRuns: new DrizzleWrapperRunPersistence(db),
     runtimeLifecycle: new DrizzleTaskRuntimeLifecyclePersistence(db),
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
-    recovery: new PostgresqlTaskExecutionRecoveryPersistence(db),
+    recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),

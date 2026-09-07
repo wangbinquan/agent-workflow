@@ -7,12 +7,13 @@ import {
   allowedFromStatusesForEvent,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm'
 
 import { nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { ConflictError } from '@/util/errors'
+import { resolveTerminalWorkspacePruneDecision } from '@/services/lifecycle'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import type {
   SourceTerminationEffectCapability,
@@ -180,6 +181,10 @@ async function applyOne(
             effectRevision: tasks.sourceTerminationEffectRev,
             lifecycleEventRevision: tasks.lifecycleEventRevision,
             errorSummary: tasks.errorSummary,
+            spaceKind: tasks.spaceKind,
+            workspacePruningAt: tasks.workspacePruningAt,
+            workspacePruneCause: tasks.workspacePruneCause,
+            workspacePrunedAt: tasks.workspacePrunedAt,
           })
           .from(tasks)
           .where(eq(tasks.id, taskId))
@@ -299,6 +304,20 @@ async function applyOne(
         })
         let statusChanged = false
         if (disposition === 'cancel') {
+          // RFC-300 —— 终态转移同时**认领**任务自有工作区的回收。SQLite 侧这一步由
+          // `setTaskStatus` 内核代劳；这里是手写的终态 CAS，所以必须自己调同一份中立策略，
+          // 否则 webhook 来源任务的工作树在 PostgreSQL 上永远不会被回收（RFC-359 W8 对拍照出）。
+          // 决策与三列墓碑条件的配对沿用 `taskRuntimeLifecyclePersistence` 的形状。
+          const prune = await resolveTerminalWorkspacePruneDecision(
+            {
+              taskId,
+              spaceKind: row.spaceKind,
+              workspacePruningAt: row.workspacePruningAt,
+              workspacePruneCause: row.workspacePruneCause,
+              workspacePrunedAt: row.workspacePrunedAt,
+            },
+            'canceled',
+          )
           const changed = await tx
             .update(tasks)
             .set({
@@ -314,6 +333,7 @@ async function applyOne(
               errorMessage: `${projection.code}: delivery=${input.deliveryId} revision=${input.streamRevision}`,
               sourceTerminationFence: nextFence,
               sourceTerminationEffectRev: input.streamRevision,
+              ...(prune.prune ? { workspacePruningAt: now, workspacePruneCause: prune.cause } : {}),
               lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
             })
             .where(
@@ -322,6 +342,13 @@ async function applyOne(
                 eq(tasks.status, priorStatus),
                 eq(tasks.lifecycleEventRevision, row.lifecycleEventRevision),
                 inArray(tasks.status, CANCELABLE),
+                ...(prune.prune
+                  ? [
+                      isNull(tasks.workspacePruningAt),
+                      isNull(tasks.workspacePruneCause),
+                      isNull(tasks.workspacePrunedAt),
+                    ]
+                  : []),
               ),
             )
             .returning({ lifecycleEventRevision: tasks.lifecycleEventRevision })
@@ -340,6 +367,11 @@ async function applyOne(
             status: 'canceled',
             errorSummary: projection.summary,
             nodeChanges,
+            // 认领必须同时进事件：`task-workspace-prune-nudge` 消费者只认这个字段，
+            // 没有它就没有人去把工作树真正删掉（两个 bootstrap 都是这么接的）。
+            workspacePruneClaim: prune.prune
+              ? { claimedAt: new Date(now).toISOString(), cause: prune.cause }
+              : null,
             sourceTerminationEffectRef: `source-termination:${input.deliveryId}:${input.streamRevision}`,
             occurredAt: now,
             identity: {

@@ -43,11 +43,25 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/legacy/workgroups.ts: 2',
   'modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts: 1',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts: 3',
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 5',
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts: 1',
+  // RFC-359 W8 销账：`sqliteTaskExecutionEffect.ts` 5 → 4 —— `resolveQuiescedCodeHostMutations`
+  // （唯一调用方是合一前的 SQLite 恢复流程）迁进两引擎共用的 `effectQuiescence.ts`，同时把
+  // 那条钉死在 `DbTxSync` 上的 `onAppliedTx` 回调（node_run 投影）收成实现的一部分。
+  // RFC-359 W8 销账：`sqliteTaskExecutionEffect.ts` 4 → 3 —— 同步 store 上的
+  // `resolveQuiescedManagedProcesses`（自带一笔 `dbTxSync`）与
+  // `closeRecoveredOutcomeUnknownAndRelease` 自 W1-T7b 起就没有调用方（清算只剩
+  // `effectQuiescence.ts` 那一份中立实现），随 effect 账本端口合一一并删除。
+  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3',
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts: 1',
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts: 1',
-  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 5',
+  // RFC-359 W8 销账：`sqliteTaskOwnership.ts` 5 → 3 —— 归属端口合一成中立的
+  // `taskOwnershipPersistence.ts` 之后，同步 store 的 `releaseAfterStop` / `releaseRecovered`
+  // （各一笔 dbTxSync）与 `revokeOldDaemon` 失去了全部调用方，随合一删除。
+  // 剩下的 3 笔按 D28b 判据都**钉死**、不能改异步：`claimPendingIntent`（`taskExecutionModule.claim`
+  // → `taskDriverLifecycle.ts` 的同步认领）、`withOwnedTaskTx`（回调签名就是 `DbTxSync`，8 处生产
+  // 调用点在 `services/task.ts` / `platform/persistence/sqlite/taskLifecycle.ts` 等处）、
+  // `revokeExact`（体内的 `revokeExactTx` 是 `sqliteSourceTerminationParticipant.ts` /
+  // `services/task.ts` 的同步事务内参与者）。
+  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 3',
   // RFC-359 W7 销账：`sqliteTerminalMaintenance.ts: 5` + `systemWorkspaceGc.ts: 1` +
   // `taskArchive.ts: 1` + `taskDelete.ts: 1` —— 终态维护认领的三条消费路径（删除 / 归档 /
   // workspace-GC）迁到 `databaseSessionFor(db).transaction(...)` + 中立参与者
@@ -58,8 +72,25 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // `provider.claimInTx` 走本文件既有的 `sqliteMembers` 窄化，与大事务里的
   // `revalidateInTx` / `finalizeInTx` 同一形态），级联只有一层：`recordArtifact` 的契约
   // 收成 `Promise<void>`，生产 prestage 链的三处调用点补 await（I14 record-before-act）。
-  'platform/persistence/sqlite/maintenanceRunStore.ts: 4',
-  'platform/persistence/sqlite/taskLifecycle.ts: 4',
+  // RFC-359 W8 销账：`sqlite/maintenanceRunStore.ts: 4` —— 维护 run 认领 / 租约存储的四笔
+  // 同步事务（enqueue / recover / claimNext / deferred-settle）改走
+  // `databaseSessionFor(db).transaction(...)`，与 PG 那份 358 行的原生重写合成一份中立实现
+  // （`platform/persistence/maintenanceRunStore.ts`）。src 侧零级联：唯一的消费者是
+  // `sqlite/systemMaintenanceOperations.ts` 里逐方法 `async X(){ return store.X(...) }` 的
+  // 恒等适配器，合一后它整体退役。
+  // RFC-359 W8 销账：`taskLifecycle.ts: 4 → 2` —— `transitionNodeRunStatus` / `setNodeRunStatus`
+  // 的「有执行上下文」分支（原来两笔 `withOwnedTaskTx`）改走中立事务原语
+  // （`withTaskExecutionWrite` + `fenceTaskWrite` + 中立异步 CAS），两个引擎共用一条。
+  // 前置是把转移判据 / 错误类型 / 字段白名单下沉成叶子 `platform/persistence/nodeRunLifecycleCore.ts`：
+  // 在那之前本文件只要 import 中立孪生就闭出 taskLifecycle → nodeRunLifecycleTransition →
+  // services/lifecycle → taskLifecycle（depcheck 变异验证过）。判据在
+  // `tests/rfc359-w8-node-run-lifecycle-neutral-transaction.test.ts`（两引擎各 6 条）。
+  //
+  // 剩下的 2 笔（`setTaskStatus` 的 `withOwnedTaskTx` / `dbTxSync` 两个分支）按 D28b 判据**钉死**：
+  // 体内是同步的 `writeTaskStatusTx`，而它的 `onTransitionTx: (tx: DbTxSync, …) => void` 回调
+  // 被 6 处生产站点传入（`taskExecutionPersistence.ts` / `sqliteSourceTerminationParticipant.ts` /
+  // `services/task.ts` ×4），改中立要连着那条参与者链一起动——属另一刀。
+  'platform/persistence/sqlite/taskLifecycle.ts: 2',
   'services/task.ts: 3',
 ]
 

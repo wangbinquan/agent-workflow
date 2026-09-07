@@ -177,9 +177,9 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
   [
     'createOwnershipToken',
     new Set([
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts',
     ]),
   ],
   [
@@ -195,8 +195,7 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
     'createVerifiedTakeoverProof',
     new Set([
       'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts',
     ]),
   ],
   [
@@ -208,9 +207,8 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
     'createVerifiedOutcomeUnknownClosure',
     new Set([
       'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
       'packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts',
     ]),
   ],
 ])

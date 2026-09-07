@@ -22,10 +22,7 @@ import {
 } from '@/modules/digital-employee/composition'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
-import {
-  createPostgresqlTaskArchiveMaintenanceCommand,
-  createSqliteTaskArchiveMaintenanceCommand,
-} from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import {
   createPostgresqlTaskExecutionPersistence,
   createSqliteTaskExecutionPersistence,
@@ -51,7 +48,7 @@ import {
 } from '@/modules/source-control/composition/workspaceMaintenance'
 import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
 import type { ClaimedMaintenanceRun, MaintenanceRunStore } from './maintenanceRunStorePort'
-import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import {
   createPostgresqlMaintenanceExecutionFence,
   createSqliteMaintenanceExecutionFence,
@@ -61,10 +58,7 @@ import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postg
 import { runPostgresqlRetentionSweepSlice } from '@/platform/persistence/postgresqlMaintenanceRetention'
 import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
-import {
-  checkpointSqliteWal,
-  createSqliteMaintenanceRunStore,
-} from '@/platform/persistence/sqlite/systemMaintenanceOperations'
+import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -542,13 +536,13 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       })
       postgresqlRuntime = runtime
       const client = createPostgresqlDatabaseClient(runtime)
-      store = createPostgresqlMaintenanceRunStore(client)
+      store = createMaintenanceRunStore(client)
       integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
         composePostgresqlWebhookDeliveryPersistence(client),
       )
       const taskExecution = createPostgresqlTaskExecutionPersistence(client)
       taskRecoveryOperations = taskExecution.recoveryAdministration
-      taskArchiveMaintenanceCommand = createPostgresqlTaskArchiveMaintenanceCommand(client)
+      taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(client)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
         composePostgresqlWorkspaceMaintenanceCommand({
           db: client,
@@ -649,7 +643,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       )
       const taskExecution = createSqliteTaskExecutionPersistence(sqliteDb)
       taskRecoveryOperations = taskExecution.recoveryAdministration
-      taskArchiveMaintenanceCommand = createSqliteTaskArchiveMaintenanceCommand(sqliteDb)
+      taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(sqliteDb)
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
         composeSqliteWorkspaceMaintenanceCommand({
           db: sqliteDb,
@@ -722,7 +716,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
       maintenanceExecutionFence = createSqliteMaintenanceExecutionFence(sqliteDb)
-      store = createSqliteMaintenanceRunStore(sqliteDb)
+      store = createMaintenanceRunStore(sqliteDb)
     }
     await store.recoverRunning(Date.now())
     initialised = true

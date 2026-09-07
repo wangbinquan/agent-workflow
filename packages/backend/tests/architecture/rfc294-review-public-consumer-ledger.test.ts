@@ -298,15 +298,12 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:system-operations:types:stageRestoreOptionsSchema', removeAfterWave: 'W4-E7' },
   { id: 'public:system-operations:types:stageRestoreResultSchema', removeAfterWave: 'W4-E7' },
   { id: 'public:task-catalog:types:TaskCatalogListQuery', removeAfterWave: 'W4-E10' },
-  // RFC-359 W7：随 `CollaborationRuntimeMechanics` 合一失去生产消费者——这个类型是当初为
-  // collaboration 的 serializable 原子而开的 task-execution 接缝，两个引擎现在跑同一份中立实现，
-  // 接缝不再需要。与它配套的 `composePostgresqlNodeRunLifecycleParticipantFactory` 已记进
-  // `rfc359-w5-adapter-production-consumer` 的「改指」账本。
-  {
-    id: 'public:task-execution:commands:NodeRunLifecycleParticipantInTx',
-    removeAfterWave:
-      'W8（RFC-359 死代码清理批：连同 composePostgresqlNodeRunLifecycleParticipantFactory 一起删）',
-  },
+  // RFC-359 W8 已销账：`public:task-execution:commands:NodeRunLifecycleParticipantInTx`
+  // ——随 `CollaborationRuntimeMechanics` 合一失去跨 context 消费者的那条。合同已降级成模块内端口
+  // （`modules/task-execution/application/ports/nodeRunLifecyclePersistence.ts`），与它配套的
+  // `composition/nodeRunLifecycle.ts::composePostgresqlNodeRunLifecycleParticipantFactory`
+  // 整个文件一并删除。**注意**：本文件只读 committed 的 `architecture/public-surfaces.json`，
+  // 那份缓存要等一次 `bun run architecture:write` 才会跟上——在那之前这条断言会红一次。
   { id: 'public:task-execution:commands:TaskCancellationCommand', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:commands:TaskDriveCoordinator', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:commands:TaskRouteMultipartFilePart', removeAfterWave: 'W4-E1' },

@@ -43,7 +43,7 @@ describe('RFC-338 maintenance architecture', () => {
     const start = readBackend('src/cli/start.ts')
     expect(start.match(/startMaintenanceService\(\{/g)).toHaveLength(2)
     expect(start).toMatch(
-      /startMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createPostgresqlMaintenanceRunStore\(db\)/u,
+      /startMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createMaintenanceRunStore\(db\)/u,
     )
     expect(start).toMatch(
       /startMaintenanceService\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
@@ -98,7 +98,7 @@ describe('RFC-338 maintenance architecture', () => {
     expect(service).not.toContain('recoverTurns: true')
     expect(worker).toContain("if ('database' in parsed)")
     expect(worker).toContain('poolMax: Math.min(2, parsed.database.poolMax)')
-    expect(worker).toContain('createPostgresqlMaintenanceRunStore(')
+    expect(worker).toContain('createMaintenanceRunStore(')
     expect(worker).toContain('composePostgresqlWorkspaceMaintenanceCommand({')
     expect(worker).toContain('composePostgresqlIntentMaintenanceCommandsForAppHome({')
     expect(worker).toContain('composePostgresqlResourcePackageApplyMaintenance({')

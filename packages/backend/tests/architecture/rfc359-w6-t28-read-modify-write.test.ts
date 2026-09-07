@@ -74,29 +74,69 @@
 // ---------------------------------------------------------------------------
 // 行号是落账当天的快照，会漂；表名与变量名不会。
 //
-//   modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts  10 处
+//   modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts  8 处（原 10，W8-T28 减 2）
 //     :160  mcpRuntimeTestTurns   captureEventBytes = turn.eventBytes + payloadBytes（累加器）
-//     :644 :685 :1311 :1446 :1477 :1736 :1873 :1944
+//     :1311 :1446 :1477 :1736 :1873 :1944
 //           mcpRuntimeTestSessions  sessionVersion = 读到的行.sessionVersion + 1（版本自增）
 //     :1695 mcpRuntimeTestTurns   cancelRequestedAt = turn.cancelRequestedAt ?? fenceAt
-//   modules/digital-employee/infrastructure/runtimeStore.ts               2 处
-//     :1772 blockCase / :1863 terminateCase —— revision = current.revision + 1
-//     （同文件的 recordMetering / replaceCaseMembers 已经先 lockAggregateRoot，是正解范本）
-//   modules/event-center/infrastructure/eventStore.ts                     2 处
-//     :1228 :1362 observerActivations —— nextScanAt 由 activation.wakeEpoch 决定；
-//           where 只围 leaseEpoch，而 wakeEpoch 是**不持租约**的 nudge 路径在写
+//     —— 剩下这 8 处**逐处实测判过不可达**，见 `tests/rfc359-w8-t28-mcp-runtime-lost-update.test.ts`
+//        的头注释与其中两条「不可达证据」：它们全部位于 `runResourceCatalogTransaction` 里，而它
+//        等于 `databaseSessionFor(db).serializable(...)`——PG 上是 SERIALIZABLE + 40001 整笔重放，
+//        SQLite 上是 BEGIN IMMEDIATE 独占，丢更新在这里发生不了（把 opener 降成
+//        `session.transaction` 后那两条证据**只在 PostgreSQL 上**立刻红）。本守卫的 opener 判据
+//        只认 `serializable` 这个名字，认不出 `runResourceCatalogTransaction` 这层包装，所以仍记账。
+//        原 `:644 :685`（acceptMessage）**是可达的**、且用户看得到：两个标签页同时发消息时两笔
+//        事务读到同一个 turnSeq，都插 `seq = n + 1`，PG 上后一笔撞唯一键抛 23505（不是 40001、
+//        不被重试）冒成 500，SQLite 上则是干净的 409。W8-T28 已按 §10.1 加 `lockAggregateRoot` 修掉。
 //   modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts     1 处
 //     :605  clarifyRounds —— 读出 draftAnswersJson 反序列化、塞一条、整个写回（JSON 合并）
 //   modules/intent/infrastructure/postgresqlIntentApplyOperations.ts      1 处
 //     :349  intentSessions —— commitSeq / contextManifestJson 由 sessionRow 算出后写回
-//   modules/memory/infrastructure/memoryCatalogOperations.ts              1 处
-//     :711  memories —— version = max(被 supersede 行的 version) + 1
-//   modules/task-execution/infrastructure/taskRecoveryOperations.ts       1 处
-//     :669  tasks —— autoRecoveryAttempts 滑动窗口计数自增
+//     —— **不可达**（W8-T28 实测判定）：`apply` 的每一条入口都先过
+//        `applyLock.run(sessionId, …)`（`application/sessionApplyLock.ts`，同 sessionId 排成一条
+//        Promise 链），而 daemon 是 flock 单实例的单进程。同一个 session 的两笔 apply 因此不可能
+//        同时进这笔事务；不同 session 各写各的行。SQLite provider 走的是同一把锁、同一个算法。
 //   platform/events/committed/sqliteStore.ts                              1 处
 //     :198  committedEventAggregateHeads —— lastSeq = (head.lastSeq ?? 0) + 1（序号分配）
-//   services/taskDelete.ts                                                1 处
-//     :321  tasks —— branchStartedAt = max(parent.startedAt, MAX(子.branchStartedAt))
+//     —— **不可达且即将退役**（W8-T28 实测判定）：`reserveAggregateSequenceTx` 的句柄类型是
+//        `DbTxSync`＝bun:sqlite 的**同步**事务面，PostgreSQL 客户端根本产生不出这种句柄，这条
+//        代码在 PG 上一次都不会执行；SQLite 上它在 `BEGIN IMMEDIATE` 独占里。provider-中立的
+//        那一份 append（`platform/events/committed/append.ts`）早已改用
+//        `engineOf(tx).advisoryLock`。本文件只为两个还挂在 `dbTxSync` 上的参与者
+//        （`collaborationCommittedEventParticipant.ts` / `taskLifecycleEventParticipant.ts`）活着，
+//        随它们迁到 `DatabaseSession` 一起删；不给一段即将退役的代码加锁。
+//
+// ---------------------------------------------------------------------------
+// W8-T28 这一刀（可达的 6 处已修，账本相应减 5 个文件）
+// ---------------------------------------------------------------------------
+// 判据只有一条：**两笔并发能不能让用户看到错的结果**。能，就先写一条把错结果演出来的双引擎
+// 用例（`tests/rfc359-w8-t28-lost-update.test.ts`，L1–L6），再按 §10.1 加 `lockAggregateRoot`。
+// 六处的变异验证结论一致：**去掉锁后只在 PostgreSQL 上红，SQLite 上前后都绿**——SQLite 会话是
+// 进程内单写者租约 + `BEGIN IMMEDIATE`，这一族债在它上面结构性不成立。
+//
+//   modules/digital-employee/infrastructure/runtimeStore.ts               2 处 → 0
+//     blockCase / terminateCase —— revision = current.revision + 1，且 `state` 判据来自同一次读。
+//     错结果：并发 terminate + block 后，「终止」已回 200，案件却带着 terminalKind 变回可 resume
+//     的 blocked；两笔并发 terminate 则让案件行与生命周期事件说两种终止原因（事件的 id/dedupeKey
+//     由 (caseId, revision) 决定，后一条被去重悄悄丢掉）。
+//     （同文件的 recordMetering / replaceCaseMembers 早就先 lockAggregateRoot，是正解范本）
+//   modules/event-center/infrastructure/eventStore.ts                     2 处 → 0
+//     :1228 :1362 observerActivations —— nextScanAt 由 activation.wakeEpoch 决定；
+//           where 只围 leaseEpoch，而 wakeEpoch 是**不持租约**的 nudge 路径在写。
+//     错结果：跑到一半来的 nudge 被结算抹掉，下一次扫描被推到整整一个 poll 间隔之后。
+//   modules/memory/infrastructure/memoryCatalogOperations.ts              1 处 → 0
+//     :711  memories —— version = max(被 supersede 行的 version) + 1，`status === 'candidate'`
+//     的裁决判据也来自同一次读。错结果：两个管理员同时批准 / 拒绝同一条候选记忆，**双双拿到
+//     200**，库里只留后写的那个。
+//   modules/task-execution/infrastructure/taskRecoveryOperations.ts       1 处 → 0
+//     :669  tasks —— autoRecoveryAttempts 滑动窗口计数自增。错结果：auto-repair 与
+//     heartbeat-kill 两条 loop 同时盯上一个任务时计数少记，用户配的
+//     `maxAutoRecoveriesPerWindow` 闸门永不跳闸，任务被无限自动重跑。
+//   services/taskDelete.ts                                                1 处 → 0
+//     :321  tasks —— branchStartedAt = max(parent.startedAt, MAX(子.branchStartedAt))。
+//     每任务写锁按**被删的**那个 taskId 分片，同父的两个兄弟同时删走的是两把不同的锁。
+//     错结果：父行的物化列永久停在已删子树的时间戳上，默认任务列表（按物化列排序）与任一
+//     过滤视图（现算）从此行序不同且永不收敛——正是这段代码原本要闭合的 bug 换了个入口复发。
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -475,14 +515,11 @@ const CORPUS_FILES: readonly string[] = (() => {
 
 /** `<相对 src 的路径>: <未加锁的读—改—写处数>`，按路径字典序。只降不升。 */
 export const READ_MODIFY_WRITE_DEBT: readonly string[] = [
-  'modules/digital-employee/infrastructure/runtimeStore.ts: 2',
-  'modules/event-center/infrastructure/eventStore.ts: 2',
   'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 1',
-  'modules/memory/infrastructure/memoryCatalogOperations.ts: 1',
-  'modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts: 10',
-  'modules/task-execution/infrastructure/taskRecoveryOperations.ts: 1',
+  // W8-T28：`acceptMessage` 的两处已按 §10.1 取会话聚合根行锁修掉（10 → 8）。剩下 8 处实测不可达，
+  // 理由见上面清单里那段与 `tests/rfc359-w8-t28-mcp-runtime-lost-update.test.ts` 的头注释。
+  'modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts: 8',
   'platform/events/committed/sqliteStore.ts: 1',
-  'services/taskDelete.ts: 1',
 ]
 
 interface ScannedFile {

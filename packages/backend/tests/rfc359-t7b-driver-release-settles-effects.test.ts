@@ -527,18 +527,15 @@ test('源码锁：两个 provider 的 driver lifecycle 都委托同一份释放�
     expect(source).not.toContain('releaseAfterStop(')
     expect(source).not.toContain('markRecoveryRequired(')
   }
-  const recovery = readFileSync(
-    resolve(infrastructure, 'postgresqlTaskExecutionRecovery.ts'),
-    'utf8',
-  )
+  // RFC-359 W8：恢复实现本身也合一了（此前 sqlite/postgresqlTaskExecutionRecovery.ts 一对），
+  // 清算全部经 effectQuiescence.ts，恢复模块里不再有任何 provider 私有的清算副本。
+  const recovery = readFileSync(resolve(infrastructure, 'taskExecutionRecovery.ts'), 'utf8')
   expect(recovery).toContain("from './effectQuiescence'")
   expect(recovery).not.toContain('async function resolveManagedProcesses(')
   expect(recovery).not.toContain('async function closeOutcomeUnknown(')
-  for (const file of [
-    'sqliteTaskExecutionEffectPersistence.ts',
-    'postgresqlTaskExecutionEffectPersistence.ts',
-  ]) {
-    const source = readFileSync(resolve(infrastructure, file), 'utf8')
-    expect(source).toContain("from './effectQuiescence'")
-  }
+  expect(recovery).not.toContain('async function resolveCodeHostMutations(')
+  // RFC-359 W8：effect 账本端口本身也合一了（此前 sqlite/postgresqlTaskExecutionEffectPersistence.ts
+  // 一对），静默清算的四个方法在唯一那份实现里委托 effectQuiescence.ts。
+  const effects = readFileSync(resolve(infrastructure, 'taskExecutionEffectPersistence.ts'), 'utf8')
+  expect(effects).toContain("from './effectQuiescence'")
 })

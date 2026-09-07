@@ -547,6 +547,16 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflowLaunchInputs.ts',
+    'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
+    ['assertWorkflowLaunchInputs'],
+    // RFC-359 W8-A：子任务启动的输入门原本只长在 legacy 引擎里（同一个 facade 的
+    // `services/task.ts` 消费者），PG 的子任务铸造机根本不看 inputs。补齐用的是**同一个**
+    // 符号，因此这条边与其它四条同生同灭、同一个清偿 owner。
+    'PostgreSQL child launch input validation',
+    REMOVE_OWNERS.taskExecutionResources,
+  ),
+  edge(
+    'services/workflowLaunchInputs.ts',
     'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
     ['assertWorkflowLaunchInputs'],
     'PostgreSQL task launch input validation',

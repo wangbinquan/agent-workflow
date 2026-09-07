@@ -9,7 +9,6 @@ import type {
   TaskStatus,
   TriggerContext,
 } from '@agent-workflow/shared'
-import type { NodeRunStatusMutation } from '../application/ports/nodeRunLifecyclePersistence'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type { Actor } from '@/auth/actor'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
@@ -354,38 +353,6 @@ export interface WorkgroupTaskRoomTaskParticipantInTx {
     closedHolderIds: readonly string[]
     eventRef: CommittedEventRef | null
   }> | null>
-}
-
-/**
- * TaskExecution-owned node lifecycle CAS bound to a caller-reserved
- * transaction. Collaboration may compose its gate rows in the same commit
- * without importing TaskExecution tables or opening a nested transaction.
- */
-export interface NodeRunLifecycleParticipantInTx {
-  set(input: {
-    readonly nodeRunId: string
-    readonly to: NodeRunStatus
-    readonly allowedFrom: readonly NodeRunStatus[]
-    readonly extra?: NodeRunStatusMutation
-    readonly allowTerminal?: boolean
-    readonly reason?: string
-  }): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
-  completeClarifyNode(input: {
-    readonly taskId: string
-    readonly nodeRunId: string
-    readonly nodeId: string
-    readonly expectedStatus: 'awaiting_human'
-    readonly status: 'done'
-    readonly cause: 'clarify-deferred-answer'
-    readonly finishedAt: number
-    readonly occurredAt: number
-    readonly identity: Readonly<{
-      operationRef: string
-      eventGroupId: string
-      eventGroupOrdinal: number
-      correlationRef: string
-    }>
-  }): Promise<CommittedEventRef | null>
 }
 
 export interface TaskRouteUploadLimits {

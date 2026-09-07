@@ -54,7 +54,7 @@ import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   assertTerminalMaintenanceClaimTx,
   createTerminalMaintenanceStore,
@@ -310,8 +310,15 @@ export async function deleteTask(
       // 停在被删子树的时间戳上。可观察后果:同一份数据在默认视图(快路径按物化列
       // 排序)与任一过滤视图(旧管线现算)之间行序不同且永不收敛。
       // 删除是低频操作,在同一事务里沿父链重算即可闭合(链长同 MAX_TREE_DEPTH)。
+      // RFC-359 W6-T28：重算是读—改—写（父自己的 started_at + 子树 MAX 算出新值写回同一行），
+      // 而每任务写锁按**被删的那个** taskId 分片——同一个父下的两个兄弟被同时删掉时，两笔删除
+      // 拿的是两把不同的锁，彼此完全不串行。PG 的 READ COMMITTED 下双方都会读到「对方还在」的
+      // 子树 MAX，后写的那笔于是把父行永久停在一个**已删子树**的时间戳上，正是上面这段注释要
+      // 闭合的那个 bug 换了个入口复发。先锁住父行：第二笔在锁上等，等到的是对方已提交的视图。
+      // 锁序恒定自下而上、沿同一条父链，两笔并发不构成环。
       let cursor: string | null = row.parentTaskId
       for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
+        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, cursor)
         const parent = await tx
           .select({
             id: tasks.id,

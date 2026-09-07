@@ -37,7 +37,7 @@ import {
   maintenanceJobSpec,
 } from '@/platform/background/maintenanceCatalog'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
@@ -1727,7 +1727,7 @@ async function enqueuePostgresqlMaintenance(input: {
   readonly archiveTargetRows: number
 }): Promise<{
   readonly runtime: ReturnType<typeof createPostgresqlDatabaseRuntime>
-  readonly store: ReturnType<typeof createPostgresqlMaintenanceRunStore>
+  readonly store: ReturnType<typeof createMaintenanceRunStore>
   readonly queued: readonly { readonly runId: string; readonly job: MaintenanceJobKey }[]
 }> {
   const runtime = createPostgresqlDatabaseRuntime({
@@ -1742,7 +1742,7 @@ async function enqueuePostgresqlMaintenance(input: {
     generationId: input.generationId,
     env: { RFC349_DATABASE_URL: input.url },
   })
-  const store = createPostgresqlMaintenanceRunStore(createPostgresqlDatabaseClient(runtime))
+  const store = createMaintenanceRunStore(createPostgresqlDatabaseClient(runtime))
   const payloads = heavyPayloads(input.expectedEvents, input.archiveTargetRows)
   const runTag = randomUUID()
   const now = Date.now()
@@ -1776,7 +1776,7 @@ function parseCounters(value: string): Record<string, number> {
 }
 
 async function waitForMaintenanceJobs(
-  store: ReturnType<typeof createPostgresqlMaintenanceRunStore>,
+  store: ReturnType<typeof createMaintenanceRunStore>,
   queued: readonly { readonly runId: string; readonly job: MaintenanceJobKey }[],
 ): Promise<readonly MaintenanceJobReport[]> {
   // RFC-349 —— 判据是「还在推进吗」，不是「多少秒内做完」。

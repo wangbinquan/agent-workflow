@@ -9,10 +9,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import {
-  createSqliteLegacyAgentDependencyLookup,
-  resolveInjection,
-} from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -81,7 +79,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps).toEqual([])
@@ -93,7 +91,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-root'])
@@ -114,7 +112,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-extra', 'm-root', 'm-leaf'])
@@ -130,7 +128,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-root'])
@@ -150,7 +148,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(result).toMatchObject({ kind: 'failed', message: 'mcp-not-found' })
   })

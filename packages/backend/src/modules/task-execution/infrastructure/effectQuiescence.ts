@@ -21,6 +21,7 @@ import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
+  nodeRunOutputs,
   nodeRuns,
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
@@ -41,6 +42,11 @@ import type {
 } from '../application/ports/taskExecutionEffectStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import type { TerminalizeTaskExecutionIntentsInput } from '../application/terminalizeExecutionIntent'
+import {
+  codeHostRecoveryClass,
+  decodeCodeHostRecoveryDescriptor,
+  type CodeHostRecoveryDescriptor,
+} from '../domain/codeHostRecovery'
 import {
   aggregateEffectOutcome,
   assertAttemptTransition,
@@ -852,5 +858,308 @@ export async function closeRecoveredOutcomeUnknownAndRelease(
       allowedOwnerStates,
       now,
     })
+  })
+}
+
+/** 接管者对一次 code-host 变更探针的确定性结论。`unknown` 的探针根本不进这里。 */
+export interface RecoveredCodeHostMutation {
+  readonly effectId: string
+  readonly attemptId: string
+  readonly outcome: 'applied' | 'definitely-not-applied'
+  readonly receiptJson: string
+  readonly nodeRunId: string | null
+  readonly responseStatus: number
+  readonly responseBody: string
+}
+
+export interface RecoveredCodeHostMutationOutcome {
+  readonly appliedEffectIds: readonly string[]
+  readonly retryAuthorizedEffectIds: readonly string[]
+}
+
+const MAX_EFFECT_RECEIPT_BYTES = 64 * 1024
+
+function boundedReceipt(value: string): string {
+  if (value.length === 0) throw new Error('code-host recovery requires a receipt')
+  if (Buffer.byteLength(value) > MAX_EFFECT_RECEIPT_BYTES) {
+    throw new Error('effect receipt exceeds the internal 64 KiB limit')
+  }
+  JSON.parse(value)
+  return value
+}
+
+/**
+ * 把探针判定投影到被中断的 node_run 上：两个输出端口落回去，运行行从 interrupted / running 翻
+ * done。合一前这一步在 SQLite 侧是 `onAppliedTx` 回调（签名钉死 `DbTxSync`）、在 PG 侧是内联代码；
+ * 唯一的调用方两边写的是同一件事，因此这里收成实现的一部分。
+ */
+async function projectRecoveredCodeHostNodeRunTx(
+  tx: DatabaseTransaction,
+  taskId: string,
+  resolution: RecoveredCodeHostMutation,
+  now: number,
+): Promise<void> {
+  if (resolution.nodeRunId === null) return
+  const run = (
+    await tx
+      .select({ status: nodeRuns.status })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.id, resolution.nodeRunId), eq(nodeRuns.taskId, taskId)))
+      .limit(1)
+  )[0]
+  if (run === undefined || (run.status !== 'interrupted' && run.status !== 'running')) {
+    throw new Error(`code-host recovery node '${resolution.nodeRunId}' is not an interrupted run`)
+  }
+  for (const value of [
+    { nodeRunId: resolution.nodeRunId, portName: 'response', content: resolution.responseBody },
+    {
+      nodeRunId: resolution.nodeRunId,
+      portName: 'status',
+      content: String(resolution.responseStatus),
+    },
+  ]) {
+    await tx
+      .insert(nodeRunOutputs)
+      .values(value)
+      .onConflictDoUpdate({
+        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+        set: { content: value.content },
+      })
+      .run()
+  }
+  const projected = await tx
+    .update(nodeRuns)
+    .set({ status: 'done', finishedAt: now, errorMessage: null, failureCode: null })
+    .where(
+      and(
+        eq(nodeRuns.id, resolution.nodeRunId),
+        eq(nodeRuns.taskId, taskId),
+        inArray(nodeRuns.status, ['interrupted', 'running']),
+      ),
+    )
+    .returning({ id: nodeRuns.id })
+  if (projected[0] === undefined) {
+    throw new Error(`code-host recovery node '${resolution.nodeRunId}' projection lost`)
+  }
+}
+
+/**
+ * 后继 daemon 拿着独占锁，把确定性的 code-host 探针结论落账：`applied` 的 attempt / effect 一起
+ * 转 succeeded 并推进 watermark + 投影 node_run；`definitely-not-applied` 的只把 attempt 转
+ * retry-authorized 并释放围栏，effect 留开着等同代重试。
+ *
+ * 合一前 SQLite 侧在 `sqliteTaskExecutionEffect.ts` 的 `resolveQuiescedCodeHostMutations`
+ * （dbTxSync），PG 侧在 `postgresqlTaskExecutionRecovery.ts` 的私有 `resolveCodeHostMutations`；
+ * 差异按强侧（SQLite）抬齐——PG 侧此前不校验接管者代际与静默证据非空
+ * （缺口 04-pg-code-host-recovery-lock-proof）。
+ */
+export async function resolveQuiescedCodeHostMutations(
+  db: ProviderNeutralDatabase,
+  input: {
+    readonly owner: OwnershipTuple
+    readonly expectedRevision: number
+    readonly lockProof: ExclusiveDaemonLockProof
+    readonly quiescenceEvidenceDigest: string
+    readonly resolutions: readonly RecoveredCodeHostMutation[]
+    readonly now?: number
+  },
+): Promise<RecoveredCodeHostMutationOutcome> {
+  assertExclusiveDaemonLockProof(input.lockProof)
+  if (input.lockProof.daemonGeneration === input.owner.daemonGeneration) {
+    throw new Error('code-host successor recovery requires a new daemon generation')
+  }
+  if (input.quiescenceEvidenceDigest.length === 0) {
+    throw new Error('code-host recovery requires quiescence evidence')
+  }
+  const seen = new Set<string>()
+  const normalized = input.resolutions.map((resolution) => {
+    const key = `${resolution.effectId}/${resolution.attemptId}`
+    if (seen.has(key)) throw new Error('duplicate code-host recovery resolution')
+    seen.add(key)
+    if (
+      !Number.isInteger(resolution.responseStatus) ||
+      resolution.responseStatus < 100 ||
+      resolution.responseStatus > 599
+    ) {
+      throw new Error('invalid code-host recovery response status')
+    }
+    return { resolution, receiptJson: boundedReceipt(resolution.receiptJson) }
+  })
+  const now = input.now ?? Date.now()
+  const allowedOwnerStates: readonly TaskOwnerState[] = ['revoked', 'recovery-required']
+
+  return await databaseSessionFor(db).transaction(async (tx) => {
+    await lockAndAssertOwnerTx(
+      tx,
+      input.owner,
+      input.expectedRevision,
+      allowedOwnerStates,
+      `task '${input.owner.taskId}' code-host recovery was fenced`,
+    )
+    const appliedEffectIds: string[] = []
+    const retryAuthorizedEffectIds: string[] = []
+    for (const { resolution, receiptJson } of normalized) {
+      const row = (
+        await tx
+          .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
+          .from(taskExecutionEffectAttempts)
+          .innerJoin(
+            taskExecutionEffects,
+            eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
+          )
+          .where(eq(taskExecutionEffectAttempts.id, resolution.attemptId))
+          .limit(1)
+      )[0]
+      if (
+        row === undefined ||
+        row.effect.id !== resolution.effectId ||
+        row.effect.taskId !== input.owner.taskId ||
+        row.effect.kind !== 'code-host-mutation' ||
+        row.effect.state !== 'open' ||
+        row.attempt.epoch !== input.owner.epoch ||
+        (row.attempt.state !== 'acting' && row.attempt.state !== 'recovery-required') ||
+        row.attempt.recoveryDescriptorJson === null
+      ) {
+        throw new TaskExecutionError(
+          'task-execution-recovery-required',
+          `code-host recovery target '${resolution.effectId}/${resolution.attemptId}' is not the exact open attempt`,
+        )
+      }
+      let descriptor: CodeHostRecoveryDescriptor
+      try {
+        descriptor = decodeCodeHostRecoveryDescriptor(row.attempt.recoveryDescriptorJson)
+      } catch {
+        throw new TaskExecutionError(
+          'task-execution-recovery-required',
+          `code-host attempt '${row.attempt.id}' has no usable recovery descriptor`,
+        )
+      }
+      const declaredRecoveryClass = codeHostRecoveryClass(descriptor.action, descriptor.method)
+      if (
+        descriptor.probe.kind === 'actor-replay' ||
+        declaredRecoveryClass === 'R-ACTOR' ||
+        declaredRecoveryClass === 'R-READ' ||
+        row.attempt.recoveryClass !== declaredRecoveryClass ||
+        !row.attempt.candidateId.startsWith(descriptor.candidateId) ||
+        !/^:t[1-9]\d*$/.test(row.attempt.candidateId.slice(descriptor.candidateId.length)) ||
+        descriptor.nodeRunId !== resolution.nodeRunId
+      ) {
+        throw new TaskExecutionError(
+          'task-execution-recovery-required',
+          `code-host attempt '${row.attempt.id}' is not eligible for deterministic recovery`,
+        )
+      }
+
+      const nextState =
+        resolution.outcome === 'applied' ? ('succeeded' as const) : ('retry-authorized' as const)
+      assertAttemptTransition(row.attempt.state, nextState)
+
+      let outcome: ReturnType<typeof aggregateEffectOutcome> | null = null
+      if (resolution.outcome === 'applied') {
+        const attempts = await tx
+          .select({
+            attemptNo: taskExecutionEffectAttempts.attemptNo,
+            state: taskExecutionEffectAttempts.state,
+            applicationEvidence: taskExecutionEffectAttempts.applicationEvidence,
+          })
+          .from(taskExecutionEffectAttempts)
+          .where(eq(taskExecutionEffectAttempts.effectId, row.effect.id))
+          .orderBy(asc(taskExecutionEffectAttempts.attemptNo))
+        outcome = aggregateEffectOutcome(
+          attempts.map(
+            (attempt): AttemptEvidence =>
+              attempt.attemptNo === row.attempt.attemptNo
+                ? {
+                    attemptNo: attempt.attemptNo,
+                    state: 'succeeded',
+                    applicationEvidence: 'applied',
+                  }
+                : {
+                    attemptNo: attempt.attemptNo,
+                    state: attempt.state,
+                    applicationEvidence: attempt.applicationEvidence ?? 'ambiguous',
+                  },
+          ),
+        )
+        if (outcome.state !== 'succeeded') {
+          throw new TaskExecutionError(
+            'task-execution-recovery-required',
+            `code-host attempt '${row.attempt.id}' did not produce a known applied outcome`,
+          )
+        }
+      }
+
+      const attemptUpdated = await tx
+        .update(taskExecutionEffectAttempts)
+        .set({
+          state: nextState,
+          applicationEvidence:
+            resolution.outcome === 'applied' ? 'applied' : 'definitely-not-applied',
+          retryAuthority: resolution.outcome === 'applied' ? 'none' : 'probe',
+          receiptJson,
+          failureCode:
+            resolution.outcome === 'applied' ? null : 'code-host-probe-definitely-not-applied',
+          settledAt: resolution.outcome === 'applied' ? now : null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(taskExecutionEffectAttempts.id, row.attempt.id),
+            eq(taskExecutionEffectAttempts.epoch, input.owner.epoch),
+            eq(taskExecutionEffectAttempts.state, row.attempt.state),
+          ),
+        )
+        .returning({ id: taskExecutionEffectAttempts.id })
+      if (attemptUpdated[0] === undefined) {
+        throw new TaskExecutionError(
+          'task-execution-stale-owner',
+          `code-host attempt '${row.attempt.id}' recovery lost its compare-and-swap`,
+        )
+      }
+      await releaseAttemptFencesTx(tx, row.attempt.id, input.owner.epoch, now)
+
+      if (resolution.outcome === 'definitely-not-applied') {
+        retryAuthorizedEffectIds.push(row.effect.id)
+        continue
+      }
+      if (outcome === null) throw new Error('applied code-host recovery lacks an outcome')
+      const effectUpdated = await tx
+        .update(taskExecutionEffects)
+        .set({
+          state: 'succeeded',
+          failureCode: null,
+          receiptJson: JSON.stringify({
+            v: 1,
+            recovery: 'daemon-restart-code-host-probe',
+            quiescenceEvidenceDigest: input.quiescenceEvidenceDigest,
+            attemptId: row.attempt.id,
+            attemptNo: row.attempt.attemptNo,
+            nodeRunId: resolution.nodeRunId,
+            responseStatus: resolution.responseStatus,
+            appliedAttemptNo: outcome.appliedAttemptNo,
+            priorAmbiguityCount: outcome.priorAmbiguityCount,
+            probeReceipt: JSON.parse(receiptJson),
+          }),
+          settledAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(eq(taskExecutionEffects.id, row.effect.id), eq(taskExecutionEffects.state, 'open')),
+        )
+        .returning({ id: taskExecutionEffects.id })
+      if (effectUpdated[0] === undefined) {
+        throw new TaskExecutionError(
+          'task-execution-stale-owner',
+          `code-host effect '${row.effect.id}' recovery lost its compare-and-swap`,
+        )
+      }
+      await upsertWatermarkTx(tx, row.effect, 'succeeded', now)
+      await projectRecoveredCodeHostNodeRunTx(tx, input.owner.taskId, resolution, now)
+      appliedEffectIds.push(row.effect.id)
+    }
+    return {
+      appliedEffectIds: [...new Set(appliedEffectIds)].sort(),
+      retryAuthorizedEffectIds: [...new Set(retryAuthorizedEffectIds)].sort(),
+    }
   })
 }

@@ -50,6 +50,11 @@ export function installTaskLifecycleAfterCommitTestPump(
         handle(value) {
           const event = decodeTaskLifecycleCommittedEvent(value)
           if (event.type !== 'task.lifecycle-transitioned.v1') return
+          // RFC-359 W8：与生产的 `task-execution-watch` 同口径——多段式续跑准入的内部交棒
+          // （`continuationHandoff`）不是任务的结局，不得当成终态。SQLite 的一段式准入从不
+          // 置这个标记，所以今天这里一行行为都不变；写上是为了这份**影子实现**不会在将来
+          // 被拿去跑 PG 的事件时给出与生产相反的结论。
+          if (event.payload.continuationHandoff) return
           if (isTerminalTaskStatus(event.payload.status)) {
             callbacks.onExecutionWatch?.(db, event.payload.taskId, event.payload.status)
           }

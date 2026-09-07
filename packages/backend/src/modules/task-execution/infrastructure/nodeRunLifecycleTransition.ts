@@ -16,11 +16,15 @@ import { and, eq } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+// RFC-359 W8 —— 判据 / 错误类型 / 字段白名单取自叶子 `platform/persistence/nodeRunLifecycleCore.ts`，
+// **不要**改回 `@/services/lifecycle`（它 re-export 自 `sqlite/taskLifecycle.ts`）：那条边本身无环，
+// 但它挡住反方向——`taskLifecycle.ts` 一旦 import 本文件就闭出
+// taskLifecycle → 本文件 → services/lifecycle → taskLifecycle，同步事务面就再也转不动。
 import {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
   type NodeRunStatusUpdateExtra,
-} from '@/services/lifecycle'
+} from '@/platform/persistence/nodeRunLifecycleCore'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
 export interface SetNodeRunStatusTxInput {

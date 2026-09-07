@@ -69,78 +69,28 @@ import type {
 } from '@/modules/task-execution/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
+import {
+  ConcurrentNodeRunTransition,
+  assertNodeRunSourceTerminationAdmission,
+  type NodeRunStatusUpdateExtra,
+} from '../nodeRunLifecycleCore'
+// RFC-359 W8 —— 中立异步孪生（两个引擎共用）。别名区分：本文件同名的 `*Tx` 是 bun:sqlite 专属的
+// **同步**版，仍被 `cancelOpenNodeRunsTx` / `services/task.ts:6039` 的同步事务体直调，本波不退役。
+import {
+  setNodeRunStatusTx as setNodeRunStatusInTransaction,
+  transitionNodeRunStatusTx as transitionNodeRunStatusInTransaction,
+} from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 
 const lifecycleLog = createLogger('lifecycle')
 
-const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES: ReadonlySet<NodeRunStatus> = new Set([
-  'pending',
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-])
-
-/**
- * RFC-303 admission under a source-termination fence. RFC-326 exports it so the
- * review decision's pre-check (before any worktree rollback) and the transactional
- * helpers below apply ONE predicate instead of two copies that could drift.
- */
-export function assertNodeRunSourceTerminationAdmission(
-  taskId: string,
-  fence: 'closed' | 'merged' | null,
-  to: NodeRunStatus,
-): void {
-  if (fence === null || !SOURCE_TERMINATION_BLOCKED_NODE_STATUSES.has(to)) return
-  throw new ConflictError(
-    fence === 'closed' ? 'task-source-terminal-closed' : 'task-source-terminal-merged',
-    `task ${taskId} is fenced by an MR/PR ${fence} event; cannot move a node run to ${to}`,
-  )
-}
-
-/**
- * Extra fields that may be written alongside a status transition (mirrors
- * common drizzle .set({}) shapes — runner pid/finishedAt/error, scheduler
- * preSnapshot, review reviewIteration/clarifyIteration, etc.). Whitelisted
- * here so callers can't smuggle `status` through this path.
- */
-export type NodeRunStatusUpdateExtra = Partial<
-  Pick<
-    typeof nodeRuns.$inferInsert,
-    | 'finishedAt'
-    | 'startedAt'
-    | 'errorMessage'
-    // RFC-145: the structured failure companions ride the same atomic write as
-    // status + errorMessage (runner-exit stamps failureCode; the review
-    // supersede path stamps supersededByReview/rolledBack).
-    | 'failureCode'
-    | 'supersededByReview'
-    | 'rolledBack'
-    | 'exitCode'
-    | 'pid'
-    | 'reviewIteration'
-    | 'consumedUpstreamRunsJson'
-    | 'preSnapshot'
-    | 'opencodeSessionId'
-    | 'tokInput'
-    | 'tokOutput'
-    | 'tokCacheCreate'
-    | 'tokCacheRead'
-    | 'tokTotal'
-  >
->
-
-/**
- * Raised when CAS UPDATE affected 0 rows — the row's status is no longer
- * the value we read a moment ago (someone else wrote it concurrently), or
- * the row was deleted. Mapped to HTTP 409 by `util/errors`.
- */
-export class ConcurrentNodeRunTransition extends ConflictError {
-  constructor(nodeRunId: string, expectedFrom: NodeRunStatus, eventKind: string) {
-    super(
-      'concurrent-node-run-transition',
-      `node_run ${nodeRunId} status changed concurrently (expected '${expectedFrom}', event '${eventKind}')`,
-    )
-  }
-}
+// RFC-359 W8 —— 转移判据 / 错误类型 / 字段白名单下沉到叶子
+// `platform/persistence/nodeRunLifecycleCore.ts`，同步版与中立异步孪生都向下取用同一份。
+// 这里继续 re-export，`@/services/lifecycle` 与既有调用方的 import 路径一格不动。
+export {
+  ConcurrentNodeRunTransition,
+  assertNodeRunSourceTerminationAdmission,
+  type NodeRunStatusUpdateExtra,
+} from '../nodeRunLifecycleCore'
 
 /**
  * High-level transition by named event. The event determines both the
@@ -154,7 +104,10 @@ export class ConcurrentNodeRunTransition extends ConflictError {
  *     moved the row out of `expectedFrom` between our read and update
  */
 export async function transitionNodeRunStatus(args: {
-  db: DbClient
+  // RFC-359 W8：体内已全部走中立原语（中立预读 + `withTaskExecutionWrite` + `fenceTaskWrite`
+  // + 中立异步 CAS），不再有 bun:sqlite 独有的同步面——两个引擎都跑得动，签名随之放宽
+  // （与 W4-D28b 放宽 `transitionMergeState` 同形）。
+  db: ProviderNeutralDatabase
   nodeRunId: string
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra
@@ -167,21 +120,47 @@ export async function transitionNodeRunStatus(args: {
   // statement (atomic on its own), callers may already be inside one, and an
   // extra BEGIN/COMMIT per transition changed the retry behaviour of the
   // session-lease claim (runner.test.ts caught it on CI).
-  const taskId = args.db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, args.nodeRunId))
-    .get()?.taskId
+  // RFC-359 W8 —— 这条预读原本是 `.get()`（bun:sqlite 独有的同步游标），它一个人就把整个
+  // `transitionNodeRunStatus` 钉在 SQLite 上，PG 上第一句就炸。改成 `setNodeRunStatus` 早就在用的
+  // 中立形态（`.limit(1)` + `[0]`），本函数至此两个引擎都跑得动——下面那条中立写事务才有对拍面。
+  const taskId = (
+    await args.db
+      .select({ taskId: nodeRuns.taskId })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, args.nodeRunId))
+      .limit(1)
+  )[0]?.taskId
   const executionContext =
     args.executionContext ??
     (taskId === undefined ? undefined : currentTaskExecutionContext(taskId))
-  if (executionContext === undefined) return transitionNodeRunStatusTx({ tx: args.db, ...args })
+  // 无执行上下文：不开事务的独立 CAS（单条 UPDATE 本身就是原子的）。同样改走中立孪生——
+  // 旧的同步版在 PG 上不可用，留着等于把这条分支继续锁死在一个引擎上。
+  if (executionContext === undefined) {
+    return await transitionNodeRunStatusInTransaction({
+      tx: args.db,
+      nodeRunId: args.nodeRunId,
+      event: args.event,
+      ...(args.extra === undefined ? {} : { extra: args.extra }),
+    })
+  }
   assertTaskExecutionContext(executionContext, taskId)
-  return taskExecutionModule.ownership.withOwnedTaskTx({
-    db: args.db,
-    token: executionContext.token,
-    now: Date.now(),
-    run: (tx) => transitionNodeRunStatusTx({ tx, ...args }),
+  // RFC-359 W8 —— 有执行上下文的分支改走中立事务原语（`withTaskExecutionWrite` + `fenceTaskWrite`
+  // + 中立异步 CAS），与合一前的 `withOwnedTaskTx`（`dbTxSync` + inline owner CAS）逐字同义：
+  // 同一笔写事务里先对 owner 行做 token CAS（命中 `claimed` 的精确 owner 才放行并推进 revision），
+  // 再做 node_run 的状态 CAS；围栏不过抛同一个 `task-execution-stale-owner`。
+  const now = Date.now()
+  return await withTaskExecutionWrite(args.db, async (tx) => {
+    await fenceTaskWrite(tx, {
+      taskId: executionContext.token.taskId,
+      context: executionContext,
+      now,
+    })
+    return await transitionNodeRunStatusInTransaction({
+      tx,
+      nodeRunId: args.nodeRunId,
+      event: args.event,
+      ...(args.extra === undefined ? {} : { extra: args.extra }),
+    })
   })
 }
 
@@ -280,7 +259,8 @@ export function cancelOpenNodeRunsTx(args: {
  * Prefer `transitionNodeRunStatus()` when the transition has a clear name.
  */
 export async function setNodeRunStatus(args: {
-  db: DbClient
+  // RFC-359 W8：同 `transitionNodeRunStatus`——体内两条分支都已中立，签名放宽到两个引擎共用。
+  db: ProviderNeutralDatabase
   nodeRunId: string
   to: NodeRunStatus
   allowedFrom: readonly NodeRunStatus[]
@@ -322,11 +302,20 @@ export async function setNodeRunStatus(args: {
   const executionContext = args.executionContext ?? currentTaskExecutionContext(row.taskId)
   if (executionContext !== undefined) {
     assertTaskExecutionContext(executionContext, row.taskId)
-    return taskExecutionModule.ownership.withOwnedTaskTx({
-      db: args.db,
-      token: executionContext.token,
-      now: Date.now(),
-      run: (tx) => setNodeRunStatusTx({ tx, ...args }),
+    // RFC-359 W8 —— 同 `transitionNodeRunStatus`：中立事务原语替下 `withOwnedTaskTx`，
+    // 围栏与 CAS 的顺序、语义、错误码都不变。
+    const now = Date.now()
+    return await withTaskExecutionWrite(args.db, async (tx) => {
+      await fenceTaskWrite(tx, { taskId: row.taskId, context: executionContext, now })
+      return await setNodeRunStatusInTransaction({
+        tx,
+        nodeRunId: args.nodeRunId,
+        to: args.to,
+        allowedFrom: args.allowedFrom,
+        ...(args.extra === undefined ? {} : { extra: args.extra }),
+        ...(args.allowTerminal === undefined ? {} : { allowTerminal: args.allowTerminal }),
+        ...(args.reason === undefined ? {} : { reason: args.reason }),
+      })
     })
   }
   assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, args.to)

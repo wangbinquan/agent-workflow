@@ -13,7 +13,7 @@ import {
   createOwnershipToken,
   createWorkerIdentity,
 } from '@/modules/task-execution/domain/ownership'
-import { PostgresqlTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence'
+import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import { withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 // RFC-359：owner CAS 围栏只有中立模块这一份定义（PG 那份是逐字重复，已删）。
 import { assertTaskOwnerTx } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
@@ -194,7 +194,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       ownerRevision: 3,
     })
     const fake = postgresqlFixture([{}, { values: [[4, 250]] }, {}])
-    const persistence = new PostgresqlTaskOwnershipPersistence(fake.db)
+    const persistence = new DrizzleTaskOwnershipPersistence(fake.db)
 
     await expect(persistence.heartbeat({ token, now: 150, leaseMs: 100 })).resolves.toMatchObject({
       taskId: 'task-1',
@@ -228,7 +228,7 @@ describe('RFC-349 task-execution provider adapters', () => {
     const fake = postgresqlFixture([{}, { values: [] }, {}])
 
     await expect(
-      new PostgresqlTaskOwnershipPersistence(fake.db).heartbeat({
+      new DrizzleTaskOwnershipPersistence(fake.db).heartbeat({
         token,
         now: 150,
         leaseMs: 100,

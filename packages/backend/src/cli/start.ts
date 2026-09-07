@@ -309,7 +309,7 @@ import {
   type PostgresqlDaemonApplication,
   type PostgresqlDaemonApplicationInput,
 } from './postgresqlDaemonApplication'
-import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import {
   createPostgresqlCollaborationCommittedEventProjection,
   createPostgresqlHumanGateContinuationRecoveryQueries,
@@ -608,7 +608,7 @@ async function composePostgresqlProviderSession(
     provider: 'postgresql',
     generationId: input.provider.generation.payload.generationId,
     database: input.config.database,
-    store: createPostgresqlMaintenanceRunStore(db),
+    store: createMaintenanceRunStore(db),
     appHome: Paths.root,
     configPath: Paths.config,
     loadConfig: () => loadConfig(Paths.config),

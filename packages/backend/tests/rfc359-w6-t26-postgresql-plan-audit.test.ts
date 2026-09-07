@@ -9,7 +9,12 @@
 //
 // 这个文件补的就是那一半：在真 PostgreSQL 上把 RFC-311 的基准语料铺开，让每条热路径
 // 正常跑，把它**实际执行**的语句连同绑定参数抓下来，逐条 `EXPLAIN (ANALYZE, BUFFERS)`，
-// 再把发现的计划缺陷钉成账本。账本随索引 / 查询改写补齐而缩，缩到零这个文件就可以退役。
+// 再把发现的计划缺陷钉成账本。
+//
+// **W8-T26 起账本已空**——采集到的三条缺口全部销账（改写见 `PLAN_GAPS` 上方的表）。
+// 账本空掉**不**意味着这个文件退役：它此刻的主职从「记账」翻转成「防复辟」——下面第①条
+// 断言会把任何**新**长出来的逐行子计划连同完整计划文本报出来，而两条正向守卫
+// （SQLite 上的具名索引 PG 一条不少 / 默认视图翻页确实走 keyset 索引）本来就与账本无关。
 //
 // # 判据用什么量：buffers 与 loops，**不用墙钟毫秒**
 //
@@ -93,6 +98,9 @@ const OPERATION_ID = 'lcop_rfc359_w6_t26'
  * 10000 是实测下界：3000 行时 PostgreSQL 还不肯为 facet_values 那个相关 EXISTS 选索引
  * 扫描，账上四条里有两条量不出来（计划翻转点在 3000–4000 之间）。10000 行离翻转点足够远，
  * 整个文件仍然只跑 4 秒。改这个数就要重新采一遍 `buffersPerRow`。
+ *
+ * W8-T26 把那三条缺口改写掉之后，这个下界的意义换成了「防复辟网的分辨率」：语料太小时
+ * 新长出来的逐行子计划同样会被 planner 藏在顺序扫描里而量不出来。**只许加不许减。**
  */
 const AUDIT_ROWS = 10_000
 
@@ -140,64 +148,43 @@ interface PlanGap {
 }
 
 /**
- * 2026-09-07 在 PostgreSQL 17.11 上实测。每条都附了「缺什么」——那是 T23/T24 那刀的输入。
+ * **账本当前为空——三条缺口已于 W8-T26 全部销账。**
  *
- * **销账规则**：补完索引 / 改完查询后对应条目会不再被观察到，此时把它从这个数组里删掉；
- * 留着不删会被下面第二条断言判红（账本不许留烂账）。
+ * 2026-09-07 采集的三条（T26-G1 任务目录 `facet_attention`、T26-G3 / T26-G4 仓库
+ * facets 的两个相关 EXISTS）根因同一个：**写在聚合的 `CASE` 里的相关子查询无法被上提成
+ * semi join**——WHERE 里的 `EXISTS` 两个 planner 都会上提，`SUM(CASE WHEN … EXISTS(…) …)`
+ * 里的只能对每一行重跑一遍，`loops` 因而等于表行数。三条都改掉之后 `loops` 回到 1：
+ *
+ *   | 缺口   | buffers/row | 50000 行语料上的单条语句                          | 改写                     |
+ *   |--------|-------------|---------------------------------------------------|--------------------------|
+ *   | G1     | 2.17 → 0.04 | 84.1ms / 107,042 buffers → 21.1ms / 2,107 buffers  | 预聚合 + LEFT JOIN       |
+ *   | G3+G4  | 2.00 → 0.02 | 122.3ms / 200,820 buffers → 18.7ms / 824 buffers   | `exists` 回 WHERE，三格互斥 |
+ *
+ * 两条改写**形状不同**，因为两张被 join 的表在生产里的相对大小不同：
+ *   · G1（`taskListPage/query.ts` 的 `fastDefaultRootQuery`）被聚合的 `lifecycle_alerts`
+ *     是小表、外层 `tasks` 本来就要全扫 ⇒ 预聚合成
+ *     `LEFT JOIN (SELECT DISTINCT task_id … WHERE resolved_at IS NULL)` 是净赚；
+ *   · G3/G4（`repositoryWorkspaceSqlStore.referencedFacetCounts`）如果照搬预聚合，代价会
+ *     从 O(仓库数) 换成 O(**任务数**)，而生产里任务表比仓库表大几个数量级——本刀实测
+ *     200 仓库 / 50000 任务的形态上 SQLite 从 0.2ms 掉到 16ms，并触发 `rfc311-perf-guards`
+ *     的「不许扫无界表」。改成把 `exists` 送回 WHERE 子句、`referenced` 拆成三格互斥标量
+ *     子查询（`E / ¬E∧L / ¬E∧¬L∧S`）相加：PostgreSQL 上 200 仓库 112ms → 19ms、
+ *     50000 仓库 322ms → 59ms，SQLite 两种比例下都不退化。
+ *
+ * 两条语句的估算代价随之掉到 `jit_above_cost=100000` 以下，**JIT 编译一并消失**
+ * （改写前 G1 那条 84.1ms 里 32.4ms 是编译、G3/G4 那条 122.3ms 里 63.6ms 是编译）。
+ * 结果等价由 `rfc359-w8-t26-plan-reshape-conformance.test.ts` 在两个引擎上钉住
+ * （重复计数 / 空集 / NULL / 悬空键四类边界，对着改写前的 SQL 原文做 oracle）。
+ *
+ * 空账本**不是**这个文件可以退役的信号：下面第①条断言（观察到的缺陷必须已在账上）此刻
+ * 变成一张纯粹的防复辟网——任何人往这些热路径里再写进一个逐行子计划，它就会带着完整计划
+ * 文本红出来。同文件的「具名索引不许只存在于 SQLite」与「默认视图确实走 keyset 索引」两条
+ * 正向守卫也照旧。
+ *
+ * **记账规则**：新观察到的缺陷连同「缺什么」一起加进来；补完索引 / 改完查询后对应条目会
+ * 不再被观察到，此时把它删掉（留着不删会被下面第②条断言判红，账本不许留烂账）。
  */
-const PLAN_GAPS: readonly PlanGap[] = [
-  {
-    id: 'T26-G1',
-    path: 'task-operations catalog — 默认视图首页',
-    node: 'Index Scan using idx_lifecycle_alerts_task on lifecycle_alerts',
-    defect: 'per-row-subplan',
-    plan:
-      'facet_values CTE 顺序扫全表 tasks，再对**每一行**跑一次 ' +
-      '`EXISTS (SELECT 1 FROM lifecycle_alerts WHERE task_id = t.id AND resolved_at IS NULL)`；' +
-      'PostgreSQL 走 idx_lifecycle_alerts_task 命中 task_id 后再 Filter resolved_at，loops = 全表行数。',
-    missing:
-      '部分索引 `lifecycle_alerts(task_id) WHERE resolved_at IS NULL`（把 Filter 变成 Index Cond，' +
-      '索引只含未闭合告警、体积小一个量级）。真正的解是把这个 EXISTS 从 CASE 里提出来——' +
-      'CASE 里的相关子查询 PostgreSQL **无法**上提成 semi join，只能逐行跑；' +
-      '预聚合成 `LEFT JOIN (SELECT DISTINCT task_id FROM lifecycle_alerts WHERE resolved_at IS NULL)` 即可一次扫完。',
-    buffersPerRow: 2.2,
-    sqlite:
-      '同一条 CTE 在 SQLite 上也是相关子查询，但整条路径 16.7ms（PG 84.6ms，50000 行语料）。' +
-      '注：**过滤视图**共用同一段 CTE，却因为过滤后的行数估算小得多而拿到了「一次求值 + 哈希探测」' +
-      '的子计划（loops=1），所以那条路径上这个缺陷不复现——账本只登记默认视图这一条。',
-  },
-  {
-    id: 'T26-G3',
-    path: '/api/cached-repos — keyset 首页',
-    node: 'Index Only Scan using idx_task_repos_cached_repo_task on task_repos',
-    defect: 'per-row-subplan',
-    plan:
-      'facets 聚合 `SELECT count(*), sum(CASE WHEN EXISTS(task_repos…) OR EXISTS(tasks…) …) FROM cached_repos` ' +
-      '顺序扫全表 cached_repos，对每一行跑两个相关 EXISTS（SubPlan 1 + SubPlan 3），' +
-      '50000 行语料上 200,820 个 shared buffer 命中。',
-    missing:
-      '**不是缺索引，是缺等价的查询形状**：SQLite 侧靠 `capabilities.indexHint()` 渲染出的 ' +
-      '`INDEXED BY` 让聚合走覆盖索引，PostgreSQL 没有对应语法（矩阵里 PG 侧返回空）。' +
-      '正解是把两个相关 EXISTS 改写成对 `task_repos` / `tasks` 的一次预聚合 + LEFT JOIN，' +
-      '两个引擎共用；那之后 indexHint 这条能力项也可以退役。',
-    buffersPerRow: 2.1,
-    sqlite: '整条路径 SQLite 21.8ms / PG 115.3ms（PG 侧单条 facets 语句 124.4ms，50000 行语料）',
-  },
-  {
-    id: 'T26-G4',
-    path: '/api/cached-repos — keyset 首页',
-    node: 'Index Scan using idx_tasks_cached_repo on tasks',
-    defect: 'per-row-subplan',
-    plan:
-      '同 T26-G3 的第二个相关 EXISTS（SubPlan 3：`EXISTS (tasks WHERE cached_repo_id = … ' +
-      'AND NOT EXISTS (task_repos …))`），同样每行跑一次。',
-    missing:
-      '同 T26-G3：把两个相关 EXISTS 改写成对 task_repos / tasks 的一次预聚合 + LEFT JOIN，' +
-      '两个引擎共用一份形状。',
-    buffersPerRow: 2.1,
-    sqlite: '同 T26-G3：整条路径 SQLite 21.8ms / PG 115.3ms（50000 行语料）',
-  },
-]
+const PLAN_GAPS: readonly PlanGap[] = []
 
 // ---------------------------------------------------------------------------
 // 语料
@@ -454,19 +441,41 @@ export function observePlanDefects(plan: string, corpusRows: number): PlanObserv
 // 账本自证（两个引擎都跑，不需要真库）
 // ---------------------------------------------------------------------------
 
+/**
+ * 一条账目里没填全的字段名。**纯函数**——账本空掉之后「逐条检查」一次也不跑，所以判据
+ * 本身必须另外对着一条捏造的残缺条目证明它还在判（否则这条守卫就静默了）。
+ */
+export function incompleteGapFields(gap: PlanGap): string[] {
+  const bad: string[] = []
+  if (!/^T26-G\d+$/.test(gap.id)) bad.push('id')
+  if (gap.path.length === 0) bad.push('path')
+  if (gap.node.length === 0) bad.push('node')
+  if (gap.plan.length <= 20) bad.push('plan')
+  if (gap.missing.length <= 20) bad.push('missing')
+  if (!(gap.buffersPerRow > 0)) bad.push('buffersPerRow')
+  if (gap.sqlite.length === 0) bad.push('sqlite')
+  return bad
+}
+
 describe('RFC-359 W6-T26 —— 缺口账本自身的形状', () => {
-  test('每条都有 id / 路径 / 节点 / 缺什么 / 实测代价，且 id 唯一', () => {
-    expect(PLAN_GAPS.length).toBeGreaterThan(0)
+  test('每条都有 id / 路径 / 节点 / 缺什么 / 实测代价，且 id 唯一（空账本 = 缺口已全销）', () => {
     expect(new Set(PLAN_GAPS.map((gap) => gap.id)).size).toBe(PLAN_GAPS.length)
-    for (const gap of PLAN_GAPS) {
-      expect(gap.id, gap.id).toMatch(/^T26-G\d+$/)
-      expect(gap.path.length, gap.id).toBeGreaterThan(0)
-      expect(gap.node.length, gap.id).toBeGreaterThan(0)
-      expect(gap.plan.length, gap.id).toBeGreaterThan(20)
-      expect(gap.missing.length, gap.id).toBeGreaterThan(20)
-      expect(gap.buffersPerRow, gap.id).toBeGreaterThan(0)
-      expect(gap.sqlite.length, gap.id).toBeGreaterThan(0)
-    }
+    for (const gap of PLAN_GAPS) expect(incompleteGapFields(gap), gap.id).toEqual([])
+
+    // negative fixture：账本此刻是空的，上面那个循环一次也不跑。
+    expect(
+      incompleteGapFields({
+        id: 'G7',
+        path: '',
+        node: '',
+        defect: 'per-row-subplan',
+        plan: '太短',
+        missing: '太短',
+        buffersPerRow: 0,
+        sqlite: '',
+      }),
+      '账目完整性判据在放空枪——它连一条七个字段全缺的条目都报不出来',
+    ).toEqual(['id', 'path', 'node', 'plan', 'missing', 'buffersPerRow', 'sqlite'])
   })
 
   test('计划解析器认得出「每行再查一次」，也不误判一次性节点', () => {

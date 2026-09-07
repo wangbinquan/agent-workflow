@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { runPostgresqlRetentionSweepSlice } from '@/platform/persistence/postgresqlMaintenanceRetention'
 import {
   createPostgresqlEventsArchiveStore,
@@ -81,7 +81,7 @@ function fixture(fenceAccepted = true) {
   const client = createPostgresqlDatabaseClient(runtime)
   return {
     client,
-    store: createPostgresqlMaintenanceRunStore(client),
+    store: createMaintenanceRunStore(client),
     statements,
     get releases() {
       return releases

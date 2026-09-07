@@ -33,10 +33,6 @@ import type {
 import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../composition/humanGate'
 import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../composition/intentTerminalization'
 import {
-  finalizeTaskExecutionRecovery as finalizeTaskExecutionRecoveryInternal,
-  prepareTaskExecutionRecovery as prepareTaskExecutionRecoveryInternal,
-} from '../composition/sqliteTaskExecutionRecovery'
-import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
   classifyCodeHostProbeResponse as classifyCodeHostProbeResponseInternal,
   codeHostRecoveryBaseUrlDigest as codeHostRecoveryBaseUrlDigestInternal,
@@ -240,8 +236,6 @@ export const bindTaskDecisionParticipantInTx = bindTaskDecisionParticipantInTxIn
 export const humanGateNodeProjectionFence = humanGateNodeProjectionFenceInternal
 export const isLegacyTaskGateContinuationPayload = isLegacyTaskGateContinuationPayloadInternal
 export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntentsTxInternal
-export const prepareTaskExecutionRecovery = prepareTaskExecutionRecoveryInternal
-export const finalizeTaskExecutionRecovery = finalizeTaskExecutionRecoveryInternal
 export const buildCodeHostRecoveryDescriptor = buildCodeHostRecoveryDescriptorInternal
 export const classifyCodeHostProbeResponse = classifyCodeHostProbeResponseInternal
 export const codeHostRecoveryBaseUrlDigest = codeHostRecoveryBaseUrlDigestInternal

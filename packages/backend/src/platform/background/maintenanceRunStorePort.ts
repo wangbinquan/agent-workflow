@@ -46,15 +46,22 @@ export interface ClaimedMaintenanceRun {
   readonly leaseToken: string
 }
 
-/** Closed scheduler/Worker persistence participant. Both providers implement
- * the same async lease/fence state machine. */
+/** Closed scheduler/Worker persistence participant. One implementation
+ * (`platform/persistence/maintenanceRunStore.ts`) serves both providers; this
+ * port is the contract the scheduler and the maintenance Worker own. */
 export interface MaintenanceRunStore {
   enqueue(input: EnqueueMaintenanceRunInput): Promise<{
     readonly row: MaintenanceRunRecord
     readonly inserted: boolean
     readonly coalesced: boolean
   }>
-  recoverExpired(now: number): Promise<number>
+  /**
+   * 恢复所有 `running` 行（Worker 启动时的唯一恢复入口）。
+   *
+   * RFC-359 W8：此前还有一个只按 `leaseExpiresAt < now` 恢复的 `recoverExpired`，
+   * **生产从来没有调用过它**（唯一的恢复调用点是 `maintenanceWorker.ts` 初始化时的
+   * `recoverRunning`），已随合一删除。租约过期本身仍由这条路径在下次 Worker 启动时兜住。
+   */
   recoverRunning(now: number): Promise<number>
   claimNext(input: {
     readonly leaseToken: string
@@ -80,7 +87,6 @@ export interface MaintenanceRunStore {
     readonly nextAttemptAt?: number
   }): Promise<boolean>
   read(runId: string): Promise<MaintenanceRunRecord | null>
-  hasCycle(cycleKey: string): Promise<boolean>
   readProjection(): Promise<{
     readonly active: MaintenanceRunRecord | null
     readonly last: MaintenanceRunRecord | null

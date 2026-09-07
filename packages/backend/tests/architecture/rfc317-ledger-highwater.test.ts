@@ -221,11 +221,31 @@ const PREVIOUS = readPreviousBaselines()
  * 「被等值断言」这一条不能省——实测：守卫目录内顶层集合常量共 143 个未登记，
  * 加上等值断言约束后降到 23 个且几乎全是真账本，其余是语料根 / 正则表 / 夹具。
  *
- * 判据 B 只作用于 `tests/architecture/`：守卫目录外也有账本（实测 13 处，含
- * `scheduler-audit-s10` 的 `RAW_TRANSACTION_SITES`、`rfc310-architecture-lock` 的
- * `COMPOSITION_CONSUMERS`、前端 `tab-callsite-contract` 的 `TRUE_TAB_CALLSITES`），
- * 它们目前只被 A 覆盖、A 又覆盖不到 —— 已记入 `docs/audit-backlog.md`，本刀不扩面：
- * 那些文件同时是普通测试，直接套 B 会把大批夹具误判成账本。
+ * 判据 B 只作用于 `tests/architecture/`。守卫目录**外**也有账本（RFC-359 W7 实测 13 处，
+ * 含 `scheduler-audit-s10` 的 `RAW_TRANSACTION_SITES`、`rfc310-architecture-lock` 的
+ * `COMPOSITION_CONSUMERS`、前端 `tab-callsite-contract` 的 `TRUE_TAB_CALLSITES`），而
+ * 目录外**不能**直接套 B：那些文件同时是普通测试，实测 B 会捞出 152 个未登记常量、
+ * 其中 139 个是夹具。于是有第三条——
+ *
+ *   **C（来源）**：顶层「一批同形条目」的常量，被等值断言，声明后不再就地改动，
+ *   且同一条断言的**另一侧**取自**仓库锚点**（`import.meta.dir(name)` / `__dirname` …）。
+ *
+ * C 的立意是把账本与夹具的**真实**区别写成机器判据：账本断言的是**仓库自己的存量**，
+ * 夹具断言的是**一个函数对给定输入的输出**。一个测试要谈论仓库，就必须先把自己在仓库里
+ * 的位置变成一条路径——除此之外没有别的入口。所以 C 认的是「**从哪儿读起**」而不是
+ * 「**怎么读**」：`readdirSync` / `listSourceFiles` / `migrateSqlite` / `spawnSync('git')`
+ * 是一张永远漏词的 API 词汇表（W7 收口时正是它漏掉了经 `migrateSqlite` 取证的
+ * `rfc359-w5-t19g`），而锚点只有那几种写法，且值从锚点流到断言这件事是可追的
+ * （沿声明与扫描累加器做一次不动点传播，与 RFC-349 `postgresqlSurface.ts` 把
+ * 「命名前缀」换成「类型可达」是同一个动作）。
+ *
+ * 「一批同形条目」这一条不能省：账本是**一批**同形条目，夹具常常是**一条**领域记录。
+ * 对象字面量按数据键（带引号）或值本身还是集合时才算集合，键是裸标识符、值是标量的
+ * 对象（`{ kind: 'ok', summary: '', message: '' }`）是记录不是账本。实测：加上这一条，
+ * 目录外新暴露的常量从 15 个降到 4 个，而 13 处已知账本一个都没丢。
+ *
+ * C ⊆ B（C 比 B 多要求一侧来自锚点），所以它在守卫目录内一条都不多认——实测 0 条，
+ * 目录内的口径完全没动。
  *
  * 每一处要么在基线文件里有条目，要么进下面这张**具名豁免表**并写清为什么它不是账本。
  */
@@ -258,6 +278,22 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
     'matcher 自证的假测试单元（fixture-foo-single-engine.test.ts），不来自真实仓库',
   'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_HALF_TEST':
     'matcher 自证的假测试单元（fixture-foo-half.test.ts），不来自真实仓库',
+  // —— 以下四条由判据 C（RFC-359 W7 第二波）扫出来，都住在守卫目录**外**。 ——
+  //
+  // ③ **双向**常驻基线：文件头注释写明「reverse AST check, with resident baselines so
+  //    drift is visible in either direction」——它记的不是债，是「今天读到了哪些字段」。
+  //    校验器多读一个字段是正常演进，钉一个只降不升的数字会在那时候假红。三处同族，
+  //    一起豁免（只豁免其中两处会让「为什么这个族里有一处要登记」变成一道无解的题）。
+  'packages/backend/tests/intent-teaching-registry.test.ts|VALIDATOR_BASELINE':
+    'RFC-348 双向漂移基线：记「校验器今天读哪些名字」，两个方向都要看得见漂移，不是只降不升的债',
+  'packages/backend/tests/intent-teaching-registry.test.ts|LAUNCH_BASELINE':
+    'RFC-348 双向漂移基线：记「启动路径今天读哪些名字」，两个方向都要看得见漂移，不是只降不升的债',
+  'packages/backend/tests/intent-teaching-registry.test.ts|FRONTEND_BASELINE':
+    'RFC-348 双向漂移基线：记「前端今天读哪些名字」，两个方向都要看得见漂移，不是只降不升的债',
+  // ④ 断言是 `expect.arrayContaining(...)` 的**部分**匹配，不是存量快照——这批工具名
+  //    是「只读工具至少得有这些」的正向清单，多一个只读工具时它本来就该长。
+  'packages/backend/tests/rfc326-mcp-review-tools.test.ts|READ_TOOLS':
+    'RFC-326 只读评审工具的正向清单，经 expect.arrayContaining 部分匹配，不是仓内存量的快照',
 }
 
 describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () => {
@@ -327,6 +363,10 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_HALF_TEST',
       'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SINGLE_ENGINE_TEST',
       'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES',
+      'packages/backend/tests/intent-teaching-registry.test.ts|FRONTEND_BASELINE',
+      'packages/backend/tests/intent-teaching-registry.test.ts|LAUNCH_BASELINE',
+      'packages/backend/tests/intent-teaching-registry.test.ts|VALIDATOR_BASELINE',
+      'packages/backend/tests/rfc326-mcp-review-tools.test.ts|READ_TOOLS',
     ])
   })
 
@@ -408,6 +448,135 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
     ].join('\n')
     expect(ledgerShapedSymbols(nameOnlyInsideStringLiteral, true)).toEqual([])
   })
+
+  /**
+   * 判据 C 的自证。正例是那 13 处逃逸账本的**真实形状**（逐条对着源码抄下来的骨架），
+   * 反例是同一批文件里、判据必须放过的夹具形状。两个方向都写死：只证「认得出」不算数
+   * ——一条把所有集合都算成账本的判据也能通过那一半。
+   */
+  test('matcher 自证（判据 C）：目录外「拿仓库扫描结果对账」的集合算账本，夹具不算', () => {
+    // ① 扫描累加器在实际侧、账本在期望侧（`rfc310-architecture-lock` 的形状）。
+    //    名字完全不命中词汇表，判据 A 放过它。
+    const scannedAgainstLedger = [
+      "const SRC = resolve(import.meta.dir, '..', 'src')",
+      "const COMPOSITION_CONSUMERS: string[] = ['cli/start.ts']",
+      'function walk() { const out = []; for (const f of readdirSync(SRC)) out.push(f); return out }',
+      "test('x', () => { expect(walk().sort()).toEqual(COMPOSITION_CONSUMERS) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(scannedAgainstLedger)).toEqual(['COMPOSITION_CONSUMERS'])
+
+    // ② 下标赋值累加器 + **故意留空**的账本（`scheduler-audit-s10` 的形状）。
+    //    `x[k] = v` 也是「声明之后又被塞了东西」——判据初版只认 `.push` 家族，漏了它。
+    const indexAccumulator = [
+      "const BACKEND_SRC = resolve(__dirname, '..', 'src')",
+      'const RAW_TRANSACTION_SITES: Record<string, number> = {}',
+      'const actual: Record<string, number> = {}',
+      'for (const file of walkTsFiles(BACKEND_SRC)) { actual[file] = 1 }',
+      "test('x', () => { expect(actual).toEqual(RAW_TRANSACTION_SITES) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(indexAccumulator)).toEqual(['RAW_TRANSACTION_SITES'])
+
+    // ③ 锚点是 `import.meta.dirname`（前端 vitest 的写法，`rfc317-dead-class-invariants`）。
+    //    meta 属性必须整体当一个名字认——拆成 `dirname` 就认不出锚点了。
+    const viteAnchor = [
+      "const SRC = resolve(import.meta.dirname, '..', 'src')",
+      "const UNDEFINED_CLASS_SNAPSHOT: readonly string[] = ['btn-ghost']",
+      'const undefined_ = classesIn(SRC)',
+      "test('x', () => { expect(undefined_).toEqual([...UNDEFINED_CLASS_SNAPSHOT].sort()) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(viteAnchor)).toEqual(['UNDEFINED_CLASS_SNAPSHOT'])
+
+    // —— 反例 ——
+
+    // ④ 没有仓库锚点：断言的另一侧是被测函数对给定输入的输出。这是**绝大多数**测试的
+    //    形状，误伤它等于逼着所有人给普通夹具改名。
+    const unitFixture = [
+      "const EXPECTED_ROWS = [{ id: 'a' }]",
+      "test('x', () => { expect(project(input)).toEqual(EXPECTED_ROWS) })",
+    ].join('\n')
+    expect(
+      ledgerShapedSymbols(unitFixture),
+      '判据 C 认的是「另一侧取自仓库」，没有锚点就不该认',
+    ).toEqual([])
+
+    // ⑤ 有锚点，但账本侧是**一条领域记录**（裸标识符键 + 标量值），不是一批条目。
+    //    `rfc339-wrapper-runtime-cutover` 的 `ok: NodeStepOutcome` 就是这个形状：
+    //    同一个文件里确实在扫仓，夹具只是恰好跟扫描结果撞在同一条断言上。
+    const recordFixtureInScanningFile = [
+      "const ROOT = resolve(import.meta.dir, '..', '..')",
+      "const ok = { kind: 'ok', summary: '', message: '' }",
+      'const scanned = tsFilesUnder(ROOT)',
+      "test('x', () => { expect(runOver(scanned)).toEqual(ok) })",
+    ].join('\n')
+    expect(
+      ledgerShapedSymbols(recordFixtureInScanningFile),
+      '一条领域记录不是账本——账本是一批同形条目',
+    ).toEqual([])
+
+    // ⑥ 有锚点、也是一批条目，但它自己就是扫描累加器（判据的**实际**侧）。
+    const accumulatorInScanningFile = [
+      "const ROOT = resolve(import.meta.dir, '..')",
+      'const observed: string[] = []',
+      'for (const f of readdirSync(ROOT)) observed.push(f)',
+      "test('x', () => { expect(observed).toEqual([...LEDGER]) })",
+    ].join('\n')
+    expect(ledgerShapedSymbols(accumulatorInScanningFile)).toEqual([])
+
+    // ⑦ 判据 C 只在目录外生效；目录内仍走更宽的 B（⑤ 在 B 眼里是账本）。
+    expect(
+      ledgerShapedSymbols(recordFixtureInScanningFile, true),
+      '守卫目录内的口径不该被 C 收窄——C 是目录外的替代，不是全局的加严',
+    ).toEqual(['ok'])
+  })
+
+  /**
+   * 变异检查：把判据 C 的两条约束各自拆掉，自证必须变红。
+   *
+   * 这条是上面那批正 / 反例的「牙齿检查」——没有它，判据被人改松（比如哪天顺手把
+   * 「一批同形条目」删了图省事）时上面的反例会静静地跟着放宽，而没有一处会红。
+   */
+  test('判据 C 的自证有牙齿：拆掉任一条约束，反例立刻被误判成账本', () => {
+    const recordFixture = ts.createSourceFile(
+      'x.ts',
+      [
+        "const ROOT = resolve(import.meta.dir, '..', '..')",
+        "const ok = { kind: 'ok', summary: '', message: '' }",
+        'const scanned = tsFilesUnder(ROOT)',
+        "test('x', () => { expect(runOver(scanned)).toEqual(ok) })",
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const sides = equalitySides(recordFixture)
+    const derived = repoDerivedNames(recordFixture)
+    // 「另一侧取自仓库锚点」这一条本来就成立（`scanned` 由 ROOT 算出来）——
+    // 所以放过 `ok` 的**唯一**理由是「一批同形条目」那一条。拆掉它就会误判。
+    expect(
+      sides.some((side) => [...side.actual].some((name) => derived.has(name))),
+      '这条反例本来就踩中「另一侧来自仓库」，它被放过全靠 entryShaped',
+    ).toBe(true)
+    expect(
+      isEntryCollection(
+        (
+          (recordFixture.statements[1] as ts.VariableStatement).declarationList
+            .declarations[0] as ts.VariableDeclaration
+        ).initializer as ts.Expression,
+      ),
+      '判据被改松了：裸标识符键 + 标量值的对象被当成了一批同形条目',
+    ).toBe(false)
+
+    // 反过来，「一批同形条目」单独也不够——没有锚点时它必须放过普通夹具。
+    const noAnchor = ts.createSourceFile(
+      'x.ts',
+      ["const EXPECTED_ROWS = [{ id: 'a' }]", 'const actual = project(input)'].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    expect(
+      repoDerivedNames(noAnchor),
+      '判据被改松了：没有任何仓库锚点的文件不该产出「来自仓库」的名字',
+    ).toEqual(new Set())
+  })
 })
 
 // 判据 A 的词汇表。RFC-317 T73 —— 补 `ALLOWANCE`：`rfc254-platform-surface-guard` 的
@@ -425,6 +594,174 @@ const EQUALITY_MATCHER = /^(?:toEqual|toStrictEqual)$/
 const MUTATING_METHOD = /^(?:push|unshift|splice|pop|shift|add|set|delete|clear)$/
 
 /**
+ * 判据 C 的**仓库锚点**：把「本文件在仓库里的位置」变成一条路径的那几种写法。
+ *
+ * 这不是一张 API 词汇表。它不枚举「怎么读仓库」（`readdirSync` / `listSourceFiles` /
+ * `migrateSqlite` / `spawnSync('git', …)` …，那种表必然漏词，W7 收口时就漏过一个），
+ * 只认「**从哪儿读起**」——一个测试要谈论仓库自己的存量，就必须先拿到仓库里的一条
+ * 路径，而路径的起点只有这几种写法。
+ */
+const REPO_ANCHOR = /^(?:__dirname|__filename|import\.meta\.(?:dir|dirname|filename|path|url))$/
+
+/**
+ * 一段 AST 里引用到的名字。`import.meta.dir` 这类 meta 属性整体算**一个**名字
+ * （否则 `dir` 会被拆成一个普通标识符，锚点就认不出来了）。
+ */
+function referencedNames(node: ts.Node | undefined): Set<string> {
+  const names = new Set<string>()
+  if (node === undefined) return names
+  const visit = (current: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(current) && ts.isMetaProperty(current.expression)) {
+      names.add(`import.meta.${current.name.text}`)
+      return
+    }
+    if (ts.isIdentifier(current)) names.add(current.text)
+    ts.forEachChild(current, visit)
+  }
+  visit(node)
+  return names
+}
+
+/**
+ * 「一批同形条目」而不是「一条记录」。
+ *
+ * 账本是**一批**条目的快照；夹具常常是**一条**领域记录（`{ kind: 'ok', summary: '',
+ * message: '' }`）。数组 / Set / Map 天然是前者；对象字面量只有在**按数据键**（键是
+ * 带引号的字符串，即键本身是数据：文件路径、class 名、族名）或**值本身还是集合**
+ * （`{ insert: { 'cli/x.ts': 1 } }` 这种两层账本）时才算。键是裸标识符、值是标量的
+ * 对象是一条记录。
+ *
+ * 空对象 / 空数组算集合：**故意留空的账本**（`RAW_TRANSACTION_SITES = {}`，「多一条
+ * 就是红」）必须留在网内。
+ */
+function isEntryCollection(node: ts.Expression): boolean {
+  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+    return isEntryCollection(node.expression)
+  }
+  if (ts.isParenthesizedExpression(node)) return isEntryCollection(node.expression)
+  if (ts.isArrayLiteralExpression(node)) return true
+  if (ts.isNewExpression(node)) return /\b(Set|Map)$/.test(node.expression.getText())
+  if (!ts.isObjectLiteralExpression(node)) return false
+  const assignments = node.properties.filter(ts.isPropertyAssignment)
+  if (assignments.length === 0) return true
+  const keyedByData = assignments.every(
+    (property) => ts.isStringLiteral(property.name) || ts.isComputedPropertyName(property.name),
+  )
+  const nestsCollections = assignments.every((property) => isEntryCollection(property.initializer))
+  return keyedByData || nestsCollections
+}
+
+/**
+ * 值可能来自仓库锚点的名字，按声明与扫描累加器做一次不动点传播。
+ *
+ * 传播两种边：① `const x = <提到锚点的表达式>` / `function f() { …锚点… }` —— 声明沾上；
+ * ② `x.push(…)` / `x[k] = …` 且**改动所在的作用域**里提到了锚点 —— 累加器沾上（扫描
+ * 的典型写法就是「在遍历文件的循环里往累加器塞」，锚点不出现在 push 的实参上）。
+ *
+ * 纯文本判据：不解析 import、不碰磁盘，扫描与自证共用同一份实现。代价是**锚点住在
+ * 被 import 的 helper 里**的守卫认不出来——那是漏，不是误判，与今天（目录外只有判据 A）
+ * 相比不会更差。
+ */
+function repoDerivedNames(source: ts.SourceFile): Set<string> {
+  const derived = new Set<string>()
+  for (const name of referencedNames(source)) if (REPO_ANCHOR.test(name)) derived.add(name)
+  const edges: { readonly name: string; readonly from: Set<string> }[] = []
+  const visit = (node: ts.Node, scope: ts.Node): void => {
+    // 作用域取「函数 / 循环**语句**」而不是 block：扫描的语料通常来自循环头
+    // （`for (const f of walkTsFiles(SRC))`），只看 block 会把锚点漏在外面。
+    const inner =
+      ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isIterationStatement(node, false)
+        ? node
+        : scope
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      edges.push({ name: node.name.text, from: referencedNames(node.initializer) })
+    }
+    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+      edges.push({ name: node.name.text, from: referencedNames(node.body) })
+    }
+    if (isInPlaceMutation(node)) {
+      edges.push({ name: mutationTarget(node), from: referencedNames(scope) })
+    }
+    ts.forEachChild(node, (child) => visit(child, inner))
+  }
+  visit(source, source)
+  for (;;) {
+    const before = derived.size
+    for (const edge of edges) {
+      if (derived.has(edge.name)) continue
+      for (const from of edge.from) {
+        if (derived.has(from)) {
+          derived.add(edge.name)
+          break
+        }
+      }
+    }
+    if (derived.size === before) return derived
+  }
+}
+
+/** `x.push(…)` 家族，或 `x[k] = …` 下标赋值——两者都是「声明之后又被塞了东西」。 */
+function isInPlaceMutation(node: ts.Node): boolean {
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) &&
+    MUTATING_METHOD.test(node.expression.name.text)
+  ) {
+    return true
+  }
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isElementAccessExpression(node.left) &&
+    ts.isIdentifier(node.left.expression)
+  )
+}
+
+function mutationTarget(node: ts.Node): string {
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+    return (node.expression.expression as ts.Identifier).text
+  }
+  const binary = node as ts.BinaryExpression
+  return ((binary.left as ts.ElementAccessExpression).expression as ts.Identifier).text
+}
+
+/** 每条等值断言的两侧各自引用到的名字（`expect(左).toEqual(右)`）。 */
+function equalitySides(source: ts.SourceFile): { actual: Set<string>; expected: Set<string> }[] {
+  const sides: { actual: Set<string>; expected: Set<string> }[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      EQUALITY_MATCHER.test(node.expression.name.text)
+    ) {
+      let subject: ts.Expression | undefined
+      const findExpect = (current: ts.Node): void => {
+        if (
+          ts.isCallExpression(current) &&
+          ts.isIdentifier(current.expression) &&
+          current.expression.text === 'expect'
+        ) {
+          subject ??= current.arguments[0]
+        }
+        ts.forEachChild(current, findExpect)
+      }
+      findExpect(node.expression.expression)
+      sides.push({
+        actual: referencedNames(subject),
+        expected: referencedNames(node.arguments[0]),
+      })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return sides
+}
+
+/**
  * 声明之后被就地改动过的顶层常量名。
  *
  * 账本与扫描累加器在**形状**上分不开——两者都可能是 `const x: string[] = []`；分得开的是
@@ -436,14 +773,7 @@ const MUTATING_METHOD = /^(?:push|unshift|splice|pop|shift|add|set|delete|clear)
 function mutatedNames(source: ts.SourceFile): Set<string> {
   const names = new Set<string>()
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      MUTATING_METHOD.test(node.expression.name.text)
-    ) {
-      names.add(node.expression.expression.text)
-    }
+    if (isInPlaceMutation(node)) names.add(mutationTarget(node))
     ts.forEachChild(node, visit)
   }
   visit(source)
@@ -482,12 +812,14 @@ function equalityAssertedNames(source: ts.SourceFile): Set<string> {
 /**
  * 顶层集合常量里、判据 A ∪ B 认定为账本形状的那些。纯函数——扫描与自证共用。
  *
- * `inGuardDirectory` 打开判据 B（见上面 T72 的规则说明）：`tests/architecture/` 里被等值
- * 断言过的顶层集合常量一律算账本，**与名字无关**。目录外只跑判据 A。
+ * `inGuardDirectory` 决定第二条判据是 B 还是 C（见上面 T72 的规则说明）：
+ * `tests/architecture/` 里被等值断言过的顶层集合常量一律算账本、**与名字无关**（B）；
+ * 目录外那批文件同时是普通测试，改用更窄的 C——同一条断言的另一侧必须取自仓库锚点，
+ * 且这一侧得是「一批同形条目」。两处都与判据 A 取并集。
  */
 function ledgerShapedSymbols(text: string, inGuardDirectory = false): string[] {
   const source = ts.createSourceFile('ledger.ts', text, ts.ScriptTarget.Latest, true)
-  const collections: string[] = []
+  const collections: { readonly name: string; readonly entryShaped: boolean }[] = []
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) continue
     for (const declaration of statement.declarationList.declarations) {
@@ -495,15 +827,36 @@ function ledgerShapedSymbols(text: string, inGuardDirectory = false): string[] {
       const initializer = declaration.initializer
       if (initializer === undefined) continue
       if (!isCollectionInitializer(initializer)) continue
-      collections.push(declaration.name.text)
+      collections.push({
+        name: declaration.name.text,
+        entryShaped: isEntryCollection(initializer),
+      })
     }
   }
-  if (!inGuardDirectory) return collections.filter((name) => LEDGER_NAME.test(name))
-  const asserted = equalityAssertedNames(source)
   const mutated = mutatedNames(source)
-  return collections.filter(
-    (name) => LEDGER_NAME.test(name) || (asserted.has(name) && !mutated.has(name)),
-  )
+  if (inGuardDirectory) {
+    const asserted = equalityAssertedNames(source)
+    return collections
+      .filter(({ name }) => LEDGER_NAME.test(name) || (asserted.has(name) && !mutated.has(name)))
+      .map(({ name }) => name)
+  }
+  const derived = repoDerivedNames(source)
+  const sides = equalitySides(source)
+  const assertedAgainstRepoScan = (name: string): boolean =>
+    sides.some(
+      (side) =>
+        (side.expected.has(name) &&
+          [...side.actual].some((other) => other !== name && derived.has(other))) ||
+        (side.actual.has(name) &&
+          [...side.expected].some((other) => other !== name && derived.has(other))),
+    )
+  return collections
+    .filter(
+      ({ name, entryShaped }) =>
+        LEDGER_NAME.test(name) ||
+        (entryShaped && !mutated.has(name) && assertedAgainstRepoScan(name)),
+    )
+    .map(({ name }) => name)
 }
 
 function isCollectionInitializer(node: ts.Expression): boolean {

@@ -32,13 +32,13 @@ import {
   composePostgresqlLegacyCodeReadProviders,
   composeSqliteLegacyCodeReadProviders,
 } from '@/modules/code-capability/composition/legacyCodeReads'
-import { composePostgresqlReviewerResolutionRead } from '@/modules/code-capability/composition/reviewerResolution'
+import { DrizzleReviewerResolutionRead } from '@/modules/code-capability/infrastructure/reviewerResolutionRead'
 import { composePostgresqlDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composePostgresqlWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { composePostgresqlDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
-import { composePostgresqlNodeRunLifecycleParticipantFactory } from '@/modules/task-execution/composition/nodeRunLifecycle'
+import { createNodeRunLifecycleParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { NotFoundError } from '@/util/errors'
@@ -200,7 +200,7 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
       updatedAt: T0,
     })
 
-    const read = composePostgresqlReviewerResolutionRead(asPostgresql(harness.db))
+    const read = new DrizzleReviewerResolutionRead(harness.db)
     expect(
       await read.loadRepositoryCapability({ repositoryId: repoId, capability: 'code-review' }),
     ).toEqual({ templateId })
@@ -433,7 +433,13 @@ describeEachProvider(
       )
     })
 
-    test('节点运行生命周期参与者工厂：在真事务里绑出的参与者可以读节点运行行', async () => {
+    // RFC-359 W8：这里原本驱动的是 `composition/nodeRunLifecycle.ts` 的
+    // `composePostgresqlNodeRunLifecycleParticipantFactory` —— 当初为 collaboration 的
+    // serializable 原子而开的 task-execution 接缝。W7 把两个引擎合到中立的
+    // `createCollaborationRuntimeMechanics` 之后接缝生产消费者归零，整个文件已删；
+    // 中立工厂 `infrastructure/nodeRunLifecyclePersistence.ts::createNodeRunLifecycleParticipantInTx`
+    // 才是两个引擎真正在跑的那一份，这里改直接驱动它。
+    test('节点运行生命周期参与者：在真事务里绑出的参与者可以读节点运行行', async () => {
       const taskId = `t_${ulid()}`
       await seedTask(harness.db, taskId)
       const nodeRunId = `nr_${ulid()}`
@@ -445,10 +451,9 @@ describeEachProvider(
         retryIndex: 0,
         startedAt: T0,
       })
-      const factory = composePostgresqlNodeRunLifecycleParticipantFactory()
       await harness.session.transaction(async (transaction) => {
-        const participant = factory.inTransaction(
-          transaction as unknown as Parameters<typeof factory.inTransaction>[0],
+        const participant = createNodeRunLifecycleParticipantInTx(
+          transaction as unknown as Parameters<typeof createNodeRunLifecycleParticipantInTx>[0],
         )
         expect(typeof participant).toBe('object')
         // 参与者绑的是这一个事务句柄：在事务里读回刚写的节点运行行。

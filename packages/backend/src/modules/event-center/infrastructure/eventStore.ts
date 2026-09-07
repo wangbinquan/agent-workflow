@@ -1189,6 +1189,20 @@ export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
 
     async settleObserver(input) {
       return await databaseSessionFor(db).transaction(async (tx) => {
+        // 读—改—写：下面两处 `nextScanAt` 都由这次读到的 `activation.wakeEpoch` 决定，而 UPDATE 的
+        // where 只围 `leaseEpoch`——`wakeEpoch` 恰恰是**不持租约**的 `nudgeObserver` 在写。不先锁住
+        // 激活行，PG 的 READ COMMITTED 下一次跑到半途的 nudge 会被结算悄悄抹掉：下一次扫描被推到
+        // 整整一个 poll 间隔之后而不是立刻（tests/rfc359-w8-t28-lost-update.test.ts L3）。
+        // 主键是 (sourceId, sourceRevision)；按 sourceId 取锁是它的超集，同源的所有版本一起串行化。
+        // 加锁顺序（激活行 → 订阅行）与 `subscribe` / `cancelSubscription`（订阅行 → 激活行）相反，
+        // 但两边**锁的订阅行不相交**：那两条只碰 `mode = 'exact'` 的行，这里只插 routing 物化出来的
+        // `mode = 'filtered'` 行，读 exact 订阅走的是不加锁的普通 SELECT。因此构不成环。
+        await engineOf(tx).lockAggregateRoot(
+          tx,
+          observerActivations,
+          observerActivations.sourceId,
+          input.run.source.sourceRef.id,
+        )
         const activation = await tx
           .select()
           .from(observerActivations)

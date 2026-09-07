@@ -19,7 +19,8 @@
 //   BEGIN IMMEDIATE + async 体 + COMMIT/ROLLBACK                []           ← 真回滚
 //   同上，体内跨真实事件循环 tick（setTimeout）                  正常提交
 //
-// 仓内已有先例这么做：`platform/persistence/sqliteLogicalTarget.ts:222,287`。
+// 仓内先例是 `platform/persistence/sqliteLogicalTarget.ts:222,287` 的 `exec('BEGIN IMMEDIATE')`
+// （RFC-359 W8 已删——那个逻辑恢复目标零生产装配点；上表的实测结论不依赖它，本文件即现行形态）。
 //
 // # 代价与护栏
 //

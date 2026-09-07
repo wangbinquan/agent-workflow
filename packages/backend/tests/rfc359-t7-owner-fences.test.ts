@@ -210,10 +210,10 @@ test('源码锁：每个 PG owner 围栏都先读环境上下文；effect 账本
   const leases = readFileSync(resolve(infrastructure, 'runtimeSessionLeaseOperations.ts'), 'utf8')
   expect(leases).toContain('fenceTaskWrite(tx, { taskId, now })')
   expect(leases).not.toContain('currentTaskExecutionContext(')
-  const effects = readFileSync(
-    resolve(infrastructure, 'postgresqlTaskExecutionEffectPersistence.ts'),
-    'utf8',
-  )
+  // RFC-359 W8：effect 账本合一后围栏就是中立原语 `assertTaskOwnerTx`（owner 行条件 UPDATE），
+  // 私有 assertOwner 连同它对 revision / lease 的等值判定一起消失。
+  const effects = readFileSync(resolve(infrastructure, 'taskExecutionEffectPersistence.ts'), 'utf8')
+  expect(effects).toContain('assertTaskOwnerTx(tx,')
   expect(effects).not.toContain('token.ownerRevision')
   expect(effects).not.toContain('token.leaseUntil')
   // RFC-359 W7：协作运行期机制合一后，围栏由中立的 `fenceTaskWrite` 统一取——它自己

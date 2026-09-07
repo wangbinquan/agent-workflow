@@ -51,34 +51,9 @@ export {
   type WorkgroupTaskRoomClarifyParticipantFactory,
 } from './composition/workgroupTaskRoomClarify'
 
-// RFC-333 temporary legacy bridge inventory. These symbols stay internal to
-// the collaboration context: services/humanGateComposition.ts is the sole
-// compatibility importer and removes this block when W2-D injects the legacy
-// service dependencies directly.
-export { prepareWorkspaceRollbackPlan } from './application/prepareWorkspaceRollbackPlan'
-export {
-  canonicalHumanGateRequestHash,
-  canonicalHumanGateValueJson,
-  deriveHumanGateCompatibilityKey,
-} from './domain/canonicalGateRequest'
-export { decodeCollaborationCommittedEvent } from './domain/collaborationCommittedEvent'
-export {
-  decodeClarifyDecisionManifest,
-  decodeClarifyDecisionReceipt,
-  encodeClarifyDecisionManifest,
-  encodeClarifyDecisionReceipt,
-} from './domain/clarifyDecision'
-export { gateDecisionReceipt } from './domain/gateReceipt'
-export {
-  decodeQuestionDispatchManifest,
-  decodeQuestionDispatchReceipt,
-  encodeQuestionDispatchManifest,
-  encodeQuestionDispatchReceipt,
-} from './domain/questionDispatchDecision'
-export {
-  decodeReviewDecisionManifest,
-  decodeReviewDecisionReceipt,
-  encodeReviewDecisionManifest,
-  encodeReviewDecisionReceipt,
-} from './domain/reviewDecision'
-export { GitWorkspaceRollbackSnapshotInspector } from './infrastructure/gitWorkspaceRollbackSnapshotInspector'
+// RFC-359 W8 —— 「RFC-333 temporary legacy bridge inventory」那一块（11 个 domain /
+// application 纯函数 + `GitWorkspaceRollbackSnapshotInspector`）已删除。它唯一的消费者
+// `services/humanGateComposition.ts` 改成逐个从定义模块直取，理由写在那个文件顶部：
+// 经本 barrel 取用会把整个 collaboration 的实现面拖进依赖图，W7 之后当场闭掉 9 条
+// `no-circular`。本 barrel 此后**只导出装配用的工厂**，不再转售 domain 纯函数——
+// 想用 domain / application 的函数请直接 import 定义模块。

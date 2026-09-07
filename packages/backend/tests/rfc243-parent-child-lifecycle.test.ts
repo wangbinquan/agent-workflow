@@ -145,10 +145,15 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
-    const callRun = await seedRun(db, parent, 'call', { status: 'running' })
+    const childId = ulid()
+    // RFC-359 W8-A：调用行预留了这个子任务 —— 这条用例要证的是「父被取消后子铸不出来」，
+    // 其它准入门必须先满足，否则测的就成了别的门。
+    const callRun = await seedRun(db, parent, 'call', {
+      status: 'running',
+      childTaskId: childId,
+    })
     await cancelTask(db, parent)
 
-    const childId = ulid()
     const childRoot = mkdtempSync(join(tmpdir(), 'aw-rfc243-late-child-'))
     const space: MaterializedSpace = {
       kind: 'single',
@@ -207,6 +212,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
             parentTaskId: parent,
             parentNodeRunId: callRun,
             invocationDepth: 1,
+            launchActorUserId: '__system__',
             frozenSnapshotJson: EMPTY_DEF,
             refClosureJson: null,
           },

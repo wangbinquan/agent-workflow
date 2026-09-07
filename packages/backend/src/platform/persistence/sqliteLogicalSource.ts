@@ -108,10 +108,22 @@ export function openSqliteLogicalSource(input: {
   const db = new Database(input.path, { readonly: true })
   let closed = false
 
-  const snapshot = (): SqliteLogicalSourceSnapshot => {
+  /**
+   * RFC-359 W8 双引擎对拍实测：`readChunk` / `assertUnchanged` 此前不看 `closed`，于是关闭之后
+   * 第一条语句是 `db.query(...)` 抛出的**裸** bun:sqlite `Cannot use a closed database`——它没有
+   * `code`，`classifyDatabaseMigrationFailure`（`databaseMigrationRunner.ts:167-175`）只能回落到
+   * `error.name`，把这次迁移失败记成 `detailCode: 'error'` / `category: 'internal'`，运维拿到的
+   * 是一条没有任何可操作 slug 的「内部错误」。PostgreSQL 侧三个读出口早就各有一道
+   * `postgresql-source-closed`。补齐后两侧一律以本源的类型化错误拒绝。
+   */
+  const assertOpen = (): void => {
     if (closed) {
       throw new SqliteLogicalSourceError('sqlite-source-read', 'SQLite logical source is closed')
     }
+  }
+
+  const snapshot = (): SqliteLogicalSourceSnapshot => {
+    assertOpen()
     const quick = db.query('PRAGMA quick_check').all() as { quick_check: string }[]
     if (quick.length !== 1 || quick[0]?.quick_check !== 'ok') {
       throw new SqliteLogicalSourceError(
@@ -175,6 +187,7 @@ export function openSqliteLogicalSource(input: {
       return snapshot()
     },
     async assertUnchanged(expected) {
+      assertOpen()
       const dataVersion = scalarNumber(db, 'PRAGMA data_version')
       const pageCount = scalarNumber(db, 'PRAGMA page_count')
       const fileBytes =
@@ -224,6 +237,7 @@ export function openSqliteLogicalSource(input: {
       }
     },
     async readChunk(table, afterKey, limit) {
+      assertOpen()
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
         throw new SqliteLogicalSourceError(
           'sqlite-source-read',

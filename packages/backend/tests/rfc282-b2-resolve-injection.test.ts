@@ -21,10 +21,8 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
-import {
-  createSqliteLegacyAgentDependencyLookup,
-  resolveInjection,
-} from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { buildCommitAgent } from '../src/services/commitPush'
 import { buildMergeAgent } from '../src/services/mergeAgent'
 import {
@@ -87,7 +85,7 @@ describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attrib
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log,
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(result.kind).toBe('failed')
     if (result.kind !== 'failed') throw new Error('unreachable')
@@ -112,7 +110,7 @@ describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attrib
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log,
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(result.kind).toBe('failed')
     if (result.kind !== 'failed') throw new Error('unreachable')
@@ -137,7 +135,7 @@ describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attrib
       resolveInjection(db, agent, {
         appHome: '/tmp/aw',
         log,
-        agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+        agentDependencies: legacyInjectionAgentLookup(db),
       }),
     ).resolves.toMatchObject({ kind: 'failed' })
   })
@@ -150,7 +148,7 @@ describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 
       const result = await resolveInjection(db, agent, {
         appHome: '/tmp/aw',
         log,
-        agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+        agentDependencies: legacyInjectionAgentLookup(db),
       })
       expect(result.kind).toBe('ok')
       if (result.kind !== 'ok') throw new Error('unreachable')

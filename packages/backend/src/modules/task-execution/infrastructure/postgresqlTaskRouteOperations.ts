@@ -77,6 +77,8 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
 import { branchTraceForTask } from '../application/branchTrace'
+import { sourceTerminationRevivalError } from '../domain/sourceTermination'
+import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { nextRetryIndex } from '../application/nextRetryIndex'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -124,12 +126,20 @@ import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
+  loadRollbackTargetFrom,
+  rollbackNodeRunWorktrees,
+  type RollbackOutcome,
+} from '@/services/nodeRollback'
+import { selectSyncRollbackTargets } from '@/services/task'
+import {
   ConflictError,
   DomainError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
 } from '@/util/errors'
+import { createLogger } from '@/util/log'
+import { killStaleRunProcessTree } from '@/util/process'
 import {
   deleteSnapshotRefs,
   gitDiffSnapshot,
@@ -138,6 +148,8 @@ import {
   worktreeDiff,
 } from '@/util/git'
 import { Paths } from '@/util/paths'
+
+const log = createLogger('task-execution.postgresql-task-routes')
 
 const TASK_DIFF_MAX_BYTES = 1024 * 1024
 const STDOUT_TAIL_BUDGET_BYTES = 1024 * 1024
@@ -1428,6 +1440,239 @@ async function workflowSyncPreview(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-359 W8 —— retry / syncWorkflow 共用的三件事：冻结溯源预检、快照基线判据、
+// 被取消写节点的工作树回滚。SQLite 的权威实现在 `services/task.ts`
+// （`assertFrozenTaskTriggerPreflight` / `escalateSnapshotLost` /
+// `escalateLiveChildSurvived` / `selectSyncRollbackTargets`）；这里是同口径的 PG 侧实现，
+// 判据与错误码逐条对齐，行为差异只在下面每处注释显式写明的地方。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * RFC-292 —— 冻结任务的溯源预检。webhook 上下文永远从**durable 任务行**重读；调用方可以
+ * 给一份候选 root+closure（sync 换定义时用），但绝不能替换 trigger 源。
+ *
+ * 与 SQLite 的 `assertFrozenTaskTriggerPreflight` 同位同序：它必须落在准入 CAS **之前**，
+ * 否则一个必然被拒的重试/同步会先把任务状态推走、铸出占位行，再拒绝。
+ */
+async function assertFrozenTaskTriggerPreflight(
+  db: PostgresqlDatabaseClient,
+  taskId: string,
+  candidate?: Readonly<{ workflowSnapshot: string; refClosureJson: string | null }>,
+): Promise<void> {
+  const frozen = (
+    await db
+      .select({
+        workflowSnapshot: tasks.workflowSnapshot,
+        refClosureJson: tasks.refClosureJson,
+        triggerContextJson: tasks.triggerContextJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+  )[0]
+  if (frozen === undefined) return
+
+  const source = parseTriggerContextJson(frozen.triggerContextJson)
+  if (source.kind === 'invalid') {
+    throw new ValidationError(
+      'trigger-context-invalid',
+      'the frozen task trigger context is invalid',
+    )
+  }
+  const selected = candidate ?? frozen
+  try {
+    const root = migrateWorkflowDefinitionToLatest(
+      WorkflowDefinitionSchema.parse(JSON.parse(selected.workflowSnapshot)),
+    )
+    assertTriggerPreflight({ root, closureJson: selected.refClosureJson, source })
+  } catch (error) {
+    // 历史上损坏的工作流快照保留既有的恢复姿势；来自**合法**快照的 trigger 失败是权威的，
+    // 必须先于任何生命周期 / 调度副作用发生。
+    if (error instanceof ValidationError && error.code.startsWith('trigger-')) throw error
+  }
+}
+
+/** RFC-359 W8 —— MR/PR 终结栅栏的透传（SQLite 侧由准入 CAS 抛出同名码）。 */
+function assertNotSourceTerminated(task: Pick<TaskRow, 'id' | 'sourceTerminationFence'>): void {
+  const code = sourceTerminationRevivalError(task.sourceTerminationFence)
+  if (code === null) return
+  throw new ConflictError(
+    code,
+    `task '${task.id}' is fenced by an MR/PR ${task.sourceTerminationFence} event`,
+  )
+}
+
+/** `snapshot-missing` 的合并说明；没有这类失败时返回 null。 */
+function snapshotLostDetail(outcome: RollbackOutcome): string | null {
+  const failures = outcome.failures.filter((failure) => failure.code === 'snapshot-missing')
+  if (failures.length === 0) return null
+  return failures
+    .map((failure) =>
+      failure.worktreeDirName === undefined
+        ? failure.message
+        : `${failure.worktreeDirName}: ${failure.message}`,
+    )
+    .join('; ')
+}
+
+/**
+ * RFC-098 WP-9 —— 承诺要恢复的基线已被 gc prune：失败关闭。任务落 `failed`
+ * （`errorSummary='snapshot-lost'` / `'live-child-survived'`），调用方拿 409。返回 `never`。
+ */
+async function escalateUnsafeContinuation(
+  dependencies: PostgresqlTaskRouteOperationsDependencies,
+  input: Readonly<{
+    taskId: string
+    run: Pick<NodeRunRow, 'id' | 'nodeId'>
+    allowedFrom: readonly TaskStatus[]
+    code: 'snapshot-lost' | 'live-child-survived'
+    detail: string
+    reason: string
+  }>,
+): Promise<never> {
+  const now = dependencies.now?.() ?? Date.now()
+  await dependencies.persistence.runtimeLifecycle.trySet({
+    taskId: input.taskId,
+    to: 'failed',
+    allowedFrom: [...input.allowedFrom],
+    // 来源可能已经是终态（retry 的准入门放行 done/failed/canceled/… 六档），所以这条
+    // 「终态→failed」的升级必须显式允许覆写终态，否则升级会被生命周期内核静默丢掉。
+    allowTerminal: true,
+    extra: {
+      finishedAt: now,
+      errorSummary: input.code,
+      errorMessage: input.detail,
+      failedNodeId: input.run.nodeId,
+    },
+    now,
+    reason: `${input.reason}:${input.code}`,
+  })
+  await dependencies.persistence.recoveryAdministration.recordEvent({
+    id: dependencies.id?.() ?? ulid(),
+    taskId: input.taskId,
+    nodeRunId: input.run.id,
+    actor: 'system',
+    kind: input.code,
+    reason: input.detail,
+    beforeJson: JSON.stringify({ status: 'pending' }),
+    afterJson: JSON.stringify({ status: 'failed' }),
+    createdAt: now,
+  })
+  throw new ConflictError(input.code, input.detail)
+}
+
+/**
+ * 副作用为零的**跨行**快照存在性预检（RFC-108 T7 AR-17 的同口径实现）：每一条要回滚的行的
+ * `pre_snapshot` 都必须还能解析成一个 commit，否则失败关闭。`checkOnly` 只跑
+ * `git cat-file`，不碰任何工作树，所以它可以安全地放在准入 CAS **之前**。
+ */
+async function assertRollbackBaselinesPresent(
+  dependencies: PostgresqlTaskRouteOperationsDependencies,
+  input: Readonly<{
+    taskId: string
+    runs: readonly NodeRunRow[]
+    allowedFrom: readonly TaskStatus[]
+    reason: string
+  }>,
+): Promise<void> {
+  // 没记过任何快照的行在 resume 口径下本来就是「什么都不动」，连 git 都不会跑到——
+  // 提前滤掉，别为最常见的那条路径多发一次 rollback-target 查询。
+  const candidates = input.runs.filter(
+    (run) => (run.preSnapshot ?? '') !== '' || run.preSnapshotReposJson !== null,
+  )
+  if (candidates.length === 0) return
+  const target = await loadRollbackTargetFrom(
+    new DrizzleTaskRollbackQueries(dependencies.db),
+    input.taskId,
+  )
+  if (target === null) return
+  for (const run of candidates) {
+    const outcome = await rollbackNodeRunWorktrees(
+      target,
+      run,
+      { resetOnEmptySnapshot: false, checkOnly: true },
+      log,
+    )
+    const detail = snapshotLostDetail(outcome)
+    if (detail !== null) {
+      await escalateUnsafeContinuation(dependencies, {
+        taskId: input.taskId,
+        run,
+        allowedFrom: input.allowedFrom,
+        code: 'snapshot-lost',
+        detail: `node_run ${run.id} (node ${run.nodeId}) pre-snapshot is missing from the object database (pruned by gc?): ${detail}`,
+        reason: input.reason,
+      })
+    }
+  }
+}
+
+/**
+ * 真回滚：先把该行可能还活着的运行时子进程组杀掉，再把工作树重置回它开跑前的快照。
+ *
+ * 与 SQLite 的 `reapRunBeforeWorktreeReset` 的差别只有一处，且是**刻意**的：held native
+ * session 租约的围栏与修复留在紧随其后的 `children.resume`
+ * （`postgresqlChildTaskLifecycleParticipant.rollbackForResume` 对整棵任务做同一件事，
+ * 且它持有 `RuntimeSessionLeaseOperations`）。本处只做 SQLite 在**没有**租约那一支的判据：
+ * 杀不掉就失败关闭。
+ */
+async function rollbackRunsForContinuation(
+  dependencies: PostgresqlTaskRouteOperationsDependencies,
+  input: Readonly<{
+    taskId: string
+    runs: readonly NodeRunRow[]
+    allowedFrom: readonly TaskStatus[]
+    reason: string
+  }>,
+): Promise<void> {
+  if (input.runs.length === 0) return
+  const target = await loadRollbackTargetFrom(
+    new DrizzleTaskRollbackQueries(dependencies.db),
+    input.taskId,
+  )
+  if (target === null) return
+  for (const run of input.runs) {
+    const killed = await killStaleRunProcessTree(run)
+    if (killed === 'killed') {
+      log.warn('stale runtime child group-killed before workspace rollback', {
+        taskId: input.taskId,
+        nodeRunId: run.id,
+        pid: run.pid,
+      })
+    }
+    if (killed === 'kill-failed') {
+      await escalateUnsafeContinuation(dependencies, {
+        taskId: input.taskId,
+        run,
+        allowedFrom: input.allowedFrom,
+        code: 'live-child-survived',
+        detail: `node_run ${run.id} child reap could not be proven (kill-failed, pid ${run.pid ?? '?'}); refusing to reset the worktree while a writer may still be alive`,
+        reason: input.reason,
+      })
+    }
+  }
+  for (const run of input.runs) {
+    const outcome = await rollbackNodeRunWorktrees(
+      target,
+      run,
+      { resetOnEmptySnapshot: false },
+      log,
+    )
+    const detail = snapshotLostDetail(outcome)
+    if (detail !== null) {
+      await escalateUnsafeContinuation(dependencies, {
+        taskId: input.taskId,
+        run,
+        allowedFrom: input.allowedFrom,
+        code: 'snapshot-lost',
+        detail: `node_run ${run.id} (node ${run.nodeId}) pre-snapshot is missing from the object database (pruned by gc?): ${detail}`,
+        reason: input.reason,
+      })
+    }
+  }
+}
+
 async function syncWorkflow(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
   input: Parameters<TaskRouteOperations['syncWorkflow']>[0],
@@ -1488,8 +1733,9 @@ async function syncWorkflow(
       issues: validation.issues,
     })
   }
+  const frozenDefinition = definitionOf(parseJson(row.workflowSnapshot, null))
   const diff = diffWorkflowForSync(
-    definitionOf(parseJson(row.workflowSnapshot, null)),
+    frozenDefinition,
     workflow.definition,
     await syncRunSummary(dependencies.db, input.taskId),
   )
@@ -1505,6 +1751,53 @@ async function syncWorkflow(
       diff.blockers.map((blocker) => blocker.detail).join('; '),
     )
   }
+
+  // RFC-359 W8（判据缺口账本 —— ② sync 回滚）:被取消的**写**节点在 RFC-095 下是可再派发的,
+  // 新定义会在同一棵工作树上从它继续跑,所以它上次被取消时写了一半的东西必须先回滚到
+  // `pre_snapshot`。这一档 `children.resume` 永远够不着——`rollbackForResume` 用的是 **resume**
+  // 选择器(只收 failed / interrupted),canceled 从不进它的集合。failed / interrupted 两档
+  // 反过来由紧随其后的 `children.resume` 连同 native-session 租约围栏一并处理,本处不重复,
+  // 免得在租约围栏之前就动工作树。判据本身复用 SQLite 的权威选择器
+  // `selectSyncRollbackTargets`(每个节点最新的顶层行 + 状态过滤 + wrapper 豁免)。
+  //
+  // wrapper 豁免按 **旧** 定义判(RFC-109 impl-gate F2):一条 canceled 行要不要回滚取决于它
+  // 跑的时候**是什么**——旧图里是 agent 写节点就回滚,是 wrapper 就放过(RFC-095 原地复活,
+  // 回滚会把已完成的内层工作抹掉)。
+  const frozenWrapperNodeIds = new Set(
+    frozenDefinition.nodes.filter((node) => isWrapperKind(node.kind)).map((node) => node.id),
+  )
+  const syncRuns = await dependencies.db
+    .select()
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, input.taskId))
+  const syncRollbackRuns = selectSyncRollbackTargets(syncRuns, ['canceled'], (nodeId) =>
+    frozenWrapperNodeIds.has(nodeId),
+  )
+  // 跨行 all-or-nothing 预检(零副作用)先于准入 CAS:任一行的基线已被 gc prune 时,任务
+  // 失败关闭而不是被推进 interrupted 之后才在半截回滚里发现。
+  await assertRollbackBaselinesPresent(dependencies, {
+    taskId: input.taskId,
+    runs: syncRollbackRuns,
+    allowedFrom: allowedFrom,
+    reason: 'syncTaskWorkflow',
+  })
+
+  // RFC-109 F5 TOCTOU 复检:上面的校验 / diff 全是本地读,并发的 workflow PUT 可能在这个
+  // 窗口里把版本推走。紧挨着准入 CAS 再断言一次,保证写进任务的永远是用户确认过的那一版。
+  const liveVersion = (
+    await dependencies.db
+      .select({ version: workflows.version })
+      .from(workflows)
+      .where(eq(workflows.id, row.workflowId))
+      .limit(1)
+  )[0]
+  if (liveVersion?.version !== input.expectedVersion) {
+    throw new ConflictError(
+      'workflow-sync-preview-stale',
+      `workflow advanced since validation; refresh and re-confirm`,
+    )
+  }
+
   const now = dependencies.now?.() ?? Date.now()
   const eventRef = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
     const changed = await tx
@@ -1540,9 +1833,23 @@ async function syncWorkflow(
       status: 'interrupted',
       errorSummary: row.errorSummary,
       occurredAt: now,
+      // RFC-359 W8：这是两段式准入的**内部交棒**，不是任务真的中断了——第二段
+      // `children.resume` 的 `admitResume` 马上把它 CAS 回 pending。不打这个标记，
+      // 三个只看「状态值是不是终态」的消费者会在 PG 上把「同步进行中」谎报成
+      // 「任务已结束」（唤醒 watchTaskTerminal / 放掉子任务预算名额 / 发 task.done），
+      // 而 SQLite 的一段式直接落 pending，一条都不会发生。
+      continuationHandoff: true,
     })
   })
   await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
+  // 准入拿下之后才动工作树(与 SQLite 的 `resumeKick` 同序:CAS 是命令准入的胜者,
+  // 输的一方零副作用)。此时任务已在 `interrupted`,升级的 allowedFrom 随之收敛到它。
+  await rollbackRunsForContinuation(dependencies, {
+    taskId: input.taskId,
+    runs: syncRollbackRuns,
+    allowedFrom: ['interrupted'],
+    reason: 'syncTaskWorkflow',
+  })
   await dependencies.children.resume(
     {
       taskId: input.taskId,
@@ -1581,10 +1888,37 @@ function retryNodeIds(
   return affected
 }
 
-function freshestTopLevel(rows: readonly NodeRunRow[], nodeId: string): NodeRunRow | undefined {
+function freshestTopLevel(rows: readonly NodeRunRow[]): NodeRunRow | undefined {
   return rows
-    .filter((row) => row.nodeId === nodeId && row.parentNodeRunId === null)
+    .filter((row) => row.parentNodeRunId === null)
     .sort((left, right) => right.id.localeCompare(left.id))[0]
+}
+
+/**
+ * RFC-354 —— 级联占位行的继承源：**被点行所在帧**里该节点最新的顶层行。
+ *
+ * 帧 = `(container_run_id, iteration)`：wrapper 的那一代行 + 代内的轮次。级联要重新武装的
+ * 是「用户正在重试的那一代」，所以先按帧过滤，再在帧内取 id 序最新的顶层行。
+ *
+ * 为什么不能只按纯 id 序取（这是 RFC-359 W8 修掉的实测缺口）：嵌套 wrapper 下同一个节点在
+ * **不同代**里各有一条顶层行，而 id 序只反映铸造先后。loop 套 loop 时重试外层第 0 轮里的
+ * 节点，纯 id 序会选中第 1 轮那一代的行，占位行于是继承了**别的 generation** 的
+ * `container_run_id` —— 调度器在用户正在重试的那一帧里根本看不到这条新行，级联对当前帧
+ * 静默失效，反倒把另一代无端重开。
+ *
+ * 帧内无行时回落到全行集（与 SQLite 的 `retryNode` 逐字同形）：下游节点可能住在外层作用域、
+ * 或住在某个嵌套 wrapper 里由该 wrapper 自己的占位行重开，那时按老口径取最新顶层行即可。
+ */
+function inheritanceSourceInFrame(
+  rows: readonly NodeRunRow[],
+  nodeId: string,
+  frame: Readonly<{ containerRunId: string | null; iteration: number }>,
+): NodeRunRow | undefined {
+  const existing = rows.filter((row) => row.nodeId === nodeId)
+  const sameFrame = existing.filter(
+    (row) => row.containerRunId === frame.containerRunId && row.iteration === frame.iteration,
+  )
+  return freshestTopLevel(sameFrame.length > 0 ? sameFrame : existing)
 }
 
 /**
@@ -1657,9 +1991,46 @@ async function retryNode(
     }
     return prepared
   }
+  // RFC-359 W8（判据缺口账本 —— ① retry 的三道前置门）。三条都必须落在准入 CAS **之前**：
+  // 一个注定要被拒绝的重试不得先把任务状态推走、铸出「queued for retry」的假尝试、再拒绝。
+  // SQLite 的同位实现在 `services/task.ts` 的 `retryNode`（RFC-292 预检 → CAS → 回滚）。
+  //
+  // ① RFC-292：重试复用任务不可变的 webhook 溯源。
+  await assertFrozenTaskTriggerPreflight(dependencies.db, input.taskId)
+  // ② MR/PR 终结栅栏透传：SQLite 侧由准入 CAS（`setTaskStatus`）抛出这两个码并原样上抛；
+  //    PG 的 CAS 是裸条件 UPDATE，栅栏既不在谓词里也没人判，于是被栅栏的任务照样被推进
+  //    `interrupted`，直到 `children.resume` 才发现——那时任务已经改坏了。
+  assertNotSourceTerminated(task)
+
+  // 快照要在 ③ 之前解出来：③ 是否适用取决于被点行是不是「被取消的 wrapper」，而那要查
+  // 节点 kind。解不出快照同样是「什么都还没动」的拒绝，提前发生不改变任何已落库的状态。
   const definition = definitionOf(parseJson(task.workflowSnapshot, null))
-  const affected = retryNodeIds(definition, target.nodeId, input.cascade)
   const kinds = new Map(definition.nodes.map((node) => [node.id, node.kind]))
+
+  // RFC-095 design.md:43-48 —— 被点的行是**被取消的 wrapper** 时，它自己就是复活信号：
+  // wrapper ledger 原地复用这一行（`createWrapperRunLedger.openGeneration` 的 allowedFrom
+  // 含 'canceled'），按持久化 progress **续跑**，git baseline 保持 pre-inner。它的
+  // `pre_snapshot` 因此永远不会被恢复——`selectSyncRollbackTargets` 早已为 sync 那一侧写死
+  // 同一条豁免（services/task.ts：「rolling it back would undo completed inner work」）。
+  // 基线既然不会被用，它在不在就与本次重试的安全性无关；拿它去拒绝只会让一条早被 gc 掉的
+  // 存量快照把一次合法的复活永久封死。
+  const canceledWrapperRevival =
+    isWrapperKind(kinds.get(target.nodeId)) && target.status === 'canceled'
+
+  // ③ RFC-098 WP-9：被点行承诺要恢复的基线还在不在。`checkOnly` 只跑 `git cat-file`、
+  //    不碰工作树，所以可以放在 CAS 之前——基线没了就失败关闭，一条占位行都不铸。
+  //    真正的（破坏性）回滚仍由紧随其后的 `children.resume` 执行：被点行的 `pre_snapshot`
+  //    随占位行继承下去，`rollbackForResume` 会连同 native-session 租约围栏一并处理它。
+  if (!canceledWrapperRevival) {
+    await assertRollbackBaselinesPresent(dependencies, {
+      taskId: input.taskId,
+      runs: [target],
+      allowedFrom: RETRYABLE_TASK_STATUSES,
+      reason: 'retryNode',
+    })
+  }
+
+  const affected = retryNodeIds(definition, target.nodeId, input.cascade)
   const childTaskIds = [
     ...new Set(
       runs.flatMap((row) =>
@@ -1682,6 +2053,9 @@ async function retryNode(
           eq(tasks.id, input.taskId),
           eq(tasks.status, task.status),
           eq(tasks.lifecycleEventRevision, task.lifecycleEventRevision),
+          // 上面的 `assertNotSourceTerminated` 是快失败门（给得出对的错误码）；栅栏进谓词
+          // 才是真判据——否则栅栏在读到写之间落下时重试仍会得手。
+          isNull(tasks.sourceTerminationFence),
         ),
       )
       .returning({ revision: tasks.lifecycleEventRevision })
@@ -1701,7 +2075,13 @@ async function retryNode(
     }> = []
     for (const nodeId of affected) {
       const kind = kinds.get(nodeId)
-      const selected = nodeId === target.nodeId ? target : freshestTopLevel(runs, nodeId)
+      const selected =
+        nodeId === target.nodeId
+          ? target
+          : inheritanceSourceInFrame(runs, nodeId, {
+              containerRunId: target.containerRunId,
+              iteration: target.iteration,
+            })
       const wrapperRevival =
         nodeId === target.nodeId &&
         isWrapperKind(kind) &&
@@ -1758,6 +2138,11 @@ async function retryNode(
       errorSummary: task.errorSummary,
       occurredAt: now,
       identity: { operationRef, eventGroupId: operationRef, eventGroupOrdinal: 0 },
+      // RFC-359 W8：同上——重试的第一段只是把任务推到一个**可 resume 的终态**交给
+      // `children.resume`，任务并没有结束。`pending` 不能当这个中转态（不在
+      // `RESUMABLE_TASK_STATUSES` 里，会被 `assertResumeAdmission` 当场拒掉），所以
+      // 分家只能落在事件的语义上，而不是状态值上。
+      continuationHandoff: true,
     })
     const nodeStatuses =
       nodeChanges.length === 0
@@ -2019,6 +2404,37 @@ async function deleteTask(
     }
     await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, expected)).run()
     await tx.delete(tasks).where(eq(tasks.id, taskId)).run()
+
+    // RFC-311 实现门 P1-6 / P2-3（RFC-359 W8 抬齐到 PG）：`branch_started_at` 是「子树
+    // max(started_at)」的**物化**值，只有铸行点向上单调 MAX 推进过它。删掉一棵子树之后没人
+    // 把它拉回来，父行就**永久**停在被删子树的时间戳上——同一份数据在默认视图（快路径按
+    // 物化列排序）与任一过滤视图（旧管线现算）之间行序不同且永不收敛。
+    // 删除是低频操作，在同一事务里沿父链重算即可闭合（链长同 MAX_TREE_DEPTH）。
+    // 与 SQLite 的 `services/taskDelete.ts` 同形；`coalesce(max(...), 0)` 是聚合，两个方言
+    // 同名同义（两参数的 `MAX(a,b)` 是 SQLite 独有的，这里没有用到）。
+    let cursor: string | null = root.parentTaskId
+    for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
+      const parent = (
+        await tx
+          .select({ id: tasks.id, parentTaskId: tasks.parentTaskId, startedAt: tasks.startedAt })
+          .from(tasks)
+          .where(eq(tasks.id, cursor))
+          .limit(1)
+      )[0]
+      if (parent === undefined) break
+      const childMax = (
+        await tx
+          .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
+          .from(tasks)
+          .where(eq(tasks.parentTaskId, parent.id))
+      )[0]
+      await tx
+        .update(tasks)
+        .set({ branchStartedAt: Math.max(parent.startedAt ?? 0, childMax?.v ?? 0) })
+        .where(eq(tasks.id, parent.id))
+        .run()
+      cursor = parent.parentTaskId
+    }
   })
   claim = await dependencies.persistence.terminalMaintenance.transition({
     claim,

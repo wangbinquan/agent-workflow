@@ -394,6 +394,23 @@ export function fastDefaultRootQuery(
     ORDER BY t.branch_started_at DESC, t.id DESC
     LIMIT ${parsed.limit + 1}
   `
+  // RFC-359 W8-T26 —— `facet_attention` 的未闭合告警判据必须**预聚合**，不能写成
+  // `SUM(CASE WHEN … OR EXISTS (…) …)` 里的相关子查询：`CASE` 里的相关子查询
+  // PostgreSQL 无法上提成 semi join（WHERE 里的可以），只能对授权集的**每一行**再查
+  // 一次 lifecycle_alerts。5 万行语料上实测 loops=50000、107,042 个 shared buffer、
+  // 单条 84.1ms（其中 32.4ms 是被虚高估算代价触发的 JIT 编译）。
+  //
+  // `SELECT DISTINCT task_id` 让每个任务至多一行——LEFT JOIN 因而不会放大 `COUNT(*)`
+  // 或任何一个 `SUM`，这是改写等价的支点（一个任务挂多条未闭合告警是生产常态）。
+  // 未匹配到的行 `open_alerts.task_id` 为 NULL，正是原来的 `NOT EXISTS`。
+  // 由 `rfc359-w8-t26-plan-reshape-conformance` 在两个引擎上钉住。
+  const openAlertTasks = sql`
+    LEFT JOIN (
+      SELECT DISTINCT la.task_id AS task_id
+      FROM lifecycle_alerts la
+      WHERE la.resolved_at IS NULL
+    ) open_alerts ON open_alerts.task_id = t.id
+  `
   return sql`
     WITH facet_values AS (
       SELECT
@@ -402,14 +419,12 @@ export function fastDefaultRootQuery(
           AS facet_active,
         COALESCE(SUM(CASE
           WHEN t.status IN (${list(TASK_LIST_ATTENTION_STATUSES)})
-            OR EXISTS (
-              SELECT 1 FROM lifecycle_alerts la
-              WHERE la.task_id = t.id AND la.resolved_at IS NULL
-            )
+            OR open_alerts.task_id IS NOT NULL
           THEN 1 ELSE 0 END), 0) AS facet_attention,
         COALESCE(SUM(CASE WHEN t.status IN (${list(TASK_LIST_FINISHED_STATUSES)}) THEN 1 ELSE 0 END), 0)
           AS facet_finished
       FROM tasks t
+      ${openAlertTasks}
       WHERE ${taskListVisibilityCondition(
         db,
         { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },

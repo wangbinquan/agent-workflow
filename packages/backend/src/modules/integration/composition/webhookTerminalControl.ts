@@ -1,8 +1,6 @@
 // RFC-303 composition seam. Transitional routes/services may request this
 // command, while application/domain stay free of concrete SQLite imports.
 import type { DbClient } from '@/db/client'
-import { createAcceptVerifiedWebhookDeliveryAsync } from '@/modules/integration/application/acceptVerifiedWebhookDelivery'
-import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
@@ -18,27 +16,7 @@ import {
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
-import type { VerifiedWebhookDeliveryPersistencePort } from '../application/ports/verifiedWebhookDeliveryPersistence'
 import { InMemoryWebhookLaunchSupervisor } from '../infrastructure/inMemoryWebhookLaunchSupervisor'
-
-export function composeVerifiedWebhookDeliveryAcceptanceWithPersistence(
-  persistence: VerifiedWebhookDeliveryPersistencePort,
-) {
-  return createAcceptVerifiedWebhookDeliveryAsync({ persistence })
-}
-
-/** RFC-359 W4-D2：已验证投递的接收一份实现，两个 provider 共用；旧名保留为装配别名。 */
-export function composeSqliteVerifiedWebhookDeliveryAcceptance(db: DbClient) {
-  return composeVerifiedWebhookDeliveryAcceptanceWithPersistence(
-    createVerifiedWebhookDeliveryPersistence(db),
-  )
-}
-
-export function composePostgresqlVerifiedWebhookDeliveryAcceptance(db: PostgresqlDatabaseClient) {
-  return composeVerifiedWebhookDeliveryAcceptanceWithPersistence(
-    createVerifiedWebhookDeliveryPersistence(db),
-  )
-}
 
 export interface MrTerminalControlPersistence {
   readonly launchGuards: MrLaunchGuardPersistencePort

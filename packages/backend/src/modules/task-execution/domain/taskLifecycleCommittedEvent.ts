@@ -53,6 +53,25 @@ export type TaskLifecycleTransitionedPayloadV1 = Readonly<{
   nodeChanges: readonly TaskNodeChangeV1[]
   workspacePruneClaim: Readonly<{ claimedAt: string; cause: string }> | null
   sourceTerminationEffectRef: string | null
+  /**
+   * RFC-359 W8 —— 这一跳是**多段式续跑准入的内部交棒**，`status` 是中转态而不是任务的结局。
+   *
+   * 唯一的生产来源是 PostgreSQL 的两段式 `retry` / `syncWorkflow`：第一段把任务推到一个
+   * **可 resume 的终态**（`interrupted`），第二段 `children.resume` 的 `admitResume` 再 CAS 到
+   * `pending`。中转态非落在终态上不可——`pending` 不在 `RESUMABLE_TASK_STATUSES` 里，硬改会被
+   * `assertResumeAdmission` 当场拒掉整条重试。
+   *
+   * 于是「状态值是终态」与「任务真的结束了」在这一跳上分了家，而三个消费者只认前者：
+   * 唤醒 `watchTaskTerminal`（RFC-243 的父任务就等在上面）、放掉子任务并发预算的名额、
+   * 广播一帧 `task.done`。三条都会在 PostgreSQL 上把「重试进行中」谎报成「任务已结束」，
+   * 而 SQLite 一段式直接落 `pending`、一条都不会发生 —— 同一个操作两个引擎产出不同的
+   * 用户可见结果。这个字段就是把这条分家显式化：**事件照旧落库、照旧投递**（durable 投递
+   * 本来就不看有没有 publish，靠「不发布」是遮不住的），只是终态性判据一律跳过它。
+   *
+   * 只有内部交棒才置 true。真终态（含重试自己失败后的 `failed` 升级）一律 false，该唤醒的
+   * 照唤醒——见 `rfc359-w8-task-route-capability-parity.test.ts` 的 ⑥ 两条用例。
+   */
+  continuationHandoff: boolean
 }>
 
 export type TaskNodeStatusesTransitionedPayloadV1 = Readonly<{
@@ -130,6 +149,9 @@ const taskLifecycleTransitionedEventSchema = taskEnvelopeBase
           .strict()
           .nullable(),
         sourceTerminationEffectRef: z.string().min(1).nullable(),
+        // 存量事件（本字段之前落库的）没有这个键，`.default(false)` 让它们按「真转移」解码——
+        // 那正是它们当时的语义。新事件一律显式带上。
+        continuationHandoff: z.boolean().default(false),
       })
       .strict(),
   })

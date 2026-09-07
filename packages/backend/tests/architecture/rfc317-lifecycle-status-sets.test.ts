@@ -136,8 +136,11 @@ interface StatusListExemption {
  */
 const EXEMPTIONS: readonly StatusListExemption[] = [
   {
-    site: 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
-    why: '`SOURCE_TERMINATION_BLOCKED_NODE_STATUSES` 是 **NodeRunStatus** 的集合，不是 TaskStatus。两个状态域恰好共用这四个字面量，但它们分属两台状态机——把它改成 import 任务侧的常量，会在任一侧新增状态时静默串台。',
+    site: 'packages/backend/src/platform/persistence/nodeRunLifecycleCore.ts',
+    why:
+      '`SOURCE_TERMINATION_BLOCKED_NODE_STATUSES` 是 **NodeRunStatus** 的集合，不是 TaskStatus。两个状态域恰好共用这四个字面量，但它们分属两台状态机——把它改成 import 任务侧的常量，会在任一侧新增状态时静默串台。' +
+      '（RFC-359 W8 三层下沉把这个符号从 `sqlite/taskLifecycle.ts` 抽进了中立叶子 `nodeRunLifecycleCore.ts`，' +
+      '本条只跟着改了 site，判据与理由一字未动。）',
     removeWhen:
       'node_run 侧也从自己的转移表派生出对应集合（RFC-317 B7 的 T47 会把 node 侧的 allowedFrom 一并纳入表判据），届时这里改 import 那一个。',
   },

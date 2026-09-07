@@ -1,7 +1,5 @@
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import {
   createPostgresqlClarifyRepairParticipant,
@@ -36,8 +34,7 @@ import {
   type PostgresqlTaskExecutionRuntimeDependencies,
 } from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
 import { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
-import { createPostgresqlTaskArchiveMaintenanceCommand } from '../infrastructure/postgresqlTaskArchiveMaintenanceCommand'
-import { createSqliteTaskArchiveMaintenanceCommand } from '../infrastructure/sqliteTaskArchiveMaintenanceCommand'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
 import { createPostgresqlTaskLifecycleAutoRepairCommand } from '../infrastructure/postgresqlTaskLifecycleAutoRepairCommand'
 import { createSqliteTaskLifecycleAutoRepairCommand } from '../infrastructure/sqliteTaskLifecycleAutoRepairCommand'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
@@ -260,7 +257,7 @@ export function composeSqliteTaskExecutionProviderRuntime(
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
-    archive: createSqliteTaskArchiveMaintenanceCommand(db),
+    archive: createDrizzleTaskArchiveMaintenanceCommand(db),
     autoResume,
     repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
     lifecycleRepair,
@@ -416,7 +413,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
-    archive: createPostgresqlTaskArchiveMaintenanceCommand(db),
+    archive: createDrizzleTaskArchiveMaintenanceCommand(db),
     autoResume,
     repositoryPreparationRetry,
     lifecycleRepair,
@@ -452,17 +449,14 @@ export function composePostgresqlTaskExecutionProviderRuntime(
 }
 
 /**
- * RFC-359 W3-T15-B：归档维护命令按客户端品牌选实现（boot 恢复 / 测试用）。落在这里而不是
- * taskExecutionPersistence.ts：归档命令经 services/taskArchive → taskExecutionParticipants 绕回
- * persistence 组合，放那边会成环。
+ * 归档维护命令（boot 恢复 / 测试用）。
+ *
+ * RFC-359 W8-A 合一后这里不再按品牌分派：`createDrizzleTaskArchiveMaintenanceCommand` 是两个
+ * provider 共用的**同一份**实现，客户端只是它的中立入参。保留这个具名工厂是为了让 boot 与测试
+ * 有一个稳定的取用点（此前的分派语义见 W3-T15-B）。
  */
 export function createTaskArchiveMaintenanceCommand(
   db: ProviderNeutralDatabase,
 ): TaskArchiveMaintenanceCommand {
-  const provider = databaseSessionFor(db).engine.provider
-  return provider === 'postgresql'
-    ? createPostgresqlTaskArchiveMaintenanceCommand(db as unknown as PostgresqlDatabaseClient)
-    : provider === 'sqlite'
-      ? createSqliteTaskArchiveMaintenanceCommand(db as unknown as DbClient)
-      : unhandledDatabaseProvider(provider)
+  return createDrizzleTaskArchiveMaintenanceCommand(db)
 }

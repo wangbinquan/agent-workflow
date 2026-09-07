@@ -21,10 +21,8 @@ import {
 } from '../src/services/runtime/injectionIdentity'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import {
-  createSqliteLegacyAgentDependencyLookup,
-  resolveInjection,
-} from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { skillFilesRel } from '../src/services/skillIdentityPaths'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -107,7 +105,7 @@ async function prepareRoot(db: DbClient, rootId: string) {
   return resolveInjection(db, root, {
     appHome: '/tmp/aw-rfc223-pr6',
     log: NOOP_LOG,
-    agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    agentDependencies: legacyInjectionAgentLookup(db),
   })
 }
 

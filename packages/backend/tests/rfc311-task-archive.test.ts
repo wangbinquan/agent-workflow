@@ -39,11 +39,15 @@ import {
   users,
   workflows,
 } from '../src/db/schema'
-import { createSqliteTaskArchiveMaintenanceCommand } from '../src/modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand'
-import { createApp } from '../src/server'
+// RFC-359 W8-A：归档管线合一后，级联对账的两张清单跟着**活着的那份实现**走
+// （`services/taskArchive.ts` 的同名导出已无任何生产引用，等 services/** 那一刀一起退役）。
 import {
   ARCHIVED_TABLES,
   ARCHIVE_EXEMPT_TABLES,
+  createDrizzleTaskArchiveMaintenanceCommand,
+} from '../src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand'
+import { createApp } from '../src/server'
+import {
   archiveTaskTree,
   findArchivableTrees,
   runTaskArchiveSweep,
@@ -318,7 +322,7 @@ describe('RFC-311 T19 — task archive', () => {
 
     // RFC-359 W3-T15-B：`.tmp-*` 收尾在模块的 SQLite 适配器里（与 PostgreSQL 共用一份规则），
     // legacy 的 recoverInterruptedArchives 只续做 RFC-328 认领并交出 claimedRoots。
-    const recovered = await createSqliteTaskArchiveMaintenanceCommand(db).recover(dirs)
+    const recovered = await createDrizzleTaskArchiveMaintenanceCommand(db).recover(dirs)
     expect(recovered.promoted).toEqual(['gone'])
     expect(recovered.discarded).toEqual(['still-here'])
     expect(existsSync(join(dirs.archiveDir, 'gone', 'manifest.json'))).toBe(true)

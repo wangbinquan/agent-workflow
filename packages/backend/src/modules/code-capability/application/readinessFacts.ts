@@ -92,7 +92,18 @@ export interface GatherFactsInput {
   /** The template about to be saved, when checking a not-yet-written cell. */
   templateId: string | null
   enabled: boolean
-  provider?: 'gitlab' | 'github'
+  /**
+   * Which code host this repository was resolved to, or `null` when it could
+   * not be resolved at all.
+   *
+   * RFC-359 W8 — required rather than optional, and explicitly nullable. It
+   * used to be optional and default to `'gitlab'`, which quietly re-introduced
+   * the hardcoded provider RFC-304 removed (`domain/repoProvider.ts`): a caller
+   * that could NOT decide which host a repository belongs to got an answer
+   * about gitlab instead of an honest "unresolved". Making the caller name the
+   * absence means the default cannot come back by omission.
+   */
+  provider: 'gitlab' | 'github' | null
 }
 
 /**
@@ -125,7 +136,21 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
   // The same resolution the round performs. An enabled endpoint for the
   // provider IS the code-host identity a round keys its ledger to, so asking
   // any other question here would let a cell pass a check the round then fails.
-  const endpoint = await resolveCodeHostEndpointId(reader.repoEndpoints, input.provider ?? 'gitlab')
+  //
+  // RFC-359 W8 — an unresolved repository is `false`, not "ask about gitlab".
+  // The `?? 'gitlab'` this replaces made the two provider adapters of
+  // `CapabilityMatrixReadPort` disagree in a case that occurs the moment a
+  // deployment has both a GitLab and a GitHub endpoint: for a repository whose
+  // URL matches neither code host, the PostgreSQL adapter reported
+  // `code-host-unconfigured` (with the repair link to /settings/code-hosts)
+  // while this path reported the code host as configured — so the same cell,
+  // on the same data, sent the person to the webhooks page to wire a trigger
+  // that could never make it ready. A red label with the WRONG next step is
+  // worse than a red label with none (`domain/repairActions.ts`).
+  const endpoint =
+    input.provider === null
+      ? { ok: false as const }
+      : await resolveCodeHostEndpointId(reader.repoEndpoints, input.provider)
 
   return {
     enabled: input.enabled,

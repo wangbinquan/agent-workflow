@@ -119,7 +119,11 @@ function seedRunningTask(
   return id
 }
 
-function seedCallRun(h: Harness, taskId: string): string {
+/**
+ * RFC-359 W8-A：调用行必须**预留**它要铸的那个子任务 id —— 真实调用节点在 launch 之前就
+ * stamp 了 `childTaskId`，铸行准入门（`child-task-reservation-mismatch`）按它对账。
+ */
+function seedCallRun(h: Harness, taskId: string, childTaskId: string): string {
   const id = ulid()
   h.db
     .insert(nodeRuns)
@@ -131,6 +135,7 @@ function seedCallRun(h: Harness, taskId: string): string {
       retryIndex: 0,
       iteration: 0,
       startedAt: Date.now(),
+      childTaskId,
     })
     .run()
   return id
@@ -141,6 +146,8 @@ function callLaunch(parentTaskId: string, parentNodeRunId: string, invocationDep
     parentTaskId,
     parentNodeRunId,
     invocationDepth,
+    // 本文件的父任务都不带 owner（NULL owner 的历史行），发起者身份不参与判定。
+    launchActorUserId: '__system__',
     frozenSnapshotJson: EMPTY_DEF,
     refClosureJson: null,
   }
@@ -157,8 +164,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
   test('a workflow child and grandchild copy the exact root origin', async () => {
     h = buildHarness()
     const rootId = seedRunningTask(h, 'webhook', null, 'internal')
-    const rootRunId = seedCallRun(h, rootId)
     const childId = ulid()
+    const rootRunId = seedCallRun(h, rootId, childId)
     let grandchildId: string | undefined
 
     await startTask(
@@ -180,8 +187,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
             .set({ status: 'running' })
             .where(sql`${tasks.id} = ${event.taskId}`)
             .run()
-          const childRunId = seedCallRun(h!, event.taskId)
           grandchildId = ulid()
+          const childRunId = seedCallRun(h!, event.taskId, grandchildId)
           await startTask(
             { workflowId: h!.workflowId, name: 'grandchild', inputs: {} },
             {
@@ -216,10 +223,10 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
   test('concurrent siblings all copy one immutable parent value', async () => {
     h = buildHarness()
     const rootId = seedRunningTask(h, 'scheduled')
-    const children = Array.from({ length: 8 }, () => ({
-      id: ulid(),
-      runId: seedCallRun(h!, rootId),
-    }))
+    const children = Array.from({ length: 8 }, () => {
+      const id = ulid()
+      return { id, runId: seedCallRun(h!, rootId, id) }
+    })
 
     await Promise.all(
       children.map(({ id, runId }) =>
@@ -248,7 +255,10 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
   test('a child cannot smuggle root provenance or even blank root attribution ids', async () => {
     h = buildHarness()
     const rootId = seedRunningTask(h, 'api')
-    const runId = seedCallRun(h, rootId)
+    const conflictingChildId = ulid()
+    const blankMetadataChildId = ulid()
+    const conflictingRunId = seedCallRun(h, rootId, conflictingChildId)
+    const blankMetadataRunId = seedCallRun(h, rootId, blankMetadataChildId)
 
     await expect(
       startTask(
@@ -257,8 +267,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
-          materializedSpace: inheritedSpace(h, ulid()),
-          callLaunch: callLaunch(rootId, runId, 1),
+          materializedSpace: inheritedSpace(h, conflictingChildId),
+          callLaunch: callLaunch(rootId, conflictingRunId, 1),
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         },
       ),
@@ -271,8 +281,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
-          materializedSpace: inheritedSpace(h, ulid()),
-          callLaunch: callLaunch(rootId, runId, 1),
+          materializedSpace: inheritedSpace(h, blankMetadataChildId),
+          callLaunch: callLaunch(rootId, blankMetadataRunId, 1),
           webhookFireId: ' ',
         },
       ),

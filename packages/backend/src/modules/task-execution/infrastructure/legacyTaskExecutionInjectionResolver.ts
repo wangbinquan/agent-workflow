@@ -23,7 +23,7 @@ import { join as pathJoin } from 'node:path'
 import type { Agent, AgentSkillRef, Mcp, Plugin } from '@agent-workflow/shared'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { agents as agentRows, mcps as mcpRows, plugins as pluginRows, skills } from '@/db/schema'
+import { mcps as mcpRows, plugins as pluginRows, skills } from '@/db/schema'
 import type { Logger } from '@/util/log'
 import { ConflictError, SkillQuarantinedError } from '@/util/errors'
 import { resolveDependsClosure, type AgentDependencyLookup } from '@/services/agentDeps'
@@ -76,17 +76,6 @@ export interface ResolveInjectionOpts {
    * are not yet cancellation-aware; the parameter is the contract.
    */
   readonly signal?: AbortSignal
-}
-
-/** Explicit SQLite test/compatibility binding. Production provider sessions
- * inject their Resource Catalog lookup instead of reaching this factory. */
-export function createSqliteLegacyAgentDependencyLookup(db: DbClient): AgentDependencyLookup {
-  return Object.freeze({
-    async get(id: string) {
-      const rows = await db.select().from(agentRows).where(eq(agentRows.id, id)).limit(1)
-      return rows[0] === undefined ? null : taskExecutionResourceDependencies.rowToAgent(rows[0])
-    },
-  })
 }
 
 /**

@@ -299,7 +299,11 @@ describe('RFC-349 PostgreSQL child execution launch', () => {
     }
     const definition = WorkflowDefinitionSchema.parse({
       $schema_version: 2,
-      inputs: [],
+      // RFC-359 W8-A：子启动现在也按**冻结定义**校验输入（`assertWorkflowLaunchInputs`），
+      // 与 legacy 引擎同一道门、同一个 `workflow-inputs-invalid`。`childTask.inputs` 带了
+      // `input`，冻结定义就必须声明它——此前这里写 `inputs: []`，靠的是 PG 侧根本不看
+      // inputs 才没红（同一份 payload 在 SQLite 上一直是 `unknown-input` 拒启动）。
+      inputs: [{ kind: 'text', key: 'input', label: 'Input' }],
       nodes: [],
       edges: [],
     })

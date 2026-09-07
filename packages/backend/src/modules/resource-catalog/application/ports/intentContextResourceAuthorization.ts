@@ -21,16 +21,3 @@ export interface IntentContextResourceAuthorizationReadPort {
     userId: string,
   ): Promise<ResourceGrantLevel | null>
 }
-
-/** SQLite-only transaction reads that never escape a synchronous tx body. */
-export interface IntentContextResourceAuthorizationSyncReadPort {
-  loadIdentity(
-    resourceType: CatalogSelectorKind,
-    resourceId: string,
-  ): IntentContextResourceAuthorizationRow | null
-  loadGrantLevel(
-    resourceType: CatalogSelectorKind,
-    resourceId: string,
-    userId: string,
-  ): ResourceGrantLevel | null
-}

@@ -27,12 +27,20 @@ import {
 export interface RepositoryWorkspaceSqlExecutor {
   all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]>
   run(query: SQLWrapper): Promise<number>
+  /**
+   * 每格一条 `SELECT count(*) FROM cached_repos WHERE <谓词>` 的标量子查询。
+   * `referenced` 的三格互斥（见 `referencedFacetCounts`），调用方相加。
+   */
   cachedRepoFacets(input: {
-    readonly referenced: SQLWrapper
+    readonly explicit: SQLWrapper
+    readonly legacyOnly: SQLWrapper
+    readonly scheduledOnly: SQLWrapper
     readonly attention: SQLWrapper
   }): Promise<{
     readonly all_count: number
-    readonly referenced_count: number
+    readonly explicit_count: number
+    readonly legacy_count: number
+    readonly scheduled_count: number
     readonly attention_count: number
   }>
 }
@@ -177,27 +185,81 @@ function scheduledReferenceIds(rows: readonly { readonly launch_payload: string 
   return ids
 }
 
+function scheduledCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
+  return scheduleIds.size === 0
+    ? // RFC-349: this fragment lands in a boolean position (an `OR` arm in
+      // `referencedCondition`, the leading `AND` term in `scheduledOnly`), and the
+      // same builder now renders for PostgreSQL, which types `0` as integer and
+      // rejects the whole statement (`argument of OR must be type boolean, not type
+      // integer`). `false` is the literal both dialects agree on — it is what
+      // drizzle's own empty `inArray` emits.
+      sql`false`
+    : sql`${cachedRepos.id} in (${sql.join(
+        [...scheduleIds].map((id) => sql`${id}`),
+        sql`, `,
+      )})`
+}
+
+/** 被至少一行显式 `task_repos` 引用。 */
+const explicitReference = sql`exists (
+  select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id}
+)`
+
+/** 被**遗留直挂**引用：任务自己带 `cached_repo_id`，且它一行 `task_repos` 都没有。 */
+const legacyReference = sql`exists (
+  select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
+    and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
+)`
+
+/** Row-level predicate: 三条来源的并集。用在**分页 WHERE** 里，两个 planner 在那个位置
+ *  都能把 `exists` 上提成 semi/anti join，形状没有问题。 */
 function referencedCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
-  const scheduled =
-    scheduleIds.size === 0
-      ? // RFC-349: this fragment sits in an `OR` arm, and the same builder now
-        // renders for PostgreSQL, which types `0` as integer and rejects the
-        // whole statement (`argument of OR must be type boolean, not type
-        // integer`). `false` is the literal both dialects agree on — it is what
-        // drizzle's own empty `inArray` emits.
-        sql`false`
-      : sql`${cachedRepos.id} in (${sql.join(
-          [...scheduleIds].map((id) => sql`${id}`),
-          sql`, `,
-        )})`
   return sql`(
-    exists (select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id})
-    or exists (
-      select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
-        and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
-    )
-    or ${scheduled}
+    ${explicitReference}
+    or ${legacyReference}
+    or ${scheduledCondition(scheduleIds)}
   )`
+}
+
+/**
+ * RFC-359 W8-T26 —— facets 的 `referenced` 一格拆成**三格互斥计数**，每格一条标量子查询。
+ *
+ * 改写前是 `sum(case when (exists(…) or exists(…) or id in (…)) then 1 else 0 end)`：
+ * 写在聚合 `CASE` 里的相关子查询**两个 planner 都无法上提**成 semi join，只能对
+ * cached_repos 的每一行重跑一遍。PostgreSQL 上实测（50000 tasks 语料）：
+ *
+ *   · 50000 个仓库：322ms / 250,319 个 shared buffer，且估算代价越过 `jit_above_cost`
+ *     又白搭进一次 JIT 编译；
+ *   · 200 个仓库（生产比例：仓库少、任务多）：112ms / 16,702 buffer——planner 对
+ *     `loops=200` 的子计划选了 `Seq Scan on task_repos`，比逐行索引探还糟。
+ *
+ * 支点是**把 `exists` 送回 WHERE 子句**：那个位置两个 planner 都会上提。外层是一行常量，
+ * 所以每格只求值一次（loops=1）。三格按 `E / ¬E∧L / ¬E∧¬L∧S` 互斥切分，相加即原来的并集。
+ *
+ * 实测（同语料，PostgreSQL）：50000 仓库 322ms → 59ms、250,319 → 2,021 buffer，JIT 消失；
+ * 200 仓库 112ms → 19ms、16,702 → 1,114 buffer。
+ *
+ * **为什么不是「预聚合 task_repos ∪ tasks 再 LEFT JOIN」**（T26 账本原本记的正解）：
+ * 那个形状在 PostgreSQL 上同样快（49ms / 904 buffer），但它把代价从 O(仓库数) 换成了
+ * O(**任务数**)——生产里任务表比仓库表大几个数量级。SQLite 上实测因此直接翻车：
+ * 200 仓库 / 50000 任务的形态上 0.2ms → 16ms（八十倍），并且 `SCAN tasks` 触发
+ * `rfc311-perf-guards` 的「不许扫无界表」判据。互斥三格两个引擎、两种表比例下都不退化
+ * （SQLite 同形态 0.2ms → 0.4ms）。
+ *
+ * 结果等价（三格相加 === 原来的并集）由 `rfc359-w8-t26-plan-reshape-conformance`
+ * 用一对多 / 空集 / NULL / 悬空键四类语料在两个引擎上钉住。
+ */
+function referencedFacetCounts(scheduleIds: ReadonlySet<string>): {
+  readonly explicit: SQLWrapper
+  readonly legacyOnly: SQLWrapper
+  readonly scheduledOnly: SQLWrapper
+} {
+  return {
+    explicit: explicitReference,
+    legacyOnly: sql`not ${explicitReference} and ${legacyReference}`,
+    scheduledOnly: sql`${scheduledCondition(scheduleIds)}
+      and not ${explicitReference} and not ${legacyReference}`,
+  }
 }
 
 const attentionCondition = sql`(
@@ -462,11 +524,15 @@ export class RepositoryWorkspaceSqlStore {
     let facets = cachedFacets?.facets
     if (facets === undefined) {
       const facetRow = await this.executor.cachedRepoFacets({
-        referenced,
+        ...referencedFacetCounts(scheduleIds),
         attention: attentionCondition,
       })
       const all = Number(facetRow.all_count)
-      const referencedCount = Number(facetRow.referenced_count)
+      // 三格按构造互斥（E / ¬E∧L / ¬E∧¬L∧S），相加即改写前那个 OR 的并集势。
+      const referencedCount =
+        Number(facetRow.explicit_count) +
+        Number(facetRow.legacy_count) +
+        Number(facetRow.scheduled_count)
       facets = {
         all,
         referenced: referencedCount,

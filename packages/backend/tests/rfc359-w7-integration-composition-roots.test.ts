@@ -53,12 +53,11 @@ import {
 } from '@/modules/integration/composition/webhookDelivery'
 import {
   composePostgresqlWebhookDispatchPersistence,
-  composePostgresqlWebhookTriggerAdministration,
   composePostgresqlWebhookTriggerServiceDependencies,
-  composeSqliteWebhookDispatchPersistence,
-  composeSqliteWebhookTriggerAdministration,
   composeSqliteWebhookTriggerServiceDependencies,
 } from '@/modules/integration/composition/webhookDispatch'
+import { createWebhookTriggerAdministration } from '@/modules/integration/infrastructure/webhookTriggerAdministration'
+import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
 import {
   composePostgresqlWebhookEndpointServiceDependencies,
   composeSqliteWebhookEndpointServiceDependencies,
@@ -68,11 +67,7 @@ import {
   composePostgresqlWebhookIngressPersistence,
   composeSqliteWebhookDeliveryRuntime,
 } from '@/modules/integration/composition/webhookIngress'
-import {
-  composePostgresqlMrTerminalControl,
-  composePostgresqlVerifiedWebhookDeliveryAcceptance,
-  composeSqliteVerifiedWebhookDeliveryAcceptance,
-} from '@/modules/integration/composition/webhookTerminalControl'
+import { composePostgresqlMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -266,35 +261,35 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
   test('webhookDispatch 持久化 + 触发器管理面：create/get/update/listFires/delete 与 fire 记账', async () => {
     const owner = await seedUser(harness.db)
     const endpointId = await seedEndpoint(harness.db)
-    const administrationSqlite = composeSqliteWebhookTriggerAdministration(asSqlite(harness.db))
-    const administrationPostgresql = composePostgresqlWebhookTriggerAdministration(
-      asPostgresql(harness.db),
-    )
-    expect(await administrationSqlite.endpointExists(endpointId)).toBe(true)
-    expect(await administrationPostgresql.endpointExists('we_missing')).toBe(false)
+    // RFC-359 W8：触发器管理面的两个 provider 别名都是零生产消费者的摆设，已随死适配器一批删除；
+    // 生产装配走中立的 `createWebhookTriggerAdministration`（`webhookDispatch.ts:63/74` 两个
+    // ServiceDependencies 组合根都直接调它），这里也改指它，覆盖面不变。
+    const administration = createWebhookTriggerAdministration(harness.db)
+    expect(await administration.endpointExists(endpointId)).toBe(true)
+    expect(await administration.endpointExists('we_missing')).toBe(false)
 
     const record = triggerRecord(endpointId, owner.id)
-    const created = await administrationSqlite.create(record)
+    const created = await administration.create(record)
     expect(created).toMatchObject({ id: record.id, endpointId, enabled: true })
-    expect((await administrationPostgresql.list()).map((row) => row.id)).toContain(record.id)
+    expect((await administration.list()).map((row) => row.id)).toContain(record.id)
 
-    const updated = await administrationPostgresql.update({
+    const updated = await administration.update({
       triggerId: record.id,
       patch: { enabled: false, templateSyntaxVersion: 2, updatedAt: T0 + 1 },
     })
     expect(updated).toMatchObject({ id: record.id, enabled: false })
 
-    const dispatchSqlite = composeSqliteWebhookDispatchPersistence(asSqlite(harness.db))
+    // SQLite 别名同样是摆设；派发持久化只剩 PostgreSQL 这一个具名装配别名。
     const dispatchPostgresql = composePostgresqlWebhookDispatchPersistence(asPostgresql(harness.db))
-    expect(await dispatchSqlite.triggerEnabled(record.id)).toBe(false)
+    expect(await dispatchPostgresql.triggerEnabled(record.id)).toBe(false)
     expect(await dispatchPostgresql.triggerEnabled('wt_missing')).toBeNull()
-    expect((await dispatchSqlite.getTrigger(record.id))?.name).toBe(record.name)
+    expect((await dispatchPostgresql.getTrigger(record.id))?.name).toBe(record.name)
     // enabled=false 之后不再出现在端点的启用清单里。
     expect(await dispatchPostgresql.listEnabledTriggers(endpointId)).toEqual([])
 
     const deliveryId = `wd_${ulid()}`
     const fireId = `wf_${ulid()}`
-    await dispatchSqlite.recordFire({
+    await dispatchPostgresql.recordFire({
       fireId,
       deliveryId,
       triggerId: record.id,
@@ -303,10 +298,8 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
       taskId: null,
     })
     expect(await dispatchPostgresql.fireExists(deliveryId, record.id)).toBe(true)
-    expect(await dispatchSqlite.fireExists(deliveryId, 'wt_other')).toBe(false)
-    expect((await administrationPostgresql.listFires(record.id, 10)).map((row) => row.id)).toEqual([
-      fireId,
-    ])
+    expect(await dispatchPostgresql.fireExists(deliveryId, 'wt_other')).toBe(false)
+    expect((await administration.listFires(record.id, 10)).map((row) => row.id)).toEqual([fireId])
 
     await dispatchPostgresql.putTriggerStream({
       triggerId: record.id,
@@ -314,11 +307,11 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
       consecutiveFires: 2,
       lastFireAt: T0 + 9,
     })
-    expect(await dispatchSqlite.getTriggerStream(record.id, 'stream-1')).toEqual({
+    expect(await dispatchPostgresql.getTriggerStream(record.id, 'stream-1')).toEqual({
       consecutiveFires: 2,
       lastFireAt: T0 + 9,
     })
-    await administrationSqlite.resetStream({
+    await administration.resetStream({
       triggerId: record.id,
       streamKey: 'stream-1',
       resetAt: T0 + 10,
@@ -328,8 +321,8 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
       (await dispatchPostgresql.getTriggerStream(record.id, 'stream-1'))?.consecutiveFires,
     ).toBe(0)
 
-    await administrationPostgresql.delete(record.id)
-    expect(await administrationSqlite.get(record.id)).toBeNull()
+    await administration.delete(record.id)
+    expect(await administration.get(record.id)).toBeNull()
   })
 
   test('webhookDispatch 触发器服务依赖：两个别名装出的 administration / dispatchPersistence 都能读写', async () => {
@@ -494,15 +487,16 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     expect(await sqliteRuntime.queries.hasTerminalControlEffect(accepted.deliveryId)).toBe(true)
   })
 
-  test('webhookTerminalControl 已验证投递接收：两个别名各接一条独立事实', async () => {
+  test('已验证投递接收：连着接两条独立事实', async () => {
     const endpointId = await seedEndpoint(harness.db)
-    const acceptSqlite = composeSqliteVerifiedWebhookDeliveryAcceptance(asSqlite(harness.db))
-    const acceptPostgresql = composePostgresqlVerifiedWebhookDeliveryAcceptance(
-      asPostgresql(harness.db),
-    )
+    // RFC-359 W8：`compose{Sqlite,Postgresql}VerifiedWebhookDeliveryAcceptance` 两个别名与它们
+    // 共用的中立包装都是零生产消费者的摆设，已随死适配器一批删除。生产的接收路径是
+    // `webhookIngress.ts:34::composeWebhookIngressPersistenceFor` 直接用的
+    // `createVerifiedWebhookDeliveryPersistence(db).accept`，这里改指它，断言一条不减。
+    const accept = createVerifiedWebhookDeliveryPersistence(harness.db).accept
     // 事实键含 body 字节：两条要真的独立，body 也必须不同（同 body 是同一条事实，只 bump attempt）。
     const bodyOf = (iid: string) => `{"object_kind":"merge_request","state":"closed","iid":${iid}}`
-    const first = await acceptSqlite({
+    const first = await accept({
       endpointId,
       event: codeHostEvent({ mrIid: '11' }),
       rawBodyBytes: new TextEncoder().encode(bodyOf('11')),
@@ -511,7 +505,7 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
       objectKind: 'merge_request',
     })
     expect(first.kind).toBe('inserted')
-    const second = await acceptPostgresql({
+    const second = await accept({
       endpointId,
       event: codeHostEvent({ mrIid: '12' }),
       rawBodyBytes: new TextEncoder().encode(bodyOf('12')),
@@ -724,10 +718,7 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composePostgresqlWebhookDeliveryPersistence,
     composeSqliteWebhookDeliveryPersistence,
     composePostgresqlWebhookDispatchPersistence,
-    composePostgresqlWebhookTriggerAdministration,
     composePostgresqlWebhookTriggerServiceDependencies,
-    composeSqliteWebhookDispatchPersistence,
-    composeSqliteWebhookTriggerAdministration,
     composeSqliteWebhookTriggerServiceDependencies,
     composePostgresqlWebhookEndpointServiceDependencies,
     composeSqliteWebhookEndpointServiceDependencies,
@@ -735,10 +726,8 @@ test('本文件覆盖的组合根都来自生产装配面（不是测试里自�
     composePostgresqlWebhookIngressPersistence,
     composeSqliteWebhookDeliveryRuntime,
     composePostgresqlMrTerminalControl,
-    composePostgresqlVerifiedWebhookDeliveryAcceptance,
-    composeSqliteVerifiedWebhookDeliveryAcceptance,
     composePostgresqlTaskSourceTermination,
   ]
-  expect(roots.length).toBe(24)
+  expect(roots.length).toBe(19)
   expect(roots.filter((root) => typeof root === 'function').length).toBe(roots.length)
 })

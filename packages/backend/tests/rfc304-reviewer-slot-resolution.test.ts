@@ -19,7 +19,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { capabilityTemplates, agents } from '../src/db/schema'
 import { resolveReviewerAgent } from '../src/services/codeReviewAgentCaller'
-import { composeSqliteReviewerResolutionRead } from '../src/modules/code-capability/composition/reviewerResolution'
+import { DrizzleReviewerResolutionRead } from '../src/modules/code-capability/infrastructure/reviewerResolutionRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -27,7 +27,7 @@ const NOW = 1_700_000_000_000
 const REPO = 'repo-1'
 
 const ask = (db: DbClient) =>
-  resolveReviewerAgent(composeSqliteReviewerResolutionRead(db), {
+  resolveReviewerAgent(new DrizzleReviewerResolutionRead(db), {
     repoId: REPO,
     capability: 'mr-review',
     slot: 'reviewer',

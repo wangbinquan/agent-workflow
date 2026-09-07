@@ -122,14 +122,14 @@ import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
 import { sha256Hex } from '@/util/hash'
 import type { StaleRunKillOutcome } from '@/util/process'
-import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
+import {
+  childLaunchAdmissionIssue,
+  type SourceTerminationSnapshot,
+} from '@/modules/task-execution/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
-import {
-  sourceTerminationRevivalError,
-  type TaskStopCause,
-} from '@/modules/task-execution/domain/sourceTermination'
+import type { TaskStopCause } from '@/modules/task-execution/domain/sourceTermination'
 import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
@@ -741,6 +741,14 @@ export interface StartTaskDeps {
     parentTaskId: string
     parentNodeRunId: string
     invocationDepth: number
+    /**
+     * RFC-359 W8-A: WHO is firing this child launch. Distinct from
+     * `actorUserId` (which becomes the child's own `owner_user_id`): the
+     * parent-admission gate requires the launcher to be the parent's owner,
+     * while an owner-less legacy parent still mints an owner-less child.
+     * Supplied by the child-launch port from the delegated call Actor.
+     */
+    launchActorUserId: string
     /**
      * Frozen child definition (call-workflow arm). NULL for the workgroup arm
      * — there the host snapshot is composed by the frozen launch face and
@@ -3376,6 +3384,8 @@ async function startTaskImpl(
           .select({
             id: tasks.id,
             status: tasks.status,
+            ownerUserId: tasks.ownerUserId,
+            invocationDepth: tasks.invocationDepth,
             launchOrigin: tasks.launchOrigin,
             catalogVisibility: tasks.catalogVisibility,
             sourceTerminationBinding: tasks.sourceTerminationBinding,
@@ -3394,16 +3404,42 @@ async function startTaskImpl(
             `parent task '${deps.callLaunch.parentTaskId}' disappeared during child launch`,
           )
         }
-        if (parent.status !== 'running') {
-          throw new ConflictError(
-            'parent-task-not-running',
-            `parent task '${deps.callLaunch.parentTaskId}' is '${parent.status}'; refusing to mint child '${taskId}'`,
+        const parentRun = tx
+          .select({
+            taskId: nodeRuns.taskId,
+            status: nodeRuns.status,
+            childTaskId: nodeRuns.childTaskId,
+            continuationSlotKey: nodeRuns.continuationSlotKey,
+            lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
+            operationGeneration: nodeRuns.operationGeneration,
+          })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, deps.callLaunch.parentNodeRunId))
+          .get()
+        if (parentRun === undefined) {
+          // RFC-359 W8-A: the calling node_run is the whole reason this child
+          // exists. It used to be optional here — a missing row silently
+          // degraded to a `legacy-call:` slot key and generation 0, which is
+          // exactly how a child could be minted with no live call row to
+          // return to.
+          throw new NotFoundError(
+            'parent-node-run-not-found',
+            `parent node_run '${deps.callLaunch.parentNodeRunId}' was not found`,
           )
         }
-        const sourceFenceError = sourceTerminationRevivalError(parent.sourceTerminationFence)
-        if (sourceFenceError !== null) {
-          throw new ConflictError(sourceFenceError, sourceFenceError)
-        }
+        // RFC-359 W8-A: the parent-admission gates are ONE shared judgement
+        // (`domain/childLaunchAdmission.ts`) — this engine used to run only the
+        // first two of them, so a mismatched call row, a stolen child
+        // reservation, a skipped invocation depth or a non-owner launcher all
+        // minted a child here while the other provider refused. Same rows, same
+        // order, same codes on both.
+        const admission = childLaunchAdmissionIssue(parent, parentRun, {
+          parentNodeRunId: deps.callLaunch.parentNodeRunId,
+          childTaskId: taskId,
+          invocationDepth: deps.callLaunch.invocationDepth,
+          launchActorUserId: deps.callLaunch.launchActorUserId,
+        })
+        if (admission !== null) throw new ConflictError(admission.code, admission.message)
         launchOrigin = parent.launchOrigin
         catalogVisibility = parent.catalogVisibility
         sourceTerminationSnapshot =
@@ -3415,20 +3451,11 @@ async function startTaskImpl(
                 fence: parent.sourceTerminationFence,
                 effectRevision: parent.sourceTerminationEffectRev,
               }
-        const parentRun = tx
-          .select({
-            continuationSlotKey: nodeRuns.continuationSlotKey,
-            lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
-            operationGeneration: nodeRuns.operationGeneration,
-          })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, deps.callLaunch.parentNodeRunId))
-          .get()
         executionLineageId = parent.executionLineageId ?? parent.id
         continuationSlotKey =
-          parentRun?.continuationSlotKey ?? `legacy-call:${deps.callLaunch.parentNodeRunId}`
-        operationGeneration = parentRun?.operationGeneration ?? 0
-        const inheritedPathRaw = parentRun?.lineageSlotPathJson ?? parent.lineageSlotPathJson
+          parentRun.continuationSlotKey ?? `legacy-call:${deps.callLaunch.parentNodeRunId}`
+        operationGeneration = parentRun.operationGeneration
+        const inheritedPathRaw = parentRun.lineageSlotPathJson ?? parent.lineageSlotPathJson
         try {
           const parsed: unknown = inheritedPathRaw === null ? null : JSON.parse(inheritedPathRaw)
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -6223,6 +6250,23 @@ export async function retryNode(
     targetKind !== undefined &&
     WRAPPER_KINDS.has(targetKind) &&
     (runRow.status === 'canceled' || runRow.status === 'interrupted')
+  // RFC-095 design.md:43-48 / RFC-359 W8 — a CANCELED wrapper row is the revival
+  // signal itself: the wrapper ledger reuses THAT row and continues from the
+  // persisted progress (git baseline stays pre-inner), so the inner rounds that
+  // already finished stay `done` in the DB. Resetting the worktree to the
+  // wrapper's own pre_snapshot would delete those rounds' output from disk while
+  // the DB still claims they happened — restart semantics smuggled into a
+  // continue. `selectSyncRollbackTargets` already carves the same case out on the
+  // sync side ("rolling it back would undo completed inner work"); retry was the
+  // one path that still rolled it back, and only on SQLite (PostgreSQL's
+  // `children.resume` selector never picks a canceled row, so it never did).
+  //
+  // Scoped to `canceled` on purpose — NOT the whole `wrapperRevivalTarget`. An
+  // `interrupted` wrapper IS in the resume selector's status set on both engines,
+  // so it keeps its rollback; widening this carve-out would open a fresh
+  // divergence in the opposite direction.
+  const canceledWrapperRevivalTarget =
+    targetKind !== undefined && WRAPPER_KINDS.has(targetKind) && runRow.status === 'canceled'
   const targets = new Set<string>()
   if (!wrapperRevivalTarget) targets.add(runRow.nodeId)
   for (const id of downstream) {
@@ -6354,19 +6398,27 @@ export async function retryNode(
       // RFC-098 WP-8: same kill-then-proceed as resumeTask — group-kill the
       // target row's still-alive child (if any) before touching the worktree.
       await reapRunBeforeWorktreeReset(db, taskId, runRow, 'retryNode', opts.deps, log)
-      // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
-      // contract as resumeTask) — no placeholder rows are minted and no
-      // scheduler is kicked when the promised baseline no longer exists.
-      const rollbackOutcome = await rollbackNodeRunForResume(db, task, runRow, log)
-      if (rollbackOutcome.failures.some((f) => f.code === 'snapshot-missing')) {
-        await escalateSnapshotLost(
-          db,
-          requireTaskRecoveryOperations(opts.deps),
-          taskId,
-          runRow,
-          rollbackOutcome,
-          'retryNode',
-        )
+      // RFC-095 / RFC-359 W8: the canceled-wrapper revival target is resumed IN
+      // PLACE, so its pre_snapshot is never restored — see
+      // `canceledWrapperRevivalTarget` above. Skipping the rollback also skips the
+      // WP-9 escalation for that row on purpose: `snapshot-lost` means "the
+      // baseline we PROMISED to restore is gone", and here nothing was promised.
+      // Every other target keeps both.
+      if (!canceledWrapperRevivalTarget) {
+        // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
+        // contract as resumeTask) — no placeholder rows are minted and no
+        // scheduler is kicked when the promised baseline no longer exists.
+        const rollbackOutcome = await rollbackNodeRunForResume(db, task, runRow, log)
+        if (rollbackOutcome.failures.some((f) => f.code === 'snapshot-missing')) {
+          await escalateSnapshotLost(
+            db,
+            requireTaskRecoveryOperations(opts.deps),
+            taskId,
+            runRow,
+            rollbackOutcome,
+            'retryNode',
+          )
+        }
       }
 
       // Flip target + downstream node_runs from done → failed so the resumer

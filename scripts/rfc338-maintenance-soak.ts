@@ -24,7 +24,7 @@ import {
   maintenanceJobSpec,
 } from '../packages/backend/src/platform/background/maintenanceCatalog'
 import { openDb } from '../packages/backend/src/db/client'
-import { createMaintenanceRunStore } from '../packages/backend/src/platform/persistence/sqlite/maintenanceRunStore'
+import { createMaintenanceRunStore } from '../packages/backend/src/platform/persistence/maintenanceRunStore'
 import {
   MaintenanceStatusSchema,
   type MaintenanceJobKey,
@@ -609,18 +609,21 @@ function heavyPayloads(expectedEvents: number): Record<string, Readonly<Record<s
   }
 }
 
-function enqueueMaintenance(
+async function enqueueMaintenance(
   store: ReturnType<typeof createMaintenanceRunStore>,
   expectedEvents: number,
-): Array<{ runId: string; job: MaintenanceJobKey }> {
+): Promise<Array<{ runId: string; job: MaintenanceJobKey }>> {
   const runTag = randomUUID()
   const now = Date.now()
   const payloads = heavyPayloads(expectedEvents)
   const jobs = [...HEAVY_MAINTENANCE_JOB_KEYS, 'walCheckpoint'] as const
-  return jobs.map((job, index) => {
+  // RFC-359 W8: the run store is a Promise port on both providers; the slots
+  // must still be admitted in order so `now + index` keeps its meaning.
+  const queued: Array<{ runId: string; job: MaintenanceJobKey }> = []
+  for (const [index, job] of jobs.entries()) {
     const runId = randomUUID()
     const spec = maintenanceJobSpec(job)
-    const receipt = store.enqueue({
+    const receipt = await store.enqueue({
       id: runId,
       jobKey: job,
       jobClass: spec.class,
@@ -631,8 +634,9 @@ function enqueueMaintenance(
       now: now + index,
     })
     if (!receipt.inserted) throw new Error(`soak run for ${job} was unexpectedly coalesced`)
-    return { runId, job }
-  })
+    queued.push({ runId, job })
+  }
+  return queued
 }
 
 function parseCounters(value: string): Record<string, number> {
@@ -880,8 +884,8 @@ async function main(): Promise<void> {
       daemon,
       args,
       taskIds: taskIds.slice(split),
-      beforeRequests: () => {
-        queued = enqueueMaintenance(store, before.events)
+      beforeRequests: async () => {
+        queued = await enqueueMaintenance(store, before.events)
         console.log(`[maintenance-soak] queued ${queued.length} maintenance jobs`)
       },
     })

@@ -411,7 +411,7 @@ done
 3. 脚本里做了一串命令后，**别只看最后一句的 echo**——它可能是 shell 内建、在 PATH 毁掉之后
    照样打印。判据取实际结果（这里是 `git log --oneline -1` 有没有变），不是脚本自己的口播。
 
-## zsh 不对未加引号的 `$FILES` 做分词：`git add $FILES` 整串当一个路径（2026-09-04 一天撞两次）
+## zsh 不对未加引号的 `$FILES` 做分词：`git add $FILES` 整串当一个路径（2026-09-04 一天撞两次；**2026-09-07 第四次**）
 
 bash 里 `FILES="a b c"; git add $FILES` 是三个路径，zsh 里是**一个**叫 `a b c` 的路径：
 `fatal: pathspec 'a b c' did not match any files`。危险不在报错本身，而在**后面的链**：
@@ -428,6 +428,20 @@ git fetch origin main; git merge --ff-only origin/main; git push origin main   #
 定式：①路径清单写进文件，用 `$(cat list.txt)` 展开（命令替换会分词），或 `xargs`；②add → commit →
 push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推；③别指望 `set -o shwordsplit`——
 每个 Bash 调用都是新 shell。
+
+### 第四次复发的记录，与它说明的事（2026-09-07）
+
+`FILES=$(ls tests/rfc359-w8-*.test.ts | tr '\n' ' '); bun test --isolate $FILES` —— 19 个路径被当成
+**一个**过滤串，bun 报「did not match any test files」并把那一串原样打出来。**这条已经在本文件里
+记了三次，我照样又撞了**。
+
+值得记的不是这次撞，而是它说明的事：**一份很长的踩坑文档，只有在动手前真的去查才有用**。
+同一天我还三次撞进本文件的「架构账本的联动点：动一次代码要同步 8 处」那张表（第 1/2/4 行各一次），
+每次都是撞了才回来查表——而表就在那儿。
+
+**可操作的结论**：涉及「多个路径 / 多个文件」的命令，别用变量传，**直接用 glob 让 shell 展开**
+（`bun test tests/foo-*.test.ts`、`git add path/a path/b`）。要用变量就写数组
+（`files=(...)` + `"${files[@]}"`）或显式 `${=FILES}`。
 
 ### 第二种形态：`set -- $VAR` 拆不出位置参数，后台轮询会**静默空转到超时**（2026-09-07 实撞，一次挂 4 个）
 

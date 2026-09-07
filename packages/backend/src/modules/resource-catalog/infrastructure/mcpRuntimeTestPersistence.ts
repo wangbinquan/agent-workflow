@@ -9,6 +9,7 @@ import {
   mcpRuntimeTestSessions,
   mcpRuntimeTestTurns,
 } from '@/db/schema'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import type {
   McpRuntimeTestAcceptMessageInput,
@@ -49,6 +50,42 @@ function canResumeNativeSession(
   )
 }
 
+/**
+ * RFC-359 W8-T28 —— 目录写事务 + 唯一键冲突整笔重来。给「先查一眼、没有就插一条」那几笔用。
+ *
+ * 这类形状**行锁救不了**：`runResourceCatalogTransaction` 在 PG 上是 SERIALIZABLE，快照在事务第一条
+ * 语句就冻住了，`lockAggregateRoot` 只是排队等锁、**不会刷新快照**（实测：给 `appendEvent` 加会话
+ * 行锁后，后一笔仍然算出同一个 `eventSeq` 并撞 23505）。而 23505 不是 40001，
+ * `retryPostgresqlSerialization` 的判据不认，于是裸驱动错误直接冒到 HTTP 边界变成 500——SQLite 那边
+ * `BEGIN IMMEDIATE` 独占，第二笔读到的是对方提交后的状态，走的是干净的 4xx。两个引擎收场不一样。
+ *
+ * 正解是**换一笔事务重来**：新事务取新快照，读得到对方已提交的行，于是序号自然往后排、「已存在」
+ * 的前置检查自然命中，收敛回与 SQLite 相同的那条路。判据走能力矩阵的 `classifyError`（PG 的 23505
+ * 与 SQLite 的 SQLITE_CONSTRAINT_UNIQUE 同归 'unique-violation'），与 `terminalMaintenancePersistence` /
+ * `runtimeSessionLeaseOperations` 是同一条。事务体只碰数据库、失败的一笔已整笔回滚，重跑无副作用。
+ *
+ * 预算 5 次：冲突方重跑时读的是**已提交**的新状态，一次就能排开；预算是给三方以上同时抢的余量。
+ */
+const UNIQUE_VIOLATION_ATTEMPTS = 5
+
+async function runCatalogTransactionRetryingUniqueViolations<T>(
+  db: ProviderNeutralDatabase,
+  body: (tx: Parameters<Parameters<typeof runResourceCatalogTransaction>[1]>[0]) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await runResourceCatalogTransaction(db, body)
+    } catch (error) {
+      if (
+        attempt >= UNIQUE_VIOLATION_ATTEMPTS - 1 ||
+        engineOf(db).classifyError(error) !== 'unique-violation'
+      ) {
+        throw error
+      }
+    }
+  }
+}
+
 export function createMcpRuntimeTestPersistence(
   db: ProviderNeutralDatabase,
 ): McpRuntimeTestPersistence {
@@ -56,7 +93,11 @@ export function createMcpRuntimeTestPersistence(
     identity: db,
 
     async appendEvent(input): Promise<McpRuntimeTestEventAppendResult> {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      // 事件序号是「读出 max、加一、插回」，撞 `uniq_mcp_runtime_test_events_session_seq` 时
+      // 换一笔事务重来（见 `runCatalogTransactionRetryingUniqueViolations` 的注释：这里行锁无效，因为快照不会刷新）。
+      // 抛出去的话这条事件就丢了，抓取被判失败、整个测试台会话被标成 unusable——而 SQLite 上两条
+      // 都好端端落库。
+      return runCatalogTransactionRetryingUniqueViolations(db, async (tx) => {
         const turn = await tx
           .select({
             captureState: mcpRuntimeTestTurns.captureState,
@@ -434,7 +475,13 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async create(input: McpRuntimeTestCreatePersistenceInput) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      // 「先查有没有活会话、没有就插一条」是 check-then-insert：PG 的 SSI **大多数**时候能把两笔
+      // 并发认成读写依赖环、给后一笔 40001 并整笔重放，但不是每次——实测 40 轮里必有几轮是先撞上
+      // `uniq_mcp_runtime_test_sessions_owner_mcp_live`（同一人同一 MCP 只能有一个活会话的库面表达）
+      // 抛 23505 冒成 500，而 SQLite 上永远是干净的 `mcp-test-session-exists` 409。
+      // 换一笔事务重来即可：新快照读得到对方刚提交的活会话，走回上面那条 409（还带着会话 id）。
+      // 幂等键相同的两笔并发同理——重跑时读得到对方的 receipt，按重放返回同一个会话。
+      return runCatalogTransactionRetryingUniqueViolations(db, async (tx) => {
         const replay = await tx
           .select()
           .from(mcpRuntimeTestCreateReceipts)
@@ -589,6 +636,20 @@ export function createMcpRuntimeTestPersistence(
 
     async acceptMessage(input: McpRuntimeTestAcceptMessageInput) {
       return runResourceCatalogTransaction(db, async (tx) => {
+        // RFC-359 W8-T28 —— 会话聚合根行锁，先锁再读（design §10.1）。
+        // 这一笔的写值全部由读到的会话行算出来：新轮次的 `seq = turnSeq + 1` 落在
+        // `uniq_mcp_runtime_test_turns_session_seq` 上，会话的 `sessionVersion` 自增落在会话行上。
+        // 不锁时两个并发发送（两个标签页 / 一次双击）各读到同一个 `turnSeq`，都插 `seq = n + 1`：
+        // SQLite 的 BEGIN IMMEDIATE 独占把第二笔挡在门外，它重读后走到「会话已有在飞轮次」的
+        // `mcp-test-session-not-ready` 409；PostgreSQL 上第二笔却是插进去才撞唯一键，抛 23505——
+        // 不是 40001，SERIALIZABLE 的重试判据不认，于是原样冒到 HTTP 边界变成 500。
+        // 取了行锁后第二笔等第一笔提交再读，两个引擎收敛到同一个 409。
+        await engineOf(tx).lockAggregateRoot(
+          tx,
+          mcpRuntimeTestSessions,
+          mcpRuntimeTestSessions.id,
+          input.sessionId,
+        )
         const replay = await tx
           .select()
           .from(mcpRuntimeTestTurns)

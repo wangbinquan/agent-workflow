@@ -29,10 +29,8 @@ import {
   createVerifiedStopProof,
   decideOwnerTransition,
 } from '@/modules/task-execution/domain/ownership'
-import {
-  finalizeTaskExecutionRecovery,
-  prepareTaskExecutionRecovery,
-} from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery'
+import { DrizzleTaskExecutionRecoveryPersistence } from '@/modules/task-execution/infrastructure/taskExecutionRecovery'
+import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import {
   aggregateEffectOutcome,
   canonicalResourceKeySet,
@@ -154,7 +152,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
     })
   })
 
-  test('one pending intent has one winner; a revoked epoch writes zero domain rows', () => {
+  test('one pending intent has one winner; a revoked epoch writes zero domain rows', async () => {
     const database = db()
     seedTask(database, 'task-owner')
     const module = createTaskExecutionTestModule('daemon-owner')
@@ -198,8 +196,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
     expect(database.select({ value: tasks.errorSummary }).from(tasks).get()?.value).toBeNull()
 
     const revoked = module.ownership.read(database, 'task-owner')!
-    module.ownership.releaseAfterStop({
-      db: database,
+    await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
       token: claimed.token,
       intentId: submitted.intentId,
       proof: createVerifiedStopProof({
@@ -402,7 +399,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     ).toEqual([0, 1])
   })
 
-  test('a stop between probe authorization and resend releases the owner without losing the retry', () => {
+  test('a stop between probe authorization and resend releases the owner without losing the retry', async () => {
     const database = db()
     seedTask(database, 'task-probe-stop-window')
     const module = createTaskExecutionTestModule('daemon-probe-stop-window')
@@ -451,9 +448,8 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       now: 41,
     })
     const owner = module.ownership.read(database, 'task-probe-stop-window')!
-    expect(() =>
-      module.ownership.releaseAfterStop({
-        db: database,
+    await expect(
+      new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
         token: claim.token,
         intentId: intent.intentId,
         proof: createVerifiedStopProof({
@@ -465,7 +461,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
         }),
         now: 42,
       }),
-    ).not.toThrow()
+    ).resolves.toMatchObject({ state: 'released' })
     expect(module.ownership.read(database, 'task-probe-stop-window')?.state).toBe('released')
     expect(
       module.effects.planCodeHostAttempt({
@@ -867,12 +863,13 @@ describe('RFC-328 successor-daemon effect recovery', () => {
       acquiredAt: 200,
       lockReceiptDigest: 'exclusive-gate-recovery-lock',
     })
-    expect(prepareTaskExecutionRecovery({ db: database, lockProof, now: 201 })).toEqual({
+    expect(
+      await new DrizzleTaskExecutionRecoveryPersistence(database).prepare({ lockProof, now: 201 }),
+    ).toEqual({
       revokedTaskIds: [taskId],
     })
     expect(
-      await finalizeTaskExecutionRecovery({
-        db: database,
+      await new DrizzleTaskExecutionRecoveryPersistence(database).finalize({
         lockProof,
         processEvidence: { orphanReaperCompleted: true },
         now: 202,
@@ -1019,7 +1016,12 @@ describe('RFC-328 successor-daemon effect recovery', () => {
     })
     expect(
       [
-        ...prepareTaskExecutionRecovery({ db: database, lockProof, now: 201 }).revokedTaskIds,
+        ...(
+          await new DrizzleTaskExecutionRecoveryPersistence(database).prepare({
+            lockProof,
+            now: 201,
+          })
+        ).revokedTaskIds,
       ].sort(),
     ).toEqual(['task-process-activated', 'task-process-not-activated', 'task-remote-unknown'])
     database.update(tasks).set({ status: 'interrupted' }).run()
@@ -1033,8 +1035,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
       .where(eq(taskExecutionIntents.state, 'claimed'))
       .run()
 
-    const finalized = await finalizeTaskExecutionRecovery({
-      db: database,
+    const finalized = await new DrizzleTaskExecutionRecoveryPersistence(database).finalize({
       lockProof,
       processEvidence: {
         orphanReaperCompleted: true,
@@ -1183,14 +1184,18 @@ describe('RFC-328 successor-daemon effect recovery', () => {
     })
     expect(
       [
-        ...prepareTaskExecutionRecovery({ db: database, lockProof, now: 201 }).revokedTaskIds,
+        ...(
+          await new DrizzleTaskExecutionRecoveryPersistence(database).prepare({
+            lockProof,
+            now: 201,
+          })
+        ).revokedTaskIds,
       ].sort(),
     ).toEqual(['task-codehost-recovered-applied', 'task-codehost-recovered-retry'])
     database.update(tasks).set({ status: 'interrupted' }).run()
     database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 }).run()
 
-    const finalized = await finalizeTaskExecutionRecovery({
-      db: database,
+    const finalized = await new DrizzleTaskExecutionRecoveryPersistence(database).finalize({
       lockProof,
       processEvidence: { orphanReaperCompleted: true },
       async codeHostProbe(descriptor) {
@@ -1438,8 +1443,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       },
     })
     const owner = module.ownership.read(database, 'task-archive-ledger')!
-    module.ownership.releaseAfterStop({
-      db: database,
+    await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
       token: owned.token,
       intentId: intent.intentId,
       proof: createVerifiedStopProof({

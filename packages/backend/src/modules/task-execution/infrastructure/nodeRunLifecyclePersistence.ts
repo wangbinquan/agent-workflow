@@ -12,10 +12,10 @@ import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
+  NodeRunLifecycleParticipantInTx,
   NodeRunLifecyclePersistence,
   NodeRunMintInput,
 } from '../application/ports/nodeRunLifecyclePersistence'
-import type { NodeRunLifecycleParticipantInTx } from '../public/commands'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,

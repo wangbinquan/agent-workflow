@@ -8,12 +8,9 @@ import type {
   TaskExecutionEffectKind,
 } from '../domain/executionEffect'
 import type {
-  ExclusiveDaemonLockProof,
   OwnerSnapshot,
   OwnershipToken,
-  OwnershipTuple,
   VerifiedOutcomeUnknownClosure,
-  VerifiedStopProof,
 } from '../domain/ownership'
 
 // RFC-359 T7b：判定结果类型归端口所有；这里只为同步 store 的既有 import 路径再导出。
@@ -51,21 +48,6 @@ export interface PreparedEffectAttempt {
 export interface LinkedWorkspaceRollbackEffect {
   readonly effectId: string
   readonly idempotent: boolean
-}
-
-export interface RecoveredCodeHostMutationInput {
-  readonly effectId: string
-  readonly attemptId: string
-  readonly outcome: 'applied' | 'definitely-not-applied'
-  readonly receiptJson: string
-  readonly nodeRunId: string | null
-  readonly responseStatus: number
-  readonly responseBody: string
-}
-
-export interface RecoveredCodeHostMutationResolution {
-  readonly appliedEffectIds: readonly string[]
-  readonly retryAuthorizedEffectIds: readonly string[]
 }
 
 export interface CodeHostAttemptPlan {
@@ -126,55 +108,14 @@ export interface TaskExecutionEffectStore {
   }): CodeHostAttemptPlan
   prepareAndAcquire(input: PrepareEffectAttemptInput): PreparedEffectAttempt
   settle(input: SettleEffectAttemptInput): void
-  /**
-   * Resolve only RFC-328 pre-activated managed-process attempts after the
-   * successor daemon's orphan-process barrier has completed.  A durable spawn
-   * receipt means the launch happened; its absence means the gated launcher
-   * could not activate the target.  Every other shape remains unresolved.
-   */
-  resolveQuiescedManagedProcesses(
-    input: {
-      readonly db: DbClient
-      readonly quiescenceEvidenceDigest: string
-      readonly now?: number
-    } & (
-      | {
-          readonly authority: 'successor-daemon'
-          readonly owner: OwnershipTuple
-          readonly expectedRevision: number
-          readonly lockProof: ExclusiveDaemonLockProof
-        }
-      | {
-          readonly authority: 'exact-stop'
-          readonly token: OwnershipToken
-          readonly expectedRevision: number
-          readonly proof: VerifiedStopProof
-        }
-    ),
-  ): RecoveredManagedProcessResolution
-  /** Resolve deterministic code-host probes under the successor daemon lock. */
-  resolveQuiescedCodeHostMutations(input: {
-    readonly db: DbClient
-    readonly owner: OwnershipTuple
-    readonly expectedRevision: number
-    readonly lockProof: ExclusiveDaemonLockProof
-    readonly quiescenceEvidenceDigest: string
-    readonly resolutions: readonly RecoveredCodeHostMutationInput[]
-    readonly onAppliedTx?: (tx: DbTxSync, resolution: RecoveredCodeHostMutationInput) => void
-    readonly now?: number
-  }): RecoveredCodeHostMutationResolution
+  // RFC-359 W8：静默清算的同步副本已退役。`resolveQuiescedManagedProcesses` /
+  // `closeRecoveredOutcomeUnknownAndRelease` 只剩 `effectQuiescence.ts` 那一份中立实现
+  // （两个 provider 共用，经 `TaskExecutionEffectPersistence` 端口暴露）；同步 store 上的
+  // 那两份自 W1-T7b 起就没有任何调用方，随本波一并删除。
   closeOutcomeUnknownAndRelease(input: {
     readonly db: DbClient
     readonly token: OwnershipToken
     readonly intentId: string
-    readonly proof: VerifiedOutcomeUnknownClosure
-    readonly now?: number
-  }): OwnerSnapshot
-  closeRecoveredOutcomeUnknownAndRelease(input: {
-    readonly db: DbClient
-    readonly owner: OwnershipTuple
-    readonly expectedRevision: number
-    readonly lockProof: ExclusiveDaemonLockProof
     readonly proof: VerifiedOutcomeUnknownClosure
     readonly now?: number
   }): OwnerSnapshot

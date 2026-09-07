@@ -15,19 +15,10 @@ import type {
 import type {
   IntentContextResourceAuthorizationReadPort,
   IntentContextResourceAuthorizationRow,
-  IntentContextResourceAuthorizationSyncReadPort,
 } from '../ports/intentContextResourceAuthorization'
 
 export interface IntentContextCurrentAuthorityResolver {
   resolve(authority: ResourceRequestContext): Actor
-}
-
-/** Provider-private synchronous capability for a SQLite owning tx body. */
-export interface IntentContextResourceAuthorizationSyncSession {
-  loadVisibleSync(
-    authority: ResourceRequestContext,
-    reference: IntentContextResourceReference,
-  ): IntentContextResourceIdentity | null
 }
 
 function projectVisibleIdentity(
@@ -74,29 +65,4 @@ export function createIntentContextResourceAuthorizationSession(
     },
   })
   return session
-}
-
-/**
- * Mint the SQLite-only synchronous variant for use inside dbTxSync.
- * It deliberately stays outside the public participant surface.
- */
-export function createIntentContextResourceAuthorizationSyncSession(
-  authorityResolver: IntentContextCurrentAuthorityResolver,
-  reads: IntentContextResourceAuthorizationSyncReadPort,
-): IntentContextResourceAuthorizationSyncSession {
-  return Object.freeze<IntentContextResourceAuthorizationSyncSession>({
-    loadVisibleSync(authority, reference) {
-      const actor = authorityResolver.resolve(authority)
-      const row = reads.loadIdentity(reference.resourceType, reference.resourceId)
-      if (row === null) return null
-      if (reference.expectedName !== undefined && row.name !== reference.expectedName) return null
-
-      const audience = resourceAclAudienceAuthority(actor)
-      const grant =
-        audience.bypass || !audience.private
-          ? null
-          : reads.loadGrantLevel(reference.resourceType, reference.resourceId, actor.user.id)
-      return projectVisibleIdentity(actor, row, grant)
-    },
-  })
 }

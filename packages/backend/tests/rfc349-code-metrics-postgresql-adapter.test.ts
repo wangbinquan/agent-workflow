@@ -4,8 +4,11 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
-import { createPostgresqlCodeMetricsQuery } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
+import {
+  createCodeMetricsQuery,
+  DEFAULT_METRICS_WINDOW_MS,
+} from '@/modules/code-capability/application/codeMetricsQuery'
+import { createPostgresqlCodeMetricsRead } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -54,7 +57,9 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    query: createPostgresqlCodeMetricsQuery(createPostgresqlDatabaseClient(runtime)),
+    query: createCodeMetricsQuery(
+      createPostgresqlCodeMetricsRead(createPostgresqlDatabaseClient(runtime)),
+    ),
     executions,
   }
 }

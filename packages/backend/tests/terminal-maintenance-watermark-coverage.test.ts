@@ -30,6 +30,7 @@ import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/appl
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
 import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
+import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import {
   canonicalJson,
@@ -90,10 +91,10 @@ function continuation(taskId: string): CanonicalContinuationRequest {
  * One family that settled TWO business generations carrying different requests
  * — what a re-run of the same slot leaves behind — then went quiescent.
  */
-function settledTwoGenerationTask(taskId: string): {
+async function settledTwoGenerationTask(taskId: string): Promise<{
   readonly database: DbClient
   readonly module: ReturnType<typeof createTaskExecutionTestModule>
-} {
+}> {
   const database = createInMemoryDb(MIGRATIONS)
   seedTask(database, taskId, '/tmp/worktree')
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
@@ -151,8 +152,7 @@ function settledTwoGenerationTask(taskId: string): {
 
   database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId)).run()
   const owner = module.ownership.read(database, taskId)!
-  module.ownership.releaseAfterStop({
-    db: database,
+  await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
     token: owned.token,
     intentId: intent.intentId,
     proof: createVerifiedStopProof({
@@ -182,13 +182,13 @@ async function claimWorkspaceGc(database: DbClient, taskId: string): Promise<voi
 describe('terminal maintenance retained-watermark coverage', () => {
   test('a family that settled two generations with different requests can still be claimed', async () => {
     const taskId = 'task-two-generation-family'
-    const { database } = settledTwoGenerationTask(taskId)
+    const { database } = await settledTwoGenerationTask(taskId)
     await expect(claimWorkspaceGc(database, taskId)).resolves.toBeUndefined()
   })
 
   test('coverage is still refused when the retained watermark is gone', async () => {
     const taskId = 'task-watermark-erased'
-    const { database } = settledTwoGenerationTask(taskId)
+    const { database } = await settledTwoGenerationTask(taskId)
     database.delete(taskExecutionLineageOperationRecords).run()
     await expect(claimWorkspaceGc(database, taskId)).rejects.toThrow(
       /lacks a complete retained watermark/,

@@ -15,10 +15,7 @@ import { createFileDatabaseMigrationArtifactStore } from '@/modules/system-opera
 import { createSqliteMigrationSafetyBackup } from '@/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup'
 import { readLogicalArtifactManifest } from '@/platform/persistence/logicalDatabaseArtifact'
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
-import {
-  openVerifiedLogicalDatabaseArtifactSource,
-  restoreLogicalDatabaseArtifact,
-} from '@/platform/persistence/logicalDatabaseRestore'
+import { openVerifiedLogicalDatabaseArtifactSource } from '@/platform/persistence/logicalDatabaseRestore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
@@ -27,7 +24,6 @@ import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgres
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
-import { createSqliteLogicalTarget } from '@/platform/persistence/sqliteLogicalTarget'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -190,38 +186,18 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
             chunkRows: 25,
           })
           expect(backup.archiveRows).toBe(1)
-
-          const restored = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
-          const restoredSqlite = (restored as unknown as { $client: Database }).$client
-          const sqliteTarget = createSqliteLogicalTarget({
-            database: restoredSqlite,
-            operationId: 'dbm_real_sqlite_restore_01',
-            contract,
-            checkpointRoot: join(root, 'sqlite-logical-restore'),
-            initialState: 'fresh-migrated',
-            ownsDatabase: true,
-          })
-          try {
-            const restore = await restoreLogicalDatabaseArtifact({
-              artifactRoot: postgresqlBackupRoot,
-              expectedManifestDigest: backup.manifest.digest,
-              expectedLegacyArchiveFileDigest: backup.legacyArchiveFileDigest,
-              restoreOperationId: 'dbm_real_sqlite_restore_01',
-              contract,
-              target: sqliteTarget,
-            })
-            expect(restore.archiveRowsPreserved).toBe(1)
-            expect(
-              restoredSqlite.query("SELECT id FROM agents WHERE id = 'agent-rfc349'").get(),
-            ).toEqual({ id: 'agent-rfc349' })
-            expect(
-              restoredSqlite
-                .query("SELECT count(*) AS count FROM code_artifacts WHERE id = 'legacy-rfc349'")
-                .get(),
-            ).toEqual({ count: 0 })
-          } finally {
-            await sqliteTarget.close()
-          }
+          // 归档制品自证可读：清单摘要与保留的归档行都落在物件里。
+          // RFC-359 W8：这里原本还把这份 PG 逻辑备份**恢复进一个 SQLite 目标**，驱动
+          // `platform/persistence/sqliteLogicalTarget.ts::createSqliteLogicalTarget`。那个目标
+          // 零生产装配点（逻辑恢复目标只有一条：`openPostgresqlLogicalTarget`，装配在
+          // `postgresqlProviderRestore.ts:59` 与 `databaseMigrationCoordinator.ts:268`），
+          // 是给「尚未存在的 PG→SQLite 反向迁移」备的脚手架
+          // （`design/dual-provider-parity-audit-2026-09-04.md:397` 判定为可删死代码），已随本波删除。
+          // 恢复引擎本身仍有覆盖：`tests/rfc349-logical-database-restore.test.ts` 与
+          // `tests/rfc349-postgresql-logical-target-finalization.test.ts` 各驱动一侧。
+          expect(
+            readLogicalArtifactManifest(join(postgresqlBackupRoot, 'logical-manifest.json')),
+          ).toMatchObject({ payload: { sourceProvider: 'postgresql' } })
         } finally {
           await postgresqlSource.close()
         }

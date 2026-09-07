@@ -24,14 +24,13 @@ import type {
   StoredCommittedEvent,
 } from '@/platform/events/committed/types'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { createSqliteMaintenanceRunStore } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { sha256Hex } from '@/util/hash'
 import { canonicalJson } from '@agent-workflow/shared'
 import { MIGRATIONS } from './migration-freeze'
@@ -271,7 +270,7 @@ function postgresqlMaintenanceStore(): Readonly<{
     COMMIT,
   ])
   return {
-    store: createPostgresqlMaintenanceRunStore(fixture.db),
+    store: createMaintenanceRunStore(fixture.db),
     assertExhausted: fixture.assertExhausted,
   }
 }
@@ -669,9 +668,7 @@ describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
         .values([...APPLY_ROWS])
         .run()
       const sqlite = {
-        maintenance: await maintenanceTranscript(
-          createSqliteMaintenanceRunStore(sqliteMaintenanceDb),
-        ),
+        maintenance: await maintenanceTranscript(createMaintenanceRunStore(sqliteMaintenanceDb)),
         committedEvents: await committedEventTranscript(
           createCommittedEventDeliveryPersistence(sqliteEventsDb),
           events,

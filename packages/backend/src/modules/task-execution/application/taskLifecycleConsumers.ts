@@ -13,6 +13,18 @@ export const taskLifecycleCommittedEventCodec = {
   decode: decodeTaskLifecycleCommittedEvent,
 } as const
 
+/**
+ * RFC-359 W8 —— 这一跳是不是多段式续跑准入的**内部交棒**（`status` 是中转态，不是结局）。
+ * 语义与来源见 `domain/taskLifecycleCommittedEvent.ts` 的 `continuationHandoff` 字段说明。
+ */
+function isContinuationHandoff(
+  event: ReturnType<typeof decodeTaskLifecycleCommittedEvent>,
+): boolean {
+  return (
+    event.type === 'task.lifecycle-transitioned.v1' && event.payload.continuationHandoff === true
+  )
+}
+
 export function createTaskLifecycleDurableConsumerDefinitions(input: {
   readonly events: EventObservationParticipant
   readonly closeTerminalGates: (taskId: string, status: 'done' | 'canceled') => Promise<void>
@@ -62,9 +74,15 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
       settle: 'delivery-accepted',
       async handle(value) {
         const event = decodeTaskLifecycleCommittedEvent(value)
-        if (event.type !== 'task.node-statuses-transitioned.v1') {
-          await input.notifyChildBudget(event.payload.taskId, event.payload.status)
-        }
+        if (event.type === 'task.node-statuses-transitioned.v1') return
+        // RFC-359 W8: the continuation handoff is not an outcome — the task is
+        // mid-retry and will be back in `pending` a moment later. Feeding the
+        // handoff status in un-counts the task and re-scans the waiter queue, so a
+        // queued sibling child launch gets admitted over the configured budget for
+        // the length of the handoff window. SQLite's one-stage retry lands on
+        // `pending` and never releases the unit; skipping here makes the two match.
+        if (isContinuationHandoff(event)) return
+        await input.notifyChildBudget(event.payload.taskId, event.payload.status)
       },
     },
     {
@@ -76,7 +94,14 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
         const event = decodeTaskLifecycleCommittedEvent(value)
         if (
           event.type === 'task.lifecycle-transitioned.v1' &&
-          isTerminalTaskStatus(event.payload.status)
+          isTerminalTaskStatus(event.payload.status) &&
+          // RFC-359 W8: `interrupted` here is PostgreSQL's two-stage retry handing
+          // the task to `children.resume`, not the task settling. Resolving the
+          // watch on it wakes RFC-243's parent call node with "the child finished"
+          // while the child is about to go back to `pending` and keep running —
+          // the parent then walks on with an outcome that never happened. SQLite
+          // never produces this frame (its admission CAS lands on `pending`).
+          !event.payload.continuationHandoff
         ) {
           await input.notifyExecutionWatch(event.payload.taskId, event.payload.status)
         }

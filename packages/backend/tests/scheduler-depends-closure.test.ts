@@ -16,10 +16,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import {
-  createSqliteLegacyAgentDependencyLookup,
-  resolveInjection,
-} from '../src/services/execution/resolveInjection'
+import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -83,7 +81,7 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const out = await resolveInjection(db, root, {
       appHome: '/tmp/app-home',
       log: NOOP_LOG,
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(out.kind).toBe('ok')
     if (out.kind !== 'ok') throw new Error('unreachable')
@@ -103,7 +101,7 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const out = await resolveInjection(db, root, {
       appHome: '/tmp/app-home',
       log: NOOP_LOG,
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(out.kind).toBe('ok')
     if (out.kind !== 'ok') throw new Error('unreachable')
@@ -125,7 +123,7 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const out = await resolveInjection(db, root, {
       appHome: '/tmp/app-home',
       log: NOOP_LOG,
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')
@@ -149,7 +147,7 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const out = await resolveInjection(db, root, {
       appHome: '/tmp/app-home',
       log: NOOP_LOG,
-      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      agentDependencies: legacyInjectionAgentLookup(db),
     })
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')

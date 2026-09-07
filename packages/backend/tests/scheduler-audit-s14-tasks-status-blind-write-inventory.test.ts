@@ -66,12 +66,16 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 2,
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 1,
+  // RFC-359 W8：+1 —— 删除时沿父链重算 `branch_started_at`（RFC-311 P1-6，与 SQLite 的
+  // `services/taskDelete.ts` 那一处逐字同形）。只写这一列、不翻状态：被删子树的时间戳
+  // 不重算的话，父行的物化排序列会永久停在那儿，默认视图与过滤视图从此行序不同。
+  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
   'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts': 4,
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts': 1,
+  // RFC-359 W8：effect 账本端口合一（sqlite/postgresqlTaskExecutionEffectPersistence.ts 各 1 →
+  // 中立的 taskExecutionEffectPersistence.ts 1）。工作区准备结算的任务列投影，不翻状态。
+  'modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts': 1,
   // RFC-359 T7c：删除恢复的 branch_started_at 沿父链重算搬进中立实现（services/taskDelete.ts 2 → 1）。
   'modules/task-execution/infrastructure/taskDeleteRecovery.ts': 1,
   // RFC-359 W4-B1 批 2e：两份 provider 恢复实现合成一份。

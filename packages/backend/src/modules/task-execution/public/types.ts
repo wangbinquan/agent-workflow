@@ -14,6 +14,13 @@ export type {
 } from '@/modules/task-execution/domain/sourceTermination'
 export { taskStopProjection } from '@/modules/task-execution/domain/sourceTermination'
 
+/**
+ * RFC-359 W8-A —— 子任务启动的父任务准入判定。两个引擎的铸行事务各自读行、调这一份，
+ * 于是同一次子启动在两侧同码同判（判定顺序也定死在 domain 那一份里）。
+ * legacy 的通用启动引擎（`services/task.ts`）按 exact public 合同消费它，不穿模块内部。
+ */
+export { childLaunchAdmissionIssue } from '@/modules/task-execution/domain/childLaunchAdmission'
+
 /** Safe cross-context failure codes; durable owner identities never cross here. */
 export type TaskExecutionCommandErrorCode =
   | 'task-continuation-conflict'

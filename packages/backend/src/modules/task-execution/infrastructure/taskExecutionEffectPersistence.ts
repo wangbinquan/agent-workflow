@@ -1,8 +1,37 @@
-// RFC-349 — PostgreSQL effect journal, attempt ledger and resource fences.
+// RFC-359 W8 —— effect 账本 / attempt 台账 / 资源围栏：**一份**实现，两个 provider 共用。
+//
+// 此前是一对同构引擎：
+//   · SQLite：`sqliteTaskExecutionEffectPersistence.ts`（369 行 Promise 薄壳）转发到
+//     `sqliteTaskExecutionEffect.ts` 的 `SqliteTaskExecutionEffectStore`（planCodeHostAttempt /
+//     nextOperationGeneration / prepareAndAcquire / settle 四个同步方法，约 583 行，
+//     `withOwnedTaskTx` + `dbTxSync`），投影用 `onSettledTx` 回调挂在同一笔事务里；
+//   · PostgreSQL：`postgresqlTaskExecutionEffectPersistence.ts`（1007 行）自带 SERIALIZABLE 事务、
+//     私有 `assertOwner` 与私有 `uniqueViolation` 分类。
+// 同一张 `task_execution_effects` / `_attempts` / `_fences` / `lineage_operation_records` 账本、
+// 同一套 domain 判定、同一批错误码——是重复，不是能力缺口。
+//
+// 合一时按**强侧**抬齐（对拍见 `tests/rfc359-w8-effect-persistence-conformance.test.ts`）：
+//   · owner 围栏：走统一原语 `assertTaskOwnerTx`（owner 行上的条件 UPDATE + revision 前进）。
+//     此前只有 SQLite 这么做，PG 是只读 SELECT 检查——没有行锁，同一任务的两个写手可以同时穿过。
+//   · 每一步 CAS 都验受影响行（PG 侧原有），SQLite 侧此前一律 `.run()` 不看结果：
+//     attempt 转 acting / effect 推进 lastAttemptNo / attempt 结算 / effect 终态 / watermark 前进 /
+//     spawn 回执与 node_run 投影 / 回滚投影逐行，任何一条丢了都抛 `task-execution-stale-owner`。
+//   · node_run 投影走两引擎共用的事务内 CAS（`nodeRunLifecycleTransition.setNodeRunStatusTx`）：
+//     终态闸 + `allowedFrom` + MR/PR source-termination 围栏 + `node-run-not-found`。此前只有
+//     SQLite 侧如此，PG 手写 `update … where status='running'`（判据缺口
+//     `03-pg-code-host-projection-node-run-cas`，本文件合一即关闭）。
+//   · 唯一冲突分类走能力矩阵 `classifyError`：PG 的私有分类只看 `error.code === '23505'`，而
+//     Bun.SQL 把 SQLSTATE 放在 `errno`（对账 F-I-13），于是 PG 上资源围栏抢占抛的是裸
+//     `DrizzleQueryError` 而不是 `task-execution-resource-conflict`。
+//   · receipt 边界：字节上限（PG 侧）+ JSON 合法性（SQLite 侧）两条都做，抛 `TaskExecutionError`。
+//
+// 事务形状沿用两侧原有的最强档：`withTaskExecutionSerializable`（PG = SERIALIZABLE + 40001 重放；
+// SQLite = BEGIN IMMEDIATE，本就全库独占）。事务体只 await 数据库操作。
 
-import { and, asc, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   nodeRunOutputs,
   nodeRuns,
@@ -13,16 +42,16 @@ import {
   taskExecutionEffects,
   taskExecutionIntents,
   taskExecutionLineageOperationRecords,
-  taskExecutionOwners,
   tasks,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   CodeHostNodeSettlementProjection,
+  GateRollbackSettlement,
   TaskEffectAttemptSettlement,
   TaskExecutionEffectPersistence,
+  WorkspacePreparationSettlementProjection,
 } from '../application/ports/taskExecutionEffectStore'
-import type { GateContinuationEffectPersistence } from '../application/drive/gateContinuationEffectStep'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   aggregateEffectOutcome,
@@ -31,84 +60,38 @@ import {
   canonicalResourceKeySet,
   type AttemptEvidence,
 } from '../domain/executionEffect'
-import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
 import {
   closeOutcomeUnknownAndRelease,
   readUnreapedProcessCode,
   readUnresolvedEffectIds,
   resolveQuiescedManagedProcesses,
 } from './effectQuiescence'
-import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
-import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
+import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
+import {
+  assertTaskOwnerTx,
+  withTaskExecutionSerializable,
+  type TaskExecutionTransaction,
+} from './ownedTaskExecution'
 
-type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
 const MAX_RECEIPT_BYTES = 64 * 1024
 
+/** 回执 / 恢复描述符的入库闸：≤64 KiB 且必须是合法 JSON。 */
 function bounded(value: string | null | undefined): string | null {
   if (value === undefined || value === null) return null
   if (Buffer.byteLength(value) > MAX_RECEIPT_BYTES) {
     throw new TaskExecutionError('task-continuation-conflict', 'effect receipt exceeds 64 KiB')
   }
+  try {
+    JSON.parse(value)
+  } catch {
+    throw new TaskExecutionError('task-continuation-conflict', 'effect receipt is not valid JSON')
+  }
   return value
 }
 
-function uniqueViolation(error: unknown): boolean {
-  let current: unknown = error
-  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth += 1) {
-    if ((current as { readonly code?: unknown }).code === '23505') return true
-    current = (current as { readonly cause?: unknown }).cause
-  }
-  return false
-}
-
-async function serializable<T>(db: PostgresqlDatabaseClient, body: (tx: PgTx) => Promise<T>) {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await db.transaction(async (tx) => {
-        await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
-        return await body(tx)
-      })
-    } catch (error) {
-      if (await retryPostgresqlSerialization(attempt, error)) continue
-      throw error
-    }
-  }
-}
-
-async function assertOwner(tx: PgTx, token: OwnershipToken): Promise<void> {
-  assertOwnershipToken(token)
-  const rows = await tx
-    .select({
-      ownerId: taskExecutionOwners.ownerId,
-      daemonGeneration: taskExecutionOwners.daemonGeneration,
-      epoch: taskExecutionOwners.epoch,
-      state: taskExecutionOwners.state,
-      leaseUntil: taskExecutionOwners.leaseUntil,
-      revision: taskExecutionOwners.revision,
-    })
-    .from(taskExecutionOwners)
-    .where(eq(taskExecutionOwners.taskId, token.taskId))
-    .limit(1)
-  const owner = rows[0]
-  if (
-    owner === undefined ||
-    owner.ownerId !== token.ownerId ||
-    owner.daemonGeneration !== token.daemonGeneration ||
-    owner.epoch !== token.epoch ||
-    // RFC-359 W1-T7（P0-2）：与公共 assertPostgresqlTaskOwnerTx / SQLite withOwnedTaskTx 同规则——
-    // 不可变 capability 只点名 owner 身份 + epoch；心跳会推进 revision / lease，attach 时冻结的 token
-    // 不能拿它们做等值谓词（此前首次心跳后所有 effect 写入被拒）。
-    owner.state !== 'claimed'
-  ) {
-    throw new TaskExecutionError(
-      'task-execution-stale-owner',
-      `task '${token.taskId}' mutation was fenced`,
-    )
-  }
-}
-
+/** code-host 结算的 node_run 投影：输出 upsert + 共用的事务内状态 CAS。 */
 async function applyCodeHostProjection(
-  tx: PgTx,
+  tx: TaskExecutionTransaction,
   projection: CodeHostNodeSettlementProjection,
 ): Promise<void> {
   for (const output of projection.outputs ?? []) {
@@ -121,26 +104,109 @@ async function applyCodeHostProjection(
       })
       .run()
   }
-  const changed = await tx
-    .update(nodeRuns)
-    .set({
-      status: projection.status,
+  await setNodeRunStatusTx({
+    tx,
+    nodeRunId: projection.nodeRunId,
+    to: projection.status,
+    allowedFrom: ['running'],
+    reason: projection.reason,
+    extra: {
       finishedAt: projection.finishedAt,
       ...(projection.errorMessage === undefined ? {} : { errorMessage: projection.errorMessage }),
       ...(projection.failureCode === undefined ? {} : { failureCode: projection.failureCode }),
-    })
-    .where(and(eq(nodeRuns.id, projection.nodeRunId), eq(nodeRuns.status, 'running')))
-    .returning({ id: nodeRuns.id })
-  if (changed[0] === undefined) {
+    },
+  })
+}
+
+/** 工作区准备结算的投影：任务列 + 仓库行 + 空间目录 + prep node_run 同笔落库。 */
+async function applyWorkspacePreparationProjection(
+  tx: TaskExecutionTransaction,
+  projection: WorkspacePreparationSettlementProjection,
+): Promise<void> {
+  await tx.update(tasks).set(projection.task).where(eq(tasks.id, projection.taskId)).run()
+  if (projection.repositories.length > 0) {
+    await tx
+      .insert(taskRepos)
+      .values(projection.repositories.map((row) => ({ ...row })))
+      .run()
+  }
+  if (projection.nodePaths.length > 0) {
+    await tx
+      .insert(taskSpaceNodes)
+      .values(
+        projection.nodePaths.map((nodePath) => ({
+          taskId: projection.taskId,
+          nodePath,
+          schemaVersion: 1,
+        })),
+      )
+      .run()
+  }
+  await setNodeRunStatusTx({
+    tx,
+    nodeRunId: projection.prepNodeRunId,
+    to: 'done',
+    allowedFrom: ['running'],
+    reason: 'repo-prep-done',
+    extra: { finishedAt: projection.finishedAt },
+  })
+}
+
+/** 回滚确实跑完了的那一支（`threw` 没有投影可做）。 */
+type CompletedGateRollback = Extract<GateRollbackSettlement['outcome'], { kind: 'completed' }>
+
+/** 人工门回滚结算的投影：按成功集合改写来源 node_run 的 rolledBack / errorMessage。 */
+async function applyGateRollbackProjection(
+  tx: TaskExecutionTransaction,
+  input: Readonly<{
+    taskId: string
+    operationId: string
+    sourceNodeRunIds: readonly string[]
+    outcome: CompletedGateRollback
+  }>,
+): Promise<void> {
+  if (input.sourceNodeRunIds.length === 0) return
+  const rows = await tx
+    .select({ id: nodeRuns.id, errorMessage: nodeRuns.errorMessage })
+    .from(nodeRuns)
+    .where(
+      and(eq(nodeRuns.taskId, input.taskId), inArray(nodeRuns.id, [...input.sourceNodeRunIds])),
+    )
+    .limit(input.sourceNodeRunIds.length)
+  if (rows.length !== input.sourceNodeRunIds.length) {
     throw new TaskExecutionError(
       'task-continuation-stale',
-      `node run '${projection.nodeRunId}' changed before effect settlement`,
+      `workspace rollback projection for '${input.operationId}' lost a source row`,
     )
+  }
+  const successful = new Set(input.outcome.successfulSourceNodeRunIds)
+  for (const row of rows) {
+    const rolledBack = successful.has(row.id)
+    const updated = await tx
+      .update(nodeRuns)
+      .set({
+        rolledBack,
+        errorMessage:
+          row.errorMessage === null
+            ? null
+            : row.errorMessage.replace(
+                /^(superseded-by-review-(?:rejected|iterated))(?:-rollback)?:/,
+                `$1${rolledBack ? '-rollback' : ''}:`,
+              ),
+      })
+      .where(and(eq(nodeRuns.id, row.id), eq(nodeRuns.taskId, input.taskId)))
+      .returning({ id: nodeRuns.id })
+    if (updated[0] === undefined) {
+      throw new TaskExecutionError(
+        'task-continuation-stale',
+        `workspace rollback projection for '${input.operationId}' lost source '${row.id}'`,
+      )
+    }
   }
 }
 
-export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEffectPersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffectPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async readLineage(input: Parameters<TaskExecutionEffectPersistence['readLineage']>[0]) {
     const taskRows = await this.db
@@ -275,8 +341,8 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
     const now = input.now ?? Date.now()
     const resources = canonicalResourceKeySet(input.resourceKeys)
     const recoveryDescriptorJson = bounded(input.recoveryDescriptorJson)
-    return await serializable(this.db, async (tx) => {
-      await assertOwner(tx, input.token)
+    return await withTaskExecutionSerializable(this.db, async (tx) => {
+      await assertTaskOwnerTx(tx, input.token, now)
       const intents = await tx
         .select({
           id: taskExecutionIntents.id,
@@ -509,7 +575,9 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
             })
             .run()
         } catch (error) {
-          if (!uniqueViolation(error)) throw error
+          // 驱动错误形状经能力矩阵归类：PG 的 SQLSTATE 23505（`errno` 或 `code`）与 SQLite 的
+          // `SQLITE_CONSTRAINT_UNIQUE` / `UNIQUE constraint failed` 都归 'unique-violation'。
+          if (engineOf(tx).classifyError(error) !== 'unique-violation') throw error
           throw new TaskExecutionError(
             'task-execution-resource-conflict',
             `resource '${fenceKey}' is already held by another acting effect`,
@@ -546,18 +614,18 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
   }
 
   private async settleTx(
-    tx: PgTx,
+    tx: TaskExecutionTransaction,
     input: TaskEffectAttemptSettlement,
     projection?: CodeHostNodeSettlementProjection,
   ): Promise<void> {
     if (input.state === 'outcome-unknown') {
       throw new TaskExecutionError(
         'task-execution-recovery-required',
-        'outcome-unknown requires a task-wide quiescence closure',
+        'outcome-unknown requires a task-wide quiescence closure; ordinary worker settlement may only mark recovery-required',
       )
     }
     const now = input.now ?? Date.now()
-    await assertOwner(tx, input.token)
+    await assertTaskOwnerTx(tx, input.token, now)
     const attemptRows = await tx
       .select()
       .from(taskExecutionEffectAttempts)
@@ -608,17 +676,8 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
       throw new TaskExecutionError('task-execution-stale-owner', 'effect settlement CAS lost')
     }
     if (input.state === 'retry-authorized') {
-      await tx
-        .update(taskExecutionEffectFences)
-        .set({ releasedAt: now })
-        .where(
-          and(
-            eq(taskExecutionEffectFences.effectAttemptId, attempt.id),
-            isNull(taskExecutionEffectFences.releasedAt),
-            eq(taskExecutionEffectFences.acquiredEpoch, input.token.epoch),
-          ),
-        )
-        .run()
+      // 授权放行的下一次发送不再需要这一 attempt 的 hold。
+      await this.releaseFences(tx, attempt.id, input.token.epoch, now)
       if (projection !== undefined) await applyCodeHostProjection(tx, projection)
       return
     }
@@ -647,6 +706,8 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
     })
     const outcome = aggregateEffectOutcome(evidence)
     if (outcome.state === 'outcome-unknown') {
+      // 先前的含糊加上后来的确定失败仍然是未知。留一个未结算的 attempt / hold，
+      // 让带证明的任务级清算才能终结这一代。
       await tx
         .update(taskExecutionEffectAttempts)
         .set({
@@ -665,17 +726,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
       if (projection !== undefined) await applyCodeHostProjection(tx, projection)
       return
     }
-    await tx
-      .update(taskExecutionEffectFences)
-      .set({ releasedAt: now })
-      .where(
-        and(
-          eq(taskExecutionEffectFences.effectAttemptId, attempt.id),
-          isNull(taskExecutionEffectFences.releasedAt),
-          eq(taskExecutionEffectFences.acquiredEpoch, input.token.epoch),
-        ),
-      )
-      .run()
+    await this.releaseFences(tx, attempt.id, input.token.epoch, now)
     const logicalReceipt = JSON.stringify({
       v: 1,
       appliedAttemptNo: outcome.appliedAttemptNo,
@@ -770,16 +821,32 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
     if (projection !== undefined) await applyCodeHostProjection(tx, projection)
   }
 
-  async settle(input: TaskEffectAttemptSettlement): Promise<void> {
-    await serializable(this.db, async (tx) => await this.settleTx(tx, input))
+  /** 只释放这一枚不可变 attempt 在本 epoch 里持有的围栏。 */
+  private async releaseFences(
+    tx: TaskExecutionTransaction,
+    attemptId: string,
+    epoch: number,
+    now: number,
+  ): Promise<void> {
+    await tx
+      .update(taskExecutionEffectFences)
+      .set({ releasedAt: now })
+      .where(
+        and(
+          eq(taskExecutionEffectFences.effectAttemptId, attemptId),
+          isNull(taskExecutionEffectFences.releasedAt),
+          eq(taskExecutionEffectFences.acquiredEpoch, epoch),
+        ),
+      )
+      .run()
   }
 
-  /** Use-case-specific atom: effect settlement and review rollback projection
-   * share one PostgreSQL transaction. It deliberately stays off the generic
-   * application effect port. */
-  async settleGateRollback(
-    input: Parameters<GateContinuationEffectPersistence['settle']>[0],
-  ): Promise<void> {
+  async settle(input: TaskEffectAttemptSettlement): Promise<void> {
+    await withTaskExecutionSerializable(this.db, async (tx) => await this.settleTx(tx, input))
+  }
+
+  /** 用例专属原子：effect 结算与评审回滚投影共用一笔事务，刻意不进通用 effect 端口。 */
+  async settleGateRollback(input: GateRollbackSettlement): Promise<void> {
     if (input.outcome.kind === 'threw') {
       await this.settle({
         token: input.token,
@@ -799,7 +866,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
       return
     }
     const outcome = input.outcome
-    await serializable(this.db, async (tx) => {
+    await withTaskExecutionSerializable(this.db, async (tx) => {
       await this.settleTx(tx, {
         token: input.token,
         effectId: input.effectId,
@@ -816,54 +883,19 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
         }),
         ...(outcome.rolledBack ? {} : { failureCode: 'human-gate-workspace-rollback-incomplete' }),
       })
-      if (input.sourceNodeRunIds.length === 0) return
-      const rows = await tx
-        .select({ id: nodeRuns.id, errorMessage: nodeRuns.errorMessage })
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, input.token.taskId),
-            inArray(nodeRuns.id, [...input.sourceNodeRunIds]),
-          ),
-        )
-        .limit(input.sourceNodeRunIds.length)
-      if (rows.length !== input.sourceNodeRunIds.length) {
-        throw new TaskExecutionError(
-          'task-continuation-stale',
-          `workspace rollback projection for '${input.operationId}' lost a source row`,
-        )
-      }
-      const successful = new Set(outcome.successfulSourceNodeRunIds)
-      for (const row of rows) {
-        const rolledBack = successful.has(row.id)
-        const updated = await tx
-          .update(nodeRuns)
-          .set({
-            rolledBack,
-            errorMessage:
-              row.errorMessage === null
-                ? null
-                : row.errorMessage.replace(
-                    /^(superseded-by-review-(?:rejected|iterated))(?:-rollback)?:/,
-                    `$1${rolledBack ? '-rollback' : ''}:`,
-                  ),
-          })
-          .where(and(eq(nodeRuns.id, row.id), eq(nodeRuns.taskId, input.token.taskId)))
-          .returning({ id: nodeRuns.id })
-        if (updated[0] === undefined) {
-          throw new TaskExecutionError(
-            'task-continuation-stale',
-            `workspace rollback projection for '${input.operationId}' lost source '${row.id}'`,
-          )
-        }
-      }
+      await applyGateRollbackProjection(tx, {
+        taskId: input.token.taskId,
+        operationId: input.operationId,
+        sourceNodeRunIds: input.sourceNodeRunIds,
+        outcome,
+      })
     })
   }
 
   async settleCodeHostNode(
     input: Parameters<TaskExecutionEffectPersistence['settleCodeHostNode']>[0],
   ): Promise<void> {
-    await serializable(
+    await withTaskExecutionSerializable(
       this.db,
       async (tx) => await this.settleTx(tx, input.settlement, input.projection),
     )
@@ -872,38 +904,9 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
   async settleWorkspacePreparation(
     input: Parameters<TaskExecutionEffectPersistence['settleWorkspacePreparation']>[0],
   ): Promise<void> {
-    await serializable(this.db, async (tx) => {
+    await withTaskExecutionSerializable(this.db, async (tx) => {
       await this.settleTx(tx, input.settlement)
-      await tx
-        .update(tasks)
-        .set(input.projection.task)
-        .where(eq(tasks.id, input.projection.taskId))
-        .run()
-      if (input.projection.repositories.length > 0) {
-        await tx
-          .insert(taskRepos)
-          .values(input.projection.repositories.map((row) => ({ ...row })))
-          .run()
-      }
-      if (input.projection.nodePaths.length > 0) {
-        await tx
-          .insert(taskSpaceNodes)
-          .values(
-            input.projection.nodePaths.map((nodePath) => ({
-              taskId: input.projection.taskId,
-              nodePath,
-              schemaVersion: 1,
-            })),
-          )
-          .run()
-      }
-      await createNodeRunLifecycleParticipantInTx(tx).set({
-        nodeRunId: input.projection.prepNodeRunId,
-        to: 'done',
-        allowedFrom: ['running'],
-        reason: 'repo-prep-done',
-        extra: { finishedAt: input.projection.finishedAt },
-      })
+      await applyWorkspacePreparationProjection(tx, input.projection)
     })
   }
 
@@ -911,8 +914,8 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
     input: Parameters<TaskExecutionEffectPersistence['recordProcessSpawn']>[0],
   ): Promise<void> {
     const now = input.now ?? Date.now()
-    await serializable(this.db, async (tx) => {
-      await assertOwner(tx, input.token)
+    await withTaskExecutionSerializable(this.db, async (tx) => {
+      await assertTaskOwnerTx(tx, input.token, now)
       const attempts = await tx
         .select({
           state: taskExecutionEffectAttempts.state,
@@ -984,7 +987,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
     })
   }
 
-  // RFC-359 T7b：静默清算是一份实现（effectQuiescence.ts），两个 provider 的适配器都只是委托。
+  // RFC-359 T7b：静默清算是一份实现（effectQuiescence.ts），端口只是委托。
   async unresolvedEffectIds(taskId: string): Promise<readonly string[]> {
     return await readUnresolvedEffectIds(this.db, taskId)
   }

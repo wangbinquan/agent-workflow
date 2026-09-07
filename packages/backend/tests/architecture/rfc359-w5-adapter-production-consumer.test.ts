@@ -35,9 +35,9 @@
 //     内部助手，信噪比与 `create` 一样干净，没有理由只收其一：只看 `create` 的话，把一份死适配器
 //     改名成 `composeXxx` 就绕过去了，而实测里 `compose` 侧的死法比 `create` 还多一个。
 //   · `open` **4** 个 / 0 死 —— `open{Sqlite,Postgresql}Logical{Source,Target}` 一族，全在
-//     `platform/persistence/`，每个都返回一个活的适配器句柄（`openPostgresqlLogicalTarget`
-//     正是下面账本里 `createSqliteLogicalTarget` 那条的「真实能力」）。人口小但语义纯粹、零噪音，
-//     收进来今天不加任何一条债，只是把改名逃逸的口堵上。
+//     `platform/persistence/`，每个都返回一个活的适配器句柄（开账时账本里的
+//     `createSqliteLogicalTarget` 就是被 `openPostgresqlLogicalTarget` 顶掉的那份，W8 已删）。
+//     人口小但语义纯粹、零噪音，收进来今天不加任何一条债，只是把改名逃逸的口堵上。
 //   · `bind` **1** 个 / 0 死 —— 只有 `bindPostgresqlResourcePackageTransactionReader`，
 //     把 port 绑到 transaction+actor 上返回实现，形状与 `createSqliteTaskAuthorizationParticipantInTx`
 //     同类；它的唯一消费者在**同文件**（`postgresqlResourcePackageMutationParticipants.ts:1339`），
@@ -69,10 +69,11 @@
 //     在 `modules/collaboration/composition.ts:11,13` 的全部「引用」，放过它这条守卫就等于没写；
 //   · `import { X } from './x'` 的 import 绑定本身（真正的使用点会在别处被数到）；
 //   · 类型位置（`typeof X`、`import type`）—— 拿一份死实现当类型模板不构成装配；
-//   · 属性名 `obj.createSqliteFoo` 与字符串 `'createSqliteFoo'`。后者不是假设：
-//     `composeSqliteResourceCatalogOverviewQuery` 今天**唯一**的引用就是一条源码锁里的字符串
+//   · 属性名 `obj.createSqliteFoo` 与字符串 `'createSqliteFoo'`。后者不是假设：开账当天
+//     `composeSqliteResourceCatalogOverviewQuery` **唯一**的引用就是一条源码锁里的字符串
 //     （`tests/rfc349-resource-catalog-provider-contributions.test.ts:28` 的 `toContain('…')`）
-//     ——一条守卫按名字钉着一个没有任何调用方的函数；把字符串算成消费，这种最该被看见的形态就没了；
+//     ——一条守卫按名字钉着一个没有任何调用方的函数。W8 销账时那条锁翻成了 `not.toContain`，
+//     函数与字符串一起走；但判据必须继续把字符串排除在消费之外，否则下一个同形的就看不见了；
 //   · **测试**。语料只有 `src`：「只有测试在调它」正是本守卫要报的那种死法。
 //
 // 判据用 AST 不用正则，是本仓写死的教训（`docs/dev-gotchas.md`）：判「某名字有没有被调用」
@@ -84,14 +85,23 @@
 //   · `改指：` —— 这件事在生产上**确实有人在干**，只是走了别的路；本条是过时孪生。
 //     处置是把还引用它的测试 / 源码锁改指真实那份，再删。
 //   · `纯死代码：` —— 全仓（含测试）**零引用**，没有任何东西依赖它。处置是直接删。
-//     本轮 8 条属于这一类，其中 `server.ts::composeSqliteProviderAppDeps` 与
+//     开账当天 8 条属于这一类，其中 `server.ts::composeSqliteProviderAppDeps` 与
 //     `modules/collaboration/infrastructure/postgresqlReviewMutationScope.ts::PostgresqlReviewMutationScopeResolver`
-//     连一行测试都没有——它们已经不是「抽象层错位」，是纯死代码。
+//     连一行测试都没有——它们已经不是「抽象层错位」，是纯死代码（这两条至今仍在账本里，
+//     原因写在各自条目里：删它们要动的文件当时被并发改动持有）。
 //
 // # 为什么是高水位而不是 0
 //
-// 开账当天实测 242 个 provider 适配器声明里有 **18 个**零生产消费者。此刻钉 0 会让守卫从落地
-// 第一天就红、等于没有防守能力。所以按 RFC-317 T17 的棘轮形态逐条登记，**只降不升**：
+// 开账当天实测 242 个 provider 适配器声明里有 **18 个**零生产消费者（随后随本波新写的
+// W7 组合根测试涨到 19 条：那些测试直接 import 了几份死适配器，恰好证明「只有测试在调它」
+// 就是本守卫要报的死法）。此刻钉 0 会让守卫从落地第一天就红、等于没有防守能力。
+// 所以按 RFC-317 T17 的棘轮形态逐条登记，**只降不升**。
+//
+// RFC-359 W8 死代码清理批销掉 15 条，账本 19 → 4：删掉的 15 份适配器（含它们的装配点、
+// 源码文本锁与级联死掉的中立包装）在 src 里已不存在，还引用它们的测试全部改指了生产在跑的那一份。
+// 剩下的 4 条不是「删不动」而是「当时轮不到」——`modules/collaboration/**`、`server.ts`、
+// 以及 `rfc359-w5-t17-provider-file-location.test.ts` 的账本当时都被并发改动持有，
+// 逐条理由写在各自条目末尾。棘轮规则照旧：
 //   · **增**了红 —— 又多了一份「看着对等、其实没接」的摆设；要么接上，要么删掉，
 //     要么写进账本并说明它的真实能力在哪；
 //   · **减**了也红 —— 收敛发生了；把账本一起改小，让每一次销账都留下一次有署名的提交记录。
@@ -279,131 +289,35 @@ const DECLARATIONS: readonly ProviderAdapterDeclaration[] = providerAdapterDecla
  */
 export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] = [
   [
-    'modules/code-capability/composition/reviewerResolution.ts::composePostgresqlReviewerResolutionRead',
-    '纯死代码：全仓零引用。它与同文件的 sqlite 孪生都只是 `new DrizzleReviewerResolutionRead(db)`' +
-      '（`modules/code-capability/infrastructure/reviewerResolutionRead.ts:10`，两个 provider 共用一份，' +
-      '文件注释自陈「收敛后合成一个」），而该类在 src 里没有别的构造点、`resolveReviewerAgent`' +
-      '（`services/codeReviewAgentCaller.ts:67`）在 src 里也没有调用方——整片今天只有测试在用。',
-  ],
-  [
-    'modules/code-capability/composition/reviewerResolution.ts::composeSqliteReviewerResolutionRead',
-    '改指：唯一调用方是 `tests/rfc304-reviewer-slot-resolution.test.ts:30`。真实实现是中立的 ' +
-      '`modules/code-capability/infrastructure/reviewerResolutionRead.ts:10::DrizzleReviewerResolutionRead`；' +
-      '与上一条一并处置时把测试改指该类本身，两个具名入口同时删。',
-  ],
-  [
-    'modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts::createPostgresqlCodeMetricsQuery',
-    '改指：PG 侧只该出读端口。真实能力是同文件的 `createPostgresqlCodeMetricsRead`（:13）喂给中立的 ' +
-      '`modules/code-capability/application/codeMetricsQuery.ts::createCodeMetricsQuery`，' +
-      '装配在 `modules/code-capability/composition/historyQueries.ts:62`；本工厂是整条查询的第二份实现。',
-  ],
-  [
     'modules/collaboration/infrastructure/postgresqlReviewMutationScope.ts::PostgresqlReviewMutationScopeResolver',
     '纯死代码：全仓零引用（连测试都没有）。同一件事的实现是中立的 ' +
       '`modules/collaboration/infrastructure/reviewMutationScope.ts:11::DatabaseReviewMutationScopeResolver`，' +
-      '由 `services/reviewMutationCoordinator.ts:75` new 出来，两个引擎共用一份。',
-  ],
-  [
-    'modules/integration/composition/webhookDispatch.ts::composePostgresqlWebhookTriggerAdministration',
-    '纯死代码：全仓零引用。它只是中立的 ' +
-      '`modules/integration/infrastructure/webhookTriggerAdministration.ts::createWebhookTriggerAdministration`' +
-      ' 的一层同义包装；生产的触发器管理面由同文件的 ' +
-      '`composePostgresqlWebhookTriggerServiceDependencies`（`webhookDispatch.ts:80`）直接调那个中立工厂装配。',
-  ],
-  [
-    'modules/integration/composition/webhookDispatch.ts::composeSqliteWebhookDispatchPersistence',
-    '纯死代码：全仓零引用。真实能力是中立的 ' +
-      '`modules/integration/infrastructure/webhookDispatchPersistence.ts::createWebhookDispatchPersistence`；' +
-      'PG 侧经同文件的 `composePostgresqlWebhookDispatchPersistence`（`cli/postgresqlDaemonApplication.ts:1161`）装配，' +
-      'SQLite 侧由同文件的 `composeSqliteWebhookDispatchCore` / `composeSqliteWebhookTriggerServiceDependencies`' +
-      '（`server.ts:2626`）直接调它。',
-  ],
-  [
-    'modules/integration/composition/webhookDispatch.ts::composeSqliteWebhookTriggerAdministration',
-    '纯死代码：全仓零引用。与上面的 PG 孪生同形——只是 `createWebhookTriggerAdministration(db)` 的包装；' +
-      '生产走同文件的 `composeSqliteWebhookTriggerServiceDependencies`（:69，`server.ts:2626`）。',
-  ],
-  [
-    'modules/integration/composition/webhookTerminalControl.ts::composePostgresqlVerifiedWebhookDeliveryAcceptance',
-    '纯死代码：全仓零引用。生产的已验证投递接收走中立的 ' +
-      '`modules/integration/composition/webhookIngress.ts:34::composeWebhookIngressPersistenceFor`，' +
-      '它直接用 `createVerifiedWebhookDeliveryPersistence(db).accept`，不经本函数包的 ' +
-      '`createAcceptVerifiedWebhookDeliveryAsync` 那一层。',
-  ],
-  [
-    'modules/integration/composition/webhookTerminalControl.ts::composeSqliteVerifiedWebhookDeliveryAcceptance',
-    '纯死代码：全仓零引用，与上面的 PG 孪生同形（文件注释自陈「一份实现两个 provider 共用，旧名保留为装配别名」，' +
-      '但两个别名都没有调用方）。生产路径同上：`modules/integration/composition/webhookIngress.ts:34`。',
-  ],
-  [
-    'modules/resource-catalog/composition/intentContextAuthorization.ts::composeSqliteIntentContextResourceAuthorizationSyncFactory',
-    '改指：真实能力是同文件的中立工厂 ' +
-      '`modules/resource-catalog/composition/intentContextAuthorization.ts:65::composeIntentContextResourceAuthorizationFactory`。' +
-      'RFC-359 W7 合 IntentSqlProgramRunner 后本工厂生产消费者归零——中立 runner 只收异步授权会话，' +
-      '两个 SQLite bootstrap 已改指中立工厂。该同步链自己写的退役条件' +
-      '（`modules/resource-catalog/infrastructure/intentContextResourceAuthorization.ts:79`）现已成立；' +
-      '未当场删是因为 `tests/rfc345-resource-catalog-contracts.test.ts` 有源码文本断言钉着它。',
-  ],
-  [
-    'modules/resource-catalog/composition/resourceCatalogOverview.ts::composeSqliteResourceCatalogOverviewQuery',
-    '改指：没有任何调用方，唯一引用是一条源码锁里的**字符串**' +
-      '（`tests/rfc349-resource-catalog-provider-contributions.test.ts:28` 的 `toContain`）。' +
-      '真实能力是中立的 `modules/resource-catalog/application/resourceCatalogOverview.ts::createResourceCatalogOverviewQuery` + ' +
-      '`modules/resource-catalog/infrastructure/resourceCatalogOverview.ts::createResourceCatalogOverviewCountPort`，' +
-      'PG 侧同文件的 `composePostgresqlResourceCatalogOverviewQuery` 仍在装配；先把那条源码锁改指再删。',
-  ],
-  [
-    'modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts::createSqliteResourceCatalogAclIdentityReadPort',
-    '改指：真实能力在中立的 `modules/resource-catalog/infrastructure/aclReadRepository.ts:223::createResourceCatalogAclIdentityReadPort`，' +
-      '装配在 `modules/resource-catalog/composition/providerResourceCatalog.ts:79`；' +
-      '同文件其余读函数仍有生产消费者，只有这个端口工厂是孪生残留。',
-  ],
-  [
-    'modules/system-operations/infrastructure/postgresqlProviderBackup.ts::createPostgresqlScheduledBackupRequester',
-    '改指：定时备份的真实路径是中立命令 `requestBackup`（`cli/start.ts:891`）→ ' +
-      '`createPostgresqlAdminBackupCoordinator`（装配在 `modules/system-operations/composition.ts:194`）→ ' +
-      '同文件的 `createPostgresqlProviderBackup`；本工厂是绕开命令层的第二条入口。',
-  ],
-  [
-    'modules/task-execution/composition/nodeRunLifecycle.ts::composePostgresqlNodeRunLifecycleParticipantFactory',
-    '改指：真实能力已收进中立实现 ' +
-      '`modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts:26::createCollaborationRuntimeMechanics`，' +
-      '两个引擎共用。本工厂当初是为 collaboration 的 serializable 原子而开的 task-execution 接缝，' +
-      'RFC-359 W7 合掉那一对后生产消费者归零（只剩一个测试引用），接缝不再需要。',
-  ],
-  [
-    'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts::createSqliteLegacyAgentDependencyLookup',
-    '改指：生产的注入解析走 `services/execution/taskExecutionResources.ts:97::resolveTaskExecutionInjection`' +
-      '（具名 Resource Catalog participant）；本文件整体是 RFC-349 的行为神谕，' +
-      '`services/execution/taskExecutionResourceDependencies.ts:5` 明写「生产不走它」，该文件退役时本条一并销账。',
+      '由 `services/reviewMutationCoordinator.ts:75` new 出来，两个引擎共用一份。' +
+      'RFC-359 W8 清理批未动它：并发波次里 collaboration 整个 bounded context 由别人持有，' +
+      '且删掉这个文件要同批改 `rfc359-w5-t17-provider-file-location` 的账本（当时也在别人手上）。',
   ],
   [
     'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts::createSqliteTaskAuthorizationParticipantInTx',
     '改指：真实能力在中立的 `modules/task-execution/infrastructure/taskAuthorization.ts:82::createTaskAuthorizationParticipantInTx`，' +
       '被 `modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts:83` 与 ' +
-      '`modules/collaboration/infrastructure/legacySqliteReview.ts:3544` 调用；' +
-      '同文件的 `createSqliteTaskAuthorizationQueries` 仍在生产使用，死的只有这个 in-tx 工厂。',
+      '`modules/collaboration/infrastructure/legacySqliteReview.ts:3544` 调用。' +
+      '本文件只剩这两个导出、两个都死，销账等于删掉整个 provider 命名文件——' +
+      '那要同批把 `rfc359-w5-t17-provider-file-location.test.ts` 的 `PROVIDER_NAMED_FILE_DEBT` 改小；' +
+      'RFC-359 W8 清理批跑时那份账本正被别的并发改动持有，故整条推迟。',
   ],
   [
     'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts::createSqliteTaskAuthorizationQueries',
     '改指：真实能力是中立的 ' +
       '`modules/task-execution/infrastructure/taskAuthorization.ts:88::createTaskAuthorizationQueries`，' +
       'RFC-359 W7 合 collaboration 两对时 `modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts:287` ' +
-      '已改指它，本工厂生产消费者归零。',
-  ],
-  [
-    'platform/persistence/sqliteLogicalTarget.ts::createSqliteLogicalTarget',
-    '改指：生产只有一条逻辑恢复目标——`platform/persistence/postgresqlLogicalTarget.ts:387::openPostgresqlLogicalTarget`，' +
-      '装配在 `modules/system-operations/infrastructure/postgresqlProviderRestore.ts:59` 与 ' +
-      '`modules/system-operations/infrastructure/databaseMigrationCoordinator.ts:268`；' +
-      'SQLite 目标是为尚未存在的 PG→SQLite 反向迁移准备的（见该文件头注）。',
+      '已改指它，本工厂生产消费者归零。与上一条同文件、同批处置（同上：受 T17 账本占用推迟）。',
   ],
   [
     'server.ts::composeSqliteProviderAppDeps',
     '纯死代码：全仓零引用（连测试都没有）。它只是同文件 `composeProviderAppDeps`（`server.ts:1265`）的同义包装；' +
       'PG bootstrap 走并列的 `composePostgresqlAppDeps`（`server.ts:1436` → `cli/postgresqlDaemonApplication.ts:2158`），' +
       'SQLite bootstrap 走的是另一个函数 `composeSqliteAppDeps`（`server.ts:1785`，经 `server.ts:3248` 的 `createComposedApp`），' +
-      '从不经过本函数。',
+      '从不经过本函数。RFC-359 W8 清理批未动它：`server.ts` 当时正被并发改动持有。',
   ],
 ]
 
@@ -412,12 +326,19 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
     expect(UNITS.length).toBeGreaterThanOrEqual(1500)
   })
 
+  // 这是**语料下限**，不是棘轮：它只回答「动词表还咬得动吗」，答案坏掉时是 0 或个位数。
+  // 分母本身会随 RFC-359 收敛一路变小（开账当天 242 → W7 成对合一后 203 → W8 死代码清理批 188），
+  // 所以这个门槛只能跟着**往下**调，不许往上——往上会把「收敛成功」判成红。真正证明判据没坏的是
+  // 文件末尾那三条自变异 fixture（伪造源码喂给两个决定过程），它们与真实语料的大小完全无关；
+  // 分母哪天真的走到零，删掉这条即可，fixture 仍然守着。
   test('被判集合非空：动词表确实咬到了一大批 provider 适配器声明（咬成 0 = 判据失效）', () => {
     expect(
       DECLARATIONS.length,
       '一个 provider 适配器工厂 / 类都没扫到——要么命名约定变了（`<create|compose|open|bind>' +
-        '[形容词]<Provider>…` / `class <Provider>…`），要么动词表被改坏；此刻账本再准也毫无预言力',
-    ).toBeGreaterThanOrEqual(200)
+        '[形容词]<Provider>…` / `class <Provider>…`），要么动词表被改坏；此刻账本再准也毫无预言力。' +
+        '注意：数字掉到门槛以下**未必**是判据坏了——RFC-359 每合一批适配器分母就小一截，' +
+        '确认是收敛就把门槛跟着调低（只降不升），并在注释里记下这一档的实测值。',
+    ).toBeGreaterThanOrEqual(150)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {
@@ -449,7 +370,7 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       bad,
       '每条账本必须以 `改指：`（真实能力在别处、把引用改过去再删）或 `纯死代码：`（全仓零引用、直接删）' +
         '开头，并给出可复跑的源码锚（`path/to/file.ts:line`）——两者处置完全不同，' +
-        '没有这个区分，后来人只能对着 18 条一样长的说明重新调查一遍',
+        '没有这个区分，后来人只能对着一堆一样长的说明重新调查一遍',
     ).toEqual([])
   })
 })

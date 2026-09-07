@@ -48,11 +48,21 @@ const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOr
  * 实测存量：四个站点、三列齐全。**这份账本的正确状态是「每一行都三列齐全」**——
  * 出现 `-` 就是上面说的那条静默分叉，不要把它登记进来了事，去把那一列补上。
  */
+/**
+ * 已知的摩擦：本账本按 `file:line` 钉站点，于是**插入点上方的任何编辑**都会让它漂
+ * （2026-09-07 一天内漂了两次：`services/task.ts` 3482→3509、PG 侧 585→579，
+ * 两次三个血缘列都齐备，纯粹是行号动了）。
+ *
+ * 改进方向：把键从 `file:line` 换成 `file#外层函数名` —— 行号只是定位信息，
+ * 真正要钉的是「哪个铸行点」。换掉之后同文件内的无关编辑不再制造 diff，
+ * 而站点被**挪进另一个函数**这件事仍然会红（那正是该被看见的）。
+ * 没在本波做是因为它要改 AST 遍历的键并重新做一次变异验证，而落盘时的改动面已经很大。
+ */
 const TASK_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:585 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:579 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:110 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:762 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  'services/task.ts:3482 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'services/task.ts:3509 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

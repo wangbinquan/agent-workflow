@@ -10,7 +10,7 @@ import { ulid } from 'ulid'
 import { openDb } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
 import type { MaintenanceRunStore } from './maintenanceRunStorePort'
-import { createSqliteMaintenanceRunStore } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { startMaintenanceTicker, type MaintenanceTickerHandle } from '@/services/maintenanceTicker'
@@ -369,7 +369,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
       busyTimeoutMs: ADMISSION_BUSY_TIMEOUT_MS,
       slowQueryMs: 0,
     })
-    store = createSqliteMaintenanceRunStore(admissionDb)
+    store = createMaintenanceRunStore(admissionDb)
     payloadSources = options.payloadSources
   }
   const bootIntentTurnIds = Promise.resolve(payloadSources.bootIntentTurnIds())

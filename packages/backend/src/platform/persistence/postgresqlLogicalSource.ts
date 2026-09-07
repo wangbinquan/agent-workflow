@@ -79,6 +79,34 @@ function safeCount(value: unknown, table: string): number {
   return Number(parsed)
 }
 
+/**
+ * RFC-359 W8 双引擎对拍：围栏复核按**值**判定，不按对象引用。
+ *
+ * 此前这里写的是 `expected !== snapshot`——只有把 `preflight()` 原样回传的那**一个对象**才认。
+ * SQLite 侧同名方法一直是按值判定的，而且它**必须**如此：迁移读出跑在 Worker 线程里
+ * （`sqliteLogicalSourceWorkerSupervisor.ts`），快照经 postMessage 结构化克隆往返之后早就不是
+ * 同一个引用了。两侧要落成一份实现，只有值语义能同时服务两条传输形态；引用判等也没有多守住
+ * 任何东西——下面逐字段的比对覆盖了快照的全部内容。
+ */
+function sameSnapshot(
+  left: PostgresqlLogicalSourceSnapshot,
+  right: PostgresqlLogicalSourceSnapshot,
+): boolean {
+  if (
+    left.databaseFingerprint !== right.databaseFingerprint ||
+    left.generationId !== right.generationId ||
+    left.schemaDigest !== right.schemaDigest ||
+    left.totalRows !== right.totalRows
+  ) {
+    return false
+  }
+  const tables = Object.keys(right.tableRows)
+  return (
+    Object.keys(left.tableRows).length === tables.length &&
+    tables.every((table) => left.tableRows[table] === right.tableRows[table])
+  )
+}
+
 async function rollback(connection: PostgresqlReservedConnection): Promise<void> {
   try {
     await connection.unsafe('ROLLBACK')
@@ -204,13 +232,13 @@ export async function openPostgresqlLogicalSource(input: {
       }
       if (
         snapshot === undefined ||
-        expected !== snapshot ||
+        !sameSnapshot(expected, snapshot) ||
         expected.generationId !== input.generationId ||
         expected.schemaDigest !== input.contract.digest
       ) {
         throw new PostgresqlLogicalSourceError(
           'postgresql-source-generation',
-          'PostgreSQL logical source snapshot identity differs',
+          'PostgreSQL logical source snapshot differs from the preflight snapshot',
         )
       }
       await readGeneration(input.runtime.providerPool().unsafe.bind(input.runtime.providerPool()))

@@ -290,10 +290,15 @@ describe('RFC-349 repository workspace provider boundary', () => {
     const fixture = postgresqlFixture()
     await fixture.store.listCachedRepoPage({ limit: 20 })
 
-    const facets = fixture.executions.find((query) => query.includes('referenced_count'))
+    const facets = fixture.executions.find((query) => query.includes('scheduled_count'))
     expect(facets).toBeDefined()
-    // The OR arm for "no scheduled task references this repo".
-    expect(facets).toContain('or false')
-    expect(facets).not.toMatch(/\bor 0\b/)
+    // The empty-set literal for "no scheduled task references this repo". RFC-349:
+    // PostgreSQL types `0` as integer and rejects the whole statement the moment it
+    // lands in a boolean position — that arm read `or 0` before, and reads
+    // `WHERE 0 and …` after the W8-T26 reshape, so the guard follows the literal
+    // rather than the surrounding operator. `false` is what both dialects accept,
+    // and what drizzle's own empty `inArray` emits.
+    expect(facets).toContain('WHERE false')
+    expect(facets).not.toMatch(/\b(?:where|or|and)\s+0\b/i)
   })
 })

@@ -23,8 +23,19 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
-/** Drizzle 查询构造的痕迹。纯类型 / 纯常量文件不该进语料。 */
-const BUILDS_SQL = /\.(from|insert|update|delete|selectDistinct)\(|\bsql\s*(<[^>]*>)?`/u
+/**
+ * Drizzle 查询构造的痕迹。纯类型 / 纯常量文件不该进语料。
+ *
+ * `sql.raw(` 是 2026-09-07（RFC-359 W7 第二波）补进来的：判据初版只认模板字面量
+ * `` sql` `` 与查询构造器调用，于是**整篇只用 `sql.raw('…')` 的文件一个都不进语料**——
+ * 它们恰恰是最该被陷阱守卫看住的一类，因为 raw 文本完全绕开查询构造器，`compilePostgresqlSql`
+ * 那层极窄改写之外没有任何东西替它做方言适配。实例：
+ * `modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts` 的
+ * `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`（W5-T20 头注释把它记成了已知盲区）。
+ * 扩面实测只多 2 个文件（275 → 277），四条共用守卫都没有因此暴露新债。
+ */
+const BUILDS_SQL =
+  /\.(from|insert|update|delete|selectDistinct)\(|\bsql\s*(<[^>]*>)?`|\bsql\.raw\(/u
 
 /**
  * 拿得到 PostgreSQL 执行句柄的痕迹：

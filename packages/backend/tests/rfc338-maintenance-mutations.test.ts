@@ -27,7 +27,7 @@ const original: Sources = {
   service: readBackend('src/platform/background/maintenanceService.ts'),
   runner: readBackend('src/platform/background/maintenanceJobRunner.ts'),
   eventArchive: readBackend('src/platform/background/eventsArchiveMaintenance.ts'),
-  store: readBackend('src/platform/persistence/sqlite/maintenanceRunStore.ts'),
+  store: readBackend('src/platform/persistence/maintenanceRunStore.ts'),
   migration: readFileSync(
     resolve(BACKEND, 'db', 'migrations', '0216_rfc338_maintenance_runs.sql'),
     'utf-8',

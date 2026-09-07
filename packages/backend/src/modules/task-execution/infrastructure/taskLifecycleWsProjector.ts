@@ -43,11 +43,19 @@ export function createTaskLifecycleWsProjector(
           status: payload.status,
           ...(payload.errorSummary === null ? {} : { errorSummary: payload.errorSummary }),
         })
+        // RFC-359 W8: `task.done` says "this task reached an outcome". The
+        // continuation handoff of PostgreSQL's two-stage retry / sync is not one —
+        // the task goes back to `pending` as soon as `children.resume` admits it,
+        // and SQLite's one-stage admission never emits this frame at all. The
+        // `task.status` frame above IS still emitted: the row really does hold that
+        // status right now, and any refetch would read it — muting that frame would
+        // only make the socket disagree with the API.
         if (
-          payload.status === 'done' ||
-          payload.status === 'failed' ||
-          payload.status === 'canceled' ||
-          payload.status === 'interrupted'
+          !payload.continuationHandoff &&
+          (payload.status === 'done' ||
+            payload.status === 'failed' ||
+            payload.status === 'canceled' ||
+            payload.status === 'interrupted')
         ) {
           taskBroadcaster.broadcast(TASK_CHANNEL(payload.taskId), {
             id: -1,

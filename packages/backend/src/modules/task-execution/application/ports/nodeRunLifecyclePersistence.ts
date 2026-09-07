@@ -1,5 +1,7 @@
 import type { NodeRunStatus, NodeRunTransitionEvent, RerunCause } from '@agent-workflow/shared'
 
+import type { CommittedEventRef } from '@/platform/events/committed/types'
+
 import type { NodeExecutionOutputWrite } from './nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
@@ -133,4 +135,44 @@ export interface NodeRunLifecyclePersistence {
     readonly executionContext?: TaskExecutionContextRef
   }): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
   loadEnvelopeNonce(nodeRunId: string): Promise<string>
+}
+
+/**
+ * TaskExecution-owned node lifecycle CAS bound to a caller-reserved
+ * transaction. Collaboration may compose its gate rows in the same commit
+ * without importing TaskExecution tables or opening a nested transaction.
+ *
+ * RFC-359 W8：这份合同曾住在 `public/commands.ts`。Collaboration 侧的
+ * serializable 原子在 W7 合到中立的 `createCollaborationRuntimeMechanics` 之后，
+ * 跨 context 的消费者归零（`tests/architecture/rfc294-review-public-consumer-ledger.test.ts`
+ * 把它记成零 consumer 的 public symbol、点名本波清偿），与它配套的
+ * `composePostgresqlNodeRunLifecycleParticipantFactory` 接缝也一并删除。
+ * 现在它只被 task-execution 自己的 `infrastructure/nodeRunLifecyclePersistence.ts` 实现与使用，
+ * 因此降级成模块内端口。
+ */
+export interface NodeRunLifecycleParticipantInTx {
+  set(input: {
+    readonly nodeRunId: string
+    readonly to: NodeRunStatus
+    readonly allowedFrom: readonly NodeRunStatus[]
+    readonly extra?: NodeRunStatusMutation
+    readonly allowTerminal?: boolean
+    readonly reason?: string
+  }): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
+  completeClarifyNode(input: {
+    readonly taskId: string
+    readonly nodeRunId: string
+    readonly nodeId: string
+    readonly expectedStatus: 'awaiting_human'
+    readonly status: 'done'
+    readonly cause: 'clarify-deferred-answer'
+    readonly finishedAt: number
+    readonly occurredAt: number
+    readonly identity: Readonly<{
+      operationRef: string
+      eventGroupId: string
+      eventGroupOrdinal: number
+      correlationRef: string
+    }>
+  }): Promise<CommittedEventRef | null>
 }

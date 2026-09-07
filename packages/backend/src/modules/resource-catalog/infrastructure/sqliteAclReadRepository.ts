@@ -3,7 +3,6 @@ import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { AclRow } from '../domain/resourceAccess'
-import type { ResourceCatalogAclIdentityReadPort } from '../application/ports/providerResourceCatalogPersistence'
 import { isSqliteAclResourceType, SQLITE_ACL_TABLES } from './sqliteAclRegistry'
 
 function sqliteAclTable(type: AclResourceType) {
@@ -217,15 +216,4 @@ export async function listAclResourceIdentityRowsByNames(
     })
     .from(table)
     .where(inArray(table.name, [...names]))) as AclResourceIdentitySnapshot[]
-}
-
-/** Internal provider-neutral owner/name reads used by Intent apply preflight. */
-export function createSqliteResourceCatalogAclIdentityReadPort(
-  db: DbClient,
-): ResourceCatalogAclIdentityReadPort {
-  const port: ResourceCatalogAclIdentityReadPort = {
-    getOwner: (type, id) => getAclResourceOwner(db, type, id),
-    listOwnedNames: (type, ownerUserId) => listOwnedAclResourceNames(db, type, ownerUserId),
-  }
-  return Object.freeze(port)
 }

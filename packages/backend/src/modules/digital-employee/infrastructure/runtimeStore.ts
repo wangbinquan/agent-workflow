@@ -1760,6 +1760,11 @@ export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCa
 
     async blockCase(caseId, reason, now) {
       await session.transaction(async (tx) => {
+        // 读—改—写：`state` 判据与 `revision + 1` 都由这次读决定，而 UPDATE 的 where 里没有它们。
+        // 不先锁住案件行，PG 的 READ COMMITTED 下一次并发 `terminateCase` 会整个被盖掉——
+        // 「终止」已经回了 200，案件却带着 terminalKind 变回可 resume 的 blocked
+        // （tests/rfc359-w8-t28-lost-update.test.ts L1）。
+        await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, caseId)
         const current = await tx
           .select()
           .from(employeeCases)
@@ -1851,6 +1856,11 @@ export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCa
 
     async terminateCase(caseId, terminalKind, now) {
       return await session.transaction(async (tx) => {
+        // 同 blockCase：`state !== 'terminal'` 的判据、`revision + 1` 与 `writerGeneration + 1`
+        // 都由这次读决定。两笔并发终止若都读到 active，后落地的那笔会把 terminalKind 换掉，而
+        // 生命周期事件的 id / dedupeKey 由 (caseId, revision) 决定 ⇒ 后一条被去重丢掉，
+        // 事件流与案件详情从此说两种终止原因（tests/rfc359-w8-t28-lost-update.test.ts L2）。
+        await engine.lockAggregateRoot(tx, employeeCases, employeeCases.id, caseId)
         const current = await tx
           .select()
           .from(employeeCases)

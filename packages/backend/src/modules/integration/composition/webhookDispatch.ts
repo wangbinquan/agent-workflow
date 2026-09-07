@@ -5,7 +5,6 @@ import type { WebhookDispatchDeps } from '@/services/webhook/webhookDispatch'
 import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
 import type { ScheduledTaskOperations } from '@/services/scheduledTasks'
 import type { WebhookDispatchPersistencePort } from '../application/ports/webhookDispatchPersistence'
-import type { WebhookTriggerAdministrationPort } from '../application/ports/webhookTriggerAdministration'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 import { createWebhookDispatchPersistence } from '../infrastructure/webhookDispatchPersistence'
 import { createWebhookTriggerAdministration } from '../infrastructure/webhookTriggerAdministration'
@@ -30,28 +29,10 @@ export function composeWebhookDispatchPersistence(
   return persistence
 }
 
-export function composeSqliteWebhookDispatchPersistence(
-  db: DbClient,
-): WebhookDispatchPersistencePort {
-  return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
-}
-
 export function composePostgresqlWebhookDispatchPersistence(
   db: PostgresqlDatabaseClient,
 ): WebhookDispatchPersistencePort {
   return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
-}
-
-export function composeSqliteWebhookTriggerAdministration(
-  db: DbClient,
-): WebhookTriggerAdministrationPort {
-  return createWebhookTriggerAdministration(db)
-}
-
-export function composePostgresqlWebhookTriggerAdministration(
-  db: PostgresqlDatabaseClient,
-): WebhookTriggerAdministrationPort {
-  return createWebhookTriggerAdministration(db)
 }
 
 export function composeWebhookTriggerServiceDependencies(

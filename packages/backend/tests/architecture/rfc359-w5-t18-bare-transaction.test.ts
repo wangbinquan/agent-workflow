@@ -142,12 +142,13 @@ export const BARE_TRANSACTION_DEBT: readonly string[] = [
   'modules/intent/infrastructure/intentSqlPersistence.ts: 27',
   'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 2',
   'modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts: 1',
-  'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts: 1',
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts: 1',
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts: 1',
+  // RFC-359 W8 销账：`postgresqlTaskExecutionRecovery.ts: 1` + `postgresqlTaskOwnershipPersistence.ts: 1`
+  // —— 归属与后继恢复两对适配器合一成 `taskOwnershipPersistence.ts` / `taskExecutionRecovery.ts`，
+  // 它们的 SERIALIZABLE 事务体改走 `databaseSessionFor(db).serializable(...)`。
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts: 3',
-  'modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts: 1',
-  'platform/persistence/postgresqlMaintenanceRunStore.ts: 4',
+  // RFC-359 W8 销账：`postgresqlMaintenanceRunStore.ts: 4` —— 它与 SQLite 侧那份
+  // 同步实现（4 处 `dbTxSync`）合成了中立的 `platform/persistence/maintenanceRunStore.ts`，
+  // 四笔事务改走 `databaseSessionFor(db).transaction(...)`，两份 provider 命名的实现整体退役。
   'platform/persistence/postgresqlResourcePackageAtomicApply.ts: 2',
 ]
 

@@ -101,7 +101,11 @@ export function createSqliteCapabilityMatrixRead(db: DbClient): CapabilityMatrix
               endpointId: endpoint.ok ? endpoint.endpointId : '',
               templateId: cell.templateId,
               enabled: cell.enabled,
-              ...(endpoint.ok ? { provider: endpoint.provider } : {}),
+              // RFC-359 W8 — the refusal is passed on as a refusal. Omitting
+              // the key let `gatherReadinessFacts` fall back to `'gitlab'`,
+              // which answered a question about a provider this repository may
+              // not belong to (see the fallback's removal there).
+              provider: endpoint.ok ? endpoint.provider : null,
             }),
           }),
         ),

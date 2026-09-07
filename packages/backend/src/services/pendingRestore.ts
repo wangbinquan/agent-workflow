@@ -20,6 +20,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { z } from 'zod'
 import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -28,17 +29,44 @@ import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/sy
 
 const log = createLogger('pendingRestore')
 
-interface PendingRestoreMarker {
-  stagedTarball: string
-  noSafetyBackup?: boolean
-  noMigrate?: boolean
-  skipIntegrityCheck?: boolean
-  requestedAt: number
-}
+/**
+ * RFC-359 W8 —— 标记的**类型**校验（对齐 PostgreSQL 侧的 `postgresqlPendingRestore.ts`）。
+ *
+ * 此前这里只做 `JSON.parse`，于是一个结构合法、字段类型错乱的标记
+ * （截断 / 半写 / 手改坏）会被原样投影出去：`requestedAt: "yesterday"` 直接流进
+ * `recoveryStatusViewSchema`，把 `GET /api/restore/pending` 炸成 500——而取消按钮就在
+ * 同一个面板上，用户此刻恰恰最需要它可用。PostgreSQL 侧用 zod 校验后返回 null，
+ * 面板照常渲染成「没有待还原」，两侧对拍照出了这一条
+ * （`tests/rfc359-w8-system-operations-recovery-conformance.test.ts` ⑤）。
+ *
+ * 只校验**投影与 boot 应用真正消费的字段**，不拒绝未知键：SQLite 的标记没有 PG 那个
+ * 显式 `version` 字段，严格模式会让「新版本写的标记被旧二进制读到」变成静默丢弃一次
+ * 已排队的还原——那比多容忍几个键危险得多。
+ */
+const pendingRestoreMarkerSchema = z.object({
+  stagedTarball: z.string().min(1),
+  noSafetyBackup: z.boolean().optional(),
+  noMigrate: z.boolean().optional(),
+  skipIntegrityCheck: z.boolean().optional(),
+  requestedAt: z.number(),
+})
+
+type PendingRestoreMarker = z.infer<typeof pendingRestoreMarkerSchema>
 
 const pendingDir = (appHome: string): string => join(appHome, '.restore-pending')
 const markerPath = (appHome: string): string => join(pendingDir(appHome), 'restore-pending.json')
 const stagedPath = (appHome: string): string => join(pendingDir(appHome), 'staged.tar.gz')
+
+/** 读并校验标记；读不到 / 读不懂一律 null（调用方据此当成「没有待还原」）。 */
+function parsePendingRestoreMarker(appHome: string): PendingRestoreMarker | null {
+  const path = markerPath(appHome)
+  if (!existsSync(path)) return null
+  try {
+    return pendingRestoreMarkerSchema.parse(JSON.parse(readFileSync(path, 'utf-8')))
+  } catch {
+    return null
+  }
+}
 
 export function hasPendingRestore(appHome: string = Paths.root): boolean {
   return existsSync(markerPath(appHome))
@@ -53,24 +81,19 @@ export interface PendingRestoreInfo {
 }
 
 export function readPendingRestore(appHome: string = Paths.root): PendingRestoreInfo | null {
-  const mPath = markerPath(appHome)
-  if (!existsSync(mPath)) return null
+  const marker = parsePendingRestoreMarker(appHome)
+  if (marker === null) return null
+  let stagedBytes: number | null = null
   try {
-    const marker = JSON.parse(readFileSync(mPath, 'utf-8')) as PendingRestoreMarker
-    let stagedBytes: number | null = null
-    try {
-      stagedBytes = statSync(marker.stagedTarball).size
-    } catch {
-      stagedBytes = null
-    }
-    return {
-      requestedAt: marker.requestedAt,
-      stagedBytes,
-      noMigrate: marker.noMigrate === true,
-      skipIntegrityCheck: marker.skipIntegrityCheck === true,
-    }
+    stagedBytes = statSync(marker.stagedTarball).size
   } catch {
-    return null
+    stagedBytes = null
+  }
+  return {
+    requestedAt: marker.requestedAt,
+    stagedBytes,
+    noMigrate: marker.noMigrate === true,
+    skipIntegrityCheck: marker.skipIntegrityCheck === true,
   }
 }
 
@@ -144,15 +167,29 @@ export function stagePendingRestore(tarballPath: string, opts: StagePendingResto
     }
     throw err
   }
-  cpSync(tarballPath, stagedPath(appHome))
-  const marker: PendingRestoreMarker = {
-    stagedTarball: stagedPath(appHome),
-    noSafetyBackup: opts.noSafetyBackup,
-    noMigrate: opts.noMigrate,
-    skipIntegrityCheck: opts.skipIntegrityCheck,
-    requestedAt: opts.now,
+  // RFC-359 W8 —— 暂存中途失败必须把刚建的目录收回去（对齐 PostgreSQL 侧）。
+  //
+  // 上面那个 O_EXCL mkdir 是「已经排了一个还原」的**唯一**判据，而 `readPendingRestore` /
+  // `clearPendingRestore` 认的是**标记文件**。两者一旦不同步——拷贝或写标记在中途失败，
+  // 目录留下、标记没写成——实例就永久卡死：面板说「没有待还原」、取消说「没清掉任何东西」、
+  // 而每一次重新上传还原包都被 409「已经排了一个还原，请先取消」挡回去，三条互相矛盾，
+  // 且没有任何一条提到该去删 `~/.agent-workflow/.restore-pending`。灾难恢复当场归零。
+  // PostgreSQL 侧一直是收回去的；两侧对拍照出了这一条
+  // （`tests/rfc359-w8-system-operations-recovery-conformance.test.ts` ④）。
+  try {
+    cpSync(tarballPath, stagedPath(appHome))
+    const marker: PendingRestoreMarker = {
+      stagedTarball: stagedPath(appHome),
+      noSafetyBackup: opts.noSafetyBackup,
+      noMigrate: opts.noMigrate,
+      skipIntegrityCheck: opts.skipIntegrityCheck,
+      requestedAt: opts.now,
+    }
+    writeFileSync(markerPath(appHome), JSON.stringify(marker), 'utf-8')
+  } catch (err) {
+    rmSync(dir, { recursive: true, force: true })
+    throw err
   }
-  writeFileSync(markerPath(appHome), JSON.stringify(marker), 'utf-8')
   log.info('staged pending restore', { staged: stagedPath(appHome) })
 }
 
@@ -174,13 +211,12 @@ export interface ApplyPendingRestoreOptions {
  */
 export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions): Promise<boolean> {
   const appHome = opts.appHome ?? Paths.root
-  const mPath = markerPath(appHome)
-  if (!existsSync(mPath)) return false
+  if (!existsSync(markerPath(appHome))) return false
 
-  let marker: PendingRestoreMarker
-  try {
-    marker = JSON.parse(readFileSync(mPath, 'utf-8')) as PendingRestoreMarker
-  } catch {
+  // 与 `readPendingRestore` 共用同一个校验器：boot 应用路径与状态面板对「这个标记算不算数」
+  // 必须给同一个答案，否则面板说没有、boot 却拿一个字段类型错乱的标记去跑还原。
+  const marker = parsePendingRestoreMarker(appHome)
+  if (marker === null) {
     log.warn('pending-restore marker unreadable — clearing')
     rmSync(pendingDir(appHome), { recursive: true, force: true })
     return false

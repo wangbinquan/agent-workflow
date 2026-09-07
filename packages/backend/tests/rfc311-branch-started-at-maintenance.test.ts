@@ -119,6 +119,9 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       nodeId: 'n1',
       status: 'running',
       startedAt: parentStartedAt,
+      // RFC-359 W8-A：铸子任务的准入门要求这条调用行确实预留了这个子任务
+      // （`child-task-reservation-mismatch`），真实调用节点在启动前就 stamp 了它。
+      childTaskId: 'placeholder',
     })
 
     // ① 真启动路径:子任务的 started_at 晚于父,父行必须被抬升到子的时间。
@@ -137,6 +140,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
           parentTaskId: parentId,
           parentNodeRunId: callRun,
           invocationDepth: 1,
+          launchActorUserId: 'u1',
           frozenSnapshotJson: EMPTY_DEF,
           refClosureJson: null,
         },
@@ -204,7 +208,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const markRunning = async (taskId: string): Promise<void> => {
         await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
       }
-      const runOf = async (taskId: string): Promise<string> => {
+      // RFC-359 W8-A：调用行必须预留它要铸的那个子任务 id，否则铸行准入门直接拒。
+      const runOf = async (taskId: string, childTaskId: string): Promise<string> => {
         const id = ulid()
         await db.insert(nodeRuns).values({
           id,
@@ -212,6 +217,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
           nodeId: 'n1',
           status: 'running',
           startedAt: Date.now(),
+          childTaskId,
         })
         return id
       }
@@ -225,8 +231,9 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         materializedSpace: spaceFor(childId, rootDir),
         callLaunch: {
           parentTaskId: root.id,
-          parentNodeRunId: await runOf(root.id),
+          parentNodeRunId: await runOf(root.id, childId),
           invocationDepth: 1,
+          launchActorUserId: 'u1',
           frozenSnapshotJson: EMPTY_DEF,
           refClosureJson: null,
         },
@@ -235,17 +242,19 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
 
       // 孙子:继承的是**父的根**,而不是父自己——两者只在深度 ≥2 时才分得开。
       await markRunning(child.id)
+      const grandchildId = ulid()
       const grandchild = await startTask(
         { workflowId: wf, name: 'grandchild', inputs: {} } as StartTask,
         {
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
             .schedulerDriver,
-          materializedSpace: spaceFor(ulid(), rootDir),
+          materializedSpace: spaceFor(grandchildId, rootDir),
           callLaunch: {
             parentTaskId: child.id,
-            parentNodeRunId: await runOf(child.id),
+            parentNodeRunId: await runOf(child.id, grandchildId),
             invocationDepth: 2,
+            launchActorUserId: 'u1',
             frozenSnapshotJson: EMPTY_DEF,
             refClosureJson: null,
           },

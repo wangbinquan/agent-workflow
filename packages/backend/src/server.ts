@@ -326,7 +326,7 @@ import {
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
 import {
@@ -2933,7 +2933,7 @@ function composeSqliteApiRouteMounts(
     taskArchive: (app) =>
       mountTaskArchiveRoutes(app, {
         configPath: deps.configPath,
-        taskArchiveMaintenance: createSqliteTaskArchiveMaintenanceCommand(deps.db),
+        taskArchiveMaintenance: createDrizzleTaskArchiveMaintenanceCommand(deps.db),
       }),
     maintenanceDisk: (app) => mountMaintenanceDiskRoutes(app, deps.maintenanceDisk),
     scheduledTasks: (app) =>

@@ -25,7 +25,7 @@ import {
 } from '@/db/schema'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   CANCELABLE_TASK_STATUSES,
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -649,6 +649,11 @@ export function createTaskRecoveryOperations(
 
     async recordAutoRecoveryAttempt(input) {
       return databaseSessionFor(db).transaction(async (tx) => {
+        // 读—改—写：滑动窗口的计数由这次读自增，而 UPDATE 的 where 只有 id。auto-repair 与
+        // heartbeat-kill 是两条各自定时的 loop，可以同时盯上同一个任务；不先锁住任务行，PG 的
+        // READ COMMITTED 下两次尝试只会记成一次——用户配的 `maxAutoRecoveriesPerWindow` 闸门
+        // 因此永不跳闸，任务被无限自动重跑（tests/rfc359-w8-t28-lost-update.test.ts L5）。
+        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, input.taskId)
         const row = await tx
           .select({
             attempts: tasks.autoRecoveryAttempts,

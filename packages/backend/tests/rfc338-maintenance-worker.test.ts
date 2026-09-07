@@ -15,7 +15,7 @@ import {
   type MaintenanceWorkerRejectionEvent,
 } from '@/platform/background/maintenanceWorkerErrorBoundary'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
-import { createMaintenanceRunStore } from '@/platform/persistence/sqlite/maintenanceRunStore'
+import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { MIGRATIONS } from './migration-freeze'
 
 const roots: string[] = []
@@ -434,7 +434,7 @@ describe('RFC-338 maintenance Worker', () => {
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })
-    createMaintenanceRunStore(db).enqueue({
+    await createMaintenanceRunStore(db).enqueue({
       id: 'worker-run',
       jobKey: 'tokenAuditGc',
       jobClass: 'cleanup',
@@ -475,7 +475,7 @@ describe('RFC-338 maintenance Worker', () => {
     const result = await Promise.race([completed, timeout])
     expect(result).toEqual({ outcome: 'succeeded', error: undefined })
     expect(deferredSlices).toBe(1)
-    const settled = createMaintenanceRunStore(db).read('worker-run')
+    const settled = await createMaintenanceRunStore(db).read('worker-run')
     expect(settled).toMatchObject({
       state: 'succeeded',
       attempt: 2,
@@ -502,7 +502,7 @@ describe('RFC-338 maintenance Worker', () => {
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })
-    createMaintenanceRunStore(db).enqueue({
+    await createMaintenanceRunStore(db).enqueue({
       id: 'claim-busy-run',
       jobKey: 'tokenAuditGc',
       jobClass: 'cleanup',

@@ -25,8 +25,13 @@ describe('RFC-349 Resource Catalog provider contributions', () => {
       expect(publicQueries).toContain(`readonly ${property}: number | null`)
     }
     expect(application).toContain('actor.permissions.has(dimension.permission)')
-    expect(composition).toContain('composeSqliteResourceCatalogOverviewQuery')
+    // RFC-359 W8：`composeSqliteResourceCatalogOverviewQuery` 已删——它零调用方，唯一的「引用」
+    // 就是这里原本的那条 `toContain` 字符串（一条守卫按名字钉着一个没人调的函数）。计数端口本来
+    // 就收中立客户端，两个引擎共用；断言翻面，钉住它不许回来。判的是**声明**不是提及：
+    // 源码注释里还写着它曾经在这里、为什么走了，那是退役该留的痕。
+    expect(composition).not.toContain('export function composeSqliteResourceCatalogOverviewQuery')
     expect(composition).toContain('composePostgresqlResourceCatalogOverviewQuery')
+    expect(composition).toContain('createResourceCatalogOverviewCountPort')
     expect(publicQueries).not.toContain('DbClient')
     expect(publicQueries).not.toContain('PostgresqlDatabaseClient')
   })

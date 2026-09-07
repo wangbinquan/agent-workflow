@@ -88,6 +88,11 @@ export type TaskLifecycleTransitionCommittedEventInput = Readonly<{
   nodeChanges?: readonly TaskNodeChangeV1[]
   workspacePruneClaim?: TaskLifecycleTransitionedPayloadV1['workspacePruneClaim']
   sourceTerminationEffectRef?: string | null
+  /**
+   * 缺省 false = 这是任务真的走到了这个状态。只有多段式续跑准入的**内部交棒**才置 true；
+   * 语义与消费者口径见 `domain/taskLifecycleCommittedEvent.ts` 的字段说明。
+   */
+  continuationHandoff?: boolean
   occurredAt: number
   identity?: Partial<TaskCommittedEventIdentity>
 }>
@@ -117,6 +122,7 @@ export function taskLifecycleTransitionCommittedEventInput(
       nodeChanges: input.nodeChanges ?? [],
       workspacePruneClaim: input.workspacePruneClaim ?? null,
       sourceTerminationEffectRef: input.sourceTerminationEffectRef ?? null,
+      continuationHandoff: input.continuationHandoff ?? false,
     },
     consumers: taskLifecycleDurableConsumers('task.lifecycle-transitioned.v1'),
   }

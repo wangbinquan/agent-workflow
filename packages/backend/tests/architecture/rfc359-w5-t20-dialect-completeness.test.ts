@@ -47,10 +47,15 @@
 // # 语料
 //
 // `tests/architecture/postgresqlSurface.ts` 的**类型可达**派生（不是文件名前缀），与 RFC-349
-// 三条陷阱守卫共用。今天 273 个文件。**已知盲区**（不在本守卫职权内，记在这里免得被误读成已覆盖）：
-//   · `BUILDS_SQL` 要求文件里有 `sql\`` 或 `.from(` 等构造痕迹，只用 `sql.raw('…')` 的文件不进语料
-//     （实例：`modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts` 的
-//     `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`）。修它要动共享语料判据，归 RFC-359 W5 另立。
+// 三条陷阱守卫共用。
+//
+// 2026-09-07（RFC-359 W7 第二波）补掉了原来的第一条盲区：`BUILDS_SQL` 此前只认 `sql\`` 与
+// `.from(` 等构造痕迹，**整篇只用 `sql.raw('…')` 的文件一个都不进语料**——而 raw 文本恰恰完全
+// 绕开查询构造器，最该被看住。加一条 `sql.raw(` 痕迹后语料 275 → 277，四条共用守卫里只有本文件
+// 的 J1 多出一条真债（`resource-catalog` 的 `repositorySupport.ts` 手搓可串行化事务，已进
+// `RAW_DIALECT_DEBT` 并写明 clearedBy）；其余三条陷阱守卫零新增。
+//
+// **剩余已知盲区**（不在本守卫职权内，记在这里免得被误读成已覆盖）：
 //   · `db/schema.ts` 的 CHECK / DEFAULT 表达式（`json_valid` / `hex` / `unixepoch`）不经查询构造器，
 //     走 `postgresqlSchema.ts` 的 DDL 投影，归 W5-T19g 的「迁移后 sqlite_master vs 逻辑契约」对账。
 //   · `connection.unsafe(…)` 直连 Bun.SQL 的迁移 / 导出机件（`postgresqlMigrator` /
@@ -389,32 +394,26 @@ interface DialectDebtRow {
  */
 const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   {
+    file: 'modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts',
+    construct: 'set-transaction',
+    count: 1,
+    why:
+      '`runPostgresqlResourceCatalogTransaction` 自己手搓了「可串行化事务」这一整个能力：' +
+      "`sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')` + 自带的 retryPostgresqlSerialization " +
+      '重试环。而 `platform/persistence/databaseTransaction.ts` 的 `serializable` 已经是同一能力的' +
+      '两侧渲染（PG：同一句 SET + 40001/40P01 退避；SQLite：BEGIN IMMEDIATE 本就全库独占）。' +
+      '于是同一个隔离形态在仓里有两份渲染、只有 PG 一侧，resource-catalog 这条路没有 SQLite 孪生。' +
+      '**正确动作**是改调中立原语，不是保留这一行。2026-09-07 才被看见：语料判据此前要求文件里有 ' +
+      '`sql`` ` 或 `.from(`，整篇只用 `sql.raw(` 的它一直不在语料内（W5-T20 头注释记的第一条已知盲区）。',
+    clearedBy:
+      'RFC-359 W8：resource-catalog 事务改走 databaseSessionFor().serializable，与 W8 的同步事务面第二批同批',
+  },
+  {
     file: 'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
     construct: 'pg-greatest',
     count: 1,
     why: 'PG 侧裸写 GREATEST(COALESCE(...))，SQLite 孪生 taskDeleteRecovery.ts 用 MAX(...) 读回来再在 JS 里 Math.max——矩阵的 greatest() 就是为消灭这一对而存在的（workgroupTurnsOperations.ts 已是正确用法）。',
     clearedBy: 'RFC-359 W4-B1 task-execution 分支时间戳回填 pair 合一',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
-    clearedBy: 'RFC-359 W4 task-execution 归档维护 pair 合一',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
-    clearedBy: 'RFC-359 W4 task-execution 效果持久化 pair 合一',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
-    clearedBy: 'RFC-359 W4 task-execution 恢复 pair 合一',
   },
   {
     file: 'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
@@ -429,13 +428,6 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
     count: 1,
     why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
     clearedBy: 'RFC-359 W4 task-execution 生命周期事务 pair 合一',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why: '同上：PG 适配器手写隔离级别提升语句，矩阵没有对应能力项。',
-    clearedBy: 'RFC-359 W4-D28a task ownership 合一',
   },
   {
     file: 'platform/persistence/maintenanceExecutionFence.ts',

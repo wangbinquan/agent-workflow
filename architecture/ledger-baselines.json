@@ -750,6 +750,104 @@
       "symbol": "entries",
       "baseline": 25069,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+    },
+    {
+      "id": "s10-async-transaction-sites",
+      "file": "packages/backend/tests/scheduler-audit-s10-async-transaction-decorative.test.ts",
+      "symbol": "EXPECTED_ASYNC_TX_SITES",
+      "baseline": 0,
+      "why": "S-10：`.transaction(async` 的装饰性异步事务清单。bun:sqlite 的事务是同步的，`async` 回调里的 await 落在事务之外——每一条都是一处「看起来在事务里、实际不在」的写。当前 0 条，多一条就是新增一处假事务。RFC-359 W7 第二波按判据 C 补入网：它住在守卫目录外，此前只被判据 A 覆盖而名字不命中词汇表。"
+    },
+    {
+      "id": "s10-raw-transaction-sites",
+      "file": "packages/backend/tests/scheduler-audit-s10-async-transaction-decorative.test.ts",
+      "symbol": "RAW_TRANSACTION_SITES",
+      "baseline": 0,
+      "why": "RFC-317 T37（CC-04）：绕过 dbTxSync 直接开原始事务的站点。每一条都逃过了统一事务原语的重试 / 嵌套处理。当前 0 条。RFC-359 W7 第二波按判据 C 补入网（守卫目录外的账本此前不在棘轮网内）。"
+    },
+    {
+      "id": "s14-non-status-tasks-update-snapshot",
+      "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
+      "symbol": "NON_STATUS_UPDATE_TASKS_SNAPSHOT",
+      "baseline": 15,
+      "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "rfc310-composition-consumers",
+      "file": "packages/backend/tests/rfc310-architecture-lock.test.ts",
+      "symbol": "COMPOSITION_CONSUMERS",
+      "baseline": 4,
+      "why": "RFC-310：允许直接消费 composition 装配面的文件（组合根 + maintenanceWorker + server）。多一条等于多一处绕过 public 合同的装配耦合。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "rfc310-required-ports-consumers",
+      "file": "packages/backend/tests/rfc310-architecture-lock.test.ts",
+      "symbol": "REQUIRED_PORTS_CONSUMERS",
+      "baseline": 0,
+      "why": "RFC-310：直接消费 requiredPorts 的文件。当前 0 条——这是一份**故意留空**的账本，多一条就是红。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "rfc321-call-site-subjects",
+      "file": "packages/backend/tests/rfc321-repository-publication-ratchet.test.ts",
+      "symbol": "CALL_SITE_SUBJECTS",
+      "baseline": 6,
+      "why": "RFC-321：仓库发布边界上每个调用点的归属主体（谁的 owner 列决定这次发布代表谁）。多一条等于多一处需要人确认归属的发布入口。文件名里就写着 ratchet、自己却不在棘轮网内——RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "rfc287-scheduler-source-lock-files",
+      "file": "packages/backend/tests/rfc287-t1-scheduler-source-lock-inventory.test.ts",
+      "symbol": "SCHEDULER_SOURCE_LOCK_FILES",
+      "baseline": 30,
+      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "rfc199-workflow-writers",
+      "file": "packages/backend/tests/rfc199-workflow-writer-inventory.test.ts",
+      "symbol": "EXPECTED_WRITERS",
+      "baseline": 4,
+      "why": "RFC-199：workflows 表的写入者清单（按 insert / update 等操作分组，值是 文件→次数）。多一个写入者等于多一处绕过工作流写门的路径。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "test-suite-required-gate-activations",
+      "file": "packages/backend/tests/test-suite-policy.test.ts",
+      "symbol": "REQUIRED_GATE_ACTIVATIONS",
+      "baseline": 7,
+      "why": "默认关闭的测试门（RUN_CHAOS / RUN_GIT_NETWORK / RUN_EVIDENCE_SOAK …）各自「真在跑」的自动化路径。每一条都是一格默认不执行的断言，必须指向一个实际会跑它的 workflow。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "frontend-undefined-class-snapshot",
+      "file": "packages/frontend/tests/rfc317-dead-class-invariants.test.ts",
+      "symbol": "UNDEFINED_CLASS_SNAPSHOT",
+      "baseline": 155,
+      "why": "RFC-317：TSX 里用到、styles.css 里却没有定义的 class 存量快照。每一条都是一处「写了 class 却没有样式」的静默失效，只该减少。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "frontend-true-tab-callsites",
+      "file": "packages/frontend/tests/tab-callsite-contract.test.ts",
+      "symbol": "TRUE_TAB_CALLSITES",
+      "baseline": 19,
+      "why": "RFC-317：真正实现 tab 语义的调用点存量（`文件::id`）。这份清单是 tab 契约的被测面，新增一处就要人确认它确实按 tab 语义接线。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "frontend-overlay-family-owners",
+      "file": "packages/frontend/tests/overlay-ux-inventory.test.ts",
+      "symbol": "OVERLAY_FAMILY_OWNERS",
+      "baseline": 9,
+      "why": "RFC-198：每个 overlay 产品族的行为 owner 与移动端 owner。它是 OVERLAY_CALLSITES 的对账面，多一族等于多一处需要人指派 owner 的 overlay 家族。判据 C 认不出它（它对账的是另一份账本的投影、不是扫描结果本身），RFC-359 W7 第二波逐条登记补入网。"
+    },
+    {
+      "id": "shared-codec-site-exceptions",
+      "file": "packages/shared/tests/rfc317-port-codec-single-source.test.ts",
+      "symbol": "CODEC_SITE_EXCEPTIONS",
+      "baseline": 1,
+      "why": "RFC-317：不走统一 port codec 入口的站点例外，每条自带 why + removeWhen。多一条等于多一处自行切分端口内容的实现。RFC-359 W7 第二波按判据 C 补入网。"
+    },
+    {
+      "id": "rfc331-preexisting-deep-imports",
+      "file": "packages/backend/tests/rfc331-task-execution-topology.test.ts",
+      "symbol": "REGISTERED_PREEXISTING_DEEP_IMPORTS",
+      "baseline": 10,
+      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。"
     }
   ],
   "canonicalProjection": {
@@ -767,7 +865,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "77971ceeec99e068f2585a741eaf991b7caa0de5",
-    "contentDigest": "sha256:ffccf2f3bd79658b72293b2e98d7ab6abffa4a150fcd6621b0049b8900bd6f26",
+    "contentDigest": "sha256:ad150fa095ddc7699d0b9e66aab16872207014ef3a3d7294dcd717440924f7da",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -73,8 +73,18 @@
 //   07      PG 上取消与其它状态写并发时直接 409，SQLite 会回收竞态并照常完成取消。
 //   08      PG 上 daemon 重启恢复后，未消费的 `actor-replay-authorized` 决策不回退成
 //           `requires-actor`，重放授权悬空。
-//   10      PG 上归档恢复不认 cleanupPlan 里的 archiveRoot，换了归档目录会恢复到错误的位置。
-//   12      SQLite 上子任务启动缺 5 道亲子准入门，错配的 parent node_run / 深度 / actor 也能起。
+//   10      【RFC-359 W8-A 已销账】归档维护命令合一为
+//           `modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts`，
+//           恢复按强侧（SQLite）读 cleanupPlan 的 archiveRoot 围栏；对拍见
+//           `tests/rfc359-w8-task-archive-conformance.test.ts` 的
+//           「recover leaves claims frozen against a different archive root untouched」。
+//   12      【RFC-359 W8-A 已销账】5 道亲子准入门抽成
+//           `modules/task-execution/domain/childLaunchAdmission.ts` 的一份中立判定
+//           （`childLaunchAdmissionIssue`，判定顺序也定死在那里），PostgreSQL 的
+//           `assertParentAdmission` 与 SQLite 的 `startTaskImpl` 各自在自己的铸行事务内
+//           读同样的两条行快照、调同一份判定；同一次子启动两侧同码同判。对拍见
+//           `tests/rfc359-w8-child-launch-conformance.test.ts` 的 `parent admission — …`
+//           一族 + 「reports the first failing gate identically on both engines」。
 //   13a     SQLite 上资源包恢复不校验 committed receipt，回执缺失 / 错配也照样 roll-forward。
 //   13b     SQLite 上资源包技能恢复缺代际四分支与路径 / 版本哈希校验，跨代际也会 roll-forward。
 //
@@ -156,121 +166,6 @@ type PredicateGap = Readonly<{
  */
 export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
   {
-    id: '03-pg-code-host-projection-node-run-cas',
-    item: 3,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts',
-        fn: ['settleCodeHostNode'],
-        anchors: [
-          { kind: 'identifier', text: 'setNodeRunStatusTx' },
-          { kind: 'identifier', text: 'allowedFrom' },
-        ],
-      },
-      {
-        file: 'platform/persistence/sqlite/taskLifecycle.ts',
-        fn: ['setNodeRunStatusTx'],
-        anchors: [
-          { kind: 'identifier', text: 'assertNodeRunSourceTerminationAdmission' },
-          { kind: 'identifier', text: 'isTerminalNodeRunStatus' },
-          { kind: 'literal', text: 'illegal-node-run-transition' },
-          { kind: 'literal', text: 'node-run-not-found' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts',
-      fn: ['applyCodeHostProjection'],
-      anchors: [
-        { kind: 'identifier', text: 'setNodeRunStatusTx' },
-        { kind: 'identifier', text: 'assertNodeRunSourceTerminationAdmission' },
-        { kind: 'identifier', text: 'isTerminalNodeRunStatus' },
-        { kind: 'identifier', text: 'allowedFrom' },
-        { kind: 'literal', text: 'illegal-node-run-transition' },
-        { kind: 'literal', text: 'node-run-not-found' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'nodeRuns' },
-      { kind: 'literal', text: 'task-continuation-stale' },
-    ],
-    consequence:
-      'PG 上 code-host 节点结算手写 update 顶掉了事务内 CAS：会覆写已终态的 node_run，也不认 source-termination 围栏。',
-  },
-  {
-    id: '04-pg-code-host-recovery-lock-proof',
-    item: 4,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts',
-        fn: ['resolveQuiescedCodeHostMutations'],
-        anchors: [
-          { kind: 'identifier', text: 'lockProof' },
-          { kind: 'identifier', text: 'assertExclusiveDaemonLockProof' },
-          {
-            kind: 'literal',
-            text: 'code-host successor recovery requires a new daemon generation',
-          },
-          { kind: 'literal', text: 'code-host recovery requires quiescence evidence' },
-        ],
-      },
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
-        fn: ['finalizeTaskExecutionRecovery'],
-        anchors: [{ kind: 'identifier', text: 'lockProof' }],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
-      fn: ['resolveCodeHostMutations'],
-      anchors: [
-        { kind: 'identifier', text: 'lockProof' },
-        { kind: 'identifier', text: 'assertExclusiveDaemonLockProof' },
-        { kind: 'literal', text: 'code-host successor recovery requires a new daemon generation' },
-        { kind: 'literal', text: 'code-host recovery requires quiescence evidence' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'quiescenceEvidenceDigest' },
-      { kind: 'literal', text: 'duplicate code-host recovery resolution' },
-    ],
-    consequence:
-      'PG 上 code-host 恢复不校验接管者代际与静默证据非空，旧 daemon 代际的证据也能落账。',
-  },
-  {
-    id: '05-pg-code-host-evidence-digest-payload',
-    item: 5,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
-        fn: ['finalizeTaskExecutionRecovery'],
-        anchors: [
-          { kind: 'identifier', text: 'codeHostEvidenceDigest' },
-          { kind: 'identifier', text: 'descriptor' },
-          { kind: 'identifier', text: 'proofCode' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
-      fn: ['finalize'],
-      anchors: [
-        { kind: 'identifier', text: 'descriptor' },
-        { kind: 'identifier', text: 'proofCode' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'codeHostEvidenceDigest' },
-      { kind: 'identifier', text: 'processEvidenceDigest' },
-      { kind: 'identifier', text: 'nodeRunId' },
-    ],
-    consequence:
-      '两侧 codeHostEvidenceDigest 载荷不同（PG 含 nodeRunId 不含 descriptor/proofCode，SQLite 相反）⇒ 同一次恢复产出不同的 takeover 证明摘要。',
-  },
-  {
     id: '06-pg-source-termination-driverless-finalize',
     item: 6,
     missingSide: 'postgresql',
@@ -318,110 +213,6 @@ export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
     ],
     consequence:
       'PG 上状态 CAS 竞态直接抛 409；SQLite 会复读赢家并照常完成 fence + revoke + terminalize。',
-  },
-  {
-    id: '08-pg-release-recovered-replay-decision-rollback',
-    item: 8,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTaskOwnership.ts',
-        fn: ['releaseRecovered'],
-        anchors: [{ kind: 'identifier', text: 'terminalizeTaskExecutionIntentsTx' }],
-      },
-      {
-        file: 'modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts',
-        fn: ['terminalizeTaskExecutionIntentsTx'],
-        anchors: [
-          { kind: 'identifier', text: 'taskExecutionLineageOperationRecords' },
-          { kind: 'literal', text: 'actor-replay-authorized' },
-          { kind: 'literal', text: 'requires-actor' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts',
-      fn: ['releaseRecovered'],
-      anchors: [
-        { kind: 'identifier', text: 'taskExecutionLineageOperationRecords' },
-        { kind: 'identifier', text: 'terminalizeTaskExecutionIntentsInTx' },
-        { kind: 'literal', text: 'requires-actor' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'taskExecutionIntents' },
-      { kind: 'literal', text: 'daemon-restart-recovered' },
-    ],
-    consequence:
-      'PG 上 daemon 重启恢复后，未消费的 actor-replay-authorized 决策不回退成 requires-actor，重放授权悬空。',
-  },
-  {
-    id: '10-pg-archive-recovery-root-fence',
-    item: 10,
-    missingSide: 'postgresql',
-    present: [
-      {
-        file: 'services/taskArchive.ts',
-        fn: ['recoverInterruptedArchives'],
-        anchors: [
-          { kind: 'identifier', text: 'parseArchiveCleanupPlan' },
-          { kind: 'identifier', text: 'cleanupPlanJson' },
-          { kind: 'identifier', text: 'archiveRoot' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts',
-      fn: ['recoverCompletedIo'],
-      anchors: [
-        { kind: 'identifier', text: 'parseArchiveCleanupPlan' },
-        { kind: 'identifier', text: 'cleanupPlanJson' },
-        { kind: 'identifier', text: 'archiveRoot' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'archiveDir' },
-      { kind: 'identifier', text: 'rootTaskId' },
-      { kind: 'identifier', text: 'listRecoverable' },
-    ],
-    consequence:
-      'PG 上归档恢复直接拼 options.archiveDir、从不读 cleanupPlanJson，换了归档目录会恢复到错误的位置。',
-  },
-  {
-    id: '12-sqlite-child-launch-parent-admission',
-    item: 12,
-    missingSide: 'sqlite',
-    present: [
-      {
-        file: 'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
-        fn: ['assertParentAdmission'],
-        anchors: [
-          { kind: 'literal', text: 'parent-node-run-task-mismatch' },
-          { kind: 'literal', text: 'parent-node-run-not-running' },
-          { kind: 'literal', text: 'child-task-reservation-mismatch' },
-          { kind: 'literal', text: 'child-invocation-depth-mismatch' },
-          { kind: 'literal', text: 'child-launch-actor-mismatch' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'services/task.ts',
-      fn: ['startTaskImpl'],
-      anchors: [
-        { kind: 'literal', text: 'parent-node-run-task-mismatch' },
-        { kind: 'literal', text: 'parent-node-run-not-running' },
-        { kind: 'literal', text: 'child-task-reservation-mismatch' },
-        { kind: 'literal', text: 'child-invocation-depth-mismatch' },
-        { kind: 'literal', text: 'child-launch-actor-mismatch' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'callLaunch' },
-      { kind: 'literal', text: 'parent-task-not-found' },
-      { kind: 'literal', text: 'parent-task-not-running' },
-    ],
-    consequence:
-      'SQLite 上子任务启动缺 5 道亲子准入门，错配的 parent node_run / 子任务预留 / 调用深度 / actor 也能起。',
   },
   {
     id: '13a-sqlite-resource-package-receipt-gate',
@@ -498,6 +289,81 @@ export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
     ],
     consequence:
       'SQLite 上资源包技能恢复缺代际四分支与路径 / 版本哈希校验，跨代际的产物也会被 roll-forward。',
+  },
+]
+
+// ---------------------------------------------------------------------------
+// 已裁决分叉账本（与上面的「缺口」是**两回事**）
+// ---------------------------------------------------------------------------
+
+/**
+ * 一条**被接受的**双引擎分叉：两侧形状不同，且这个不同是被裁决过、要保留的，不是欠账。
+ *
+ * 与 `PredicateGap` 的判据方向相反：那边是「一侧有 / 另一侧不许有」，这边是**两侧的锚点都
+ * 必须命中**。任一侧变形（判据被删、函数被改名、staging 被统一）都会红，逼人回到这份账本
+ * 重新对账——分叉还成不成立、`removeWhen` 是不是已经到了。
+ *
+ * 为什么不塞进 `DUAL_ENGINE_PREDICATE_GAPS`：那份账本的收敛动作是「补上就删掉这一条」，
+ * 每一条都在等着被消灭。这里的条目不会被消灭——它们是**正确的**不同，混进去会把「还欠多少」
+ * 这个数读错。
+ *
+ * **进这份账本的门槛：不得有任何用户可见的行为差异。** 曾经有一条
+ * `retry-admission-target-status` 记在这里（SQLite 的重试准入 CAS 落 `pending`、PG 落
+ * `interrupted`），理由写的是「用户可见收尾已由 `admitResume` 对齐」。实测把它推翻了：那个
+ * `interrupted` 会以**终态事件**的形式广播出去，于是 PG 上多出两条真副作用——等在
+ * `watchTaskTerminal` 上的父任务被假终态唤醒（RFC-243 的调用节点因此拿着一个从未发生的
+ * 「子任务已结束」往下走），以及子任务并发预算被放掉一个名额、窗口里多放行一个排队的调用。
+ * 那不是可接受的实现差异，是同一操作在 PG 上产出用户可见的错结果。它已经被修掉
+ * （`domain/taskLifecycleCommittedEvent.ts` 的 `continuationHandoff`：中转态照旧落库照旧投递，
+ * 但一律不参与终态性判据），条目随之删除。**教训：只要还说得出一句「在 X 上用户会看到 Y」，
+ * 就不该往这里写。**
+ */
+type AcceptedDivergence = Readonly<{
+  /** 稳定 id；账本按它字典序排列。 */
+  id: string
+  /** SQLite 侧的形状锚：**必须全部命中**。 */
+  sqlite: Site
+  /** PostgreSQL 侧的形状锚：**必须全部命中**。 */
+  postgresql: Site
+  /** 为什么这个不同是对的（而不是某一侧欠账）。 */
+  why: string
+  /** 什么条件成立时这一条应当被删除。 */
+  removeWhen: string
+  /** 用户可见后果；确实没有的也要写清「没有」以及为什么。 */
+  consequence: string
+}>
+
+/**
+ * 已裁决的双引擎分叉账本。**两侧锚点都必须命中**；形状变了就红。
+ */
+export const ACCEPTED_DUAL_ENGINE_DIVERGENCES: readonly AcceptedDivergence[] = [
+  {
+    id: 'retry-held-session-reap-order',
+    sqlite: {
+      file: 'services/task.ts',
+      fn: ['retryNode'],
+      anchors: [{ kind: 'identifier', text: 'reapHeldRuntimeSessionOwnersForTask' }],
+    },
+    postgresql: {
+      file: 'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
+      fn: ['rollbackForResume'],
+      anchors: [
+        { kind: 'identifier', text: 'runtimeSessionLeaseRows' },
+        { kind: 'identifier', text: 'heldIds' },
+        { kind: 'identifier', text: 'reapRun' },
+      ],
+    },
+    why:
+      '两侧都会围栏「还攥着 native runtime session 租约」的行，只是位置不同：SQLite 在 retry 的' +
+      '准入延续里第一件事就做（`reapHeldRuntimeSessionOwnersForTask`），PG 放在交棒之后的 ' +
+      'rollbackForResume 里、对整棵任务做同一件事。两者都发生在任何工作树写之前，围栏面 ' +
+      'PG 反而更宽（整棵任务的租约行，不只被点的那一条）。',
+    removeWhen:
+      '两侧的重试启动分段统一时——即 PG 的 retry 不再把 `children.resume` 当作第二段' +
+      '（那时 `rollbackForResume` 也就不再是 PG 做这件事的地方，本条的 PG 侧锚点会先失效并把这条红出来）。',
+    consequence:
+      '无。顺序差异不改变任何用户可见结果——两侧都在写工作树之前完成围栏，租约行也都会被修复；' +
+      '差的只是「在 retry 里做」还是「在紧随其后的 resume 里做」。',
   },
 ]
 
@@ -837,5 +703,58 @@ describe('RFC-359 W5 — 双引擎判据缺口 exact 账本', () => {
       }
     }
     expect(problems).toEqual([])
+  })
+})
+
+describe('RFC-359 W8 — 已裁决双引擎分叉 exact 账本', () => {
+  test('账本按 id 字典序排列且无重复', () => {
+    const ids = ACCEPTED_DUAL_ENGINE_DIVERGENCES.map((entry) => entry.id)
+    expect(ids).toEqual([...ids].sort())
+    expect(ids).toEqual([...new Set(ids)])
+  })
+
+  test('每条分叉都写清了 why / removeWhen / 用户可见后果，且两侧属于不同引擎', () => {
+    const problems: string[] = []
+    for (const entry of ACCEPTED_DUAL_ENGINE_DIVERGENCES) {
+      if (entry.why.trim().length === 0) problems.push(`[${entry.id}] 缺少 why`)
+      if (entry.removeWhen.trim().length === 0) problems.push(`[${entry.id}] 缺少 removeWhen`)
+      if (entry.consequence.trim().length === 0) {
+        problems.push(`[${entry.id}] 缺少用户可见后果说明（「无」也要写，并说明为什么无）`)
+      }
+      if (/postgresql/i.test(entry.sqlite.file)) {
+        problems.push(`[${entry.id}] sqlite 侧指向了 PostgreSQL 文件 ${entry.sqlite.file}`)
+      }
+      if (!/postgresql/i.test(entry.postgresql.file)) {
+        problems.push(
+          `[${entry.id}] postgresql 侧指向的不是 PostgreSQL 文件：${entry.postgresql.file}`,
+        )
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  test('两侧的形状锚都还在（任一侧变形 = 分叉可能已消失或已变质，必须重新对账）', () => {
+    const drifted: string[] = []
+    for (const entry of ACCEPTED_DUAL_ENGINE_DIVERGENCES) {
+      for (const [side, site] of [
+        ['sqlite', entry.sqlite],
+        ['postgresql', entry.postgresql],
+      ] as const) {
+        const report = inspect(site)
+        if (report.drift !== null) {
+          drifted.push(`[${entry.id}] ${side} 侧锚点漂移：${report.drift}`)
+          continue
+        }
+        for (const miss of report.misses) {
+          drifted.push(
+            `[${entry.id}] ${side} 侧 ${site.file} > ${(site.fn ?? ['<file>']).join(' > ')} ` +
+              `已找不到锚点 ${miss}。这条分叉的形状变了：要么它已经收敛（那就把这一条从 ` +
+              `ACCEPTED_DUAL_ENGINE_DIVERGENCES 删掉，removeWhen 写的就是这一刻），` +
+              `要么只是搬了家（那就更新锚点）。`,
+          )
+        }
+      }
+    }
+    expect(drifted).toEqual([])
   })
 })

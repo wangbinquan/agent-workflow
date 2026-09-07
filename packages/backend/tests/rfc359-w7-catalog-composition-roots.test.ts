@@ -18,7 +18,6 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { createPostgresqlAuthRuntime } from '@/auth/composition'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, users, workflows } from '@/db/schema'
 import { createPostgresqlIdentityAccessRuntime } from '@/modules/identity-access/composition'
@@ -32,10 +31,7 @@ import {
   composeSqliteSkillArtifactCompensation,
 } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import {
-  composePostgresqlResourceCatalogOverviewQuery,
-  composeSqliteResourceCatalogOverviewQuery,
-} from '@/modules/resource-catalog/composition/resourceCatalogOverview'
+import { composePostgresqlResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
@@ -46,10 +42,6 @@ import { NotFoundError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
-
-function asSqlite(db: ProviderNeutralDatabase): DbClient {
-  return db as unknown as DbClient
-}
 
 function asPostgresql(db: ProviderNeutralDatabase): PostgresqlDatabaseClient {
   return db as unknown as PostgresqlDatabaseClient
@@ -177,18 +169,16 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
       `agent-${agentId.slice(-6).toLowerCase()}`,
     )
 
-    // 概览：两个别名各构造一次，同一个 actor 上给同样的计数。
+    // 概览：RFC-359 W8 删掉零消费者的 SQLite 别名后只剩这一个具名装配（计数端口本就中立）。
     const resolver = { resolve: () => owner }
-    const sqliteOverview = composeSqliteResourceCatalogOverviewQuery(asSqlite(harness.db), resolver)
     const postgresqlOverview = composePostgresqlResourceCatalogOverviewQuery(
       asPostgresql(harness.db),
       resolver,
     )
-    const counts = await sqliteOverview.load(pairOf(owner))
+    const counts = await postgresqlOverview.load(pairOf(owner))
     expect(counts.agents).toBe(1)
     // 没有 skills:read 权限点的维度不查库、直接给 null——这条分支也要被走到。
     expect(counts.skills).toBeNull()
-    expect(await postgresqlOverview.load(pairOf(owner))).toEqual(counts)
     // 外人看不到这条私有 agent：概览计数随之为 0（同一份计数端口，只是 actor 换了）。
     expect(
       (

@@ -115,7 +115,6 @@ export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
   'modules/intent/composition/maintenance.ts#composeSqliteIntentMaintenanceSnapshotQueries: 零引用',
   'modules/intent/composition/postgresqlApplyMaintenance.ts#composePostgresqlIntentApplyConvergence: 零引用',
   'modules/resource-catalog/composition/intentApply.ts#composePostgresqlIntentApplyResourceBinding: 零引用',
-  'modules/resource-catalog/composition/intentContextAuthorization.ts#composeSqliteIntentContextResourceAuthorizationSyncFactory: 只有源码文本锁',
   'modules/resource-catalog/composition/postgresqlClassicCatalogs.ts#composePostgresqlClassicCatalogs: 只有源码文本锁',
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageCatalog: 只有源码文本锁',
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageProvider: 只有源码文本锁',

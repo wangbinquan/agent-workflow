@@ -108,26 +108,35 @@ const VALUE_IMPORT =
 export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite + postgresql — verified by rfc359-w7-intent-apply-artifact-conformance.test.ts',
   'modules/intent/infrastructure/IntentApplyOperations: sqlite + postgresql — verified by rfc359-w7-intent-apply-operations-conformance.test.ts',
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskArchiveMaintenanceCommand: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskExecutionEffectPersistence: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskExecutionRecovery: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite + postgresql — unverified',
-  'modules/task-execution/infrastructure/TaskOwnershipPersistence: sqlite + postgresql — verified by rfc359-w4-d28a-task-ownership-conformance.test.ts',
+  // RFC-359 W8：判**不合**——`ArtifactRecovery` 那半边是两套落盘工件格式（缺口已由
+  // `rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵钉住），`JournalPort` 那半边的
+  // 事务包装也不是冗余（SQLite 的 `dbTxSync` 兜着跨上下文事务守卫）。只补对拍，理由见对拍文件头。
+  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts',
+  'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite + postgresql — verified by rfc359-w8-child-launch-conformance.test.ts',
+  // RFC-359 W8：判**真重复**（同端口同算法两份实现，见对拍文件头）；本刀只补对拍并把 PG 侧
+  // 缺的 RFC-300 工作区回收认领抬齐，合一（改走中立事务设施）留给下一刀。
+  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w8-source-termination-conformance.test.ts',
+  // RFC-359 W8：判**不合**（两台 children 引擎 + 两个 registry，见对拍文件头注释），只补对拍。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — verified by rfc359-w8-runtime-participants-conformance.test.ts',
+  // RFC-359 W8：判**真重复**，且 PG 侧还多养了第三份 S4（`postgresqlTaskRouteRepairOperations`
+  // 里同样有 `S4.kick-task`）。对拍 11 条一次同时绿——本波少见的零行为差。合一方向写在对拍
+  // 文件头：端口做成吃 `RepairOperations` 的一份中立壳；卡在 `providerRuntime.ts` 的装配改动。
+  'modules/task-execution/infrastructure/TaskLifecycleAutoRepairCommand: sqlite + postgresql — verified by rfc359-w8-auto-repair-conformance.test.ts',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts',
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts',
-  'platform/persistence/LogicalSource: sqlite + postgresql — unverified',
-  'platform/persistence/LogicalTarget: sqlite + postgresql — unverified',
+  // RFC-359 W8：这一对多了第二份双引擎对拍——W7 只驱动到各方法的**前置门**为止，W8 补的是
+  // 门后的语义（retry 的三道前置门 / sync 的 canceled 回滚 / delete 的父链排序列重算）。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite + postgresql — verified by rfc359-w7-task-route-conformance.test.ts, rfc359-w8-task-route-capability-parity.test.ts',
+  // RFC-359 W8：判**读出 / 编码面该合、冻结围栏面不该合**（两侧都是活的生产代码，逐条见对拍
+  // 文件头）。本刀只补对拍并把两条实测差异按强侧抬齐（SQLite 关闭后的裸驱动错误、PG 的引用式
+  // 快照判等）；围栏本身是文件代号 vs 活跃生成代两台机器，作为能力差异留在账本里。
+  'platform/persistence/LogicalSource: sqlite + postgresql — verified by rfc359-w8-logical-source-conformance.test.ts',
 ]
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
-export const PROVIDER_PAIR_COUNT = 15
+export const PROVIDER_PAIR_COUNT = 10
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
-export const UNVERIFIED_PAIR_COUNT = 10
+export const UNVERIFIED_PAIR_COUNT = 0
 
 // ---------------------------------------------------------------------------
 // 判据本体：纯函数（输入是路径 / 测试事实，不碰文件系统），供真实树与内存 fixture 共用

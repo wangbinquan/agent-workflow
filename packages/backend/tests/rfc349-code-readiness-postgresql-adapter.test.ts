@@ -82,6 +82,7 @@ describe('RFC-349 PostgreSQL code readiness adapter', () => {
         repoId: 'group/project',
         capability: 'mr-review',
         endpointId: 'endpoint-1',
+        provider: 'gitlab',
         templateId: 'template-1',
         enabled: true,
       }),

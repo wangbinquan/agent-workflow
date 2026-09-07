@@ -389,6 +389,7 @@ describe('RFC-320 task Git identity snapshot', () => {
           parentTaskId: parent.id,
           parentNodeRunId: 'node-run',
           invocationDepth: 1,
+          launchActorUserId: 'alice',
           frozenSnapshotJson: null,
           refClosureJson: null,
         },

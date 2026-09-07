@@ -4,6 +4,7 @@ import {
   WORKFLOW_SCHEMA_VERSION,
   buildClarifyEdges,
   initialDwState,
+  migrateWorkflowDefinitionToLatest,
   redactGitUrl,
   resolveWorkgroupOutputContract,
   type StartTask,
@@ -38,6 +39,7 @@ import {
   triggerSourceFromContext,
 } from '@/services/execution/triggerPreflight'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
+import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   DefaultTaskDriveCoordinator,
@@ -52,8 +54,8 @@ import type {
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { TaskExecutionModule } from '../composition'
+import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
-import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import {
   type PostgresqlTaskExecutionTransaction,
@@ -228,23 +230,40 @@ function prepareWorkflowSubject(
 ): Readonly<{ task: StartTask; subject: ChildLaunchSubject; collaborators: readonly string[] }> {
   const task = request.payload
   if (task.workflowId !== request.workflowId) {
+    // RFC-359 W8-A: one code for "the ref and the payload disagree" across every
+    // launch kind — the executor facade and the PostgreSQL route launch already
+    // speak it, so the child mint no longer invents a private synonym.
     throw new ValidationError(
-      'child-workflow-id-mismatch',
-      `child payload workflow '${task.workflowId}' does not match frozen workflow '${request.workflowId}'`,
+      'execution-ref-mismatch',
+      `ref targets workflow '${request.workflowId}' but payload.workflowId is '${task.workflowId}'`,
     )
   }
-  let raw: unknown
+  // RFC-359 W8-A: the frozen child definition is migrated to the latest schema
+  // and every launch gate below evaluates THAT definition — byte-identical to
+  // the legacy engine's `effectiveDefinition` handling (services/task.ts). A
+  // snapshot frozen under an older schema is not a 500; an unreadable one is
+  // the established `workflow-call-ref-missing`.
+  let definition: WorkflowDefinition
   try {
-    raw = JSON.parse(request.frozenSnapshotJson)
+    const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(request.frozenSnapshotJson))
+    if (!parsed.success) throw new Error('schema')
+    definition = migrateWorkflowDefinitionToLatest(parsed.data)
   } catch {
-    throw new ValidationError('workflow-invalid', 'frozen child workflow is not valid JSON')
+    throw new ValidationError(
+      'workflow-call-ref-missing',
+      `frozen child definition for workflow '${request.workflowId}' is unreadable`,
+    )
   }
-  const definition = WorkflowDefinitionSchema.parse(raw)
   assertTriggerPreflight({
     root: definition,
     closureJson: request.refClosureJson,
     source: triggerSourceFromContext(request.runtime.triggerContext),
   })
+  // RFC-359 W8-A: a child's inputs were wired by the call node's ports, but the
+  // frozen definition still declares which of them are required. Skipping this
+  // let a missing required input execute as an empty string on PostgreSQL while
+  // the legacy engine refused the same launch.
+  assertWorkflowLaunchInputs(definition.inputs, task.inputs)
   return {
     task,
     subject: {
@@ -356,49 +375,24 @@ async function activeCollaborators(
   return requested
 }
 
+/**
+ * RFC-359 W8-A: the parent admission judgement itself now lives in
+ * `domain/childLaunchAdmission.ts` and is shared with the legacy engine, so a
+ * gate can never again exist on one provider only. This adapter still owns
+ * WHERE it runs — inside the serializable mint transaction, on rows read there.
+ */
 function assertParentAdmission(
   request: ChildLaunchRequest,
   parent: ParentLaunchSnapshot,
   parentRun: ParentRunSnapshot,
 ): void {
-  if (parent.status !== 'running') {
-    throw new ConflictError(
-      'parent-task-not-running',
-      `parent task '${parent.id}' is '${parent.status}'; refusing to mint child`,
-    )
-  }
-  const fence = sourceTerminationRevivalError(parent.sourceTerminationFence)
-  if (fence !== null) throw new ConflictError(fence, fence)
-  if (parentRun.taskId !== parent.id) {
-    throw new ConflictError(
-      'parent-node-run-task-mismatch',
-      `node_run '${request.parentNodeRunId}' does not belong to parent task '${parent.id}'`,
-    )
-  }
-  if (parentRun.status !== 'running') {
-    throw new ConflictError(
-      'parent-node-run-not-running',
-      `parent node_run '${request.parentNodeRunId}' is '${parentRun.status}'`,
-    )
-  }
-  if (parentRun.childTaskId !== request.materializedSpace.taskId) {
-    throw new ConflictError(
-      'child-task-reservation-mismatch',
-      `parent node_run '${request.parentNodeRunId}' reserved a different child task`,
-    )
-  }
-  if (request.invocationDepth !== parent.invocationDepth + 1) {
-    throw new ConflictError(
-      'child-invocation-depth-mismatch',
-      `child depth ${request.invocationDepth} does not follow parent depth ${parent.invocationDepth}`,
-    )
-  }
-  if (parent.ownerUserId !== null && request.actor.user.id !== parent.ownerUserId) {
-    throw new ConflictError(
-      'child-launch-actor-mismatch',
-      `child launch actor does not match parent task '${parent.id}' owner`,
-    )
-  }
+  const issue = childLaunchAdmissionIssue(parent, parentRun, {
+    parentNodeRunId: request.parentNodeRunId,
+    childTaskId: request.materializedSpace.taskId,
+    invocationDepth: request.invocationDepth,
+    launchActorUserId: request.actor.user.id,
+  })
+  if (issue !== null) throw new ConflictError(issue.code, issue.message)
 }
 
 function createCoordinator(
