@@ -1145,8 +1145,14 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   1. `grep` 出还在用 `dbTxSync` / `withOwnedTaskTx` 的调用点；
   2. 每一处先看**外层函数是不是已经 async**——是就进候选；不是就跳过，它属于要连带转 async 的那
      一类，留到最后统一处理；
-  3. 再看体内的内层 helper 有没有中立 async 版本（`nodeRunLifecycleTransition` /
-     `nodeRunMintParticipant` / `humanGateTaskTransition` / `ownedTaskExecution` 里大多已经有）；
+  3. 再看体内的内层 helper——判据要写严一点：**不是「有没有中立 async 版本」，而是「这个 helper
+     的类型面还被别人钉在 `DbTxSync` 上没有」**。两者不等价，`legacy/agent.ts` 就是反例：它 5 个
+     调用点的外层函数全是 `async`（第 2 步全过），体内却只调一句
+     `commitAgentCreateInTx(tx, prepared)`，而这个 helper 的签名是 `(tx: DbTxSync, …) => void`，
+     并且**被生产的意图应用链共用**（`aggregateAdapters/legacyIntentApplyResourceParticipants.ts`
+     的端口逐字段声明成 `(tx: DbTxSync, prepared: unknown) => void`）。把它改成中立的，意图应用
+     那条链要跟着改——级联从这里开始。所以 `legacy/agent.ts` **不是**一刀，它属于「意图应用参与者
+     链」那一批，要连着做。
   4. 两条都满足就是一刀：改完跑 `bun run lint:promises` + 双引擎跑一遍 + 把账本改小，单独提交。
 
   **第二刀（同日，`0560998df`）验证了这套筛法可复用**：runtime 注册表那一对（247 行 SQLite /
@@ -1160,6 +1166,48 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   - **合一会顺带照出「PG 自己抄了一份」**：`transitionRuntimeTests` 在 PG 文件里被内联重写，与
     `legacy/mcpRuntimeTestTransitions.ts` 的同步版并存。这类重复只有在合一时才会被逼着逐字段对
     账——本次对完确认语义相同，合并即可；D23c / D25 / D26 那几次对完是 PG 更弱，要按强的那侧抬齐。
+
+  ### 账本里有一批「测试专用」的同步面：先分类，再决定要不要迁（2026-09-07 清点）
+
+  按上面的筛法逐处看 resource-catalog legacy 那 11 个调用点时发现：**其中 10 个所在的函数在
+  生产代码里一个静态调用方都没有**，只被测试大量使用。逐个清点（`grep` 静态调用点，
+  排除定义文件本身）：
+
+  | 函数 | 生产调用方 | 测试用点 |
+  | --- | --- | --- |
+  | `legacy/agent.ts` `createAgent` | 0 | 250 |
+  | `legacy/agent.ts` `updateAgent` | 0 | 36 |
+  | `legacy/agent.ts` `deleteAgent` | 0 | 23 |
+  | `legacy/agent.ts` `renameAgent`（2 处调用点） | 0 | 14 |
+  | `legacy/workflow.ts` `copyWorkflow` | 0 | 9 |
+  | `legacy/workgroups.ts` `createWorkgroup` | 0 | 53 |
+  | `legacy/workgroup/state.ts` `casGateStatus` | 0 | 14 |
+  | `legacy/workflow.ts` `createWorkflow` | 1（`legacy/workflow.yaml.ts`） | 110 |
+  | `legacy/importRefs.ts` `resolveImportRefs` | 1（同上） | 11 |
+
+  而那唯一的上游 `importWorkflowYaml` 自己也是**生产零调用方 / 16 处测试用点**——整条
+  YAML 导入链在生产里没有入口（生产只消费同文件里的纯函数 `stringifyWorkflowYaml`）。
+  资源写面的生产路径早已走中立的 `agentRepository.ts` / `agentPersistence.ts` 那一套。
+
+  **这件事改变优先级**：这 8 个调用点**不是**「PostgreSQL 上跑不了某个功能」，而是**测试夹具
+  把一批已死的生产代码吊着**。它们在账本里和真正的单引擎路径混在一起，会让「还剩多少」显得比
+  实际的用户可见风险更严重。
+
+  **另记一笔工具上的坑**：用「往上找最近的函数声明」这种正则启发式判断「外层是不是 async」会
+  **漏判**——`renameAgent` 明明是 `export async function`，却因为它体内先出现了别的匹配行而被归进
+  「外层非 async」那一堆。也就是说零级联候选比第一次扫出来的 23 处**更多**，下一轮筛选建议直接用
+  TypeScript AST 取 enclosing function，别用正则。
+
+  **处置建议（按性价比排序，都不必一次做完）**：
+
+  1. **先确认「零调用方」**——上面只查了静态调用点，还要排除经 operation descriptor /
+     `services/*` re-export 的动态到达。确认后按仓规「删除优于 deprecate」整体删除，测试改接
+     中立仓（`agentRepository` / `workflowPersistence` 一类），账本一次掉 10 个点——
+     `legacy/agent.ts` 那 5 个调用点**整份**都在这一类里（create / update / delete / rename×2）。
+  2. **若暂不删**：把它们的内部改成中立事务原语即可，**签名一格不动**（它们本来就是 `async`），
+     250 处测试调用完全无感——这仍然是零级联的一刀，只是收益是「账本数字」而非「用户可见能力」。
+  3. **别再把它们和真单引擎路径混在一张表里**：下次更新账本正文时给这类加个标记，让读账本的人
+     一眼看出哪些是「功能只有一个引擎能用」，哪些只是「测试夹具吊着的死代码」。
 
   **仍然成立**：不要再做第四次全量机械转换。账本口径确实少算一半以上（30 个调用者 vs 61 个
   `DbTxSync` 引用者），但**按这种切法它不再是拦路石**——每一刀只动自己那几处；口径问题留到最后
