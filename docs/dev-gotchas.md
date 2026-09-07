@@ -429,6 +429,30 @@ git fetch origin main; git merge --ff-only origin/main; git push origin main   #
 push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推；③别指望 `set -o shwordsplit`——
 每个 Bash 调用都是新 shell。
 
+### 第二种形态：`set -- $VAR` 拆不出位置参数，后台轮询会**静默空转到超时**（2026-09-07 实撞，一次挂 4 个）
+
+同一个坑换个身位，危害更隐蔽——不报错，只是判据恒假。写 CI 轮询器时用了这个惯用法：
+
+```bash
+RUN=$(gh api "…/runs?head_sha=$SHA" --jq '"\(.id) \(.status) \(.conclusion)"' | head -1)
+set -- $RUN; ID=$1; ST=$2; CC=$3      # ← zsh 里 $1 是整串，$2 / $3 是空
+if [ "$ST" = "completed" ]; then … exit 0; fi
+sleep 60
+```
+
+zsh 实测：`set -- $RUN` ⇒ `$1='34078437900 completed success'`、`$2=''`、`$3=''`。于是
+`[ "$ST" = "completed" ]` **永远为假**，退出分支一次都不会走，循环跑满 160 轮（≈160 分钟）才吐一句
+「TIMED OUT」。四个这样的 watcher 同时挂着，每分钟各打一次 GitHub API，**而它们要等的 run 早就绿了**——
+是用户看见「4 个后台 shell」才问出来的。
+
+**为什么比第一种更该防**：第一种会 `fatal: pathspec …` 当场报错；这一种**零输出**，"没有通知" 和
+"还在跑" 长得一模一样，正好落在本文件 §Monitor 那条「silence is not success」上。
+
+定式：①zsh 里要分词就写 `${=VAR}`（`set -- ${=RUN}` 实测正确拆成三个）；②更稳的是根本不分词——
+让 `--jq` 分三次输出，或直接 `ID=$(… --jq '.id')` 逐个取；③**任何轮询器写完先跑一轮「已知终态」的
+干跑**，确认它真的会退出，别等它自己超时；④只等一个结论就别用 `for i in $(seq …)` 手搓，用
+Bash `run_in_background` + `until` 条件循环，条件成立进程自然退出。
+
 ## ANSI 色码会让「自己拼的 grep 检查」恒不匹配（2026-08-24 一天内踩两次）
 
 工具带色输出时，`[warn]` 实际是 `[\e[33mwarn\e[39m]`、`fixture failed` 实际是 `\e[0m\e[31mfixture failed\e[0m`。于是两类东西会静默失效：
