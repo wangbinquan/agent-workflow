@@ -1,0 +1,294 @@
+// RFC-359 W5-T17 —— provider 命名的文件只允许住在 `platform/persistence/`（高水位账本，只降不升）。
+//
+// **这条守卫锁的是什么**：一个以 `sqlite*` / `postgresql*`（含 `legacySqlite*` / `legacyPostgresql*`）
+// 开头的文件名，是这份文件对自己的**自述**——「我只服务一个引擎」。而 RFC-359 要消灭的恰恰是这种形态：
+// 同一件事落成两份实现，一个 provider 上修了、另一个漏了，行为就此悄悄漂移（W4 手上的每一对 pair
+// 都是这么来的）。目标形态是：领域 / 应用层只认中立端口，引擎差异全部收进 `platform/persistence/`
+// ——方言 SQL、客户端、迁移器、logical source/target 这些**本来就该按引擎分叉**的东西住在那里是设计，
+// 不是债。判据因此只有一条：文件名带 provider 前缀 ⇒ 必须在 `platform/persistence/` 底下；在别处 = 债。
+//
+// **为什么现在是高水位而不是 0**：W4（pair 合一）还在收敛——写下这条守卫时全树还有 136 份这样的文件、
+// 约 25 对未合。此刻钉 0 会让守卫从落地第一天就红，等于没有防守能力。所以先按 RFC-317 T17 的棘轮形态
+// 把存量逐文件登记下来，**只降不升**：
+//   - **增**了红 —— 有人又新开了一条只有单引擎能走的分叉；要么改走中立端口，要么把新增写进账本并说明理由；
+//   - **减**了也红 —— 说明收敛真的发生了；把账本一起改小，让每一次销账都留下一次有署名的提交记录。
+// W4 收敛完后这份账本应当清空：届时把两个常量都改成 `[]`，判据自然就是钉 0
+// （`design/RFC-359-database-provider-unification/plan.md` §5 W5-T17：
+//  「**T17** provider 命名文件只允许在 `platform/persistence/`（棘轮到 0）」）。
+//
+// **第二份账本（目录）** 堵的是同一判据的绕过口：把 `sqliteFoo.ts` 改叫 `sqlite/foo.ts`，文件名判据就
+// 看不见了，分叉却一点没少。所以 provider 命名的**目录**同样登记、同样只降不升。
+
+import { describe, expect, test } from 'bun:test'
+import { readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+const SRC = resolve(import.meta.dir, '..', '..', 'src')
+
+/** provider 命名文件唯一允许的家：引擎差异本来就该收在这里。 */
+const PERSISTENCE_HOME = 'platform/persistence/'
+
+/** 「我只服务一个引擎」的自述式命名。大小写按仓内实际写法，不做宽松匹配。 */
+const PROVIDER_NAMED = /^(sqlite|postgresql|legacySqlite|legacyPostgresql)/
+
+/** 还落在 `platform/persistence/` 之外的 provider 命名文件（相对 `src`），按路径字典序。只降不升。 */
+export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
+  'auth/infrastructure/legacySqliteAuthRuntime.ts',
+  'auth/infrastructure/legacySqliteLoginPolicy.ts',
+  'auth/infrastructure/legacySqlitePatStore.ts',
+  'auth/infrastructure/legacySqliteSessionStore.ts',
+  'cli/postgresqlDaemonApplication.ts',
+  'db/postgresqlSerializationRetry.ts',
+  'db/sqliteMigrator.ts',
+  'db/sqliteWriteRetry.ts',
+  'modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts',
+  'modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts',
+  'modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts',
+  'modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts',
+  'modules/code-capability/infrastructure/sqliteCodeMetricsRead.ts',
+  'modules/collaboration/composition/legacySqliteDecisionCommands.ts',
+  'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts',
+  'modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts',
+  'modules/collaboration/infrastructure/legacySqliteReview.ts',
+  'modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts',
+  'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts',
+  'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+  'modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts',
+  'modules/collaboration/infrastructure/postgresqlClarifyDirectiveStore.ts',
+  'modules/collaboration/infrastructure/postgresqlClarifyRepairParticipant.ts',
+  'modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts',
+  'modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts',
+  'modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
+  'modules/collaboration/infrastructure/postgresqlReviewMutationScope.ts',
+  'modules/collaboration/infrastructure/postgresqlReviewRepairParticipant.ts',
+  'modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts',
+  'modules/collaboration/infrastructure/sqliteClarifyDirectiveStore.ts',
+  'modules/collaboration/infrastructure/sqliteClarifyRepairParticipant.ts',
+  'modules/collaboration/infrastructure/sqliteCollaborationRouteOperations.ts',
+  'modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts',
+  'modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
+  'modules/collaboration/infrastructure/sqliteReviewRepairParticipant.ts',
+  'modules/identity-access/composition/legacySqliteUserService.ts',
+  'modules/identity-access/infrastructure/legacySqliteUserService.ts',
+  'modules/identity-access/infrastructure/sqliteOwnerScopedName.ts',
+  'modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts',
+  'modules/intent/composition/postgresqlApplyMaintenance.ts',
+  'modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts',
+  'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts',
+  'modules/intent/infrastructure/postgresqlIntentPersistence.ts',
+  'modules/intent/infrastructure/postgresqlIntentSqlProgramRunner.ts',
+  'modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts',
+  'modules/intent/infrastructure/sqliteIntentApplyOperations.ts',
+  'modules/intent/infrastructure/sqliteIntentPersistence.ts',
+  'modules/intent/infrastructure/sqliteIntentSqlProgramRunner.ts',
+  'modules/resource-catalog/composition/postgresqlClassicCatalogs.ts',
+  'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
+  'modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts',
+  'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
+  'modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts',
+  'modules/resource-catalog/infrastructure/sqliteAclRegistry.ts',
+  'modules/resource-catalog/infrastructure/sqliteLegacyResourceAccess.ts',
+  'modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts',
+  'modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts',
+  'modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts',
+  'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts',
+  'modules/runtime-management/infrastructure/postgresqlRealtimeStore.ts',
+  'modules/runtime-management/infrastructure/sqliteRealtimeStore.ts',
+  'modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts',
+  'modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator.ts',
+  'modules/system-operations/infrastructure/postgresqlHealthReadModel.ts',
+  'modules/system-operations/infrastructure/postgresqlPendingRestore.ts',
+  'modules/system-operations/infrastructure/postgresqlProviderBackup.ts',
+  'modules/system-operations/infrastructure/postgresqlProviderBackupApplicationAssets.ts',
+  'modules/system-operations/infrastructure/postgresqlProviderRestore.ts',
+  'modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets.ts',
+  'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts',
+  'modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts',
+  'modules/system-operations/infrastructure/sqliteResourceLimitPersistence.ts',
+  'modules/task-execution/composition/sqliteEffectObservers.ts',
+  'modules/task-execution/composition/sqliteGateContinuationEffect.ts',
+  'modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
+  'modules/task-execution/composition/sqliteTaskCatalogSources.ts',
+  'modules/task-execution/composition/sqliteTaskExecutionContext.ts',
+  'modules/task-execution/composition/sqliteTaskExecutionRecovery.ts',
+  'modules/task-execution/composition/sqliteTerminalMaintenance.ts',
+  'modules/task-execution/infrastructure/legacySqliteNodeRollback.ts',
+  'modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts',
+  'modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts',
+  'modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts',
+  'modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts',
+  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
+  'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
+  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
+  'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
+  'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts',
+  'modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts',
+  'modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts',
+  'modules/task-execution/infrastructure/sqliteCodeHostEffectObserver.ts',
+  'modules/task-execution/infrastructure/sqliteGateContinuationEffectStep.ts',
+  'modules/task-execution/infrastructure/sqliteLocalEffectObserver.ts',
+  'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
+  'modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts',
+  'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
+  'modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand.ts',
+  'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts',
+  'modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionRecoveryPersistence.ts',
+  'modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+  'modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts',
+  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts',
+  'modules/task-execution/infrastructure/sqliteTaskOwnershipPersistence.ts',
+  'modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts',
+  'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
+  'modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts',
+  'modules/task-execution/infrastructure/sqliteTerminalMaintenancePersistence.ts',
+  'modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts',
+  'platform/events/committed/postgresqlPersistence.ts',
+  'platform/events/committed/sqlitePersistence.ts',
+  'platform/events/committed/sqliteStore.ts',
+  'services/bundle/postgresqlApply.ts',
+]
+
+/**
+ * 还落在 `platform/persistence/` 之外的 provider 命名**目录**（相对 `src`），按路径字典序。只降不升。
+ * 这些目录里的文件自己不带 provider 前缀，逃得过上面那条账本，分叉却是同一种。
+ */
+export const PROVIDER_NAMED_DIRECTORY_DEBT: readonly string[] = [
+  'modules/collaboration/infrastructure/legacySqliteClarify',
+  'modules/resource-catalog/infrastructure/postgresql',
+]
+
+type Entry = { readonly rel: string; readonly isDirectory: boolean }
+
+/** 遍历整棵 `src`，产出每一个目录与 `.ts` 文件的相对路径。 */
+function walkSrc(): Entry[] {
+  const out: Entry[] = []
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(join(SRC, dir), { withFileTypes: true })) {
+      const rel = dir === '' ? entry.name : `${dir}/${entry.name}`
+      if (entry.isDirectory()) {
+        out.push({ rel, isDirectory: true })
+        walk(rel)
+        continue
+      }
+      if (entry.name.endsWith('.ts')) out.push({ rel, isDirectory: false })
+    }
+  }
+  walk('')
+  return out
+}
+
+const basename = (rel: string): string => rel.slice(rel.lastIndexOf('/') + 1)
+
+/** 扫到的全部 backend 源文件——语料下限的分母（RFC-317 T13：扫空 = 假绿）。 */
+function sourceFiles(): string[] {
+  return walkSrc()
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => entry.rel)
+}
+
+/** `platform/persistence/` 里的 provider 命名文件：合法住户，同时也是「匹配器还活着」的活体证据。 */
+function providerNamedAtHome(): string[] {
+  return walkSrc()
+    .filter(
+      (entry) =>
+        !entry.isDirectory &&
+        entry.rel.startsWith(PERSISTENCE_HOME) &&
+        PROVIDER_NAMED.test(basename(entry.rel)),
+    )
+    .map((entry) => entry.rel)
+    .sort()
+}
+
+/** 判据本体：provider 命名、且不在 `platform/persistence/` 底下的文件。 */
+function scan(): string[] {
+  return walkSrc()
+    .filter(
+      (entry) =>
+        !entry.isDirectory &&
+        !entry.rel.startsWith(PERSISTENCE_HOME) &&
+        PROVIDER_NAMED.test(basename(entry.rel)),
+    )
+    .map((entry) => entry.rel)
+    .sort()
+}
+
+/** 同一判据的目录形态（绕过口）。 */
+function scanDirectories(): string[] {
+  return walkSrc()
+    .filter(
+      (entry) =>
+        entry.isDirectory &&
+        !entry.rel.startsWith(PERSISTENCE_HOME) &&
+        PROVIDER_NAMED.test(basename(entry.rel)),
+    )
+    .map((entry) => entry.rel)
+    .sort()
+}
+
+describe('RFC-359 W5-T17 —— provider 命名文件只允许在 platform/persistence/', () => {
+  test('语料非空：确实扫到了整棵 backend 源码树，且命名匹配器仍能咬到东西（扫空 = 假绿）', () => {
+    expect(
+      sourceFiles().length,
+      '扫到的 backend 源文件太少——扫描根多半失效了，此刻这条守卫零预言力。',
+    ).toBeGreaterThanOrEqual(1500)
+    expect(
+      providerNamedAtHome().length,
+      '`platform/persistence/` 里一个 provider 命名文件都没扫到——命名匹配器已经不咬人了；' +
+        '账本清空后这条守卫会变成永久假绿，先修匹配器再说。',
+    ).toBeGreaterThanOrEqual(10)
+  })
+
+  test('落在 platform/persistence/ 之外的 provider 命名文件与账本逐字相等（增了是新分叉，减了是收敛，都要改账本）', () => {
+    expect(
+      scan(),
+      'provider 命名文件的落位与账本不符。' +
+        '**增**了说明有人又新开了一条只有单引擎能走的分叉——把它写成中立端口 + ' +
+        '`platform/persistence/` 里的方言实现；确有理由留在原地就把新增写进 ' +
+        '`PROVIDER_NAMED_FILE_DEBT` 并说明为什么。' +
+        '**减**了说明合一发生了——把账本一起改小，让这次销账留下一次有署名的提交记录。' +
+        'W4 收敛完后这份账本应当清空（plan.md §5 W5-T17：棘轮到 0）。',
+    ).toEqual([...PROVIDER_NAMED_FILE_DEBT])
+  })
+
+  test('落在 platform/persistence/ 之外的 provider 命名目录与账本逐字相等（堵住「改叫 sqlite/foo.ts」的绕过口）', () => {
+    expect(
+      scanDirectories(),
+      'provider 命名目录与账本不符。新建这样的目录等于把分叉藏进路径里躲开文件名判据；' +
+        '**增**了要么改走中立端口，要么写进 `PROVIDER_NAMED_DIRECTORY_DEBT` 并说明；' +
+        '**减**了把账本一起改小。',
+    ).toEqual([...PROVIDER_NAMED_DIRECTORY_DEBT])
+  })
+
+  test('两份账本都按路径字典序、无重复（清点稳定的前提）', () => {
+    for (const [name, ledger] of [
+      ['PROVIDER_NAMED_FILE_DEBT', PROVIDER_NAMED_FILE_DEBT],
+      ['PROVIDER_NAMED_DIRECTORY_DEBT', PROVIDER_NAMED_DIRECTORY_DEBT],
+    ] as const) {
+      expect(new Set(ledger).size, `${name} 里有重复条目`).toBe(ledger.length)
+      expect([...ledger].sort(), `${name} 没有按路径字典序排列`).toEqual([...ledger])
+    }
+  })
+})

@@ -3,4 +3,7 @@
 # prettier 会把单元素数组折成一行，与生成器输出不一致 —— 于是每次重新采数都会
 # 产生一堆与内容无关的格式 churn，且「账本是否与实测相等」的判据会被格式差污染。
 # 账本的规范形态以生成器为准，不进 prettier。
-architecture/
+# 前导斜杠是必需的：gitignore 语义下无斜杠的 `architecture/` 会匹配**任意层级**的同名目录，
+# 于是 `packages/backend/tests/architecture/` 下 60+ 个架构守卫整体逃出 CI 的 format 门
+# （2026-09-07 实证：往该目录塞格式错乱文件，`prettier --check` 照样报全绿）。
+/architecture/

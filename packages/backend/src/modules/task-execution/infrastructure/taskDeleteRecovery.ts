@@ -76,8 +76,13 @@ export function parseDeleteCleanupPlan(
           typeof (target as DeleteWorktreeTarget).repoPath === 'string' &&
           typeof (target as DeleteWorktreeTarget).worktreePath === 'string',
       ) ||
-      !Array.isArray(parsed.directories) ||
-      !parsed.directories.every((dir) => typeof dir === 'string')
+      // `directories` 只有 v2 带、也只有 v2 读；v1（PG 侧 `{ v, taskId, taskIds, worktrees }`）从来
+      // 没有它，改从 members 推导。这条曾是无条件校验，于是每个 v1 计划都在此判 null、下面的
+      // v1 分支成了死代码——PG 删除崩溃恢复永久卡在 recovery-required。见
+      // `tests/rfc359-w5-delete-cleanup-plan-v1.test.ts`。
+      (parsed.v === 2 &&
+        (!Array.isArray(parsed.directories) ||
+          !parsed.directories.every((dir) => typeof dir === 'string')))
     ) {
       return null
     }

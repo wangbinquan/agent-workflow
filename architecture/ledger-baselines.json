@@ -66,6 +66,104 @@
       "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。 RFC-359 W4-D6c：digital-employee 作者面孪生对合一为 authoringStore.ts，`toTool` / `uniqueError` 两条豁免随孪生对消失删除，12 → 10。 RFC-359 W4-D16（2026-09-05）：Mcp 仓库合一后 ownerScopedNameWhere 的方言分叉退役，5→4。 RFC-359 W4-D17（2026-09-06）：Plugin 仓库合一后 ownerScopedNameWhere 的方言分叉退役，4→3。 RFC-359 W4-D18（2026-09-06）：Workgroup 仓库合一后 ownerScopedNameWhere 的方言分叉退役，3→2。 RFC-359 W4-D24：运行时会话租约合一后 `constraintViolation` 只剩一份、走能力矩阵归类，这条 fork 销账，2→1。"
     },
     {
+      "id": "rfc359-w5-provider-named-file-location",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
+      "symbol": "PROVIDER_NAMED_FILE_DEBT",
+      "baseline": 136,
+      "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
+    },
+    {
+      "id": "rfc359-w5-provider-named-directory",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
+      "symbol": "PROVIDER_NAMED_DIRECTORY_DEBT",
+      "baseline": 2,
+      "why": "RFC-359 W5「防复辟」波次。provider 命名的**目录**形态（`legacySqliteClarify/` 等）——把 `sqliteFoo.ts` 改叫 `sqlite/foo.ts` 就能绕过按文件名的判据，这条堵它。"
+    },
+    {
+      "id": "rfc359-w5-bare-transaction",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t18-bare-transaction.test.ts",
+      "symbol": "BARE_TRANSACTION_DEBT",
+      "baseline": 17,
+      "why": "RFC-359 W5「防复辟」波次。事务原语之外直调 `db.transaction(` 的存量。bun:sqlite 的同步包装器在第一个 await 处就 COMMIT，所以一个事务体没法同时跑两个引擎——新写的必须走 `databaseSessionFor(db).transaction(...)`。含 `intentSqlPersistence.ts` 的 27 处 `this.runner.transaction`：那是本仓第二套并行的中立事务抽象，按债计入（豁免它等于给「再开一套」发许可证），随 IntentSqlProgramRunner 合一自然清零。"
+    },
+    {
+      "id": "rfc359-w5-provider-branch",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
+      "symbol": "PROVIDER_BRANCH_DEBT",
+      "baseline": 16,
+      "why": "RFC-359 W5「防复辟」波次。业务代码里按 provider 名分叉（`provider === 'sqlite'` / `storage === 'embedded-file'` 及 switch / 条件类型）。正解是判**能力**（`engineOf(tx)` / capabilities）而不是判品牌。已按形状豁免穷尽性围栏（比较链落到 `unhandledDatabaseProvider` 的 fail-loud 收窄闸，方向与本 RFC 同向）；语料限 backend——前端显示「当前跑在哪个数据库上」是产品语义，不是分叉。"
+    },
+    {
+      "id": "rfc359-w5-provider-branch-relocation",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19-provider-branch.test.ts",
+      "symbol": "PROVIDER_BRANCH_RELOCATION_DEBT",
+      "baseline": 1,
+      "why": "RFC-359 W5「防复辟」波次。与上一条同判据、但销账方式是**搬家**而非重写：`db/providerSchema.ts` 就是「把品牌翻译成能力」的投影层本身，只是住在 `db/` 而不是 `platform/persistence/`。"
+    },
+    {
+      "id": "rfc359-w5-startup-provider-execution-branch",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19c-startup-sequence.test.ts",
+      "symbol": "PROVIDER_EXECUTION_BRANCH_DEBT",
+      "baseline": 1,
+      "why": "RFC-359 W5「防复辟」波次。启动入口里按 provider **分执行流程**的分支（选装配合法、分流程不合法）。同文件另有 exact 钉死：启动序列各环节的调用点数，多一条启动路径就红。"
+    },
+    {
+      "id": "rfc359-w5-composition-root-placeholder",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts",
+      "symbol": "COMPOSITION_ROOT_PLACEHOLDER_DEBT",
+      "baseline": 13,
+      "why": "RFC-359 W5「防复辟」波次。组合根里的 `*-not-bound` / `*-not-composed` 占位与晚绑定 holder（fail-closed 那种）。语料含 `cli/**`、`**/composition*` 与 `server.ts`——把 server.ts 收进来照出了 `mcpCatalogRef` 在 HTTP 根与 daemon 根各存一份、而只有一份在守卫下。"
+    },
+    {
+      "id": "rfc359-w5-toplevel-column-capture",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-toplevel-column-capture.test.ts",
+      "symbol": "TOPLEVEL_COLUMN_CAPTURE_DEBT",
+      "baseline": 8,
+      "why": "RFC-359 W5「防复辟」波次。PG 执行面上模块顶层捕获 `@/db/schema` 表列（投影常量）。表是按 provider 投影的 Proxy 门面，顶层捕获会钉死在**加载时**的 provider 上。按**列引用数**而非捕获点数计（83 处 / 8 文件），否则往已欠债的投影里再塞几列就免检。计划原文以为存量是 0，实测不是。"
+    },
+    {
+      "id": "rfc359-w5-test-engine-hardcoding",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
+      "symbol": "TEST_ENGINE_HARDCODING_DEBT",
+      "baseline": 821,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
+    },
+    {
+      "id": "rfc359-w5-test-engine-hardcoding-exempt",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
+      "symbol": "EXEMPT",
+      "baseline": 2,
+      "why": "RFC-359 W5「防复辟」波次。上一条的豁免名单：harness 自己（`tests/helpers/eachProvider.ts`）与该守卫自身。只降不升，防止豁免退化成空白许可证。"
+    },
+    {
+      "id": "rfc359-w5-raw-dialect",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
+      "symbol": "RAW_DIALECT_DEBT",
+      "baseline": 12,
+      "why": "RFC-359 W5「防复辟」波次。具名渲染器之外裸写的方言构造（`SET TRANSACTION ISOLATION LEVEL` 7 行、`DELETE … USING` 4 处、for-update / nulls-ordering / INDEXED BY / GREATEST 各若干）。本仓 PG 客户端是 drizzle sqlite-proxy：渲染的是 SQLite 方言文本，只经一层极窄改写就发给 PG，**没有第二个翻译层**——所以每个方言点必须两侧同名同参存在，否则是运行到那条语句才炸的 42883。"
+    },
+    {
+      "id": "rfc359-w5-unshimmed-function",
+      "file": "packages/backend/tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts",
+      "symbol": "UNSHIMMED_FUNCTION_DEBT",
+      "baseline": 0,
+      "why": "RFC-359 W5「防复辟」波次。raw SQL 里用了「既不可移植、又不在 PG shim 集、也不在能力矩阵」的函数。今天为 0，钉 0——挡的是未来的 `strftime(` / `iif(` / `group_concat(`。"
+    },
+    {
+      "id": "rfc359-w5-dead-provider-adapter",
+      "file": "packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts",
+      "symbol": "DEAD_PROVIDER_ADAPTER_DEBT",
+      "baseline": 18,
+      "why": "RFC-359 W5「防复辟」波次。生产零消费者的 provider 适配器工厂/类（`create|compose|open|bind` 四个构造动词，含品牌名前带形容词的形态）。这类死适配器会**伪装成 provider 对等**——看起来两侧都有实现，实际只有一侧在跑。账本按性质机器校验分两类：`纯死代码：`（8 条，连测试都零引用，可直接删）与 `改指：`（10 条，真实能力在别处）。纯再导出与字符串字面量不算消费。"
+    },
+    {
+      "id": "rfc359-w6-read-modify-write-unlocked",
+      "file": "packages/backend/tests/architecture/rfc359-w6-t28-read-modify-write.test.ts",
+      "symbol": "READ_MODIFY_WRITE_DEBT",
+      "baseline": 9,
+      "why": "RFC-359 W6「防复辟」波次。事务内「读—改—写、中间既不锁也不 CAS」的存量（20 处 / 9 文件）。SQLite 的 BEGIN IMMEDIATE 独占下碰巧正确，PG 的 READ COMMITTED 上是**丢更新且不报错**——计划原文的「合一时必须改形状、不能原样搬」说的就是它。其中 17 处今天已经跑在两个引擎上（如 `mcpRuntimeTestPersistence` 的 8 处 sessionVersion 自增），只有 3 处是 SQLite-only 的合一陷阱。逐条改成 `lockAggregateRoot` 或补 CAS 谓词后把基线改小。"
+    },
+    {
       "id": "rfc294-cross-context-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CROSS_CONTEXT_PILOT_DEBT",
