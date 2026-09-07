@@ -1149,6 +1149,18 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
      `nodeRunMintParticipant` / `humanGateTaskTransition` / `ownedTaskExecution` 里大多已经有）；
   4. 两条都满足就是一刀：改完跑 `bun run lint:promises` + 双引擎跑一遍 + 把账本改小，单独提交。
 
+  **第二刀（同日，`0560998df`）验证了这套筛法可复用**：runtime 注册表那一对（247 行 SQLite /
+  336 行 PG，十二个方法同名同序）五处同步调用点的外层函数**全部已经是 async**，一筛就中，改完
+  同样零级联。这一刀比第一刀更进一步——不只是退掉同步网关，而是**把两份 provider 实现整体合成
+  一份**，PG 那 336 行连同它内联重写的会话失效逻辑一起退役。两条经验记下来：
+
+  - **隔离级别要逐方法抄 PG 那份**，别一刀切成 `.transaction`。PG 侧对「先查后写」的跨行判据
+    （默认 runtime 不许停用 / 最后一个不许删 / 种子只种一次）用的是 SERIALIZABLE + 40001 重放，
+    合一后对应 `databaseSessionFor(db).serializable`；其余两处才是普通写事务。
+  - **合一会顺带照出「PG 自己抄了一份」**：`transitionRuntimeTests` 在 PG 文件里被内联重写，与
+    `legacy/mcpRuntimeTestTransitions.ts` 的同步版并存。这类重复只有在合一时才会被逼着逐字段对
+    账——本次对完确认语义相同，合并即可；D23c / D25 / D26 那几次对完是 PG 更弱，要按强的那侧抬齐。
+
   **仍然成立**：不要再做第四次全量机械转换。账本口径确实少算一半以上（30 个调用者 vs 61 个
   `DbTxSync` 引用者），但**按这种切法它不再是拦路石**——每一刀只动自己那几处；口径问题留到最后
   那批「外层函数还不是 async」的文件时一并处理。
