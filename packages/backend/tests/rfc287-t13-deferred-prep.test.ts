@@ -1973,11 +1973,18 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
 describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => {
   test('回填与 setNodeRunStatusTx 共用一个事务回调（不是事务后的下一次 await）', () => {
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    // 无 effect 上下文时由 SQLite 兼容事务消费该回调；有上下文时走 closed
+    // 无 effect 上下文时由中立写事务消费该回调；有上下文时走 closed
     // workspace-preparation settlement DTO，由 provider infrastructure 把 effect 与
-    // 同一份投影写进一个事务，不能把 DbTx callback 暴露到 application port。
+    // 同一份投影写进一个事务，不能把事务句柄暴露到 application port。
+    //
+    // RFC-359 W10：回调的签名从 bun:sqlite 专属的同步 `(tx: LegacySqliteTaskTransaction): void`
+    // 换成中立的 `async (tx: DatabaseTransaction): Promise<void>`，消费它的边界从 `dbTxSync`
+    // 换成 `withTaskExecutionWrite`。本条守卫锁的**意图**没变（回填与 prep 置 done 必须同事务），
+    // 只是锚点跟着改名走；行为判据在
+    // `tests/rfc359-w10-task-execution-sync-transaction-cutover.test.ts` ⑥⑦（两引擎各一遍，
+    // 含「最后一步失败时前三张表全部回滚」）。
     const at = src.indexOf(
-      'const persistPreparedProjection = (tx: LegacySqliteTaskTransaction): void => {',
+      'const persistPreparedProjection = async (tx: DatabaseTransaction): Promise<void> => {',
     )
     expect(at, '应有唯一的准备投影事务回调').toBeGreaterThan(-1)
     // 回调体用**括号配平**切（内层还有多个 `})`，取第一个会切在半路）。
@@ -1990,20 +1997,22 @@ describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => 
     }
     const tx = src.slice(open + 1, i - 1)
     const txEnd = i
-    expect(tx, '任务投影回填必须在事务回调内').toMatch(/tx\.update\(tasks\)/)
+    // RFC-359 W10：中立事务里每条语句都要 await，prettier 于是把 `tx.update(tasks)` 折成
+    // `await tx\n  .update(tasks)`；锚点跟着放宽到「同一条语句里 tx 后面接 .update(tasks)」。
+    expect(tx, '任务投影回填必须在事务回调内').toMatch(/await tx\s*\.update\(tasks\)/)
     expect(tx, 'prep 置 done 必须在事务内').toMatch(
-      /setNodeRunStatusTx\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
+      /setNodeRunStatusInTransaction\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
     )
     // 两条执行路径都保持原子性；effect 路径只能传 closed projection，不能把
     // SQLite transaction callback 穿过 provider-neutral contract。
     const after = src.slice(txEnd)
-    expect(after.slice(0, 900), '兼容路径必须把完整回调交给 dbTxSync').toMatch(
-      /dbTxSync\(deps\.db, persistPreparedProjection\)/,
+    expect(after.slice(0, 900), '兼容路径必须把完整回调交给中立写事务').toMatch(
+      /await withTaskExecutionWrite\(deps\.db, persistPreparedProjection\)/,
     )
     expect(after.slice(0, 1_800), 'effect 路径必须调用具名 workspace settlement port').toMatch(
       /await prepEffect\.succeedWorkspacePreparation\([\s\S]{0,1400}repositories: preparedRepoRows/,
     )
-    expect(after.slice(0, 1_800), 'effect 路径不得透传 SQLite transaction callback').not.toMatch(
+    expect(after.slice(0, 1_800), 'effect 路径不得透传事务回调').not.toMatch(
       /succeedWorkspacePreparation\([\s\S]{0,1400}persistPreparedProjection/,
     )
     // 反向：事务**之后**不得再有一次异步的 prep-done 写入（那就是旧形态）。

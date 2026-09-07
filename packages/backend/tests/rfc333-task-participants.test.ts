@@ -25,7 +25,14 @@ import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/i
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
-import { GateContinuationEffectStep } from '@/modules/task-execution/infrastructure/sqliteGateContinuationEffectStep'
+// RFC-359 W10：此前这里 import 的是 `infrastructure/sqliteGateContinuationEffectStep`——一份
+// **零生产调用方**的同步孪生（生产路径注入的是下面这个中立 step + `DrizzleGateContinuationEffect
+// Persistence`，见 `services/humanGateContinuationEffects.ts` 与 `public/participants.ts`）。
+// 判据搬到真在跑的那份上；SQL 半边的双引擎对拍在 `rfc359-w4-b1-batch2a-adapters.test.ts` 与
+// `rfc359-w8-effect-persistence-conformance.test.ts`（settleGateRollback 三条）里。
+import { GateContinuationEffectStep } from '@/modules/task-execution/application/drive/gateContinuationEffectStep'
+import { DrizzleGateContinuationEffectPersistence } from '@/modules/task-execution/infrastructure/gateContinuationEffectPersistence'
+import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
 import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
@@ -820,7 +827,13 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         }
       },
     }
-    const step = new GateContinuationEffectStep(db, module.effects, executor)
+    const step = new GateContinuationEffectStep(
+      new DrizzleGateContinuationEffectPersistence(
+        db,
+        new DrizzleTaskExecutionEffectPersistence(db),
+      ),
+      executor,
+    )
     const execution = createTaskExecutionContext({
       intentId: decision.continuationRef,
       token: claimed.token,
@@ -883,7 +896,13 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         throw new Error('legacy task gate must not execute a collaboration rollback plan')
       },
     }
-    const step = new GateContinuationEffectStep(db, module.effects, executor)
+    const step = new GateContinuationEffectStep(
+      new DrizzleGateContinuationEffectPersistence(
+        db,
+        new DrizzleTaskExecutionEffectPersistence(db),
+      ),
+      executor,
+    )
     const context = {
       taskId,
       execution: createTaskExecutionContext({

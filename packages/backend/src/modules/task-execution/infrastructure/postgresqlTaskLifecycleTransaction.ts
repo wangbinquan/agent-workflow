@@ -1,9 +1,9 @@
 // RFC-349 — PostgreSQL task lifecycle primitives used only by named
 // task-execution atoms. They are named after the provider because their
-// *judgement* is PostgreSQL-shaped (SERIALIZABLE budgets, `FOR UPDATE` row
-// locks); the transaction boundary itself is the neutral one.
+// *judgement* is PostgreSQL-shaped (SERIALIZABLE budgets, aggregate-root row
+// locks); the transaction boundary and the lock rendering are both neutral.
 //
-// RFC-359 W5-T18：这三个开事务的地方原本直接调驱动的 `db.transaction(`，是账本里的裸事务。
+// RFC-359 W5-T18：这几个开事务的地方原本直接调驱动的 `db.transaction(`，是账本里的裸事务。
 // 它们现在一律走 `databaseSessionFor(db)` 的中立会话。两件事因此变了，都是修复：
 //   · **可重入**——裸的 PG `db.transaction(` 会在**另一条连接**上另开一笔并独立提交，外层
 //     回滚带不走它（本波实撞：外层回滚后 SQLite 侧 0 行、PG 侧 1 行）。中立会话按客户端认
@@ -13,12 +13,11 @@
 // 「SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001/40P01 退避重试」——
 // `platform/persistence/databaseTransaction.ts` 的 `serializable` 显式记着它以本文件为蓝本。
 
-import { sql } from 'drizzle-orm'
-
-import { nodeRuns, tasks } from '@/db/schema'
+import { tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   databaseSessionFor,
+  engineOf,
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 
@@ -38,50 +37,19 @@ export async function withPostgresqlSerializableTaskExecution<T>(
   return await databaseSessionFor(db).serializable(body)
 }
 
-/**
- * RFC-349 —— 单个 node run 的写事务：同样不走 SERIALIZABLE。聚合根锁由调用方的
- * `fencedTaskId` 在 owner fence **之后**取（`select ... from node_runs ... for update`），
- * 锁序必须是 owner 行 → node run 行：其余 owned 写手都是先 fence 再动 `node_runs`，
- * 反过来取就会和它们死锁。
- *
- * 为什么换：这些是**产品里最热的写**——agent 每吐一行 stdout/stderr 就 `appendEvents`
- * 一次。它们全都先过 `assertPostgresqlTaskOwnerTx`（对 `task_execution_owners` 的条件
- * UPDATE），而那张表**每个任务只有一行**：全新安装 / 小库割接后它就是一张几行的小表，
- * 小表上 PostgreSQL 把 predicate lock 落到**页**这一级，于是每个任务的写都和其它任务的
- * 写互判读写依赖。2026-09-03 对着真 PostgreSQL（10 万任务的迁移目标库）实测：
- *
- *   task_execution_owners 有 10 万行（生产规模、已 ANALYZE）
- *     4 / 16 / 32 并发                     冲突率 0% / 0.13% / 0.25%，逃逸 0
- *   同一份代码、同一台机器，只把该表缩到 4 行（全新安装 / 小库割接后的形态）
- *     4 并发 × 每任务 20 次/秒（真实速率）    冲突率 63.0%，**逃逸 1**，p95 50.7ms
- *     8 并发满速                             冲突率 81.2%，**逃逸 234**，156 ops/s
- *   换成本函数后，同样的小表形态
- *     8 并发满速                             冲突率 **0%**，逃逸 **0**，904 ops/s，p95 11.7ms
- *
- * `pg_locks` 直接印证了粒度：8 个 worker 在 `idx_task_execution_owners_state_lease` 的
- * **同一页**上各持一个 SIReadLock，而每个 worker 的 fence UPDATE 都写这张表。
- *
- * 为什么安全：这几个写手读写的行全部属于**同一个 node run**（`node_runs` 一行 + 它的
- * `node_run_outputs` / `node_run_events`），加上按 task 精确命中的 owner fence。锁住
- * node run 行就把同一个 node run 的并发写手串起来了；不同 node run 之间本来就没有需要
- * 串行化的不变量。适用判据同 {@link withPostgresqlTaskAggregateTransaction}。
- */
-export async function withPostgresqlNodeRunAggregateTransaction<T>(
-  db: PostgresqlDatabaseClient,
-  body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
-): Promise<T> {
-  return await databaseSessionFor(db).transaction(body)
-}
-
-/** 聚合根行锁：`fencedTaskId` 在 owner fence 之后调用，见上面的锁序说明。 */
-export async function lockPostgresqlNodeRunAggregateRoot(
-  tx: PostgresqlTaskExecutionTransaction,
-  nodeRunId: string,
-): Promise<void> {
-  await tx.run(
-    sql`select ${nodeRuns.id} from ${nodeRuns} where ${nodeRuns.id} = ${nodeRunId} for update`,
-  )
-}
+// RFC-359 W11 退役：`withPostgresqlNodeRunAggregateTransaction` 与
+// `lockPostgresqlNodeRunAggregateRoot` 已删除。它们是 RFC-349 给 node run 写事务开的那一对
+// （非 SERIALIZABLE 的事务边界 + `node_runs` 行的聚合根锁）；**W4-B1 把两份 provider 投影合成
+// `nodeExecutionPersistence.ts` 一份**之后，那条路走的是 `withTaskExecutionWrite` + 能力矩阵的
+// `lockAggregateRoot`，这两个导出从此**零生产调用方**——`packages/backend/src` 下一处 import
+// 都没有，唯一的引用来自两份测试。删除而不是「改调 capabilities」：改调只会凭空给一段死代码
+// 续命（同一个错误 RFC-359 W10 在 `runPostgresqlResourceCatalogTransaction` 上刚犯过一次，
+// 见 W5-T20 账本里那段更正）。
+//
+// 「为什么当年要有它」这段实测数据没有丢：`withTaskExecutionWrite` 那一侧与
+// `tests/rfc349-task-aggregate-transaction.test.ts` 的第二个 describe 头注释各留一份
+// （小表上 SERIALIZABLE 的 predicate lock 落到索引**页**：8 并发满速冲突率 81.2%、逃逸 234；
+// 换成聚合根行锁后 0% / 0 / 904 ops/s）。判「零生产消费者」时**要把测试排除在消费者之外**。
 
 /**
  * RFC-349 —— 单聚合的「读—改—写」事务：不走 SERIALIZABLE，改为在聚合根（task 行）上
@@ -116,7 +84,10 @@ export async function withPostgresqlTaskAggregateTransaction<T>(
   body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
 ): Promise<T> {
   return await databaseSessionFor(db).transaction(async (tx) => {
-    await tx.run(sql`select ${tasks.id} from ${tasks} where ${tasks.id} = ${taskId} for update`)
+    // RFC-359 W11：行锁的渲染权归能力矩阵——PG 渲染 `select 1 … for update`，SQLite 是
+    // no-op（`BEGIN IMMEDIATE` 已全库独占）。此前这里裸写 `for update`，于是同一个聚合根锁
+    // 在仓里有两份渲染，改矩阵不会红这里；顺带它也让这个 opener 在 SQLite 上直接语法错误。
+    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)
     return await body(tx)
   })
 }

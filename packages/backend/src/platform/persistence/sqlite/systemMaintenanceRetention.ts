@@ -17,8 +17,21 @@
 // System Operations SQLite adapter for the shared retention-sweep application contract.
 
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { sql } from 'drizzle-orm'
+import { sql, type SQL } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
+import {
+  intentSessions,
+  intentTurnEvents,
+  intentTurns,
+  mcpRuntimeTestEvents,
+  mcpRuntimeTestSessions,
+  memoryDistillEvents,
+  memoryDistillJobs,
+  tasks,
+  webhookTriggerFires,
+} from '@/db/schema'
+import { BOUNDED_DELETE_MAX_ROWS } from '@/platform/persistence/capabilities'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
@@ -26,7 +39,6 @@ import { createLogger } from '@/util/log'
 const log = createLogger('maintenance-retention')
 
 const DAY_MS = 86_400_000
-export const RETENTION_DELETE_BATCH = 5_000
 
 export interface RetentionConfig {
   /** 事件流水三胞胎（distill / intent turn / mcp runtime test），0 = off。 */
@@ -133,6 +145,77 @@ function advanceRetentionPhase(cursor: RetentionSweepCursorV1): RetentionSweepCu
   return { ...cursor, phase: phases[Math.min(phases.length - 1, index + 1)]! }
 }
 
+// RFC-359 W6-T25 —— 四条清扫语句的**候选集**。谓词与 LIMIT 在这里；「候选集怎么变成一条 DELETE」
+// 是方言，归能力矩阵的 `deleteByCandidates`（PG 渲染 `DELETE … USING candidates`，SQLite 渲染
+// `DELETE … WHERE id IN (…)`）。合一前这里裸写的是 `rowid IN (…)`——三张事件表的 `id` 就是
+// `INTEGER PRIMARY KEY AUTOINCREMENT`（rowid 别名）、`webhook_trigger_fires` 的 `id` 是 ULID 主键，
+// 按主键删与按 rowid 删选中的是同一批行。
+
+function distillCandidates(cutoff: number | null, batchSize: number): SQL {
+  return sql`
+    SELECT ${memoryDistillEvents.id} AS id
+    FROM ${memoryDistillEvents}
+    WHERE ${memoryDistillEvents.ts} < ${cutoff}
+      AND EXISTS (
+        SELECT 1 FROM ${memoryDistillJobs}
+        WHERE ${memoryDistillJobs.id} = ${memoryDistillEvents.distillJobId}
+          AND ${memoryDistillJobs.status} IN ('done', 'failed', 'canceled')
+      )
+    ORDER BY ${memoryDistillEvents.id}
+    LIMIT ${batchSize}
+  `
+}
+
+function intentCandidates(cutoff: number | null, batchSize: number): SQL {
+  return sql`
+    SELECT ${intentTurnEvents.id} AS id
+    FROM ${intentTurnEvents}
+    WHERE ${intentTurnEvents.ts} < ${cutoff}
+      AND EXISTS (
+        SELECT 1
+        FROM ${intentTurns}
+        JOIN ${intentSessions} ON ${intentSessions.id} = ${intentTurns.sessionId}
+        WHERE ${intentTurns.id} = ${intentTurnEvents.turnId}
+          AND ${intentSessions.status} = 'archived'
+      )
+    ORDER BY ${intentTurnEvents.id}
+    LIMIT ${batchSize}
+  `
+}
+
+function mcpRuntimeCandidates(cutoff: number | null, batchSize: number): SQL {
+  return sql`
+    SELECT ${mcpRuntimeTestEvents.id} AS id
+    FROM ${mcpRuntimeTestEvents}
+    WHERE ${mcpRuntimeTestEvents.ts} < ${cutoff}
+      AND EXISTS (
+        SELECT 1 FROM ${mcpRuntimeTestSessions}
+        WHERE ${mcpRuntimeTestSessions.id} = ${mcpRuntimeTestEvents.testSessionId}
+          AND ${mcpRuntimeTestSessions.status} = 'ended'
+      )
+    ORDER BY ${mcpRuntimeTestEvents.id}
+    LIMIT ${batchSize}
+  `
+}
+
+function webhookFireCandidates(cutoff: number | null, batchSize: number): SQL {
+  return sql`
+    SELECT ${webhookTriggerFires.id} AS id
+    FROM ${webhookTriggerFires}
+    WHERE ${webhookTriggerFires.firedAt} < ${cutoff}
+      AND NOT EXISTS (
+        SELECT 1 FROM ${tasks}
+        WHERE ${tasks.id} = ${webhookTriggerFires.taskId}
+          AND ${tasks.status} NOT IN (${sql.join(
+            TERMINAL_TASK_STATUSES.map((value) => sql`${value}`),
+            sql`, `,
+          )})
+      )
+    ORDER BY ${webhookTriggerFires.id}
+    LIMIT ${batchSize}
+  `
+}
+
 /**
  * One predicate-rechecking DELETE statement. This is the Worker-facing owner
  * contract; it cannot keep SQLite's writer lock across phases or batches.
@@ -142,7 +225,7 @@ export async function runRetentionSweepSlice(
   config: RetentionConfig,
   cursorValue: unknown,
   now: number = Date.now(),
-  batchSize: number = RETENTION_DELETE_BATCH,
+  batchSize: number = BOUNDED_DELETE_MAX_ROWS,
 ): Promise<RetentionSweepSliceResult> {
   if (!Number.isInteger(batchSize) || batchSize < 1) {
     throw new Error('maintenance-retention-batch-invalid')
@@ -151,76 +234,47 @@ export async function runRetentionSweepSlice(
   const counters = zeroRetentionResult()
   if (cursor.phase === 'done') return { done: true, cursor, counters }
 
+  const engine = databaseSessionFor(db).engine
   let deleted: Array<{ id: string }>
   switch (cursor.phase) {
     case 'distill-events':
-      deleted = await db.all(sql`
-        DELETE FROM memory_distill_events
-        WHERE rowid IN (
-          SELECT event.rowid FROM memory_distill_events event
-          WHERE event.ts < ${cursor.eventCutoff}
-            AND EXISTS (
-              SELECT 1 FROM memory_distill_jobs job
-              WHERE job.id = event.distill_job_id
-                AND job.status IN ('done', 'failed', 'canceled')
-            )
-          ORDER BY event.id
-          LIMIT ${batchSize}
-        )
-        RETURNING id`)
+      deleted = await db.all(
+        engine.deleteByCandidates(
+          memoryDistillEvents,
+          memoryDistillEvents.id,
+          distillCandidates(cursor.eventCutoff, batchSize),
+        ),
+      )
       counters.distillEvents = deleted.length
       break
     case 'intent-turn-events':
-      deleted = await db.all(sql`
-        DELETE FROM intent_turn_events
-        WHERE rowid IN (
-          SELECT event.rowid FROM intent_turn_events event
-          WHERE event.ts < ${cursor.eventCutoff}
-            AND EXISTS (
-              SELECT 1 FROM intent_turns turn
-              JOIN intent_sessions session ON session.id = turn.session_id
-              WHERE turn.id = event.turn_id AND session.status = 'archived'
-            )
-          ORDER BY event.id
-          LIMIT ${batchSize}
-        )
-        RETURNING id`)
+      deleted = await db.all(
+        engine.deleteByCandidates(
+          intentTurnEvents,
+          intentTurnEvents.id,
+          intentCandidates(cursor.eventCutoff, batchSize),
+        ),
+      )
       counters.intentTurnEvents = deleted.length
       break
     case 'mcp-runtime-test-events':
-      deleted = await db.all(sql`
-        DELETE FROM mcp_runtime_test_events
-        WHERE rowid IN (
-          SELECT event.rowid FROM mcp_runtime_test_events event
-          WHERE event.ts < ${cursor.eventCutoff}
-            AND EXISTS (
-              SELECT 1 FROM mcp_runtime_test_sessions session
-              WHERE session.id = event.test_session_id AND session.status = 'ended'
-            )
-          ORDER BY event.id
-          LIMIT ${batchSize}
-        )
-        RETURNING id`)
+      deleted = await db.all(
+        engine.deleteByCandidates(
+          mcpRuntimeTestEvents,
+          mcpRuntimeTestEvents.id,
+          mcpRuntimeCandidates(cursor.eventCutoff, batchSize),
+        ),
+      )
       counters.mcpRuntimeTestEvents = deleted.length
       break
     case 'webhook-trigger-fires':
-      deleted = await db.all(sql`
-        DELETE FROM webhook_trigger_fires
-        WHERE rowid IN (
-          SELECT fire.rowid FROM webhook_trigger_fires fire
-          WHERE fire.fired_at < ${cursor.webhookCutoff}
-            AND NOT EXISTS (
-              SELECT 1 FROM tasks task
-              WHERE task.id = fire.task_id
-                AND task.status NOT IN (${sql.join(
-                  TERMINAL_TASK_STATUSES.map((value) => sql`${value}`),
-                  sql`, `,
-                )})
-            )
-          ORDER BY fire.id
-          LIMIT ${batchSize}
-        )
-        RETURNING id`)
+      deleted = await db.all(
+        engine.deleteByCandidates(
+          webhookTriggerFires,
+          webhookTriggerFires.id,
+          webhookFireCandidates(cursor.webhookCutoff, batchSize),
+        ),
+      )
       counters.webhookTriggerFires = deleted.length
       break
   }

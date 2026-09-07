@@ -6,7 +6,12 @@ import { TriggerContextSchema } from '@agent-workflow/shared'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import {
+  databaseSessionFor,
+  engineOf,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
+import { chunkedAll } from '@/util/sqlChunk'
 import {
   eventDeliveries,
   eventObserverRuns,
@@ -28,6 +33,7 @@ import {
   type EventSubject,
   type EventSubscriber,
   type EventSubscriptionRecord,
+  type MatchedFilteredEventSubscription,
   type ObserverActivationRecord,
 } from '../domain/model'
 
@@ -37,6 +43,75 @@ function sourceWhere(ref: EventExactRef) {
 
 function typeWhere(ref: EventExactRef) {
   return and(eq(eventTypeCatalog.eventTypeId, ref.id), eq(eventTypeCatalog.revision, ref.revision))
+}
+
+/**
+ * RFC-359 W6-T25 —— 把命中的路由规则物化成 filtered 订阅行，并按**匹配顺序**取回它们
+ * （投递 id 按这个顺序逐个铸造，所以顺序是落库结果的一部分）。
+ *
+ * 合一前这段在 `recordObservation`（每个入站 webhook 请求跑 2 次）与 `settleObserver`
+ * （1 Hz 的观测轮，观测数 × 匹配数）里近乎逐字重复了两份，且都是**逐行 INSERT + 逐行回读**
+ * ⇒ 2N 条语句。现在是「一条批量 upsert + 一条按 id 集合的回读」⇒ 2 条。
+ *
+ * 语义逐字保持：
+ *   · `onConflictDoNothing` 的批量写在两个引擎上都是**首行赢**，与逐行同义（PG 的「同一行不能在
+ *     一条语句里被改两次」只管 DO UPDATE，所以这里不需要按键压平）；
+ *   · 回读**按 match 逐条回填**，同一个 materializedSubscriptionId 出现两次就回填两次——这与逐行写
+ *     逐字相同（下游的投递扇出会因此撞唯一键，那是改批之前就有的收场，不在这里偷偷改掉）。
+ */
+async function materializeFilteredSubscriptions(
+  tx: DatabaseTransaction,
+  subject: EventSubject,
+  matches: readonly MatchedFilteredEventSubscription[],
+): Promise<Array<typeof eventSubscriptions.$inferSelect>> {
+  if (matches.length === 0) return []
+  await insertInBatches(
+    tx,
+    eventSubscriptions,
+    matches.map((match) => {
+      const definition = match.definition
+      return {
+        id: match.materializedSubscriptionId,
+        eventTypeId: match.eventTypeRef.id,
+        eventTypeRevision: match.eventTypeRef.revision,
+        sourceId: definition.sourceRef.id,
+        sourceRevision: definition.sourceRef.revision,
+        subjectType: subject.typeId,
+        subjectRef: subject.subjectRef,
+        subscriberKind: definition.subscriber.kind,
+        subscriberRef: definition.subscriber.subscriberRef,
+        mode: 'filtered' as const,
+        originKind: 'routing-rule',
+        originRef: definition.id,
+        definitionRevision: definition.definitionRevision,
+        displayNameJson: JSON.stringify(definition.displayName),
+        selectorKind: definition.selector.kind,
+        selectorJson: JSON.stringify(definition.selector.config),
+        activeIdentityKey: null,
+        state: 'active' as const,
+        createdAt: definition.createdAt,
+        updatedAt: definition.updatedAt,
+        cancelledAt: null,
+      }
+    }),
+    (batch) =>
+      tx
+        .insert(eventSubscriptions)
+        .values([...batch])
+        .onConflictDoNothing()
+        .run(),
+  )
+  const ids = [...new Set(matches.map((match) => match.materializedSubscriptionId))]
+  const stored = await chunkedAll(ids, (chunk) =>
+    tx.select().from(eventSubscriptions).where(inArray(eventSubscriptions.id, chunk)),
+  )
+  const byId = new Map(stored.map((row) => [row.id, row]))
+  const out: Array<typeof eventSubscriptions.$inferSelect> = []
+  for (const match of matches) {
+    const row = byId.get(match.materializedSubscriptionId)
+    if (row !== undefined) out.push(row)
+  }
+  return out
 }
 
 function subscriptionRecord(row: typeof eventSubscriptions.$inferSelect): EventSubscriptionRecord {
@@ -716,42 +791,11 @@ export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
                 eq(eventSubscriptions.state, 'active'),
               ),
             )
-          const filteredSubscriptions: Array<typeof eventSubscriptions.$inferSelect> = []
-          for (const match of input.routingSubscriptions) {
-            const definition = match.definition
-            await tx
-              .insert(eventSubscriptions)
-              .values({
-                id: match.materializedSubscriptionId,
-                eventTypeId: match.eventTypeRef.id,
-                eventTypeRevision: match.eventTypeRef.revision,
-                sourceId: definition.sourceRef.id,
-                sourceRevision: definition.sourceRef.revision,
-                subjectType: input.observation.subject.typeId,
-                subjectRef: input.observation.subject.subjectRef,
-                subscriberKind: definition.subscriber.kind,
-                subscriberRef: definition.subscriber.subscriberRef,
-                mode: 'filtered',
-                originKind: 'routing-rule',
-                originRef: definition.id,
-                definitionRevision: definition.definitionRevision,
-                displayNameJson: JSON.stringify(definition.displayName),
-                selectorKind: definition.selector.kind,
-                selectorJson: JSON.stringify(definition.selector.config),
-                activeIdentityKey: null,
-                state: 'active',
-                createdAt: definition.createdAt,
-                updatedAt: definition.updatedAt,
-                cancelledAt: null,
-              })
-              .onConflictDoNothing()
-            const row = await tx
-              .select()
-              .from(eventSubscriptions)
-              .where(eq(eventSubscriptions.id, match.materializedSubscriptionId))
-              .get()
-            if (row !== undefined) filteredSubscriptions.push(row)
-          }
+          const filteredSubscriptions = await materializeFilteredSubscriptions(
+            tx,
+            input.observation.subject,
+            input.routingSubscriptions,
+          )
           const subscriptions = [...exactSubscriptions, ...filteredSubscriptions]
           // RFC-359 W6-T25 —— 投递扇出按批。id 仍按订阅顺序逐个铸造，落库行与顺序不变。
           const deliveryRows = subscriptions.map((subscription) => ({
@@ -1310,42 +1354,11 @@ export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
                 eq(eventSubscriptions.state, 'active'),
               ),
             )
-          const filteredSubscriptions: Array<typeof eventSubscriptions.$inferSelect> = []
-          for (const match of item.routingSubscriptions) {
-            const definition = match.definition
-            await tx
-              .insert(eventSubscriptions)
-              .values({
-                id: match.materializedSubscriptionId,
-                eventTypeId: match.eventTypeRef.id,
-                eventTypeRevision: match.eventTypeRef.revision,
-                sourceId: definition.sourceRef.id,
-                sourceRevision: definition.sourceRef.revision,
-                subjectType: item.observation.subject.typeId,
-                subjectRef: item.observation.subject.subjectRef,
-                subscriberKind: definition.subscriber.kind,
-                subscriberRef: definition.subscriber.subscriberRef,
-                mode: 'filtered',
-                originKind: 'routing-rule',
-                originRef: definition.id,
-                definitionRevision: definition.definitionRevision,
-                displayNameJson: JSON.stringify(definition.displayName),
-                selectorKind: definition.selector.kind,
-                selectorJson: JSON.stringify(definition.selector.config),
-                activeIdentityKey: null,
-                state: 'active',
-                createdAt: definition.createdAt,
-                updatedAt: definition.updatedAt,
-                cancelledAt: null,
-              })
-              .onConflictDoNothing()
-            const row = await tx
-              .select()
-              .from(eventSubscriptions)
-              .where(eq(eventSubscriptions.id, match.materializedSubscriptionId))
-              .get()
-            if (row !== undefined) filteredSubscriptions.push(row)
-          }
+          const filteredSubscriptions = await materializeFilteredSubscriptions(
+            tx,
+            item.observation.subject,
+            item.routingSubscriptions,
+          )
           const subscriptions = [...exactSubscriptions, ...filteredSubscriptions]
           // RFC-359 W6-T25 —— 投递扇出按批（一次观测轮的行数 = 观测数 × 订阅数）。
           await insertInBatches(

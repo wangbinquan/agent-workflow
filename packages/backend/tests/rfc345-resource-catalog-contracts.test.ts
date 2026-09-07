@@ -1728,8 +1728,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(postgresqlEngine).toContain('readSkillFile,')
     expect(postgresqlEngine).toContain('await session.prestage(item, { recordArtifact })')
     expect(postgresqlEngine).toContain(".set({ state: 'applying', updatedAt: now() })")
+    // RFC-359 W11：提交事务改走中立会话（`databaseSessionFor(db).transaction(...)`）后，
+    // 仍按 provider 命名事务句柄取参的 `bindTransaction` 经具名窄化 `catalogTransaction(transaction)`
+    // 拿到同一个句柄（PostgreSQL 上就是驱动 `db.transaction` 回调里的那个对象），位置与次序不变。
+    // 同 SQLite 侧 W4-D23b 的 `sqliteMembers(tx)`。
     expect(postgresqlEngine).toContain(
-      'const transactionSession = session.bindTransaction(transaction)',
+      'const transactionSession = session.bindTransaction(catalogTransaction(transaction))',
     )
     expect(postgresqlEngine).toContain(
       'await assertActiveHumanMappings(transactionSession.reader, humanMappings.activeUserIds)',

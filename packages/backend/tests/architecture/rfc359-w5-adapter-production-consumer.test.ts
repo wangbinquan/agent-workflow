@@ -108,6 +108,11 @@
 // 它的能力今天由中立的 `modules/collaboration/infrastructure/reviewMutationScope.ts` 承担，
 // 两个引擎共用。剩下 3 条里的两条（`sqliteTaskAuthorization.ts` 的两个工厂）当时被
 // T17 账本占用而推迟，那个理由本批已消失——账本现在改得动，只是文件属于 task-execution。
+// RFC-359 W10 再销 2 条，账本 3 → 1：`sqliteTaskAuthorization.ts` 的两个工厂随整份文件退役
+// （T17 账本本批由本刀持有，上一批推迟的唯一理由随之消失）。它们的真实能力在中立的
+// `modules/task-execution/infrastructure/taskAuthorization.ts`，本批同时给它补了双引擎对拍
+// `tests/rfc359-w10-task-authorization-conformance.test.ts`——此前这个端口在
+// `describeEachProvider` 里一条判据都没有，被跑的是死的那份、在跑的那份没人跑。
 // 棘轮规则照旧：
 //   · **增**了红 —— 又多了一份「看着对等、其实没接」的摆设；要么接上，要么删掉，
 //     要么写进账本并说明它的真实能力在哪；
@@ -295,22 +300,6 @@ const DECLARATIONS: readonly ProviderAdapterDeclaration[] = providerAdapterDecla
  * 生产上到底是谁在干这件事，否则删除会变成一次盲改。处置标记的语义见文件头。
  */
 export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] = [
-  [
-    'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts::createSqliteTaskAuthorizationParticipantInTx',
-    '改指：真实能力在中立的 `modules/task-execution/infrastructure/taskAuthorization.ts:82::createTaskAuthorizationParticipantInTx`，' +
-      '被 `modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts:83` 与 ' +
-      '`modules/collaboration/infrastructure/legacySqliteReview.ts:3544` 调用。' +
-      '本文件只剩这两个导出、两个都死，销账等于删掉整个 provider 命名文件——' +
-      '那要同批把 `rfc359-w5-t17-provider-file-location.test.ts` 的 `PROVIDER_NAMED_FILE_DEBT` 改小；' +
-      'RFC-359 W8 清理批跑时那份账本正被别的并发改动持有，故整条推迟。',
-  ],
-  [
-    'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts::createSqliteTaskAuthorizationQueries',
-    '改指：真实能力是中立的 ' +
-      '`modules/task-execution/infrastructure/taskAuthorization.ts:88::createTaskAuthorizationQueries`，' +
-      'RFC-359 W7 合 collaboration 两对时 `modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts:287` ' +
-      '已改指它，本工厂生产消费者归零。与上一条同文件、同批处置（同上：受 T17 账本占用推迟）。',
-  ],
   [
     'server.ts::composeSqliteProviderAppDeps',
     '纯死代码：全仓零引用（连测试都没有）。它只是同文件 `composeProviderAppDeps`（`server.ts:1265`）的同义包装；' +

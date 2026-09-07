@@ -75,7 +75,7 @@ import type { OwnerIdentityQueries } from '@/modules/identity-access/public/oper
 import type { FrozenTaskExecutionResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { branchTraceForTask } from '../application/branchTrace'
 import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
@@ -950,7 +950,9 @@ async function taskNodeRuns(
       .select()
       .from(nodeRuns)
       .where(eq(nodeRuns.taskId, taskId))
-      .orderBy(ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id)),
+      // 还没开始的 run（started_at IS NULL）要排在最前：两个引擎的默认落位正好相反，
+      // NULL 掉到队尾会让时间线把「还没开始」排在「已完成」后面。渲染权在能力矩阵。
+      .orderBy(engineOf(dependencies.db).ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id)),
     dependencies.db
       .select({
         reviewNodeRunId: docVersions.reviewNodeRunId,

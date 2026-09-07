@@ -2,14 +2,16 @@
 //
 // 归属端口本身已经合一（`taskOwnershipPersistence.ts`，一份实现两个引擎共用）。这里剩下的
 // 只为那些签名钉死在 `DbTxSync` 上的参与者与它们的同步调用方服务：
-//   · `withOwnedTaskTx` —— 回调签名是 `(tx: DbTxSync, owned: OwnedTaskTx) => T`，
-//     `platform/persistence/sqlite/taskLifecycle.ts`、`services/task.ts`、
-//     `sqliteTaskExecutionEffect.ts`、`sqliteProcessEffectObserver.ts` 等 8 处生产调用点依赖它同步；
-//   · `revokeExactTx` —— `sqliteSourceTerminationParticipant.ts` / `services/task.ts` 在自己的
-//     同步事务里当参与者调用；
+//   · `withOwnedTaskTx` —— 回调签名是 `(tx: DbTxSync, owned: OwnedTaskTx) => T`。W10 之后
+//     src 侧只剩 2 处调用点（`sqliteTaskExecutionEffect.ts` 的 `prepareAndAcquire` / `settle`）
+//     加上 `platform/persistence/sqlite/taskLifecycle.ts` 的 `setTaskStatus`；
+//   · `revokeExactTx` —— `services/task.ts` 传给 `setTaskStatus` 的 `onTransitionTx` 回调在那笔
+//     还没转的同步事务里当参与者调用。它的中立对等物是
+//     `taskOwnershipPersistence.ts#revokeExactOwnerInTx`，源终止参与者用的就是那份；
 //   · `claimPendingIntent` —— `taskExecutionModule.claim` → `taskDriverLifecycle.ts` 的同步认领。
 // `releaseAfterStop` / `releaseRecovered` / `revokeOldDaemon` 已随 W8 合一删除：它们唯一的
-// 调用方（合一前的 SQLite 恢复流程与 43 行端口适配器）都没有了。
+// 调用方（合一前的 SQLite 恢复流程与 43 行端口适配器）都没有了。RFC-359 W10 又去掉了
+// `revokeExact` 的事务包装（单语句 CAS 本就原子，理由写在该方法上）。
 
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
@@ -264,6 +266,15 @@ export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
     })
   }
 
+  /**
+   * RFC-359 W10 —— 事务包装去掉了。体内是**一条** `UPDATE … WHERE (精确 owner 元组 + 期望
+   * revision + state='claimed') RETURNING *`：单语句在两个引擎上本来就是原子的，赢/输由 CAS
+   * 判据自己裁决（没命中就 `.get()` 回 undefined，抛 stale-owner），外面再套一层 `BEGIN` /
+   * `COMMIT` 不改变任何可观测行为，只是把这条路径钉死在 bun:sqlite 专属的同步事务面上。
+   * 中立孪生 `taskOwnershipPersistence.ts` 的 `revokeExact` 早就是这个形状（无事务的单语句
+   * CAS），这里与它对齐。要把撤销和别的写并成一笔的调用方走 `revokeExactTx`，把自己的事务
+   * 句柄传进来。
+   */
   revokeExact(input: {
     db: DbClient
     owner: OwnershipTuple
@@ -271,19 +282,18 @@ export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
     now: number
     recoveryCode?: string
   }): OwnerSnapshot {
-    return dbTxSync(input.db, (tx) =>
-      this.revokeExactTx({
-        tx,
-        owner: input.owner,
-        expectedRevision: input.expectedRevision,
-        now: input.now,
-        ...(input.recoveryCode !== undefined ? { recoveryCode: input.recoveryCode } : {}),
-      }),
-    )
+    return this.revokeExactTx({
+      tx: input.db,
+      owner: input.owner,
+      expectedRevision: input.expectedRevision,
+      now: input.now,
+      ...(input.recoveryCode !== undefined ? { recoveryCode: input.recoveryCode } : {}),
+    })
   }
 
   revokeExactTx(input: {
-    tx: DbTxSync
+    /** 事务句柄，或连接本身（单语句 CAS 时的同一套同步面）。 */
+    tx: DbTxSync | DbClient
     owner: OwnershipTuple
     expectedRevision: number
     now: number

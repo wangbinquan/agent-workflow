@@ -27,7 +27,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
 import {
   clarifyRounds,
   nodeRuns,
@@ -218,9 +218,24 @@ function gatePatch(args: GateCasArgs): Partial<typeof workgroupTaskState.$inferI
   }
 }
 
-export function casGateStatusTx(tx: DbTxSync, taskId: string, args: GateCasArgs): boolean {
+/**
+ * RFC-359 W9 —— 门状态 CAS。**事务整个去掉了**，不是换了个事务原语。
+ *
+ * 体内本来就只有一条语句（`UPDATE … WHERE gate_status IN (…) RETURNING`），单语句在两个引擎上
+ * 都是原子的——`from` 集合就是 compare，`RETURNING` 的行数就是 swap 结果。包一层事务既不多给
+ * 一分原子性，又把这条路钉死在 bun:sqlite 独有的同步面上（`dbTxSync` 的回调不许 `await`，
+ * PostgreSQL 上根本走不了）。同一判据见 `reviewRepairParticipant.ts`（W7 也是直接去掉）。
+ *
+ * 同步孪生 `casGateStatusTx` 随之删除：它自 RFC-217 起就只被本文件这一处调用（生产零外部调用方，
+ * 测试只用异步的 `casGateStatus`），留着等于留一条没人走的 SQLite-only 岔路。
+ */
+export async function casGateStatus(
+  db: DbClient,
+  taskId: string,
+  args: GateCasArgs,
+): Promise<boolean> {
   assertGateTransition(args.from, args.to)
-  const updated = tx
+  const updated = await db
     .update(workgroupTaskState)
     .set({ gateStatus: args.to, updatedAt: Date.now(), ...gatePatch(args) })
     .where(
@@ -230,16 +245,7 @@ export function casGateStatusTx(tx: DbTxSync, taskId: string, args: GateCasArgs)
       ),
     )
     .returning({ taskId: workgroupTaskState.taskId })
-    .all()
   return updated.length > 0
-}
-
-export async function casGateStatus(
-  db: DbClient,
-  taskId: string,
-  args: GateCasArgs,
-): Promise<boolean> {
-  return dbTxSync(db, (tx) => casGateStatusTx(tx, taskId, args))
 }
 
 export async function setPauseReason(

@@ -9,6 +9,7 @@ import type {
   AgentSkillRef,
   CreateAgent,
   RenameAgent,
+  ResourceAccess,
   UpdateAgent,
 } from '@agent-workflow/shared'
 import {
@@ -31,6 +32,12 @@ import {
 } from '@/db/schema'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import {
+  affectedRows,
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
+import { resolveResourceAccessForTx } from '../resourceAclTransaction'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import {
   ConflictError,
@@ -692,7 +699,9 @@ export function commitAgentUpdateInTx(tx: DbTxSync, p: PreparedAgentUpdate): voi
       )
     : eq(agents.id, id)
   const result = tx.update(agents).set(set).where(where).run()
-  if (revisionFenced && changesOf(result) !== 1) throw staleAgentError(id)
+  // RFC-359 W9：本地的 `changesOf` 退役，判据统一走中立的 `affectedRows`（两个引擎都读
+  // `changes`，缺失按 0 计 ⇒ 判据失真时「恰好一行」失败得大声）。这一臂本身仍钉在同步面上。
+  if (revisionFenced && affectedRows(result) !== 1) throw staleAgentError(id)
 }
 
 export async function updateAgent(
@@ -727,28 +736,38 @@ export async function deleteAgent(
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
   const name = existing.name
-  // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the
-  // guard transaction (dbTxSync is sync) — used only to decide which
-  // referencing resource NAMES the refusal details may show.
+  // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the write
+  // transaction — used only to decide which referencing resource NAMES the
+  // refusal details may show, never as a fence. (RFC-359 W9: the neutral
+  // primitive would now let them read inside, but "谁的名字能出现在拒绝理由里"
+  // 不是不变量的一部分，多占一段写锁没有收益。)
   const wfGranted = hasResourceAclBypass(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'workflow')
   const agGranted = hasResourceAclBypass(actor)
     ? new Set<string>()
     : await listGrantedResourceIds(db, actor, 'agent')
-  // RFC-165 (F17-r3): guards + the delete run in ONE dbTxSync — the old
+  // RFC-165 (F17-r3): guards + the delete run in ONE transaction — the old
   // check-then-await-then-write shape let a reference land between the check
-  // and the delete. All reads below use the synchronous tx surface.
-  dbTxSync(db, (tx) => {
+  // and the delete.
+  //
+  // RFC-359 W9：这一笔从 bun:sqlite 独有的同步 `dbTxSync` 迁到中立事务原语，两个引擎共用
+  // 一条。事务体里的每一条语句都必须 `await`——**漏掉不是小事**：读漏 await 只有 PG 红，
+  // 写漏 await（`.run()` 那一档）在 PG 上**静默**失真（`changes` 恒 undefined）。
+  await databaseSessionFor(db).transaction(async (tx) => {
     // Canonical-id fence: a rename cannot retarget this operation. A concurrent
     // delete is reported as the same non-enumerating 404 as an absent id.
     if (fence === undefined) {
-      const fenceRow = tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).get()
+      const [fenceRow] = await tx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(eq(agents.id, id))
+        .limit(1)
       if (fenceRow === undefined) {
         throw new NotFoundError('agent-not-found', 'agent not found')
       }
     } else {
-      requireAgentMutationRevision(tx, id, actor, fence, 'govern')
+      await requireAgentMutationRevisionTx(tx, id, actor, fence, 'govern')
     }
 
     // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
@@ -763,7 +782,7 @@ export async function deleteAgent(
         `agent '${name}' has a task launch in progress; retry after it completes`,
       )
     }
-    const wfRows = tx
+    const wfRows = await tx
       .select({
         id: workflows.id,
         name: workflows.name,
@@ -772,7 +791,6 @@ export async function deleteAgent(
         visibility: workflows.visibility,
       })
       .from(workflows)
-      .all()
     // RFC-285 B2 档位说明：agent 对**任务**引用零检查即是统一中档——任务快照
     // 冻结（workflowSnapshot/agent 定义随任务落盘），删除 agent 不影响在跑或
     // 历史任务，展示层容忍悬空 agent 名。此处的 agent-in-use 挡的是 **workflow
@@ -794,7 +812,7 @@ export async function deleteAgent(
     // dependsOn closure mentions. Forces the caller to deref upstream first so
     // runtime never spawns with a dangling reference (which would surface as
     // a node failure with `agent-dependency-not-found`).
-    const depRows = tx
+    const depRows = await tx
       .select({
         id: agents.id,
         name: agents.name,
@@ -805,7 +823,6 @@ export async function deleteAgent(
       .from(agents)
       // RFC-223 (PR-1): dependsOn stores agent IDS now — match this agent's id.
       .where(like(agents.dependsOn, `%"${existing.id}"%`))
-      .all()
     const dependents = agentsDependingOnIn(depRows, existing.id)
     if (dependents.length > 0) {
       throw new ConflictError(
@@ -826,7 +843,7 @@ export async function deleteAgent(
     // leak that task's id via the error). A pre-0091 legacy task has NULL
     // source_agent_id and is already R4-1-quarantined (un-resumable), so not
     // blocking on it is correct.
-    const live = tx
+    const live = await tx
       .select({ id: tasks.id })
       .from(tasks)
       .where(
@@ -835,7 +852,6 @@ export async function deleteAgent(
           notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
         ),
       )
-      .all()
     if (live.length > 0) {
       throw new ConflictError(
         'agent-tasks-active',
@@ -843,7 +859,7 @@ export async function deleteAgent(
         { taskIds: live.map((t) => t.id) },
       )
     }
-    const schedRows = tx
+    const schedRows = await tx
       .select({
         id: scheduledTasks.id,
         name: scheduledTasks.name,
@@ -852,7 +868,6 @@ export async function deleteAgent(
         ownerUserId: scheduledTasks.ownerUserId,
       })
       .from(scheduledTasks)
-      .all()
     // RFC-284 T9（§2.2）：本地副本收编 scheduledTasks.scheduledRowsReferencing。
     const schedRefRows = scheduledRowsReferencing(schedRows, {
       launchKind: 'agent',
@@ -866,7 +881,7 @@ export async function deleteAgent(
         discloseScheduleRefs(actor, schedRefRows),
       )
     }
-    tx.delete(agents).where(eq(agents.id, id)).run()
+    await tx.delete(agents).where(eq(agents.id, id))
   })
 }
 
@@ -886,8 +901,10 @@ export async function renameAgent(
   }
   if (input.newName === existing.name) {
     if (opts !== undefined) {
-      dbTxSync(db, (tx) => {
-        requireAgentMutationRevision(tx, id, opts.actor, opts, 'govern')
+      // 名字没变也要过一次围栏：no-op 改名的 404 / 403 / stale 与真改名同形，
+      // 否则「用当前名字再存一次」就成了一条绕过治理门的旁路。
+      await databaseSessionFor(db).transaction(async (tx) => {
+        await requireAgentMutationRevisionTx(tx, id, opts.actor, opts, 'govern')
       })
     }
     return existing
@@ -897,16 +914,16 @@ export async function renameAgent(
   // metadata only. It must not be blocked by references that continue to point
   // at this exact row.
   try {
-    dbTxSync(db, (tx) => {
+    await databaseSessionFor(db).transaction(async (tx) => {
       // Canonical-id fence: the row selected by the URL cannot be retargeted by
       // a concurrent rename.
       const current =
         opts === undefined
-          ? tx.select().from(agents).where(eq(agents.id, id)).get()
-          : requireAgentMutationRevision(tx, id, opts.actor, opts, 'govern')
+          ? (await tx.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
+          : await requireAgentMutationRevisionTx(tx, id, opts.actor, opts, 'govern')
       if (current === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
 
-      const collision = tx
+      const [collision] = await tx
         .select({ id: agents.id })
         .from(agents)
         .where(
@@ -918,12 +935,15 @@ export async function renameAgent(
             { column: agents.id, id },
           ),
         )
-        .get()
+        .limit(1)
       if (collision !== undefined) {
         throw new ConflictError('agent-name-in-use', `agent '${input.newName}' already exists`)
       }
 
-      const result = tx
+      // RFC-359 W9：CAS 判据从 bun:sqlite 独有的 `.run().changes` 换成中立的 `affectedRows`
+      // ——`.run()` 在 PG（drizzle sqlite-proxy，异步）上回的是**没被 await 的 Promise**，
+      // `changes` 恒为 undefined，于是「恰好一行」的围栏静默恒假。
+      const result = await tx
         .update(agents)
         .set({ name: input.newName, updatedAt: monotonicNow(current.updatedAt) })
         .where(
@@ -935,8 +955,7 @@ export async function renameAgent(
                 eq(agents.aclRevision, opts.expectedAclRevision),
               ),
         )
-        .run()
-      if (changesOf(result) !== 1) throw staleAgentError(id)
+      if (affectedRows(result) !== 1) throw staleAgentError(id)
     })
   } catch (error) {
     if (isOwnerNameUniqueViolation(error, 'agents', 'agents_owner_name_unique')) {
@@ -958,24 +977,24 @@ export async function renameAgent(
  * RFC-223: scheduled agent targets are canonical ids. Delete refuses while an
  * id-targeted row remains; rename is safe because the id does not change.
  */
-function requireAgentMutationRevision(
-  tx: DbTxSync,
+/**
+ * RFC-359 W9 —— 围栏门的**判据核**。取行与取 access 的方式在两个包装器上不同（同步 SQLite 面
+ * vs 中立异步事务面），但判据只许有一份：404 先于 403 先于 stale 的错误顺序是路由契约的一部分，
+ * 抄成两份就等着它们哪天各漂各的。蓝本是 `platform/persistence/nodeRunLifecycleCore.ts`
+ * （RFC-359 W8 把转移判据下沉成叶子的同一手法）。
+ */
+function assertAgentMutationAllowed(
   id: string,
-  actor: Actor,
+  current: AgentRow | undefined,
+  access: ResourceAccess | undefined,
   expected: { expectedUpdatedAt: number; expectedAclRevision: number },
-  // RFC-324 —— 这道 in-tx 门服务三个调用方，而它们不再同档：内容更新是 `edit`，
-  // 删除与改名是 `govern`。参数是必填的：加默认值等于给未来的第四个调用方一个
-  // 「不想就不填」的选项，而这里恰恰是最不该猜的地方。
   need: 'edit' | 'govern',
 ): AgentRow {
-  const current = tx.select().from(agents).where(eq(agents.id, id)).get()
-  if (current === undefined) {
+  if (current === undefined || access === undefined) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
-
   // RFC-282/RFC-305/RFC-324 — 可见性与档位来自同一次判定；错误顺序
   // （404 先于 403 先于 stale）是路由契约的一部分。
-  const access = resolveResourceAccessForInTx(tx, actor, 'agent', current)
   if (!canViewAccess(access)) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
@@ -999,8 +1018,54 @@ function requireAgentMutationRevision(
   return current
 }
 
-function changesOf(result: unknown): number {
-  return (result as { changes?: number }).changes ?? 0
+/**
+ * 同步面的围栏门。**只剩一个调用方**：`commitAgentUpdateInTx` —— 它按 `DbTxSync` 定型，被
+ * `aggregateAdapters/legacyIntentApplyResourceParticipants.ts` /
+ * `legacyResourcePackageMutationParticipants.ts` 的参与者契约 `(tx: DbTxSync, …) => void` 钉着，
+ * 那条链迁完之前这一份删不掉（RFC-359 W9 逐处判定，见文件头的账本注释）。
+ */
+function requireAgentMutationRevision(
+  tx: DbTxSync,
+  id: string,
+  actor: Actor,
+  expected: { expectedUpdatedAt: number; expectedAclRevision: number },
+  // RFC-324 —— 这道 in-tx 门服务多个调用方，而它们不再同档：内容更新是 `edit`，
+  // 删除与改名是 `govern`。参数是必填的：加默认值等于给未来的调用方一个
+  // 「不想就不填」的选项，而这里恰恰是最不该猜的地方。
+  need: 'edit' | 'govern',
+): AgentRow {
+  const current = tx.select().from(agents).where(eq(agents.id, id)).get()
+  return assertAgentMutationAllowed(
+    id,
+    current,
+    current === undefined ? undefined : resolveResourceAccessForInTx(tx, actor, 'agent', current),
+    expected,
+    need,
+  )
+}
+
+/**
+ * 中立事务面的围栏门（delete / rename 走这一条）。读一律写成 `await …limit(1)` 解构而不是
+ * `.get()`：中立句柄上 `.get()` 的返回类型是 `T | Promise<T>` 的联合，能 await 但读起来像同步面，
+ * 下一个人很容易抄成漏 await 的形状（同 `sqliteIntentApplyOperations.ts` 的房规）。
+ */
+async function requireAgentMutationRevisionTx(
+  tx: DatabaseTransaction,
+  id: string,
+  actor: Actor,
+  expected: { expectedUpdatedAt: number; expectedAclRevision: number },
+  need: 'edit' | 'govern',
+): Promise<AgentRow> {
+  const [current] = await tx.select().from(agents).where(eq(agents.id, id)).limit(1)
+  return assertAgentMutationAllowed(
+    id,
+    current,
+    current === undefined
+      ? undefined
+      : await resolveResourceAccessForTx(tx, actor, 'agent', current),
+    expected,
+    need,
+  )
 }
 
 function staleAgentError(id: string): ConflictError {

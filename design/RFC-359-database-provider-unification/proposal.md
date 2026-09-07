@@ -144,6 +144,24 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
 - **AC-12**（G5）组合根全量：`cli/` 与 `*/composition*` 下 `*-not-bound` 形状为零；启动序列恰有
   一个调用方；provider 命名文件在 `platform/persistence/` 之外为零。
 
+  **修订（2026-09-08，与 AC-1 的修订对齐）**：第三款「provider 命名文件在 `platform/persistence/`
+  之外为零」按字面与**修订后的 AC-1 直接矛盾**——AC-1 已接受一份 exact 登记的「机制分叉对」清单
+  （以双引擎对拍替代合一），而那些对的文件天然是 provider 命名、且大多落在
+  `modules/*/infrastructure/` 而非 `platform/persistence/`。两条判据不可能同时按字面成立。
+
+  **修订后的第三款**：`platform/persistence/` 之外的 provider 命名文件数 = 0，**例外是
+  `PROVIDER_PAIR_CONFORMANCE_LEDGER` 里已登记的机制分叉对**——它们的 provider 名是**准确的**
+  （文件确实只服务一个引擎，且这件事已被逐条裁决并带双引擎对拍见证），不属于命名债。
+
+  换句话说，第三款要消灭的是**名不副实**的两类文件：①**死代码**（provider 命名、零生产消费者）；
+  ②**命名债**（provider 命名，但根本没有孪生实现——它就是那件事的唯一实现，前缀纯属历史）。
+  前者删、后者改名。**登记在册的真分叉保留其 provider 名**，因为改成中立名反而会掩盖
+  「这份实现只服务一个引擎」这个必须一眼可见的事实。
+
+  **当前实测（as of `1b5e74339`）**：账本 `PROVIDER_NAMED_FILE_DEBT` 共 **88** 条，其中
+  **18 条**属于 9 对已登记机制分叉（第 10 对 `LogicalSource` 本就在 `platform/persistence/` 下，
+  不在本款范围内）；**70 条**不属于任何登记对，即本款真正要处置的面。
+
 ## 8. 用户裁决点（呈确认）
 
 - **D1 事务原语形态**：采用「显式 `BEGIN IMMEDIATE` + 进程内单写者异步租约 + 显式 COMMIT/ROLLBACK」

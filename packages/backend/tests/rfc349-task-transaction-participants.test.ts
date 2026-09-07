@@ -14,10 +14,6 @@ import { nodeRuns, taskCollaborators, tasks, users } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
-import {
-  createSqliteTaskAuthorizationParticipantInTx,
-  createSqliteTaskAuthorizationQueries,
-} from '@/modules/task-execution/infrastructure/sqliteTaskAuthorization'
 import { createTaskAuthorizationParticipantInTx } from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -155,43 +151,10 @@ function postgresqlFixture() {
 }
 
 describe('RFC-349 task transaction participants', () => {
-  test('visibility includes observers while acting membership excludes them', async () => {
-    const db = seedTask()
-    const queries = createSqliteTaskAuthorizationQueries(db)
-
-    for (const userId of ['owner', 'member', 'observer']) {
-      await expect(
-        queries.canViewTask({
-          subject: { userId, canReadAllTasks: false },
-          taskId: TASK_ID,
-        }),
-      ).resolves.toBe(true)
-    }
-    await expect(
-      queries.canViewTask({
-        subject: { userId: 'outsider', canReadAllTasks: false },
-        taskId: TASK_ID,
-      }),
-    ).resolves.toBe(false)
-    await expect(
-      queries.canViewTask({
-        subject: { userId: 'outsider', canReadAllTasks: true },
-        taskId: 'missing-task',
-      }),
-    ).resolves.toBe(false)
-
-    expect(
-      dbTxSync(db, (tx) => {
-        const authorization = createSqliteTaskAuthorizationParticipantInTx(tx)
-        return {
-          owner: authorization.canActOnTask({ userId: 'owner', taskId: TASK_ID }),
-          member: authorization.canActOnTask({ userId: 'member', taskId: TASK_ID }),
-          observer: authorization.canActOnTask({ userId: 'observer', taskId: TASK_ID }),
-          outsider: authorization.canActOnTask({ userId: 'outsider', taskId: TASK_ID }),
-        }
-      }),
-    ).toEqual({ owner: true, member: true, observer: false, outsider: false })
-  })
+  // RFC-359 W10：这条用例此前驱动的是 `infrastructure/sqliteTaskAuthorization.ts`——一份自
+  // W1-T2c 起零生产调用方的同步孪生，本批随文件一并退役。同一判据（可见性含 viewer、
+  // 动手权只认 owner/collaborator）已搬到真在跑的中立实现上，并且两个引擎各跑一遍：
+  // `tests/rfc359-w10-task-authorization-conformance.test.ts`。
 
   test('replacement mint and superseded-merge retirement commit atomically', () => {
     const db = seedTask()

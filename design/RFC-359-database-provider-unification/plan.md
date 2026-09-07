@@ -1715,6 +1715,70 @@ W9 逐个核过 collaboration 的 12 个条目：**只有 1 个名副其实**。
 **下一步建议**：把纯改名单独做一刀（零行为改动），一次性重采账本。混在功能刀里做会牵动
 5–7 份 architecture ledger、把改名的 diff 淹没在行为改动里，review 不动。
 
+## 5e. T17 那 88 条的构成实测（2026-09-08，`1b5e74339`）——**未登记的成对实现已经是 0**
+
+把 `PROVIDER_NAMED_FILE_DEBT`（88 条）逐条与 `PROVIDER_PAIR_CONFORMANCE_LEDGER`（10 对）交叉比对，
+再对剩下的每一条查同目录同词干的孪生是否存在，结果是：
+
+| 分类 | 条数 | 含义 |
+| --- | --- | --- |
+| 属于 9 对已登记机制分叉 | **18** | 各带双引擎对拍 + 逐条裁决；第 10 对 `LogicalSource` 本就在 `platform/persistence/` 下，不在 AC-12 第三款范围 |
+| 未登记、**有**孪生 | **0** | —— |
+| 未登记、**无**孪生 | **70** | 每一条都是那件事的**唯一实现**，provider 前缀纯属历史：命名债或死码 |
+
+**这条数据的分量**：RFC-359 要消灭的是「同一件事两份实现会漂」。按成对账本的口径，
+**全仓已不存在任何一对未登记的 provider 专属实现**——每个 provider 命名文件要么是登记在册、
+裁决过、有对拍见证的机制分叉，要么根本没有对手方。用户那条硬要求（「不允许再出现两种数据库
+一个好一个不好的分支」）在结构上已经达成，剩下的 70 条是**名不副实**，不是分叉。
+
+**因此 Cut F（T17 收尾）是纯机械刀**：改名 + 删死码，不含裁决。但它必须在**安静工作树**上做——
+改名要同时动 5–7 本架构账本（多本按文件名 / 符号名取语料）并配一次普查重采。
+
+**口径的已知盲区（必须写明，别把上面的 0 读成绝对）**：成对账本按**同目录同词干**认对，
+于是两类孪生它看不见——
+① **同名不同文件**：`terminalizeTaskExecutionIntentsTx` 在 `effectQuiescence.ts` 里有第三份逐字节
+   相同的同名导出，T17（按文件名）与成对账本（按同目录同词干）**同时失明**；
+② **孪生根本不是文件**：六个 PG 文件的对手方是 `src/cli/start.ts` / `services/task.ts` 里的
+   **内联对象字面量**。
+这两类只能靠逐刀排查照出来，不是这个口径能覆盖的。**引用上面那个 0 时要连这段一起引。**
+
+## 5f. AC-3 收口：裸驱动事务已归零，账本剩的 27 是**守卫过度匹配**（2026-09-08 实测）
+
+W11 Cut G 把最后 4 处真·裸驱动事务转成中立原语
+（`postgresqlIntentApplyOperations.ts` ×2、`postgresqlResourcePackageAtomicApply.ts` ×2）。
+账本 `BARE_TRANSACTION_DEBT` 因此 31 → 27，**剩下的 27 全在 `intentSqlPersistence.ts` 一个文件里**。
+
+**那 27 处不是债。** 它们的形状是 `this.runner.transaction(function* () { … })`——基于生成器的
+intent SQL 程序运行器，而 `runner.transaction` 内部调的正是
+`databaseSessionFor(this.db).transaction(...)`（`intentSqlProgramRunner.ts:85` / `:117`）。
+也就是说它们**本来就走中立原语**，只是低一层。
+
+**守卫超出了它自己声明的判据**：`rfc359-w5-t18-bare-transaction.test.ts` 的头注释写明它锁的是
+「`db.transaction(` / `this.db.transaction(` / `dependencies.db.transaction(` 这些裸形态」，
+而 `this.runner.transaction(` 不在其中——正则把任意接收者的 `.transaction(` 都数了进来。
+
+**顺带订正一条过期裁决**：账本原注释称 `IntentSqlProgramRunner` 有
+`SqliteIntentSqlProgramRunner`（走 `dbTxSync`）与 `PostgresqlIntentSqlProgramRunner`（走裸事务）
+两份实现。**那两个文件在 W7 就被合并了**，现存两个类都调中立原语。注释已就地订正。
+
+**处置（未做，记为收口项）**：把守卫的判据从「任意接收者的 `.transaction(`」收紧到
+「接收者是**数据库句柄**」——用同文件 AST 找到接收者的声明（属性 / 形参）并看它的类型标注是否
+指向数据库类型（`ProviderNeutralDatabase` / `DatabaseClient` / `SqliteRemoteDatabase` 等）。
+**这不是白名单**（账本正确地拒绝过「白名单 = 空白许可证」），是让谓词与它自己写明的判据一致。
+收紧后账本应降到 0，且必须配一条变异验证：手工插一处 `db.transaction(` 仍要红。
+
+**另一条路（不取）**：collapse 掉生成器抽象（49 个 `function*` / 162 个 `yield*` / 44 个程序入口，
+约 2845 行重写）。为了让一个正则高兴而做这种规模的重写，代价与收益完全不成比例。
+
+### Cut G 顺带照出的一个真缺口（已修）
+
+PG 侧的 apply **一直缺 `inClaimTxAfterJournal` 测试缝**，而 SQLite 侧从 W9 就有——
+于是「认领与四条读判定同生共死」这条不变量**在 PostgreSQL 上此前零可观测面**。已在同位置补上。
+
+**先红后绿的形状与常规相反**（值得记）：基线 8 pass / 4 fail 里，**PG 那半从一开始就是绿的**
+（驱动自带事务本就原子），红的是 **SQLite**。此前 W8 的 T28 是反过来的（PG 红 SQLite 绿）。
+**结论：别预设哪个引擎会红**——两个方向都真实出现过，取决于缺陷是「弱隔离」还是「同步包装器」。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

@@ -26,7 +26,6 @@ import {
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
   taskExecutionEffects,
-  taskExecutionIntents,
   taskExecutionLineageOperationRecords,
   taskExecutionOwners,
 } from '@/db/schema'
@@ -41,7 +40,7 @@ import type {
   RecoveredManagedProcessResolution,
 } from '../application/ports/taskExecutionEffectStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import type { TerminalizeTaskExecutionIntentsInput } from '../application/terminalizeExecutionIntent'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import {
   codeHostRecoveryClass,
   decodeCodeHostRecoveryDescriptor,
@@ -548,89 +547,13 @@ export async function resolveQuiescedManagedProcesses(
 }
 
 /**
- * Close every active intent of one task and hand any unconsumed replay authorization back to
- * requires-actor, inside the caller's control / recovery transaction. Successor-daemon recovery
- * can fence this to the interrupted claimed epoch so a gate decision committed before the crash
- * keeps its pending successor.
+ * RFC-359 W10：本文件此前**又抄了一份** `terminalizeTaskExecutionIntentsTx`——与
+ * `taskExecutionIntentTerminalPersistence.ts` 的 `terminalizeTaskExecutionIntentsInTx` 逐字节相同
+ * （连两条 `task-continuation-stale` 的文案都一样），却因为**同名不同文件**，成对账本与
+ * provider 命名账本谁都看不见它：下一个人改了那边、忘了这边，静默清算与源终止就会分道扬镳。
+ * 现在只留一条转出，实现只有一份。
  */
-export async function terminalizeTaskExecutionIntentsTx(
-  tx: DatabaseTransaction,
-  input: TerminalizeTaskExecutionIntentsInput,
-): Promise<void> {
-  const active = await tx
-    .select({ id: taskExecutionIntents.id })
-    .from(taskExecutionIntents)
-    .where(
-      and(
-        eq(taskExecutionIntents.taskId, input.taskId),
-        input.claimedOwnerEpoch === undefined
-          ? inArray(taskExecutionIntents.state, ['pending', 'claimed'])
-          : and(
-              eq(taskExecutionIntents.state, 'claimed'),
-              eq(taskExecutionIntents.claimedEpoch, input.claimedOwnerEpoch),
-            ),
-      ),
-    )
-  const activeIntentIds = active.map((row) => row.id)
-  if (activeIntentIds.length === 0) return
-  const terminalized = await tx
-    .update(taskExecutionIntents)
-    .set({
-      state: input.state,
-      failureCode: input.failureCode,
-      completedAt: input.now,
-      updatedAt: input.now,
-    })
-    .where(inArray(taskExecutionIntents.id, activeIntentIds))
-    .returning({ id: taskExecutionIntents.id })
-  if (terminalized.length !== activeIntentIds.length) {
-    throw new TaskExecutionError(
-      'task-continuation-stale',
-      `task '${input.taskId}' active intents changed during terminalization`,
-    )
-  }
-  const decisions = await tx
-    .select({
-      id: taskExecutionLineageOperationRecords.id,
-      revision: taskExecutionLineageOperationRecords.recordRevision,
-    })
-    .from(taskExecutionLineageOperationRecords)
-    .where(
-      and(
-        eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'),
-        eq(taskExecutionLineageOperationRecords.decisionState, 'actor-replay-authorized'),
-        inArray(taskExecutionLineageOperationRecords.boundIntentId, activeIntentIds),
-      ),
-    )
-  for (const decision of decisions) {
-    const released = await tx
-      .update(taskExecutionLineageOperationRecords)
-      .set({
-        decisionState: 'requires-actor',
-        replayAuthorizationId: null,
-        authorizationScopeJson: null,
-        actorUserId: null,
-        authorizationSource: null,
-        boundIntentId: null,
-        recordRevision: decision.revision + 1,
-        updatedAt: input.now,
-      })
-      .where(
-        and(
-          eq(taskExecutionLineageOperationRecords.id, decision.id),
-          eq(taskExecutionLineageOperationRecords.recordRevision, decision.revision),
-          eq(taskExecutionLineageOperationRecords.decisionState, 'actor-replay-authorized'),
-        ),
-      )
-      .returning({ id: taskExecutionLineageOperationRecords.id })
-    if (released[0] === undefined) {
-      throw new TaskExecutionError(
-        'task-continuation-stale',
-        `replay decision '${decision.id}' changed during intent terminalization`,
-      )
-    }
-  }
-}
+export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntentsInTx
 
 /**
  * Terminalize an ambiguous execution generation only after a task-wide quiescence proof exists:

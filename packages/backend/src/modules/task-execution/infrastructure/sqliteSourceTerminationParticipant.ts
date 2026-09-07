@@ -1,11 +1,26 @@
 // RFC-303 — canonical task-owned source-termination application service.
-import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
+//
+// RFC-359 W10 —— 这里原来有三笔 bun:sqlite 专属的同步 `dbTxSync`（重放对账 / 终态 CAS 输给
+// 别人后的补写 / 目标本就终态的直写），全部改走中立事务原语
+// `databaseSessionFor(db).transaction(...)`，事务体里的四个参与者也各自换成两个引擎共用的
+// 那一份：
+//   · `cancelOpenNodeRunsTx` → 本文件的 `cancelOpenNodeRunsInTx`（同一张转移表、同一个
+//     MR/PR 围栏判定，走中立的 `transitionNodeRunStatusTx`）；
+//   · `appendTaskNodeStatusesCommittedEventTx` → `appendTaskNodeStatusesCommittedEvent`；
+//   · `ownership.revokeExactTx` → `revokeExactOwnerInTx`；
+//   · `terminalizeTaskExecutionIntentsTx` → `terminalizeTaskExecutionIntentsInTx`。
+// 唯一留下的同步参与者是传给 `setTaskStatus` 的 `onTransitionTx` 回调——那笔事务的主体
+// （`writeTaskStatusTx`）本身还是同步的，属另一刀（账本 `taskLifecycle.ts: 2` 那两笔）。
+import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import type { TaskStatus } from '@agent-workflow/shared'
-import { and, asc, eq, lt } from 'drizzle-orm'
+import { and, asc, eq, inArray, lt } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { taskExecutionOwners, tasks } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import { nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import {
   sourceTerminationTargetDisposition,
   taskStopProjection,
@@ -24,14 +39,48 @@ import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator
 import { ConflictError } from '@/util/errors'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { terminalizeTaskExecutionIntentsTx } from './sqliteTerminalizeExecutionIntent'
+import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
+import { revokeExactOwnerInTx } from './taskOwnershipPersistence'
+import { transitionNodeRunStatusTx as transitionNodeRunStatusInTransaction } from './nodeRunLifecycleTransition'
 import type { RuntimeStopTicket } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
 import type { OwnershipToken } from '@/modules/task-execution/domain/ownership'
-import { appendTaskNodeStatusesCommittedEventTx } from './taskLifecycleEventParticipant'
+import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 // RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
 const CANCELABLE: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
+const CANCELABLE_NODE_RUN_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
+
+/**
+ * RFC-359 W10 —— `cancelOpenNodeRunsTx` 的中立孪生：把任务下每一行还活着的 node_run 投影成
+ * `canceled`，逐行走共享转移表（`transitionNodeRunStatusTx`）而不是一条 bulk UPDATE，于是
+ * 终态覆写闸与 MR/PR 围栏判定与别处逐字同一份，并发改动会以
+ * `ConcurrentNodeRunTransition` 让整笔回滚。调用方提交后才广播。
+ */
+async function cancelOpenNodeRunsInTx(
+  tx: DatabaseTransaction,
+  args: { readonly taskId: string; readonly finishedAt: number; readonly errorMessage: string },
+): Promise<Array<{ id: string; nodeId: string }>> {
+  const rows = await tx
+    .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+    .from(nodeRuns)
+    .where(
+      and(
+        eq(nodeRuns.taskId, args.taskId),
+        inArray(nodeRuns.status, [...CANCELABLE_NODE_RUN_STATUSES]),
+      ),
+    )
+  for (const row of rows) {
+    await transitionNodeRunStatusInTransaction({
+      tx,
+      nodeRunId: row.id,
+      event: { kind: 'mark-canceled', reason: args.errorMessage },
+      extra: { finishedAt: args.finishedAt, errorMessage: args.errorMessage },
+    })
+  }
+  return rows
+}
 
 type AppliedTarget = {
   receipt: TaskSourceTerminationReceipt
@@ -77,18 +126,23 @@ async function applyOne(
   input: TaskSourceTerminationEffectInput,
 ): Promise<AppliedTarget | null> {
   return withTaskReviewMutationLock(taskId, async () => {
-    const row = db
-      .select({
-        status: tasks.status,
-        parentTaskId: tasks.parentTaskId,
-        launchRevision: tasks.sourceTerminationLaunchRev,
-        fence: tasks.sourceTerminationFence,
-        effectRevision: tasks.sourceTerminationEffectRev,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-      .all()[0]
+    // RFC-359 W10 —— 事务**外**的这几条读/写原本也是 bun:sqlite 专属的同步面（`.all()[0]` /
+    // 不 await 的 `.run()`）。它们不进同步事务面账本，但一样是「只有一个引擎跑得动」：PG 上
+    // `.all()` 回的是 Promise（`[0]` 恒 undefined），`.run()` 回一个没人等的 Promise（语句静默
+    // 不落）。补齐 await 之后 `applyOne` 除了还钉着的 `setTaskStatus` 取消分支以外都两个引擎共用。
+    const row = (
+      await db
+        .select({
+          status: tasks.status,
+          parentTaskId: tasks.parentTaskId,
+          launchRevision: tasks.sourceTerminationLaunchRev,
+          fence: tasks.sourceTerminationFence,
+          effectRevision: tasks.sourceTerminationEffectRev,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+    )[0]
     if (
       row === undefined ||
       row.launchRevision === null ||
@@ -103,16 +157,15 @@ async function applyOne(
       let canceledNodeRuns: Array<{ id: string; nodeId: string }> = []
       let nodeEventRef: CommittedEventRef | null = null
       if (repeatedCause !== null) {
-        dbTxSync(db, (tx) => {
+        await databaseSessionFor(db).transaction(async (tx) => {
           const now = Date.now()
-          canceledNodeRuns = cancelOpenNodeRunsTx({
-            tx,
+          canceledNodeRuns = await cancelOpenNodeRunsInTx(tx, {
             taskId,
             finishedAt: now,
             errorMessage: taskStopProjection(repeatedCause).code,
           })
           if (canceledNodeRuns.length > 0) {
-            nodeEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+            nodeEventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
               taskId,
               reason: 'source-termination',
               nodeChanges: canceledNodeRuns.map((run) => ({
@@ -159,7 +212,8 @@ async function applyOne(
 
     if (input.kind === 'clear-closed') {
       const nextFence = row.fence === 'closed' ? null : row.fence
-      db.update(tasks)
+      await db
+        .update(tasks)
         .set({
           sourceTerminationFence: nextFence,
           sourceTerminationEffectRev: input.streamRevision,
@@ -171,7 +225,8 @@ async function applyOne(
       // NULL effect revisions do not satisfy SQL `<`; old task rows are handled
       // by the unconditional, coordinator-protected fallback.
       if (row.effectRevision === null) {
-        db.update(tasks)
+        await db
+          .update(tasks)
           .set({
             sourceTerminationFence: nextFence,
             sourceTerminationEffectRev: input.streamRevision,
@@ -278,55 +333,52 @@ async function applyOne(
         statusChanged = true
       } catch (error) {
         if (!(error instanceof ConflictError)) throw error
-        const winner = db
-          .select({ status: tasks.status })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .limit(1)
-          .all()[0]
+        const winner = (
+          await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+        )[0]
         if (winner !== undefined && CANCELABLE.includes(winner.status)) throw error
         raceWinnerStatus = winner?.status ?? null
         let nodeEventRef: CommittedEventRef | null = null
-        dbTxSync(db, (tx) => {
+        await databaseSessionFor(db).transaction(async (tx) => {
           const now = Date.now()
-          tx.update(tasks)
+          await tx
+            .update(tasks)
             .set({
               sourceTerminationFence: nextFence,
               sourceTerminationEffectRev: input.streamRevision,
             })
             .where(eq(tasks.id, taskId))
             .run()
-          const owner = tx
-            .select()
-            .from(taskExecutionOwners)
-            .where(eq(taskExecutionOwners.taskId, taskId))
-            .get()
+          const owner = (
+            await tx
+              .select()
+              .from(taskExecutionOwners)
+              .where(eq(taskExecutionOwners.taskId, taskId))
+              .limit(1)
+          )[0]
           if (owner?.state === 'claimed') {
             exactToken = taskExecutionModule.runtimeRegistry.tokenForOwner(owner)
             ownerWithoutLocalToken = exactToken === null
-            taskExecutionModule.ownership.revokeExactTx({
-              tx,
+            await revokeExactOwnerInTx(tx, {
               owner,
               expectedRevision: owner.revision,
               now: Date.now(),
               recoveryCode: 'terminal-control-source-race-winner',
             })
           }
-          terminalizeTaskExecutionIntentsTx({
-            tx,
+          await terminalizeTaskExecutionIntentsInTx(tx, {
             taskId,
             state: 'canceled',
             failureCode: projection.code,
             now,
           })
-          canceledNodeRuns = cancelOpenNodeRunsTx({
-            tx,
+          canceledNodeRuns = await cancelOpenNodeRunsInTx(tx, {
             taskId,
             finishedAt: now,
             errorMessage: projection.code,
           })
           if (canceledNodeRuns.length > 0) {
-            nodeEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+            nodeEventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
               taskId,
               reason: 'source-termination',
               nodeChanges: canceledNodeRuns.map((run) => ({
@@ -346,46 +398,46 @@ async function applyOne(
       }
     } else {
       let nodeEventRef: CommittedEventRef | null = null
-      dbTxSync(db, (tx) => {
+      await databaseSessionFor(db).transaction(async (tx) => {
         const now = Date.now()
-        tx.update(tasks)
+        await tx
+          .update(tasks)
           .set({
             sourceTerminationFence: nextFence,
             sourceTerminationEffectRev: input.streamRevision,
           })
           .where(eq(tasks.id, taskId))
           .run()
-        const owner = tx
-          .select()
-          .from(taskExecutionOwners)
-          .where(eq(taskExecutionOwners.taskId, taskId))
-          .get()
+        const owner = (
+          await tx
+            .select()
+            .from(taskExecutionOwners)
+            .where(eq(taskExecutionOwners.taskId, taskId))
+            .limit(1)
+        )[0]
         if (owner?.state === 'claimed') {
           exactToken = taskExecutionModule.runtimeRegistry.tokenForOwner(owner)
           ownerWithoutLocalToken = exactToken === null
-          taskExecutionModule.ownership.revokeExactTx({
-            tx,
+          await revokeExactOwnerInTx(tx, {
             owner,
             expectedRevision: owner.revision,
             now,
             recoveryCode: 'terminal-control-source-terminal',
           })
         }
-        terminalizeTaskExecutionIntentsTx({
-          tx,
+        await terminalizeTaskExecutionIntentsInTx(tx, {
           taskId,
           state: 'canceled',
           failureCode: projection.code,
           now,
         })
-        canceledNodeRuns = cancelOpenNodeRunsTx({
-          tx,
+        canceledNodeRuns = await cancelOpenNodeRunsInTx(tx, {
           taskId,
           finishedAt: now,
           errorMessage: projection.code,
         })
         if (canceledNodeRuns.length > 0) {
-          nodeEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+          nodeEventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
             taskId,
             reason: 'source-termination',
             nodeChanges: canceledNodeRuns.map((run) => ({

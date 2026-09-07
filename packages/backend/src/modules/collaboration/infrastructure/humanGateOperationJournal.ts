@@ -15,6 +15,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, or } from 'drizzle-orm'
 
 import { collaborationGateArtifacts, collaborationGateOperations, tasks } from '@/db/schema'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import {
   affectedRows,
   engineOf,
@@ -855,23 +856,31 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
       }
       seen.add(artifact.artifactKey)
     }
-    for (const artifact of input.artifacts) {
-      await input.tx
-        .insert(collaborationGateArtifacts)
-        .values({
-          operationId: input.operationId,
-          artifactKey: artifact.artifactKey,
-          artifactKind: 'review-doc',
-          stagedPath: artifact.stagedPath,
-          finalPath: artifact.finalPath,
-          sha256: artifact.sha256,
-          byteSize: artifact.byteSize,
-          state: 'declared',
-          receiptJson: null,
-          updatedAt: input.now,
-        })
-        .run()
-    }
+    // RFC-359 W6-T25 —— 产物声明按批落库。它的条数与 review-open 的 `manifest.documents` **相等**
+    // （两者由同一份文档集派生，`humanGateOpenParticipant` 显式断言长度一致），所以一次 review-open
+    // 此前要付 2N 条逐行 INSERT。批内重复的 artifactKey 由上面那轮 `seen` 校验挡住（重复即抛），
+    // 这里不需要再按键压平——压平反而会把那条校验吃掉。
+    await insertInBatches(
+      input.tx,
+      collaborationGateArtifacts,
+      input.artifacts.map((artifact) => ({
+        operationId: input.operationId,
+        artifactKey: artifact.artifactKey,
+        artifactKind: 'review-doc' as const,
+        stagedPath: artifact.stagedPath,
+        finalPath: artifact.finalPath,
+        sha256: artifact.sha256,
+        byteSize: artifact.byteSize,
+        state: 'declared' as const,
+        receiptJson: null,
+        updatedAt: input.now,
+      })),
+      (batch) =>
+        input.tx
+          .insert(collaborationGateArtifacts)
+          .values([...batch])
+          .run(),
+    )
   }
 
   async transitionArtifactTx(

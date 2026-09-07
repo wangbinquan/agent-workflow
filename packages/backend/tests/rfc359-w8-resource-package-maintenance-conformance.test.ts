@@ -31,14 +31,36 @@
 // **本引擎自己的**工件格式喂本引擎自己的恢复端口，问的是「同一种运维情形，两个引擎给用户的
 // 结果一不一样」。
 //
-// # 对拍在旧实现上照出的一条真差异（已按强侧抬齐前先在这里被看见）
+// # 对拍在旧实现上照出的一条真差异 —— RFC-359 W10 已合一（判据缺口 13a 销账）
 //
-// **`committed` 行缺 receipt 时两侧走向相反**：PostgreSQL 侧 `rollForward` 第一步就是
-// `parseReceipt`，`receipt_json` 为 NULL 直接抛 `resource-package-committed-receipt-missing`，
-// 收敛器记一条 `resource-package-roll-forward-retryable` 并**每一轮重蹈**，那一行永远收不掉；
-// SQLite 侧根本不看 receipt，照常 roll-forward 并计数。这不是本对拍要修的东西（两套工件格式
-// 决定了 receipt 语义只在 PG 那一套里存在），但它是**用户可见的运维差异**，必须被看见而不是
-// 被合一时才发现，所以在这里逐条锁住。
+// **`committed` 行的回执信封两侧走向相反**：PostgreSQL 侧 `rollForward` 第一步就是
+// `parseReceipt`，`receipt_json` 为 NULL 直接抛 `resource-package-committed-receipt-missing`、
+// 回执认领的是别的 journal 就抛 `resource-package-committed-receipt-mismatch`；SQLite 侧
+// 根本不看回执，照常 roll-forward 并计一次 `rolledForward`——同一行损坏的 journal，
+// 一个引擎拒收并留痕、另一个引擎报成功，正是 RFC-359 要消灭的「一个好一个不好」。
+//
+// **合一形状（不是把 PG 那份搬过来）**：拆成两层。
+//   · **信封层**——「committed 就必须带回执，且回执必须认领这一行」——与落盘格式无关，
+//     两套格式都只有 `journalId` 一个共同字段。它抽成中立的
+//     `modules/resource-catalog/domain/resourcePackageApplyReceipt.ts`
+//     （`committedApplyReceiptIssue` 纯判定 + `assertCommittedApplyReceipt` 抛同一组错误码），
+//     **两个引擎调同一份**，于是这一层不再有两份实现，也就不会再漂。
+//   · **载荷层**——`applied[]` 里逐条工件的匹配——两套格式互不认识（SQLite 写 `opId`、
+//     PostgreSQL 写 `operationId`，且 PG 的解码器是 zod `.strict()`），仍各留各的，
+//     由 `tests/architecture/rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵管。
+//
+// **为什么不能直接把 PG 的 `parseReceipt` 搬给 SQLite**（这是本次最贵的一条发现）：
+// PG 的 `parseReceipt` 里那句 schema 解析吃的是 **PG 自己的回执格式**，`applied[]` 逐条要求
+// `operationId` 且 `.strict()`；而 SQLite 生产写出的回执逐条是 `opId`。照搬 = SQLite 上
+// **每一条真实的 committed 回执**都被 zod 拒收，全库的 committed 行当场集体停止 roll-forward。
+// 下面「committed 的 plugin-install」与「回执用另一侧的字段名」两条用例按引擎喂**生产真形状**
+// 的回执，就是把这条陷阱钉死：谁把载荷层一起搬过去，那两条立刻红。
+//
+// # 先红后绿（本刀实测）
+//
+// 补门之前跑这四条：PostgreSQL 全绿，SQLite 在「缺回执」与「回执错配」两条上红成
+// `{ failed: 0, rolledForward: 1 }` + `warnings: []`——即账本 13a 写的「回执缺失 / 与 journal
+// 错配也照样 roll-forward」。补上中立信封门之后两侧逐字相同。
 
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -142,18 +164,38 @@ function pluginArtifactJson(
   ])
 }
 
-/** PostgreSQL 的 roll-forward 要求工件出现在 receipt 里；SQLite 不看 receipt。 */
-function pluginReceiptJson(journalId: string): string {
+/**
+ * 本引擎自己**生产写出**的回执格式。两套载荷格式互不认识，与落盘工件同源：
+ * SQLite 的 `BundleReceipt.applied[]` 逐条是 `opId`（`services/bundle/provider.ts` 的
+ * `BundleAppliedOp`），PostgreSQL 的逐条是 `operationId` 且解码器 `.strict()`。
+ *
+ * 按引擎喂生产真形状不是讲究：中立信封门只认 `journalId`，谁把 PG 的载荷 schema 一起搬到
+ * SQLite，SQLite 这一半立刻被 zod 拒收——那正是本文件头说的那条陷阱。
+ */
+function pluginReceiptJson(
+  isolation: 'exclusive' | 'read-committed',
+  journalId: string,
+  applied: 'own-shape' | 'other-engine-shape' = 'own-shape',
+): string {
+  const sqliteShape = (isolation === 'exclusive') === (applied === 'own-shape')
   return JSON.stringify({
     journalId,
     applied: [
-      {
-        resourceType: 'plugin',
-        operationId: OPERATION_ID,
-        resourceId: PLUGIN_ID,
-        action: 'create',
-        name: 'w8-plugin',
-      },
+      sqliteShape
+        ? {
+            opId: OPERATION_ID,
+            resourceType: 'plugin',
+            resourceId: PLUGIN_ID,
+            action: 'create',
+            name: 'w8-plugin',
+          }
+        : {
+            resourceType: 'plugin',
+            operationId: OPERATION_ID,
+            resourceId: PLUGIN_ID,
+            action: 'create',
+            name: 'w8-plugin',
+          },
     ],
   })
 }
@@ -232,7 +274,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
         id: 'w8rpm-b',
         state: 'committed',
         preparedArtifactsJson: '[]',
-        receiptJson: pluginReceiptJson('w8rpm-b'),
+        receiptJson: pluginReceiptJson(harness.capabilities.isolation, 'w8rpm-b'),
         updatedAt: FRESH,
       })
 
@@ -418,7 +460,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
           harness.capabilities.isolation,
           generationDirectory,
         ),
-        receiptJson: pluginReceiptJson('w8rpm-roll'),
+        receiptJson: pluginReceiptJson(harness.capabilities.isolation, 'w8rpm-roll'),
         updatedAt: OLD,
       })
 
@@ -452,43 +494,106 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
     }
   })
 
-  test('committed 行缺 receipt：PostgreSQL 侧永远收不掉，SQLite 侧照常 roll-forward（对拍照出的真差异）', async () => {
+  /**
+   * 中立信封门的两格：缺回执 / 回执认领的是别的 journal。**两个引擎逐字相同**。
+   *
+   * 判据落在用户看得见的三处：收敛回执的两个计数、运维日志里那条 `*-retryable` 的错误码、
+   * 以及 journal 行与它名下 generation 目录的落库/落盘状态。补门之前 SQLite 在这两格上都是
+   * `{ failed: 0, rolledForward: 1 }` + `warnings: []`（账本 13a 的原文）。
+   */
+  for (const broken of [
+    {
+      label: '缺回执',
+      id: 'w8rpm-noreceipt',
+      receiptOf: (): string | null => null,
+      code: 'resource-package-committed-receipt-missing',
+    },
+    {
+      label: '回执认领的是别的 journal',
+      id: 'w8rpm-crossreceipt',
+      receiptOf: (isolation: 'exclusive' | 'read-committed'): string | null =>
+        pluginReceiptJson(isolation, 'w8rpm-some-other-journal'),
+      code: 'resource-package-committed-receipt-mismatch',
+    },
+  ]) {
+    test(`converge · committed 行${broken.label}：两个引擎都拒收并留痕，谁都不许照常 roll-forward`, async () => {
+      const paths = makePaths()
+      try {
+        const generationDirectory = join(paths.pluginsDir, PLUGIN_ID, GENERATION_ID)
+        mkdirSync(generationDirectory, { recursive: true })
+        await insertJournal(harness, {
+          id: broken.id,
+          state: 'committed',
+          preparedArtifactsJson: pluginArtifactJson(
+            harness.capabilities.isolation,
+            generationDirectory,
+          ),
+          receiptJson: broken.receiptOf(harness.capabilities.isolation),
+          updatedAt: OLD,
+        })
+
+        const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
+        const warnings: Warning[] = []
+        const receipt = await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })
+
+        expect(receipt).toEqual({ failed: 0, rolledForward: 0 })
+        expect(warnings.map((entry) => entry.message)).toEqual([
+          'resource-package-roll-forward-retryable',
+        ])
+        expect(warnings[0]!.fields.journalId).toBe(broken.id)
+        expect(warnings[0]!.fields.error).toContain(`${broken.code}:${broken.id}`)
+        // committed 行两侧都不被结算（收敛器对 committed 只做幂等回放，没有结算臂），
+        // 名下的 generation 目录当然也留在原地等下一轮。
+        expect((await readJournal(harness, broken.id))?.state).toBe('committed')
+        expect(existsSync(generationDirectory)).toBe(true)
+      } finally {
+        cleanup()
+      }
+    })
+  }
+
+  test('信封门只认 journalId：回执载荷用另一侧引擎的字段名，本引擎照样 roll-forward', async () => {
     const paths = makePaths()
     try {
       const generationDirectory = join(paths.pluginsDir, PLUGIN_ID, GENERATION_ID)
       mkdirSync(generationDirectory, { recursive: true })
+      const cachedPath = join(generationDirectory, 'index.js')
+      writeFileSync(cachedPath, 'export default {}')
+      await harness.db.insert(plugins).values({
+        id: PLUGIN_ID,
+        name: 'w8-plugin',
+        spec: 'file:./w8-plugin',
+        sourceKind: 'file',
+        cachedPath,
+        installedAt: OLD,
+        createdAt: OLD,
+        updatedAt: OLD,
+      })
       await insertJournal(harness, {
-        id: 'w8rpm-noreceipt',
+        id: 'w8rpm-envelope',
         state: 'committed',
         preparedArtifactsJson: pluginArtifactJson(
           harness.capabilities.isolation,
           generationDirectory,
         ),
-        receiptJson: null,
+        receiptJson: pluginReceiptJson(
+          harness.capabilities.isolation,
+          'w8rpm-envelope',
+          harness.capabilities.isolation === 'exclusive' ? 'other-engine-shape' : 'own-shape',
+        ),
         updatedAt: OLD,
       })
 
       const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
       const warnings: Warning[] = []
-      const receipt = await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })
-
-      if (harness.capabilities.isolation === 'exclusive') {
-        // SQLite 的工件格式里没有 receipt 这一层：plugins 里查不到这个 id 就当发布物无需复核。
-        expect(receipt).toEqual({ failed: 0, rolledForward: 1 })
-        expect(warnings).toEqual([])
-      } else {
-        // PostgreSQL：`parseReceipt` 是 rollForward 的第一步，NULL receipt 每一轮抛同一个错，
-        // 这一行**永久卡在 committed**，名下的 generation 目录也永远没人收。
-        expect(receipt).toEqual({ failed: 0, rolledForward: 0 })
-        expect(warnings.map((entry) => entry.message)).toEqual([
-          'resource-package-roll-forward-retryable',
-        ])
-        expect(warnings[0]!.fields.error).toContain(
-          'resource-package-committed-receipt-missing:w8rpm-noreceipt',
-        )
-      }
-      expect((await readJournal(harness, 'w8rpm-noreceipt'))?.state).toBe('committed')
-      expect(existsSync(generationDirectory)).toBe(true)
+      // SQLite 喂的是 PostgreSQL 形状的 `applied[]`（`operationId`）。信封门与载荷无关，所以它过。
+      // 谁把 PG 的 `.strict()` 载荷 schema 一并搬进 SQLite，这一条当场红。
+      // PostgreSQL 喂自己的形状：它的载荷层本来就要求 `operationId`，这一半是正向对照。
+      expect(await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })).toEqual({
+        failed: 0,
+        rolledForward: 1,
+      })
+      expect(warnings).toEqual([])
     } finally {
       cleanup()
     }

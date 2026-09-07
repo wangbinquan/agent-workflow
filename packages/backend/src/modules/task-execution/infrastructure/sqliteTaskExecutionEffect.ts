@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, max } from 'drizzle-orm'
+import { and, desc, eq, isNull, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   taskExecutionEffectAttempts,
@@ -6,9 +6,8 @@ import {
   taskExecutionEffects,
   taskExecutionIntents,
   taskExecutionLineageOperationRecords,
-  taskExecutionOwners,
 } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
 import type {
   CodeHostAttemptPlan,
   LinkedWorkspaceRollbackEffect,
@@ -19,7 +18,6 @@ import type {
 } from './taskExecutionEffectTransactionStore'
 import type { TaskOwnershipStore } from './taskOwnershipTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import { terminalizeTaskExecutionIntentsTx } from './sqliteTerminalizeExecutionIntent'
 import {
   aggregateEffectOutcome,
   assertAttemptTransition,
@@ -27,13 +25,6 @@ import {
   canonicalResourceKeySet,
   type AttemptEvidence,
 } from '../domain/executionEffect'
-import {
-  assertOwnershipToken,
-  assertVerifiedOutcomeUnknownClosure,
-  type OwnerSnapshot,
-  type VerifiedOutcomeUnknownClosure,
-} from '../domain/ownership'
-
 const MAX_EFFECT_RECEIPT_BYTES = 64 * 1024
 
 function boundedReceipt(value: string | null | undefined): string | null {
@@ -728,271 +719,9 @@ export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore 
     })
   }
 
-  closeOutcomeUnknownAndRelease(input: {
-    db: Parameters<TaskOwnershipStore['read']>[0]
-    token: Parameters<TaskOwnershipStore['heartbeat']>[0]['token']
-    intentId: string
-    proof: VerifiedOutcomeUnknownClosure
-    now?: number
-  }): OwnerSnapshot {
-    assertOwnershipToken(input.token)
-    assertVerifiedOutcomeUnknownClosure(input.proof)
-    if (input.proof.taskId !== input.token.taskId || input.proof.epoch !== input.token.epoch) {
-      throw new Error('outcome-unknown closure does not match ownership token')
-    }
-    const now = input.now ?? Date.now()
-    return dbTxSync(input.db, (tx) => {
-      const owner = tx
-        .select()
-        .from(taskExecutionOwners)
-        .where(eq(taskExecutionOwners.taskId, input.token.taskId))
-        .get()
-      if (
-        owner === undefined ||
-        owner.taskId !== input.token.taskId ||
-        owner.ownerId !== input.token.ownerId ||
-        owner.daemonGeneration !== input.token.daemonGeneration ||
-        owner.epoch !== input.token.epoch ||
-        owner.revision !== input.proof.ownerRevision ||
-        !['claimed', 'revoked', 'recovery-required'].includes(owner.state)
-      ) {
-        throw new TaskExecutionError(
-          'task-execution-stale-owner',
-          `task '${input.token.taskId}' outcome-unknown closure was fenced`,
-        )
-      }
-
-      const unresolved = tx
-        .select({
-          attempt: taskExecutionEffectAttempts,
-          effect: taskExecutionEffects,
-        })
-        .from(taskExecutionEffectAttempts)
-        .innerJoin(
-          taskExecutionEffects,
-          eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-        )
-        .where(
-          and(
-            eq(taskExecutionEffects.taskId, input.token.taskId),
-            eq(taskExecutionEffects.state, 'open'),
-            inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-          ),
-        )
-        .all()
-      const actualEffectIds = [...new Set(unresolved.map((row) => row.effect.id))].sort()
-      const provenEffectIds = [...new Set(input.proof.unresolvedEffectIds)].sort()
-      if (
-        actualEffectIds.length === 0 ||
-        actualEffectIds.length !== provenEffectIds.length ||
-        actualEffectIds.some((id, index) => id !== provenEffectIds[index])
-      ) {
-        throw new TaskExecutionError(
-          'task-execution-recovery-required',
-          'task-wide quiescence proof does not cover the exact unresolved effect set',
-        )
-      }
-
-      for (const { attempt, effect } of unresolved) {
-        tx.update(taskExecutionEffectAttempts)
-          .set({
-            state: 'outcome-unknown',
-            applicationEvidence: 'ambiguous',
-            retryAuthority: 'none',
-            failureCode: attempt.failureCode ?? 'outcome-unknown-after-quiescence',
-            settledAt: now,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(taskExecutionEffectAttempts.id, attempt.id),
-              eq(taskExecutionEffectAttempts.epoch, input.token.epoch),
-              inArray(taskExecutionEffectAttempts.state, [
-                'prepared',
-                'acting',
-                'recovery-required',
-              ]),
-            ),
-          )
-          .run()
-        tx.update(taskExecutionEffectFences)
-          .set({ releasedAt: now })
-          .where(
-            and(
-              eq(taskExecutionEffectFences.effectAttemptId, attempt.id),
-              isNull(taskExecutionEffectFences.releasedAt),
-              eq(taskExecutionEffectFences.acquiredEpoch, input.token.epoch),
-            ),
-          )
-          .run()
-        tx.update(taskExecutionEffects)
-          .set({
-            state: 'outcome-unknown',
-            failureCode: attempt.failureCode ?? 'outcome-unknown-after-quiescence',
-            receiptJson: JSON.stringify({
-              v: 1,
-              closureDigest: input.proof.quiescenceDigest,
-              attemptId: attempt.id,
-              attemptNo: attempt.attemptNo,
-            }),
-            settledAt: now,
-            updatedAt: now,
-          })
-          .where(
-            and(eq(taskExecutionEffects.id, effect.id), eq(taskExecutionEffects.state, 'open')),
-          )
-          .run()
-
-        const watermark = tx
-          .select()
-          .from(taskExecutionLineageOperationRecords)
-          .where(
-            and(
-              eq(taskExecutionLineageOperationRecords.recordKind, 'generation-watermark'),
-              eq(
-                taskExecutionLineageOperationRecords.executionLineageId,
-                effect.executionLineageId,
-              ),
-              eq(
-                taskExecutionLineageOperationRecords.operationFamilyKey,
-                effect.operationFamilyKey,
-              ),
-            ),
-          )
-          .get()
-        if (watermark === undefined) {
-          tx.insert(taskExecutionLineageOperationRecords)
-            .values({
-              id: ulid(),
-              recordKind: 'generation-watermark',
-              executionLineageId: effect.executionLineageId,
-              operationFamilyKey: effect.operationFamilyKey,
-              operationGeneration: null,
-              highestSettledGeneration: effect.operationGeneration,
-              lastOutcome: 'outcome-unknown',
-              requestHash: effect.requestHash,
-              slotPathJson: effect.slotPathJson,
-              slotPathDigest: effect.slotPathDigest,
-              rootAnchorTaskId: effect.taskId,
-              currentAnchorTaskId: effect.taskId,
-              recordRevision: 1,
-              createdAt: now,
-              updatedAt: now,
-            })
-            .run()
-        } else if ((watermark.highestSettledGeneration ?? -1) <= effect.operationGeneration) {
-          tx.update(taskExecutionLineageOperationRecords)
-            .set({
-              highestSettledGeneration: effect.operationGeneration,
-              lastOutcome: 'outcome-unknown',
-              requestHash: effect.requestHash,
-              slotPathJson: effect.slotPathJson,
-              slotPathDigest: effect.slotPathDigest,
-              currentAnchorTaskId: effect.taskId,
-              recordRevision: watermark.recordRevision + 1,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(taskExecutionLineageOperationRecords.id, watermark.id),
-                eq(taskExecutionLineageOperationRecords.recordRevision, watermark.recordRevision),
-              ),
-            )
-            .run()
-        }
-
-        const decision = tx
-          .select({ id: taskExecutionLineageOperationRecords.id })
-          .from(taskExecutionLineageOperationRecords)
-          .where(
-            and(
-              eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'),
-              eq(
-                taskExecutionLineageOperationRecords.executionLineageId,
-                effect.executionLineageId,
-              ),
-              eq(
-                taskExecutionLineageOperationRecords.operationFamilyKey,
-                effect.operationFamilyKey,
-              ),
-              eq(
-                taskExecutionLineageOperationRecords.operationGeneration,
-                effect.operationGeneration,
-              ),
-            ),
-          )
-          .get()
-        if (decision === undefined) {
-          tx.insert(taskExecutionLineageOperationRecords)
-            .values({
-              id: ulid(),
-              recordKind: 'replay-decision',
-              executionLineageId: effect.executionLineageId,
-              operationFamilyKey: effect.operationFamilyKey,
-              operationGeneration: effect.operationGeneration,
-              highestSettledGeneration: null,
-              lastOutcome: 'outcome-unknown',
-              requestHash: effect.requestHash,
-              slotPathJson: effect.slotPathJson,
-              slotPathDigest: effect.slotPathDigest,
-              rootAnchorTaskId: effect.taskId,
-              currentAnchorTaskId: effect.taskId,
-              sourceTaskId: effect.taskId,
-              sourceEffectId: effect.id,
-              sourceAttemptId: attempt.id,
-              failureCode: attempt.failureCode ?? 'outcome-unknown-after-quiescence',
-              decisionState: 'requires-actor',
-              recordRevision: 1,
-              createdAt: now,
-              updatedAt: now,
-            })
-            .run()
-        }
-      }
-
-      terminalizeTaskExecutionIntentsTx({
-        tx,
-        taskId: input.token.taskId,
-        state: 'failed',
-        failureCode: 'task-execution-outcome-unknown',
-        now,
-      })
-      const released = tx
-        .update(taskExecutionOwners)
-        .set({
-          state: 'released',
-          revision: owner.revision + 1,
-          recoveryCode: 'task-execution-outcome-unknown',
-          recoveryProofDigest: input.proof.quiescenceDigest,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.token.taskId),
-            eq(taskExecutionOwners.ownerId, input.token.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.token.epoch),
-            eq(taskExecutionOwners.revision, owner.revision),
-            inArray(taskExecutionOwners.state, ['claimed', 'revoked', 'recovery-required']),
-          ),
-        )
-        .returning()
-        .get()
-      if (released === undefined) {
-        throw new TaskExecutionError(
-          'task-execution-stale-owner',
-          `task '${input.token.taskId}' outcome-unknown release lost`,
-        )
-      }
-      return {
-        taskId: released.taskId,
-        ownerId: released.ownerId,
-        daemonGeneration: released.daemonGeneration,
-        epoch: released.epoch,
-        state: released.state,
-        leaseUntil: released.leaseUntil,
-        revision: released.revision,
-      }
-    })
-  }
+  // RFC-359 W10 —— 同步的 `closeOutcomeUnknownAndRelease`（一笔 `dbTxSync`：owner 围栏 +
+  // 未决效应集合逐项 outcome-unknown + 生成 replay 决定 + 释放 owner）已删除。它自 W1-T7b 起
+  // 就没有生产调用方——driver 释放序列（`taskDriverRelease.ts`）走的是端口，落到两个引擎共用的
+  // `effectQuiescence.ts#closeOutcomeUnknownAndRelease`（中立事务 + `lockAndAssertOwnerTx`）；
+  // 留着的只有三处测试直调，已改指中立那份。
 }

@@ -22,6 +22,7 @@ import {
 import { hashRegularFileTree } from './legacy/skillHash'
 import { skillFilesAbs, skillVersionAbs } from './legacy/skillIdentityPaths'
 import { markSkillBootVerified } from './legacy/skillBootVerify'
+import { assertCommittedApplyReceipt } from '../domain/resourcePackageApplyReceipt'
 import {
   resourcePackageSkillRecoveryDisposition,
   type ResourcePackageSkillRecoveryDisposition,
@@ -104,15 +105,17 @@ function parseArtifacts(json: string): readonly PostgresqlArtifact[] {
   return z.array(PostgresqlArtifactSchema).parse(JSON.parse(json))
 }
 
+/**
+ * RFC-359 W10（判据缺口 13a）：**信封那两条判据搬进中立的
+ * `domain/resourcePackageApplyReceipt.ts`，两个引擎调同一份**——此前只有 PostgreSQL 有，
+ * SQLite 上回执缺失 / 认领别的 journal 也照常 roll-forward 并报成功。
+ *
+ * 留在这里的只有**载荷层**：`applied[]` 逐条的 PostgreSQL 形状（`operationId` + `.strict()`）。
+ * 它不能中立化——SQLite 生产写出的逐条是 `opId`，两套格式互不认识
+ * （`tests/architecture/rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵）。
+ */
 function parseReceipt(journal: ResourcePackageApplyJournalSnapshot): ApplyReceipt {
-  if (journal.receiptJson === null) {
-    throw new Error(`resource-package-committed-receipt-missing:${journal.id}`)
-  }
-  const receipt = ApplyReceiptSchema.parse(JSON.parse(journal.receiptJson))
-  if (receipt.journalId !== journal.id) {
-    throw new Error(`resource-package-committed-receipt-mismatch:${journal.id}`)
-  }
-  return receipt
+  return ApplyReceiptSchema.parse(JSON.parse(assertCommittedApplyReceipt(journal)))
 }
 
 function assertManagedPath(root: string, path: string): void {

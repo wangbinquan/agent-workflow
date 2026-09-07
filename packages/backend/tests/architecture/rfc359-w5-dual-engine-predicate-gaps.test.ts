@@ -14,8 +14,12 @@
 //     forcing function：「不允许再出现两种数据库一个好一个不好的分支」不能靠人记得。
 //   · **锚点漂移 ⇒ 还是红**。见下文「为什么它抗重构」。
 //
-// RFC-359 收敛完后这份账本应当清空：届时把 `DUAL_ENGINE_PREDICATE_GAPS` 改成 `[]`，判据自然
-// 就是钉 0。
+// **RFC-359 W10 起账本已清空（17 → 0），这就是判据面的完工线。** 守卫本身不下岗：它继续钉 0，
+// 谁再只在一个引擎上加判据都要么两侧都加、要么把新缺口写回这里并说明理由。
+// 但清空带来一个新问题——**空账本让本文件上半部的每条用例都退化成 `expect([]).toEqual([])`，
+// 「一条缺口都没有」与「扫描机已经坏了」长得一模一样**（RFC-317 T13「零与合规同形」）。
+// 语料下限因此移交给文件末尾的「扫描面自证」describe：它拿真实仓内文件跑同一套 `measure()`，
+// 让四种红（缺口已补 / 缺口仍开 / 锚点漂移 / 语料下限）各留一条活证据。**别把那段删掉。**
 //
 // # 判据机制：两个方向都断言的「存在性探针」
 //
@@ -84,8 +88,7 @@
 //           读同样的两条行快照、调同一份判定；同一次子启动两侧同码同判。对拍见
 //           `tests/rfc359-w8-child-launch-conformance.test.ts` 的 `parent admission — …`
 //           一族 + 「reports the first failing gate identically on both engines」。
-//   13a     SQLite 上资源包恢复不校验 committed receipt，回执缺失 / 错配也照样 roll-forward。
-//           【RFC-359 W9 已裁决：**保留缺口，且明确不要照抄 PG 的门**】见下文「W9 裁决」。
+//   13a     【RFC-359 W10 已销账 —— 按合一处置，并推翻了 W9 的「保留」裁决】见下文「W10 销账」。
 //   13b     【RFC-359 W9 已销账，且原记载有一半不实】见下文「W9 销账」。
 //
 // # RFC-359 W7 销账：17 → 10（两种成因，别混成一句「已收敛」）
@@ -161,24 +164,54 @@
 // 位置不同、覆盖面等价）。**这两条从来不是缺口，是命名差异被 absent 锚点记成了缺口**——写
 // absent 锚点时只写 PG 那侧的字面量，会把「换了个名字做同一件事」误判成「没做」。
 //
-// # RFC-359 W9 裁决：13a **保留缺口，并且明确不要照抄 PG 的门**
+// # RFC-359 W10 销账：13a —— 1 → 0，**判据面的完工线**（并推翻 W9 的「保留」裁决）
 //
-// 只读核对的结论有三条，合起来指向「现在补它是负收益」：
-//   1. **它守的状态产品自己造不出来**：`state='committed'` 与 `receipt_json` 在两侧都是**同一条
-//      UPDATE** 里一起写的（`platform/persistence/sqlite/legacyResourcePackageBundleApply.ts` 与
-//      `postgresqlResourcePackageAtomicApply.ts` 的提交臂），schema 上也没有对应 check。
-//      也就是说「committed 但回执缺失 / 错配」只可能来自手工改库。
-//   2. **照抄 PG 的门会把一个更坏的形态一起复制过来**：PG 的 `parseReceipt` 一抛，收敛器只记一条
-//      `resource-package-roll-forward-retryable` 就走，那一行**每一轮重蹈、永远收不掉**
-//      （已由 `tests/rfc359-w8-resource-package-maintenance-conformance.test.ts` 锁住）。
-//      给 SQLite 加同样的门 = 让两个引擎一起卡死，不是收敛。
-//   3. **真正的收敛方向在另一侧**：该让「回执损坏」结算成 `failed` 而不是无限重试，那是改
-//      **PostgreSQL** 的行为、且只对手工损坏的行有意义。它同时压在
-//      `ResourcePackageMaintenance` 那一对「两套落盘工件格式」的裁决上
-//      （`rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵），不该由这条缺口顺手带走。
-// 所以它**留在 GAPS 里**（确实还是一侧有一侧没有），但**不进 ACCEPTED**——ACCEPTED 的门槛是
-// 「不得有任何用户可见的行为差异」，而损坏行上两侧一个空转一个照常 roll-forward，说得出差异。
-// 下一把刀接手时：不要直接给 SQLite 补 `parseReceipt`。
+// W9 曾裁决「保留缺口、明确不要照抄 PG 的门」，理由三条。W10 逐条实测，**其中一条不成立**，
+// 于是裁决翻转。三条的实测结论按原顺序：
+//
+//   1. **成立**：「committed 但回执缺失 / 错配」产品自己造不出来——`state='committed'` 与
+//      `receipt_json` 在两侧都是**同一条 UPDATE** 里一起写的，只可能来自手工改库。
+//      但这不是保留缺口的理由：账本收的是**判据**缺口，而缺口本身有用户可见后果（下）。
+//   2. **不成立，是本次最重要的更正**。原文说「PG 的门一抛，那一行每一轮重蹈、永远收不掉；
+//      给 SQLite 加同样的门 = 两个引擎一起卡死」。实测：**收敛器对 `committed` 行根本没有
+//      结算臂**——`application/resourcePackageMaintenance.ts` 的 `converge` 里，`committed`
+//      分支要么 `rolledForward += 1` 要么记一条 retryable，两条路都 `continue`，
+//      `settleFailed` 的 `expectedState` 也只收 `'prepared' | 'applying'`。也就是说
+//      **所有 committed 行在两个引擎上本来就永远留在 committed**，「永远收不掉」不是这道门
+//      带来的差别，加不加门都一样。门唯一改变的是「这一轮做不做那次幂等回放、留不留痕」。
+//   3. **成立但与本条无关**：「让回执损坏结算成 failed」要动收敛器的端口契约
+//      （给 `settleFailed` 开 `committed` 这个 expectedState），那是另一次改动的事。
+//      本条销账不碰它，两个引擎照旧幂等重试——只是现在**一起**重试，而不是一个重试一个空过。
+//
+// **用户可见后果**（这才是它不该留在账本里的判据，也是 ACCEPTED 的门槛之所以过不了）：
+// 同一行损坏的 journal，SQLite 上收敛器报 `rolledForward: 1`、运维日志一片安静，
+// PostgreSQL 上报 `rolledForward: 0` + 一条 `resource-package-roll-forward-retryable`。
+// 实测两条都复现过（见下「先红后绿」）。
+//
+// **处置是合一，不是抬齐**——判据拆两层，只有一层该中立：
+//   · **信封层**（committed 必须带回执 + 回执必须认领这一行）与落盘格式无关，两套格式的公共
+//     字段只有 `journalId`。抽成中立的
+//     `modules/resource-catalog/domain/resourcePackageApplyReceipt.ts`
+//     （`committedApplyReceiptIssue` / `assertCommittedApplyReceipt`），**两个引擎调同一份**。
+//   · **载荷层**（`applied[]` 逐条匹配）两侧格式互不认识（SQLite 写 `opId`、PostgreSQL 写
+//     `operationId` 且 `.strict()`），仍各留各的，归
+//     `rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵管。
+//
+// **W9 那句「不要直接给 SQLite 补 `parseReceipt`」的正确内核**（原文没写出理由，实测补上）：
+// PG 的 `parseReceipt` 里那句 schema 解析吃的是 **PG 自己的回执格式**。原样搬给 SQLite，
+// 会让 SQLite 上**每一条真实的 committed 回执**（逐条 `opId`）被 zod `.strict()` 拒收，
+// 全库 committed 行当场集体停止 roll-forward——那是真正的「两个引擎一起卡死」。
+// 所以照搬确实不行，但结论不是「保留缺口」，是「只搬信封那一层」。
+//
+// **先红后绿（实测颜色）**：把两格判据写进
+// `tests/rfc359-w8-resource-package-maintenance-conformance.test.ts` 之后先跑一遍——
+// PostgreSQL 8/8 全绿，SQLite 6/8，红的两条都是
+// `expect(receipt).toEqual({failed:0, rolledForward:0})` 收到 `rolledForward: 1`、
+// 且 `warnings: []`，与本条 `consequence` 的原文逐字对上。补上中立信封门后两侧 16/16。
+// 销账前也按本文件「锚是按函数作用域匹配的」那条规矩验过：只补代码、不动锚点时守卫**只**报
+// 「有判据一侧锚点漂移」（literal 搬进了中立模块），**没有**报「缺口已补」——正是那条注释
+// 警告的假绿形态；把两侧锚点一起改成 `assertCommittedApplyReceipt` 之后守卫才按设计报出
+// 「缺口已补：… 请把这一条删掉」。那两个锚点连同这条缺口一起退役，语料改由下面的自证用例养着。
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -238,40 +271,16 @@ type PredicateGap = Readonly<{
 /**
  * 双引擎判据缺口账本。**只降不升，逐字相等。**
  *
- * 补上一条 ⇒ 从这里删掉这一行；确需新增一条 ⇒ 在 PR 里说明为什么允许这个缺口存在。
+ * **RFC-359 W10 起为空 —— 这就是判据面的完工线**（17 → 10 → 4 → 2 → 1 → 0，逐条销账记录在
+ * 上面的注释里）。空账本的判据自然是钉 0：任何人只在一个引擎上加判据，都要么两侧都加，
+ * 要么把新缺口写回这里并说明为什么允许它存在。
+ *
+ * ⚠️ **空账本会让本 describe 的每一条用例退化成 `expect([]).toEqual([])`**——「零」与「合规」
+ * 同形（RFC-317 T13）。证明这台 AST 扫描机还活着的责任因此移交给文件末尾的
+ * 「扫描面自证」describe：它拿**真实仓内文件**跑同一套 `measure()`，四种红（缺口已补 /
+ * 缺口仍开 / 锚点漂移 / 语料下限）各要一条。删空这份账本时**不要**把那个 describe 一起删掉。
  */
-export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = [
-  {
-    id: '13a-sqlite-resource-package-receipt-gate',
-    item: 13,
-    missingSide: 'sqlite',
-    present: [
-      {
-        file: 'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
-        fn: ['parseReceipt'],
-        anchors: [
-          { kind: 'literal-prefix', text: 'resource-package-committed-receipt-missing' },
-          { kind: 'literal-prefix', text: 'resource-package-committed-receipt-mismatch' },
-        ],
-      },
-    ],
-    absent: {
-      file: 'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts',
-      fn: null,
-      anchors: [
-        { kind: 'literal-prefix', text: 'resource-package-committed-receipt-missing' },
-        { kind: 'literal-prefix', text: 'resource-package-committed-receipt-mismatch' },
-        { kind: 'identifier', text: 'parseReceipt' },
-      ],
-    },
-    context: [
-      { kind: 'identifier', text: 'receiptJson' },
-      { kind: 'identifier', text: 'rollForwardArtifacts' },
-    ],
-    consequence:
-      'SQLite 上资源包恢复不校验 committed receipt，回执缺失 / 与 journal 错配也照样 roll-forward。',
-  },
-]
+export const DUAL_ENGINE_PREDICATE_GAPS: readonly PredicateGap[] = []
 
 // ---------------------------------------------------------------------------
 // 已裁决分叉账本（与上面的「缺口」是**两回事**）
@@ -778,5 +787,141 @@ describe('RFC-359 W8 — 已裁决双引擎分叉 exact 账本', () => {
       }
     }
     expect(drifted).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 扫描面自证（RFC-359 W10 —— `DUAL_ENGINE_PREDICATE_GAPS` 清零之后的语料下限）
+// ---------------------------------------------------------------------------
+
+/**
+ * # 为什么清零之后还要有这一段
+ *
+ * 上面那份账本是空的，于是它那个 describe 里每一条用例都退化成 `expect([]).toEqual([])`：
+ * **「一条缺口都没有」与「扫描机已经坏了」长得一模一样**（RFC-317 T13「零与合规同形」）。
+ * 账本空掉是这条守卫的成功，不是它可以下岗——它还要继续挡住「又有人只在一个引擎上加判据」。
+ * 所以判据面的语料下限移交到这里：**拿真实仓内文件跑同一套 `measure()`**，
+ * 让这台 AST 扫描机的四种红各留一条活的证据。
+ *
+ * # 语料取哪一对：最后一条销账的那一对
+ *
+ * 取 13a 退役时的两个站点（资源包应用的回执信封门）。这么取有三个好处：
+ *   · **语料是活的**——两个文件、一个函数作用域、一个具名判据都还在生产代码里，
+ *     改名 / 删除 / 搬家都会让下面的用例红，而不是静默失效；
+ *   · **顺带把 13a 的销账钉住**——谁把 SQLite 那道信封门删掉、或把中立判定改回两份实现，
+ *     「缺口已补」那一条立刻翻脸；
+ *   · 不引入任何新的成对适配器模块名，`rfc359-w5-t19d-coverage-parity.test.ts` 的
+ *     引用计数不受影响（本文件此前就因为 13a 引用着这两个模块）。
+ */
+const RETIRED_13A_PRESENT: Site = {
+  file: 'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
+  fn: ['parseReceipt'],
+  anchors: [{ kind: 'identifier', text: 'assertCommittedApplyReceipt' }],
+}
+
+const RETIRED_13A_ABSENT_FILE =
+  'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts'
+
+/**
+ * ⚠️ 这个作用域**不能写成整文件**（`fn: null`）。`identifier` 锚点数的是所有 `ts.Identifier`
+ * 节点，而 `import { assertCommittedApplyReceipt } from …` 里那个名字**也是一个 Identifier**。
+ * 于是整文件作用域下，把真正的门调用整句删掉、只留一条无用 import，探针照旧命中——
+ * 自证用例静默保持绿（本刀变异验证时实撞：删掉门之后对拍两条红了，这条却没红）。
+ * 锚点因此落到门真正该在的那个方法体上。
+ */
+const RETIRED_13A_ABSENT_FN: readonly string[] = [
+  'createSqliteResourcePackageApplyArtifactRecovery',
+  'rollForward',
+]
+
+/** 语料下限：这两个锚点证明「资源包 roll-forward 这条代码路径」还在那个方法体里。 */
+const RETIRED_13A_CONTEXT: readonly Anchor[] = [
+  { kind: 'identifier', text: 'rollForwardArtifacts' },
+  { kind: 'identifier', text: 'preparedArtifactsJson' },
+]
+
+/** 拿退役 13a 的两个站点拼一条探针；只有 `absent.anchors` / `context` / `present.fn` 按用例换。 */
+function selfTestProbe(input: {
+  readonly absentAnchors: readonly Anchor[]
+  readonly context?: readonly Anchor[]
+  readonly presentFn?: readonly string[]
+}): PredicateGap {
+  return {
+    id: '13a-retired-scanner-self-test',
+    item: 13,
+    missingSide: 'sqlite',
+    present: [{ ...RETIRED_13A_PRESENT, fn: input.presentFn ?? RETIRED_13A_PRESENT.fn }],
+    absent: {
+      file: RETIRED_13A_ABSENT_FILE,
+      fn: RETIRED_13A_ABSENT_FN,
+      anchors: input.absentAnchors,
+    },
+    context: input.context ?? RETIRED_13A_CONTEXT,
+    consequence: '自证探针，不是真缺口。',
+  }
+}
+
+/** 仓里确定不存在的标识符。改动本文件时别让它们意外变成真符号。 */
+const NO_SUCH_PREDICATE = 'rfc359W10NonexistentPredicateAnchor'
+const NO_SUCH_FUNCTION = 'rfc359W10NonexistentFunctionScope'
+const NO_SUCH_CORPUS = 'rfc359W10NonexistentCorpusAnchor'
+
+describe('RFC-359 W10 — 判据缺口扫描面自证（账本清零，语料不许跟着清零）', () => {
+  test('语料下限：自证用的两个站点文件都真实存在且非空', () => {
+    for (const file of [RETIRED_13A_PRESENT.file, RETIRED_13A_ABSENT_FILE]) {
+      const unit = unitOf(file)
+      expect(unit, `${file} 不在了——自证探针的语料消失，此刻本文件零预言力`).not.toBeNull()
+      expect(unit!.text.trim().length).toBeGreaterThan(0)
+    }
+    // 三个「确定不存在」的锚点必须真的不存在，否则下面三条用例全是假绿。
+    const sqlite = unitOf(RETIRED_13A_ABSENT_FILE)!
+    for (const name of [NO_SUCH_PREDICATE, NO_SUCH_FUNCTION, NO_SUCH_CORPUS]) {
+      expect(sqlite.text, `${name} 竟然出现在生产代码里，自证探针的负样本失效`).not.toContain(name)
+    }
+  })
+
+  test('扫描机仍认得出「缺口已补」（同时钉住 13a 的销账不被回退）', () => {
+    const measurement = measure(
+      selfTestProbe({
+        absentAnchors: [{ kind: 'identifier', text: 'assertCommittedApplyReceipt' }],
+      }),
+    )
+    expect(
+      measurement.failures.join('\n'),
+      'SQLite 侧的 committed 回执信封门不见了（或中立判定被改回两份实现）——' +
+        'RFC-359 W10 销账的 13a 被回退了；同时说明「缺口已补」这条判据此刻也证不出东西。',
+    ).toContain('缺口已补')
+    expect(measurement.open).toBe(false)
+  })
+
+  test('扫描机仍认得出「缺口仍开着」（不存在的判据锚点 = 一条真缺口）', () => {
+    const measurement = measure(
+      selfTestProbe({ absentAnchors: [{ kind: 'identifier', text: NO_SUCH_PREDICATE }] }),
+    )
+    expect(
+      measurement.failures,
+      '有判据一侧或语料锚点先红了，这条用例此刻测不到「缺口仍开」',
+    ).toEqual([])
+    expect(measurement.open).toBe(true)
+  })
+
+  test('扫描机仍认得出「有判据一侧锚点漂移」（函数改名不许静默变绿）', () => {
+    const measurement = measure(
+      selfTestProbe({
+        absentAnchors: [{ kind: 'identifier', text: NO_SUCH_PREDICATE }],
+        presentFn: [NO_SUCH_FUNCTION],
+      }),
+    )
+    expect(measurement.failures.join('\n')).toContain('锚点漂移')
+  })
+
+  test('扫描机仍认得出「语料下限被侵蚀」（缺判据一侧的代码路径被搬走）', () => {
+    const measurement = measure(
+      selfTestProbe({
+        absentAnchors: [{ kind: 'identifier', text: NO_SUCH_PREDICATE }],
+        context: [{ kind: 'identifier', text: NO_SUCH_CORPUS }],
+      }),
+    )
+    expect(measurement.failures.join('\n')).toContain('不含语料锚点')
   })
 })

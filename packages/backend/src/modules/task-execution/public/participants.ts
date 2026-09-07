@@ -70,7 +70,7 @@ import type {
   TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
-import type { RecoverableTerminalMaintenanceClaim } from '../composition/sqliteTerminalMaintenance'
+import type { RecoverableTerminalMaintenanceClaim } from '../application/ports/terminalMaintenanceStore'
 import type { TerminalMaintenanceStore as TerminalMaintenanceStoreInternal } from '../application/ports/terminalMaintenanceStore'
 import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
 import {
@@ -84,6 +84,10 @@ import {
   appendTaskNodeStatusesCommittedEventTx as appendTaskNodeStatusesCommittedEventTxInternal,
   type TaskCommittedEventIdentity,
 } from '../infrastructure/taskLifecycleEventParticipant'
+// RFC-359 W10 —— 上面那三个是 bun:sqlite 专属的**同步**参与者（`dbTxSync` 体内用）。事务迁到中立
+// 原语的调用方要的是两个引擎共用的这一份，同样从 public 合同出去，legacy 层不必伸手进模块内部。
+import { appendTaskCreatedCommittedEvent as appendTaskCreatedCommittedEventInternal } from '../infrastructure/taskLifecycleCommittedEvents'
+import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
 
 declare const workerIdentityBrand: unique symbol
 declare const ownershipTokenBrand: unique symbol
@@ -245,6 +249,8 @@ export const canonicalTaskExecutionJson = canonicalTaskExecutionJsonInternal
 export const decodeLineageSlotPath = decodeLineageSlotPathInternal
 export const encodeLineageSlotPath = encodeLineageSlotPathInternal
 export const appendTaskCreatedCommittedEventTx = appendTaskCreatedCommittedEventTxInternal
+export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
+export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
 export const appendTaskLifecycleTransitionCommittedEventTx =
   appendTaskLifecycleTransitionCommittedEventTxInternal
 export const appendTaskNodeStatusesCommittedEventTx = appendTaskNodeStatusesCommittedEventTxInternal

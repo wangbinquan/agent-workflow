@@ -289,35 +289,29 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     // the tasks insert used to leave a committed pending row — ownerless,
     // workspaceless, invisible to the scheduler. The launch writes are now a
     // single transaction; poison the task_repos insert INSIDE it and assert
-    // the rollback is total. The poison wraps `transaction` so the tx handle
-    // the launch sees rejects the taskRepos table.
+    // the rollback is total.
+    //
+    // RFC-359 W10: the poison used to wrap `db.transaction` (the surface
+    // `dbTxSync` opened). The launch now goes through the provider-neutral
+    // `databaseSessionFor(db).transaction`, which on SQLite marks its own
+    // boundary with explicit `BEGIN IMMEDIATE` / `COMMIT` and hands the body
+    // the CLIENT as the transaction handle — `db.transaction` is never called,
+    // so the old wrapper silently stopped poisoning anything and this test
+    // went green for the wrong reason. Poison `insert` on the client itself:
+    // it is the same handle the transaction body writes through, and
+    // `taskRepos` is only ever inserted inside that transaction.
     h = buildHarness()
     const realDb = h.db
-    type TxFn = (tx: unknown) => unknown
     const poisoned = new Proxy(realDb, {
       get(target, prop, receiver) {
-        if (prop === 'transaction') {
-          return (fn: TxFn) =>
-            (target as unknown as { transaction: (f: TxFn) => unknown }).transaction(
-              (tx: unknown) => {
-                const poisonedTx = new Proxy(tx as object, {
-                  get(txTarget, txProp, txReceiver) {
-                    if (txProp === 'insert') {
-                      return (table: unknown) => {
-                        if (table === taskRepos) throw new Error('boom-task-repos-insert')
-                        return (txTarget as unknown as { insert: (t: unknown) => unknown }).insert(
-                          table,
-                        )
-                      }
-                    }
-                    return Reflect.get(txTarget, txProp, txReceiver)
-                  },
-                })
-                return fn(poisonedTx)
-              },
-            )
+        if (prop === 'insert') {
+          return (table: unknown) => {
+            if (table === taskRepos) throw new Error('boom-task-repos-insert')
+            return (target as unknown as { insert: (t: unknown) => unknown }).insert(table)
+          }
         }
-        return Reflect.get(target, prop, receiver)
+        const value = Reflect.get(target, prop, receiver)
+        return typeof value === 'function' ? value.bind(target) : value
       },
     }) as DbClient
 

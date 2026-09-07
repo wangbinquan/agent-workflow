@@ -79,7 +79,8 @@ const SCHEMA_PROJECTOR_FILE = 'platform/persistence/postgresqlSchema.ts'
  * （design §5「实现里永远不出现 provider 名；边界按引擎渲染最优 SQL」）。
  *
  * 具名 + 逐条理由，**不接受目录通配**——`platform/persistence/postgresql*.ts` 整目录放行的话，
- * `postgresqlNullOrdering.ts` 这种「矩阵已收编、原件还没退役」的存量会当场消失在账本外。
+ * 「矩阵已收编、原件还没退役」这类存量会当场消失在账本外。写下这条时的实例是一份独立的
+ * NULL 排序模块（RFC-359 W11 已随最后一个调用方改指矩阵而删除）；例子退役了，理由没退役。
  */
 const DIALECT_RENDERERS: Readonly<Record<string, string>> = {
   [MATRIX_FILE]:
@@ -130,7 +131,7 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     pattern: /\bnulls\s+(?:first|last)\b/iu,
     dialect: 'divergent',
     capability: ['ascNullsFirst', 'descNullsLast'],
-    why: '两引擎默认 NULL 落位正好相反；认领类查询会因此饿死（postgresqlNullOrdering.ts 的来由）。',
+    why: '两引擎默认 NULL 落位正好相反；认领类查询会因此饿死——这正是矩阵收编这条资产的来由。',
   },
   {
     id: 'ilike',
@@ -199,8 +200,8 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     id: 'delete-using',
     pattern: /\bdelete\s+from\b[^;]{0,120}?\busing\b/iu,
     dialect: 'postgresql-only',
-    capability: [],
-    why: 'PG 的 DELETE … USING；SQLite 没有这个子句，等价写法是 DELETE … WHERE id IN (…)。矩阵尚无「按候选集批量删」这一项。',
+    capability: ['deleteByCandidates'],
+    why: 'PG 的 DELETE … USING；SQLite 没有这个子句，等价写法是 DELETE … WHERE id IN (…)。RFC-359 W6-T25 起由矩阵的 deleteByCandidates 各渲染一次。',
   },
   {
     id: 'distinct-on',
@@ -393,63 +394,80 @@ interface DialectDebtRow {
  * 减了 = 收敛发生了：把这张表一起改小，让每一次减少都留下一次有署名的提交。
  */
 const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
-  {
-    file: 'modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts',
-    construct: 'set-transaction',
-    count: 1,
-    why:
-      '`runPostgresqlResourceCatalogTransaction` 自己手搓了「可串行化事务」这一整个能力：' +
-      "`sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')` + 自带的 retryPostgresqlSerialization " +
-      '重试环。而 `platform/persistence/databaseTransaction.ts` 的 `serializable` 已经是同一能力的' +
-      '两侧渲染（PG：同一句 SET + 40001/40P01 退避；SQLite：BEGIN IMMEDIATE 本就全库独占）。' +
-      '于是同一个隔离形态在仓里有两份渲染、只有 PG 一侧，resource-catalog 这条路没有 SQLite 孪生。' +
-      '**正确动作**是改调中立原语，不是保留这一行。2026-09-07 才被看见：语料判据此前要求文件里有 ' +
-      '`sql`` ` 或 `.from(`，整篇只用 `sql.raw(` 的它一直不在语料内（W5-T20 头注释记的第一条已知盲区）。',
-    clearedBy:
-      'RFC-359 W8：resource-catalog 事务改走 databaseSessionFor().serializable，与 W8 的同步事务面第二批同批',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
-    construct: 'pg-greatest',
-    count: 1,
-    why: 'PG 侧裸写 GREATEST(COALESCE(...))，SQLite 孪生 taskDeleteRecovery.ts 用 MAX(...) 读回来再在 JS 里 Math.max——矩阵的 greatest() 就是为消灭这一对而存在的（workgroupTurnsOperations.ts 已是正确用法）。',
-    clearedBy: 'RFC-359 W4-B1 task-execution 分支时间戳回填 pair 合一',
-  },
-  {
-    file: 'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
-    construct: 'for-update',
-    count: 2,
-    why: '裸写 `select … for update` 而不是调 capabilities.lockAggregateRoot——同一个聚合根锁在两处各有一份渲染，矩阵改了这里不会跟着改。',
-    clearedBy: 'RFC-359 W4 task-execution 生命周期事务 pair 合一（design §10.1 写法纪律）',
-  },
-  // RFC-359 W5-T18 销账：`postgresqlTaskLifecycleTransaction.ts: set-transaction ×1` ——
-  // `withPostgresqlSerializableTaskExecution` 不再自己 `sql.raw('SET TRANSACTION ISOLATION LEVEL
-  // SERIALIZABLE')` + 自己写 40001 重试循环，整个事务边界改走 `databaseSessionFor(db).serializable(...)`。
-  // 那句方言现在只剩中立原语里的一处（`platform/persistence/databaseTransaction.ts`，它本来就是渲染器），
-  // 隔离级别的语义一字未变——中立原语的 `serializable` 显式记着以本文件当年那段为蓝本。
-  // 同文件的 `for-update ×2` **仍在账本上**：那两处 `select … for update` 一字未动，
-  // 该收敛成 `capabilities.lockAggregateRoot` 的事还没做。
-  {
-    file: 'platform/persistence/maintenanceExecutionFence.ts',
-    construct: 'indexed-by',
-    count: 1,
-    why: 'SQLite 半边裸写 `FROM node_runs INDEXED BY idx_node_runs_status_active`、PG 半边走 query builder——同一个存在性探针分成两份实现，矩阵的 indexHint() 正是为合并它而存在。',
-    clearedBy: 'RFC-359 W4 platform 维护围栏 pair 合一',
-  },
-  {
-    file: 'platform/persistence/postgresqlMaintenanceRetention.ts',
-    construct: 'delete-using',
-    count: 4,
-    why: '四条保留期清扫语句用 PG 专属的 DELETE … USING candidates；SQLite 孪生只能写 DELETE … WHERE id IN (…)。矩阵尚无「按候选集批量删」这一项，合一前先记账。',
-    clearedBy: 'RFC-359 W6-T25 批量写能力项（batchInsertMax 同批）落地时一并给出批量删渲染',
-  },
-  {
-    file: 'platform/persistence/postgresqlNullOrdering.ts',
-    construct: 'nulls-ordering',
-    count: 2,
-    why: '矩阵的 ascNullsFirst / descNullsLast 已收编这条资产，但原件还在、还有调用方——同一个方言点两份渲染，改一处不会红另一处。',
-    clearedBy: 'RFC-359 W4 收尾：调用方改指 capabilities 后删除本文件',
-  },
+  // RFC-359 W10 销账：`modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts:
+  // set-transaction ×1` —— `runPostgresqlResourceCatalogTransaction` 已删除。
+  //
+  // **这一行的 `why` 曾把处置写错，记在这里供后来人对照**：它写的是「**正确动作**是改调中立原语」，
+  // 前提是这个 helper 还有人用。逐个 import 核过之后事实是 **零生产调用方**——`packages/backend/src`
+  // 下没有任何一处 import 它；全仓提到这个名字的只有三份**反向**源码文本守卫
+  // （`rfc349-resource-catalog-intent-apply-postgresql.test.ts:29-30` /
+  // `rfc349-resource-catalog-postgresql-adapters.test.ts:264` /
+  // `rfc345-intent-context-resource-authorization.test.ts:38`，它们断言这个名字**不**出现）
+  // 外加账本自己。resource-catalog 的 PG 适配器从头到尾走 `db.transaction(...)` 直连，
+  // 从没经过它。于是处置是**删除**，不是改调——改调会凭空给一段死代码续命。
+  //
+  // 一般规律（读这本账本时带上）：账本行里由人写下的 `why` / `clearedBy` 是**当时的假设**，
+  // 不是事实。销账前先把「谁在用它」按 import 逐条验一遍——`why` 说得越具体，越容易让人
+  // 跳过这一步。
+  // ──────────────────────────────────────────────────────────────────────────
+  // RFC-359 W11 销账：`modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:
+  // pg-greatest ×1` —— 祖先链「只前进不后退」的分支时间戳回填改调 `engineOf(tx).greatest(...)`，
+  // 可空侧的 `coalesce(...)` 留在调用方（两个引擎都认的写法）。
+  //
+  // **原 `why` 把孪生认错了，记在这里供后来人对照**：它写的是「SQLite 孪生 taskDeleteRecovery.ts
+  // 用 MAX(...) 读回来再在 JS 里 Math.max」。逐个核过之后事实是两码事——`taskDeleteRecovery.ts`
+  // 做的是**删除之后重算**（`coalesce(max(col), 0)` 是**聚合** max，两个引擎原生同名同义），
+  // 它本来就是一份中立实现，没有任何方言。真正与这条 PG 回填成对的 SQLite 孪生是
+  // `services/task.ts` 铸任务时那段同形的祖先链 `MAX(branch_started_at, now)`（同样 64 层上限、
+  // 同样的循环）。**它不在本账本上**：两参数 `max` 在 PG 侧有同名同参 shim（转发 greatest），
+  // J2 因此认它已声明；这一对的合一是另一刀的活（那份文件此刻正被并发施工占着）。
+  //
+  // 顺带钉住一格**矩阵没有抹平**的语义分歧：SQLite 的多参数 `max` 对 NULL 传染（任一参数 NULL
+  // ⇒ 结果 NULL），PG 的 `GREATEST` 忽略 NULL。所以 `greatest()` 的可空侧必须由调用方 COALESCE。
+  // 双引擎实测见 `tests/rfc359-w11-dialect-ledger-conformance.test.ts`——那也是这个算子的
+  // **第一次**真实执行断言（矩阵的「每项两侧各一次真实执行」在它身上此前是空的）。
+  // ──────────────────────────────────────────────────────────────────────────
+  // RFC-359 W11 销账：`modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts:
+  // for-update ×2` —— 两处的处置**不一样**，这正是销账前要逐处核实的理由：
+  //   · `withPostgresqlTaskAggregateTransaction` 事务头那处**有生产调用方**（成员替换），
+  //     改调 `engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)`；渲染权归矩阵之后
+  //     这个 opener 顺带在 SQLite 上也跑得动了（裸 `for update` 在 SQLite 上是语法错误），
+  //     双引擎对拍因此第一次能同时喂到它。
+  //   · `lockPostgresqlNodeRunAggregateRoot` 那处**零生产调用方**——node run 的写路径在 W4-B1
+  //     合成一份之后走的是统一写事务原语 + 矩阵的 `lockAggregateRoot`，这个导出（连同同族的
+  //     `withPostgresqlNodeRunAggregateTransaction`）从此只被两份测试引用着。处置是**删除**，
+  //     不是改调；判「零生产消费者」时要把测试排除在消费者之外。
+  //
+  // RFC-359 W5-T18 销账：同文件 `set-transaction ×1` —— `withPostgresqlSerializableTaskExecution`
+  // 不再自己 `sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')` + 自己写 40001 重试循环，
+  // 整个事务边界改走 `databaseSessionFor(db).serializable(...)`。那句方言现在只剩中立原语里的一处
+  // （`platform/persistence/databaseTransaction.ts`，它本来就是渲染器），隔离级别的语义一字未变
+  // ——中立原语的 `serializable` 显式记着以本文件当年那段为蓝本。
+  // ──────────────────────────────────────────────────────────────────────────
+  // RFC-359 W11 销账：`platform/persistence/maintenanceExecutionFence.ts: indexed-by ×1` ——
+  // 两份实现（SQLite 裸 raw SQL + PG 查询构造器）合成一份，索引提示由 `engineOf(db).indexHint()`
+  // 渲染：SQLite `INDEXED BY "<index>"`、PG 空。SQLite 侧当初裸写它的**全部理由**（满库终态
+  // node run 时 planner 会改选整表扫）由对拍里的 `EXPLAIN QUERY PLAN` 断言接着守住。
+  // ──────────────────────────────────────────────────────────────────────────
+  // RFC-359 W6-T25 销账：`platform/persistence/postgresqlMaintenanceRetention.ts: delete-using ×4`
+  // —— 四条保留期清扫语句不再自己拼 `DELETE … USING candidates`，改调矩阵的
+  // `EngineCapabilities.deleteByCandidates`（PG 渲染 CTE + USING，SQLite 渲染 `WHERE id IN (…)`）。
+  // 两侧此后只提供**谓词与 LIMIT**；SQLite 孪生原来按 `rowid` 删、现在按主键删——这三张事件表的
+  // `id` 就是 `INTEGER PRIMARY KEY AUTOINCREMENT`（rowid 别名），`webhook_trigger_fires` 的 `id`
+  // 是 ULID 主键，选中的是同一批行。顺带把两侧各存一份的批大小常量
+  // （`RETENTION_DELETE_BATCH` / `POSTGRESQL_RETENTION_DELETE_BATCH`）收成矩阵里的
+  // `BOUNDED_DELETE_MAX_ROWS` 一处——那正是 T25 守卫禁止 `runner.ts` 干的「仓里第二份批大小推导」，
+  // 只是它在 DELETE 侧、此前逃过了那条守卫。
+  //
+  // **没有一并做的事**（留债，别读成已完成）：两个 retention 文件的**游标 / 相位 / 四条谓词**仍是
+  // 各写一份（`rfc359-w8-retention-parity.test.ts` 是它们的对拍）。合一它们要动
+  // `platform/background/maintenanceWorker.ts` 的两个调用点，不在本刀的路径域内。
+  // ──────────────────────────────────────────────────────────────────────────
+  // RFC-359 W11 销账：`platform/persistence/postgresqlNullOrdering.ts: nulls-ordering ×2` ——
+  // 矩阵早已收编这条资产，缺的只是把最后一个调用方改指过去然后删掉原件。核过之后全仓只有
+  // **一个**生产调用方（任务详情的 node run 时间线），改成 `engineOf(db).ascNullsFirst(...)`
+  // 之后整份文件删除。同时把三处只在注释里提到它的地方一并更正——注释不会随代码演进自动作废，
+  // 留着会让下一个人以为还有第二份渲染。
 ]
 
 /** 用到了却既不可移植、也没 shim、也不在方言词汇表里的函数。目标态是空。 */

@@ -22,6 +22,7 @@ import {
   taskQuestions,
 } from '@/db/schema'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type {
@@ -242,36 +243,44 @@ async function projectReviewGateOpen(
     }
   }
 
-  for (const document of manifest.documents) {
-    await tx
-      .insert(docVersions)
-      .values({
-        id: document.id,
-        taskId: document.taskId,
-        reviewNodeId: document.reviewNodeId,
-        reviewNodeRunId: document.reviewNodeRunId,
-        sourceNodeId: document.sourceNodeId,
-        sourcePortName: document.sourcePortName,
-        versionIndex: document.versionIndex,
-        reviewIteration: document.reviewIteration,
-        bodyPath: document.bodyPath,
-        commentsJson: document.commentsJson,
-        decision: document.decision,
-        decisionReason: document.decisionReason,
-        promptSnapshot: document.promptSnapshot,
-        sourceFilePath: document.sourceFilePath,
-        itemIndex: document.itemIndex,
-        selection: document.selection,
-        itemPath: document.itemPath,
-        selectionStale: document.selectionStale,
-        roundGeneration: document.roundGeneration,
-        createdAt: document.createdAt,
-        decidedAt: document.decidedAt,
-        decidedBy: document.decidedBy,
-        decidedByRole: document.decidedByRole,
-      })
-      .run()
-  }
+  // RFC-359 W6-T25 —— 文档投影按批落库。`manifest.documents` 的条数**无界**（它来自 agent 输出端口
+  // 的 splitListItems，review 路径没有 wrapper-fanout 那道 256 闸），而这段跑在
+  // `withTaskExecutionSerializable` 体内——SQLite 上那是全库独占，逐行写的 N 次往返阻塞的是所有任务。
+  // 陈旧探测在**循环之外**（上面按 node 各做一次），所以这里是真正的 N→1。
+  await insertInBatches(
+    tx,
+    docVersions,
+    manifest.documents.map((document) => ({
+      id: document.id,
+      taskId: document.taskId,
+      reviewNodeId: document.reviewNodeId,
+      reviewNodeRunId: document.reviewNodeRunId,
+      sourceNodeId: document.sourceNodeId,
+      sourcePortName: document.sourcePortName,
+      versionIndex: document.versionIndex,
+      reviewIteration: document.reviewIteration,
+      bodyPath: document.bodyPath,
+      commentsJson: document.commentsJson,
+      decision: document.decision,
+      decisionReason: document.decisionReason,
+      promptSnapshot: document.promptSnapshot,
+      sourceFilePath: document.sourceFilePath,
+      itemIndex: document.itemIndex,
+      selection: document.selection,
+      itemPath: document.itemPath,
+      selectionStale: document.selectionStale,
+      roundGeneration: document.roundGeneration,
+      createdAt: document.createdAt,
+      decidedAt: document.decidedAt,
+      decidedBy: document.decidedBy,
+      decidedByRole: document.decidedByRole,
+    })),
+    (batch) =>
+      tx
+        .insert(docVersions)
+        .values([...batch])
+        .run(),
+  )
   await tx
     .insert(nodeRunEvents)
     .values({

@@ -67,11 +67,16 @@ import {
   canViewAccess,
   discloseScheduleRefs,
 } from '@/modules/resource-catalog/domain/resourceAccess'
-import { listResourceGrantUserIdsInTx } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+import { resolveResourceAccessForTx } from '@/modules/resource-catalog/infrastructure/resourceAclTransaction'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import {
   assertNoMissingRefs,
   assertRefsUsableInTx,
+  listResourceGrantUserIdsForTx,
   resolveRefsUsableById,
 } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
@@ -553,35 +558,44 @@ export async function deleteWorkgroup(
       issues: parsed.error.issues,
     })
   }
-  const deleted = dbTxSync<{
+  // RFC-359 W9：删除面从 bun:sqlite 独有的同步 `dbTxSync` 迁到中立事务原语，两个引擎共用一条。
+  // 能迁是因为删除面的 in-tx 门（`assertPrincipalCanGovernInTx` / `assertNoScheduledReferencesInTx`）
+  // 的**唯一**调用方就是这一笔，跟着改成异步零级联；create / copy / save 三笔仍钉着——它们体内的
+  // `commitWorkgroupCreateInTx` / `commitWorkgroupSaveInTx` 与 `insertWorkgroupInTx` /
+  // `insertWorkgroupMembersInTx` / `prepareAgentMembersInTx` / `assertHumanMembersActiveInTx`
+  // 都被 aggregateAdapters 的 `(tx: DbTxSync, …) => …` 参与者契约共用。
+  const deleted = await databaseSessionFor(db).transaction<{
     deletedVersion: number
     audience: WorkgroupDeletedAudienceContext
-  }>(db, (tx) => {
-    const currentRow = tx.select().from(workgroups).where(eq(workgroups.id, id)).get()
+  }>(async (tx) => {
+    const [currentRow] = await tx.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
     if (currentRow === undefined) throwWorkgroupNotFound(id)
-    assertPrincipalCanGovernInTx(tx, principal, currentRow)
+    await assertPrincipalCanGovernForTx(tx, principal, currentRow)
     if (currentRow.version !== parsed.data.expectedVersion) {
-      const members = tx
+      const members = await tx
         .select()
         .from(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, id))
-        .all()
       throw staleConflictError(
         'workgroup',
         `workgroup '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
         { current: workgroupRevisionOf(rowToWorkgroup(currentRow, members)) },
       )
     }
-    assertNoScheduledReferencesInTx(tx, principal, currentRow)
+    await assertNoScheduledReferencesForTx(tx, principal, currentRow)
     // RFC-285 B2（D5/E3，能力收缩——Q2 现网检查已记 T5 实施记录）：删除中档
     // 统一——workgroup 从「可删留孤儿」收紧为拒**非终态**任务引用
     // （tasks.workgroupId 软链查询；终态引用不阻删，与 workflow/agent 同档）。
     // 披露沿 workflow.ts 的 task-ACL 论证：只给聚合 count。
-    const nonTerminalRefs = tx
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(and(eq(tasks.workgroupId, id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])))
-      .all().length
+    // 只用行数，不用 SQL 的 `count(*)`：**PG 的 `count` 回字符串**，`> 0` 在两个引擎上不同义。
+    const nonTerminalRefs = (
+      await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(eq(tasks.workgroupId, id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
+        )
+    ).length
     if (nonTerminalRefs > 0) {
       throw new ConflictError(
         'workgroup-in-use',
@@ -595,13 +609,12 @@ export async function deleteWorkgroup(
       workgroupId: id,
       visibility: currentRow.visibility,
       ownerUserId: currentRow.ownerUserId,
-      grantedUserIds: new Set(listResourceGrantUserIdsInTx(tx, 'workgroup', id)),
+      grantedUserIds: new Set(await listResourceGrantUserIdsForTx(tx, 'workgroup', id)),
     }
-    const deleted = tx
+    const [deleted] = await tx
       .delete(workgroups)
       .where(and(eq(workgroups.id, id), eq(workgroups.version, parsed.data.expectedVersion)))
       .returning({ id: workgroups.id })
-      .get()
     if (deleted === undefined) {
       throw staleConflictError('workgroup', `workgroup '${id}' changed; reload`)
     }
@@ -888,13 +901,13 @@ function assertPrincipalCanEditInTx(
 }
 
 /** RFC-324 —— 删除面的 in-tx 门：治理写，编辑授权不覆盖。 */
-function assertPrincipalCanGovernInTx(
-  tx: DbTxSync,
+async function assertPrincipalCanGovernForTx(
+  tx: DatabaseTransaction,
   principal: WorkgroupWritePrincipal,
   row: WorkgroupRow,
-): void {
+): Promise<void> {
   if (principal.kind === 'system') return
-  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workgroup', row)
+  const access = await resolveResourceAccessForTx(tx, principal.actor, 'workgroup', row)
   if (!canViewAccess(access)) throwWorkgroupNotFound(row.id)
   if (!canGovernAccess(access)) {
     throw new ForbiddenError(
@@ -934,12 +947,12 @@ function assertNameChangeAllowedInTx(tx: DbTxSync, current: Workgroup, nextName:
   }
 }
 
-function assertNoScheduledReferencesInTx(
-  tx: DbTxSync,
+async function assertNoScheduledReferencesForTx(
+  tx: DatabaseTransaction,
   principal: WorkgroupWritePrincipal,
   target: { id: string; name: string },
-): void {
-  const rows = tx
+): Promise<void> {
+  const rows = await tx
     .select({
       id: scheduledTasks.id,
       name: scheduledTasks.name,
@@ -948,7 +961,6 @@ function assertNoScheduledReferencesInTx(
       ownerUserId: scheduledTasks.ownerUserId,
     })
     .from(scheduledTasks)
-    .all()
   // RFC-284 T9（§2.2）：内联副本收编 scheduledTasks.scheduledRowsReferencing。
   const refs = scheduledRowsReferencing(rows, {
     launchKind: 'workgroup',

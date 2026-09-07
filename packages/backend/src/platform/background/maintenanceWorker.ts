@@ -50,8 +50,7 @@ import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/publi
 import type { ClaimedMaintenanceRun, MaintenanceRunStore } from './maintenanceRunStorePort'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import {
-  createPostgresqlMaintenanceExecutionFence,
-  createSqliteMaintenanceExecutionFence,
+  createMaintenanceExecutionFence,
   type MaintenanceExecutionFence,
 } from '@/platform/persistence/maintenanceExecutionFence'
 import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
@@ -557,7 +556,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         client,
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
-      maintenanceExecutionFence = createPostgresqlMaintenanceExecutionFence(client)
+      maintenanceExecutionFence = createMaintenanceExecutionFence(client)
       developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(client)
       digitalEmployeeMaintenance = composePostgresqlDigitalEmployeeMaintenanceCommands(client)
       const operational = createPostgresqlDatabaseOperationalAdapter({
@@ -715,7 +714,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         sqliteDb,
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
-      maintenanceExecutionFence = createSqliteMaintenanceExecutionFence(sqliteDb)
+      maintenanceExecutionFence = createMaintenanceExecutionFence(sqliteDb)
       store = createMaintenanceRunStore(sqliteDb)
     }
     await store.recoverRunning(Date.now())

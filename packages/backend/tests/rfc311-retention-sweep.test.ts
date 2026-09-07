@@ -315,18 +315,19 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
       ),
       'utf8',
     )
-    for (const table of [
-      'memory_distill_events',
-      'intent_turn_events',
-      'mcp_runtime_test_events',
-    ]) {
-      expect(src).toContain(`DELETE FROM ${table}`)
+    // RFC-359 W6-T25 起三条腿的 DELETE 由能力矩阵的 `deleteByCandidates` 渲染（PG 是
+    // `DELETE … USING candidates`，SQLite 是 `DELETE … WHERE id IN (…)`），本文件只出候选集。
+    // 锚点随之从 `DELETE FROM <表名>` 改成「这条腿的候选集把这张表交给了那个渲染器」——
+    // 判的仍然是同一件事：三条事件流都还挂在同一个窗口上。
+    for (const table of ['memoryDistillEvents', 'intentTurnEvents', 'mcpRuntimeTestEvents']) {
+      expect(src).toContain(`engine.deleteByCandidates(\n          ${table},`)
+      expect(src).toContain(`FROM \${${table}}`)
     }
     expect(src).toContain('export async function runRetentionSweepSlice(')
     expect(src).toContain('LIMIT ${batchSize}')
     // 且三条腿都带宿主终态判据(实现门 P2-11)。
-    expect(src).toContain("job.status IN ('done', 'failed', 'canceled')")
-    expect(src).toContain("session.status = 'archived'")
-    expect(src).toContain("session.status = 'ended'")
+    expect(src).toContain("${memoryDistillJobs.status} IN ('done', 'failed', 'canceled')")
+    expect(src).toContain("${intentSessions.status} = 'archived'")
+    expect(src).toContain("${mcpRuntimeTestSessions.status} = 'ended'")
   })
 })

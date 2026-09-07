@@ -65,6 +65,7 @@ import {
   extractWorkflowAgentRefs,
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
+  listResourceGrantUserIdsForTx,
   resolveRefsUsableById,
   resolveRefsUsableByName,
 } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
@@ -84,7 +85,11 @@ import {
   canGovernAccess,
   canViewAccess,
 } from '@/modules/resource-catalog/domain/resourceAccess'
-import { listResourceGrantUserIdsInTx } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+import { resolveResourceAccessForTx } from '@/modules/resource-catalog/infrastructure/resourceAclTransaction'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { sha256Hex } from '@/util/hash'
@@ -689,13 +694,19 @@ export async function deleteWorkflow(
       issues: parsed.error.issues,
     })
   }
-  const deleted = dbTxSync<{
+  // RFC-359 W9：删除面从 bun:sqlite 独有的同步 `dbTxSync` 迁到中立事务原语，两个引擎共用一条。
+  // 能迁是因为**删除面的 in-tx 门与保存面是分开的两份**（RFC-324 的核心区分）：
+  // `assertPrincipalCanGovernInTx` / `countNonTerminalReferencingTasksInTx` 的唯一调用方就是
+  // 这一笔，跟着改成异步零级联；保存面的 `commitWorkflowSaveInTx` / `insertWorkflowInTx` /
+  // `assertRefsUsableInTx` 仍被 aggregateAdapters 的 `(tx: DbTxSync, …) => void` 参与者契约钉着，
+  // 那三个站点这一刀不动。
+  const deleted = await databaseSessionFor(db).transaction<{
     deletedVersion: number
     audience: WorkflowDeletedAudienceContext
-  }>(db, (tx) => {
-    const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
+  }>(async (tx) => {
+    const [currentRow] = await tx.select().from(workflows).where(eq(workflows.id, id)).limit(1)
     if (currentRow === undefined) throwWorkflowNotFound(id)
-    assertPrincipalCanGovernInTx(tx, principal, currentRow)
+    await assertPrincipalCanGovernForTx(tx, principal, currentRow)
 
     if (currentRow.version !== parsed.data.expectedVersion) {
       // RFC-359 T6：定义损坏的行在版本冲突时也只报 409——revision 详情算得出就带上，算不出不让
@@ -718,7 +729,7 @@ export async function deleteWorkflow(
     // workflow 允许删除，终态任务详情容忍悬空引用（tasks.workflow_id 已随
     // 0151 迁移软链化，与 workgroupId/agent 同型）。The check and DELETE
     // share one transaction, so a task insert that wins first is observed.
-    const referenceCount = countNonTerminalReferencingTasksInTx(tx, id)
+    const referenceCount = await countNonTerminalReferencingTasksForTx(tx, id)
     if (referenceCount > 0) {
       throw new ConflictError(
         'workflow-in-use',
@@ -737,7 +748,7 @@ export async function deleteWorkflow(
     // consecutive-failure auto-disable kicks in ~10 fires later (audit P1
     // F-12). Same transaction as the DELETE, so a schedule insert that wins
     // first is always observed.
-    const schedRows = tx
+    const schedRows = await tx
       .select({
         id: scheduledTasks.id,
         name: scheduledTasks.name,
@@ -746,7 +757,6 @@ export async function deleteWorkflow(
         ownerUserId: scheduledTasks.ownerUserId,
       })
       .from(scheduledTasks)
-      .all()
     const referencing = scheduledRowsReferencingWorkflow(schedRows, id)
     if (referencing.length > 0) {
       // Schedules are member-private (owner + `tasks:read:all`). Details
@@ -780,14 +790,13 @@ export async function deleteWorkflow(
       workflowId: id,
       visibility: currentRow.visibility,
       ownerUserId: currentRow.ownerUserId,
-      grantedUserIds: new Set(listResourceGrantUserIdsInTx(tx, 'workflow', id)),
+      grantedUserIds: new Set(await listResourceGrantUserIdsForTx(tx, 'workflow', id)),
     }
 
-    const deletedRow = tx
+    const [deletedRow] = await tx
       .delete(workflows)
       .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
       .returning({ id: workflows.id, version: workflows.version })
-      .get()
     if (deletedRow === undefined) {
       throw staleConflictError('workflow', `workflow '${id}' changed; reload`)
     }
@@ -903,14 +912,18 @@ export function broadcastWorkflowCreated(created: WorkflowDetail): void {
  * RFC-285 B2：删除门只数**非终态**引用（终态集合单源 shared/lifecycle.ts）。
  * 终态引用不再阻删——展示层按悬空软链容忍（E2）。
  */
-function countNonTerminalReferencingTasksInTx(tx: DbTxSync, workflowId: string): number {
-  return tx
+async function countNonTerminalReferencingTasksForTx(
+  tx: DatabaseTransaction,
+  workflowId: string,
+): Promise<number> {
+  const rows = await tx
     .select({ id: tasks.id })
     .from(tasks)
     .where(
       and(eq(tasks.workflowId, workflowId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
     )
-    .all().length
+  // 只用行数，不用 SQL 的 `count(*)`：**PG 的 `count` 回字符串**，`> 0` 在两个引擎上不同义。
+  return rows.length
 }
 
 function rowToWorkflow(row: WorkflowRow): Workflow {
@@ -1052,16 +1065,16 @@ function assertPrincipalCanEditInTx(
  * 与保存面分开是本 RFC 的核心区分：可编辑授权覆盖内容，不覆盖「让这份工作流不再
  * 存在」。路由层已经判过一次（routes/workflows.ts），这里是事务内的权威复检。
  */
-function assertPrincipalCanGovernInTx(
-  tx: DbTxSync,
+async function assertPrincipalCanGovernForTx(
+  tx: DatabaseTransaction,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
-): void {
+): Promise<void> {
   if (principal.kind === 'system') {
     assertNotBuiltin('workflow', row)
     return
   }
-  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workflow', row)
+  const access = await resolveResourceAccessForTx(tx, principal.actor, 'workflow', row)
   if (!canViewAccess(access)) throwWorkflowNotFound(row.id)
   assertNotBuiltin('workflow', row)
   if (!canGovernAccess(access)) {

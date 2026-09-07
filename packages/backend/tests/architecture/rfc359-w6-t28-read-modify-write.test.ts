@@ -45,13 +45,13 @@
 //      `sqliteTaskOwnership` / `postgresqlTaskOwnershipPersistence` 两处正确的 CAS 会被误报
 //      （实测，是本判据成型过程中最先撞到的假阳）。
 //   ⑤ **没有串行化手段**：作用域里没有出现 `lockAggregateRoot` / `advisoryLock` /
-//      `claimRows` / `lockPostgresqlNodeRunAggregateRoot`，没有裸 `for update` 模板，
+//      `claimRows`，没有裸 `for update` 模板，
 //      没有 owner 行 CAS 围栏（`fenceTaskWrite` / `assertTaskOwner*Tx`——它们对同一任务的
 //      并发写手就是一把锁：都要 CAS 推进同一行 owner 的 revision，第二个必然落空），
 //      且 opener 不是 `serializable` / `withTaskExecutionSerializable` /
-//      `withPostgresqlTaskAggregateTransaction`（前两者抬到 SERIALIZABLE，后者在事务头
-//      对 task 行取了 `for update`——它自己是 T20 账本上的另一笔债「裸写 for update 而不是
-//      调 capabilities」，但对**本**守卫而言它确实锁住了）。
+//      `withPostgresqlTaskAggregateTransaction`（前两者抬到 SERIALIZABLE，后者在事务头对
+//      task 行取聚合根锁——RFC-359 W11 起它走的正是 `lockAggregateRoot`，T20 账本上那笔
+//      「裸写 for update 而不是调 capabilities」的债随之销掉）。
 //   ⑥ **没有 CAS 谓词**：`where(…)` 既不引用读变量（含派生名），写进 `.set({…})` 的列名
 //      也不出现在 `where(…)` 对同一张表的列引用里。第二半是必需的——`legacy/workflow.ts`
 //      的 `set({ version: currentRow.version + 1 }).where(and(eq(w.id, id),
@@ -156,7 +156,6 @@ const TX_HANDLE_NAMES: ReadonlySet<string> = new Set(['tx', 'transaction'])
 /** 出现其一即认为该事务作用域已经把并发写手串起来了。 */
 const SERIALIZING_CALLEES: ReadonlySet<string> = new Set([
   'lockAggregateRoot',
-  'lockPostgresqlNodeRunAggregateRoot',
   'advisoryLock',
   'claimRows',
   // owner 行 CAS 围栏：同任务的并发写手都要推进同一行 owner 的 revision，第二个落空。

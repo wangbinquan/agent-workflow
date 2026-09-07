@@ -11,6 +11,7 @@ import {
   eventSources,
   eventTypeCatalog,
 } from '@/db/schema'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CustomEventSourceStorePort } from '../application/ports/customEventSourceStore'
 import {
@@ -160,19 +161,29 @@ export function createCustomEventSourceStore(
           state: 'published',
           registeredAt: input.now,
         })
-        for (const eventType of input.eventTypes) {
-          await tx.insert(eventTypeCatalog).values({
+        // RFC-359 W6-T25 —— 目录登记按批（一个源最多 100 个事件类型，见 domain/customEventSource）。
+        // 纯 INSERT、无冲突子句：草稿 schema 已经把重复 eventKey 挡在外面，所以批内不会有重复主键，
+        // 真撞上仍然照旧大声抛（与逐行同）。
+        await insertInBatches(
+          tx,
+          eventTypeCatalog,
+          input.eventTypes.map((eventType) => ({
             eventTypeId: eventType.eventTypeRef.id,
             revision: eventType.eventTypeRef.revision,
             sourceId: eventType.sourceRef.id,
             sourceRevision: eventType.sourceRef.revision,
             descriptorJson: JSON.stringify(eventType),
             descriptorDigest: input.digest,
-            catalogVisibility: 'public',
-            state: 'published',
+            catalogVisibility: 'public' as const,
+            state: 'published' as const,
             registeredAt: input.now,
-          })
-        }
+          })),
+          (batch) =>
+            tx
+              .insert(eventTypeCatalog)
+              .values([...batch])
+              .run(),
+        )
         const published = await tx
           .update(customEventSourceDefinitions)
           .set({ publishedRevision: input.revision, updatedAt: input.now })

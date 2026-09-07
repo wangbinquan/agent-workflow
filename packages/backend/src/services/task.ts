@@ -1,7 +1,7 @@
 // Task service — start / list / get.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
-import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type {
@@ -30,6 +30,8 @@ import type {
 } from '@agent-workflow/shared'
 import { taskListOriginMatches } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
+// RFC-359 W10：workgroup 运行态行的 INSERT 内联进任务铸行事务后，校验 schema 直接取用。
+import { DwStateSchema } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -94,7 +96,7 @@ import {
   tasks,
   users,
   workflows,
-  dbTxSync,
+  workgroupTaskState,
   type SQL,
   type LegacySqliteTaskDatabase,
   type LegacySqliteTaskTransaction,
@@ -104,7 +106,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'nod
 import { rm } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
-import { insertWorkgroupTaskStateTx, setDwStateTx } from '@/services/workgroup/state'
+import { setDwStateTx } from '@/services/workgroup/state'
 import type { SecretBox } from '@/auth/secretBox'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { unsealRepoUrl } from '@/services/repoCredentials'
@@ -133,9 +135,11 @@ import type { TaskStopCause } from '@/modules/task-execution/domain/sourceTermin
 import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
+  fenceTaskWrite,
   submitTaskContinuationTx,
   taskExecutionModule,
   terminalizeTaskExecutionIntentsTx,
+  withTaskExecutionWrite,
   type OwnershipToken,
   type RuntimeStopTicket as TaskDriverStopTicket,
   type TaskExecutionIntentKind,
@@ -148,9 +152,11 @@ import {
   setNodeRunStatus,
   setTaskStatus,
   transitionTaskStatusByEvent,
-  setNodeRunStatusTx,
   cancelOpenNodeRunsTx,
 } from '@/services/lifecycle'
+// RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 `@/services/lifecycle`
+// 上同名的 bun:sqlite 专属**同步**版按名字区分开。
+import { setNodeRunStatusInTransaction } from '@/modules/task-execution/public/participants'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
@@ -196,7 +202,8 @@ import {
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
-import { appendTaskCreatedCommittedEventTx } from '@/modules/task-execution/public/participants'
+// RFC-359 W10：任务铸行事件改走两个引擎共用的 `appendTaskCreatedCommittedEvent`（async）。
+import { appendTaskCreatedCommittedEvent } from '@/modules/task-execution/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
@@ -1666,11 +1673,18 @@ function createPersistedRepositoryPreparationStep(input: {
       const task = await getTask(input.deps.db, descriptor.taskId)
       if (task === null) return { kind: 'terminal-won' }
       if (descriptor.hasPriorAttempt) {
-        taskExecutionModule.ownership.withOwnedTaskTx({
-          db: input.deps.db,
-          token: context.execution.token,
-          now: Date.now(),
-          run: () => undefined,
+        // RFC-359 W10 —— 这一笔**没有事务体**（`run: () => undefined`），它只是围栏：确认本
+        // driver 仍是任务的活 owner（命中 `claimed` 的精确 owner 才放行并推进 revision），
+        // 确认不了就不去动上一次准备留下的工件。中立原语一比一顶上——同一笔写事务里做同一次
+        // owner CAS，失败仍抛 `task-execution-stale-owner`——于是这条 bun:sqlite 专属的
+        // 同步 `withOwnedTaskTx` 在本文件消失。
+        const fenceNow = Date.now()
+        await withTaskExecutionWrite(input.deps.db, async (tx) => {
+          await fenceTaskWrite(tx, {
+            taskId: descriptor.taskId,
+            context: context.execution,
+            now: fenceNow,
+          })
         })
         await reclaimStalePrepArtifacts(input.deps.db, input.appHome, task)
       }
@@ -3320,10 +3334,17 @@ async function startTaskImpl(
 
     // RFC-165 (F17-r3): the task row + its per-repo rows + the launch
     // collaborator rows + the single-agent existence RE-check land in ONE
-    // dbTxSync transaction — atomicity replaces the old best-effort manual
+    // transaction — atomicity replaces the old best-effort manual
     // rollback (which, per Codex P1, could even delete a PRE-EXISTING task
-    // when a handed-off taskId collided). Synchronous surface only inside.
-    dbTxSync(deps.db, (tx) => {
+    // when a handed-off taskId collided).
+    //
+    // RFC-359 W10 —— 事务边界从 bun:sqlite 专属的同步 `dbTxSync` 换成中立的
+    // `withTaskExecutionWrite`（`databaseSessionFor(db).transaction`）：同一笔原子、同一套
+    // 回滚语义，但两个引擎共用一条。体内每一条语句都必须 `await`——drizzle 的查询构建器是
+    // **惰性** thenable，既不 `.run()` 也不 `await` 的写在两个引擎上一条都不会发生；只
+    // `.run()` 不 await 的写在 PostgreSQL 上是一个没人等的 Promise，语句可能落在事务外，
+    // 而两边都不抛。
+    await withTaskExecutionWrite(deps.db, async (tx) => {
       // This read and the initial INSERT share SQLite's transaction boundary:
       // terminal revoke wins first, or the later effect must observe the task.
       deps.sourceTerminationAdmission?.()
@@ -3334,7 +3355,7 @@ async function startTaskImpl(
       // editor supplied an exact version, a materialization-time writer is
       // fenced here as well. If this transaction wins first, deleteWorkflow's
       // in-transaction reference check necessarily observes the task row.
-      const liveWorkflow = tx
+      const liveWorkflow = await tx
         .select({ version: workflows.version })
         .from(workflows)
         .where(eq(workflows.id, workflow.id))
@@ -3380,7 +3401,7 @@ async function startTaskImpl(
         },
       ]
       if (deps.callLaunch !== undefined) {
-        const parent = tx
+        const parent = await tx
           .select({
             id: tasks.id,
             status: tasks.status,
@@ -3404,7 +3425,7 @@ async function startTaskImpl(
             `parent task '${deps.callLaunch.parentTaskId}' disappeared during child launch`,
           )
         }
-        const parentRun = tx
+        const parentRun = await tx
           .select({
             taskId: nodeRuns.taskId,
             status: nodeRuns.status,
@@ -3494,7 +3515,7 @@ async function startTaskImpl(
       // actually resolved. The launch reservation already blocks delete/rename
       // mid-launch; this is the belt-and-suspenders behind it.
       if (deps.agentLaunch !== undefined) {
-        const live = tx
+        const live = await tx
           .select({ id: agents.id })
           .from(agents)
           .where(eq(agents.id, deps.agentLaunch.agentId))
@@ -3506,7 +3527,8 @@ async function startTaskImpl(
           )
         }
       }
-      tx.insert(tasks)
+      await tx
+        .insert(tasks)
         .values({
           id: taskId,
           // RFC-037: required name (StartTaskSchema already trimmed + length-validated).
@@ -3619,11 +3641,13 @@ async function startTaskImpl(
           rootTaskId:
             deps.callLaunch?.parentTaskId === undefined
               ? taskId
-              : (tx
-                  .select({ rootTaskId: tasks.rootTaskId })
-                  .from(tasks)
-                  .where(eq(tasks.id, deps.callLaunch.parentTaskId))
-                  .get()?.rootTaskId ?? deps.callLaunch.parentTaskId),
+              : ((
+                  await tx
+                    .select({ rootTaskId: tasks.rootTaskId })
+                    .from(tasks)
+                    .where(eq(tasks.id, deps.callLaunch.parentTaskId))
+                    .get()
+                )?.rootTaskId ?? deps.callLaunch.parentTaskId),
           executionLineageId,
           lineageSlotPathJson: JSON.stringify(lineageSlotPath),
         })
@@ -3631,7 +3655,8 @@ async function startTaskImpl(
 
       launchIntentId = ulid()
       const launchPayloadJson = JSON.stringify({ v: 1, workflowId: workflow.id })
-      tx.insert(taskExecutionIntents)
+      await tx
+        .insert(taskExecutionIntents)
         .values({
           id: launchIntentId,
           taskId,
@@ -3668,7 +3693,7 @@ async function startTaskImpl(
         })
         .run()
 
-      createdEventRef = appendTaskCreatedCommittedEventTx(tx, {
+      createdEventRef = await appendTaskCreatedCommittedEvent(tx, {
         taskId,
         status: earlyError === null ? 'pending' : 'failed',
         errorSummary: earlyError !== null ? `worktree creation failed: ${earlyError}` : null,
@@ -3682,13 +3707,14 @@ async function startTaskImpl(
       {
         let cursor: string | null = deps.callLaunch?.parentTaskId ?? null
         for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
-          const parent = tx
+          const parent = await tx
             .select({ id: tasks.id, parentTaskId: tasks.parentTaskId })
             .from(tasks)
             .where(eq(tasks.id, cursor))
             .get()
           if (parent === undefined) break
-          tx.update(tasks)
+          await tx
+            .update(tasks)
             .set({ branchStartedAt: sql`MAX(${tasks.branchStartedAt}, ${now})` })
             .where(eq(tasks.id, parent.id))
             .run()
@@ -3702,7 +3728,8 @@ async function startTaskImpl(
       // by `tasks.repo_count`; the detail page's `Task.repos[]` array is hydrated
       // from this table by `getTask`.
       if (materializedRepos.length > 0) {
-        tx.insert(taskRepos)
+        await tx
+          .insert(taskRepos)
           .values(taskRepoRowsFor(taskId, materializedRepos, input.workingBranch ?? null))
           .run()
       }
@@ -3711,7 +3738,8 @@ async function startTaskImpl(
       // repo rows. Repository metadata stays in task_repos; these rows retain
       // pure directories that cannot be reconstructed from mount paths.
       if (space.nodePaths.length > 0) {
-        tx.insert(taskSpaceNodes)
+        await tx
+          .insert(taskSpaceNodes)
           .values(
             space.nodePaths.map((nodePath) => ({
               taskId,
@@ -3727,7 +3755,20 @@ async function startTaskImpl(
       // DwState checkpoint (phase 'generating') here instead of smuggling it
       // inside workgroup_config_json.
       if (deps.workgroupLaunch) {
-        insertWorkgroupTaskStateTx(tx, taskId, deps.workgroupLaunch.dw ?? null)
+        // RFC-359 W10 —— 原来这里调 `insertWorkgroupTaskStateTx`（签名钉在 `DbTxSync` 上的
+        // 同步参与者，且本站点是它唯一的调用方）。事务转中立后再传它就会撞上最毒的那一档：
+        // `.run()` 在 PostgreSQL 上回一个没人 await 的 Promise，行静默不落。这里把那六行
+        // INSERT 原样内联，DwState 仍按 `DwStateSchema` 校验后序列化。
+        const dw = deps.workgroupLaunch.dw ?? null
+        await tx
+          .insert(workgroupTaskState)
+          .values({
+            taskId,
+            gateStatus: 'idle',
+            dwStateJson: dw === null ? null : JSON.stringify(DwStateSchema.parse(dw)),
+            updatedAt: Date.now(),
+          })
+          .run()
       }
 
       // RFC-067 NOTE: an earlier draft of this RFC also wrote `user.name` /
@@ -3747,7 +3788,7 @@ async function startTaskImpl(
       // D6) inside the SAME transaction — a validation throw (inactive user)
       // rolls back the task + task_repos rows atomically.
       if (deps.actorUserId) {
-        const userRows = tx.select({ id: users.id, status: users.status }).from(users).all()
+        const userRows = await tx.select({ id: users.id, status: users.status }).from(users)
         const collabRows = buildLaunchCollabRows(
           {
             taskId,
@@ -3758,7 +3799,7 @@ async function startTaskImpl(
           userRows,
         )
         if (collabRows.length > 0) {
-          tx.insert(taskCollaborators).values(collabRows).run()
+          await tx.insert(taskCollaborators).values(collabRows).run()
         }
       }
     })
@@ -5994,8 +6035,13 @@ async function runDeferredRepoPreparation(args: {
   const preparedHead = prepared.repos[0]
   const preparedRepoRows = taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null)
   const preparedFinishedAt = Date.now()
-  const persistPreparedProjection = (tx: LegacySqliteTaskTransaction): void => {
-    tx.update(tasks)
+  // RFC-359 W10 —— 回填投影改走中立写事务（`withTaskExecutionWrite` → `databaseSessionFor`），
+  // 事务边界与「四件事同生共死」的语义一格不动，只是不再依赖 bun:sqlite 专属的同步 `dbTxSync`。
+  // 体内每一条语句都必须 `await`：`.run()` 在 PostgreSQL 上不 await 就是一个没人等的 Promise，
+  // 语句要么落在事务外、要么根本不发，而两边都不会抛。
+  const persistPreparedProjection = async (tx: DatabaseTransaction): Promise<void> => {
+    await tx
+      .update(tasks)
       .set({
         worktreePath: prepared.worktreePath,
         branch: prepared.branch,
@@ -6013,10 +6059,11 @@ async function runDeferredRepoPreparation(args: {
       .where(eq(tasks.id, taskId))
       .run()
     if (prepared.repos.length > 0) {
-      tx.insert(taskRepos).values(preparedRepoRows).run()
+      await tx.insert(taskRepos).values(preparedRepoRows).run()
     }
     if (prepared.nodePaths.length > 0) {
-      tx.insert(taskSpaceNodes)
+      await tx
+        .insert(taskSpaceNodes)
         .values(
           prepared.nodePaths.map((nodePath) => ({
             taskId,
@@ -6035,7 +6082,7 @@ async function runDeferredRepoPreparation(args: {
     // 而审计历史上永久留着「仓库准备被中断」。这也直接违反 AC-10 的「prep done 之后
     // 才有工作树」——回填后工作树已在，而 prep 没 done。
     // 同一事务之后这个组合不可达。
-    setNodeRunStatusTx({
+    await setNodeRunStatusInTransaction({
       tx,
       nodeRunId: prepRunId,
       to: 'done',
@@ -6050,7 +6097,7 @@ async function runDeferredRepoPreparation(args: {
     spaceKind: prepared.spaceKind,
   } as const
   if (prepEffect === undefined) {
-    dbTxSync(deps.db, persistPreparedProjection)
+    await withTaskExecutionWrite(deps.db, persistPreparedProjection)
   } else {
     await prepEffect.succeedWorkspacePreparation(preparationReceipt, {
       taskId,

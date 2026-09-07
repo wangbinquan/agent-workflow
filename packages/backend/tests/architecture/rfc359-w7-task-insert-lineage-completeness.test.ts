@@ -59,10 +59,14 @@ const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOr
  * 没在本波做是因为它要改 AST 遍历的键并重新做一次变异验证，而落盘时的改动面已经很大。
  */
 const TASK_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:579 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-359 W11：行号从 579 挪到 580——同文件里祖先链的分支时间戳回填改调能力矩阵的
+  // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
+  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:580 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:110 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:762 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  'services/task.ts:3509 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-359 W10：行号从 3509 挪到 3530——铸行事务从 `dbTxSync` 换成 `withTaskExecutionWrite`
+  // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
+  'services/task.ts:3530 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

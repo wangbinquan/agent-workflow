@@ -157,21 +157,34 @@ describeEachProvider(
       ])
     }
 
-    /** PostgreSQL 的 roll-forward 走 receipt 门；SQLite 不看 receipt。 */
-    function receiptJson(): string | null {
-      if (sqliteSide()) return null
-      return JSON.stringify({
-        journalId: JOURNAL_ID,
-        applied: [
-          {
+    /**
+     * 本引擎自己**生产写出**的回执。
+     *
+     * RFC-359 W10 起两个引擎的 roll-forward 都先过**回执信封门**（committed 必须带回执、
+     * 回执必须认领这一行，判定在中立的 `domain/resourcePackageApplyReceipt.ts`），所以这里
+     * 不能再像以前那样只给 PostgreSQL 一份、给 SQLite 塞 `null`——那样 SQLite 这一半会全部
+     * 停在信封门上，四格代际判定一格都跑不到。
+     *
+     * 载荷层仍是两套格式（SQLite 逐条 `opId`、PostgreSQL 逐条 `operationId` 且 `.strict()`），
+     * 与 `prepared_artifacts_json` 同源，所以这里也按引擎给各自的真形状。
+     */
+    function receiptJson(): string {
+      const applied = sqliteSide()
+        ? {
+            opId: PUBLISH_ID,
+            resourceType: 'skill',
+            resourceId: SKILL_ID,
+            action: 'update',
+            name: 'w9-recovery',
+          }
+        : {
             resourceType: 'skill',
             operationId: PUBLISH_ID,
             resourceId: SKILL_ID,
             action: 'update',
             name: 'w9-recovery',
-          },
-        ],
-      })
+          }
+      return JSON.stringify({ journalId: JOURNAL_ID, applied: [applied] })
     }
 
     function recoveryFor(appHome: string): ResourcePackageApplyArtifactRecoveryPort {

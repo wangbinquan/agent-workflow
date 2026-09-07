@@ -7,11 +7,7 @@ import type {
   TaskExecutionAttemptState,
   TaskExecutionEffectKind,
 } from '../domain/executionEffect'
-import type {
-  OwnerSnapshot,
-  OwnershipToken,
-  VerifiedOutcomeUnknownClosure,
-} from '../domain/ownership'
+import type { OwnershipToken } from '../domain/ownership'
 
 // RFC-359 T7b：判定结果类型归端口所有；这里只为同步 store 的既有 import 路径再导出。
 export type { RecoveredManagedProcessResolution }
@@ -112,11 +108,6 @@ export interface TaskExecutionEffectStore {
   // `closeRecoveredOutcomeUnknownAndRelease` 只剩 `effectQuiescence.ts` 那一份中立实现
   // （两个 provider 共用，经 `TaskExecutionEffectPersistence` 端口暴露）；同步 store 上的
   // 那两份自 W1-T7b 起就没有任何调用方，随本波一并删除。
-  closeOutcomeUnknownAndRelease(input: {
-    readonly db: DbClient
-    readonly token: OwnershipToken
-    readonly intentId: string
-    readonly proof: VerifiedOutcomeUnknownClosure
-    readonly now?: number
-  }): OwnerSnapshot
+  // RFC-359 W10：`closeOutcomeUnknownAndRelease` 同理——生产的 driver 释放序列走端口落到
+  // `effectQuiescence.ts` 那一份中立实现，同步副本只剩测试直调，已随本波删除。
 }

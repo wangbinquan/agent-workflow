@@ -70,7 +70,10 @@ const PROVIDER_PREFIX = /^(sqlite|postgresql)(?=[A-Z])/
  */
 export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite 3/1, postgresql 3/2',
-  'modules/intent/infrastructure/IntentApplyOperations: sqlite 18/2, postgresql 3/1',
+  // RFC-359 W11：PostgreSQL 侧 +1 ref / +1 drive
+  // （`rfc359-w11-atomic-apply-neutral-transaction-conformance.test.ts` 值 import 了那台编排机，
+  // 给它此前没有的**事务边界原子性**补上双引擎判据）。倒挂**收窄**：18 vs 3 → 18 vs 4。
+  'modules/intent/infrastructure/IntentApplyOperations: sqlite 18/2, postgresql 4/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-resource-package-maintenance-conformance.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧的 journal + 恢复端口）。
   // RFC-359 W9：两侧各 +1 ref / +1 drive —— `rfc359-w9-resource-package-skill-recovery-conformance.test.ts`
@@ -80,7 +83,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 不合一判定用源码文本钉住了「drive 里两侧各挂一台子任务启动引擎」这条锚点。
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite 6/2, postgresql 8/1',
   // RFC-359 W8：双引擎对拍 `rfc359-w8-source-termination-conformance.test.ts` 把两侧各 +1/+1。
-  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 3/2, postgresql 2/1',
+  // RFC-359 W10：SQLite 侧再 +1 ref / +1 drive —— 三笔 `dbTxSync` 转成中立事务之后，
+  // `rfc359-w10-task-execution-sync-transaction-cutover.test.ts` 在**两个引擎上都构造这一个**
+  // SQLite 命名的参与者（它跑得动 PostgreSQL 正是转换成功的判据），于是它的引用/驱动数上涨。
+  // 倒挂随之从 +1 变成 +2，但方向是「弱侧 PG 的那份原生重写更该退役」，不是新债。
+  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/3, postgresql 2/1',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 5/1',
   // RFC-359 W8：这一对此前**两侧都是 0/0**（RFC-108 只测了注入式循环，provider 那一半从未被跑过）。
   // `rfc359-w8-auto-repair-conformance.test.ts` 是它的第一份行为覆盖，两侧同时 0/0 → 1/1。
@@ -102,7 +109,8 @@ export const REFERENCE_GAP_THRESHOLD = 3
  * 这是「先合谁」的排序依据：倒挂越深，合一时撞出行为差异的概率越大（D19b 实证）。
  */
 export const INVERTED_PAIRS: readonly string[] = [
-  'modules/intent/infrastructure/IntentApplyOperations: 18 vs 3',
+  // RFC-359 W11：18 vs 3 → 18 vs 4（PG 侧补了事务边界的双引擎判据）。仍在观察名单内。
+  'modules/intent/infrastructure/IntentApplyOperations: 18 vs 4',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 5',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 8 vs 5',

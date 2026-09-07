@@ -26,6 +26,10 @@ import type {
   ResourcePackageMutationReceipt,
 } from '@/modules/resource-catalog/public/types'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   assertActionsAllowed,
@@ -91,6 +95,26 @@ interface PostgresqlResourcePackageAtomicApplyOrchestrator<TPackage> {
 }
 
 const PACKAGE_IDEMPOTENCY_SCOPE = 'package'
+
+/**
+ * RFC-359 W11 —— 认领 / 提交两笔事务已改走中立事务原语
+ * （`databaseSessionFor(db).transaction(...)`），但资源包变更会话仍按 provider 命名的事务
+ * 句柄取参。把中立句柄重新窄化给它**不是强转谎话**：那个参数类型归根到底就是
+ * `Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]`，而中立会话在
+ * PostgreSQL 上交出的正是驱动 `db.transaction` 回调里的那个句柄本身
+ * （`createPostgresqlDatabaseSession` 只把同一个对象标注成 `DatabaseTransaction`）——运行期
+ * 逐字相同。目标类型直接从 `bindTransaction` 的形参上取，收件人变了这里跟着变。
+ * 退役条件：`bindTransaction` 改吃 `DatabaseTransaction`，两套 apply 引擎合一时随之消失。
+ */
+type PostgresqlResourcePackageBoundTransaction = Parameters<
+  PostgresqlResourcePackageMutationSession['bindTransaction']
+>[0]
+
+function catalogTransaction(
+  transaction: DatabaseTransaction,
+): PostgresqlResourcePackageBoundTransaction {
+  return transaction as unknown as PostgresqlResourcePackageBoundTransaction
+}
 
 const ReceiptSchema = z
   .object({
@@ -826,7 +850,7 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
     }
 
     const journalId = nextId()
-    const claim = await dependencies.db.transaction(async (transaction) => {
+    const claim = await databaseSessionFor(dependencies.db).transaction(async (transaction) => {
       const existing = await transaction
         .select()
         .from(resourceBundleApplies)
@@ -907,7 +931,7 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
       const prepared = await prepareOperations(session, operations)
       for (const item of prepared.items) await session.prestage(item, { recordArtifact })
 
-      const receipt = await dependencies.db.transaction(async (transaction) => {
+      const receipt = await databaseSessionFor(dependencies.db).transaction(async (transaction) => {
         const cas = await transaction
           .update(resourceBundleApplies)
           .set({ state: 'applying', updatedAt: now() })
@@ -923,7 +947,7 @@ export function createPostgresqlResourcePackageAtomicApplyOperations(
           throw new ConflictError('bundle-apply-unsettled', 'journal claim lost')
         }
 
-        const transactionSession = session.bindTransaction(transaction)
+        const transactionSession = session.bindTransaction(catalogTransaction(transaction))
         const selected = await assertSelectedResources(
           transactionSession.reader,
           input.package,

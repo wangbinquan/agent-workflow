@@ -137,11 +137,43 @@ function scan(): string[] {
  * `PostgresqlIntentSqlProgramRunner`（内部走裸 `db.transaction`）两份实现。它不是「PG 走不了的路」，
  * 但它正是 RFC-359 要收敛掉的那种**并行的双实现事务面**：最终该塌进 `databaseSessionFor`。故按债计入
  * 而不是豁免——把它放进白名单等于给「再开一套并行事务抽象」发许可证。
+ *
+ * 【2026-09-08 更正 —— 上一段的「两份实现」已经**过期**，别照着它下结论】（原文留着，是为了记住
+ * 这条口径曾经指向哪里）。RFC-359 **W7 已经把那两份 runner 合掉了**：`sqliteIntentSqlProgramRunner.ts`
+ * / `postgresqlIntentSqlProgramRunner.ts` 在树上**都已不存在**，取而代之的是单份
+ * `modules/intent/infrastructure/intentSqlProgramRunner.ts`，其中 `PlainIntentSqlProgramRunner:85`
+ * 与 `AuthorizedIntentSqlProgramRunner:117` **两个实现体都调 `databaseSessionFor(db).transaction(...)`**；
+ * 全树 `implements IntentSqlProgramRunner` 只有这两处（合一判据见
+ * `tests/rfc359-w7-intent-sql-runner-conformance.test.ts`）。也就是说这 27 处**已经不是**
+ * 「一段逻辑只能给一个 provider 跑」——它们是对一个**已经中立**的抽象的调用，本守卫此刻按
+ * 债计入的理由只剩下正则形状（`this.runner.transaction(` 长得像裸驱动调用）。
+ *
+ * 真要销掉这 27 处，只有两条路，**都不是本波能顺手做的**，谁接手先在这里记一笔：
+ *   (a) 改本守卫的中立形态口径（把 `runner.transaction(` 按 `session.transaction(` 那样锚定豁免）
+ *       ——但那正是上一段拒绝过的「白名单 = 空白许可证」，要配一条「runner 的每个实现都必须经
+ *       `databaseSessionFor` 开事务」的检查才不算发许可证；
+ *   (b) 把生成器程序抽象整个塌进中立原语——`intentSqlPersistence.ts` 现有 49 个 `function*`、
+ *       162 处 `yield*`、44 个程序入口（17 `read` + 27 `transaction`），是一次 2845 行的全文件改写，
+ *       该单独立波次，不该夹在销账提交里。
  */
 export const BARE_TRANSACTION_DEBT: readonly string[] = [
   'modules/intent/infrastructure/intentSqlPersistence.ts: 27',
-  'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts: 2',
-  'modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts: 1',
+  // RFC-359 W11 销账：`postgresqlIntentApplyOperations.ts: 2` —— Intent apply 的**认领事务**与
+  // **提交事务**改走 `databaseSessionFor(dependencies.db).transaction(...)`。此前这两笔是裸
+  // `dependencies.db.transaction(`：整段 apply 编排（claim → preflight → prepare → 图校验 →
+  // prestage → 大事务 → 前滚 → 收敛）因此只有 PostgreSQL 一个引擎跑得对——换个客户端不报错、
+  // happy path 还全绿，只有事务体中途失败时才**静默失去原子性**（bun:sqlite 的同步包装器在第一个
+  // await 处就 COMMIT 了）。顺带把 SQLite 侧 W9 就有、PG 侧一直缺的认领事务接缝
+  // `inClaimTxAfterJournal` 补齐——没有它，「认领与四道读判据同生共死」这条不变量在 PG 上
+  // 根本没有可观测面。双引擎判据见
+  // `tests/rfc359-w11-atomic-apply-neutral-transaction-conformance.test.ts`（含变异表）；
+  // 改造前实测：PostgreSQL 全绿（驱动事务本来就 async 原子），SQLite 两条原子性判据全红。
+  // 资源会话仍按 provider 命名的事务句柄取参，中立句柄经具名窄化 `catalogTransaction(...)`
+  // 交给它（运行期逐字同一个对象），随两套 apply 引擎合一退役。
+  // RFC-359 W10 销账：`modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts: 1`
+  // —— 那一处裸 `db.transaction(` 在 `runPostgresqlResourceCatalogTransaction` 里，而这个 helper
+  // **零生产调用方**（见该文件头与 W5-T20 账本同批销账的注释），整个函数删除，不是「改调中立原语」。
+  // 提醒后来人：本账本与 T20 裸方言账本这次是**同一处**代码在两本账上各留了一行——销账要一起动。
   // RFC-359 W8 销账：`postgresqlTaskExecutionRecovery.ts: 1` + `postgresqlTaskOwnershipPersistence.ts: 1`
   // —— 归属与后继恢复两对适配器合一成 `taskOwnershipPersistence.ts` / `taskExecutionRecovery.ts`，
   // 它们的 SERIALIZABLE 事务体改走 `databaseSessionFor(db).serializable(...)`。
@@ -157,7 +189,11 @@ export const BARE_TRANSACTION_DEBT: readonly string[] = [
   // RFC-359 W8 销账：`postgresqlMaintenanceRunStore.ts: 4` —— 它与 SQLite 侧那份
   // 同步实现（4 处 `dbTxSync`）合成了中立的 `platform/persistence/maintenanceRunStore.ts`，
   // 四笔事务改走 `databaseSessionFor(db).transaction(...)`，两份 provider 命名的实现整体退役。
-  'platform/persistence/postgresqlResourcePackageAtomicApply.ts: 2',
+  // RFC-359 W11 销账：`postgresqlResourcePackageAtomicApply.ts: 2` —— 资源包原子导入的
+  // **认领事务**（幂等键 claim）与**提交事务**（CAS → 六条提交臂 → 根解析 → journal 落 committed）
+  // 同批改走 `databaseSessionFor(dependencies.db).transaction(...)`，成因与判据同上一条。
+  // 这台编排机此前**一条行为判据都没有**（全仓只有源码文本形状锁按名字断言它），W11 的对拍
+  // 是它的第一份可执行覆盖：提交事务里参与者经事务句柄写的行，在体内抛错后必须一并消失。
 ]
 
 describe('RFC-359 W5-T18 —— 裸 `db.transaction(` 只降不升', () => {

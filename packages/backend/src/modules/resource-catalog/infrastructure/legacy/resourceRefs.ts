@@ -14,15 +14,16 @@
 // to a row the editor cannot view, and the error deliberately echoes ONLY the
 // name the editor typed (no id / description / owner — D1).
 
-import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
+import type { AclResourceType, GrantResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
-import { like } from 'drizzle-orm'
+import { and, eq, like } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { agents } from '@/db/schema'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { agents, resourceGrants } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import {
   hasResourceAclBypass,
@@ -448,4 +449,28 @@ export async function findAgentsReferencingIdInJsonColumn(
     .from(agents)
     .where(like(args.column, `%"${args.id}"%`))
   return collectReferencing(rows, args)
+}
+
+/**
+ * RFC-359 W9 —— 「删除受众」的授权用户清单，**中立事务面**版本。
+ *
+ * 删除是唯一一条必须在**同一笔事务里**把受众读走的路径：行删掉之后 grant 也没了，事后再读
+ * 只能读到空集，WS 的 `*.deleted` 帧就投递不到那些本该收到的人（冷缓存客户端会永远显示一条
+ * 已经不存在的资源）。同步孪生 `listResourceGrantUserIdsInTx` 仍留给还钉在 `DbTxSync` 上的
+ * 站点（`legacy/mcpRuntimeTestTransitions.ts` / `services/resourceAcl.ts`）。
+ *
+ * 落在本文件而不是 `infrastructure/resourceAclTransaction.ts`（那才是中立 in-tx ACL 判据的正典
+ * 归属）是这一刀的作业面边界所致：并发的另一把刀在 provider 命名文件上，本刀只碰
+ * `infrastructure/legacy/`。那条链收敛时把这一份并进去。
+ */
+export async function listResourceGrantUserIdsForTx(
+  tx: DatabaseTransaction,
+  type: GrantResourceType,
+  resourceId: string,
+): Promise<string[]> {
+  const rows = await tx
+    .select({ userId: resourceGrants.userId })
+    .from(resourceGrants)
+    .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.resourceId, resourceId)))
+  return rows.map((row) => row.userId)
 }

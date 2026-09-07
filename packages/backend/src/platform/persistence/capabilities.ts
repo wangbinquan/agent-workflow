@@ -16,7 +16,9 @@
 //
 // # 收进来的既有资产（此前散在各处，各自正确、彼此不知）
 //
-//   · NULL 排序：`postgresqlNullOrdering.ts`（两引擎默认正好相反；认领类查询会因此饿死）
+//   · NULL 排序：两引擎默认正好相反；认领类查询会因此饿死。原件是一份独立的 PG 专属模块，
+//     RFC-359 W11 把最后一个调用方改指 `engineOf(db).ascNullsFirst` 之后已整份删除——
+//     `ascNullsFirst` / `descNullsLast` 现在是全仓唯一的渲染处。
 //   · LIKE 大小写：`rfc349-provider-search-case-parity`（SQLite ASCII 不敏感 / PG 敏感 ⇒ ilike）
 //   · LIKE 转义符：本轮对账 P1-28（SQLite 无默认转义符 / PG 默认是 `\`；两侧都显式带 ESCAPE 才一致）
 //   · 裸行数值归一：RFC-357 `taskListPage/projection.ts`（PG 的 int8 经驱动回来是字符串）
@@ -49,6 +51,20 @@ const SQLITE_MAX_BIND_PARAMETERS = 32_766
 /** PostgreSQL 的绑定参数预算：wire protocol 的 int16 参数计数上限。 */
 const POSTGRESQL_MAX_BIND_PARAMETERS = 65_535
 
+/**
+ * RFC-359 W6-T25 —— 一条「按候选集有界删除」一次最多删多少行。**仓里唯一的一份**。
+ *
+ * 它与 `batchInsertMax` 不是同一个预算：候选集是**子查询**，整条语句只带一个 LIMIT 绑定参数，
+ * 所以绑定参数上限在这里不构成约束；约束是「单条 DELETE 持写锁多久」——SQLite 上一条长删会挡住
+ * 整个库的写者，PG 上会把被删行全部锁住。
+ *
+ * 5000 是 RFC-311 落地时选的值，此前**两侧各存了一份**（`sqlite/systemMaintenanceRetention.ts` 的
+ * `RETENTION_DELETE_BATCH` 与 `postgresqlMaintenanceRetention.ts` 的
+ * `POSTGRESQL_RETENTION_DELETE_BATCH`）——那正是 T25 守卫禁止 `runner.ts` 干的「仓里第二份批大小
+ * 推导」，只是它在 DELETE 侧、逃过了那条守卫。现在两侧都从这里取。
+ */
+export const BOUNDED_DELETE_MAX_ROWS = 5_000
+
 export type EngineErrorClass = 'unique-violation' | 'serialization' | 'busy' | 'other'
 
 export interface EngineCapabilities {
@@ -79,6 +95,24 @@ export interface EngineCapabilities {
    * 随构建而变」，所以矩阵继续按保守预算切批，不去贴那个会飘的天花板。
    */
   batchInsertMax(columnCount: number): number
+
+  /**
+   * RFC-359 W6-T25 —— **按候选集的有界删除**：一条语句删掉 `candidates` 选出来的那些行，
+   * 并把删掉的主键回吐（调用方据此判「这一批满了没有」来决定是否继续下一片）。
+   *
+   * `candidates` 是调用方给的**至多 `BOUNDED_DELETE_MAX_ROWS` 行**的主键 SELECT，它的唯一输出列
+   * 必须**别名为 `id`**（PG 侧要靠这个名字 join 回来）。谓词与 LIMIT 都在调用方手里，这里只管
+   * 「怎么把候选集变成一条删除语句」这一件按引擎不同的事：
+   *
+   *   · PostgreSQL —— `WITH candidates AS (…) DELETE … USING candidates WHERE pk = candidates.id`。
+   *   · SQLite —— 没有 `USING` 子句，等价写法是 `DELETE … WHERE pk IN (…)`。
+   *
+   * 合一前这条方言点在 `postgresqlMaintenanceRetention.ts` 里裸写了 4 次、在
+   * `sqlite/systemMaintenanceRetention.ts` 里另写了 4 次（且 SQLite 那 4 条走的是 `rowid`——
+   * 这三张事件表的 `id` 就是 `INTEGER PRIMARY KEY AUTOINCREMENT`、即 rowid 别名，
+   * `webhook_trigger_fires` 的 `id` 是 ULID 主键，按主键删与按 rowid 删选中的是同一批行）。
+   */
+  deleteByCandidates(table: SQLiteTable, idColumn: SQLiteColumn, candidates: SQL): SQL
 
   /**
    * 锁住聚合根，供「读—改—写」用。PG 渲染 `SELECT … FOR UPDATE`；SQLite no-op（已独占）。
@@ -299,6 +333,8 @@ export function createSqliteCapabilities(): EngineCapabilities {
     maxBindParameters: SQLITE_MAX_BIND_PARAMETERS,
     batchInsertMax: (columnCount) =>
       batchInsertMaxRows(SQLITE_MAX_BIND_PARAMETERS, SQL_IN_CHUNK, columnCount),
+    deleteByCandidates: (table, idColumn, candidates) =>
+      sql`delete from ${table} where ${idColumn} in (${candidates}) returning ${idColumn} as ${sql.identifier('id')}`,
     async lockAggregateRoot() {
       // BEGIN IMMEDIATE 已独占整个库；行锁没有对应物，也不需要。
     },
@@ -393,6 +429,8 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     maxBindParameters: POSTGRESQL_MAX_BIND_PARAMETERS,
     batchInsertMax: (columnCount) =>
       batchInsertMaxRows(POSTGRESQL_MAX_BIND_PARAMETERS, SQL_IN_CHUNK, columnCount),
+    deleteByCandidates: (table, idColumn, candidates) =>
+      sql`with candidates as (${candidates}) delete from ${table} using candidates where ${idColumn} = candidates.id returning ${idColumn} as ${sql.identifier('id')}`,
     async lockAggregateRoot(tx, table, idColumn, id) {
       await tx.run(sql`select 1 from ${table} where ${idColumn} = ${id} for update`)
     },

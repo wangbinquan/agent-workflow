@@ -123,12 +123,15 @@ describe('RFC-349 NULL ordering is the same on both providers', () => {
   })
 
   test('the helpers spell out exactly that placement', () => {
-    const source = readFileSync(
-      join(srcRoot, 'platform/persistence/postgresqlNullOrdering.ts'),
-      'utf8',
-    )
+    // RFC-359 W11：判据一字未变，只是锚点跟着实现走。这两个 helper 原本住在一份独立的
+    // PG 专属模块里；最后一个调用方改指能力矩阵之后原件已删除，矩阵是唯一的渲染处。
+    // 两侧各渲染一次，所以这里同时钉 PG 侧的显式落位与 SQLite 侧的「不加修饰即正确」。
+    const source = readFileSync(join(srcRoot, 'platform/persistence/capabilities.ts'), 'utf8')
     expect(source).toContain('asc nulls first')
     expect(source).toContain('desc nulls last')
+    expect(source, 'SQLite 侧显式写出 nulls 修饰会扰动它的索引排序计划').toContain(
+      'ascNullsFirst: (column) => sql`${column} asc`',
+    )
   })
 
   test('every nullable ORDER BY in a PostgreSQL adapter is fixed or proven NULL-free', () => {

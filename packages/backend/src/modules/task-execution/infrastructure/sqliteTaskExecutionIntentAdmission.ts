@@ -1,11 +1,16 @@
 // RFC-328/RFC-349 — SQLite continuation-admission transaction adapter.
+//
+// RFC-359 W10：本文件只剩**事务内**的同步参与者 `submitTaskContinuationTx`（调用方是
+// `sqliteTaskDecisionParticipant.ts` 自己的 `dbTxSync` 体）。它此前还有一个自带 `dbTxSync`
+// 的独立入口 `submitTaskContinuation(db, input)`——生产与测试的调用点在 W4-B1 批 2g 把准入
+// 迁到中立的 `taskContinuationAdmission.ts` / `DrizzleTaskExecutionIntentPersistence` 之后
+// 就全没了，留着只是在账本上多挂一笔 bun:sqlite 专属的同步事务，已删除。
 
 import { and, desc, eq } from '@/db/query'
 import { sha256Hex } from '../domain/digest'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
 import { taskExecutionIntents, taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
 import { taskExecutionModule } from '../composition'
 import {
   canonicalJson,
@@ -163,11 +168,4 @@ export function submitTaskContinuationTx(
     }
   }
   return submitted
-}
-
-export function submitTaskContinuation(
-  db: DbClient,
-  input: SubmitTaskContinuationInput,
-): SubmittedTaskExecutionIntent {
-  return dbTxSync(db, (tx) => submitTaskContinuationTx(tx, input))
 }

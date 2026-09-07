@@ -159,7 +159,7 @@ import {
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { createDevelopmentActivityWorkerBinding } from '@/modules/development-automation/composition/activityOperations'
+import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import {
   composePostgresqlDevelopmentConfigOperations,
   type DevelopmentConfigResourceAccess,
@@ -246,7 +246,6 @@ import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
-import type { DevelopmentAutomationModule } from '@/modules/development-automation/composition'
 import { createDevelopmentMissionExecutionTerminalObserver } from '@/modules/development-automation/composition/executionTerminalObserver'
 import { composePostgresqlAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composePostgresqlScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
@@ -488,15 +487,15 @@ export async function composePostgresqlDaemonApplication(
     db: input.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
-  let collaborationContext: Parameters<typeof readCommittedReviewArtifactBody>[0] | null = null
   const memoryOperations = composePostgresqlMemoryOperations({
     db: input.db,
     reviewedArtifacts: {
+      // RFC-359 W11：记忆要读已评审产物、评审上下文又要记忆的蒸馏命令面。环打在**词法作用域**
+      // 上，不再打在一个可空槽上：`boundCollaborationContext` 是同一作用域里的 `const`，
+      // 闭包只在运行期取值。忘了装配在这里不可表达——删掉那行 `const boundCollaborationContext = …`
+      // 就是一个 tsc 编译错误，而不是一个编译通过、跑到才炸的 daemon。
       async read(finalPath) {
-        if (collaborationContext === null) {
-          throw new Error('collaboration-command-context-not-bound')
-        }
-        return await readCommittedReviewArtifactBody(collaborationContext, finalPath)
+        return await readCommittedReviewArtifactBody(boundCollaborationContext, finalPath)
       },
     },
     catalogBinding: {
@@ -518,14 +517,14 @@ export async function composePostgresqlDaemonApplication(
     resourceCatalog,
   })
   const mcpProbeStore = composeMcpProbeStore(input.db)
-  let mcpCatalogRef: ReturnType<typeof composeMcpCatalog> | null = null
   const mcpRuntimeTests = getMcpRuntimeTestService({
     ...composeMcpRuntimeTestProvider(input.db),
+    // RFC-359 W11：运行时测试要查 MCP、MCP 目录的删除 / 对账又要运行时测试——同一作用域里的
+    // `const mcpCatalog`（下面几行）由词法闭包解析，两边都只在运行期取值，可空槽消失。
     async loadMcp(mcpId) {
-      if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
       const identity = await admitDaemonIdentity(identityAccess)
       if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
-      return await mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
+      return await mcpCatalog.queries.get(identity.actor, { id: mcpId })
     },
     loadRuntime: (name) => core.runtimeRegistry.getRuntime(name),
     configPath: input.configPath,
@@ -549,7 +548,6 @@ export async function composePostgresqlDaemonApplication(
       reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
     }),
   })
-  mcpCatalogRef = mcpCatalog
   const pluginCatalog = composePluginCatalog({
     db: input.db,
     resourceCatalog,
@@ -752,7 +750,6 @@ export async function composePostgresqlDaemonApplication(
     // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
     reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
   })
-  collaborationContext = boundCollaborationContext
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const workgroupTurns = composeWorkgroupTurnsOperations(
     input.db,
@@ -834,12 +831,13 @@ export async function composePostgresqlDaemonApplication(
     integrity: classicCatalogs.agentResourceIntegrity.launch,
   })
 
-  let taskExecutionProviderRef: SelectedPostgresqlTaskExecutionProviderRuntime | null = null
-  let taskDriveCoordinatorRef: TaskDriveCoordinator | null = null
+  // RFC-359 W11：启动内核要一个协调器、真协调器又要执行提供者的生命周期端口。环打在**词法
+  // 作用域**上：`boundTaskDriveCoordinator` 是同一作用域里的 `const`（下面几十行），这个转发
+  // 面只在运行期取值。此前是 `let … | null = null` + 进门一句 throw——那形状允许「装配漏了一
+  // 步」编译通过，正是 PG daemon 每 tick 抛 `*-not-bound` 的那类缺陷。
   const taskDriveCoordinator: TaskDriveCoordinator = Object.freeze({
     async submit(request: Parameters<TaskDriveCoordinator['submit']>[0]) {
-      if (taskDriveCoordinatorRef === null) throw new Error('task-drive-coordinator-not-bound')
-      return await taskDriveCoordinatorRef.submit(request)
+      return await boundTaskDriveCoordinator.submit(request)
     },
   })
   const launchRuntime = resolveLaunchRuntimeConfig(input.configPath)
@@ -947,7 +945,6 @@ export async function composePostgresqlDaemonApplication(
     fusion: { appHome: input.appHome },
     workgroupTaskRoom: { collaboration: workgroupClarify },
   })
-  taskExecutionProviderRef = taskExecutionProvider
   const taskDriverLifecycle = createPostgresqlTaskDriverLifecyclePort({
     db: input.db,
     module: taskExecutionProvider.executionModule,
@@ -955,15 +952,15 @@ export async function composePostgresqlDaemonApplication(
     log,
     finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
   })
-  taskDriveCoordinatorRef = new DefaultTaskDriveCoordinator({
+  const boundTaskDriveCoordinator = new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(runConfig),
     lifecycle: taskDriverLifecycle,
     repositoryPreparation: skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {
-        const selected = taskExecutionProviderRef
-        if (selected === null) throw new Error('task-execution-provider-not-bound')
-        await selected.runtime.schedulerDriver.drive({
+        // 执行提供者就是上面那个 `const taskExecutionProvider`——下面 `failureReporter`
+        // 本来就直接用它，这里此前多绕了一个可空 ref 与一句 throw。
+        await taskExecutionProvider.runtime.schedulerDriver.drive({
           taskId: context.taskId,
           appHome: context.runtime.appHome,
           ...context.runtime.runtime,
@@ -1394,8 +1391,11 @@ export async function composePostgresqlDaemonApplication(
       return { caseId: result.caseRef.id }
     },
   })
-  const developmentActivity = createDevelopmentActivityWorkerBinding()
-  developmentActivity.bind(digitalEmployee.runtime.worker)
+  // RFC-359 W11：worker 是必填实参，装配到此为止；此前是 `createDevelopmentActivityWorkerBinding()`
+  // 加下一行一句 `.bind(...)`，两行之间那段「已经能被调用但还没装配」的窗口从来没有用处。
+  const developmentActivityOperations = composeDevelopmentActivityOperations(
+    digitalEmployee.runtime.worker,
+  )
 
   const developmentAdmissionLookup = composeDevelopmentAdmissionLookup(input.db)
   const developmentConfigAccess: DevelopmentConfigResourceAccess = {
@@ -1426,16 +1426,14 @@ export async function composePostgresqlDaemonApplication(
   // RFC-359 W1-T3（F-H2-2）：agent / script 动作 launcher 与执行终态观察者——与 cli/start.ts 同一份
   // 执行器（actionExecutionRunners.ts），只是宿主任务的启动 / 取消换成 PG 的根启动内核与取消命令。
   // 此前 PG daemon 一个都没接，development mission 的每个动作都被 `*-launcher-not-wired` 挡下。
-  const developmentAutomationRef: { current: DevelopmentAutomationModule | null } = {
-    current: null,
-  }
+  // RFC-359 W11：终态观察者要回调 `developmentAutomation.drive`，而 automation 的两个 launcher
+  // 又要这个观察者。环打在**词法作用域**上：`developmentAutomation` 是同一作用域里的 `const`
+  // （下面几十行），闭包只在运行期取值，没有可空盒子、也没有「还没装配」的分支。
   const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db: input.db,
     async drive(missionId) {
-      const current = developmentAutomationRef.current
-      if (current === null) throw new Error('development-automation-not-composed')
       try {
-        const outcome = await current.drive(missionId)
+        const outcome = await developmentAutomation.drive(missionId)
         if (outcome.stop === 'step-budget') {
           log.warn('development mission drive reached its bounded step budget', {
             missionId,
@@ -1495,7 +1493,6 @@ export async function composePostgresqlDaemonApplication(
       },
     }),
   })
-  developmentAutomationRef.current = developmentAutomation
   const developmentMissions = composeDevelopmentMissionOperations({
     db: input.db,
     deliveryProvider: developmentDeliveryProvider,
@@ -1586,7 +1583,7 @@ export async function composePostgresqlDaemonApplication(
       digitalEmployees: Object.freeze({
         persistence: digitalEmployeePersistence,
         module: digitalEmployee,
-        activityOperations: developmentActivity.operations,
+        activityOperations: developmentActivityOperations,
         contexts: identityAccess.directAuthority,
       }),
       developmentConfig: Object.freeze({

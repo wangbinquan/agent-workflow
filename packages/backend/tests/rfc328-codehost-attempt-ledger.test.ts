@@ -35,6 +35,9 @@ import {
 } from '@/modules/task-execution/domain/codeHostRecovery'
 import { createVerifiedOutcomeUnknownClosure } from '@/modules/task-execution/domain/ownership'
 import { submitTaskContinuationTx } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission'
+// RFC-359 W10：同步 store 上的 `closeOutcomeUnknownAndRelease` 生产零调用方、已删除；
+// 这里改指两个引擎共用的那一份。
+import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -240,8 +243,7 @@ async function approveResponseLossDriftFixture(input: {
 
   const unresolved = h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).get()!
   const owner = h.module.ownership.read(h.db, h.taskId)!
-  h.module.effects.closeOutcomeUnknownAndRelease({
-    db: h.db,
+  await closeOutcomeUnknownAndRelease(h.db, {
     token: h.context.token,
     intentId: `intent-${h.taskId}`,
     proof: createVerifiedOutcomeUnknownClosure({
@@ -425,8 +427,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       .from(taskExecutionEffects)
       .get()!
     const owner = h.module.ownership.read(h.db, h.taskId)!
-    h.module.effects.closeOutcomeUnknownAndRelease({
-      db: h.db,
+    await closeOutcomeUnknownAndRelease(h.db, {
       token: h.context.token,
       intentId: `intent-${h.taskId}`,
       proof: createVerifiedOutcomeUnknownClosure({

@@ -50,13 +50,21 @@ export interface CollaborationCommandDependencies {
   readonly questionDispatches?: QuestionDispatchCommandPort
   readonly clarifyDecisions?: ClarifyDecisionCommandPort
   readonly taskExecutionReadModels?: TaskExecutionReadModels
-  readonly reviewTaskAccess?: ReviewTaskAccessPort
+  // RFC-359 W5-T19b：评审任务访问端口**不是**装配选项——两个工厂都从同一个 `db` 现造
+  // （`createReviewTaskAccessPort(input.db)`），全仓从来没有第二个来源、也没有任何调用方
+  // 传过它。留成 `?:` 只是让「没装配」在类型层仍然可表达，代价是两处 `is not composed`
+  // 的运行期兜底（其中一处还在 `reviewNodeReviewerDependencies.ts` 里被逐字抄了一遍）。
+  // 改必填后缺口无处可表达，那两句兜底随之删除。
+  readonly reviewTaskAccess: ReviewTaskAccessPort
 }
 
 const dependencies = new WeakMap<object, CollaborationCommandDependencies>()
 
 export function createCollaborationCommandContext(
-  input: Omit<CollaborationCommandDependencies, 'persistence' | 'artifacts' | 'taskAccess'> & {
+  input: Omit<
+    CollaborationCommandDependencies,
+    'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
+  > & {
     // RFC-359 W7：装配面只用中立客户端组合中立实现（`DbClient` 是 SQLite 的具体类型，
     // 这里从来没用到它的任何 SQLite-专属能力）。
     readonly db: ProviderNeutralDatabase
@@ -66,7 +74,7 @@ export function createCollaborationCommandContext(
   return createCollaborationCommandContextFromPersistence({
     ...input,
     taskAccess: createCollaborationTaskAccessPort(input.db),
-    reviewTaskAccess: input.reviewTaskAccess ?? createReviewTaskAccessPort(input.db),
+    reviewTaskAccess: createReviewTaskAccessPort(input.db),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
       clarifyQuestions: new DatabaseClarifyQuestionSnapshotReader(input.db),
@@ -90,7 +98,10 @@ export function createCollaborationCommandContext(
 }
 
 export function createPostgresqlCollaborationCommandContext(
-  input: Omit<CollaborationCommandDependencies, 'persistence' | 'artifacts' | 'taskAccess'> & {
+  input: Omit<
+    CollaborationCommandDependencies,
+    'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
+  > & {
     readonly db: PostgresqlDatabaseClient
     readonly appHome?: string
   },
@@ -98,7 +109,7 @@ export function createPostgresqlCollaborationCommandContext(
   return createCollaborationCommandContextFromPersistence({
     ...input,
     taskAccess: createCollaborationTaskAccessPort(input.db),
-    reviewTaskAccess: input.reviewTaskAccess ?? createReviewTaskAccessPort(input.db),
+    reviewTaskAccess: createReviewTaskAccessPort(input.db),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
       clarifyQuestions: new DatabaseClarifyQuestionSnapshotReader(input.db),
@@ -200,9 +211,7 @@ export function requireTaskFeedbackStore(context: CollaborationCommandContext): 
 export function requireReviewTaskAccess(
   context: CollaborationCommandContext,
 ): ReviewTaskAccessPort {
-  const taskAccess = resolveCollaborationCommandContext(context).reviewTaskAccess
-  if (taskAccess === undefined) throw new Error('collaboration task access is not composed')
-  return taskAccess
+  return resolveCollaborationCommandContext(context).reviewTaskAccess
 }
 
 export function requireCollaborationTaskAccess(

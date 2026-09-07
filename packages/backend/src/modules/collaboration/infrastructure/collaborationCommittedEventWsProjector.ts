@@ -13,7 +13,8 @@
 // （`legacySqliteTaskQuestionDispatch.ts:1566` / `:1624`），因此
 // `reruns[].entryIds ⊆ questionIds` 恒成立，那道过滤**可证冗余**。
 //
-// 两处 NULL 排序必须显式写出 SQLite 语义（`platform/persistence/postgresqlNullOrdering.ts`）：
+// 两处 NULL 排序必须显式写出 SQLite 语义（能力矩阵的 `ascNullsFirst` / `descNullsLast`；
+// RFC-359 W11 起那是唯一的渲染处，此前另有一份独立原件）：
 // 评审门挑「哪一份待审文档」的 `item_index ASC`（NULL = RFC-079 单文档判别位）与澄清决定
 // 回落读模型时的 `dispatched_at DESC`（NULL = 尚未下发）。两条都在对拍里带变异验证。
 

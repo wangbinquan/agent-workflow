@@ -422,7 +422,15 @@ test('源码锁：PG daemon 接上 launcher 与终态观察者；两个 composer
   expect(daemon).toContain('agentLauncher: composePostgresqlAgentActionExecution({')
   expect(daemon).toContain('scriptLauncher: composePostgresqlScriptActionExecution({')
   expect(daemon).toContain('createDevelopmentMissionExecutionTerminalObserver({')
-  expect(daemon).toContain('developmentAutomationRef.current = developmentAutomation')
+  // RFC-359 W11：观察者与 automation 之间那个 `{ current: … | null }` 的回填盒子已经拆掉
+  // ——环改打在词法作用域上，观察者直接闭包引用同作用域后面那个 `const developmentAutomation`。
+  // 这一条锁的意图没变（观察者接的必须是**这一个** automation，不是另造一个），只是锚点从
+  // 「回填那一行」换成「观察者体内直呼它」+「automation 确实在同一作用域里造出来」。
+  expect(daemon).toContain('await developmentAutomation.drive(missionId)')
+  expect(daemon).toContain('const developmentAutomation = composeDevelopmentAutomation({')
+  expect(daemon.indexOf('createDevelopmentMissionExecutionTerminalObserver({')).toBeLessThan(
+    daemon.indexOf('const developmentAutomation = composeDevelopmentAutomation({'),
+  )
   expect(daemon.indexOf('const taskLaunchKernel = ')).toBeLessThan(
     daemon.indexOf('agentLauncher: composePostgresqlAgentActionExecution({'),
   )

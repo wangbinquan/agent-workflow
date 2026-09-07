@@ -48,7 +48,7 @@ import {
 } from '../src/modules/identity-access/application/operationContext'
 import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
-import { createDevelopmentActivityWorkerBinding } from '../src/modules/development-automation/composition/activityOperations'
+import { composeDevelopmentActivityOperations } from '../src/modules/development-automation/composition/activityOperations'
 
 const ROOT = join(import.meta.dir, '..')
 const operationCatalogCheckpoint = captureOperationCatalogForTests()
@@ -693,13 +693,13 @@ describe('RFC-344 direct bound handler invocation', () => {
 })
 
 describe('RFC-344 bootstrap-owned development activity participant', () => {
-  test('fails closed before binding and accepts exactly one runtime worker', async () => {
-    const binding = createDevelopmentActivityWorkerBinding()
-    await expect(binding.operations.runOneWorkerCycle()).rejects.toThrow(
-      'development-activity-worker-not-bound',
-    )
-
-    binding.bind({
+  // RFC-359 W11：这条用例原来锁的是「bind 之前 fail-closed、且只接受一次 bind」。
+  // 那个可空槽已经拆掉——worker 现在是 `composeDevelopmentActivityOperations` 的必填实参，
+  // 「还没装配」与「被第二次 bind 静默覆盖」两种状态都不再可表达（前者是编译错误 TS2554，
+  // 后者没有 bind 可调）。RFC-344 真正要锁的那半——**装配归 bootstrap、operations 就地
+  // 落到交进来的那台 worker 上**——原样保留在下面。
+  test('operations run against exactly the worker handed in at composition', async () => {
+    const operations = composeDevelopmentActivityOperations({
       publishOneChannelResult: async () => 'idle',
       runOneOutbox: async () => 'idle',
       pumpOneDelivery: async () => false,
@@ -707,19 +707,27 @@ describe('RFC-344 bootstrap-owned development activity participant', () => {
       inspectOneExecution: async () => 'completed',
     })
 
-    await expect(binding.operations.runOneWorkerCycle()).resolves.toEqual({
+    await expect(operations.runOneWorkerCycle()).resolves.toEqual({
       activity: 'execution',
       state: 'completed',
     })
-    expect(() =>
-      binding.bind({
-        publishOneChannelResult: async () => 'idle',
-        runOneOutbox: async () => 'idle',
-        pumpOneDelivery: async () => false,
-        planOneReaction: async () => null,
-        inspectOneExecution: async () => 'idle',
-      }),
-    ).toThrow('development-activity-worker-already-bound')
+
+    // 另一台 worker 交进来就是另一份 operations——没有共享的可变槽把两者串在一起。
+    const otherOperations = composeDevelopmentActivityOperations({
+      publishOneChannelResult: async () => 'completed',
+      runOneOutbox: async () => 'idle',
+      pumpOneDelivery: async () => false,
+      planOneReaction: async () => null,
+      inspectOneExecution: async () => 'idle',
+    })
+    await expect(otherOperations.runOneWorkerCycle()).resolves.toEqual({
+      activity: 'channel',
+      state: 'completed',
+    })
+    await expect(operations.runOneWorkerCycle()).resolves.toEqual({
+      activity: 'execution',
+      state: 'completed',
+    })
   })
 })
 

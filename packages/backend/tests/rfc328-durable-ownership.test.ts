@@ -31,6 +31,7 @@ import {
 } from '@/modules/task-execution/domain/ownership'
 import { DrizzleTaskExecutionRecoveryPersistence } from '@/modules/task-execution/infrastructure/taskExecutionRecovery'
 import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
+import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastructure/effectQuiescence'
 import {
   aggregateEffectOutcome,
   canonicalResourceKeySet,
@@ -46,7 +47,8 @@ import {
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { archiveTaskTree } from '@/services/taskArchive'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/infrastructure/sqliteLocalEffectObserver'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
+import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { buildCodeHostRecoveryDescriptor } from '@/modules/task-execution/domain/codeHostRecovery'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -364,9 +366,13 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       intentId: intent.intentId,
       token: claim.token,
     })
+    // RFC-359 W10：此前这里 import 的是 `infrastructure/sqliteLocalEffectObserver`——一份**零生产
+    // 调用方**的同步孪生，于是这条判据锁的从来不是生产在跑的那份。改指中立实现（生产路径
+    // `public/participants.ts` 转出的就是它），并在
+    // `rfc359-w10-effect-observer-conformance.test.ts` 里补了同一判据的双引擎版本。
     const prepare = () =>
       createLocalEffectAttemptObserver({
-        db: database,
+        persistence: new DrizzleTaskExecutionEffectPersistence(database),
         taskId: 'task-local-generation',
         kind: 'workspace-rollback',
         stableActionOrdinal: 'workspace-rollback',
@@ -378,7 +384,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
 
     const first = prepare()
     await first.beforeAct()
-    first.succeed({ snapshot: 'snapshot-a' })
+    await first.succeed({ snapshot: 'snapshot-a' })
     expect(
       database
         .select({ generation: taskExecutionEffects.operationGeneration })
@@ -564,7 +570,9 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     ).toBe(1)
   })
 
-  test('resource collision has one acting winner and task-wide closure retains actor replay', () => {
+  // RFC-359 W10：任务级静默闭合改指两个引擎共用的 `effectQuiescence.ts#closeOutcomeUnknownAndRelease`
+  // （同步 store 上那份 `dbTxSync` 副本自 W1-T7b 起生产零调用方，本波删除），于是这条用例变成 async。
+  test('resource collision has one acting winner and task-wide closure retains actor replay', async () => {
     const database = db()
     seedTask(database, 'task-unknown')
     const module = createTaskExecutionTestModule('daemon-unknown')
@@ -630,8 +638,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       failureCode: 'response-lost',
     })
     const owner = module.ownership.read(database, 'task-unknown')!
-    module.effects.closeOutcomeUnknownAndRelease({
-      db: database,
+    await closeOutcomeUnknownAndRelease(database, {
       token: claim.token,
       intentId: intent.intentId,
       proof: createVerifiedOutcomeUnknownClosure({

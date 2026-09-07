@@ -52,13 +52,59 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // `recordArtifact` 的契约收成 `Promise<void>`，生产 prestage 链的三处调用点补 await
   // （`legacyIntentApplyResourceParticipants.ts`，I14 record-before-act）。
   // 判据在 `tests/rfc359-w9-intent-apply-sync-transaction-cutover.test.ts`（两引擎各 13 条）。
-  'modules/resource-catalog/infrastructure/legacy/agent.ts: 5',
+  // RFC-359 W9 销账（resource-catalog legacy 的删除 / 改名面）：
+  //   `legacy/agent.ts: 5 → 2` —— deleteAgent + renameAgent 的两笔（no-op 围栏 / 真改名）
+  //     改走 `databaseSessionFor(db).transaction(...)`，改名的 CAS 判据从 `.run().changes`
+  //     换成中立的 `affectedRows`（本地的 `changesOf` 随之退役）。级联只有一层：围栏门
+  //     `requireAgentMutationRevision` 拆成「判据核 + 两个包装器」——判据核
+  //     `assertAgentMutationAllowed` 一份（404→403→stale 的顺序是路由契约，不许抄两份），
+  //     同步包装器留给还钉着的 `commitAgentUpdateInTx`，中立包装器给 delete / rename。
+  //   `legacy/workflow.ts: 2 → 3` / `legacy/workgroups.ts: 2 → 3` —— **数字变大不是回退**：
+  //     上面的口径修正把两个文件各 2 处 `dbTxSync<T>(…)` 从隐身状态揪了出来（真实基数 4），
+  //     本轮各转掉 1 处（deleteWorkflow / deleteWorkgroup）⇒ 4 → 3。能转是因为 RFC-324 把
+  //     删除面的 in-tx 门与保存面**分成了两份**：`assertPrincipalCanGovernInTx` /
+  //     `assertNoScheduledReferencesInTx` / `countNonTerminalReferencingTasksInTx` 的唯一调用方
+  //     就是删除那一笔，跟着改异步零级联。删除受众的授权清单走新的中立读
+  //     `listResourceGrantUserIdsForTx`（`legacy/resourceRefs.ts`）——受众必须与 DELETE 同事务
+  //     读走，行没了就再也读不到，WS 的 `*.deleted` 帧会投递不到那些人。
+  //   `legacy/workgroup/state.ts: 1 → 0` —— 门状态 CAS 的**事务整个去掉**（不是换原语）：
+  //     体内只有一条 `UPDATE … WHERE gate_status IN (…) RETURNING`，单语句两个引擎都原子，
+  //     包一层事务不多给原子性、只把这条路钉死在同步面上。同步孪生 `casGateStatusTx` 一并删除
+  //     （自 RFC-217 起生产零外部调用方）。
+  //
+  // 三个文件里**剩下的 8 笔全部钉死**，被同一条链钉着：`commitAgentCreateInTx` /
+  // `commitAgentUpdateInTx` / `commitWorkgroupCreateInTx` / `commitWorkgroupSaveInTx` /
+  // `commitWorkflowSaveInTx` / `insertWorkflowInTx` / `assertRefsUsableInTx` 是
+  // `aggregateAdapters/legacyIntentApplyResourceParticipants.ts` 与
+  // `legacyResourcePackageMutationParticipants.ts` 的参与者契约 `(tx: DbTxSync, …) => …` 的成员，
+  // 改异步要连那两个适配器 + 两个 composition/services 装配点一起动（属另一刀）。
+  // `legacy/importRefs.ts: 1` 同理：`resolveImportRefs` 的私有助手
+  // （`assertSelectedIdsVisibleInTx` / `buildCandidateSnapshotsInTx`）与导出的
+  // `assertImportRefsStableInTx` 共用，而后者正是通过 `workflow.yaml.ts` 的 `inTxGuard`
+  // 被塞进上面那批钉死的 `dbTxSync` 体里的。
+  'modules/resource-catalog/infrastructure/legacy/agent.ts: 2',
   'modules/resource-catalog/infrastructure/legacy/importRefs.ts: 1',
-  'modules/resource-catalog/infrastructure/legacy/workflow.ts: 2',
-  'modules/resource-catalog/infrastructure/legacy/workgroup/state.ts: 1',
-  'modules/resource-catalog/infrastructure/legacy/workgroups.ts: 2',
-  'modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts: 1',
-  'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts: 3',
+  'modules/resource-catalog/infrastructure/legacy/workflow.ts: 3',
+  'modules/resource-catalog/infrastructure/legacy/workgroups.ts: 3',
+  // 口径修正后首次现身（此前唯一的调用点是 `dbTxSync<boolean>(…)`，被旧正则漏掉）。
+  'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts: 1',
+  // RFC-359 W10 销账：`sqliteProcessEffectObserver.ts: 1` —— 三份 SQLite 效应观察者
+  // （local / process / code-host，共 903 行）自 RFC-349 起就只剩一个同样零调用方的
+  // composition 再导出壳指着它们，生产路径转出的是 `application/{local,process,codeHost}
+  // EffectObserver.ts`。补完双引擎对拍（`tests/rfc359-w10-effect-observer-conformance.test.ts`）
+  // 后整体退役，`withOwnedTaskTx` 这一处调用点随之消失。
+  // RFC-359 W10 销账：`sqliteSourceTerminationParticipant.ts: 3 → 0` —— 源终止参与者的三笔
+  // 事务（重放对账 / 终态 CAS 输给别人后的补写 / 目标本就终态的直写）全部改走
+  // `databaseSessionFor(db).transaction(...)`，事务体里的四个参与者各自换成两个引擎共用的
+  // 那一份：`cancelOpenNodeRunsTx` → 本文件私有的 `cancelOpenNodeRunsInTx`（逐行走中立的
+  // `transitionNodeRunStatusTx`，转移表 / 终态闸 / MR·PR 围栏与别处同一份）、
+  // `appendTaskNodeStatusesCommittedEventTx` → `appendTaskNodeStatusesCommittedEvent`、
+  // `ownership.revokeExactTx` → 新的中立事务内参与者 `revokeExactOwnerInTx`
+  // （`taskOwnershipPersistence.ts`，单语句精确 owner CAS，`revokeExact` 自己也改成用它）、
+  // `terminalizeTaskExecutionIntentsTx` → `terminalizeTaskExecutionIntentsInTx`。
+  // 留下的同步参与者只有传给 `setTaskStatus` 的 `onTransitionTx` 回调——它挂在
+  // `taskLifecycle.ts` 那笔还没转的事务上（见文件末尾那两笔的钉死理由），不是本文件的调用点。
+  // 判据在 `tests/rfc359-w10-task-execution-sync-transaction-cutover.test.ts`（两引擎各跑一遍）。
   // RFC-359 W8 销账：`sqliteTaskExecutionEffect.ts` 5 → 4 —— `resolveQuiescedCodeHostMutations`
   // （唯一调用方是合一前的 SQLite 恢复流程）迁进两引擎共用的 `effectQuiescence.ts`，同时把
   // 那条钉死在 `DbTxSync` 上的 `onAppliedTx` 回调（node_run 投影）收成实现的一部分。
@@ -66,18 +112,47 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // `resolveQuiescedManagedProcesses`（自带一笔 `dbTxSync`）与
   // `closeRecoveredOutcomeUnknownAndRelease` 自 W1-T7b 起就没有调用方（清算只剩
   // `effectQuiescence.ts` 那一份中立实现），随 effect 账本端口合一一并删除。
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3',
+  // RFC-359 W10 销账：`sqliteTaskExecutionEffect.ts` 3 → 2 —— 同步的
+  // `closeOutcomeUnknownAndRelease`（一笔 `dbTxSync`）删除。它自 W1-T7b 起就没有生产调用方：
+  // driver 释放序列（`taskDriverRelease.ts`）走端口落到两个引擎共用的
+  // `effectQuiescence.ts#closeOutcomeUnknownAndRelease`；只剩三处测试直调，已改指中立那份。
+  //
+  // 剩下的 2 笔（`prepareAndAcquire` / `settle` 的 `withOwnedTaskTx`）**不是技术钉死**：
+  // W10 删掉 `sqliteGateContinuationEffectStep.ts` 之后 src 侧已经零调用方（生产走
+  // `taskExecutionEffectPersistence.ts` 的中立实现）。挡住它们的是 **53 处测试直调**
+  // （`rfc328-durable-ownership` / `rfc359-t7-owner-fences` / `rfc359-t7b-driver-release-settles-effects`
+  // / `rfc359-w8-*` / `terminal-maintenance-watermark-coverage`）：改异步要把那 53 处连同各自的
+  // 同步夹具函数一起翻成 async，属另一刀。
+  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 2',
+  // RFC-359 W10 复核：`sqliteTaskExecutionIntent.ts: 1`（`submit` 的 `dbTxSync`）同样**不是技术
+  // 钉死**——src 侧零调用方（生产准入走 `taskContinuationAdmission.ts` /
+  // `DrizzleTaskExecutionIntentPersistence`，见本文件 W4-B1 批 2g 那条），挡住它的是 **38 处测试
+  // 直调**（12 个测试文件里的 `module.intents.submit(...)` 夹具）。同一刀里连
+  // `sqliteTaskOwnership.ts#claimPendingIntent` 的 ~30 处 `module.claim(...)` 一起翻 async 最省事。
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts: 1',
-  'modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission.ts: 1',
+  // RFC-359 W10 销账：`sqliteTaskExecutionIntentAdmission.ts: 1 → 0` —— 自带 `dbTxSync` 的独立
+  // 入口 `submitTaskContinuation(db, input)` 删除（src / tests 全仓零调用方；事务内参与者
+  // `submitTaskContinuationTx` 保留，它的调用方是 `sqliteTaskDecisionParticipant.ts` 自己的事务）。
   // RFC-359 W8 销账：`sqliteTaskOwnership.ts` 5 → 3 —— 归属端口合一成中立的
   // `taskOwnershipPersistence.ts` 之后，同步 store 的 `releaseAfterStop` / `releaseRecovered`
   // （各一笔 dbTxSync）与 `revokeOldDaemon` 失去了全部调用方，随合一删除。
-  // 剩下的 3 笔按 D28b 判据都**钉死**、不能改异步：`claimPendingIntent`（`taskExecutionModule.claim`
-  // → `taskDriverLifecycle.ts` 的同步认领）、`withOwnedTaskTx`（回调签名就是 `DbTxSync`，8 处生产
-  // 调用点在 `services/task.ts` / `platform/persistence/sqlite/taskLifecycle.ts` 等处）、
-  // `revokeExact`（体内的 `revokeExactTx` 是 `sqliteSourceTerminationParticipant.ts` /
-  // `services/task.ts` 的同步事务内参与者）。
-  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 3',
+  // RFC-359 W10 销账：`sqliteTaskOwnership.ts` 3 → 2 —— `revokeExact` 的**事务整个去掉**
+  // （不是换原语）：体内是一条 `UPDATE … WHERE (精确 owner 元组 + 期望 revision + state='claimed')
+  // RETURNING *`，单语句两个引擎都原子，包一层 BEGIN/COMMIT 不多给任何原子性、只把这条路钉死在
+  // 同步面上；中立孪生 `taskOwnershipPersistence.ts#revokeExact` 早就是这个形状。`revokeExactTx`
+  // 保留（`services/task.ts` 的 `onTransitionTx` 回调仍在 `setTaskStatus` 那笔同步事务里用它），
+  // 但它的中立对等物 `revokeExactOwnerInTx` 已经存在，源终止参与者用的就是那份。
+  //
+  // 剩下 2 笔的复核结论（W8 写的「3 笔都钉死」已被本轮推翻一笔）：
+  //   · `withOwnedTaskTx` —— 调用点从 W8 记的 8 处降到 2 处，且都在
+  //     `sqliteTaskExecutionEffect.ts`（W10 删掉三份效应观察者与 gate step 之后 src 侧只剩它）。
+  //     它跟着上面 effect 那条的 53 处测试直调一起走。
+  //   · `claimPendingIntent` —— **不是技术钉死**：唯一的生产调用链
+  //     `taskExecutionModule.claim` → `taskDriverLifecycle.ts:59` 本来就在 async 体里，补一个
+  //     `await` 就完；中立孪生 `DrizzleTaskOwnershipPersistence.claimPendingIntent` 已经在跑
+  //     PostgreSQL 的 daemon。挡住它的是 ~30 处 `module.claim(...)` 测试直调（含
+  //     `expect(() => …).toThrow` 要翻成 `await expect(…).rejects`）。
+  'modules/task-execution/infrastructure/sqliteTaskOwnership.ts: 2',
   // RFC-359 W7 销账：`sqliteTerminalMaintenance.ts: 5` + `systemWorkspaceGc.ts: 1` +
   // `taskArchive.ts: 1` + `taskDelete.ts: 1` —— 终态维护认领的三条消费路径（删除 / 归档 /
   // workspace-GC）迁到 `databaseSessionFor(db).transaction(...)` + 中立参与者
@@ -102,12 +177,30 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // services/lifecycle → taskLifecycle（depcheck 变异验证过）。判据在
   // `tests/rfc359-w8-node-run-lifecycle-neutral-transaction.test.ts`（两引擎各 6 条）。
   //
-  // 剩下的 2 笔（`setTaskStatus` 的 `withOwnedTaskTx` / `dbTxSync` 两个分支）按 D28b 判据**钉死**：
-  // 体内是同步的 `writeTaskStatusTx`，而它的 `onTransitionTx: (tx: DbTxSync, …) => void` 回调
-  // 被 6 处生产站点传入（`taskExecutionPersistence.ts` / `sqliteSourceTerminationParticipant.ts` /
-  // `services/task.ts` ×4），改中立要连着那条参与者链一起动——属另一刀。
+  // 剩下的 2 笔（`setTaskStatus` 的 `withOwnedTaskTx` / `dbTxSync` 两个分支）**钉死**。
+  // RFC-359 W10 复核后理由比 W8 记的更硬一层：不止是那 6 处 `onTransitionTx: (tx: DbTxSync, …)`
+  // 回调（`composition/taskExecutionPersistence.ts` / `sqliteSourceTerminationParticipant.ts` /
+  // `services/task.ts` ×4）——它们的宿主 `writeTaskStatusTx` **同时**是 RFC-333 同步人工门参与者
+  // `transitionHumanGateTaskTx`（同文件 :734）的实现体，而后者是端口
+  // `HumanGateTaskLifecycle.transitionTx`（同步契约）的唯一实现、由 `composition/humanGate.ts`
+  // 经 `legacyHumanGateTaskLifecycle.ts` 装配、在别人的 `dbTxSync` 体内被当参与者调用。
+  // 也就是说 `writeTaskStatusTx` 一改异步，要同时翻掉「6 条转移回调链」和「人工门参与者端口」
+  // 两条互不相干的链，外加同步的 `appendTaskLifecycleTransitionCommittedEventTx`——属另一刀。
   'platform/persistence/sqlite/taskLifecycle.ts: 2',
-  'services/task.ts: 3',
+  // RFC-359 W10 销账：`services/task.ts: 3 → 0`（整行退出账本）——
+  //   · 仓库准备重试前的那笔 `withOwnedTaskTx({ run: () => undefined })` 本来就**没有事务体**、
+  //     只是围栏，换成 `withTaskExecutionWrite` + `fenceTaskWrite`（同一次 owner CAS，同一个
+  //     `task-execution-stale-owner`）；
+  //   · 延后准备的回填投影（tasks 回写 + task_repos + task_space_nodes + prep 行置 done 四件事
+  //     同生共死）改走 `withTaskExecutionWrite`，`setNodeRunStatusTx` 换成中立孪生；
+  //   · 任务铸行的那笔 459 行大事务（工作流版本复核 + 父任务准入 + tasks/intents 插入 +
+  //     created 事件 + branch_started_at 沿父链推进 + task_repos / task_space_nodes /
+  //     workgroup_task_state / task_collaborators）改走 `withTaskExecutionWrite`，体内 16 条语句
+  //     逐条补 `await`；`appendTaskCreatedCommittedEventTx` → `appendTaskCreatedCommittedEvent`，
+  //     `insertWorkgroupTaskStateTx`（签名钉在 `DbTxSync` 上、且本站点是它唯一调用方）内联成
+  //     一条 await 过的 INSERT——继续传中立句柄给它会撞上最毒的那一档：PG 上 `.run()` 回一个
+  //     没人 await 的 Promise，行静默不落而两边都不抛。
+  // 判据在 `tests/rfc359-w10-task-execution-sync-transaction-cutover.test.ts`（两引擎各跑一遍）。
 ]
 
 function scan(): string[] {
@@ -122,7 +215,13 @@ function scan(): string[] {
       if (!entry.name.endsWith('.ts')) continue
       if (rel === 'db/txSync.ts') continue // 原语自己的家
       const text = readFileSync(join(SRC, rel), 'utf8')
-      const sync = (text.match(/\bdbTxSync\(/g) ?? []).length
+      // RFC-359 W9 —— 口径修正：`dbTxSync<T>(…)` 也是调用点。
+      // 修之前这条正则只认 `dbTxSync(`，于是**带显式泛型参数**的调用整个隐身：全仓 5 处
+      // （`legacy/workflow.ts` 2 + `legacy/workgroups.ts` 2 + `sqliteResourcePackageMaintenance.ts` 1）
+      // 一处都没被记进账本——`sqliteResourcePackageMaintenance.ts` 因此**从未在账本里出现过**，
+      // 而账本的全部预言力就建立在「逐文件逐字相等」上。留着这个洞等于给「想加一笔 SQLite-only
+      // 事务又不想惊动账本」留了一个只需多打一对尖括号的后门。
+      const sync = (text.match(/\bdbTxSync[<(]/g) ?? []).length
       const owned =
         rel === 'modules/task-execution/infrastructure/sqliteTaskOwnership.ts'
           ? 0 // 同上：`withOwnedTaskTx` 的定义处

@@ -112,7 +112,6 @@ const SERIALIZING_OPENERS: ReadonlySet<string> = new Set([
 const SERIALIZING_CALLEES: ReadonlySet<string> = new Set([
   'advisoryLock',
   'lockAggregateRoot',
-  'lockPostgresqlNodeRunAggregateRoot',
   'claimRows',
   'fenceTaskWrite',
   'assertTaskOwnerTx',
@@ -499,7 +498,7 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *     :814 taskCollaborators。why —— `withPostgresqlTaskAggregateTransaction`（事务头对 task 行
  *       取 `for update`），且插入前先整体 `delete` 同任务的成员行。removeWhen —— 那两条前提任一
  *       消失时重判。
- *   modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 5
+ *   modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3（RFC-359 W10 起；开账时 5）
  *     taskExecutionEffects / taskExecutionEffectAttempts / taskExecutionLineageOperationRecords ×3。
  *     why —— 同步事务面（`dbTxSync`）为主，PG 上不可达。
  *     ⚠️ **这个数字在缩**：该文件正被同步面退役那一刀改动（落账当天从 6 掉到 5），红了先看是不是
@@ -551,7 +550,10 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/effectQuiescence.ts: 1',
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts: 1',
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts: 1',
-  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 5',
+  // RFC-359 W10 销账：5 → 3 —— 同步的 `closeOutcomeUnknownAndRelease`（生产零调用方，清算只剩
+  // `effectQuiescence.ts` 那一份中立实现）随本波删除，它体内那两处「先查存在、再插入唯一键表」
+  // 一并消失。
+  'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3',
   'modules/task-execution/infrastructure/taskContinuationAdmission.ts: 1',
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
   'platform/events/committed/append.ts: 2',

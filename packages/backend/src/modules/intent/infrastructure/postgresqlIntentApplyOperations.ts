@@ -47,6 +47,10 @@ import type {
   PostgresqlIntentApplyResourceSession,
 } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
@@ -100,6 +104,27 @@ export interface PostgresqlIntentApplyDependencies {
 
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
 
+/**
+ * RFC-359 W11 —— 两笔大事务已改走中立事务原语（`databaseSessionFor(db).transaction(...)`），
+ * 但注入进来的资源会话仍按 provider 命名的事务句柄取参。把中立句柄重新窄化给它**不是强转
+ * 谎话**：那个参数类型归根到底是
+ * `Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]`，而中立会话在
+ * PostgreSQL 上交出的正是驱动 `db.transaction` 回调里的那个句柄本身
+ * （`createPostgresqlDatabaseSession` 只把同一个对象标注成 `DatabaseTransaction`）——
+ * 运行期逐字相同。
+ *
+ * 目标类型从**已经注入的那个会话**上取（而不是另开一条深取 import）：窄化的收件人变了，
+ * 这里就跟着变，不会留下一个自说自话的别名。退役条件：资源会话协议改吃 `DatabaseTransaction`，
+ * 两套 apply 引擎合一时随之消失。
+ */
+type IntentApplyCatalogTransaction = Parameters<
+  PostgresqlIntentApplyResourceSession['createTransactionAttempt']
+>[0]
+
+function catalogTransaction(transaction: DatabaseTransaction): IntentApplyCatalogTransaction {
+  return transaction as unknown as IntentApplyCatalogTransaction
+}
+
 function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
   const parsed: unknown = JSON.parse(json)
   if (!Array.isArray(parsed)) throw new Error('intent journal artifacts must be an array')
@@ -133,7 +158,7 @@ export function createPostgresqlIntentApplyOperations(
     const { actor, authority, command: input } = request
     const log = request.log ?? createLogger('intentApply')
     const journalId = nextId()
-    const claim = await dependencies.db.transaction(async (transaction) => {
+    const claim = await databaseSessionFor(dependencies.db).transaction(async (transaction) => {
       const session = await transaction
         .select()
         .from(intentSessions)
@@ -185,6 +210,9 @@ export function createPostgresqlIntentApplyOperations(
         createdAt: recordedAt,
         updatedAt: recordedAt,
       })
+      // RFC-359 W11 —— 认领事务的原子性接缝（与 SQLite 侧同名同位）：journal 行已插入、
+      // 事务尚未提交时抛。这是「四道读判据 + 认领同生共死」唯一可观测的形态。
+      request.faults?.inClaimTxAfterJournal?.()
       return { kind: 'claimed' as const, session, draft: committable }
     })
 
@@ -300,77 +328,82 @@ export function createPostgresqlIntentApplyOperations(
       for (const plan of plans) await resourceSession.prestage(plan, { recordArtifact })
       request.faults?.beforeTx?.()
 
-      const transactionResult = await dependencies.db.transaction(async (transaction) => {
-        const cas = await transaction
-          .update(intentApplyJournal)
-          .set({ state: 'applying', updatedAt: now() })
-          .where(
-            and(eq(intentApplyJournal.id, journalId), eq(intentApplyJournal.state, 'prepared')),
+      const transactionResult = await databaseSessionFor(dependencies.db).transaction(
+        async (transaction) => {
+          const cas = await transaction
+            .update(intentApplyJournal)
+            .set({ state: 'applying', updatedAt: now() })
+            .where(
+              and(eq(intentApplyJournal.id, journalId), eq(intentApplyJournal.state, 'prepared')),
+            )
+            .returning({ id: intentApplyJournal.id })
+            .get()
+          if (cas === undefined) {
+            throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
+          }
+          const sessionRow = await transaction
+            .select()
+            .from(intentSessions)
+            .where(eq(intentSessions.id, input.sessionId))
+            .get()
+          const baseline = {
+            claimSession: claim.session,
+            claimDraftId: claim.draft.id,
+            sessionNow: sessionRow,
+          }
+          assertIntentApplyBaselineFresh(baseline)
+          const sessionNow = baseline.sessionNow
+          const bundleCreatedNames = bundleCreatedNamesOf(plans)
+          const attempt = resourceSession.createTransactionAttempt(
+            catalogTransaction(transaction),
+            {
+              bundleCreatedNames,
+            },
           )
-          .returning({ id: intentApplyJournal.id })
-          .get()
-        if (cas === undefined) {
-          throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
-        }
-        const sessionRow = await transaction
-          .select()
-          .from(intentSessions)
-          .where(eq(intentSessions.id, input.sessionId))
-          .get()
-        const baseline = {
-          claimSession: claim.session,
-          claimDraftId: claim.draft.id,
-          sessionNow: sessionRow,
-        }
-        assertIntentApplyBaselineFresh(baseline)
-        const sessionNow = baseline.sessionNow
-        const bundleCreatedNames = bundleCreatedNamesOf(plans)
-        const attempt = resourceSession.createTransactionAttempt(transaction, {
-          bundleCreatedNames,
-        })
-        const applied: IntentApplyReceipt['applied'] = []
-        for (const [index, plan] of plans.entries()) {
-          const operation = requireOpForPlan(bundle.ops[index], plan)
-          await attempt.participant.authorizeAndCommit(authority, plan)
-          applied.push(appliedEntryOf(operation))
-          await transaction.insert(intentProvenance).values({
-            resourceType: operation.resourceType,
-            resourceId: operation.resourceId,
-            commitId: journalId,
-            sessionId: input.sessionId,
-            createdAt: now(),
-          })
-        }
-        request.faults?.inTxAfterOps?.()
+          const applied: IntentApplyReceipt['applied'] = []
+          for (const [index, plan] of plans.entries()) {
+            const operation = requireOpForPlan(bundle.ops[index], plan)
+            await attempt.participant.authorizeAndCommit(authority, plan)
+            applied.push(appliedEntryOf(operation))
+            await transaction.insert(intentProvenance).values({
+              resourceType: operation.resourceType,
+              resourceId: operation.resourceId,
+              commitId: journalId,
+              sessionId: input.sessionId,
+              createdAt: now(),
+            })
+          }
+          request.faults?.inTxAfterOps?.()
 
-        const mutation = intentApplyCommitMutationOf({
-          claimSession: claim.session,
-          preCommitManifestJson: sessionNow.contextManifestJson,
-          ops: bundle.ops,
-        })
-        const commitSeq = mutation.commitSeq
-        await transaction
-          .update(intentSessions)
-          .set({
-            commitSeq: mutation.commitSeq,
-            contextRevision: mutation.contextRevision,
-            currentDraftId: null,
-            contextManifestJson: mutation.contextManifestJson,
-            handleWatermarkJson: mutation.handleWatermarkJson,
-            updatedAt: now(),
+          const mutation = intentApplyCommitMutationOf({
+            claimSession: claim.session,
+            preCommitManifestJson: sessionNow.contextManifestJson,
+            ops: bundle.ops,
           })
-          .where(eq(intentSessions.id, input.sessionId))
-        const receiptValue: IntentApplyReceipt = { journalId, commitSeq, applied }
-        await transaction
-          .update(intentApplyJournal)
-          .set({
-            state: 'committed',
-            receiptJson: JSON.stringify(receiptValue),
-            updatedAt: now(),
-          })
-          .where(eq(intentApplyJournal.id, journalId))
-        return Object.freeze({ receipt: receiptValue, attempt })
-      })
+          const commitSeq = mutation.commitSeq
+          await transaction
+            .update(intentSessions)
+            .set({
+              commitSeq: mutation.commitSeq,
+              contextRevision: mutation.contextRevision,
+              currentDraftId: null,
+              contextManifestJson: mutation.contextManifestJson,
+              handleWatermarkJson: mutation.handleWatermarkJson,
+              updatedAt: now(),
+            })
+            .where(eq(intentSessions.id, input.sessionId))
+          const receiptValue: IntentApplyReceipt = { journalId, commitSeq, applied }
+          await transaction
+            .update(intentApplyJournal)
+            .set({
+              state: 'committed',
+              receiptJson: JSON.stringify(receiptValue),
+              updatedAt: now(),
+            })
+            .where(eq(intentApplyJournal.id, journalId))
+          return Object.freeze({ receipt: receiptValue, attempt })
+        },
+      )
       const { receipt, attempt } = transactionResult
       committedReceipt = receipt
       attempt.commitSucceeded()

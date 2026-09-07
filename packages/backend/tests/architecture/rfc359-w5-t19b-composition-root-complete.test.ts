@@ -56,22 +56,72 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  * 先造出双方都依赖的那个纯端口，再由 bootstrap 把两个实例一次性交齐。
  */
 export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
+  // RFC-359 W11 分类结论（未销账，留给下一刀）：这一条**不是**声明位置造成的假占位。
+  // `createDaemonRealtimePolicyBinding()` 有两个组合根消费它（PG daemon 与 SQLite daemon 入口），
+  // 两处都把 `.policy` 先交给 provider core、待 Resource Catalog / Memory / transport 三个 owner
+  // 建好之后才 `bind`——真的是跨阶段的环。拆它要同时改两个根，而 SQLite 那个根这一刀不许碰，
+  // 于是只能整条留着（单改一侧等于把两个 daemon 的装配序拆成两种形状，比现状更糟）。
   'cli/daemonRealtimePolicy.ts: marker=1, prose=0, holder=1',
   // RFC-359 W5-T19b 销账：`cli/package.ts: marker=1` —— `packageCommand` 的 `bootstrapFactory`
   // 从可选变必填，缺省时那句「把没装配当成一种命令输出返回给用户」（`identity-access-runtime-not-composed`）
   // 随之删除。这处占位的代价是**实测到的**：`tests/rfc271-cli.test.ts` 的「--plan 与 --on-conflict
   // 同时给 ⇒ 报错」本意走到「user not found」，却因为不传 factory 在那一句就返回了，
   // 断言因一个无关理由变绿；必填之后那条用例才真的走到它要测的路径。
-  'cli/postgresqlDaemonApplication.ts: marker=9, prose=0, holder=3',
+  // RFC-359 W11 销账：`cli/postgresqlDaemonApplication.ts` marker 9 → 4、holder 3 → 0。
+  // 拆掉的五处是**同一形状**：一个装配环被打在「可空的实例槽 + 进门一句 throw」上，而环的
+  // 两端其实同处一个函数作用域——`collaborationContext`（记忆读已评审产物 ↔ 评审上下文吃记忆的
+  // 蒸馏命令面）、`mcpCatalogRef`（运行时测试查 MCP ↔ MCP 目录的删除/对账走运行时测试）、
+  // `taskDriveCoordinatorRef`（启动内核要协调器 ↔ 协调器要执行提供者的生命周期端口）、
+  // `taskExecutionProviderRef`（多余的别名：同一个 `const taskExecutionProvider` 在下面
+  // `failureReporter` 里本来就直接用）、`developmentAutomationRef`（终态观察者回调 automation ↔
+  // automation 的两个 launcher 要观察者）。
+  // 改法是把环打在**词法作用域**上：闭包直接引用同一作用域里那个 `const`，只在运行期取值。
+  // 于是可空槽与那五句 throw 一起消失，且「装配漏了一步」在类型层不可表达——实测：删掉
+  // `const boundCollaborationContext = …` 那一行 ⇒ TS2304「Cannot find name 'boundCollaborationContext'」，
+  // 删掉 `const boundTaskDriveCoordinator = …` ⇒ TS2304「Cannot find name 'boundTaskDriveCoordinator'」，
+  // 而原来的形状是删掉 `xxxRef = …` 那一行照样编译通过、跑到才炸（正是 W1-T1 修掉的那类缺陷）。
+  // 剩下的 4 处 marker 不是同一回事：`postgresql-memory-catalog-not-composed` /
+  // `postgresql-digital-employee-runtime-not-composed` 是**工厂返回类型的可选字段**造成的假占位
+  // （两个根都必然传了那半输入，缺口在 `modules/memory/composition.ts` 与
+  // `modules/digital-employee/composition.ts` 的签名上，各加一个重载即可，本刀路径域外）；
+  // `postgresql-task-launch-kernel-not-composed` 同理，落在 task-execution 的 provider runtime 上；
+  // `intent-resource-catalog-context-not-bound` **根本不是装配缺口**——它是 `contextFor` 往
+  // WeakMap 里登记 actor、`resolveActor` 再取回来的**每请求**旁路，取不到说明来了一个不是本
+  // 目录铸出来的 context，与「依赖没装配」无关，只是错误码里恰好带 `not-bound` 才被本守卫计入
+  // （同 `taskEngineApplication.ts` 留下那 2 处的理由）。
+  // 行为判据见 `tests/rfc359-w11-composition-root-lexical-binding.test.ts`。
+  'cli/postgresqlDaemonApplication.ts: marker=4, prose=0, holder=0',
   'cli/start.ts: marker=10, prose=0, holder=5',
-  'modules/collaboration/composition/commandContext.ts: marker=0, prose=6, holder=0',
-  'modules/collaboration/composition/reviewNodeReviewerDependencies.ts: marker=0, prose=1, holder=0',
-  'modules/development-automation/composition/activityOperations.ts: marker=1, prose=0, holder=1',
+  // RFC-359 W5-T19b 销账：`commandContext.ts` prose 6 → 5，且
+  // `reviewNodeReviewerDependencies.ts: prose=1` 整行消失 —— `CollaborationCommandDependencies.reviewTaskAccess`
+  // 从 `?:` 改成必填。这个槽从来没有第二个来源：两个工厂都是 `createReviewTaskAccessPort(input.db)`
+  // 现造，全仓无任何调用方传过它（`createCollaborationCommandContextFromPersistence` 亦无外部调用方，
+  // `CollaborationCommandDependencies` 只在本文件内出现）。留成可空的代价是同一个缺口兜两次、还兜出
+  // 两种话术：`requireReviewTaskAccess` 抛 `collaboration task access is not composed`，而
+  // `reviewNodeReviewerDependencies.ts` 私藏的那份逐字同构副本抛 `collaboration review task access is
+  // not composed`。必填之后缺口在类型层不可表达（实测：删掉工厂里那行 ⇒ TS2345「not assignable to
+  // parameter of type 'CollaborationCommandDependencies'」），两句兜底与那份副本一起删除。
+  // 行为判据见 `tests/rfc359-w5-t19b-collaboration-composed-review-access.test.ts`（双引擎 + 变异表）。
+  'modules/collaboration/composition/commandContext.ts: marker=0, prose=5, holder=0',
+  // RFC-359 W11 销账：`modules/development-automation/composition/activityOperations.ts:
+  // marker=1, holder=1` 整行消失 —— `createDevelopmentActivityWorkerBinding()`（先造 `operations`
+  // 交给下游、再补一句 `.bind(worker)`、`operations` 进门 `if (worker === null) throw
+  // 'development-activity-worker-not-bound'`）换成 `composeDevelopmentActivityOperations(worker)`，
+  // worker 是必填实参。这个延迟在**两个**组合根上都是多余的：PG 根紧接着下一行就 bind，
+  // SQLite 根在 `composeSqliteApiRouteMounts` 里 bind 完立刻取 `operations` 用（此前还要
+  // 经 `SqliteComposedAppDeps` 绕一圈把空槽传过来，那两个字段随之删除）。
+  // 必填之后缺口在类型层不可表达（实测：删掉调用点那个实参 ⇒ TS2554「Expected 1 arguments,
+  // but got 0」），RFC-317 T54 的 once 守卫防的「第二次 bind 静默覆盖第一次」也无从发生。
+  // `tests/rfc344-operation-catalog.test.ts` 那条用例随之改锁新契约（operations 就地落到交进
+  // 来的那台 worker 上、两次装配互不串台）。
   // RFC-359 W5-T19b 销账：`modules/digital-employee/composition.ts: prose=1` —— 那句
   // `'digital employee runtime is not composed'` 是**声明位置**造成的假占位：`runtimeDocument`
   // 的 7 个使用点全在 `runtimeService === null ? null : {…}` 的非 null 分支里（同批箭头里
   // `runtimeService.launchCase(…)` 本来就直接调、不判空），只是它自己声明在分支外、收窄够不着。
   // 改成显式接收已收窄的 service（`documentForCase(service, caseId)`），缺口无处可表达。
+  // RFC-359 W11 分类结论（未销账，留给下一刀）：`createDeferredDigitalEmployeeWorkStart()` 与
+  // `cli/daemonRealtimePolicy.ts` 同形——两个组合根消费它（PG daemon 与 SQLite daemon 入口），
+  // 拆它要同时改两个根，而 SQLite 那个根这一刀不许碰，故整条留着。
   'modules/integration/composition.ts: marker=0, prose=1, holder=1',
   // RFC-359 W5-T19b 销账：`modules/task-execution/composition.ts: prose=1` ——
   // `TaskExecutionModule.persistence?` 这个空槽与 `claimPersisted` 进门那句
@@ -90,7 +140,21 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
   // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
   'modules/task-execution/composition/taskEngineApplication.ts: marker=2, prose=0, holder=0',
-  'server.ts: marker=6, prose=0, holder=2',
+  // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
+  // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、
+  // `mcpCatalogRef`），改成直接闭包引用同作用域的 `const`；`collaborationContext` 同理，顺带
+  // 把 `let … = deps.x` + `??=` 收成一个带显式类型标注的 `const`（标注是这个环的约束点：
+  // 两边互相引用时推断转不出来，TS7022）。第五处 `task-execution-read-models-not-composed` 是
+  // **关联不上的条件**造成的假占位：runtime 只在 `deps.taskExecutionReadModels === undefined` 时
+  // 才装配，所以 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 的 undefined
+  // 分支不可达，tsc 却关联不起这两个条件；把读模型提到 runtime 之前先定下来再交进去（
+  // `composeTaskExecutionRuntime` 原样回传它，见 `composition/runtimeAssembly.ts`），空档消失。
+  // 剩下的 1 处 `intent-resource-catalog-context-not-bound` 与 PG 根那处同源，是每请求的
+  // WeakMap 旁路、不是装配缺口，理由见上面 PG 那条。
+  // **顺带记一条守卫盲点**：`server.ts:2525` 有一处与 PG 根 `digitalEmployee.runtime === null`
+  // 逐字同构的兜底，只因文案写成 `'task catalog requires the digital employee runtime'`
+  // 而不带 `not-bound|not-composed`，marker 与 prose 两条判据都咬不到它。改名逃逸不是假想。
+  'server.ts: marker=1, prose=0, holder=0',
 ]
 
 const MARKER = /not-bound|not-composed/
@@ -102,10 +166,13 @@ const PROSE =
  * `composition.ts` / `composition/**`。
  *
  * **`server.ts` 是按名字点进来的**，因为它事实上就是 HTTP 侧的组合根——只是不叫
- * `composition*`。按目录/文件名划扫描面会正好把它漏掉，而它身上挂着与账本里
- * 一模一样的形态（`intent-resource-catalog-context-not-bound`、两个
- * `mcpCatalogRef` / `agentCatalogRef` 晚绑定 holder，后者与 `cli/start.ts` 里
- * 那个同款）。命名不是判据，装配职责才是：谁在装配依赖并把它交给下游，谁就进扫描面。
+ * `composition*`。按目录/文件名划扫描面会正好把它漏掉，而它身上曾经挂着与账本里
+ * 一模一样的形态：两个晚绑定 holder（MCP 目录与代理目录，后者与 `cli/start.ts` 里
+ * 那个同款）+ 五句进门 throw。RFC-359 W11 把它们拆到只剩一处
+ * `intent-resource-catalog-context-not-bound`（那处是每请求的 WeakMap 旁路，不是装配
+ * 缺口）——**但扫描面不能因此收窄**：这个文件仍然在装配依赖并把它交给下游，
+ * 而 `cli/start.ts` 里同款的 holder 一个没少。
+ * 命名不是判据，装配职责才是：谁在装配依赖并把它交给下游，谁就进扫描面。
  */
 const NAMED_ROOTS: ReadonlySet<string> = new Set(['server.ts'])
 

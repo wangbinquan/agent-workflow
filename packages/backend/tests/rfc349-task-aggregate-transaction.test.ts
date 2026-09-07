@@ -20,11 +20,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import {
-  lockPostgresqlNodeRunAggregateRoot,
-  withPostgresqlNodeRunAggregateTransaction,
-  withPostgresqlTaskAggregateTransaction,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { withPostgresqlTaskAggregateTransaction } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 
 const backendRoot = resolve(import.meta.dir, '..')
 
@@ -65,6 +61,10 @@ function recordingClient(): {
     async transaction<T>(body: (tx: unknown) => Promise<T>): Promise<T> {
       order.push('begin')
       return await body({
+        // RFC-359 W11：行锁的渲染权归能力矩阵，而矩阵按**事务句柄**自述的 `resultKind` 取引擎
+        // （`engineOf`：sqlite-proxy 是 `'async'`，bun:sqlite 是 `'sync'`）。判据一字未变——
+        // 假事务句柄同样要自报家门，否则它冒充的是 SQLite，行锁会被渲染成 no-op。
+        resultKind: 'async',
         async run(query: unknown) {
           statements.push(literalText(query))
           order.push('run')
@@ -170,32 +170,13 @@ describe('RFC-349 single-aggregate task transaction', () => {
 //
 // 生产规模（owners 10 万行）下 SERIALIZABLE 只有 0.25% 且零逃逸——所以这条回归锁的是
 // **小部署**这一形态，别因为「大库上看起来没事」把它改回去。
+//
+// RFC-359 W11：这一档当年的两个 PG 私有 helper（非 SERIALIZABLE 的事务边界 + `node_runs` 行的
+// 聚合根锁）**已删除**——W4-B1 把两份 provider 投影合成一份之后它们就零生产调用方，只剩这份
+// 测试还在引用，也就是「测试在给死代码续命」。判据一格没少：下面这条源码锁盯的一直是**活的**
+// 那条路径（统一写事务原语 + 能力矩阵的 `lockAggregateRoot`），此前那两条只是在验一段没人跑的
+// 代码。事务边界本身的回滚 / 可重入语义由 `rfc359-w5-t18-…` 与 `rfc359-w11-…` 在两个引擎上跑。
 describe('RFC-349 single-aggregate node run transaction', () => {
-  test('does not raise the isolation level', async () => {
-    const client = recordingClient()
-
-    await withPostgresqlNodeRunAggregateTransaction(client.db, async () => undefined)
-
-    for (const statement of client.statements) {
-      expect(
-        statement.toUpperCase(),
-        'SERIALIZABLE 回来了 ⇒ 小部署上的假冲突一起回来',
-      ).not.toContain('SERIALIZABLE')
-    }
-  })
-
-  test('the aggregate root lock is a FOR UPDATE on the node run row', async () => {
-    const client = recordingClient()
-
-    await withPostgresqlNodeRunAggregateTransaction(client.db, async (tx) => {
-      await lockPostgresqlNodeRunAggregateRoot(tx, 'node-run-1')
-    })
-
-    const locked = client.statements.join('\n').toLowerCase()
-    expect(locked).toContain('for update')
-    expect(locked, '锁错了表 ⇒ 同一个 node run 的并发写手不再互斥').toContain('node_runs')
-  })
-
   test('every node-run writer uses it, and the fence takes the lock after the owner check', () => {
     // RFC-359 W4-B1 批 2f：两份 provider 投影合成一份（nodeExecutionPersistence.ts），写事务走统一原语
     // （PG 上 READ COMMITTED），聚合根行锁经能力矩阵 `lockAggregateRoot` 表达。

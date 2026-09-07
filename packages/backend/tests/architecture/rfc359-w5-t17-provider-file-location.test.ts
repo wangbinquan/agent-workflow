@@ -65,6 +65,90 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/intent/infrastructure/postgresqlIntentApplyOperations.ts',
   'modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts',
   'modules/intent/infrastructure/sqliteIntentApplyOperations.ts',
+  // ┌─ RFC-359 W10 —— resource-catalog 这 13 条**逐个核过**的分类。落在这里是因为 W9 已经证明
+  // │  「这个数不等于分叉数」，而每一刀都在重新推导同一份分类；把结论钉在账本旁边，下一刀直接接。
+  // │  分类判据：**看这份实现在生产里跑在什么句柄上、它的孪生在哪**，不看文件名。
+  // │
+  // │  ⚠️ 先记一条会反复骗人的事实：`PostgresqlDatabaseClient`（`platform/persistence/
+  // │  postgresqlDatabaseClient.ts:35`）**不是** PG 专用客户端，它是 drizzle 的 **sqlite-proxy**
+  // │  ——`SqliteRemoteDatabase<schema> & { $provider; $generationId }`，结构上就是
+  // │  `ProviderNeutralDatabase` 的子类型（`db/query.ts:20`），查询构建器两侧同一套。
+  // │  所以「这个文件吃 PostgresqlDatabaseClient」**不构成**它是真分叉的证据，只说明签名没放宽。
+  // │
+  // │  ① **真分叉（两侧各写一份业务逻辑，会漂）—— 7 条，是本模块剩下的全部靶心**
+  // │     `aggregateAdapters/postgresql*` 五个 + `postgresqlResourcePackageArtifacts.ts` +
+  // │     `composition/postgresqlResourcePackageCatalog.ts` 的 `mutationSessionFactory` 那一支。
+  // │     **孪生顶着 `legacy*` 前缀、且一半藏在别的目录里**，所以 T17 的成对判据与
+  // │     `rfc359-w5-provider-pair-conformance.test.ts` 的成对账本**同时看不见这一对**：
+  // │       · intent apply：PG 侧 `postgresqlIntentApplyResourceParticipants`(510) +
+  // │         `…ResourcePorts`(1591) + `…ArtifactOwners`(296) = 2397 行 ≈ 2099 行代码；
+  // │         legacy 侧 `legacyIntentApplyResourceParticipants`(1118) +
+  // │         `composition/legacyIntentApplyResourceDependencies`(143) + 注入的聚合写手 ≈ 1500 行
+  // │         （agent 450 / workflow 333 / workgroup 248 / skill 282 / mcp 75 / plugin 44 …）
+  // │         ⇒ **求和 ≈ 2761 行 ≈ 2219 行代码**。逐方法对位：
+  // │         `createPostgresqlIntentApplyResourceSession` ↔ `createLegacyIntentApplyResourceSession`、
+  // │         `createPostgresqlIntentApplyResourcePortFactory` ↔ `LegacyIntentApplyResourceDependencies`
+  // │         的六条注入臂、`create…SkillArtifactLifecycle`/`…PluginArtifactLifecycle` ↔ legacy 的
+  // │         inline `writeSkillTree` + 注入的 `stageManagedSkill`/`stageSkillVersion`/`installPlugin`。
+  // │         PG 独有：`…MutationPort` / `…ResourcePorts` / 两阶段 `commitSucceeded()` attempt 提升。
+  // │       · 资源包导入：PG 侧 `postgresqlResourcePackageMutationParticipants`(1405) +
+  // │         `…MutationArms`(1725) + `postgresqlResourcePackageArtifacts`(489) = 3619 行 ≈ 3069 行代码；
+  // │         legacy 侧 `legacyResourcePackageMutationParticipants`(1277) +
+  // │         `services/bundle/legacyResourcePackageMutationDependencies`(214) +
+  // │         `platform/persistence/sqlite/legacyResourcePackageCommit`(796) +
+  // │         `…BundleApply`(732) + `…BundleLower`(324) ⇒ **求和 ≈ 3343 行**（注入的 ~1500 行聚合
+  // │         写手与 intent apply **共用**，两行不要重复计）。逐方法对位：
+  // │         `commitPostgresql{Agent,Skill,Mcp,Plugin,Workflow,Workgroup}PackageMutation`
+  // │         ↔ legacy adapter 里同名的 `case '<kind>-create'/'-update'` 分支 → 注入的
+  // │         `commitAgentCreateInTx` / `commitSkillReadyInTx` / `insertWorkflowInTx` … ；
+  // │         `resolvePostgresqlCapabilityTemplatePackagePayload` ↔ `prepareTemplateFromBundle`。
+  // │         PG 独有：`PostgresqlResourcePackageTransactionReader`（~300 行事务内读层，legacy 用
+  // │         `getAclResourceOwnerInTx` 从组合根取）。
+  // │     **薄壳陷阱提醒**：`legacy*` 那两个文件**不是**转发壳（719 / 894 行真实现），它们通过
+  // │     依赖注入端口收下聚合写手；求和时要把 `composition/` 与 `services/bundle/` 里的注入记录
+  // │     一起算进去，否则会低估 legacy 侧一半体量、误判成「PG 侧凭空多写了一倍」。
+  // │     **处置建议（下一刀）**：体量 3000 : 2400，一刀合不完；按本波九次全中的经验先补
+  // │     `POST /api/resource-packages/commit` 的双引擎对拍——两侧 compose 方式已在 `main.ts:224-260`
+  // │     写全（SQLite 走 `composeSqliteResourcePackageProvider` +
+  // │     `createSqliteResourcePackageExecutionAdapter`；PG 走 `composePostgresqlResourcePackage
+  // │     Provider` + `createPostgresqlResourcePackageAtomicApplyOperations`），fork 点只在
+  // │     `services/resourcePackage/executionAdapter.ts` 的 `apply`，上游 parse/preview/closure/
+  // │     secretInputs/export 全是共用的中立代码。
+  // │
+  // │  ② **命名债（已经跑在中立句柄上，只是顶着旧名字；零行为风险）—— 4 条**
+  // │     · `composition/postgresqlClassicCatalogs.ts` —— 唯一的 PG token 是入参类型；四个被调方
+  // │       (`composeAgentCatalog` / `composeSkillCatalog` / `composeDatabaseWorkflowCatalog` /
+  // │       `createSkillContentAvailability`) 全吃 `ProviderNeutralDatabase` 或纯文件系统。
+  // │       注意它的「孪生」不是文件而是 `cli/start.ts` / `server.ts` 里**手写展开的同一串装配**。
+  // │     · `composition/postgresqlResourcePackageCatalog.ts` 的 `resources`/`reads`/`readSkillTree`
+  // │       三个字段与 `composition/resourcePackageOperations.ts:245` 的
+  // │       `composeSqliteResourcePackageProvider` **逐字相同**；`composePostgresqlResourcePackage
+  // │       Catalog` 本身是对中立 `composeResourcePackageOperations` 的纯转发。只有第四个字段
+  // │       `mutationSessionFactory` 属于上面的①。
+  // │     · `sqlitePackageResourceRows.ts` 的两个 async（`getSqlitePackageResourceRow` /
+  // │       `findSqliteBuiltinResource`）是中立 drizzle，换 PG 照跑；只有两个 `*InTx` 是真机制。
+  // │     · `sqliteResourceGrantRepository.ts` 的 `listWritableGrantedResourceIds` 早就吃
+  // │       `ProviderNeutralDatabase`。
+  // │     **改名不在本刀**：会牵动 5–7 份 architecture ledger，波尾单独一刀做。
+  // │
+  // │  ③ **机制本质不同（不该合，只该有对拍）—— 3 条**
+  // │     · `sqliteAclReadRepository.ts` —— 七个 async 读**已经是 `export … from
+  // │       './aclReadRepository'`**（W8 做的），结构上不可能漂；留下的五个 `*InTx` 吃 `DbTxSync`，
+  // │       PG 上没有这个形态。**它不是分叉，只是落位债。**
+  // │     · `sqliteResourcePackageMaintenance.ts` / `postgresqlResourcePackageMaintenance.ts` ——
+  // │       两套互不认识的落盘工件 JSON（sqlite 的 `{staged:{…}}` vs PG 的扁平 + receipt 复核），
+  // │       合一要数据迁移。已由 `rfc359-w5-artifact-format-portability.test.ts` 12 格矩阵 +
+  // │       W8/W9 两份双引擎对拍钉住，成对账本里也有名。
+  // │     ⚠️ **plan.md §W8 交接里点名的那个「活标本」已经不在了**：
+  // │       `sqliteResourcePackageMaintenance.ts` 读 `skillOperations` 漏 `await` 那处，W9 已经补上
+  // │       并在原地留了注释（今天在 :225-231）。别再按 plan 的描述去找它。
+  // │
+  // │  ④ **死代码 —— 已在本刀清掉 1 处**：`infrastructure/postgresql/repositorySupport.ts` 的
+  // │     `runPostgresqlResourceCatalogTransaction`（零生产调用方）。它同时占着 W5-T18 与 W5-T20
+  // │     两本账本各一行，随删除一并销账。另有 `sqliteResourceGrantRepository.ts` 的
+  // │     `listResourceGrantUserIds` / `listResourceGrants` 也是零调用方，但退役会改动
+  // │     `rfc349-provider-cutover.test.ts` 的导出账本（并发刀正在改那份），留给下一刀。
+  // └─
   'modules/resource-catalog/composition/postgresqlClassicCatalogs.ts',
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts',
@@ -85,12 +169,9 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/system-operations/infrastructure/postgresqlProviderRestore.ts',
   'modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets.ts',
   'modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts',
-  'modules/task-execution/composition/sqliteEffectObservers.ts',
-  'modules/task-execution/composition/sqliteGateContinuationEffect.ts',
   'modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
   'modules/task-execution/composition/sqliteTaskCatalogSources.ts',
   'modules/task-execution/composition/sqliteTaskExecutionContext.ts',
-  'modules/task-execution/composition/sqliteTerminalMaintenance.ts',
   'modules/task-execution/infrastructure/legacySqliteNodeRollback.ts',
   'modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts',
   'modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts',
@@ -110,13 +191,8 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
   'modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts',
   'modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts',
-  'modules/task-execution/infrastructure/sqliteCodeHostEffectObserver.ts',
-  'modules/task-execution/infrastructure/sqliteGateContinuationEffectStep.ts',
-  'modules/task-execution/infrastructure/sqliteLocalEffectObserver.ts',
   'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
-  'modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
-  'modules/task-execution/infrastructure/sqliteTaskAuthorization.ts',
   'modules/task-execution/infrastructure/sqliteTaskDecisionParticipant.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts',
   'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts',

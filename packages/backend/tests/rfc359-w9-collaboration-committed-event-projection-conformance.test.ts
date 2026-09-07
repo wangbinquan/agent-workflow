@@ -12,8 +12,8 @@
 // `/ws/tasks/:id` 上收到的那一帧。投错 = 评审页不弹出待审文档、澄清面板不刷新、
 // 「谁被重跑了」指向错的 node_run。判据因此写在帧上，不写在 SQL 上。
 //
-// **两处 NULL 排序陷阱**是本文件的重点（`platform/persistence/postgresqlNullOrdering.ts`
-// 实测：SQLite 把 NULL 当最小、PostgreSQL 当最大，两个默认正好相反）：
+// **两处 NULL 排序陷阱**是本文件的重点（能力矩阵的 `ascNullsFirst` / `descNullsLast` 实测：
+// SQLite 把 NULL 当最小、PostgreSQL 当最大，两个默认正好相反）：
 //   · 评审门打开时挑「哪一份待审文档」用 `item_index ASC`——`item_index IS NULL` 是
 //     RFC-079 的单文档判别位，SQLite 上它排最前；PG 默认会排到最后，于是**弹出的是另一份文档**；
 //   · 澄清决定回落到读模型时挑「最近一次下发」用 `dispatched_at DESC`——未下发行是 NULL，

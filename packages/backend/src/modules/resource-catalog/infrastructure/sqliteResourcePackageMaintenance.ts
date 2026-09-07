@@ -22,6 +22,7 @@ import {
   skillVersionAbs,
 } from './legacy/skillIdentityPaths'
 import { markSkillBootVerified, unmarkSkillBootVerified } from './legacy/skillBootVerify'
+import { assertCommittedApplyReceipt } from '../domain/resourcePackageApplyReceipt'
 import { resourcePackageSkillRecoveryDisposition } from '../domain/resourcePackageSkillRecovery'
 import { abandonOperation, finishOperation } from './legacy/skillOperations'
 
@@ -307,6 +308,13 @@ export function createSqliteResourcePackageApplyArtifactRecovery(input: {
 }): ResourcePackageApplyArtifactRecoveryPort {
   return Object.freeze({
     async rollForward(journal: ResourcePackageApplyJournalSnapshot) {
+      // RFC-359 W10（判据缺口 13a）：回放之前先过**信封门**——committed 就必须带回执，
+      // 且回执必须认领这一行。此前这里从头到尾不看回执，于是回执缺失 / 认领别的 journal 的
+      // 损坏行也照常 roll-forward 并计一次 `rolledForward`，而 PostgreSQL 侧同一行是拒收的。
+      // 判定与 PostgreSQL 侧共用中立的 `assertCommittedApplyReceipt`（纯函数，无引擎差异）；
+      // 只判信封不判载荷——`applied[]` 逐条两侧格式不同（`opId` vs `operationId`），
+      // 把 PostgreSQL 的载荷 schema 一起搬过来会让本引擎所有真实回执被 zod 拒收。
+      assertCommittedApplyReceipt(journal)
       await rollForwardArtifacts({
         db: input.db,
         appHome: input.appHome,

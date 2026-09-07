@@ -118,7 +118,18 @@ function nodeOracle(to: string): ReadonlySet<string> {
 }
 
 const TASK_WRITERS = new Set(['setTaskStatus', 'trySetTaskStatus'])
-const NODE_WRITERS = new Set(['setNodeRunStatus', 'setNodeRunStatusTx', 'trySetNodeRunStatus'])
+// RFC-359 W10 —— `setNodeRunStatusInTransaction` 是中立异步孪生
+// （`modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` 的 `setNodeRunStatusTx`）
+// 在调用方那边的惯用别名：`taskLifecycle.ts` / `services/task.ts` 都按这个名字 import，用来跟
+// `@/services/lifecycle` 上同名的 bun:sqlite 专属同步版区分。本扫描器按**被调用的标识符名**认站点，
+// 漏掉这个别名就等于每有一处事务中立化、语料就少一处（本条加进来之前 services/task.ts 的
+// 仓库准备回填站点正是这样从语料里消失的）。
+const NODE_WRITERS = new Set([
+  'setNodeRunStatus',
+  'setNodeRunStatusTx',
+  'setNodeRunStatusInTransaction',
+  'trySetNodeRunStatus',
+])
 
 interface CasSite {
   readonly file: string

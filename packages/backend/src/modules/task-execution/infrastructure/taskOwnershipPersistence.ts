@@ -12,10 +12,11 @@
 //
 // 同步事务面：`sqliteTaskOwnership.ts` 仍留着 bun:sqlite 专属的同步 store，但只为那些**签名
 // 钉死在 `DbTxSync` 上**的参与者（`withOwnedTaskTx` 的回调、`revokeExactTx`）与它们的调用方
-// （`services/task.ts`、`platform/persistence/sqlite/taskLifecycle.ts`、
-// `sqliteSourceTerminationParticipant.ts`、`taskDriverLifecycle.ts` 的同步认领）服务。
-// 端口这一侧不再经它——`releaseAfterStop` / `releaseRecovered` / `revokeOldDaemon` 已从同步 store
-// 删除，同步事务面因此从 5 处降到 3 处（账本 `rfc359-sync-transaction-highwater.test.ts`）。
+// （`services/task.ts` 的 `onTransitionTx`、`platform/persistence/sqlite/taskLifecycle.ts`、
+// `taskDriverLifecycle.ts` 的同步认领）服务。端口这一侧不再经它——`releaseAfterStop` /
+// `releaseRecovered` / `revokeOldDaemon` 已从同步 store 删除（W8），`revokeExact` 的事务包装也在
+// W10 去掉（单语句 CAS 本就原子），同步事务面因此 5 → 3 → 2
+// （账本 `rfc359-sync-transaction-highwater.test.ts`）。
 
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 
@@ -98,6 +99,55 @@ async function hasUnresolvedEffects(tx: DatabaseTransaction, taskId: string): Pr
     )
     .limit(1)
   return holds[0] !== undefined
+}
+
+/**
+ * RFC-359 W10 —— 撤销**精确** owner 元组的事务内参与者。
+ *
+ * 判据是一条 `UPDATE … WHERE (taskId + ownerId + 世代 + epoch + 期望 revision + state='claimed')
+ * RETURNING *`：单语句自带原子性，赢/输由 CAS 自己裁决，所以它既能独立跑（`revokeExact` 直接把
+ * 客户端当句柄传进来），也能被更大的原子在自己的事务里调用（源终止把「围栏 + 撤销 owner +
+ * intent 终态化 + node_run 取消」并成一笔）。合一前后者只有 bun:sqlite 专属的同步孪生
+ * `sqliteTaskOwnership.ts#revokeExactTx` 一条路，PostgreSQL 侧只能在
+ * `postgresqlSourceTerminationParticipant.ts` 里再抄一份 inline CAS。
+ */
+export async function revokeExactOwnerInTx(
+  tx: DatabaseTransaction,
+  input: {
+    readonly owner: Readonly<{
+      taskId: string
+      ownerId: string
+      daemonGeneration: string
+      epoch: number
+    }>
+    readonly expectedRevision: number
+    readonly now: number
+    readonly recoveryCode?: string | undefined
+  },
+): Promise<OwnerSnapshot> {
+  const row = (
+    await tx
+      .update(taskExecutionOwners)
+      .set({
+        state: 'revoked',
+        revision: input.expectedRevision + 1,
+        recoveryCode: input.recoveryCode ?? null,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(taskExecutionOwners.taskId, input.owner.taskId),
+          eq(taskExecutionOwners.ownerId, input.owner.ownerId),
+          eq(taskExecutionOwners.daemonGeneration, input.owner.daemonGeneration),
+          eq(taskExecutionOwners.epoch, input.owner.epoch),
+          eq(taskExecutionOwners.revision, input.expectedRevision),
+          eq(taskExecutionOwners.state, 'claimed'),
+        ),
+      )
+      .returning()
+  )[0]
+  if (row === undefined) throw stale(`task '${input.owner.taskId}' revoke lost`)
+  return snapshot(row)
 }
 
 /** provider 中立的归属 / CAS / 租约边界：原子迁移各有其名，库句柄与事务作用域都不外泄。 */
@@ -268,29 +318,8 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
   }
 
   async revokeExact(input: Parameters<TaskOwnershipPersistence['revokeExact']>[0]) {
-    const row = (
-      await this.db
-        .update(taskExecutionOwners)
-        .set({
-          state: 'revoked',
-          revision: input.expectedRevision + 1,
-          recoveryCode: input.recoveryCode ?? null,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.owner.taskId),
-            eq(taskExecutionOwners.ownerId, input.owner.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.owner.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.owner.epoch),
-            eq(taskExecutionOwners.revision, input.expectedRevision),
-            eq(taskExecutionOwners.state, 'claimed'),
-          ),
-        )
-        .returning()
-    )[0]
-    if (row === undefined) throw stale(`task '${input.owner.taskId}' revoke lost`)
-    return snapshot(row)
+    // 单语句 CAS：没有事务包装，客户端本身就是句柄（见 `revokeExactOwnerInTx` 头注释）。
+    return await revokeExactOwnerInTx(this.db, input)
   }
 
   async revokeOldDaemon(input: Parameters<TaskOwnershipPersistence['revokeOldDaemon']>[0]) {

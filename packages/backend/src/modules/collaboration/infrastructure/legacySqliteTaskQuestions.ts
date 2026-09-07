@@ -17,7 +17,7 @@
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
-import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
@@ -25,6 +25,7 @@ import { humanGateComposition } from '@/services/humanGateComposition'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import {
   databaseSessionFor,
   type DatabaseTransaction,
@@ -150,34 +151,52 @@ export async function reconcileRoundEntriesTx(
     graph: graphForRound(round),
   })
   const now = Date.now()
-  for (const d of desired) {
-    await tx
+  // RFC-359 W6-T25 —— 整轮的条目按批 upsert。这条路径是唯一挂在 **GET** `/api/tasks/:id/questions`
+  // 上的写放大（看板每次轮询都 lazy-reconcile 一遍每一轮），而 cross 模式的问题数无界。
+  //
+  // 两条必须逐字保住的语义：
+  //   · **同批重复冲突键**（一份 agent 输出里同一个 questionId 出现两次）——`onConflictDoUpdate`
+  //     在 PostgreSQL 上不许一条语句改同一行两次，逐行写的语义则是「后写覆盖先写」；`lastPerKey`
+  //     按冲突三元组保留最后一条，落库结果与逐行逐字相同。除 questionTitle 外，一轮里所有列都是
+  //     轮级常量（sourceKind / roleKind / defaultTargetNodeId / iteration / loopIter 由 round 决定），
+  //     所以「保留最后一条」与逐行的「首行插入 + 后续只改 set 列」在每一列上都同值。
+  //   · **插入顺序**——`listTaskQuestions` 的读没有 ORDER BY，看板靠插入序显示成 envelope 顺序；
+  //     `lastPerKey` 保留首次出现的相对顺序，单条多行 INSERT 按数组序写，两者合起来与逐行同序。
+  //     ULID 在压平**之后**才铸，免得给被丢弃的重复行白铸一个 id。
+  const rows = lastPerKey(
+    desired,
+    (d) => `${round.intermediaryNodeRunId}\u0000${d.questionId}\u0000${d.roleKind}`,
+  ).map((d) => ({
+    id: ulid(),
+    taskId: round.taskId,
+    originNodeRunId: round.intermediaryNodeRunId,
+    questionId: d.questionId,
+    questionTitle: d.questionTitle,
+    sourceKind: d.sourceKind,
+    roleKind: d.roleKind,
+    iteration: round.iteration,
+    loopIter: round.loopIter,
+    defaultTargetNodeId: d.defaultTargetNodeId,
+    sealedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }))
+  await insertInBatches(tx, taskQuestions, rows, (batch) =>
+    tx
       .insert(taskQuestions)
-      .values({
-        id: ulid(),
-        taskId: round.taskId,
-        originNodeRunId: round.intermediaryNodeRunId,
-        questionId: d.questionId,
-        questionTitle: d.questionTitle,
-        sourceKind: d.sourceKind,
-        roleKind: d.roleKind,
-        iteration: round.iteration,
-        loopIter: round.loopIter,
-        defaultTargetNodeId: d.defaultTargetNodeId,
-        sealedAt: null,
-        createdAt: now,
-        updatedAt: now,
-      })
+      .values([...batch])
       .onConflictDoUpdate({
         target: [taskQuestions.originNodeRunId, taskQuestions.questionId, taskQuestions.roleKind],
         // Only refresh the graph-derived snapshot; never touch the manual overlay.
+        // `excluded.*`（不是逐行字面量）：一条语句里每行要更新成**自己那行**的值。
         set: {
-          defaultTargetNodeId: d.defaultTargetNodeId,
-          questionTitle: d.questionTitle,
-          updatedAt: now,
+          defaultTargetNodeId: sql`excluded.${sql.identifier(taskQuestions.defaultTargetNodeId.name)}`,
+          questionTitle: sql`excluded.${sql.identifier(taskQuestions.questionTitle.name)}`,
+          updatedAt: sql`excluded.${sql.identifier(taskQuestions.updatedAt.name)}`,
         },
       })
-  }
+      .run(),
+  )
 }
 
 /** One clarify_round → upsert its desired handler entries (idempotent; preserves

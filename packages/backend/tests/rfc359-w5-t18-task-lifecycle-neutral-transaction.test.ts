@@ -1,7 +1,13 @@
-// RFC-359 W5-T18 —— 任务生命周期的三个事务 opener 从**裸驱动事务**改走中立会话
+// RFC-359 W5-T18 —— 任务生命周期的事务 opener 从**裸驱动事务**改走中立会话
 // （`postgresqlTaskLifecycleTransaction.ts`：`withPostgresqlSerializableTaskExecution` /
-// `withPostgresqlNodeRunAggregateTransaction` / `withPostgresqlTaskAggregateTransaction`
-// 各一处 `db.transaction(` → `databaseSessionFor(db).serializable / .transaction`）。
+// `withPostgresqlTaskAggregateTransaction` 各一处 `db.transaction(` →
+// `databaseSessionFor(db).serializable / .transaction`）。
+//
+// RFC-359 W11：本文件此前用的是同一族里的第三个 opener（node run 那一个），而**它零生产
+// 调用方**——node run 的写路径在 W4-B1 就已经合成一份并改走统一写事务原语，那个 opener 从此
+// 只被这份测试引用着（「测试在给死代码续命」）。它已随 W11 删除，本文件的每一条判据原样搬到
+// 仍在生产上跑的 `withPostgresqlTaskAggregateTransaction`：两者同走
+// `databaseSessionFor(db).transaction`，非 SERIALIZABLE，回滚与可重入的语义逐字相同。
 //
 // # 这份用例锁的是什么（别在重构时删掉）
 //
@@ -22,15 +28,17 @@
 // 隔离级别与行锁没有跟着变：`serializable` 走的正是本仓当年写在
 // `postgresqlTaskLifecycleTransaction.ts` 里的那段「SET TRANSACTION ISOLATION LEVEL
 // SERIALIZABLE + 40001/40P01 整笔重放」——中立原语的 `serializable` 注释显式记着它以那里为蓝本；
-// `withPostgresqlTaskAggregateTransaction` 事务头那条 `select … for update` 一字未动。
-// 这两条既有判据分别由 `tests/rfc349-task-aggregate-transaction.test.ts` 与
+// `withPostgresqlTaskAggregateTransaction` 事务头那条聚合根行锁的语义一字未动（W11 起它由
+// 能力矩阵的 `lockAggregateRoot` 渲染：PG 发 `for update`，SQLite no-op）。
+// 这两条既有判据分别由 `tests/rfc349-task-aggregate-transaction.test.ts`、
+// `tests/rfc359-w11-dialect-ledger-conformance.test.ts` 与
 // `tests/rfc349-postgresql-serialization-retry.test.ts` 继续把守，本文件不重复。
 //
 // # 变异表（2026-09-07 落地实测，`AW_TEST_POSTGRESQL_URL` 指向真库）
 //
 // | # | 变异 | 结果 |
 // |---|------|------|
-// | ① | `withPostgresqlNodeRunAggregateTransaction` 改回裸的 `db.transaction(body)` | **红 3 条**：PG 2（内层读不到外层未提交的写；外层回滚带不走内层的插入）、SQLite 1（体内抛错却留下了行——同步包装器在第一个 await 处就当场 COMMIT 了） |
+// | ① | 非 serializable 的那个 opener 改回裸的 `db.transaction(body)` | **红 3 条**：PG 2（内层读不到外层未提交的写；外层回滚带不走内层的插入）、SQLite 1（体内抛错却留下了行——同步包装器在第一个 await 处就当场 COMMIT 了） |
 // | ② | `withPostgresqlSerializableTaskExecution` 改回裸的 `db.transaction(…SET ISOLATION SERIALIZABLE…)` | **红 3 条**：PG 1（外层回滚带不走内层的插入）、SQLite 2（体内抛错留行 + 外层回滚带不走内层的插入） |
 //
 // 两条变异在两个引擎上都红，但**红的理由不同**：
@@ -54,8 +62,8 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
 import {
-  withPostgresqlNodeRunAggregateTransaction,
   withPostgresqlSerializableTaskExecution,
+  withPostgresqlTaskAggregateTransaction,
   type PostgresqlTaskExecutionTransaction,
 } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -66,9 +74,9 @@ import { describeEachProvider } from './helpers/eachProvider'
  * 这两个 opener 的形参类型仍写着 `PostgresqlDatabaseClient`——RFC-349 把它们定为
  * task-execution 的 PG 私有 atom，本次只换事务边界、不改契约。但边界换成中立会话之后，
  * **它们的事务语义已经不再依赖 PG 驱动**，于是同一份实现在 SQLite 客户端上也跑得动，
- * 这正是本文件要证的事。所以这里按客户端句柄的实际角色转型，而不是给生产代码放宽签名
- * （放宽会把带裸 `for update` 的 `withPostgresqlTaskAggregateTransaction` 一起放进 SQLite，
- * 那条确实只有 PG 跑得了）。
+ * 这正是本文件要证的事。所以这里按客户端句柄的实际角色转型，而不是给生产代码放宽签名。
+ * （W11 起 `withPostgresqlTaskAggregateTransaction` 的聚合根行锁也走能力矩阵，于是它同样
+ * 在两个引擎上都跑得动——此前它裸写 `for update`，在 SQLite 上是语法错误。）
  */
 const asClient = (db: ProviderNeutralDatabase): PostgresqlDatabaseClient =>
   db as unknown as PostgresqlDatabaseClient
@@ -96,6 +104,12 @@ async function rowCount(db: ProviderNeutralDatabase, id: string): Promise<number
 
 class Boom extends Error {}
 
+/**
+ * 聚合根行锁的锁定键。这些用例验的是**事务边界**（回滚 / 可重入），不是行锁本身，所以
+ * 故意用一个不存在的任务 id：锁语句照发（PG 上匹配 0 行、不取锁），事务语义不受影响。
+ */
+const TASK_ID = 't_rfc359_w5_t18_absent'
+
 describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：失败回滚', (harness) => {
   test('serializable opener：体内抛错 ⇒ 那笔写一格不留', async () => {
     const db = harness.db
@@ -111,12 +125,12 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：失
     expect(await rowCount(db, id), '体内抛错却留下了行 ⇒ 这笔事务没有回滚').toBe(0)
   })
 
-  test('node-run opener：体内抛错 ⇒ 那笔写一格不留', async () => {
+  test('聚合根 opener：体内抛错 ⇒ 那笔写一格不留', async () => {
     const db = harness.db
     const id = `cr_${ulid()}`
 
     await expect(
-      withPostgresqlNodeRunAggregateTransaction(asClient(db), async (tx) => {
+      withPostgresqlTaskAggregateTransaction(asClient(db), TASK_ID, async (tx) => {
         await insertRow(tx, id)
         throw new Boom('body failed')
       }),
@@ -129,10 +143,14 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：失
     const db = harness.db
     const id = `cr_${ulid()}`
 
-    const returned = await withPostgresqlNodeRunAggregateTransaction(asClient(db), async (tx) => {
-      await insertRow(tx, id)
-      return 'committed'
-    })
+    const returned = await withPostgresqlTaskAggregateTransaction(
+      asClient(db),
+      TASK_ID,
+      async (tx) => {
+        await insertRow(tx, id)
+        return 'committed'
+      },
+    )
 
     expect(returned).toBe('committed')
     expect(await rowCount(db, id)).toBe(1)
@@ -147,7 +165,7 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：可
     const seen = await databaseSessionFor(db).transaction(async (outer) => {
       await insertRow(outer, outerId)
       // 另开一条连接的话，这次读在 READ COMMITTED 下看不见 outerId（PG 裸事务的旧形态）。
-      return await withPostgresqlNodeRunAggregateTransaction(asClient(db), async (inner) => {
+      return await withPostgresqlTaskAggregateTransaction(asClient(db), TASK_ID, async (inner) => {
         const rows = await inner
           .select({ id: cachedRepos.id })
           .from(cachedRepos)
@@ -159,13 +177,13 @@ describeEachProvider('RFC-359 W5-T18 —— 任务生命周期事务边界：可
     expect(seen, '内层没看见外层未提交的写 ⇒ 它跑在另一笔事务里，不是复用').toBe(1)
   })
 
-  test('外层回滚把内层 opener 写下的行一起带走（node-run opener）', async () => {
+  test('外层回滚把内层 opener 写下的行一起带走（聚合根 opener）', async () => {
     const db = harness.db
     const innerId = `cr_${ulid()}`
 
     await expect(
       databaseSessionFor(db).transaction(async () => {
-        await withPostgresqlNodeRunAggregateTransaction(asClient(db), async (inner) => {
+        await withPostgresqlTaskAggregateTransaction(asClient(db), TASK_ID, async (inner) => {
           await insertRow(inner, innerId)
         })
         throw new Boom('outer failed')

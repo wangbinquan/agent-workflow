@@ -33,6 +33,7 @@ import {
   type FrozenWorkgroupGroup,
 } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   assertTriggerPreflight,
@@ -723,7 +724,14 @@ async function launchPreparedChild(
       await tx
         .update(tasks)
         .set({
-          branchStartedAt: sql`GREATEST(COALESCE(${tasks.branchStartedAt}, 0), ${occurredAt})`,
+          // RFC-359 W11：「只前进不后退」的回填走能力矩阵——PG 渲染 `greatest(a, b)`，
+          // SQLite 渲染两参数标量 `max(a, b)`。可空侧必须自己 COALESCE：SQLite 的多参数
+          // max 对 NULL 传染（任一参数 NULL ⇒ 结果 NULL），PG 的 GREATEST 忽略 NULL，
+          // 这一格分歧矩阵没有抹平（`rfc359-w11-dialect-ledger-conformance` 双引擎钉死）。
+          branchStartedAt: engineOf(tx).greatest(
+            sql`coalesce(${tasks.branchStartedAt}, 0)`,
+            sql`${occurredAt}`,
+          ),
         })
         .where(eq(tasks.id, row.id))
       cursor = row.parentTaskId

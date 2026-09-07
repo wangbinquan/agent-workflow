@@ -301,12 +301,8 @@ import {
   createSqliteCapabilityTemplatePersistence,
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeSqliteLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
-import {
-  createDevelopmentActivityWorkerBinding,
-  type DevelopmentActivityWorkerBinding,
-} from '@/modules/development-automation/composition/activityOperations'
+import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import type {
-  DevelopmentActivityOperations,
   DevelopmentConfigOperations,
   DevelopmentMissionOperations,
 } from '@/modules/development-automation/public/operations'
@@ -939,8 +935,6 @@ interface RepositoryBootstrap {
 type SqliteComposedAppDeps = RuntimeComposedAppDeps &
   RepositoryBootstrap & {
     readonly developmentAutomation: DevelopmentAutomationModule
-    readonly developmentActivityOperations: DevelopmentActivityOperations
-    readonly developmentActivityWorker: DevelopmentActivityWorkerBinding
     readonly developmentAdapterAclIdentity: ReturnType<
       typeof composeDevelopmentAdapterConfigOperationsFor
     >['resourceAclIdentity']
@@ -1726,16 +1720,14 @@ function composeFallbackDevelopmentAutomation(
   // RFC-345：Agent 查询由 bootstrap 从模块的目录查询面提供，本文件不再经 services/agent 门面。
   agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
 ): DevelopmentAutomationModule {
-  const automationRef: { current: DevelopmentAutomationModule | null } = { current: null }
+  // RFC-359 W11：终态观察者要回调 `automation.drive`，而 automation 的两个 launcher 又要这个
+  // 观察者。环打在**词法作用域**上，不再打在一个可空的盒子上：`automation` 是同一作用域里的
+  // `const`，箭头只在运行期取值。这样「忘了回填」在类型层不可表达——删掉下面那行
+  // `const automation = …`，tsc 立刻报「Cannot find name 'automation'」，而不是留下一个
+  // 编译通过、跑起来每次都 reject 的组合根。
   const terminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db: deps.db,
-    drive: (missionId) => {
-      const automation = automationRef.current
-      if (automation === null) {
-        return Promise.reject(new Error('development-automation-not-composed'))
-      }
-      return automation.drive(missionId)
-    },
+    drive: (missionId) => automation.drive(missionId),
   })
   const automation = composeDevelopmentAutomation({
     db: deps.db,
@@ -1778,7 +1770,6 @@ function composeFallbackDevelopmentAutomation(
     }),
     approvalGateway: composeSqliteApprovalGatewayRunner(deps.db),
   })
-  automationRef.current = automation
   return automation
 }
 
@@ -1814,6 +1805,13 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
   const memoryInjectionQueries =
     deps.memoryOperations?.injectionQueries ?? composeSqliteMemoryInjectionQueries(deps.db)
   const taskExecutionPersistence = createSqliteTaskExecutionPersistence(deps.db)
+  // RFC-359 W11：读模型先定下来，再决定要不要装配 runtime。此前是反过来的——先装 runtime、
+  // 再从 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 取，于是类型上多出
+  // 一个 `undefined` 分支要兜一句 throw，而那个分支**根本不可达**（runtime 只在
+  // `deps.taskExecutionReadModels === undefined` 时才不装配，两个条件 tsc 关联不起来）。
+  // `composeTaskExecutionRuntime` 原样回传 `readModels`（`composition/runtimeAssembly.ts`），
+  // 所以先取值再交进去与原来同值，且类型上不再有空档。
+  const taskExecutionReadModels = deps.taskExecutionReadModels ?? taskExecutionPersistence.reads
   const taskExecutionRuntime =
     deps.schedulerDriver !== undefined && deps.taskExecutionReadModels !== undefined
       ? undefined
@@ -1839,15 +1837,11 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
             identityAccess,
             repositoryPublicationTransport: repositoryBootstrap.repositoryPublicationTransport,
           }),
-          readModels: deps.taskExecutionReadModels ?? taskExecutionPersistence.reads,
+          readModels: taskExecutionReadModels,
         })
   const schedulerDriver = requireSchedulerDriver(
     deps.schedulerDriver ?? taskExecutionRuntime?.schedulerDriver,
   )
-  const taskExecutionReadModels = deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels
-  if (taskExecutionReadModels === undefined) {
-    throw new Error('task-execution-read-models-not-composed')
-  }
   const systemOperations =
     deps.systemOperations ??
     deps.providerCore?.systemOperations ??
@@ -1860,19 +1854,17 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     })
   const maintenanceDisk =
     deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)
-  let collaborationContext = deps.collaborationContext
   const memoryOperations =
     deps.memoryOperations ??
     composeSqliteMemoryOperations({
       db: deps.db,
       injectionQueries: memoryInjectionQueries,
       reviewedArtifacts: {
-        read: async (finalPath) => {
-          if (collaborationContext === undefined) {
-            throw new Error('collaboration-command-context-not-composed')
-          }
-          return await readCommittedReviewArtifactBody(collaborationContext, finalPath)
-        },
+        // RFC-359 W11：记忆要读已评审产物、评审上下文要记忆的蒸馏命令面——环打在词法作用域上。
+        // `collaborationContext` 是同一作用域里的 `const`（下面几行），闭包只在运行期取值，
+        // 于是这里既没有可空槽也没有「还没装配」的分支；忘了装配 = tsc 报「找不到名字」。
+        read: async (finalPath) =>
+          await readCommittedReviewArtifactBody(collaborationContext, finalPath),
       },
       // RFC-359 W4-D4：目录一份实现、两个 provider 共用；scope 访问 participant 由 resource-catalog 装配。
       catalogBinding: {
@@ -1888,14 +1880,18 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       contexts: identityAccess.contexts,
       authorization: composeResourceScopeAccessParticipant(),
     })
-  collaborationContext ??= createCollaborationCommandContext({
-    db: deps.db,
-    appHome,
-    taskExecutionReadModels,
-    reviewDecisions: createReviewDecisionCommand({ db: deps.db, appHome }),
-    questionDispatches: createQuestionDispatchCommand(deps.db),
-    clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
-  })
+  // 显式标注是这个环的**约束点**：`memoryOperations` 的闭包引用它、它又吃
+  // `memoryOperations.distillCommands`，推断转不出来（TS7022），标注把契约写死在类型层。
+  const collaborationContext: CollaborationCommandContext =
+    deps.collaborationContext ??
+    createCollaborationCommandContext({
+      db: deps.db,
+      appHome,
+      taskExecutionReadModels,
+      reviewDecisions: createReviewDecisionCommand({ db: deps.db, appHome }),
+      questionDispatches: createQuestionDispatchCommand(deps.db),
+      clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
+    })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? {
@@ -1950,16 +1946,15 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     developmentAdapterConfigOperations,
     composeSqliteDevelopmentConfigResourceAccess(runtimeDeps.db),
   )
-  const developmentActivityWorker = createDevelopmentActivityWorkerBinding()
-  let agentCatalogRef: AgentCatalogModule | null = null
   const developmentAutomation =
     runtimeDeps.developmentAutomation ??
     composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome, {
+      // RFC-359 W11：动作执行只在运行期查代理，目录是同一作用域里的 `const agentCatalog`
+      // （下面几十行）。词法闭包代替了「先留空、装配完再回填」的槽。
       get: async (id) => {
-        if (agentCatalogRef === null) throw new Error('agent-catalog-not-composed')
         const identity = await admitDaemonIdentity(identityAccess)
         if (identity === null) throw new Error('agent-action-authority-not-admitted')
-        return agentCatalogRef.queries.get(identity.actor, { id })
+        return agentCatalog.queries.get(identity.actor, { id })
       },
     })
   const developmentMissionOperations = composeDevelopmentMissionOperations({
@@ -1977,23 +1972,21 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
     // 拿到的是**同一个**实例；MCP 不再另建 route table。
     developmentAutomation,
-    developmentActivityOperations: developmentActivityWorker.operations,
-    developmentActivityWorker,
     developmentAdapterAclIdentity: developmentAdapterConfigOperations.resourceAclIdentity,
     developmentConfigOperations,
     developmentMissionOperations,
   }
 
-  let mcpCatalogRef: McpCatalogModule | null = null
   const userRuntimeTests =
     effectiveDeps.mcpRuntimeTests ??
     getMcpRuntimeTestService({
       ...composeMcpRuntimeTestProvider(effectiveDeps.db),
+      // RFC-359 W11：运行时测试要查 MCP、MCP 目录的删除 / 对账又要运行时测试——环打在词法
+      // 作用域上，`mcpCatalog` 是同一作用域里的 `const`（下面几十行），两边都只在运行期取值。
       async loadMcp(mcpId) {
-        if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
         const identity = await admitDaemonIdentity(identityAccess)
         if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
-        return mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
+        return mcpCatalog.queries.get(identity.actor, { id: mcpId })
       },
       loadRuntime: (name) => effectiveDeps.runtimeRegistry.getRuntime(name),
       configPath: effectiveDeps.configPath,
@@ -2026,7 +2019,6 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     importQueries: composeAgentImportQueries(effectiveDeps.db),
     resourceIntegrityQueries: agentResourceIntegrityQueries,
   })
-  agentCatalogRef = agentCatalog
   const mcpProbeStore = composeMcpProbeStore(effectiveDeps.db)
   const mcpCatalog = composeMcpCatalog({
     db: effectiveDeps.db,
@@ -2046,7 +2038,6 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       reconcileDurableIntents: () => userRuntimeTests.reconcileDurableIntents(),
     }),
   })
-  mcpCatalogRef = mcpCatalog
   const pluginCatalog = composePluginCatalog({
     db: effectiveDeps.db,
     resourceCatalog: providerResourceCatalog,
@@ -2525,7 +2516,6 @@ function composeSqliteApiRouteMounts(
   if (digitalEmployee.runtime === null) {
     throw new Error('task catalog requires the digital employee runtime')
   }
-  deps.developmentActivityWorker.bind(digitalEmployee.runtime.worker)
   const taskCatalog = composeTaskCatalog({
     sources: [
       // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
@@ -2534,7 +2524,12 @@ function composeSqliteApiRouteMounts(
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })
-  const developmentActivityOperations = deps.developmentActivityOperations
+  // RFC-359 W11：worker 是必填实参，就地装配。此前是 `composeSqliteAppDeps` 先造一个空槽
+  // `operations`、经 deps 传过来，再在这个函数里补一句 `.bind(digitalEmployee.runtime.worker)`
+  // ——绕一圈只为把「已经能被调用但还没装配」的窗口拉长跨两个函数。
+  const developmentActivityOperations = composeDevelopmentActivityOperations(
+    digitalEmployee.runtime.worker,
+  )
   const developmentConfigOperations = deps.developmentConfigOperations
   const developmentMissionOperations = deps.developmentMissionOperations
   const databaseMigration = deps.databaseMigration
