@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1801,
+    "backendFiles": 1802,
     "frontendFiles": 622,
-    "legacyFiles": 607,
+    "legacyFiles": 608,
     "moduleFiles": 1194,
-    "productionFiles": 2578,
+    "productionFiles": 2579,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25022
+    "symbolsIncludingFileRoots": 25034
   },
   "entries": [
     {
@@ -114618,10 +114618,46 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts#defaultContinuationSlotKey",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "defaultContinuationSlotKey",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts#generateNodeRunEnvelopeNonce",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "generateNodeRunEnvelopeNonce",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts#NodeRunLineageAnchor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NodeRunLineageAnchor",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts#nodeRunLineageColumns",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "nodeRunLineageColumns",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -136576,6 +136612,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts#workgroupNameExpression",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "workgroupNameExpression",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/index.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/index.ts#$file",
@@ -144615,6 +144663,54 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "id": "owner:packages/backend/src/platform/persistence/batchInsert.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "id": "owner:packages/backend/src/platform/persistence/batchInsert.ts#columnCountOf",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "columnCountOf",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "id": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "insertInBatches",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "id": "owner:packages/backend/src/platform/persistence/batchInsert.ts#lastPerKey",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "lastPerKey",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/capabilities.ts",
       "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#$file",
       "removeAfterWave": "W9",
@@ -144632,6 +144728,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "anyMessageMatches",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#batchInsertMaxRows",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "batchInsertMaxRows",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -144734,6 +144842,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#jsonMemberSqlLiterals",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "jsonMemberSqlLiterals",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/capabilities.ts",
       "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#LIKE_ESCAPE",
@@ -144772,6 +144892,18 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#POSTGRESQL_MAX_BIND_PARAMETERS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "POSTGRESQL_MAX_BIND_PARAMETERS",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
       "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#postgresqlSqlState",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -144788,6 +144920,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "postgresqlUniqueViolationConstraint",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#SQLITE_MAX_BIND_PARAMETERS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "SQLITE_MAX_BIND_PARAMETERS",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -300963,5 +301107,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e"
+  "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284"
 }

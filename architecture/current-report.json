@@ -2,12 +2,12 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 4807,
+    "architectureExceptions": 4814,
     "backgroundJobs": 341,
-    "crossContextImports": 5351,
+    "crossContextImports": 5358,
     "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25022,
+    "moduleSymbolOwners": 25034,
     "mutationEntrypoints": 1761,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 980,
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1801,
+    "backendProductionFiles": 1802,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -127,8 +127,8 @@
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#84",
-        "line": 84,
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#108",
+        "line": 108,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -137,8 +137,8 @@
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#78",
-        "line": 78,
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#102",
+        "line": 102,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e"
+  "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284"
 }

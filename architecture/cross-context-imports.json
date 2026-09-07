@@ -21644,6 +21644,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:444093deaa68fb4c4c3a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -22371,6 +22388,23 @@
       "toPath": "packages/backend/src/modules/memory/public/catalog.ts",
       "toSymbol": "MemoryScopeAuthority",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:45e60c4722273b4dcb3d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches",
+      "toPath": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toSymbol": "insertInBatches",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -43657,6 +43691,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:88d1dc3a93b74a06f7cd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file",
@@ -46204,6 +46255,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/runtime.ts#publishCommittedEventsAfterCommit",
       "toPath": "packages/backend/src/platform/events/committed/runtime.ts",
       "toSymbol": "publishCommittedEventsAfterCommit",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:90eea3e97359a02bfee5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches",
+      "toPath": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toSymbol": "insertInBatches",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -51305,6 +51373,23 @@
       "toPath": "packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts",
       "toSymbol": "composeTaskIdleTimeoutOperations",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a0fbae2e10db27add7f8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#lastPerKey",
+      "toPath": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toSymbol": "lastPerKey",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -57850,6 +57935,23 @@
       "toPath": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts",
       "toSymbol": "TaskRecoveryOperations",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/infrastructure/eventStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b73d00cc7f1100589e74",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches",
+      "toPath": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toSymbol": "insertInBatches",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -80768,6 +80870,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fce9a0f02723b31b4d6e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "engineOf",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#$file",
@@ -81721,9 +81840,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4807,
+    "architectureExceptions": 4814,
     "implementationSccs": 0,
-    "observedEdges": 5351,
+    "observedEdges": 5358,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -104197,6 +104316,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#$file",
+      "id": "import:444093deaa68fb4c4c3a",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "tasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -104930,6 +105065,22 @@
       "toContext": "memory",
       "toFile": "packages/backend/src/modules/memory/public/catalog.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/catalog.ts#MemoryScopeAuthority"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#$file",
+      "id": "import:45e60c4722273b4dcb3d",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/batchInsert",
+      "syntax": "static-import",
+      "targetSymbol": "insertInBatches",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches"
     },
     {
       "edgeKind": "value",
@@ -127412,6 +127563,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseMigrationCoordinator.ts#DatabaseMigrationCoordinatorPort"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#$file",
+      "id": "import:88d1dc3a93b74a06f7cd",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "tasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
@@ -130098,6 +130265,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/events/committed/runtime.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/runtime.ts#publishCommittedEventsAfterCommit"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#$file",
+      "id": "import:90eea3e97359a02bfee5",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/batchInsert",
+      "syntax": "static-import",
+      "targetSymbol": "insertInBatches",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches"
     },
     {
       "edgeKind": "value",
@@ -135426,6 +135609,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskIdleTimeout.ts#composeTaskIdleTimeoutOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#$file",
+      "id": "import:a0fbae2e10db27add7f8",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/batchInsert",
+      "syntax": "static-import",
+      "targetSymbol": "lastPerKey",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#lastPerKey"
     },
     {
       "edgeKind": "type",
@@ -142466,6 +142665,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkgroupCatalogDetail"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/infrastructure/eventStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventStore.ts#$file",
+      "id": "import:b73d00cc7f1100589e74",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/batchInsert",
+      "syntax": "static-import",
+      "targetSymbol": "insertInBatches",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/batchInsert.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/batchInsert.ts#insertInBatches"
     },
     {
       "edgeKind": "value",
@@ -166340,6 +166555,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts#$file",
+      "id": "import:fce9a0f02723b31b4d6e",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "engineOf",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
@@ -167885,7 +168116,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e",
+  "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

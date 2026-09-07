@@ -489,7 +489,7 @@
       "id": "rfc359-w5-sqlite-only-protections",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts",
       "symbol": "SQLITE_ONLY_PROTECTIONS",
-      "baseline": 10,
+      "baseline": 9,
       "why": "RFC-359 W5-T19g：写在迁移 SQL 里、却没进 drizzle 声明的约束——**PostgreSQL 上根本不存在**，且两侧测试都能全绿。"
     },
     {
@@ -766,6 +766,13 @@
       "why": "RFC-359 W8：事务作用域内插入唯一键表、且所在文件没有唯一键归一的站点。判据的预言力集中在 **READ COMMITTED opener + 读前无锁**那一档——SERIALIZABLE 下「读同一张表再插它」由 SIREAD 谓词锁兜住（实测 20/20），真正危险的是「读 A 表算序号、插 B 表」。账本因此额外输出 opener / openerSerializes / serializedBeforeRead 三个诊断字段（不进判据），红了能一眼看出落在哪一档。"
     },
     {
+      "id": "rfc359-w6-node-run-insert-lineage-completeness",
+      "file": "packages/backend/tests/architecture/rfc359-w6-node-run-insert-lineage-completeness.test.ts",
+      "symbol": "NODE_RUN_INSERT_SITES",
+      "baseline": 2,
+      "why": "RFC-359 W6：`insert(nodeRuns)` 的站点必须显式写 `continuationSlotKey` / `lineageSlotPathJson` 两列。它接管的是被退役的 SQLite 迁移 0210 补齐触发器——安全网写在守卫里对**两个引擎同时生效**，而触发器天然只能属于一个方言。与 W7 的 `insert(tasks)` 三列守卫同形。条目只许降（降=站点合并）。"
+    },
+    {
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
@@ -804,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5351,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5358,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W6：新增中立设施带来的边——`platform/persistence/batchInsert.ts`（批量写原语，两个引擎共用）与 node_run 血缘派生的调用边。5351→5358。这是**加共享代码**引起的投影增长，不是新耦合：这些边全部指向新建的中立模块，方向与 RFC-294 一致（去重后由一处提供，而不是各 provider 各写一份）。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -825,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4807,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4814,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W6：同上，新增中立设施与新守卫文件进入投影面。4807→4814。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -860,12 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25022,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25034,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W6：新增中立设施的导出符号（`insertInBatches` / `lastPerKey` / `nodeRunLineageColumns` / `jsonMemberText` 等）进入符号归属投影。25022→25034。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e",
+    "sourceDigest": "sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -878,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1a099379c37040c801947bd5f25738da2518510e",
-    "contentDigest": "sha256:4f55caed7d8f8db50b634a2fec632c643c3393ba2050d04103b9d28bcd6afd9a",
+    "currentSnapshotSha": "f2657dd005d7de5c63f70dea2a6568f2552b5b0d",
+    "contentDigest": "sha256:a1e3d612acb92d306156e5aa595e6a38c706479ac2937232de267f28a05354cd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

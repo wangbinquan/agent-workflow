@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f27255111bcaea2748626196ca0f8071c20c817f407bd7e842ffd4dfeed7a34e`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1b01ff54eb5543094f0c5818a58137edcdc393fdf6870534b499568504f7a284`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,7 +10,7 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1801 |
+| backend production TS 文件 | 1802 |
 | `services/` 文件 | 323 |
 | `modules/**` 文件 / 非空 context | 1194 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 4807 |
+| `architectureExceptions` | 4814 |
 | `backgroundJobs` | 341 |
-| `crossContextImports` | 5351 |
+| `crossContextImports` | 5358 |
 | `facades` | 323 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25022 |
+| `moduleSymbolOwners` | 25034 |
 | `mutationEntrypoints` | 1761 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 980 |
@@ -142,7 +142,7 @@
 | targetContext | 数量 |
 | --- | --- |
 | task-execution | 193 |
-| platform | 144 |
+| platform | 145 |
 | identity-access | 50 |
 | runtime-management | 44 |
 | resource-catalog | 43 |
@@ -200,7 +200,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3178 |
+| legacy-outbound | 3185 |
 | legacy-inbound | 1448 |
 | infrastructure-external | 283 |
 | offered-consumption | 157 |
@@ -215,7 +215,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3178 |
+| legacy-outbound | 3185 |
 | legacy-inbound | 1448 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 82 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2438 |
+| W9 | 2445 |
 | W4-E1 | 817 |
 | W4-C | 411 |
 | W4-E0 | 220 |
