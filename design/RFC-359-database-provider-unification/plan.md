@@ -1116,6 +1116,43 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   然后按文件逐个人工过，全程开着 `bun run lint:promises`（这道门已常设，见上一节）。
   在此之前不要再尝试第四次机械转换——三次都停在同一堵墙上，堵的位置也一次比一次靠后。
 
+  ### D28b 第四次：换一种切法，第一刀落地（2026-09-07，已提交 c074e806d）
+
+  前三次都把 D28b 当成「一次性拔掉整条同步事务面」，于是每次撞在同一堵墙上。这次换了切法，
+  第一刀当天绿着上了主干。**变的不是工具，是找缝的判据**：
+
+  - 前三次按**文件**切（账本 30 个 / 实际 61 个引用 `DbTxSync` 的文件）。一个文件里但凡有一处
+    同步调用点，整份都要转 async，async 于是从那里向所有调用方扩散——级联面就是那约 3700 行。
+  - 这次按**「外层函数是不是已经 async」**切。同步网关 `sqliteOwnedTaskMutation` 的四个导出
+    只有 5 处调用点，而这 5 处的外层函数（`setTaskStatus` / `transitionMergeState` /
+    `dispatchReviewNodeUnlocked`）**本来就是 async**——改完补个 `await` 就完了，**零级联**。
+
+  照这个判据重看剩下的面，它就不再是「一件事」，而是一串**互不牵连的小刀**：一处同步调用点，
+  只要外层函数已经 async、且体内用到的内层 helper 已有中立 async 版本，它就能单独迁、单独测、
+  单独提交。本刀用到的三个内层 helper（`transitionNodeRunStatusTx` /
+  `createNodeRunMintParticipantInTx` / `transitionHumanGateTask`）**全部早已存在**——W1/W4 前几波
+  已经把中立侧建好了，剩下的只是把调用点接过去。这也解释了前三次为什么越做越大：机械 pass 不区分
+  「已经 async 的外层」和「要连带转 async 的外层」，把两类混在一起做，后者的级联淹掉了前者的收益。
+
+  **落地结果**（c074e806d）：`sqliteOwnedTaskMutation.ts` 整份退役；同步事务面账本 30 → 29 个文件
+  （调用点 81 → 77）；rfc349 provider 具名依赖 46 → 44；`public/` 少两条点名 provider 的债。
+  行为上补了一处分叉：旧同步网关在「无执行上下文」分支里既不开事务也不设围栏、直接裸写，新路径
+  按统一规则走无主围栏——PG 侧一直是有围栏的那侧，合一以它为准（`rfc359-w4-d28b-owned-mutation-gateway.test.ts`
+  双引擎各 2 条锁住，变异验证：摘掉 `fenceTaskWrite` 后正是围栏那 2 条红）。
+
+  **下一刀怎么选**（同一判据，逐处筛）：
+
+  1. `grep` 出还在用 `dbTxSync` / `withOwnedTaskTx` 的调用点；
+  2. 每一处先看**外层函数是不是已经 async**——是就进候选；不是就跳过，它属于要连带转 async 的那
+     一类，留到最后统一处理；
+  3. 再看体内的内层 helper 有没有中立 async 版本（`nodeRunLifecycleTransition` /
+     `nodeRunMintParticipant` / `humanGateTaskTransition` / `ownedTaskExecution` 里大多已经有）；
+  4. 两条都满足就是一刀：改完跑 `bun run lint:promises` + 双引擎跑一遍 + 把账本改小，单独提交。
+
+  **仍然成立**：不要再做第四次全量机械转换。账本口径确实少算一半以上（30 个调用者 vs 61 个
+  `DbTxSync` 引用者），但**按这种切法它不再是拦路石**——每一刀只动自己那几处；口径问题留到最后
+  那批「外层函数还不是 async」的文件时一并处理。
+
   ### 剩余工作的真实形状：一件事，不是 N 件（2026-09-06 量化）
 
   上面两条勘察（D23b 卡在 bundle apply 的同步大事务、剩余 task-execution 对卡在 `withOwnedTaskTx`）
