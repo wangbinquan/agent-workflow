@@ -5442,8 +5442,8 @@
   },
   "denominator": {
     "ambientWiring": 493,
-    "disabled": 10,
-    "entries": 352,
+    "disabled": 9,
+    "entries": 351,
     "executionLocal": 50,
     "longRunning": 77,
     "managed": 11,
@@ -11162,9 +11162,9 @@
         "db",
         "runtime"
       ],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
+      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
       "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#PostgresqlRuntimeRegistryPersistence",
+      "id": "background:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
       "kind": "disabled",
       "lifecycle": {
         "health": false,
@@ -11176,34 +11176,9 @@
       },
       "lifetime": "disabled",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#PostgresqlRuntimeRegistryPersistence",
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
       "phase": "unknown",
-      "symbol": "PostgresqlRuntimeRegistryPersistence",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "config",
-        "db",
-        "runtime"
-      ],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "disabled",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "phase": "unknown",
-      "symbol": "SqliteRuntimeRegistryPersistence",
+      "symbol": "DrizzleRuntimeRegistryPersistence",
       "targetContext": "platform"
     },
     {
@@ -13215,5 +13190,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22"
+  "sourceDigest": "sha256:3ec25851ef3d24c2a03fba13a752a46130b909fc3e3133dca18cfd3351da67bb"
 }

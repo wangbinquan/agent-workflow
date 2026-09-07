@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1794,
+    "entries": 1790,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -18770,30 +18770,6 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTestsInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTestsInTx",
-      "symbol": "transitionInheritedRuntimeTestsInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionMcpRuntimeTestsInTx",
       "missingControls": [
         "audit",
@@ -18827,30 +18803,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionOwnerRuntimeTestsInTx",
       "symbol": "transitionOwnerRuntimeTestsInTx",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionRuntimeTestsInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionRuntimeTestsInTx",
-      "symbol": "transitionRuntimeTestsInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -20032,6 +19984,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTests",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTests",
+      "symbol": "transitionInheritedRuntimeTests",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -20072,6 +20048,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionMcpRuntimeTests",
       "symbol": "transitionMcpRuntimeTests",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionRuntimeTests",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionRuntimeTests",
+      "symbol": "transitionRuntimeTests",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -34567,9 +34567,9 @@
         "fenceOrOcc": true,
         "transaction": false
       },
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
+      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#runtimePatch",
+      "id": "mutation:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#runtimePatch",
       "missingControls": [
         "audit",
         "authority",
@@ -34577,104 +34577,7 @@
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#runtimePatch",
-      "symbol": "runtimePatch",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#RuntimeTestSession",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#RuntimeTestSession",
-      "symbol": "RuntimeTestSession",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transitionRuntimeTest",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transitionRuntimeTest",
-      "symbol": "transitionRuntimeTest",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transitionRuntimeTests",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transitionRuntimeTests",
-      "symbol": "transitionRuntimeTests",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#runtimePatch",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#runtimePatch",
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#runtimePatch",
       "symbol": "runtimePatch",
       "targetContext": "platform",
       "targetLayer": "runtime-registry"
@@ -42837,7 +42740,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22",
+  "sourceDigest": "sha256:3ec25851ef3d24c2a03fba13a752a46130b909fc3e3133dca18cfd3351da67bb",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

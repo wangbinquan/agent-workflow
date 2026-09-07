@@ -815,8 +815,8 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:68acda66b63b01cb26bb",
-        "import:c4af1982c02edef63165"
+        "import:1c19a3a5862adb0e556c",
+        "import:7a83a37ad18c39a03f4a"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -8566,15 +8566,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22",
+    "sourceDigest": "sha256:3ec25851ef3d24c2a03fba13a752a46130b909fc3e3133dca18cfd3351da67bb",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "c074e806d865932a62abc7692c3ed6cee977d8c9",
-    "contentDigest": "sha256:be8734ae4a4c834f01c354aba0070308d48f37da73b17aaa7035f90385e1801b",
+    "currentSnapshotSha": "0560998df2158c92b07e0120c83d812a43f8f984",
+    "contentDigest": "sha256:0f85b3f8b4023c5b1eaaaffab57b19da39f902543d8da46d547310de6f2754f8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

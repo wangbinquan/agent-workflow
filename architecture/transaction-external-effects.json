@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 37,
-    "transactionCallbacks": 315
+    "coLocatedCandidates": 36,
+    "transactionCallbacks": 309
   },
   "entries": [
     {
@@ -3715,101 +3715,27 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
+      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transaction:120",
-      "line": 120,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#PostgresqlRuntimeRegistryPersistence",
+      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#transaction:117",
+      "line": 117,
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
       "status": "clear",
-      "symbol": "PostgresqlRuntimeRegistryPersistence",
+      "symbol": "DrizzleRuntimeRegistryPersistence",
       "targetContext": "platform",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
+      "file": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transaction:185",
-      "line": 185,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#PostgresqlRuntimeRegistryPersistence",
+      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#transaction:52",
+      "line": 52,
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
       "status": "clear",
-      "symbol": "PostgresqlRuntimeRegistryPersistence",
+      "symbol": "DrizzleRuntimeRegistryPersistence",
       "targetContext": "platform",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#transaction:21",
-      "line": 21,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#serializable",
-      "status": "clear",
-      "symbol": "serializable",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#dbTxSync:104",
-      "line": 104,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "status": "clear",
-      "symbol": "SqliteRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#dbTxSync:126",
-      "line": 126,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "status": "clear",
-      "symbol": "SqliteRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#dbTxSync:156",
-      "line": 156,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "status": "co-located-risk",
-      "symbol": "SqliteRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#dbTxSync:206",
-      "line": 206,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "status": "clear",
-      "symbol": "SqliteRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#dbTxSync:39",
-      "line": 39,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#SqliteRuntimeRegistryPersistence",
-      "status": "clear",
-      "symbol": "SqliteRuntimeRegistryPersistence",
-      "targetContext": "platform",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -3870,7 +3796,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22",
+  "sourceDigest": "sha256:3ec25851ef3d24c2a03fba13a752a46130b909fc3e3133dca18cfd3351da67bb",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

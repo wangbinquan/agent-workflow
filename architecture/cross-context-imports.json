@@ -2978,23 +2978,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:08a26bff9ba2fbecfab7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#runtimes",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "runtimes",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -9366,6 +9349,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskQuestions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
+      "fromPath": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1c19a3a5862adb0e556c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionRuntimeTests",
+      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "toSymbol": "transitionRuntimeTests",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -33901,23 +33901,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#$file",
-      "fromPath": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:68acda66b63b01cb26bb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionRuntimeTestsInTx",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "toSymbol": "transitionRuntimeTestsInTx",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
       "fromPath": "packages/backend/src/services/humanGateComposition.ts",
       "fromSymbol": "$file",
@@ -40084,6 +40067,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkgroupOperationContext",
       "toPath": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "toSymbol": "WorkgroupOperationContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
+      "fromPath": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7a83a37ad18c39a03f4a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTests",
+      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "toSymbol": "transitionInheritedRuntimeTests",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -59962,6 +59962,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b9981898c77fe6ccbd4d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#runtimes",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "runtimes",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -63715,23 +63732,6 @@
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#$file",
-      "fromPath": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c4af1982c02edef63165",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTestsInTx",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "toSymbol": "transitionInheritedRuntimeTestsInTx",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -86417,22 +86417,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#$file",
-      "id": "import:08a26bff9ba2fbecfab7",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "runtimes",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#runtimes"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#$file",
@@ -93166,6 +93150,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskQuestions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
+      "id": "import:1c19a3a5862adb0e556c",
+      "owner": "platform",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions",
+      "syntax": "static-import",
+      "targetSymbol": "transitionRuntimeTests",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionRuntimeTests"
     },
     {
       "edgeKind": "value",
@@ -119474,22 +119474,6 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#$file",
-      "id": "import:68acda66b63b01cb26bb",
-      "owner": "platform",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
-      "syntax": "static-import",
-      "targetSymbol": "transitionRuntimeTestsInTx",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionRuntimeTestsInTx"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/humanGateComposition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
       "id": "import:68be674a077204e3e011",
@@ -125806,6 +125790,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkgroupOperationContext"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence.ts#$file",
+      "id": "import:7a83a37ad18c39a03f4a",
+      "owner": "platform",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions",
+      "syntax": "static-import",
+      "targetSymbol": "transitionInheritedRuntimeTests",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTests"
     },
     {
       "edgeKind": "value",
@@ -147009,6 +147009,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:b9981898c77fe6ccbd4d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "runtimes",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#runtimes"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -150894,22 +150910,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
       "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence.ts#$file",
-      "id": "import:c4af1982c02edef63165",
-      "owner": "platform",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
-      "syntax": "static-import",
-      "targetSymbol": "transitionInheritedRuntimeTestsInTx",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionInheritedRuntimeTestsInTx"
     },
     {
       "edgeKind": "type",
@@ -172233,7 +172233,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f04942a32bb1152c76858827b9ad61af4afde02134deb87f3def3b0c4a4e6f22",
+  "sourceDigest": "sha256:3ec25851ef3d24c2a03fba13a752a46130b909fc3e3133dca18cfd3351da67bb",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
