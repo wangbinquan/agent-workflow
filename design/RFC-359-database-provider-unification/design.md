@@ -257,18 +257,48 @@ UPDATE、SSI 抛 40001 触发**整段重放**；**救它的是重放，不是锁
 SQLite 上前置检查恒命中、返回域内 4xx；PG 上两个用户并发时前置检查双双落空、唯一键抛 23505，
 用户拿到 **500**。这正是本 RFC 要消灭的「一个引擎好一个引擎不好」。
 
-#### 10.1.1 唯一键未归一普查（W8）
+#### 10.1.1 唯一键未归一普查（W8）—— 含一次**判据方向被实测推翻**
 
-判据：`insert(<带 uniqueIndex / 复合主键的表>)`，在事务作用域内，排除 `onConflictDo*`，且所在文件
-**没有**唯一键归一（`classifyError` / `uniqueViolationTarget`）。全量 AST 扫描结果：带唯一约束的表
-125 张；符合上述插入点 180 处；其中无归一 77 处；其中**同作用域先读同一张表**（即「PG 500 /
-SQLite 4xx」的确切形状）**23 处**。
+**先记结论：本节初稿列的 Tier A 四处，逐处实测全部不可达，四条判断错法各不相同。**
+每处都用确定性并发（`Promise.allSettled` 打同一聚合，不靠墙钟）在两个引擎上跑够轮数，
+并用变异反证「真正兜住它的是什么」：
 
-Tier A（前置检查本就返回域内 4xx，两个普通用户即可撞上）4 处：`repositoryWorkspaceStore.ts`
-建组 / 改名（409 `repo-group-name-conflict`）、`taskContinuationAdmission.ts`（`task-continuation-conflict`）、
-`humanGateOpenParticipant.ts`（`HumanGateOperationError`）、`legacy/skillVersion.ts` 版本号自增。
-Tier B 为被进程内锁 / 单写者挡着的同形状，逐条记在守卫账本里，其中
-`platform/events/committed/` 的 `reserveAggregateSequence` 是事件骨干、优先复核。
+| 站点 | 兜住它的机制 |
+| --- | --- |
+| `repositoryWorkspaceStore.ts` 建组 | 读**之前**就有 `engineOf(tx).advisoryLock(tx, 'source-control:repository-groups')`。opener 是 `.transaction()` = READ COMMITTED，**每条语句取新快照**，输家等到锁后那条 SELECT 就看得见赢家 |
+| 同文件改名 | 根本不是本类形状——走 `update` 不是 `insert`，普查判据不覆盖；何况同一把 advisory lock + 全图 `expectedGraphVersions` CAS 双重挡着 |
+| `taskContinuationAdmission.ts` | opener 是 `.serializable()`；PG 的 SSI 先给输家 **40001**，而 `serializable()` 的重试单位是**整笔事务**，重跑取新快照才读得到活跃 intent。**救它的是重放，不是锁**（与 §10.1 勘误同一条机制） |
+| `humanGateOpenParticipant.ts` | 第二笔 open 在上游 `humanGateOperationJournal.beginTx` 就被挡下（先 `lockAggregateRoot(tasks)` 再查活跃操作） |
+| `legacy/skillVersion.ts` | 上游 `stageSkillVersion → beginOperation → acquireOpLocks` 先抢 `skill_operation_locks` 的排他行，PK 冲突**已经**归一成 409——初稿写的「归一在另一条路径上」是错的，它就在同一条路径的**上游** |
+
+**由此得到一条比原判据锋利得多的规律（实测，20/20 反证）**：
+
+> **SERIALIZABLE 能不能兜住「先查存在、再插唯一键」，取决于两笔事务有没有读过它们要插的那张表。**
+> 那次读留下的 **SIREAD 谓词锁**才让插入成为 SSI 可检测的读写冲突。把前置读换成读**另一张**表，
+> 同一段代码在 PG 上 **20/20 全红**。
+
+**推论（判据方向被推翻）**：普查判据「同作用域先读同一张表 → 插同一张表」**恰好筛出的是
+SERIALIZABLE 下安全的那一支**。真正危险的是「读 A 表算序号、插 B 表」——
+`mcpRuntimeTestPersistence.appendEvent` 正是这种，而它**不满足**该判据。
+所以这条守卫的实际预言力集中在 **READ COMMITTED opener + 读前无锁**那一档，
+账本里为此额外输出 `opener` / `openerSerializes` / `serializedBeforeRead` 三个**诊断**字段
+（不进判据），红了能一眼看出落在哪一档。
+
+**Tier B 事件骨干：安全。** `append.ts` 的 `reserveAggregateSequence` 在读 heads **之前**取
+per-aggregate advisory lock（`producer:family:kind:id`）；全新聚合上两条并发追加，
+两个引擎 × 两种 opener 都拿到 seq 1/2。`sqliteStore.ts` 那份句柄类型是 `DbTxSync`，PG 上不执行。
+变异实证：删掉那把 advisory lock，READ COMMITTED 下 PG 25/25 红，**SERIALIZABLE 下仍绿**（SSI 兜住）。
+
+**普查数字以守卫实算为准（初稿四个数全部不对）**：带唯一约束的表 **124**（不是 125）；
+事务内 insert 点（排除 `onConflictDo*`）**141**（不是 180）；其中无归一 **105**（不是 77）；
+其中同作用域先读同表 **40 处 / 21 个文件**（不是 23）。账本
+`UNNORMALIZED_UNIQUE_INSERT_DEBT` 起始 = 21 行 / 40 处，逐条 why + removeWhen，
+并注明四类假阳性来源：归一/串行化住在调用方、锁在别的函数里、单写者播种、
+同步事务面 `dbTxSync`（PG 上不可达）。
+
+**这一节留作教训**：初稿是从两处**真实**缺陷（`mcpRuntimeTestPersistence` 的 `appendEvent` /
+`create`，已修）反推出的判据，反推错了方向——**从个例归纳判据时，要先问「这个例子属于哪一档」，
+再问「这一档的边界是什么」**。少了后一问，判据会稳稳地筛出安全的那一支。
 
 ### 10.2 引擎优势必须真的用上
 

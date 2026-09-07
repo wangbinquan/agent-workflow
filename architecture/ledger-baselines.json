@@ -714,10 +714,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4838,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W7 收尾：**不是真涨，是上一提的基线被测低了 9**。上一提（a630ef625）的普查跑在共享工作树上，当时别的 session 已经删掉了一批 provider 适配器文件但尚未提交，于是那次普查按「删掉之后」的树计数，写进账本的 4829 低于该 commit 的真值。本次按 `docs/dev-gotchas.md` §「重采 architecture/ 别在共享工作树上跑」的姿势，在 `git archive HEAD` 的只读导出上重采得 4838。**已实测证实**：对 a630ef625 自己做一次同样的干净重采，得到的也是 4838——即 4838 是这两个 commit 共同的真值，4829 是污染读数。本许可是一次性的，下一提必须删除。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",

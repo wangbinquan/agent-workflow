@@ -1617,6 +1617,47 @@ push CI 的四个 ubuntu 分片**早就带真 PostgreSQL**（W5-T21 已落），
    这与 W5-T19g 的 `SQLITE_ONLY_PROTECTIONS` 账本是同一件事的两次独立发现，
    佐证那 149 条不是纸面差异。
 
+## 5d. W8 —— 一条必须挂在所有 `pre_snapshot` 类判据上的折扣（2026-09-07 实测）
+
+W8 有三条分叉判据建立在**节点重试时按 `pre_snapshot` 回滚工作树**这条路径上
+（retry 的快照丢失升级、syncWorkflow 的 canceled 档回滚、canceled wrapper 的原地复活）。
+它们的代码路径是活的、判据也是对的，但**"用户可见"要打一个折扣，必须写明**：
+
+**`pre_snapshot` / `pre_snapshot_repos_json` 今天没有任何写入方。** RFC-130 删掉了写入——
+`modules/task-execution/composition/nodeMechanics.ts:4106-4111` 明写「the RFC-092/098
+pre-snapshot … is GONE … columns + rollbackNodeRunWorktrees stay in the schema as
+defense-in-depth but are no longer written here」。全 `src` 扫过一遍，其余 `preSnapshot:`
+站点全是**继承传递**（`row.preSnapshot` / `latest.preSnapshot`），没有一处算出新 sha 写进去。
+
+因此这三条的「同一操作两个引擎在磁盘上留下不同内容」**只对 pre-RFC-130 的存量行成立**
+（或手工种的行）。抬齐仍然要做——路径是活的，哪天恢复写入就会立刻生效，而且判据本身正确；
+但**不要把它们当成"当前生产里正在发生的用户可见故障"**去汇报。
+
+**一般规律**：本 RFC 反复用「用户看到什么」作为判据，这很对；但「用户看到什么」的前提是
+**这条路径当前真的会被走到**。判定一处分叉的用户可见后果时，要顺带确认它依赖的字段 / 状态
+**今天还有没有生产写入方**——否则会把「存量数据上的差异」讲成「现在就在坏」。
+
+### W8 发现的一条 schema 级分叉（未修，须与 T23 同批在安静工作树上做）
+
+`node_runs.continuation_slot_key` / `lineage_slot_path_json` 的**补齐触发器只存在于 SQLite 的
+迁移 0210 里，PostgreSQL 上没有**。后果：绕开生产工厂直插 `node_runs` 行时，两个引擎的
+`readLineage` 结果不同——SQLite 有触发器兜底，PG 得到 null。
+
+当前生产路径**够不着**（工厂本就显式写这两列，W8 的对拍已改成显式播种），所以不是正在发生的
+故障；但它是一条**真正的能力不对等**：SQLite 有一层安全网，PG 没有。哪天有人新写一条忘了写这两列
+的插入路径，SQLite 上被兜住、PG 上静默产出 null 行——正是本 RFC 要消灭的形态。
+
+**为什么压后**：修它要动 `db/schema.ts` / 迁移，会开一个全仓 PostgreSQL 迁移历史漂移窗口
+（`postgresql-migration-history-drift`，期间**所有** PG 泳道同时假红）。与 W6-T23（JSONB + GIN）
+同性质，必须在**没有其他刀在跑**的安静工作树上一次做完并立刻
+`bun run db:rfc349-postgresql-schema` 重生成历史。
+
+**两条出路，实施时选一条**（都要先写双引擎判据）：①把触发器纳入 PG 的 DDL 投影，两侧都有安全网；
+②把触发器从 SQLite 删掉，改为「插入点必须显式写这两列」的架构守卫兜底——与
+`rfc359-w7-task-insert-lineage-completeness` 已经在做的事同形，那条守卫钉的正是
+`insert(tasks)` 的三个 lineage 列。②更符合「面向代码最合理」：安全网写在守卫里对两个引擎同时生效，
+而触发器天然只能属于一个方言。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；
