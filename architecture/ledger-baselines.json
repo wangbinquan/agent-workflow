@@ -798,10 +798,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 342,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-359 W9：新增的中立设施（`platform/persistence/portableApplicationAssets.ts` 等）与合一后重排的装配点进入 ambient wiring 投影，341→342。这是**加共享代码**引起的投影增长，不是新的后台作业——本波净删生产代码，新增的都是两个引擎共用的一份实现。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1b02bb557fc624a1ee48eb34e72cc76fdad58026",
-    "contentDigest": "sha256:6aec88a5e29b59acdfee7945ab079dd765c2348283dcf9bd681e039dbdb36fab",
+    "currentSnapshotSha": "1b5e743395848d1913bbdb0c4c31f88311b049d4",
+    "contentDigest": "sha256:9ff275e34ce6e79d9d0a8aeca36632861d502f7f0d9f8c789b26c5c9806155fb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
