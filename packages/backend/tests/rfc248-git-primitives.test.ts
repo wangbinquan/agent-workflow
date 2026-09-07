@@ -48,6 +48,15 @@ function makeRepo(name: string, files: Record<string, string>): string {
   return dir
 }
 
+// **每条用例都显式给了 60s 预算**（2026-09-07 实撞）：这些用例的 `makeRepo` 要连续 spawn
+// 好几次 `git`（init / config ×2 / add / commit），bun 默认的 5000ms 在**空载**机器上够、
+// 在 CI 的 macOS runner 上不够——实测 `git config user.name Test` 在 5010ms 被 SIGTERM 掐断，
+// 报出来的却是「用例超时」，看上去像 `findTrackedPathUnderMounts` 的逻辑坏了。
+//
+// 与本仓 `rfc199-workflow-validation-context-ratchet` 的 120s 同一类处置：**凡是 spawn 外部进程
+// 或扫全源码树的用例，都要显式给足预算**。窄预算在这种用例上迟早假红，而假红会掩盖真红。
+// 见 `docs/dev-gotchas.md` §「『扫全源码树』的守卫用例要显式给超时」。
+
 describe('applySparseSubdir（D17）', () => {
   test('non-cone checkout contains only the selected subtree', async () => {
     const repo = makeRepo('sparse', {
@@ -61,7 +70,7 @@ describe('applySparseSubdir（D17）', () => {
     expect(existsSync(join(wt, 'guides/a.md'))).toBe(true)
     expect(existsSync(join(wt, 'api'))).toBe(false)
     expect(existsSync(join(wt, 'README.md'))).toBe(false)
-  })
+  }, 60_000)
 })
 
 describe('branchName 覆盖（D14）', () => {
@@ -86,7 +95,7 @@ describe('branchName 覆盖（D14）', () => {
     })
     expect(git(wt1, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe(`agent-workflow/${taskId}`)
     expect(git(wt2, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe(`agent-workflow/${taskId}-2`)
-  })
+  }, 60_000)
 })
 
 describe('findTrackedPathUnderMounts（设计门二轮 H8）', () => {
@@ -110,11 +119,11 @@ describe('findTrackedPathUnderMounts（设计门二轮 H8）', () => {
     })
     expect(existsSync(join(wt, 'hidden'))).toBe(false)
     expect(await findTrackedPathUnderMounts(repo, 'HEAD', ['hidden/dep'])).not.toBeNull()
-  })
+  }, 60_000)
 
   test('returns null for empty or segment-neighbor mounts', async () => {
     const repo = makeRepo('clean', { 'vendor/xy/f': 'f' })
     expect(await findTrackedPathUnderMounts(repo, 'HEAD', [])).toBeNull()
     expect(await findTrackedPathUnderMounts(repo, 'HEAD', ['vendor/x'])).toBeNull()
-  })
+  }, 60_000)
 })

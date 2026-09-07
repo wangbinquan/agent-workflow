@@ -308,10 +308,7 @@
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
       "baseline": 43,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。",
-      "allowGrowth": {
-        "why": "RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。"
-      }
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。 RFC-359 W4-D6a：development adapter 的 ACL 改走 resource-catalog 的 foreign-owner 中立路径，`services/resourceAcl.ts → integration/composition/developmentAdapterConfigOperations.ts` 这条兼容边随之删除，47 → 46。 RFC-359 W4-D16（2026-09-05）：Mcp 聚合合一，services/mcpRuntimeTestTransitions 门面与 sqliteMcpRepository 两条 edge 退役，45→43。 RFC-359 W4-D19c（2026-09-06）：回合引擎合一后 `services/workgroup/engine.ts` 门面生产零消费者、整文件删除，那条边随之出账，43→42。 RFC-359 W8-A：子任务启动的输入门补到 PG 侧，42→43。`postgresqlChildExecutionLaunchOperations.ts` 成为 `services/workflowLaunchInputs.ts` 的第 5 个消费者，用的是与既有四条**同一个符号**（`assertWorkflowLaunchInputs`）与**同一个 remove-owner**（`REMOVE_OWNERS.taskExecutionResources`），随 RFC-294 W4-E1 cutover 一起退役。resource-catalog 没有暴露该符号的 public 缝，兼容门面是今天唯一正当的门；零成本的替代只有「把 PG 侧缺少输入校验这个缺口留着不补」——那正是本 RFC 要消灭的东西。"
     },
     {
       "id": "rfc348-teaching-frontend-allowlist",
@@ -675,10 +672,7 @@
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "NON_STATUS_UPDATE_TASKS_SNAPSHOT",
       "baseline": 16,
-      "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。",
-      "allowGrowth": {
-        "why": "RFC-359 W8：PG 侧 `postgresqlTaskRouteOperations.ts` 新增一处非 status 写点，15→16。它是 delete 路径沿父链重算 `branch_started_at` 的那笔 UPDATE——SQLite 侧 `services/taskDelete.ts` 一直有、PG 侧一直没有，导致父任务的物化排序列永久停在已删子树的时间戳上。补齐它就必然多一个非 status 写点；这是抬齐两个引擎的代价，不是新债。"
-      }
+      "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。 RFC-359 W8：PG 侧 `postgresqlTaskRouteOperations.ts` 新增一处非 status 写点，15→16。它是 delete 路径沿父链重算 `branch_started_at` 的那笔 UPDATE——SQLite 侧 `services/taskDelete.ts` 一直有、PG 侧一直没有，导致父任务的物化排序列永久停在已删子树的时间戳上。补齐它就必然多一个非 status 写点；这是抬齐两个引擎的代价，不是新债。"
     },
     {
       "id": "rfc310-composition-consumers",
@@ -885,7 +879,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "1a099379c37040c801947bd5f25738da2518510e",
-    "contentDigest": "sha256:d7b5c40210e27ee112c13931d690856d0a93b56f556ad7a8ab4ae666f3386c14",
+    "contentDigest": "sha256:4f55caed7d8f8db50b634a2fec632c643c3393ba2050d04103b9d28bcd6afd9a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

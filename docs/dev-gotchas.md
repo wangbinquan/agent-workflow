@@ -1447,10 +1447,10 @@ insert … values (session_id, seq + 1)                     -- 改写
 
 于是这一类要分两档看，处置不同：
 
-| 档 | 形状 | SERIALIZABLE 下 | 处置 |
-| --- | --- | --- | --- |
-| A | 读**同一张**表 → 插同一张表 | **安全**（SSI 抛 40001 → 整笔重放） | 不用管；opener 是 `.transaction()`（READ COMMITTED）时才危险 |
-| B | 读 **A 表**算序号 → 插 **B 表** | **不安全**，SSI 看不见 | 必须显式：读前 advisory lock，或唯一键有界重试 |
+| 档  | 形状                            | SERIALIZABLE 下                     | 处置                                                         |
+| --- | ------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
+| A   | 读**同一张**表 → 插同一张表     | **安全**（SSI 抛 40001 → 整笔重放） | 不用管；opener 是 `.transaction()`（READ COMMITTED）时才危险 |
+| B   | 读 **A 表**算序号 → 插 **B 表** | **不安全**，SSI 看不见              | 必须显式：读前 advisory lock，或唯一键有界重试               |
 
 **最反直觉的一点**：按「同作用域先读同表」去筛，筛出来的**恰好是安全的那一支**。
 真正危险的 B 档（`mcpRuntimeTestPersistence.appendEvent` 就是）**不满足**这条判据。
@@ -1505,6 +1505,7 @@ CI 上（macOS shard 4/4）真的超了。abort 在 `fan` 这行 node_run 插入
 按那张药方照做的结果是：改完删掉 9 条，`depcheck` 当场红 9 条未列违规。
 
 **规矩**：拿到一条 `removeWhen` 就去执行之前，先花几分钟**验证这张药方**——
+
 - 能模拟就模拟（图论类的债写个探针复现基线，再看「按药方改」之后基线动没动）；
 - 不能模拟就**做最小真改**再跑真门（改一行 import 跑一次 `depcheck`，比读三小时代码可靠）；
 - **验完不成立就停手报告，不要将就着做一半**——半截的结构改动加上被删的账本条目，
@@ -1588,6 +1589,7 @@ set -o pipefail                       # 让管道取第一个非零
    **3 个变异全部假绿**，直到人工 `git diff` 才发现文件头多了两段代码。
 
 **规矩**：
+
 - 变异 harness **禁止空串锚点**——删除要用「把整行替换成一行注释」或替换成一个独一无二的哨兵，
   别用 `""`；
 - 还原**用读到的原文整体写回**（先把原始内容存到变量/临时文件，还原时整体覆盖），
@@ -1605,11 +1607,11 @@ set -o pipefail                       # 让管道取第一个非零
 
 三条红全部是**读源码的静态守卫**，而它们**不住在 `tests/architecture/`**：
 
-| 守卫 | 位置 | 红因 |
-| --- | --- | --- |
+| 守卫                               | 位置        | 红因                                                      |
+| ---------------------------------- | ----------- | --------------------------------------------------------- |
 | `rfc326-tx-primitives-equivalence` | `tests/` 根 | 委托目标改名（同步孪生 → 中立异步孪生），字面文本判据过期 |
-| `retry-cascade-kind-matrix` | `tests/` 根 | 一笔事务挪上统一原语，代理看不见了，附带计数 12 → 11 |
-| `rfc349-provider-completeness` | `tests/` 根 | 两处 provider 分叉已收敛，账本条目失效 |
+| `retry-cascade-kind-matrix`        | `tests/` 根 | 一笔事务挪上统一原语，代理看不见了，附带计数 12 → 11      |
+| `rfc349-provider-completeness`     | `tests/` 根 | 两处 provider 分叉已收敛，账本条目失效                    |
 
 **成因**：`tests/architecture/` 装的是「架构级」守卫（模块边界、账本高水位、清单投影），
 而**按符号名 / 字面文本钉住某个函数形状**的源码锁是随各 RFC 落在 `tests/` 根下的，
@@ -1623,6 +1625,33 @@ set -o pipefail                       # 让管道取第一个非零
 **另一半教训**：这三条红**没有一条是产品回归**，全是判据跟着实现走。所以它们该修的是**判据**，
 不是代码；修的时候要同时问「这条判据的**意图**还成立吗」——本次三条的意图都还成立，
 只是钉法过期了。顺手把「意图 vs 钉法」写进注释，下一个人就不用重新判断一次。
+
+## 从 `drizzle-orm/sqlite-core` 取的表工具在 PostgreSQL 投影上会**抛**（RFC-359 T25 实撞，2026-09-07）
+
+`db/schema.ts` 的导出在 PostgreSQL 侧是**投影出来的 PgTable**（`db/providerSchema.ts` 把同一份声明
+机械投影成 pgTable）。于是任何从 `drizzle-orm/sqlite-core` 取来、又去碰表对象的工具，
+在 PG 上都会炸——实撞的是 `getTableConfig`：PgTable 上 `SQLiteTable.Symbol.InlineForeignKeys`
+是 `undefined`，当场 `TypeError`。
+
+**它按构造逃避 SQLite 单跑**：SQLite 侧 9 pass / 0 fail 全绿，PG 侧 5 pass / 4 fail。
+
+**规矩**：拿表对象做元编程（列清单、列数、外键、索引）时，只用**方言无关**的入口
+（`import { getTableColumns } from 'drizzle-orm'`），不要用 `drizzle-orm/sqlite-core` 的同名工具。
+这与本文件的「`'$provider' in db` 恒为 false」是同一族：**凡是从 `sqlite-core` 里拿的东西，
+在 provider 中立的代码里都是 provider-盲的**。
+
+## 一条 `ON CONFLICT DO UPDATE` 里出现**重复冲突目标**：PG 抛错，SQLite 静默接受（同上）
+
+把 n 行合并进一条 upsert 时，如果这 n 行里有两行落在同一个冲突键上：
+
+- **PostgreSQL**：直接抛（同一条语句不能对同一行 update 两次）；
+- **SQLite**：**静默接受**，结果取其中一行。
+
+逐行 upsert 时这个差异**完全隐形**（每行一条语句，谁也不会撞谁），一旦改成批量就会在 PG 上暴。
+处置是在进 SQL 之前按冲突键去重、保留最后一条（本仓的 `lastPerKey`），语义与逐行「后写覆盖」一致。
+
+**归纳**：把「逐行」改成「批量」不只是性能改动，它会把**同一批内部的行间关系**第一次暴露给数据库——
+重复键、顺序依赖、部分失败的回滚范围，三样都要重新想一遍，而且要在**两个引擎**上各想一遍。
 
 ## git / 多人协作（共享工作树）
 
@@ -4686,7 +4715,13 @@ macOS runner 跑 3800+ 后端用例时负载很重，`pumpUntil exhausted` / 60s
 **怎么写对**：四个被元守卫两向钉死的字段不要估，用 census 自己的函数实算，否则填错照样红：
 
 ```ts
-import { isCorpusScanner, corpusFloor, assertsAbsence, negativeFixtureAssertions, sourceUnit } from './tests/architecture/census'
+import {
+  isCorpusScanner,
+  corpusFloor,
+  assertsAbsence,
+  negativeFixtureAssertions,
+  sourceUnit,
+} from './tests/architecture/census'
 const unit = sourceUnit(relPath, text)
 // corpusScanner / minCorpusFiles / assertsAbsence / negativeFixture 全部由它们算
 ```
@@ -4772,8 +4807,7 @@ db.all(q)[0] = {"id":"u1","username":"alice"}
 ```
 
 （`bun:sqlite` + `drizzle-orm/bun-sqlite`，`q = sql\`select id as "id", name as "username" from t\``。）
-PostgreSQL 侧两种写法都返回具名对象——`postgresqlDatabaseClient.ts` 的代理把 `all` / `get`
-**双双**改写成 `rawRows(...)`，它的 `get` 就是 `rawRows(...)[0]`。
+PostgreSQL 侧两种写法都返回具名对象——`postgresqlDatabaseClient.ts`的代理把`all`/`get`**双双**改写成`rawRows(...)`，它的 `get`就是`rawRows(...)[0]`。
 
 **所以合一时正典是 `all(query)[0]`，不是 `get(query)`**，哪怕这一对的其余部分都以 PG 为底本。
 反过来选会让 SQLite 上**每个具名字段变成 `undefined`**，而且不抛错——消费 `AS "alias"` 的
@@ -4909,6 +4943,7 @@ wait
 而单独跑那些文件是全绿的。
 
 **规矩**：
+
 - 要并行跑 PG lane，**必须一个进程一个 PostgreSQL 实例**（CI 就是这么做的：4 个分片 = 4 个
   独立服务容器），不是一个实例开多个库；
 - 一个实例上只能**串行**跑；
@@ -4917,3 +4952,41 @@ wait
 
 **判据**：失败集中在 `[postgresql]` 分支，错因是 `a beforeEach/afterEach hook timed out`
 或与 `pg_advisory_lock` 相关，而同一批文件单独跑全绿。
+
+## PostgreSQL 会**常量折叠**掉 `CASE` 的保护：`from (select ? as v)` 里的表达式在计划期就求值（2026-09-07 实测）
+
+PostgreSQL 文档说「用 `CASE` 而不是 `AND`/`OR` 来控制求值顺序」。这条建议本身对，但它有一个
+文档里也写着、实际很容易忘的例外：**被折叠成常量的子表达式不受 `CASE` 保护**。
+
+写一段「合法性判据守住一次危险转换」的 SQL（RFC-359 W6 的 `jsonMemberText`：
+`CASE WHEN pg_input_is_valid(v,'jsonb') THEN (v)::jsonb ->> 'k' END`），四种语料位置实测：
+
+| 语料位置                          | 嵌套 `CASE` | `AND` 短路 |
+| --------------------------------- | ----------- | ---------- |
+| 真表的列（**生产形状**）          | 不抛        | 不抛       |
+| `(select $1 as v) d` 子查询       | **抛**      | **抛**     |
+| `(select $1::text as v) d` 子查询 | **抛**      | **抛**     |
+| `(select '字面量'::text as v) d`  | **抛**      | **抛**     |
+
+也就是说：`AND` 会不会被 planner 重排，在这类写法上**不是判据**；真正的分水岭是
+「表达式作用在表列上，还是作用在能被折叠成常量的东西上」。
+
+**对测试的直接影响**：拿 `select <被测表达式> from (select ? as v) d` 当语料，测的是一个
+**生产里不存在的形状**，而且会在非法输入上假红。语料要落进**真表的真列**再查
+（`rfc359-w6-t24-json-member-text.test.ts` 因此改用 `tasks.workgroup_config_json` 本身）。
+
+## Bun.SQL 的池化连接：一次服务端错误会挂到**下一条**查询上再报一次，`try/catch` 挡不住（2026-09-07 实撞）
+
+用例里「故意触发一个 PostgreSQL 服务端错误、`catch` 住、然后继续查」——`expect` 全过，
+用例仍被 bun:test 判红，报的是那个已经被 catch 过的 `PostgresError`（`onRejectPostgresQuery`），
+看起来像是后面某条正常查询抛的。把失败语句挪到用例最后一条、改字面量绑定都不管用；
+只有「那条连接上此后不再发查询」才不复现。
+
+处置：需要真执行一个失败语句的反面 fixture，**自己开一条裸连接**（`new SQL(url)`）跑完即
+`end()`，不要借共享 harness 的池。或者干脆别用异常当判据——先跑正面断言，异常那一半单独安置。
+
+## `bun run db:rfc349-postgresql-schema` 注册在 `packages/backend/package.json`，不在仓库根
+
+改了 `db/schema.ts` 之后要重生成 PG 基线（见上文那条），命令必须**在 `packages/backend` 下跑**；
+在仓库根跑是 `script not found`。错误消息此前只写了命令名没写目录，已补上（
+`platform/persistence/postgresqlMigrationHistory.ts` 与 `db/schema.ts` 顶部注释两处）。
