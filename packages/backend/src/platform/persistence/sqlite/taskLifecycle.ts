@@ -50,6 +50,7 @@ import {
 } from '@agent-workflow/shared'
 import { nodeRuns, tasks } from '@/db/schema'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -58,8 +59,9 @@ import {
   assertTaskExecutionContext,
   appendTaskLifecycleTransitionCommittedEventTx,
   currentTaskExecutionContext,
+  fenceTaskWrite,
   taskExecutionModule,
-  withTaskExecutionMutation,
+  withTaskExecutionWrite,
 } from '@/modules/task-execution/public/operations'
 import type {
   TaskCommittedEventIdentity,
@@ -886,22 +888,21 @@ export async function setTaskStatus(args: {
       )
     }
     if (row.worktreePath !== '' && !existsSync(row.worktreePath)) {
-      withTaskExecutionMutation({
-        db: args.db,
-        taskId: args.taskId,
-        ...(args.executionContext === undefined ? {} : { context: args.executionContext }),
-        run: (tx) =>
-          tx
-            .update(tasks)
-            .set({ workspacePrunedAt: Date.now() })
-            .where(
-              and(
-                eq(tasks.id, args.taskId),
-                isNull(tasks.workspacePruningAt),
-                isNull(tasks.workspacePrunedAt),
-              ),
-            )
-            .run(),
+      await withTaskExecutionWrite(args.db, async (tx) => {
+        await fenceTaskWrite(tx, {
+          taskId: args.taskId,
+          ...(args.executionContext === undefined ? {} : { context: args.executionContext }),
+        })
+        await tx
+          .update(tasks)
+          .set({ workspacePrunedAt: Date.now() })
+          .where(
+            and(
+              eq(tasks.id, args.taskId),
+              isNull(tasks.workspacePruningAt),
+              isNull(tasks.workspacePrunedAt),
+            ),
+          )
       })
       throw new DomainError(
         'workspace-pruned',
@@ -1111,7 +1112,9 @@ export class ConcurrentMergeStateTransition extends ConflictError {
  *     between our read and update
  */
 export async function transitionMergeState(args: {
-  db: DbClient
+  // RFC-359 W4-D28b：体内已全部走中立事务原语（`withTaskExecutionWrite` + `fenceTaskWrite`），
+  // 不再有 bun:sqlite 独有的同步事务面——两个引擎都跑得动这一条，签名随之放宽。
+  db: ProviderNeutralDatabase
   nodeRunId: string
   event: MergeStateTransitionEvent
   extra?: MergeStateUpdateExtra
@@ -1129,21 +1132,18 @@ export async function transitionMergeState(args: {
   const from = (row.mergeState ?? null) as MergeStateOrNull
   const to = nextMergeState(from, args.event)
   // rfc144-allow-direct-merge-state-write -- single allowlisted writer
-  const updated = withTaskExecutionMutation({
-    db: args.db,
-    taskId: row.taskId,
-    run: (tx) =>
-      tx
-        .update(nodeRuns)
-        .set({ mergeState: to, ...(args.extra ?? {}) })
-        .where(
-          and(
-            eq(nodeRuns.id, args.nodeRunId),
-            from === null ? isNull(nodeRuns.mergeState) : eq(nodeRuns.mergeState, from),
-          ),
-        )
-        .returning({ id: nodeRuns.id })
-        .all(),
+  const updated = await withTaskExecutionWrite(args.db, async (tx) => {
+    await fenceTaskWrite(tx, { taskId: row.taskId })
+    return await tx
+      .update(nodeRuns)
+      .set({ mergeState: to, ...(args.extra ?? {}) })
+      .where(
+        and(
+          eq(nodeRuns.id, args.nodeRunId),
+          from === null ? isNull(nodeRuns.mergeState) : eq(nodeRuns.mergeState, from),
+        ),
+      )
+      .returning({ id: nodeRuns.id })
   })
   if (updated.length === 0) {
     throw new ConcurrentMergeStateTransition(args.nodeRunId, from, args.event.kind)
@@ -1158,7 +1158,9 @@ export async function transitionMergeState(args: {
  * false; everything else rethrows.
  */
 export async function tryTransitionMergeState(args: {
-  db: DbClient
+  // RFC-359 W4-D28b：体内已全部走中立事务原语（`withTaskExecutionWrite` + `fenceTaskWrite`），
+  // 不再有 bun:sqlite 独有的同步事务面——两个引擎都跑得动这一条，签名随之放宽。
+  db: ProviderNeutralDatabase
   nodeRunId: string
   event: MergeStateTransitionEvent
   extra?: MergeStateUpdateExtra

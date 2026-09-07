@@ -14,11 +14,9 @@ import { createCodeHostEffectAttemptObserver as createCodeHostEffectAttemptObser
 import { createLocalEffectAttemptObserver as createLocalEffectAttemptObserverInternal } from '../application/localEffectObserver'
 import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../application/processEffectObserver'
 import {
-  withCurrentTaskExecutionMutation as withCurrentTaskExecutionMutationInternal,
-  withCurrentTaskExecutionTransaction as withCurrentTaskExecutionTransactionInternal,
-  withTaskExecutionMutation as withTaskExecutionMutationInternal,
-  withTaskExecutionTransaction as withTaskExecutionTransactionInternal,
-} from '../composition/sqliteOwnedTaskMutation'
+  fenceTaskWrite as fenceTaskWriteInternal,
+  withTaskExecutionWrite as withTaskExecutionWriteInternal,
+} from '../composition/ownedTaskMutation'
 import {
   assertTaskExecutionContext as assertTaskExecutionContextInternal,
   createTaskExecutionContext as createTaskExecutionContextInternal,
@@ -212,10 +210,8 @@ export const assertTaskExecutionContext = assertTaskExecutionContextInternal
 export const createTaskExecutionContext = createTaskExecutionContextInternal
 export const currentTaskExecutionContext = currentTaskExecutionContextInternal
 export const runWithTaskExecutionContext = runWithTaskExecutionContextInternal
-export const withCurrentTaskExecutionMutation = withCurrentTaskExecutionMutationInternal
-export const withCurrentTaskExecutionTransaction = withCurrentTaskExecutionTransactionInternal
-export const withTaskExecutionMutation = withTaskExecutionMutationInternal
-export const withTaskExecutionTransaction = withTaskExecutionTransactionInternal
+export const fenceTaskWrite = fenceTaskWriteInternal
+export const withTaskExecutionWrite = withTaskExecutionWriteInternal
 export const submitTaskContinuationTx = submitTaskContinuationTxInternal
 // Composition supplies only the exact lifecycle transition participant. The
 // public task-execution surface does not close over the legacy lifecycle

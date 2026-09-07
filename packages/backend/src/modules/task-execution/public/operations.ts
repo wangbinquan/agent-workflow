@@ -22,7 +22,7 @@ export function currentTaskExecutionContext(
   return currentTaskExecutionContextInternal(expectedTaskId)
 }
 export { taskExecutionModule } from '../composition'
-export { withTaskExecutionMutation } from '../composition/sqliteOwnedTaskMutation'
+export { fenceTaskWrite, withTaskExecutionWrite } from '../composition/ownedTaskMutation'
 export { appendTaskLifecycleTransitionCommittedEventTx } from '../infrastructure/taskLifecycleEventParticipant'
 export {
   normalizeTaskPlatformInputPaths,

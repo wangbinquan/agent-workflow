@@ -29,8 +29,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlPreflight :: preflightPostgresqlTarget',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlRuntime :: PostgresqlDatabaseRuntime',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/sqliteLogicalSource :: SqliteLogicalSource,SqliteLogicalSourceSnapshot',
-  'packages/backend/src/modules/task-execution/public/operations.ts -> ../composition/sqliteOwnedTaskMutation :: export:withTaskExecutionMutation',
-  'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteOwnedTaskMutation :: withCurrentTaskExecutionMutation,withCurrentTaskExecutionTransaction,withTaskExecutionMutation,withTaskExecutionTransaction',
   'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTaskExecutionContext :: assertTaskExecutionContext,createTaskExecutionContext,currentTaskExecutionContext,runWithTaskExecutionContext',
   'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTaskExecutionRecovery :: finalizeTaskExecutionRecovery,prepareTaskExecutionRecovery',
   'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTerminalMaintenance :: RecoverableTerminalMaintenanceClaim',

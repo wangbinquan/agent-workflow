@@ -215,7 +215,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(count('mintNodeRun')).toBe(0)
     expect(count('transitionNodeRunStatus')).toBe(0)
     expect(count('dbTxSync')).toBe(0)
-    expect(count('withTaskExecutionTransaction')).toBe(0)
+    expect(count('withTaskExecutionWrite')).toBe(0)
     expect(count('setTaskStatus')).toBe(0)
 
     const position = (name: string): number =>

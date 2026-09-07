@@ -37,7 +37,6 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/legacy/workflow.ts: 2',
   'modules/resource-catalog/infrastructure/legacy/workgroup/state.ts: 1',
   'modules/resource-catalog/infrastructure/legacy/workgroups.ts: 2',
-  'modules/task-execution/infrastructure/sqliteOwnedTaskMutation.ts: 4',
   'modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts: 1',
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts: 3',
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 5',

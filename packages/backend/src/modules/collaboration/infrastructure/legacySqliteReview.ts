@@ -143,13 +143,10 @@ import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/pub
 import { parseConsumedJson } from '@/services/freshness'
 import {
   assertNodeRunSourceTerminationAdmission,
-  transitionHumanGateTaskTx,
   transitionNodeRunStatus,
-  // 评审门开启（dispatchReviewNodeUnlocked）仍跑在 SQLite 的同步 withTaskExecutionTransaction 里，
-  // 用同步版；决定事务用下面两引擎共用的 async 内核。
-  transitionNodeRunStatusTx as transitionNodeRunStatusSyncTx,
 } from '@/services/lifecycle'
-// RFC-359 W1-T2c：决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核。
+// RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
+// （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
 import {
   setNodeRunStatusTx,
   transitionNodeRunStatusTx,
@@ -159,9 +156,9 @@ import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIn
 import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
 import {
   currentTaskExecutionContext,
+  fenceTaskWrite,
   humanGateNodeProjectionFence,
-  withTaskExecutionMutation,
-  withTaskExecutionTransaction,
+  withTaskExecutionWrite,
 } from '@/services/taskExecutionParticipants'
 import {
   withReviewNodeMutationLock,
@@ -176,7 +173,7 @@ import {
 } from '@/util/errors'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
-import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
+import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import {
   createTaskAuthorizationParticipantInTx,
@@ -927,22 +924,20 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         acceptedItemIndices: [],
         auto: 'empty-list',
       })
-      withTaskExecutionTransaction({
-        db,
-        taskId,
-        now: decidedAt,
-        run: (tx) => {
-          if (refreshAwaitingReview) {
-            const current = tx
-              .select({
-                status: nodeRuns.status,
-                consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-              })
-              .from(nodeRuns)
-              .where(eq(nodeRuns.id, reuse.id))
-              .get()
-            const expectedPendingIds = pendingReuseDocVersions.map((document) => document.id).sort()
-            const currentPendingIds = tx
+      await withTaskExecutionWrite(db, async (tx) => {
+        await fenceTaskWrite(tx, { taskId, now: decidedAt })
+        if (refreshAwaitingReview) {
+          const current = await tx
+            .select({
+              status: nodeRuns.status,
+              consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
+            })
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, reuse.id))
+            .get()
+          const expectedPendingIds = pendingReuseDocVersions.map((document) => document.id).sort()
+          const currentPendingIds = (
+            await tx
               .select({ id: docVersions.id })
               .from(docVersions)
               .where(
@@ -952,115 +947,109 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
                   eq(docVersions.decision, 'pending'),
                 ),
               )
-              .all()
-              .map((document) => document.id)
-              .sort()
-            if (
-              current?.status !== 'awaiting_review' ||
-              current.consumedUpstreamRunsJson !== reuse.consumedUpstreamRunsJson ||
-              currentPendingIds.length !== expectedPendingIds.length ||
-              currentPendingIds.some(
-                (documentId, index) => documentId !== expectedPendingIds[index],
-              )
-            ) {
-              throw new ConflictError(
-                'review-refresh-stale',
-                `review ${reuse.id} changed before empty-source refresh`,
-              )
-            }
-            if (currentPendingIds.length > 0) {
-              tx.delete(reviewComments)
-                .where(inArray(reviewComments.docVersionId, currentPendingIds))
-                .run()
-              tx.update(docVersions)
-                .set({
-                  decision: 'superseded',
-                  decisionReason: 'upstream-refreshed',
-                  decidedBy: SYSTEM_DECIDER,
-                  decidedAt,
-                })
-                .where(inArray(docVersions.id, currentPendingIds))
-                .run()
-            }
-            tx.update(nodeRuns)
-              .set({ consumedUpstreamRunsJson: consumedJson })
-              .where(eq(nodeRuns.id, reuse.id))
-              .run()
-          } else if (reuse?.status === 'pending') {
-            transitionNodeRunStatusSyncTx({
-              tx,
-              nodeRunId: reuse.id,
-              event: { kind: 'park-review' },
-              extra: {
-                startedAt: reuse.startedAt ?? decidedAt,
-                consumedUpstreamRunsJson: consumedJson,
-              },
-            })
-          } else {
-            reviewNodeRunId = createSqliteNodeRunMintParticipantInTx(tx).mint({
-              taskId,
-              nodeId: node.id,
-              status: 'awaiting_review',
-              cause: 'review-park',
-              containerRunId,
-              iteration,
-              overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
-            })
+          )
+            .map((document) => document.id)
+            .sort()
+          if (
+            current?.status !== 'awaiting_review' ||
+            current.consumedUpstreamRunsJson !== reuse.consumedUpstreamRunsJson ||
+            currentPendingIds.length !== expectedPendingIds.length ||
+            currentPendingIds.some((documentId, index) => documentId !== expectedPendingIds[index])
+          ) {
+            throw new ConflictError(
+              'review-refresh-stale',
+              `review ${reuse.id} changed before empty-source refresh`,
+            )
           }
-          tx.insert(nodeRunOutputs)
-            .values({
-              nodeRunId: reviewNodeRunId,
-              portName: REVIEW_APPROVED_PORT_MULTI,
-              content: '',
-              kind: acceptedKind,
-              archiveJson: null,
-            })
-            .onConflictDoUpdate({
-              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-              set: { content: '', kind: acceptedKind, archiveJson: null },
-            })
-            .run()
-          tx.insert(nodeRunOutputs)
-            .values({
-              nodeRunId: reviewNodeRunId,
-              portName: REVIEW_APPROVAL_META_PORT,
-              content: meta,
-            })
-            .onConflictDoUpdate({
-              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-              set: { content: meta },
-            })
-            .run()
-          transitionNodeRunStatusSyncTx({
+          if (currentPendingIds.length > 0) {
+            await tx
+              .delete(reviewComments)
+              .where(inArray(reviewComments.docVersionId, currentPendingIds))
+            await tx
+              .update(docVersions)
+              .set({
+                decision: 'superseded',
+                decisionReason: 'upstream-refreshed',
+                decidedBy: SYSTEM_DECIDER,
+                decidedAt,
+              })
+              .where(inArray(docVersions.id, currentPendingIds))
+          }
+          await tx
+            .update(nodeRuns)
+            .set({ consumedUpstreamRunsJson: consumedJson })
+            .where(eq(nodeRuns.id, reuse.id))
+        } else if (reuse?.status === 'pending') {
+          await transitionNodeRunStatusTx({
             tx,
-            nodeRunId: reviewNodeRunId,
-            event: { kind: 'approve-review' },
-            extra: { finishedAt: decidedAt },
+            nodeRunId: reuse.id,
+            event: { kind: 'park-review' },
+            extra: {
+              startedAt: reuse.startedAt ?? decidedAt,
+              consumedUpstreamRunsJson: consumedJson,
+            },
           })
-          if (refreshAwaitingReview && taskRow.status === 'awaiting_review') {
-            transitionHumanGateTaskTx({
-              tx,
-              taskId,
-              expectedTaskRevision: taskRow.lifecycleEventRevision,
-              transition: 'release-review',
-              now: decidedAt,
-            })
-          }
-          tx.insert(nodeRunEvents)
-            .values({
-              nodeRunId: reviewNodeRunId,
-              ts: decidedAt,
-              kind: 'text',
-              payload: `[rfc202/review-auto-approved] ${JSON.stringify({
-                rfc: 'RFC-202',
-                reason: 'empty-list',
-                itemCount: 0,
-                sourceNodeId,
-                sourcePortName,
-              })}`,
-            })
-            .run()
-        },
+        } else {
+          reviewNodeRunId = await createNodeRunMintParticipantInTx(tx).mint({
+            taskId,
+            nodeId: node.id,
+            status: 'awaiting_review',
+            cause: 'review-park',
+            containerRunId,
+            iteration,
+            overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
+          })
+        }
+        await tx
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId: reviewNodeRunId,
+            portName: REVIEW_APPROVED_PORT_MULTI,
+            content: '',
+            kind: acceptedKind,
+            archiveJson: null,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: '', kind: acceptedKind, archiveJson: null },
+          })
+        await tx
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId: reviewNodeRunId,
+            portName: REVIEW_APPROVAL_META_PORT,
+            content: meta,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: meta },
+          })
+        await transitionNodeRunStatusTx({
+          tx,
+          nodeRunId: reviewNodeRunId,
+          event: { kind: 'approve-review' },
+          extra: { finishedAt: decidedAt },
+        })
+        if (refreshAwaitingReview && taskRow.status === 'awaiting_review') {
+          await transitionHumanGateTask(tx, {
+            taskId,
+            expectedTaskRevision: taskRow.lifecycleEventRevision,
+            transition: 'release-review',
+            now: decidedAt,
+          })
+        }
+        await tx.insert(nodeRunEvents).values({
+          nodeRunId: reviewNodeRunId,
+          ts: decidedAt,
+          kind: 'text',
+          payload: `[rfc202/review-auto-approved] ${JSON.stringify({
+            rfc: 'RFC-202',
+            reason: 'empty-list',
+            itemCount: 0,
+            sourceNodeId,
+            sourcePortName,
+          })}`,
+        })
       })
       return {
         kind: 'ok',
@@ -1168,15 +1157,12 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       event: { kind: 'park-review' },
       extra: { startedAt: reuse.startedAt ?? Date.now() },
     })
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({ consumedUpstreamRunsJson: consumedJson })
-          .where(eq(nodeRuns.id, reviewNodeRunId))
-          .run(),
+    await withTaskExecutionWrite(db, async (tx) => {
+      await fenceTaskWrite(tx, { taskId })
+      await tx
+        .update(nodeRuns)
+        .set({ consumedUpstreamRunsJson: consumedJson })
+        .where(eq(nodeRuns.id, reviewNodeRunId))
     })
   } else {
     // No prior review row, OR the freshest is a terminal decision against an
@@ -1311,58 +1297,53 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         acceptedItemIndices: [],
         auto: 'empty-list',
       })
-      withTaskExecutionTransaction({
-        db,
-        taskId,
-        run: (tx) => {
-          tx.insert(nodeRunOutputs)
-            .values({
-              nodeRunId: reviewNodeRunId,
-              portName: REVIEW_APPROVED_PORT_MULTI,
-              content: '',
-              kind: acceptedKind,
-              archiveJson: null,
-            })
-            .onConflictDoUpdate({
-              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-              set: { content: '', kind: acceptedKind, archiveJson: null },
-            })
-            .run()
-          tx.insert(nodeRunOutputs)
-            .values({
-              nodeRunId: reviewNodeRunId,
-              portName: REVIEW_APPROVAL_META_PORT,
-              content: meta,
-            })
-            .onConflictDoUpdate({
-              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-              set: { content: meta },
-            })
-            .run()
-          transitionNodeRunStatusSyncTx({
-            tx,
+      await withTaskExecutionWrite(db, async (tx) => {
+        await fenceTaskWrite(tx, { taskId })
+        await tx
+          .insert(nodeRunOutputs)
+          .values({
             nodeRunId: reviewNodeRunId,
-            event: { kind: 'approve-review' },
-            extra: { finishedAt: decidedAt },
+            portName: REVIEW_APPROVED_PORT_MULTI,
+            content: '',
+            kind: acceptedKind,
+            archiveJson: null,
           })
-          // Persistent, user-visible audit record (node drawer "events" tab) —
-          // the dispatch summary string is discarded by runScope and node_runs
-          // has no summary column, so this event is the durable trace.
-          tx.insert(nodeRunEvents)
-            .values({
-              nodeRunId: reviewNodeRunId,
-              ts: decidedAt,
-              kind: 'text',
-              payload: `[rfc202/review-auto-approved] ${JSON.stringify({
-                rfc: 'RFC-202',
-                reason: 'empty-list',
-                itemCount: 0,
-                sourceNodeId,
-                sourcePortName,
-              })}`,
-            })
-            .run()
-        },
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: '', kind: acceptedKind, archiveJson: null },
+          })
+        await tx
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId: reviewNodeRunId,
+            portName: REVIEW_APPROVAL_META_PORT,
+            content: meta,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: meta },
+          })
+        await transitionNodeRunStatusTx({
+          tx,
+          nodeRunId: reviewNodeRunId,
+          event: { kind: 'approve-review' },
+          extra: { finishedAt: decidedAt },
+        })
+        // Persistent, user-visible audit record (node drawer "events" tab) —
+        // the dispatch summary string is discarded by runScope and node_runs
+        // has no summary column, so this event is the durable trace.
+        await tx.insert(nodeRunEvents).values({
+          nodeRunId: reviewNodeRunId,
+          ts: decidedAt,
+          kind: 'text',
+          payload: `[rfc202/review-auto-approved] ${JSON.stringify({
+            rfc: 'RFC-202',
+            reason: 'empty-list',
+            itemCount: 0,
+            sourceNodeId,
+            sourcePortName,
+          })}`,
+        })
       })
       return {
         kind: 'ok',

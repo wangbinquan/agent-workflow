@@ -46,10 +46,9 @@ const OWNED_MUTATION_GATEWAYS = new Set([
   'recordSpawnReceipt',
   'settleTerminal',
   'withOwnedTaskTx',
-  'withTaskExecutionMutation',
-  'withTaskExecutionTransaction',
-  'withCurrentTaskExecutionMutation',
-  'withCurrentTaskExecutionTransaction',
+  // RFC-359 W4-D28b：同步网关（withTaskExecutionMutation / withTaskExecutionTransaction 及其
+  // withCurrent* 变体）已整体退役，两个引擎共用 `withTaskExecutionWrite` + `fenceTaskWrite`。
+  'withTaskExecutionWrite',
 ])
 
 interface TaskEffectBoundaryContract {
