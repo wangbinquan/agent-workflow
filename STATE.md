@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 第十三批发布修正**：`06f1b82a3` 已发布；maintenance `34190051222` 与首个 HTTP small
+> `34190166690` 都在装载前报 `scripts/perf-seed.ts` 无法解析 `drizzle-orm`。根 package/lock 补齐
+> 与 backend 同版本的直接开发依赖；没有更改任何语料、SQL 或性能判据。冻结锁 dry-run 与 517 行
+> 原 native CLI 微型库通过；干净安装和双库测量等后继 exact-SHA CI，不能据此报 full 基准完成。
+
 > **RFC-359 W12 接续（2026-09-08）**：第十三批将完整动态工作流 bundle 收为必填，九个原诊断保持；
 > 真实四类目录与完整 provider driver 的动态确认恢复已有双引擎声明，旧全部期望保留。
 > RFC311 五表行算法合一，原 native SQLite SQL/事务/CLI 保持，517 行全物理列与旧库逐字一致；

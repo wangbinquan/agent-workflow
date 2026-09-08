@@ -459,6 +459,12 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
 
 ### W12 第十三批：原始 HTTP 基准、完整动态工作流合同与真 PG 失败定位
 
+- `06f1b82a3` 已发布并核对远端精确同步。maintenance `34190051222` / job `101946086629` 与
+  首次 HTTP small `34190166690` / job `101946430906` 均在脚本装载前失败：根目录的 perf-seed
+  新导入 `drizzle-orm`，但依赖仅在 backend 声明，Bun 1.4 干净 workspace 安装无法解析。
+  后继修正只给根 package/lock 补同一既有 `^0.45.2` 开发依赖，不改任何行算法或测量规则；
+  冻结锁 dry-run 通过，原 native CLI 微型库实得 7 repo / 23 task / 115 run / 361 event /
+  11 delivery（共 517 行）。两次失败均未进入 HTTP，不能算 P95 结果或完整验收。
 - 第十二批 `608d1b012` / Main CI `34186397795` 终态 failure，34/36 job success；
   只有 Ubuntu shard 4 与汇总失败。20 个迁移套件的 136 个 PostgreSQL 行为用例全部通过，
   Agent 新增 10 个真 PG 写入用例也通过，但 RFC139 套件的 afterAll 清理失败，不能将套件记绿。
