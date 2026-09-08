@@ -42,7 +42,8 @@ import type { FactCellValue } from '../src/modules/development-automation/domain
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 setDefaultTimeout(120_000)
 
@@ -395,7 +396,7 @@ describe('rfc310 pr5 — delivery chain redispatch (pure)', () => {
 
 // ----------------------------------------------- ② verification handler 直调
 
-describe('rfc310 pr5 — verification arm', () => {
+describeEachProvider('rfc310 pr5 — verification arm', (harness) => {
   const PROFILE = {
     schemaVersion: 1,
     steps: [
@@ -490,7 +491,7 @@ describe('rfc310 pr5 — verification arm', () => {
   }
 
   test('pass records treeOid-bound progress; fail blocks typed; tree drift blocks', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
 
     // pass → cells 进度 + collected（不 block）。
     const a = await seedDeliveredMission(fx)
@@ -541,7 +542,7 @@ describe('rfc310 pr5 — verification arm', () => {
   // 拿它去找现场就会用一个没有业务改动的 workspace 重放 stage，得到与记录不同的
   // tree ⇒ 假的 candidate-tree-drift。T140 旅程实测：父任务在审批步骤之后必撞。
   test('a later read-only action does not steal the candidate context from its producing run', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     await persistCellsSnapshot(fx, seeded.missionId, {
       ...(await currentCells(fx, seeded.missionId)),
@@ -561,9 +562,9 @@ describe('rfc310 pr5 — verification arm', () => {
 
 // -------------------------------------- ③ 完整轮次：commit → push → MR → wait
 
-describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
+describeEachProvider('rfc310 pr5 — publish chain through reconcile rounds', (harness) => {
   test('commit, push, ensure-MR advance one effect per round; MR claim ends the chain in wait', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     const pushes: unknown[] = []
     const delivery = fakeDelivery({
@@ -634,7 +635,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
   })
 
   test('dispatched effect from a crashed round is replayed by idempotency key, not stuck', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     // 模拟上一轮 crash：commit effect 已 dispatched、cells 未推进。
     const mission = (await fx.store.getMission(seeded.missionId))!
@@ -681,7 +682,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
   })
 
   test('intent drift on an existing effect row fails the effect and blocks the mission', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     const mission = (await fx.store.getMission(seeded.missionId))!
     // 同 idempotencyKey、不同 intent digest 的悬挂行（载荷漂移）。
@@ -711,7 +712,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
   })
 
   test('push CAS refusal (remote-head-changed) fails the effect and blocks typed', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     const deps = fx.deps({
       attemptContext: createAttemptContextStore(fx.evidence),
@@ -739,7 +740,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
   })
 
   test('missing delivery ports stay honest: typed block, no silent skip', async () => {
-    const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     const deps = fx.deps({ attemptContext: createAttemptContextStore(fx.evidence) })
     const r = await runMissionReconcile(deps, seeded.missionId)

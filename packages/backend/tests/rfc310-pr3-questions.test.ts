@@ -26,34 +26,11 @@ import {
   questionSetV1Schema,
 } from '../src/modules/development-automation/domain/questionSet'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 
 setDefaultTimeout(120_000)
-
-let mock: StartedRequirementProviderMock
-
-beforeAll(async () => {
-  mock = await startRequirementProviderMock()
-  mock.mock.seed({
-    externalId: 'REQ-Q',
-    revision: 'r1',
-    title: 'Ambiguous demand',
-    files: [
-      {
-        fileId: 'f1',
-        name: 'body.md',
-        role: 'body',
-        mediaType: 'text/markdown',
-        content: 'vague\n',
-      },
-    ],
-  })
-})
-
-afterAll(async () => {
-  await mock.close()
-})
 
 /** 规则含 clarificationState 谓词：答案未提交前动作不可达。 */
 const CLARIFYING_RULES = [
@@ -72,9 +49,37 @@ const CLARIFYING_RULES = [
   },
 ]
 
-describe('rfc310 pr3 — requirement-source clarification loop', () => {
+describeEachProvider('rfc310 pr3 — requirement-source clarification loop', (harness) => {
+  let mock: StartedRequirementProviderMock
+
+  beforeAll(async () => {
+    mock = await startRequirementProviderMock()
+    mock.mock.seed({
+      externalId: 'REQ-Q',
+      revision: 'r1',
+      title: 'Ambiguous demand',
+      files: [
+        {
+          fileId: 'f1',
+          name: 'body.md',
+          role: 'body',
+          mediaType: 'text/markdown',
+          content: 'vague\n',
+        },
+      ],
+    })
+  })
+
+  afterAll(async () => {
+    await mock.close()
+  })
+
   test('publish → poll (durable wake) → answers seeded → committed with exact revision → action unlocked', async () => {
-    const fx = await buildPr3Fixture({ rules: CLARIFYING_RULES, external: { mockUrl: mock.url } })
+    const fx = await buildPr3Fixture({
+      db: harness.db,
+      rules: CLARIFYING_RULES,
+      external: { mockUrl: mock.url },
+    })
     const missionId = await fx.launchExternal('rfc310-pr3-q-ext-1', 'REQ-Q')
     const deps = fx.deps({
       repositoryFacts: {
@@ -156,9 +161,9 @@ describe('rfc310 pr3 — requirement-source clarification loop', () => {
   })
 })
 
-describe('rfc310 pr3 — platform clarification channel', () => {
+describeEachProvider('rfc310 pr3 — platform clarification channel', (harness) => {
   test('publish moves to awaiting-information; submit correlates, freezes and resumes working', async () => {
-    const fx = await buildPr3Fixture({ rules: CLARIFYING_RULES })
+    const fx = await buildPr3Fixture({ db: harness.db, rules: CLARIFYING_RULES })
     const missionId = await fx.launchDirect('rfc310-pr3-q-plat-1')
     await fx.materializer.stashDirectSubmission({
       missionId,

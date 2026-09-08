@@ -102,14 +102,9 @@ const PROVIDER_ROOT_PREFIX = /(?:compose|create)(?:Sqlite|Postgresql)/
  * 至少可执行）的 db 客户端调用它，然后对它交出来的东西断言行为。把 `toContain('composeXxx(')`
  * 改成真调用即可摘掉对应行；`readFileSync` + 文本断言无论写多少条都不算。
  */
-// W12：真实任务执行夹具改由两个 providerRuntime 工厂完整装配，驱动到 done 后
-// 再通过同一工厂的 overview 与 repair 端口读取该库，两个工厂从本账本移除。
-export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
-  'modules/collaboration/composition/collaborationRouteOperations.ts#composePostgresqlCollaborationRouteOperations: 只有源码文本锁',
-  'modules/collaboration/composition/collaborationRouteOperations.ts#composeSqliteCollaborationRouteOperations: 只有源码文本锁',
-  'modules/runtime-management/composition.ts#composePostgresqlRealtimeRuntime: 只有源码文本锁',
-  'modules/task-execution/composition/digitalEmployeeExecution.ts#composePostgresqlDigitalEmployeeExecution: 零引用',
-]
+// W12 第七批：协作路由读写、实时持久事件回放及数字员工 workflow/agent 到 done
+// 均经真实组合根执行，最后四项销账。空账本仍由独立 fixture 验证增减两个方向。
+export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = []
 
 interface ProviderRoot {
   readonly file: string
@@ -309,9 +304,9 @@ const ROOT_NAMES: ReadonlySet<string> = new Set(ROOTS.map((root) => root.symbol)
 const FACTS: RootFacts = collectFacts(ROOT_NAMES)
 
 /** 欠债项的「现状」一句话——写进账本，让每一行都自带下一步该怎么还。 */
-function statusOf(symbol: string): string {
-  const textLocked = FACTS.textLocked.has(symbol)
-  const importedOnly = FACTS.imported.has(symbol)
+function statusOf(symbol: string, facts: RootFacts): string {
+  const textLocked = facts.textLocked.has(symbol)
+  const importedOnly = facts.imported.has(symbol)
   if (textLocked && importedOnly) return '源码文本锁 + 只 import 未调用'
   if (textLocked) return '只有源码文本锁'
   if (importedOnly) return '只 import 未调用'
@@ -323,12 +318,16 @@ function statusOf(symbol: string): string {
  *
  * `extraConstructed` 只服务于变异实证：把一个伪造出来的构造点并进来，看账本是否如期变红。
  */
-function debtRows(extraConstructed: ReadonlySet<string>): string[] {
+function debtRows(
+  extraConstructed: ReadonlySet<string>,
+  roots: readonly ProviderRoot[] = ROOTS,
+  facts: RootFacts = FACTS,
+): string[] {
   const rows: { key: string; row: string }[] = []
-  for (const root of ROOTS) {
-    if (FACTS.constructed.has(root.symbol) || extraConstructed.has(root.symbol)) continue
+  for (const root of roots) {
+    if (facts.constructed.has(root.symbol) || extraConstructed.has(root.symbol)) continue
     const key = `${root.file}#${root.symbol}`
-    rows.push({ key, row: `${key}: ${statusOf(root.symbol)}` })
+    rows.push({ key, row: `${key}: ${statusOf(root.symbol, facts)}` })
   }
   rows.sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
   return rows.map((entry) => entry.row)
@@ -392,21 +391,44 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
 //
 // 判据一旦判错，本守卫会用与「全部合规」完全相同的形态绿掉：漏判 ⇒ 账本凭空变长，
 // 误判 ⇒ 账本凭空缩短、真实缺口被抹掉。fixture 一律**内存字符串**，不落磁盘、不依赖
-// 仓里某个文件恰好保持某形状；被判的符号从账本里现取，所以清单收敛后 fixture 自动跟着走。
+// 仓里某个文件恰好保持某形状。自带根与事实，真实账本清零后仍验证同一个判据。
 //
 // fixture 刻意**自带候选名集合**（`new Set([symbol])`）而不是复用 `ROOT_NAMES`：要证明的是
 // 「判据本身还咬得动」，喂进去的东西就必须一点真实语料都不碰——碰了就变成在断言当下这棵树
 // 的现状，那是规则本身，不是判据还活着的证据（RFC-317 T14 的判据即按此写）。
 
-/** 从账本里现取一个欠债符号——不写死名字，账本一变 fixture 跟着变。 */
+const FIXTURE_ROOT: ProviderRoot = {
+  file: 'modules/x/composition/y.ts',
+  symbol: 'composePostgresqlFixtureRuntime',
+}
+const EMPTY_FACTS: RootFacts = {
+  constructed: NOTHING_EXTRA,
+  imported: NOTHING_EXTRA,
+  textLocked: NOTHING_EXTRA,
+}
+
+function fixtureDebtRows(constructed: ReadonlySet<string>): string[] {
+  return debtRows(constructed, [FIXTURE_ROOT], EMPTY_FACTS)
+}
+
+/** 固定内存缺口，不依赖真实账本还剩几条。 */
 function anyDebtSymbol(): { row: string; symbol: string } {
-  const row = PROVIDER_RUNTIME_UNEXERCISED[0]
-  if (row === undefined) throw new Error('账本已清空——变异实证该改成对空账本的形态')
-  const key = row.slice(0, row.lastIndexOf(': '))
-  return { row, symbol: key.slice(key.lastIndexOf('#') + 1) }
+  return {
+    row: `${FIXTURE_ROOT.file}#${FIXTURE_ROOT.symbol}: 零引用`,
+    symbol: FIXTURE_ROOT.symbol,
+  }
 }
 
 describe('RFC-359 W5 —— 判据自变异：三种「看起来覆盖了」', () => {
+  test('空账本仍拒绝新增未构造根，真实构造后才恢复', () => {
+    const roots = [...ROOTS, FIXTURE_ROOT]
+    const { row, symbol } = anyDebtSymbol()
+    const introduced = debtRows(NOTHING_EXTRA, roots)
+    expect(introduced).toContain(row)
+    expect(introduced).not.toEqual([...PROVIDER_RUNTIME_UNEXERCISED])
+    expect(debtRows(new Set([symbol]), roots)).toEqual([...PROVIDER_RUNTIME_UNEXERCISED])
+  })
+
   test(
     '① 真调用（import + CallExpression）⇒ 算覆盖，账本必须红并提示移除该行',
     () => {
@@ -422,14 +444,14 @@ describe('RFC-359 W5 —— 判据自变异：三种「看起来覆盖了」', (
         symbol,
       ])
       expect(
-        debtRows(found),
+        fixtureDebtRows(found),
         '把一个真构造点并进来之后，账本必须正好少这一行——少不掉说明棘轮不会因收敛而红',
-      ).toEqual(debtRows(NOTHING_EXTRA).filter((each) => each !== row))
+      ).toEqual(fixtureDebtRows(NOTHING_EXTRA).filter((each) => each !== row))
       // 「账本要红」说到底就是这一句：收敛发生后逐字相等必须不再成立，逼人把账本改小。
       expect(
-        debtRows(found),
+        fixtureDebtRows(found),
         '收敛之后账本居然还相等 ⇒ 这条棘轮只会因新增而红，不会因还债而红，等于半条',
-      ).not.toEqual([...PROVIDER_RUNTIME_UNEXERCISED])
+      ).not.toEqual(fixtureDebtRows(NOTHING_EXTRA))
     },
     TIMEOUT_MS,
   )
@@ -453,7 +475,9 @@ describe('RFC-359 W5 —— 判据自变异：三种「看起来覆盖了」', (
         [...stringLiteralMentions(source, candidates)],
         '文本锁形态必须能被认出来，否则欠债行的「现状」会退化成「零引用」',
       ).toEqual([symbol])
-      expect(debtRows(NOTHING_EXTRA), '账本不得因为一条文本锁而缩短').toContain(anyDebtSymbol().row)
+      expect(fixtureDebtRows(NOTHING_EXTRA), '账本不得因为一条文本锁而缩短').toContain(
+        anyDebtSymbol().row,
+      )
     },
     TIMEOUT_MS,
   )
@@ -474,7 +498,7 @@ describe('RFC-359 W5 —— 判据自变异：三种「看起来覆盖了」', (
       ).toEqual([])
       // 绑定确实建立了：判「没调用」不是因为没看见这个名字。
       expect([...valueImportBindings(source, candidates).aliases.values()]).toEqual([symbol])
-      expect(debtRows(NOTHING_EXTRA), '账本不得因为一条 import 而缩短').toContain(
+      expect(fixtureDebtRows(NOTHING_EXTRA), '账本不得因为一条 import 而缩短').toContain(
         anyDebtSymbol().row,
       )
     },

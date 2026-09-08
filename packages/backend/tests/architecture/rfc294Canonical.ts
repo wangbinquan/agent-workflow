@@ -2706,13 +2706,15 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget)/.test(
       value,
     )
   ) {
     const membership = /replaceTaskMembers|replaceConfig/.test(input.callable)
     const terminal =
-      /terminalize|cancel|failTask|deleteTask|interruptSurvivor|SourceTermination/.test(value)
+      /terminalize|cancel|failTask|deleteTask|interruptSurvivor|SourceTermination|sourceTerminationTarget/.test(
+        value,
+      )
     return {
       authorityKind: 'control-revision',
       controlSubtype: membership

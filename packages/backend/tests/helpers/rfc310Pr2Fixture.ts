@@ -1,16 +1,13 @@
 // RFC-310 PR-2 —— reconciler/recovery 测试的共享 fixture。
 //
-// 真实链路：in-memory SQLite 全量迁移 + PR-1B 真配置 store（模板/policy/员工
+// 真实链路：provider harness 交入的真库 + PR-1B 真配置 store（模板/policy/员工
 // publish 走真实闭包检查）+ 真实 mission store；只有外部世界（collector/
 // launcher/executor）是 typed fake。policy 的 actionPriority 用
 // repository.languages 谓词——admission 的占位 facts 是 unknown，因此第一轮
 // 老实地 collect-repository-facts，第二轮才命中 change.implement（这正是
 // indeterminate-stop 语义的端到端形状）。
 
-import { resolve } from 'node:path'
-
-import { createInMemoryDb } from '../../src/db/client'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -37,10 +34,8 @@ import type {
 import type { ReconcileDeps } from '../../src/modules/development-automation/application/missionReconciler'
 import { launchMission } from '../../src/modules/development-automation/application/commands/launchMission'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', '..', 'db', 'migrations')
-
 export interface Pr2Fixture {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly lookup: AdmissionLookup
@@ -51,7 +46,7 @@ export interface Pr2Fixture {
   launch(idempotencyKey: string): Promise<string>
 }
 
-function lookupOf(db: DbClient): AdmissionLookup {
+function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const row = await resolveAdmissionAssignment(db, scope)
@@ -78,8 +73,7 @@ function lookupOf(db: DbClient): AdmissionLookup {
   }
 }
 
-export async function buildPr2Fixture(): Promise<Pr2Fixture> {
-  const db = createInMemoryDb(MIGRATIONS)
+export async function buildPr2Fixture(db: ProviderNeutralDatabase): Promise<Pr2Fixture> {
   const now = () => Date.now()
   const templates = createActionTemplatePersistence(db)
 

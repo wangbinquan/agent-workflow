@@ -8,7 +8,7 @@
 // ④reconciler 端到端：collect-repository-facts arm 用真 collector 后，规则
 // 从 indeterminate 走到 implement。
 
-import { beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +17,7 @@ import { createRepositoryFactsCollector } from '../src/modules/development-autom
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import { cachedRepos } from '../src/db/schema'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 setDefaultTimeout(120_000)
@@ -57,19 +58,16 @@ beforeAll(() => {
   headSha = commitAll(repoPath, 'baseline')
 })
 
-describe('rfc310 pr5 T53 — repository facts collector', () => {
+describeEachProvider('rfc310 pr5 T53 — repository facts collector', (harness) => {
   test('detects languages, build systems, maven module catalog and contributor docs', async () => {
-    const fx = await buildPr3Fixture()
-    fx.db
-      .insert(cachedRepos)
-      .values({
-        id: 'repo-1',
-        urlHash: 't53aaaa1',
-        localPath: repoPath,
-        lastFetchedAt: Date.now(),
-        createdAt: Date.now(),
-      })
-      .run()
+    const fx = await buildPr3Fixture({ db: harness.db })
+    await fx.db.insert(cachedRepos).values({
+      id: 'repo-1',
+      urlHash: 't53aaaa1',
+      localPath: repoPath,
+      lastFetchedAt: Date.now(),
+      createdAt: Date.now(),
+    })
     const collector = createRepositoryFactsCollector(fx.db)
     const out = await collector.collect({ missionId: 'm-1', repositoryId: 'repo-1' })
 
@@ -100,21 +98,18 @@ describe('rfc310 pr5 T53 — repository facts collector', () => {
   })
 
   test('sourceRevision follows exact HEAD: a new commit re-opens decision dedup naturally', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     // --randomize 会打乱同 describe 内 test 顺序：本 test 要再 commit，必须用
     // 自己的 clone，不能污染共享 repoPath（否则先跑会让 beforeAll 的 headSha 过期）。
     const workRepo = join(mkdtempSync(join(tmpdir(), 'rfc310-t53-mut-')), 'work')
     git(mkdtempSync(join(tmpdir(), 'rfc310-t53-cwd-')), 'clone', '-q', repoPath, workRepo)
-    fx.db
-      .insert(cachedRepos)
-      .values({
-        id: 'repo-1',
-        urlHash: 't53aaaa2',
-        localPath: workRepo,
-        lastFetchedAt: Date.now(),
-        createdAt: Date.now(),
-      })
-      .run()
+    await fx.db.insert(cachedRepos).values({
+      id: 'repo-1',
+      urlHash: 't53aaaa2',
+      localPath: workRepo,
+      lastFetchedAt: Date.now(),
+      createdAt: Date.now(),
+    })
     const collector = createRepositoryFactsCollector(fx.db)
     const before = await collector.collect({ missionId: 'm-1', repositoryId: 'repo-1' })
 
@@ -134,7 +129,7 @@ describe('rfc310 pr5 T53 — repository facts collector', () => {
   })
 
   test('uncached repository is a loud error, never empty facts', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const collector = createRepositoryFactsCollector(fx.db)
     await expect(
       collector.collect({ missionId: 'm-1', repositoryId: 'repo-none' }),
@@ -142,17 +137,14 @@ describe('rfc310 pr5 T53 — repository facts collector', () => {
   })
 
   test('end to end: real collector unblocks the rules chain to implement', async () => {
-    const fx = await buildPr3Fixture()
-    fx.db
-      .insert(cachedRepos)
-      .values({
-        id: 'repo-1',
-        urlHash: 't53aaaa3',
-        localPath: repoPath,
-        lastFetchedAt: Date.now(),
-        createdAt: Date.now(),
-      })
-      .run()
+    const fx = await buildPr3Fixture({ db: harness.db })
+    await fx.db.insert(cachedRepos).values({
+      id: 'repo-1',
+      urlHash: 't53aaaa3',
+      localPath: repoPath,
+      lastFetchedAt: Date.now(),
+      createdAt: Date.now(),
+    })
     const launches: string[] = []
     const deps = fx.deps({
       repositoryFacts: createRepositoryFactsCollector(fx.db),

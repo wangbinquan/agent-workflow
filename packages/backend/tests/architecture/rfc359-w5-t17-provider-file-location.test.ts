@@ -99,11 +99,10 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │       (`composeAgentCatalog` / `composeSkillCatalog` / `composeDatabaseWorkflowCatalog` /
   // │       `createSkillContentAvailability`) 全吃 `ProviderNeutralDatabase` 或纯文件系统。
   // │       `cli/start.ts` / `server.ts` 原来展开的同一串装配也已删除，三个根共用完整 bundle。
-  // │     · `composition/postgresqlResourcePackageCatalog.ts` 的 `resources`/`reads`/`readSkillTree`
-  // │       三个字段与 `composition/resourcePackageOperations.ts:245` 的
-  // │       `composeSqliteResourcePackageProvider` **逐字相同**；`composePostgresqlResourcePackage
-  // │       Catalog` 本身是对中立 `composeResourcePackageOperations` 的纯转发。只有第四个字段
-  // │       `mutationSessionFactory` 属于上面的①。
+  // │     · W12 已将 resource-package 的 `resources`/`reads`/`readSkillTree` 三个字段合到
+  // │       `composition/resourcePackageProvider.ts`，两个 provider 共用一个工厂；
+  // │       `composePostgresqlResourcePackageCatalog` 仍对中立 operations 纯转发。
+  // │       只有第四个字段 `mutationSessionFactory` 属于上面的①，不因读装配合一销账。
   // │     · `sqlitePackageResourceRows.ts` 的两个 async（`getSqlitePackageResourceRow` /
   // │       `findSqliteBuiltinResource`）是中立 drizzle，换 PG 照跑；只有两个 `*InTx` 是真机制。
   // │     · `sqliteResourceGrantRepository.ts` 的 `listWritableGrantedResourceIds` 早就吃

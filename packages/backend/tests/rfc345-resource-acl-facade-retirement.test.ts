@@ -1081,6 +1081,10 @@ test('resource ACL compatibility barrels retire only consumer-zero symbols', () 
     resolve(sourceRoot, 'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts'),
     'utf8',
   )
+  const packageProviderComposition = readFileSync(
+    resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageProvider.ts'),
+    'utf8',
+  )
 
   for (const retiredSymbol of RETIRED_RESOURCE_ACL_SYMBOLS) {
     const exactSymbol = new RegExp(`\\b${retiredSymbol}\\b`)
@@ -1092,8 +1096,17 @@ test('resource ACL compatibility barrels retire only consumer-zero symbols', () 
   expect(packageCli).toContain('catalog.transport.findOwnedResourceIdsByName')
   expect(packageComposition).toContain('readonly resources: ResourcePackageOwnedResourceLookupPort')
   expect(packageComposition).toContain('return deps.resources.findOwnedIdsByName({')
-  expect(packageComposition).toContain('createResourcePackageOwnedResourceLookup')
-  expect(postgresqlPackageComposition).toContain('createResourcePackageOwnedResourceLookup')
+  // RFC-359 W12: both provider wrappers delegate the lookup binding to one composition.
+  expect(packageComposition).toContain('return composeResourcePackageProvider(deps)')
+  expect(postgresqlPackageComposition).toContain('...composeResourcePackageProvider(input)')
+  for (const consumer of [packageComposition, postgresqlPackageComposition]) {
+    expect(consumer).toContain("from './resourcePackageProvider'")
+    expect(consumer).not.toContain('createResourcePackageOwnedResourceLookup')
+  }
+  expect(packageProviderComposition).toContain("from '../infrastructure/packageResourceRows'")
+  expect(packageProviderComposition).toContain(
+    'resources: createResourcePackageOwnedResourceLookup(input.db)',
+  )
   expect(packageComposition).not.toContain('findOwnedAclResourceIdsByName(deps.db,')
 
   expect(

@@ -6,7 +6,7 @@
 // 是全新 ActionRun（rerunSeq 从 0 起）；③无 in-flight 动作时 no-op；④原渠道
 // （collect-requirement-answers 收齐）同一收束路径。
 
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 
 import { invalidateInFlightAction } from '../src/modules/development-automation/application/actionInvalidation'
 import { submitMissionAnswers } from '../src/modules/development-automation/application/commands/submitMissionAnswers'
@@ -16,6 +16,7 @@ import type {
   RepositoryFactsCollectorPort,
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 
@@ -66,9 +67,9 @@ async function launchWithInFlightAction(
   return { missionId, actionRunId: mission.currentActionRunId! }
 }
 
-describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
+describeEachProvider('rfc310 pr5 T55 — answers invalidate in-flight actions', (harness) => {
   test('platform-channel submit cancels + discards the running attempt and frees the mission', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const tracking = cancelTrackingLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,
@@ -133,7 +134,7 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
   })
 
   test('no in-flight action → helper is a no-op', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const missionId = await fx.launchDirect('t55-noop-1')
     const mission = (await fx.store.getMission(missionId))!
     const out = await invalidateInFlightAction(
@@ -145,7 +146,7 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
   })
 
   test('cancel failure does not block local settlement (ledger is authoritative)', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const throwing: AgentActionLauncherPort = {
       async launch() {
         return { ok: true, executionRef: 'exec-1' }

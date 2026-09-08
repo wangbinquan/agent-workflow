@@ -34,7 +34,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                   | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                    | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 5 个性能守卫已双引擎化；当前主要锁语句数、行数与参数，墙钟 P95 仍为诊断输出，尚未满足 proposal 原条款                                                               | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 4 项；provider 命名文件 88 → 62（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 0 项；provider 命名文件 88 → 62（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -200,6 +200,47 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
 - 本批候选统一 TypeScript 检查、定向 SQLite/lint/format 验证；共享树内第七批新增终止测试会
   使 T19d 读到额外一条双方引用，其内容未进入本批提交，不为其提前改写本批账本。
   完整本地门禁、本地 PG/soak/E2E 未启动。AC-1/6/9/11/12 仍有未闭合项，RFC 保持 In Progress。
+
+### W12 第七批：终止事务合一、真实组合根与测试夹具迁移
+
+- 来源终止的 SQLite/PG `applyOne` 共 641 行退役，两侧共用 `sourceTerminationTarget` 与
+  普通任务生命周期的物理 writer，4 个生产文件合计净减 394 行。每目标事务原子提交 CAS、
+  围栏、节点取消、owner 撤销、intent 终态及事件；失败整笔回滚。旧提交后发布/停止位置、
+  等待释放位于 review lock 外，以及 SQLite 无 driver 收尾均保留。原 W8 功能回归
+  19 pass / 53 expect；新 atom 15 pass / 103 expect，两个 CAS 分支变异确实红。
+- 明确修复 clear-closed 重放：没有本地 token 的活动 owner 不再使纯解除围栏回执变为
+  unreaped。原实现回归先红，修复后首用/重放均 not-required，任务/节点/owner/intent 均不动。
+  同事务真实写入终态赢家后的 CAS miss 按赢家元数据出收据，不虚构 canceled lifecycle 事件；
+  fence-only CAS 冲突带走同事务内已写入的赢家及事件。两者是事务内分支验证，外部 PG 并发
+  仍由原 W8 对拍证明，不混作同一种证据。旧已裁决 CAS 机制差异销账，保留共同 atom 源码锁。
+- 两个 collaboration 根通过真实 command context 执行正文/版本/评论读写、问题生命周期、
+  澄清草稿重入回滚与封存；realtime 两根回放真实持久事件并核验顺序、游标和后续插入。
+  SQLite 9 pass / 46 expect。数字员工 workflow/agent 均经完整 provider 工厂和真实 mock-opencode
+  子进程跑到 done，核验输出、owner 释放、intent 完成和重建后计量，2 pass / 44 expect。
+  工作区准备使用带真实目录的测试端口，不宣称覆盖生产工作区准备。未构造根 4 → 0，空账本
+  仍保留独立正负 fixture，不以构造覆盖冒充全量业务覆盖；真 PG 结果等待本批 hosted CI。
+- PR2 的 3 个与 PR3 的 13 个既有行为套件迁入双引擎。分别保留原 17/76 个 case 声明与
+  80/433 处 expected matcher AST；SQLite PR2 17 pass / 80 expect，PR3 非外部部分
+  75 pass / 448 expect。外部澄清在旧 baseline 即因本机 port 0 setup 失败，交 hosted CI，
+  不放宽超时。Pr3 默认 SQLite fixture 运行时逐字不变，显式中立 DB 注入保持精确类型；
+  原有独立双 fixture 用例未合并数据库。T19f 855 → 854，只移除实际消失的 Pr2 helper 构造点。
+  候选 AST 为 1893 个测试文件，774 文件 / 1809 次直接 SQLite 构造，209 文件调用 harness；
+  这些迁移通过共享 fixture 进入真 PG，不会凭空降低测试文件内直接构造计数。
+- 第五批 Windows inline session 日志多出空行的机制已由真子进程复现：后台蒸馏调用同一
+  mock 会写入全局 session 日志。新增可选的精确 agent scope，E2E 只记录目标 designer，
+  argv 仍记录全部调用；旧未设 scope 的行为保持。第三次 designer 仍会使原两次调用断言红，
+  没有过滤空行或去重。旧机制 3 fail，新 6 pass / 32 expect；CI 旧 trace 缺 argv 日志，
+  不能证明现场第三次调用的身份，失败附件已补日志供后续定位，Windows 最终结果待本批 CI。
+- 第六批 `203c1da42` / Main CI `34172144340` 终态 failure：三条旧目录装配源码锁与
+  macOS shard 3 的终态词汇扫描 6063.89ms 超过 5000ms。本批装配锁追到真实公共工厂，
+  保留禁止重复实现的约束；词汇扫描仅加保守预筛，1786 → 80 个 AST，全部命中与顺序相同，
+  Unicode 变异仍红，原分类与超时阈值不变。原上传 file-only/body+file journey 本次均 pass。
+  真 PG 专项及其余三个 backend 分片通过；不能将这些局部结果记为整仓全绿。
+- 同一第六批维护大样本 `34172144324` / job `101894355468` success：94 笔显式事务
+  最大 16.5ms，API/WS 错误为 0，原负载和 250ms 阈值保持。本次无慢片阈值命中，仍不能
+  反推第四批 266.57ms 的唯一原因。第七批全量本地门禁、本地 PG/soak/E2E 未启动；
+  统一 backend/system-mocks 类型、定向 SQLite/lint/format 验证，最终 CI 按新提交取证。
+  真实资源目录孪生、全量行为覆盖、11 处原始装配命中和原 P95 判据仍未闭合，RFC 仍 In Progress。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

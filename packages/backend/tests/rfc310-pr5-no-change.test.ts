@@ -8,12 +8,13 @@
 // gate 不开（seed 必须走发布链）且 confirm 防御复检也拒；④gate 未挂起 /
 // 非 awaiting 状态的确认被 typed 拒；⑤program-proof 模式不开人工 gate。
 
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 
 import { confirmNoChange } from '../src/modules/development-automation/application/commands/confirmNoChange'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import type { RepositoryFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 setDefaultTimeout(120_000)
@@ -74,11 +75,12 @@ async function settleNoChange(
   return missionId
 }
 
-describe('rfc310 pr5 T55a — no-change human gate', () => {
+describeEachProvider('rfc310 pr5 T55a — no-change human gate', (harness) => {
   test('human-confirmation policy: gate redispatch → awaiting-information → confirm → completed-no-change', async () => {
     // 规则用默认链形态（implement 读 scopeDisposition）：no-change 后该 fact
     // 缺席 ⇒ fact-unavailable block ⇒ gate 重派可拦（COLLECT 类决策不拦）。
     const fx = await buildPr3Fixture({
+      db: harness.db,
       noChangeConfirmation: 'human-confirmation',
       rules: [
         {
@@ -126,6 +128,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
 
   test('program-proof policy (default) never opens the human gate', async () => {
     const fx = await buildPr3Fixture({
+      db: harness.db,
       rules: [
         {
           ruleId: 'implement-when-ready',
@@ -146,6 +149,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
 
   test('created/replaced upload entries keep the gate shut and the confirm command refuses', async () => {
     const fx = await buildPr3Fixture({
+      db: harness.db,
       noChangeConfirmation: 'human-confirmation',
       rules: [
         {
@@ -232,6 +236,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
 
   test('confirm without a pending gate / outside awaiting-information is typed-refused', async () => {
     const fx = await buildPr3Fixture({
+      db: harness.db,
       noChangeConfirmation: 'human-confirmation',
       rules: [
         {

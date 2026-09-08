@@ -8,9 +8,10 @@
 //      opencode resume, which is what lets the spec assert
 //      `node_runs.opencode_session_id` is stable across rounds.
 //   2. ALWAYS appends the whole argv to `$CLARIFY_INLINE_ARGV_LOG`, and the
-//      PARSED `--session` value to `$CLARIFY_INLINE_SESSION_LOG`. The second log
-//      exists because grepping the raw argv for `--session` is fooled by a
-//      prompt whose body happens to contain that text (Codex 191bc32c).
+//      PARSED `--session` value to `$CLARIFY_INLINE_SESSION_LOG` (optionally
+//      scoped to `$CLARIFY_INLINE_SESSION_AGENT`). The second log exists because
+//      grepping raw argv for `--session` is fooled by a prompt whose body happens
+//      to contain that text (Codex 191bc32c).
 //   3. One question, not two.
 
 import {
@@ -56,7 +57,18 @@ export function run(argv: readonly string[]): void {
   const sessionResume = flags['--session'] ?? ''
 
   const sessionLog = process.env.CLARIFY_INLINE_SESSION_LOG
-  if (sessionLog !== undefined && sessionLog.length > 0) appendLine(sessionLog, sessionResume)
+  const sessionAgent = process.env.CLARIFY_INLINE_SESSION_AGENT
+  // A daemon's background agents inherit this fixture environment too. Scope
+  // the session oracle by the real --agent flag while retaining every selected
+  // agent invocation, including empty sessions and duplicates. The argv log
+  // above remains complete so unexpected callers can still be diagnosed.
+  if (
+    sessionLog !== undefined &&
+    sessionLog.length > 0 &&
+    (sessionAgent === undefined || sessionAgent.length === 0 || sessionAgent === agent)
+  ) {
+    appendLine(sessionLog, sessionResume)
+  }
 
   const agentKey = sanitizeStateKey(agent)
   emitSessionCreated(`opc_e2e_${agentKey}`)

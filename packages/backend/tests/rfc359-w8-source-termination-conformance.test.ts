@@ -1,10 +1,10 @@
 // RFC-359 W8 —— `SourceTerminationParticipant` 的**双引擎对拍**。
 //
-// 判定：**真重复，尚未完全合一**。W12 已将扫描绑定、固定点重扫、收据投影和停止原因提取为
-// `sourceTerminationExecution` / `sourceTerminationTargets`，两侧调用同一份公共算法。
-// 每目标的 `applyOne` 仍有两份（合计 641 行）：SQLite cancel 分支依赖 `setTaskStatus` 的同步
-// onTransitionTx / 事件 collector；PG 侧的异步条件 UPDATE + committed event 仍是独立实现。
-// 本刀保留原事务与提交后顺序，不能据此将 provider pair 或命名文件账本销账。
+// W12 已将扫描、固定点重扫与收据投影合到 `sourceTerminationExecution` / `sourceTerminationTargets`，
+// 并将原两份每目标 `applyOne`（合计 641 行）合到 `sourceTerminationTarget` 的一份中立事务。
+// 任务 CAS / 运行计时 / 回收认领 / 事件 collector 复用 `taskRuntimeLifecyclePersistence`，
+// 两个 provider 文件仅保留原提交后时点与 SQLite 无 driver finalize 快路径的机制差异。
+// 下文记录 W8 / W9 对旧实现发现的漂移及当时的修复；这些用户可见行为继续由同一批断言锁定。
 //
 // 「用户看到什么」这一层的判据（不是「两边都调了同一个函数」）：
 //   · MR/PR 关闭或合入后，任务以什么状态收场、错误摘要写的是哪句中文；

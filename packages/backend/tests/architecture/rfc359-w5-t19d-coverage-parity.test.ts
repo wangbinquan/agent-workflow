@@ -90,7 +90,8 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // `rfc359-w10-task-execution-sync-transaction-cutover.test.ts` 在**两个引擎上都构造这一个**
   // SQLite 命名的参与者（它跑得动 PostgreSQL 正是转换成功的判据），于是它的引用/驱动数上涨。
   // 倒挂随之从 +1 变成 +2，但方向是「弱侧 PG 的那份原生重写更该退役」，不是新债。
-  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/3, postgresql 2/1',
+  // W12：共用 atom 的真实回滚、终态 CAS 赢家、提交后停止回归，两侧各加 1 ref/drive。
+  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 5/4, postgresql 3/2',
   // W12：真实执行夹具提升到 providerRuntime 整体装配，底层 PG participants / launch 的
   // 直接 import 各少一条，但 factory 的返回对象驱动同一真实任务；不以直接引用数冒充行为覆盖。
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 9/3, postgresql 5/1',

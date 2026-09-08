@@ -9,7 +9,7 @@
 // （同 key 重放不产生第二条评论——fake 计数锁）。每条都用「第一轮注入
 // crash、第二轮换正常端口」模拟 daemon 重启（deps 重建 = 新进程装配）。
 
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,7 +29,9 @@ import type { FactCellValue } from '../src/modules/development-automation/domain
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
 import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 
 setDefaultTimeout(120_000)
 
@@ -40,8 +42,10 @@ function cell(value: FactCellValue): FactCell<FactCellValue> {
   return { state: 'known', value, sourceRevision: 'crash-test' }
 }
 
-async function fixtureWithNeverPolicy(): Promise<{ fx: Pr3Fixture; policyId: string }> {
-  const fx = await buildPr3Fixture()
+async function fixtureWithNeverPolicy(
+  db: ProviderNeutralDatabase,
+): Promise<{ fx: Pr3Fixture; policyId: string }> {
+  const fx = await buildPr3Fixture({ db: db })
   const policy = await createAutomationPolicy(fx.db, {
     name: 'pol-crash',
     ownerUserId: 'admin',
@@ -248,9 +252,9 @@ function goodMr(ensures: unknown[]): MrEffectsPort {
   }
 }
 
-describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
+describeEachProvider('rfc310 pr7b T83 — crash matrix converges after restart', (harness) => {
   test('commit dispatched → crash → restart replays by idempotency key and the chain reaches MR + watching', async () => {
-    const { fx, policyId } = await fixtureWithNeverPolicy()
+    const { fx, policyId } = await fixtureWithNeverPolicy(harness.db)
     const { missionId } = await seedDeliveredMission(fx, policyId)
     const commits: unknown[] = []
     const pushes: unknown[] = []
@@ -312,7 +316,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
   // 里路由的 fire-and-forget reconcile 与显式泵并发，正是它偶发的来源。这里用一次性错误注入
   // 精确构造那个持久化后态（决策行已在 + effect 停在 prepared），不靠卡时序。
   test('commit prepared（决策已在、尚未 dispatched）→ 下一轮不许被去重吞', async () => {
-    const { fx, policyId } = await fixtureWithNeverPolicy()
+    const { fx, policyId } = await fixtureWithNeverPolicy(harness.db)
     const { missionId } = await seedDeliveredMission(fx, policyId)
     const commits: unknown[] = []
     const pushes: unknown[] = []
@@ -357,7 +361,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
   })
 
   test('mr-ensure confirmed → crash before claim/cells → restart adopts the same MR (no duplicate)', async () => {
-    const { fx, policyId } = await fixtureWithNeverPolicy()
+    const { fx, policyId } = await fixtureWithNeverPolicy(harness.db)
     const { missionId } = await seedDeliveredMission(fx, policyId)
     const commits: unknown[] = []
     const pushes: unknown[] = []
@@ -403,7 +407,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
   })
 
   test('reply dispatched → crash → restart replays once, ledger settles, no duplicate note', async () => {
-    const { fx, policyId } = await fixtureWithNeverPolicy()
+    const { fx, policyId } = await fixtureWithNeverPolicy(harness.db)
     const missionId = ulid()
     const now = Date.now()
     await fx.store.createMission({

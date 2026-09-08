@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path'
 
 import { createInMemoryDb } from '../../src/db/client'
 import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -79,10 +80,10 @@ export const DEFAULT_PR3_RULES: readonly Pr3PolicyRule[] = [
   },
 ]
 
-export interface Pr3FixtureOptions {
+export interface Pr3FixtureOptions<Database extends ProviderNeutralDatabase = DbClient> {
   readonly rules?: readonly Pr3PolicyRule[]
   /** journey/HTTP 测试：在已有 db（createApp harness 同一实例）上铺配置。 */
-  readonly db?: DbClient
+  readonly db?: Database
   /** PR-5 T54：员工加 requirement.analyze 只读路由（含专用模板）。 */
   readonly analyzeRoute?: boolean
   /** PR-10 T109：员工加 mr.feedback.apply 路由（含专用模板）——全旅程 E2E 用。 */
@@ -105,8 +106,8 @@ export interface Pr3FixtureOptions {
   }
 }
 
-export interface Pr3Fixture {
-  readonly db: DbClient
+export interface Pr3Fixture<Database extends ProviderNeutralDatabase = DbClient> {
+  readonly db: Database
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly lookup: AdmissionLookup
@@ -122,7 +123,9 @@ export interface Pr3Fixture {
   launchExternal(idempotencyKey: string, externalId: string): Promise<string>
 }
 
-function lookupOf(db: DbClient): AdmissionLookup {
+export type ProviderPr3Fixture = Pr3Fixture<ProviderNeutralDatabase>
+
+function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const row = await resolveAdmissionAssignment(db, scope)
@@ -149,7 +152,13 @@ function lookupOf(db: DbClient): AdmissionLookup {
   }
 }
 
-export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<Pr3Fixture> {
+export function buildPr3Fixture(options?: Pr3FixtureOptions): Promise<Pr3Fixture>
+export function buildPr3Fixture(
+  options: Pr3FixtureOptions<ProviderNeutralDatabase> & { readonly db: ProviderNeutralDatabase },
+): Promise<ProviderPr3Fixture>
+export async function buildPr3Fixture(
+  options: Pr3FixtureOptions<ProviderNeutralDatabase> = {},
+): Promise<ProviderPr3Fixture> {
   const db = options.db ?? createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
   const templates = createActionTemplatePersistence(db)

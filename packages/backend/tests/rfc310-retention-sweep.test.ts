@@ -14,7 +14,7 @@
 // 另锁一条口径：**不删 evidence blob**。这一版只标记，因为本仓没有覆盖全部生产者
 // 的引用索引（pipeline bundle 根本没有 DB 指针行），删 blob 等于按猜测删证据。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { developmentAgentAttempts, developmentBundleRefs } from '../src/db/schema'
@@ -23,7 +23,8 @@ import {
   type RetentionPolicyReader,
 } from '../src/modules/development-automation/infrastructure/retentionSweeper'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const DAY = 24 * 60 * 60 * 1000
 const NOW = 100 * DAY
@@ -114,60 +115,48 @@ async function seedMission(
     now: 0,
   })
   const attemptId = ulid()
-  fx.db
-    .insert(developmentAgentAttempts)
-    .values({
-      id: attemptId,
-      actionRunId: runId,
-      rerunSeq: 0,
-      attemptSeq: 0,
-      executionRef: 'exec-1',
-      baselineRef: 'base',
-      nonceDigest: 'c'.repeat(64),
-      inputDigest: 'd'.repeat(64),
-      status: options.settleAttempt === false ? 'running' : 'validated',
-      createdAt: 0,
-      settledAt: options.settleAttempt === false ? null : 1,
-    })
-    .run()
+  await fx.db.insert(developmentAgentAttempts).values({
+    id: attemptId,
+    actionRunId: runId,
+    rerunSeq: 0,
+    attemptSeq: 0,
+    executionRef: 'exec-1',
+    baselineRef: 'base',
+    nonceDigest: 'c'.repeat(64),
+    inputDigest: 'd'.repeat(64),
+    status: options.settleAttempt === false ? 'running' : 'validated',
+    createdAt: 0,
+    settledAt: options.settleAttempt === false ? null : 1,
+  })
 
   const bundleRefId = ulid()
-  fx.db
-    .insert(developmentBundleRefs)
-    .values({
-      id: bundleRefId,
-      missionId,
-      purpose: 'requirement-bundle',
-      evidenceRef: 'bundle-1',
-      manifestDigest: 'e'.repeat(64),
-      fileCount: 1,
-      totalBytes: 10,
-      retentionState: 'active',
-      createdAt: 0,
-    })
-    .run()
+  await fx.db.insert(developmentBundleRefs).values({
+    id: bundleRefId,
+    missionId,
+    purpose: 'requirement-bundle',
+    evidenceRef: 'bundle-1',
+    manifestDigest: 'e'.repeat(64),
+    fileCount: 1,
+    totalBytes: 10,
+    retentionState: 'active',
+    createdAt: 0,
+  })
   return { attemptId, bundleRefId }
 }
 
-function attemptExists(fx: Pr3Fixture, id: string): boolean {
-  return fx.db
-    .select()
-    .from(developmentAgentAttempts)
-    .all()
-    .some((row) => row.id === id)
+async function attemptExists(fx: Pr3Fixture, id: string): Promise<boolean> {
+  const rows = await fx.db.select().from(developmentAgentAttempts)
+  return rows.some((row) => row.id === id)
 }
 
-function bundleState(fx: Pr3Fixture, id: string): string | undefined {
-  return fx.db
-    .select()
-    .from(developmentBundleRefs)
-    .all()
-    .find((row) => row.id === id)?.retentionState
+async function bundleState(fx: Pr3Fixture, id: string): Promise<string | undefined> {
+  const rows = await fx.db.select().from(developmentBundleRefs)
+  return rows.find((row) => row.id === id)?.retentionState
 }
 
-describe('RFC-310 T71 —— 终态 Mission 的 retention 执行', () => {
+describeEachProvider('RFC-310 T71 —— 终态 Mission 的 retention 执行', (harness) => {
   test('terminal + expired: settled attempts are pruned and bundle pointers marked', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const seeded = await seedMission(fx, 'm-expired', { terminalAt: NOW - 40 * DAY })
     const result = await sweepDevelopmentRetention(
       fx.db,
@@ -179,13 +168,13 @@ describe('RFC-310 T71 —— 终态 Mission 的 retention 执行', () => {
       marked: result.markedBundleRefs,
       pending: result.expiredBundleRefsPending,
     }).toEqual({ pruned: 1, marked: 1, pending: 1 })
-    expect(attemptExists(fx, seeded.attemptId)).toBe(false)
+    expect(await attemptExists(fx, seeded.attemptId)).toBe(false)
     // 标记而非删除：可逆、可见，等引用索引到位才谈得上清 blob。
-    expect(bundleState(fx, seeded.bundleRefId)).toBe('expired')
+    expect(await bundleState(fx, seeded.bundleRefId)).toBe('expired')
   })
 
   test('terminal but inside the TTL: nothing is touched', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const seeded = await seedMission(fx, 'm-fresh', { terminalAt: NOW - 5 * DAY })
     const result = await sweepDevelopmentRetention(
       fx.db,
@@ -196,12 +185,12 @@ describe('RFC-310 T71 —— 终态 Mission 的 retention 执行', () => {
       pruned: 0,
       marked: 0,
     })
-    expect(attemptExists(fx, seeded.attemptId)).toBe(true)
-    expect(bundleState(fx, seeded.bundleRefId)).toBe('active')
+    expect(await attemptExists(fx, seeded.attemptId)).toBe(true)
+    expect(await bundleState(fx, seeded.bundleRefId)).toBe('active')
   })
 
   test('a live mission is never swept, however old', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const seeded = await seedMission(fx, 'm-live', { terminalAt: null })
     const result = await sweepDevelopmentRetention(
       fx.db,
@@ -213,11 +202,11 @@ describe('RFC-310 T71 —— 终态 Mission 的 retention 执行', () => {
       scanned: 0,
       pruned: 0,
     })
-    expect(attemptExists(fx, seeded.attemptId)).toBe(true)
+    expect(await attemptExists(fx, seeded.attemptId)).toBe(true)
   })
 
   test('an unsettled attempt on a terminal mission survives the sweep', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const seeded = await seedMission(fx, 'm-unsettled', {
       terminalAt: NOW - 40 * DAY,
       settleAttempt: false,
@@ -229,7 +218,7 @@ describe('RFC-310 T71 —— 终态 Mission 的 retention 执行', () => {
     )
     // 终态 Mission 上还有在途 attempt 是需要有人看的异常，不该被保留期抹掉。
     expect(result.prunedAttempts).toBe(0)
-    expect(attemptExists(fx, seeded.attemptId)).toBe(true)
-    expect(bundleState(fx, seeded.bundleRefId)).toBe('expired')
+    expect(await attemptExists(fx, seeded.attemptId)).toBe(true)
+    expect(await bundleState(fx, seeded.bundleRefId)).toBe('expired')
   })
 })

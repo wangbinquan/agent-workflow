@@ -39,7 +39,8 @@ import type { FactCell } from '../src/modules/development-automation/domain/fact
 import type { PipelineEvidenceManifestV1 } from '../src/modules/development-automation/domain/pipelineManifest'
 import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 setDefaultTimeout(120_000)
 
@@ -471,9 +472,9 @@ function withPipelineProvider<
   }
 }
 
-describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
+describeEachProvider('rfc310 pr6 — pipeline chain through reconcile rounds', (harness) => {
   async function fixtureWithPipelinePolicy(): Promise<{ fx: Pr3Fixture; policyId: string }> {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const policy = await createAutomationPolicy(fx.db, {
       name: 'pol-pr6-chain',
       ownerUserId: 'admin',

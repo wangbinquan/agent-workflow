@@ -1704,6 +1704,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageOperations.ts'),
       'utf8',
     )
+    const providerComposition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageProvider.ts'),
+      'utf8',
+    )
     const route = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
     const cli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
 
@@ -1792,12 +1796,20 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createResourcePackageOperationDescriptors')
     expect(composition).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(composition).toContain('composeSqliteResourcePackageProvider')
-    expect(composition).toContain('createResourcePackageReadPort')
-    // RFC-359 W8：技能树读出也合成一份中立实现（`infrastructure/packageSkillTree.ts`），两个装配都接它。
-    expect(composition).toContain('readPackageSkillTree')
-    expect(composition).not.toMatch(
-      /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,
+    expect(composition).toContain("from './resourcePackageProvider'")
+    expect(composition).toContain('return composeResourcePackageProvider(deps)')
+    expect(composition).not.toContain('createResourcePackageReadPort')
+    expect(providerComposition).toContain('reads: createResourcePackageReadPort(input.db)')
+    // RFC-359 W12：W8 合一的技能树读出随共享 provider 装配搬家，数据库与 appHome 仍来自同一输入。
+    expect(providerComposition).toContain("from '../infrastructure/packageSkillTree'")
+    expect(providerComposition).toContain(
+      'readSkillTree: (skillId: string) => readPackageSkillTree(input.db, input.appHome, skillId)',
     )
+    for (const source of [composition, providerComposition]) {
+      expect(source).not.toMatch(
+        /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,
+      )
+    }
     for (const operationId of [
       'resource-catalog.inspect-package.v1',
       'resource-catalog.apply-package.v1',

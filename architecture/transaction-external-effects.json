@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 30,
-    "transactionCallbacks": 275
+    "transactionCallbacks": 272
   },
   "entries": [
     {
@@ -2940,42 +2940,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#transaction:131",
-      "line": 131,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-      "status": "clear",
-      "symbol": "applyOne",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#transaction:313",
-      "line": 313,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-      "status": "clear",
-      "symbol": "applyOne",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#transaction:372",
-      "line": 372,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-      "status": "clear",
-      "symbol": "applyOne",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#dbTxSync:61",
@@ -3371,7 +3335,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d356f1c137d72cb76429b16152457a851d953cae896b3b016c6a8e1608384087",
+  "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

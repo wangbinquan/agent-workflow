@@ -353,9 +353,23 @@ test('源码锁：Workflow 聚合没有 provider 命名的仓库 / 语义 / 校�
   const composition = readFileSync(join(root, 'composition/workflowOperations.ts'), 'utf8')
   expect(composition).toContain('export function composeDatabaseWorkflowCatalog(')
   expect(composition).not.toMatch(/composePostgresqlWorkflowCatalog|createSqliteWorkflowRepository/)
+  // RFC-359 W12: bootstrap shares the classic bundle, which constructs and returns this workflow catalog.
+  const classicComposition = readFileSync(join(root, 'composition/classicCatalogs.ts'), 'utf8')
+  expect(classicComposition).toContain(
+    "import { composeDatabaseWorkflowCatalog } from './workflowOperations'",
+  )
+  expect(classicComposition).toContain('const workflow = composeDatabaseWorkflowCatalog({')
+  expect(classicComposition).toContain(
+    'return Object.freeze({ agent, skill, workflow, agentResourceIntegrity, skillContent })',
+  )
   for (const file of ['src/server.ts', 'src/cli/start.ts']) {
     const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
-    expect(source, file).toContain('composeDatabaseWorkflowCatalog({')
+    expect(source, file).toContain(
+      "import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'",
+    )
+    expect(source, file).toContain('const classicCatalogs = composeClassicCatalogs({')
+    expect(source, file).toContain('classicCatalogs.workflow')
+    expect(source, file).not.toContain('composeDatabaseWorkflowCatalog({')
     expect(source, file).not.toContain('resource-catalog/infrastructure/')
   }
 })

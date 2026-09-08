@@ -137,6 +137,8 @@
 //   （手写 CAS-loss 复读 vs 引擎级序列化重试），于是转入 `ACCEPTED_DUAL_ENGINE_DIVERGENCES`
 //   并把两侧形状都钉住。红时用户看到什么、以及抬齐前 SQLite 那半为什么是错的，见
 //   `tests/rfc359-w8-source-termination-conformance.test.ts` 的 **⑯**。
+//   W12：两侧现已共用 sourceTerminationTarget 的可重放事务 atom，旧手写 catch 删除，
+//   此项从 ACCEPTED 退役；终态 CAS 赢家与围栏冲突回滚由 W12 真库用例继续锁定。
 
 // # RFC-359 W9 销账：2 → 1（13b —— 真缺口，已补；但原记载有一半不实）
 //
@@ -354,47 +356,6 @@ export const ACCEPTED_DUAL_ENGINE_DIVERGENCES: readonly AcceptedDivergence[] = [
     consequence:
       '无。顺序差异不改变任何用户可见结果——两侧都在写工作树之前完成围栏，租约行也都会被修复；' +
       '差的只是「在 retry 里做」还是「在紧随其后的 resume 里做」。',
-  },
-  {
-    id: 'source-termination-terminal-cas-race-recovery',
-    sqlite: {
-      file: 'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts',
-      fn: ['applyOne'],
-      anchors: [
-        { kind: 'literal', text: 'terminal-control-source-race-winner' },
-        { kind: 'identifier', text: 'revokeExactTx' },
-        // 抬齐那一步本身：输掉 CAS 之后收据按**赢家**的状态出，而不是按开工前那次读。
-        { kind: 'identifier', text: 'raceWinnerStatus' },
-      ],
-    },
-    postgresql: {
-      file: 'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts',
-      fn: ['applyOne'],
-      anchors: [
-        { kind: 'identifier', text: 'withPostgresqlSerializableTaskExecution' },
-        { kind: 'literal', text: 'concurrent-task-transition' },
-      ],
-    },
-    why:
-      '「本次源终止的终态 CAS 输给了另一笔终态写」两侧都会复原，只是复原**机制**不同，而机制' +
-      '由引擎决定：SQLite 那一笔没有可重放的事务单元（`setTaskStatus` 的读在事务外、写在 ' +
-      '`dbTxSync` 里），赢家只可能在 CAS 上被看见，所以它在 catch 里复读赢家、就地把围栏 / ' +
-      'owner 撤销 / intent 终态化 / 节点取消补完（`terminal-control-source-race-winner`）；' +
-      'PostgreSQL 侧整笔跑在 `withPostgresqlSerializableTaskExecution` 里，同样的并发写让那条 ' +
-      'UPDATE 撞 40001，中立会话**重放整笔**，第二遍从新快照读到赢家状态、走 already-terminal ' +
-      '分支收场。手写 catch 在 PG 上是够不着的死分支（SERIALIZABLE 下 CAS 不会「静默不匹配」，' +
-      '只会 40001），反过来把 SQLite 套进重试也无处可退——它没有第二个快照可读。',
-    removeWhen:
-      'SQLite 侧的源终止整笔也放进一个可重放的事务单元时（那时 catch 分支就该整个删掉，' +
-      '本条的 sqlite 侧锚点会先失效并把这条红出来）；或这一对适配器合一时。',
-    consequence:
-      '无。RFC-359 W9 抬齐 SQLite 的收据之后两侧逐字相同：投递方都不会收到 409，任务行 / ' +
-      '围栏 / 消费位 / 节点跑批 / 执行 intent 的落库结果一致，收据的 `priorStatus` 与 ' +
-      '`cancelOutcome` 都按**赢家**的状态出（抬齐前 SQLite 报 `running` / `canceled`，' +
-      '投递详情因此说「这次取消了它」而任务实际是 `done`——那是真差异，已经修掉）。' +
-      '仅剩的差别是 `task_execution_owners.recovery_code` 记 `-race-winner` 还是 ' +
-      '`-terminal`，该列不进任何路由 / 前端读面，也没有任何判据读它。' +
-      '对拍见 `tests/rfc359-w8-source-termination-conformance.test.ts` 的 ⑯。',
   },
 ]
 
@@ -865,6 +826,37 @@ function selfTestProbe(input: {
 const NO_SUCH_PREDICATE = 'rfc359W10NonexistentPredicateAnchor'
 const NO_SUCH_FUNCTION = 'rfc359W10NonexistentFunctionScope'
 const NO_SUCH_CORPUS = 'rfc359W10NonexistentCorpusAnchor'
+
+test('W12：来源终止两个宿主只委托一个中立事务 atom', () => {
+  const calls = (scope: ts.Node): Set<string> => {
+    const names = new Set<string>()
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        names.add(node.expression.text)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(scope)
+    return names
+  }
+  for (const provider of ['sqlite', 'postgresql']) {
+    const unit = unitOf(
+      `modules/task-execution/infrastructure/${provider}SourceTerminationParticipant.ts`,
+    )
+    expect(unit).not.toBeNull()
+    expect(calls(unit!.source).has('applySourceTerminationTarget')).toBe(true)
+    expect(calls(unit!.source).has('writeTaskRuntimeLifecycleInTx')).toBe(false)
+    expect(identifierTexts(unit!.source).has('applyOne')).toBe(false)
+  }
+  const shared = unitOf('modules/task-execution/infrastructure/sourceTerminationTarget.ts')
+  expect(shared).not.toBeNull()
+  const scope = resolveScope(shared!, ['applySourceTerminationTarget'])
+  expect(scope.ok).toBe(true)
+  if (!scope.ok) throw new Error(scope.reason)
+  const sharedCalls = calls(scope.node)
+  expect(sharedCalls.has('withTaskExecutionSerializable')).toBe(true)
+  expect(sharedCalls.has('writeTaskRuntimeLifecycleInTx')).toBe(true)
+})
 
 describe('RFC-359 W10 — 判据缺口扫描面自证（账本清零，语料不许跟着清零）', () => {
   test('语料下限：自证用的两个站点文件都真实存在且非空', () => {

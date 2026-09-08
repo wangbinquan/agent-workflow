@@ -13,8 +13,11 @@
   初始期间的迁移动作明确拒绝，避免自等待及提前读取 controller，初始窗口仍可立即读取。
 - resource-package apply journal 使用一份 DatabaseSession 算法，CAS 与外层回滚共享事务；
   SQLite/PG 的资源恢复机制仍保留各自实现，不将 journal 合一误记为整对机制退役。
-- 来源终止公共流程只负责稳定顺序、固定点重扫及收据；每目标的事务与提交后动作由原参与者
-  保持，不改成跨目标事务或并行处理。公共化不代表两侧 lifecycle atom 已合一。
+- 来源终止保持每目标串行；`sourceTerminationTarget` 共用一个可重放事务 atom，生命周期
+  CAS、节点/owner/intent 收尾和持久事件共用原子边界，CAS miss 按实际终态赢家出收据。
+  clear-closed 首次与重放都只解除 closed fence，不产生停止义务。普通生命周期命令也复用
+  同一物理 writer；伴随写失败必须向外传播并整笔回滚，不能误认作生命周期 CAS 冲突。
+  两侧原有提交后事件/停止相对 review lock 的位置，以及 SQLite 无 driver 收尾继续保留。
 - taskExecutionPersistence 只维护一份按原顺序构造的成员聚合；所选恢复生命周期在原字段处
   注入。continuation pre-drive 的三个参与者共用同一中立客户端，运行流程保持不变。
 - classic catalog 由一个完整 bundle 装配，构造期不执行数据库或文件操作；runtimeRegistry

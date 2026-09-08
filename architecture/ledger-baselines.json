@@ -461,7 +461,7 @@
       "id": "rfc359-w5-provider-runtime-unexercised",
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-runtime-exercised.test.ts",
       "symbol": "PROVIDER_RUNTIME_UNEXERCISED",
-      "baseline": 4,
+      "baseline": 0,
       "why": "RFC-359 W5：只被装配、从没被任何测试真正构造过的组合根。没跑起来 = 那条装配链的正确性无人知晓。"
     },
     {
@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 855,
+      "baseline": 854,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -776,11 +776,8 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1731,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 W12 第六批：新增 commitRequirementCells 原子端口，把需求快照插入与 mission 引用 CAS 放在同一事务；修复 readiness 竞争后引用永久缺失。写端口 1730→1731，原分散应用写点移除。"
-      }
+      "baseline": 1727,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -793,11 +790,8 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 275,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-359 W12 第六批：需求快照与 mission 引用改由一个 DatabaseSession 事务原子提交，增加1处明确事务回调；真实并发合并及外层回滚回归覆盖。"
-      }
+      "baseline": 272,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -817,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5285,
+      "baseline": 5280,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -838,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4749,
+      "baseline": 4748,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -873,15 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24925,
+      "baseline": 24926,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W12 第六批：classic catalog 与 resource-package 读取装配共用工厂，新增需求原子命令及有界维护慢片诊断，生产具名符号24913→24925；观察边与例外分别减少11。"
+        "why": "RFC-359 W12 第七批：来源终止每目标事务与普通 lifecycle writer 合一，两个 applyOne 共641行退役、4个生产文件净减394行；为命名共有事务步骤新增符号，生产具名符号24925→24926，实际写入口与事务回调分别减少4和3。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d356f1c137d72cb76429b16152457a851d953cae896b3b016c6a8e1608384087",
+    "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -894,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bd697712e5ef79615c5058cf12db110ce4b47582",
-    "contentDigest": "sha256:0bb86c52010ff66db85b14f03c7c71a7b4b9bf645368b72608101bfcac348d92",
+    "currentSnapshotSha": "203c1da42d3e9f8bddbda2ae7256e41df9cf42a0",
+    "contentDigest": "sha256:0015af6fd9aa1028ffd82ea0ca34ff33ea5482e0ac85792c20a45804768f7afe",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

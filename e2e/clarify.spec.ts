@@ -24,7 +24,7 @@
 //   → parent aggregates → task done.
 
 import { test, expect } from '@playwright/test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -672,6 +672,7 @@ test.describe
 // ---------------------------------------------------------------------------
 
 test.describe('RFC-026 clarify e2e — inline session resume', () => {
+  const agentName = 'e2e-rfc026-designer'
   let daemon: DaemonHandle
   let repoDir: string
   let stubState: string
@@ -689,6 +690,7 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
         CLARIFY_STUB_STATE: stubState,
         CLARIFY_INLINE_ARGV_LOG: argvLog,
         CLARIFY_INLINE_SESSION_LOG: sessionLog,
+        CLARIFY_INLINE_SESSION_AGENT: agentName,
       },
     })
     repoDir = mkdtempSync(join(tmpdir(), 'aw-e2e-rfc026-repo-'))
@@ -699,7 +701,6 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
       Authorization: `Bearer ${daemon.token}`,
       'Content-Type': 'application/json',
     }
-    const agentName = 'e2e-rfc026-designer'
     const agentRes = await fetch(`${daemon.baseUrl}/api/agents`, {
       method: 'POST',
       headers,
@@ -778,6 +779,19 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     fixtures = { workflowId: workflow.id, repoPath: repoDir, clarifyNodeId: 'clarify_1' }
   })
 
+  test.afterEach(async () => {
+    const testInfo = test.info()
+    if (testInfo.status === testInfo.expectedStatus) return
+    for (const [name, path] of [
+      ['inline-runtime-argv', argvLog],
+      ['inline-designer-sessions', sessionLog],
+    ] as const) {
+      if (path !== undefined && existsSync(path)) {
+        await testInfo.attach(name, { path, contentType: 'text/plain' })
+      }
+    }
+  })
+
   test.afterAll(async () => {
     try {
       rmSync(repoDir, { recursive: true, force: true })
@@ -844,9 +858,12 @@ test.describe('RFC-026 clarify e2e — inline session resume', () => {
     //    (from the FLAG, into CLARIFY_INLINE_SESSION_LOG) — NOT by grepping the
     //    whole argv for `--session`, which a prompt carrying `--session`-like body
     //    text would fool (Codex 191bc32c re-review). Round 0 (clarify) forwards NO
-    //    session (empty line, filtered out); round 1 (resume) forwards exactly the
+    //    session (empty line retained); round 1 (resume) forwards exactly the
     //    prior id and nothing else.
-    // Assert the EXACT ordered per-invocation log — including the empty round-0
+    // The log is scoped to this designer's real --agent flag: background agents
+    // such as aw-memory-distiller inherit the same stub environment. All their
+    // calls remain in argvLog, attached with sessionLog on any test failure.
+    // Assert the EXACT ordered per-designer-invocation log — including the empty round-0
     // line AND the trailing-newline tail — so a reversed, duplicated, or
     // wrong-generation resume all FAIL rather than being filtered into
     // equivalence (Codex round-4). round 0 (clarify) parses no --session (empty);

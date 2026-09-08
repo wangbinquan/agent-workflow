@@ -140,7 +140,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'gettask-multi-repo.test.ts: 1',
   'git-repo-cache-submodule.test.ts: 1',
   'git-repo-cache.test.ts: 2',
-  'helpers/rfc310Pr2Fixture.ts: 1',
   'helpers/rfc310Pr3Fixture.ts: 1',
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
   'input-port-contract.test.ts: 1',

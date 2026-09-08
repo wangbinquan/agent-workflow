@@ -3,7 +3,7 @@
 // ③prepared effect 被作废、dispatched 不动（外部真相归 reconciler）；④缺
 // published revision 拒绝；⑤active writable action 拒绝；⑥fence 期间拒绝。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 
 import {
   applyConfigurationUpgrade,
@@ -16,6 +16,7 @@ import {
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr2Fixture } from './helpers/rfc310Pr2Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const now = () => Date.now()
 
@@ -23,9 +24,9 @@ function codeOf(err: unknown): string {
   return (err as { code?: string }).code ?? String(err)
 }
 
-describe('rfc310 pr2 configuration upgrade', () => {
+describeEachProvider('rfc310 pr2 configuration upgrade', (harness) => {
   test('noop preview/apply; real apply repins policy and bumps epoch; prepared effects die', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const persistence = createMissionPersistence(f.db)
     const missionId = await f.launch('t31a-main')
     const mission = (await f.store.getMission(missionId))!
@@ -77,7 +78,7 @@ describe('rfc310 pr2 configuration upgrade', () => {
   })
 
   test('rejects missing revision, active writable action, and fenced missions', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const persistence = createMissionPersistence(f.db)
     const missionId = await f.launch('t31a-neg')
     const mission = (await f.store.getMission(missionId))!

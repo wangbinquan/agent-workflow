@@ -29,6 +29,7 @@ import {
   developmentDecisions,
 } from '../src/db/schema'
 import { buildPr2Fixture, JAVA_CELLS } from './helpers/rfc310Pr2Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 const repoCollector: RepositoryFactsCollectorPort = {
@@ -49,9 +50,9 @@ const okLauncher: AgentActionLauncherPort = {
   },
 }
 
-describe('rfc310 pr2 reconciler', () => {
+describeEachProvider('rfc310 pr2 reconciler', (harness) => {
   test('collect-then-implement journey: indeterminate → collect → route-completed action', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-journey-1')
     const deps = f.deps({
       repositoryFacts: repoCollector,
@@ -77,11 +78,11 @@ describe('rfc310 pr2 reconciler', () => {
       },
       handled: 'action-launched',
     })
-    const runs = f.db.select().from(developmentActionRuns).all()
+    const runs = await f.db.select().from(developmentActionRuns)
     expect(runs).toHaveLength(1)
     expect(runs[0]!.writable).toBe(1)
     expect(runs[0]!.templateId).toBe(f.templateId)
-    const attempts = f.db.select().from(developmentAgentAttempts).all()
+    const attempts = await f.db.select().from(developmentAgentAttempts)
     expect(attempts).toHaveLength(1)
     expect(attempts[0]!.executionRef).toBe('exec-001')
     expect(attempts[0]!.rerunSeq).toBe(0)
@@ -90,7 +91,7 @@ describe('rfc310 pr2 reconciler', () => {
     expect(mission.readinessJson).not.toBeNull()
 
     // decision 的 selectedJson 持久化的是补全后 templateRef（canonical trace 合同）。
-    const decisions = f.db.select().from(developmentDecisions).all()
+    const decisions = await f.db.select().from(developmentDecisions)
     const actionDecision = decisions.find((d) => d.selectedJson.includes('run-agent-action'))!
     expect(actionDecision.selectedJson).toContain(`${f.templateId}@1`)
     expect(actionDecision.selectedJson).not.toContain('pending-route')
@@ -109,7 +110,7 @@ describe('rfc310 pr2 reconciler', () => {
   //
   // 这里用「第一次 occUpdate 必冲突」精确构造那个竞态，不靠卡时序。
   test('并发挤掉的事实写回必须重试落库 —— 丢了就是永久停顿', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-occ-retry-1')
     const base = f.deps({
       repositoryFacts: repoCollector,
@@ -147,7 +148,7 @@ describe('rfc310 pr2 reconciler', () => {
   })
 
   test('missing launcher is a typed block, never a silent skip', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-nolaunch-1')
     // PR-11 起 launcher 的接线判定按模板 executor 分流（agent / script），不再是
     // 「所有端口之前」的总闸。要证明缺 launcher 仍是 typed block，就必须把其余端口
@@ -164,13 +165,13 @@ describe('rfc310 pr2 reconciler', () => {
     const mission = (await f.store.getMission(missionId))!
     expect(mission.status).toBe('blocked')
     expect(mission.blockCode).toBe('agent-launcher-not-wired')
-    const run = f.db.select().from(developmentActionRuns).all()[0]!
+    const run = (await f.db.select().from(developmentActionRuns))[0]!
     expect(run.status).toBe('failed')
     expect(run.failureJson).toContain('agent-launcher-not-wired')
   })
 
   test('unsettled effect stops at the guard, arms a durable wake, and dedupes on replay', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-wait-1')
     const mission = (await f.store.getMission(missionId))!
     const effect = await f.store.prepareEffect({
@@ -200,7 +201,7 @@ describe('rfc310 pr2 reconciler', () => {
   })
 
   test('external MR terminal wins over everything; claim released; terminal absorbs', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-terminal-1')
     const mission = (await f.store.getMission(missionId))!
     const claim = ulid()
@@ -266,7 +267,7 @@ describe('rfc310 pr2 reconciler', () => {
   })
 
   test('readinessJson never counts an unknown required gate as pass', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-readiness-1')
     const mission = (await f.store.getMission(missionId))!
     const snapshotId = ulid()

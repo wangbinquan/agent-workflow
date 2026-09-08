@@ -7,7 +7,7 @@
 // invalidate；④到期 deferred wake 被 fire（state 迁移）且 domain 语义：
 // early 唤醒/重启都不清零 attemptOrdinal。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { recoverMissions } from '../src/modules/development-automation/application/missionRecovery'
@@ -26,6 +26,7 @@ import {
 } from '../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr2Fixture, type Pr2Fixture } from './helpers/rfc310Pr2Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 function readersOf(f: Pr2Fixture) {
   return {
@@ -41,9 +42,9 @@ const okExecutor: MissionEffectExecutorPort = {
   },
 }
 
-describe('rfc310 pr2 recovery', () => {
+describeEachProvider('rfc310 pr2 recovery', (harness) => {
   test('cancel with a dispatched effect settles through the executor, then reaches canceled', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-cancel-1')
     const mission = (await f.store.getMission(missionId))!
     const claim = ulid()
@@ -97,7 +98,7 @@ describe('rfc310 pr2 recovery', () => {
   })
 
   test('handoff-pending settles into tracking-only with automation writes fenced off', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-handoff-1')
     const mission = (await f.store.getMission(missionId))!
     expect(
@@ -117,7 +118,7 @@ describe('rfc310 pr2 recovery', () => {
   })
 
   test('prepared effects from an older epoch are invalidated, current-epoch ones survive', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-epoch-1')
     const mission = (await f.store.getMission(missionId))!
     const stale = await f.store.prepareEffect({
@@ -150,7 +151,7 @@ describe('rfc310 pr2 recovery', () => {
   })
 
   test('due wakes fire (ordinal preserved) and drive an ordinary reconcile', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-wake-1')
     const wakeId = ulid()
     await f.store.armWake({
@@ -201,7 +202,7 @@ describe('rfc310 pr2 recovery', () => {
   })
 
   test('reconcile on a fenced mission goes through the same settle path as recovery', async () => {
-    const f = await buildPr2Fixture()
+    const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-fence-direct-1')
     const mission = (await f.store.getMission(missionId))!
     await f.store.bumpEpoch(mission.id, mission.revision, { transitionFence: 'cancel-pending' })

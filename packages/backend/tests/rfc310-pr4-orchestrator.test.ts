@@ -9,7 +9,7 @@
 // ④needs-information → agent 问题集入台账 → 澄清闭环接管。
 // 真实文件系统/子进程面归 rfc310-pr4-journey 与 fork J/K 专项。
 
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import { launchAgentAttempt } from '../src/modules/development-automation/application/agentActionOrchestrator'
@@ -19,7 +19,12 @@ import type {
   AgentExecutionSnapshot,
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { RepositoryFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
-import { buildPr3Fixture, PR3_JAVA_CELLS, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import {
+  buildPr3Fixture,
+  PR3_JAVA_CELLS,
+  type ProviderPr3Fixture as Pr3Fixture,
+} from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 
@@ -158,9 +163,9 @@ async function launchToAction(
   return { missionId, actionRunId: mission.currentActionRunId! }
 }
 
-describe('rfc310 pr4 — attempt orchestration (launch half)', () => {
+describeEachProvider('rfc310 pr4 — attempt orchestration (launch half)', (harness) => {
   test('launch freezes the ledger contract: nonce digest only, ab1 baseline, pre-state blob, prompt protocol block', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,
@@ -196,7 +201,7 @@ describe('rfc310 pr4 — attempt orchestration (launch half)', () => {
   })
 
   test('missing execution ports are typed blocks (not silent skips)', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const ports = fakeAgentActionPorts({ db: fx.db, overrides: { agentLauncher: scripted.port } })
     const { workspaceValidation: _drop, ...withoutValidation } = ports
@@ -216,9 +221,9 @@ describe('rfc310 pr4 — attempt orchestration (launch half)', () => {
   })
 })
 
-describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
+describeEachProvider('rfc310 pr4 — attempt orchestration (collect half)', (harness) => {
   test('pending execution → guards wait(active-action-running); done+valid envelope → validated + candidate + honest stage block', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,
@@ -262,7 +267,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
   })
 
   test('protocol failure → fresh rerun with new nonce; budget exhaustion → agent-contract-exhausted', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,
@@ -323,7 +328,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
   })
 
   test('feedback protocol retry rebuilds from the exact frozen comment body', async () => {
-    const fx = await buildPr3Fixture({ feedbackRoute: true })
+    const fx = await buildPr3Fixture({ db: harness.db, feedbackRoute: true })
     const scripted = scriptedLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,
@@ -453,7 +458,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
   })
 
   test('boundary violation → attempt discarded (never same-session) + fresh rerun', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const base = fakeAgentActionPorts({ db: fx.db, overrides: { agentLauncher: scripted.port } })
     const deps = fx.deps({
@@ -488,7 +493,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
   })
 
   test('needs-information → agent question set enters the clarification loop', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,
@@ -531,7 +536,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
   })
 
   test('execution not-found → runtime-transient fresh rerun path', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
     const deps = fx.deps({
       repositoryFacts: repoCollector,

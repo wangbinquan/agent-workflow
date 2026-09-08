@@ -8,7 +8,7 @@
 // effect 台账（idempotencyKey）+ 台账 state 推进（addressed/needs-human），
 // 正文只回复绝不 resolve。多轮推进收单 test 防 --randomize。
 
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
@@ -35,6 +35,7 @@ import { createAttemptContextStore } from '../src/modules/development-automation
 import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 setDefaultTimeout(120_000)
 
@@ -52,12 +53,12 @@ const WAIT_MR_CARE: NextDecision = {
   attemptOrdinal: 0,
 }
 
-describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
+describeEachProvider('rfc310 pr7 — mr care redispatch (pure with store)', (harness) => {
   // Regression: a feedback selection is only an action-scoped lease. Launch
   // or contract failure must make the exact revision selectable again instead
   // of leaving it permanently hidden in `selected`.
   test('feedback action selection is released back to observed by exact action run', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const persistence = createMissionPersistence(fx.db)
     const now = 10_000_000
     await fx.store.createMission({
@@ -150,7 +151,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
   // T78：conflict repair 的三条 policy 边界。它们都不在 takeover 里——规则命中
   // conflict.repair 时 selected 根本不是静止态，放进 takeover 就永远轮不到。
   test('conflict repair honours policy mode, repair budget and rule routing', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const base = defaultAutomationPolicyContent()
     const now = 10_000_000
     const missionId = 'm-conflict-policy'
@@ -285,7 +286,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
   })
 
   test('takeover, staleness, reply dispatch, feedback wait, readiness push', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const policy = defaultAutomationPolicyContent()
     const now = 10_000_000
     const mission = { id: 'm-care', mrClaimId: 'claim-1', status: 'watching' } as MissionRow
@@ -434,9 +435,9 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
   })
 })
 
-describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
+describeEachProvider('rfc310 pr7 — collect-mr-facts arm ledger integration', (harness) => {
   test('collect upserts threads idempotently, obsoletes old head, projects unhandled count; reply arm settles ledger', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const noMatch = await createAutomationPolicy(fx.db, {
       name: 'pol-pr7-care',
       ownerUserId: 'admin',

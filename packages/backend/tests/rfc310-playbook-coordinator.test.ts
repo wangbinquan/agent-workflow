@@ -4,7 +4,7 @@
 // step. These cases lock exact success/failure branches, durable joins, problem
 // producer fallback, problem priority and configured verification.
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 
 import {
   buildFactSnapshot,
@@ -24,6 +24,8 @@ import type { ReconcilerPorts } from '../src/modules/development-automation/appl
 import type { ReconcileDeps } from '../src/modules/development-automation/application/missionReconciler'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 
 const ref = (id: string, revision = 1) => ({ id, revision })
 type EmployeeStep = NonNullable<DigitalEmployeeContent['steps']>[number]
@@ -97,6 +99,7 @@ function agentStep(stepId: string, onSuccess: string, onExhausted: string): Empl
 }
 
 async function setup(
+  db: ProviderNeutralDatabase,
   patch:
     | Partial<DigitalEmployeeContent>
     | ((context: {
@@ -120,7 +123,7 @@ async function setup(
     readonly persistence: ReturnType<typeof createPlaybookSagaPersistence>
   }
 }> {
-  const fx = await buildPr3Fixture()
+  const fx = await buildPr3Fixture({ db: db })
   const missionId = await fx.launchDirect(`playbook-${crypto.randomUUID()}`)
   const mission = (await fx.store.getMission(missionId))!
   const contentPatch =
@@ -224,9 +227,9 @@ async function settle(
   ).toBe(true)
 }
 
-describe('employee step routing', () => {
+describeEachProvider('employee step routing', (harness) => {
   test('success does not fall through into a failure-only target', async () => {
-    const env = await setup({
+    const env = await setup(harness.db, {
       steps: [agentStep('attempt', 'complete', 'recover'), platformStep('recover', 'reconcile')],
     })
     const first = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
@@ -246,6 +249,7 @@ describe('employee step routing', () => {
   // `step-failed:...:agent-contract-exhausted`；宽松的实现则会照着空需求交付）。
   test('a step that eats the mission requirement materializes it before dispatching', async () => {
     const env = await setup(
+      harness.db,
       { steps: [agentStep('attempt', 'complete', 'recover')] },
       {},
       {},
@@ -282,7 +286,7 @@ describe('employee step routing', () => {
   // 新身份 ⇒ 每轮重新认领 run + 重新拉起 Agent。T140 旅程实测过这个活锁：
   // 同一步骤 110 次 succeeded、110 次 Agent 执行，下一步永远轮不到。
   test('the requirement-fed step keeps one identity when the requirement fact snapshot is rewritten', async () => {
-    const env = await setup({ steps: [agentStep('attempt', 'complete', 'recover')] })
+    const env = await setup(harness.db, { steps: [agentStep('attempt', 'complete', 'recover')] })
     expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toMatchObject({
       kind: 'run-agent-action',
     })
@@ -294,7 +298,7 @@ describe('employee step routing', () => {
   })
 
   test('exhaustion follows the configured recovery step without blocking the Mission', async () => {
-    const env = await setup({
+    const env = await setup(harness.db, {
       steps: [agentStep('attempt', 'complete', 'recover'), platformStep('recover', 'reconcile')],
     })
     const first = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
@@ -309,7 +313,7 @@ describe('employee step routing', () => {
   })
 
   test('any join settles durably and leaves the unfinished member observation-only', async () => {
-    const env = await setup({
+    const env = await setup(harness.db, {
       steps: [
         platformStep('owner', 'complete', {
           groupId: 'parallel-checks',
@@ -358,7 +362,7 @@ describe('employee step routing', () => {
   })
 })
 
-describe('problem production and handling', () => {
+describeEachProvider('problem production and handling', (harness) => {
   const pipelineCells = {
     '__pipeline.headSha': known('a'.repeat(40)),
     '__pipeline.manifestDigest': known('b'.repeat(64)),
@@ -367,6 +371,7 @@ describe('problem production and handling', () => {
 
   test('uses the declared producer fallback after the primary is exhausted', async () => {
     const env = await setup(
+      harness.db,
       {
         problemTypes: [
           {
@@ -421,6 +426,7 @@ describe('problem production and handling', () => {
 
   test('handles lower numeric priority first and runs its configured verification step', async () => {
     const env = await setup(
+      harness.db,
       {
         steps: [
           {
@@ -487,9 +493,9 @@ describe('problem production and handling', () => {
   })
 })
 
-describe('cross-repository employee and approval saga', () => {
+describeEachProvider('cross-repository employee and approval saga', (harness) => {
   test('handoff and terminal settlement retain dispatched child and approval receipts', async () => {
-    const env = await setup({})
+    const env = await setup(harness.db, {})
     const now = Date.now()
     const childMissionId = await env.launchSibling(`retained-child-${crypto.randomUUID()}`)
     const childStep = (
@@ -609,7 +615,7 @@ describe('cross-repository employee and approval saga', () => {
   })
 
   test('blocks a recursive employee identity even when the requested revision differs', async () => {
-    const env = await setup(({ employeeId, employeeRevision }) => ({
+    const env = await setup(harness.db, ({ employeeId, employeeRevision }) => ({
       steps: [
         {
           stepId: 'recursive-call',
@@ -644,6 +650,7 @@ describe('cross-repository employee and approval saga', () => {
     let approvalObserves = 0
     let childMissionRef = ''
     const env = await setup(
+      harness.db,
       {
         steps: [
           {
@@ -863,6 +870,7 @@ describe('cross-repository employee and approval saga', () => {
 
   test('rejects a child receipt that does not belong to the frozen intent', async () => {
     const env = await setup(
+      harness.db,
       {
         steps: [
           {
@@ -918,6 +926,7 @@ describe('cross-repository employee and approval saga', () => {
 
   test('turns a still-pending approval into expired at its durable deadline', async () => {
     const env = await setup(
+      harness.db,
       {},
       {},
       {

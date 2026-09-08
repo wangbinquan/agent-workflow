@@ -948,7 +948,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 794
+      "lines": 808
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -1212,7 +1212,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 692
+      "lines": 1249
     },
     {
       "id": "rfc317-lifecycle-origin-neutrality",
@@ -1777,7 +1777,7 @@
       "assertsAbsence": true,
       "negativeFixture": false,
       "classified": true,
-      "lines": 1000
+      "lines": 919
     },
     {
       "id": "rfc359-w5-provider-pair-conformance",
@@ -1801,7 +1801,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 550
+      "lines": 574
     },
     {
       "id": "rfc359-w5-t17-provider-file-location",
@@ -1813,7 +1813,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 303
+      "lines": 302
     },
     {
       "id": "rfc359-w5-t18-bare-transaction",
@@ -1873,7 +1873,7 @@
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 350
+      "lines": 351
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -1885,7 +1885,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 989
+      "lines": 988
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -2393,14 +2393,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d356f1c137d72cb76429b16152457a851d953cae896b3b016c6a8e1608384087",
+    "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "bd697712e5ef79615c5058cf12db110ce4b47582",
-    "contentDigest": "sha256:afdda90f93dc3715d562ef9a84ac6ca5d54215c3afdeb9a2d74c47a21e4fd38a",
+    "currentSnapshotSha": "203c1da42d3e9f8bddbda2ae7256e41df9cf42a0",
+    "contentDigest": "sha256:66d41dd9b68eef83e644f9024751bbab23734e00c6f9cc95ea2e1d9449560042",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

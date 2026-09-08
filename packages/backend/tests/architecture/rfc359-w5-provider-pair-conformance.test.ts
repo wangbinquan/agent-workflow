@@ -116,9 +116,9 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 删了技能 / 库更旧），live 目录里最后是哪一代内容。判据缺口 13b 就是被它照出来并销掉的。
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts, rfc359-w9-resource-package-skill-recovery-conformance.test.ts',
   'modules/task-execution/infrastructure/ChildExecutionLaunchOperations: sqlite + postgresql — verified by rfc359-w8-child-launch-conformance.test.ts',
-  // RFC-359 W8：判**真重复**（同端口同算法两份实现，见对拍文件头）；本刀只补对拍并把 PG 侧
-  // 缺的 RFC-300 工作区回收认领抬齐，合一（改走中立事务设施）留给下一刀。
-  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w8-source-termination-conformance.test.ts',
+  // RFC-359 W12：共同流程和每目标事务 atom 已合一，两个 applyOne 副本退役。
+  // 留下两侧既有的提交后事件/停止位置与 SQLite 无 driver 收尾机制，真实对拍继续锁定。
+  'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite + postgresql — verified by rfc359-w12-source-termination-atom.test.ts, rfc359-w8-source-termination-conformance.test.ts',
   // RFC-359 W8：判**不合**（两台 children 引擎 + 两个 registry，见对拍文件头注释），只补对拍。
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite + postgresql — verified by rfc359-w8-runtime-participants-conformance.test.ts',
   // RFC-359 W12：TaskLifecycleAutoRepairCommand 已合为中立循环；PG 自动修复借用人工修复的

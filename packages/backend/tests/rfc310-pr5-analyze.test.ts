@@ -22,6 +22,7 @@ import type {
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { makeManifest } from './helpers/rfc310Pr4Manifest'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
 setDefaultTimeout(120_000)
@@ -170,7 +171,7 @@ describe('rfc310 pr5 T54 — semantic validator', () => {
   })
 })
 
-describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
+describeEachProvider('rfc310 pr5 T54 — analyze → implement chain (end to end)', (harness) => {
   function scriptedLauncher(): {
     port: AgentActionLauncherPort
     prompts: string[]
@@ -210,6 +211,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
 
   test('default-chain shape: analyze runs first, its validated facts route implement next', async () => {
     const fx = await buildPr3Fixture({
+      db: harness.db,
       analyzeRoute: true,
       rules: [
         {
@@ -315,6 +317,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
 
   test('module refs outside the catalog make analyze retry, not silently pass', async () => {
     const fx = await buildPr3Fixture({
+      db: harness.db,
       analyzeRoute: true,
       rules: [
         {

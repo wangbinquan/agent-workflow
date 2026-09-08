@@ -145,6 +145,9 @@ export async function createEachProviderTaskExecution(
       })
     return {
       provider,
+      actor,
+      identityAccess,
+      launchResources,
       persistence: provider.persistence,
       async launch(
         task: StartTask,
@@ -265,6 +268,9 @@ export async function createEachProviderTaskExecution(
   })
   return {
     provider,
+    actor,
+    identityAccess,
+    launchResources,
     persistence: provider.persistence,
     async launch(
       task: StartTask,

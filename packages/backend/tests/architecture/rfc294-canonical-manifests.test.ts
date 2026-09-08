@@ -478,6 +478,20 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     expect(entries.length).toBeGreaterThan(30)
     expect(ledger.unknown).toEqual([])
     expect(ledger.unknownControlGateways).toEqual([])
+    // RFC-359 W12 moves the two source-fence writes into one shared atom.
+    const sourceFences = entries.filter(
+      (entry) =>
+        entry.file ===
+        'packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts',
+    )
+    expect(sourceFences).toHaveLength(1)
+    expect(sourceFences[0]).toMatchObject({
+      consumer: 'writeFence',
+      dataClass: 'tasks',
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'task-lifecycle-revision-and-provider-transaction-cas',
+    })
     expect([...new Set(entries.map((entry) => entry.authorityKind))].sort()).toEqual([
       'control-revision',
       'recovery-proof',

@@ -32,6 +32,9 @@ const KNOWN = new Set<string>([...EMPLOYEE_CASE_TERMINAL_KINDS, ...LEGACY_MISSIO
  * 不在这条断言的范围内。
  */
 function mintedTerminalKinds(rel: string, text: string): string[] {
+  // 绝大多数源文件没有这个属性，无需为它们构造完整 AST。Unicode 转义也可组成
+  // Identifier（例如 terminal\u004bind），必须继续交给原 AST 判据；文本命中本身不算铸值。
+  if (!text.includes('terminalKind') && !text.includes('\\u')) return []
   const source = ts.createSourceFile(rel, text, ts.ScriptTarget.ES2022, true)
   const out: string[] = []
   const visit = (node: ts.Node): void => {
@@ -121,7 +124,7 @@ describe('RFC-317 T44（DE-06）—— 终态种类词汇', () => {
   })
 })
 
-describe('RFC-317 T44 自变异 —— 判据的两条边界', () => {
+describe('RFC-317 T44 自变异 —— AST 判据与预筛边界', () => {
   test('真的铸一个未知终态会被抓到', () => {
     expect(
       mintedTerminalKinds('probe.ts', `const x = { terminalKind: 'invented-kind' }\n`).length,
@@ -132,5 +135,58 @@ describe('RFC-317 T44 自变异 —— 判据的两条边界', () => {
     expect(
       mintedTerminalKinds('probe.ts', `if (row.terminalKind === 'merged') return 1\n`),
     ).toEqual([])
+  })
+
+  test.each([
+    ['无终态属性的返回判别值', `return { ok: false, code: 'epoch-conflict' }`, []],
+    [
+      'quoted / computed 属性保留原 Identifier 判据',
+      `const x = { 'terminalKind': 'invented-kind', ['terminalKind']: 'invented-kind' }`,
+      [],
+    ],
+    [
+      '转义 quoted / computed 属性仍不属于 Identifier',
+      String.raw`const x = { 'terminal\u004bind': 'invented-kind', ['terminal\u004bind']: 'invented-kind' }`,
+      [],
+    ],
+    [
+      '注释和字符串里提到赋值不算铸值',
+      `// const x = { terminalKind: 'invented-kind' }\nconst text = "{ terminalKind: 'invented-kind' }"`,
+      [],
+    ],
+    [
+      '属性简写不是带字面量的属性赋值',
+      `const terminalKind = 'invented-kind'; const x = { terminalKind }`,
+      [],
+    ],
+    [
+      'Unicode 转义标识符仍铸值',
+      String.raw`const x = { terminal\u004bind: 'invented-kind' }`,
+      ["probe.ts:1 'invented-kind'"],
+    ],
+    [
+      'Unicode code point 转义标识符仍铸值',
+      String.raw`const x = { \u{74}erminalKind: 'invented-kind' }`,
+      ["probe.ts:1 'invented-kind'"],
+    ],
+    [
+      '完全转义的标识符仍铸值',
+      String.raw`const x = { \u0074\u0065\u0072\u006d\u0069\u006e\u0061\u006c\u004b\u0069\u006e\u0064: 'invented-kind' }`,
+      ["probe.ts:1 'invented-kind'"],
+    ],
+    [
+      '字符串转义按 AST 解码且保留行号',
+      String.raw`const x = {
+  terminal\u004bind: '\u0069nvented-kind'
+}`,
+      ["probe.ts:2 'invented-kind'"],
+    ],
+    [
+      '无插值模板字面量仍铸值',
+      'const x = { terminalKind: `invented-kind` }',
+      ["probe.ts:1 'invented-kind'"],
+    ],
+  ] as const)('%s', (_name, source, expected) => {
+    expect(mintedTerminalKinds('probe.ts', source)).toEqual([...expected])
   })
 })

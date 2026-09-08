@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1731,
+    "entries": 1727,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -26535,95 +26535,6 @@
       "controls": {
         "audit": false,
         "authority": "effect",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#applyOne",
-      "missingControls": [
-        "audit"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#applyOne",
-      "symbol": "applyOne",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#CANCELABLE",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#CANCELABLE",
-      "symbol": "CANCELABLE",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#CANCELABLE_NODE_STATUSES",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#CANCELABLE_NODE_STATUSES",
-      "symbol": "CANCELABLE_NODE_STATUSES",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#cancelOpenNodeRuns",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#cancelOpenNodeRuns",
-      "symbol": "cancelOpenNodeRuns",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "effect",
         "authorization": false,
         "event": true,
         "fenceOrOcc": true,
@@ -26639,28 +26550,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#createPostgresqlTaskSourceTerminationParticipant",
       "symbol": "createPostgresqlTaskSourceTerminationParticipant",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "effect",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#revokeClaimedOwner",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#revokeClaimedOwner",
-      "symbol": "revokeClaimedOwner",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -27245,6 +27134,117 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#applySourceTerminationTarget",
+      "missingControls": [
+        "audit"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#applySourceTerminationTarget",
+      "symbol": "applySourceTerminationTarget",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#CANCELABLE_NODE_STATUSES",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#CANCELABLE_NODE_STATUSES",
+      "symbol": "CANCELABLE_NODE_STATUSES",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#cancelOpenNodeRuns",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#cancelOpenNodeRuns",
+      "symbol": "cancelOpenNodeRuns",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#stopOwner",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#stopOwner",
+      "symbol": "stopOwner",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "effect",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#StopOwner",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#StopOwner",
+      "symbol": "StopOwner",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -27298,95 +27298,6 @@
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-      "missingControls": [
-        "audit"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-      "symbol": "applyOne",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#CANCELABLE",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#CANCELABLE",
-      "symbol": "CANCELABLE",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#CANCELABLE_NODE_RUN_STATUSES",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#CANCELABLE_NODE_RUN_STATUSES",
-      "symbol": "CANCELABLE_NODE_RUN_STATUSES",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#cancelOpenNodeRunsInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#cancelOpenNodeRunsInTx",
-      "symbol": "cancelOpenNodeRunsInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "effect",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
@@ -27394,7 +27305,6 @@
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
       "missingControls": [
         "audit",
-        "event",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#createTaskSourceTerminationParticipant",
@@ -41349,7 +41259,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d356f1c137d72cb76429b16152457a851d953cae896b3b016c6a8e1608384087",
+  "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41459,7 +41369,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 200,
+      "durableWriterSites": 192,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42538,86 +42448,6 @@
       },
       {
         "allowedTables": [
-          "taskExecutionOwners"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "revokeClaimedOwner",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionOwners",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#109:taskExecutionOwners",
-        "line": 109,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#revokeClaimedOwner",
-        "requiredBrandedProof": "VerifiedStopProofOrExactControlTuple",
-        "revisionPredicate": "exact-owner-tuple-state-and-revision",
-        "symbol": "revokeClaimedOwner"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#231:tasks",
-        "line": 231,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#293:tasks",
-        "line": 293,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#355:tasks",
-        "line": 355,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "cancelOpenNodeRuns",
-        "controlSubtype": "terminal-control",
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#68:nodeRuns",
-        "line": 68,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts#cancelOpenNodeRuns",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "cancelOpenNodeRuns"
-      },
-      {
-        "allowedTables": [
           "tasks"
         ],
         "authorityKind": "control-revision",
@@ -42874,6 +42704,22 @@
       },
       {
         "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "writeFence",
+        "controlSubtype": "terminal-control",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#78:tasks",
+        "line": 78,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#writeFence",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "writeFence"
+      },
+      {
+        "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
@@ -42903,70 +42749,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "createSqliteNodeRunMintParticipantInTx"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#186:tasks",
-        "line": 186,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#199:tasks",
-        "line": 199,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#315:tasks",
-        "line": 315,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "applyOne",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#374:tasks",
-        "line": 374,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#applyOne",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "applyOne"
       },
       {
         "allowedTables": [
@@ -44001,8 +43783,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#110:tasks",
-        "line": 110,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#218:tasks",
+        "line": 218,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44013,16 +43795,16 @@
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "set",
+        "consumer": "writeTaskRuntimeLifecycleInTx",
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#142:tasks",
-        "line": 142,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#77:tasks",
+        "line": 77,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#writeTaskRuntimeLifecycleInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "DrizzleTaskRuntimeLifecyclePersistence"
+        "symbol": "writeTaskRuntimeLifecycleInTx"
       },
       {
         "allowedTables": [

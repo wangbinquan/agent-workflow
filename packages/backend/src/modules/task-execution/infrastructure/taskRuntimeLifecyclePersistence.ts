@@ -13,15 +13,23 @@ import {
   ConcurrentTaskTransition,
   isTerminalTaskStatus,
   resolveTerminalWorkspacePruneDecision,
+  type TerminalWorkspacePruneDecision,
 } from '@/services/lifecycle'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
-import type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
+import type {
+  TaskRuntimeLifecycleMutation,
+  TaskRuntimeLifecyclePersistence,
+} from '../application/ports/taskRuntimeLifecyclePersistence'
+import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
-import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
+import {
+  appendTaskLifecycleTransitionCommittedEvent,
+  type TaskCommittedEventIdentity,
+} from './taskLifecycleCommittedEvents'
 
 type LifecycleRow = Readonly<{
   status: TaskStatus
@@ -33,6 +41,106 @@ type LifecycleRow = Readonly<{
   sourceTerminationFence: 'closed' | 'merged' | null
   errorSummary: string | null
 }>
+
+type TaskRuntimeLifecycleWriteInput = Readonly<{
+  taskId: string
+  from: TaskStatus
+  to: TaskStatus
+  extra?: TaskRuntimeLifecycleMutation &
+    Partial<
+      Pick<typeof tasks.$inferInsert, 'sourceTerminationFence' | 'sourceTerminationEffectRev'>
+    >
+  now: number
+  isRevival?: boolean
+  workspacePruneDecision: TerminalWorkspacePruneDecision
+  previousErrorSummary: string | null
+  expectedLifecycleRevision?: number
+  nodeChanges?: readonly TaskNodeChangeV1[]
+  sourceTerminationEffectRef?: string | null
+  committedEventIdentity?: Partial<TaskCommittedEventIdentity>
+  onTransitionTx?: (
+    tx: TaskExecutionTransaction,
+    transition: Readonly<{ from: TaskStatus; to: TaskStatus }>,
+    collector: Readonly<{ addNodeChanges(changes: readonly TaskNodeChangeV1[]): void }>,
+  ) => Promise<void>
+}>
+
+/** The single physical task CAS and committed-event writer. Named atoms own
+ * validation and the transaction; companions run after the CAS, before its
+ * event is appended. A CAS miss returns null before any companion runs, while
+ * companion failures propagate so the enclosing transaction rolls back. */
+export async function writeTaskRuntimeLifecycleInTx(
+  tx: TaskExecutionTransaction,
+  input: TaskRuntimeLifecycleWriteInput,
+) {
+  const prune = input.workspacePruneDecision
+  const updated = await tx
+    .update(tasks)
+    .set({
+      status: input.to,
+      ...(input.to === 'running'
+        ? { runningSince: input.now }
+        : input.from === 'running'
+          ? {
+              runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
+              runningSince: null,
+            }
+          : {}),
+      ...(input.extra ?? {}),
+      ...(prune.prune ? { workspacePruningAt: input.now, workspacePruneCause: prune.cause } : {}),
+      lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
+    })
+    .where(
+      and(
+        eq(tasks.id, input.taskId),
+        eq(tasks.status, input.from),
+        ...(input.expectedLifecycleRevision === undefined
+          ? []
+          : [eq(tasks.lifecycleEventRevision, input.expectedLifecycleRevision)]),
+        ...(input.isRevival
+          ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)]
+          : []),
+        ...(prune.prune
+          ? [
+              isNull(tasks.workspacePruningAt),
+              isNull(tasks.workspacePruneCause),
+              isNull(tasks.workspacePrunedAt),
+            ]
+          : []),
+      ),
+    )
+    .returning({ lifecycleEventRevision: tasks.lifecycleEventRevision })
+  const changed = updated[0]
+  if (changed === undefined) return null
+  const nodeChanges = [...(input.nodeChanges ?? [])]
+  await input.onTransitionTx?.(
+    tx,
+    { from: input.from, to: input.to },
+    {
+      addNodeChanges: (changes) => {
+        nodeChanges.push(...changes)
+      },
+    },
+  )
+  const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
+    taskId: input.taskId,
+    lifecycleRevision: changed.lifecycleEventRevision,
+    previousStatus: input.from,
+    status: input.to,
+    errorSummary:
+      input.extra?.errorSummary === undefined
+        ? input.previousErrorSummary
+        : (input.extra.errorSummary ?? null),
+    nodeChanges,
+    workspacePruneClaim: prune.prune
+      ? { claimedAt: new Date(input.now).toISOString(), cause: prune.cause }
+      : null,
+    sourceTerminationEffectRef: input.sourceTerminationEffectRef,
+    identity: input.committedEventIdentity,
+    occurredAt: input.now,
+  })
+  return { lifecycleEventRevision: changed.lifecycleEventRevision, eventRef }
+}
 
 export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecyclePersistence {
   constructor(private readonly db: ProviderNeutralDatabase) {}
@@ -139,60 +247,17 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
     const result = await withTaskExecutionWrite(this.db, async (tx) => {
       await this.fence(tx, input)
       await guard?.(tx)
-      const updated = await tx
-        .update(tasks)
-        .set({
-          status: input.to,
-          ...(input.to === 'running'
-            ? { runningSince: input.now }
-            : from === 'running'
-              ? {
-                  runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
-                  runningSince: null,
-                }
-              : {}),
-          ...(input.extra ?? {}),
-          ...(prune.prune
-            ? { workspacePruningAt: input.now, workspacePruneCause: prune.cause }
-            : {}),
-          lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-        })
-        .where(
-          and(
-            eq(tasks.id, input.taskId),
-            eq(tasks.status, from),
-            ...(isRevival
-              ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)]
-              : []),
-            ...(prune.prune
-              ? [
-                  isNull(tasks.workspacePruningAt),
-                  isNull(tasks.workspacePruneCause),
-                  isNull(tasks.workspacePrunedAt),
-                ]
-              : []),
-          ),
-        )
-        .returning({ lifecycleEventRevision: tasks.lifecycleEventRevision })
-      const changed = updated[0]
-      if (changed === undefined) {
+      const changed = await writeTaskRuntimeLifecycleInTx(tx, {
+        ...input,
+        from,
+        isRevival,
+        workspacePruneDecision: prune,
+        previousErrorSummary: snapshot.errorSummary,
+      })
+      if (changed === null) {
         throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
       }
-      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
-        taskId: input.taskId,
-        lifecycleRevision: changed.lifecycleEventRevision,
-        previousStatus: from,
-        status: input.to,
-        errorSummary:
-          input.extra?.errorSummary === undefined
-            ? snapshot.errorSummary
-            : (input.extra.errorSummary ?? null),
-        workspacePruneClaim: prune.prune
-          ? { claimedAt: new Date(input.now).toISOString(), cause: prune.cause }
-          : null,
-        occurredAt: input.now,
-      })
-      return eventRef === null ? [] : [eventRef]
+      return changed.eventRef === null ? [] : [changed.eventRef]
     })
     await publishCommittedEventsAfterCommit(result)
   }

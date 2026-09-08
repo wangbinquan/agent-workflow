@@ -272,6 +272,8 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   //    与债务无关；反过来把它们钉住会让「给 matcher 补一条自证」变成要改基线的事。
   'packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts|FIXTURE_EXPECTED_DECLARATIONS':
     'matcher 自证的假语料（__fixture__/thing.ts），不来自真实仓库',
+  'packages/backend/tests/rfc359-w12-clarify-inline-session-log.test.ts|EXPECTED_DESIGNER_SESSIONS':
+    '真实子进程夹具的两次 designer session 与日志末尾换行预期，不是仓库扫描结果或债务豁免表',
   'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES':
     'matcher 自证的假语料（modules/demo/…），不来自真实仓库',
   'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SINGLE_ENGINE_TEST':
@@ -367,6 +369,7 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       'packages/backend/tests/intent-teaching-registry.test.ts|LAUNCH_BASELINE',
       'packages/backend/tests/intent-teaching-registry.test.ts|VALIDATOR_BASELINE',
       'packages/backend/tests/rfc326-mcp-review-tools.test.ts|READ_TOOLS',
+      'packages/backend/tests/rfc359-w12-clarify-inline-session-log.test.ts|EXPECTED_DESIGNER_SESSIONS',
     ])
   })
 
