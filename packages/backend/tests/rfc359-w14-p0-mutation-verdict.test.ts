@@ -4,6 +4,36 @@ import { describe, expect, test } from 'bun:test'
 import { PHASES, validatePhaseLog, type Phase } from '../../../scripts/rfc359-p0-mutations'
 
 const diagnostics: Readonly<Record<string, readonly string[]>> = {
+  'p0-2-owner-snapshot': [
+    `[rfc359-p0-2-snapshot] {"taskId":"t7_01M20746EQP6RMXG9PVEAYH351","tokenRevision":1,"rowRevision":2,"tokenLeaseUntil":1788861416509,"rowLeaseUntil":1788861476519}
+TaskExecutionError: task 't7_01M20746EQP6RMXG9PVEAYH351' mutation was fenced
+  status: 409,
+ details: {},
+    code: "task-execution-stale-owner"
+      at assertHistoricalEffectOwner (rfc359-p0-mutation:effect-owner-snapshot:503:11)`,
+  ],
+  'p0-8-command-omission': [
+    `error: collaboration question dispatch command is not composed
+      at requireQuestionDispatchCommand (rfc359-p0-mutation:collaboration-command-omission:90:11)
+      at dispatchTaskQuestions (/repo/packages/backend/src/modules/collaboration/public/commands.ts:207:10)
+      at <anonymous> (/repo/packages/backend/tests/rfc359-t2-question-dispatch-command.test.ts:49:25)`,
+    `error: collaboration clarify decision command is not composed
+      at requireClarifyDecisionCommand (rfc359-p0-mutation:collaboration-command-omission:96:11)
+      at submitClarifyDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:215:10)
+      at <anonymous> (/repo/packages/backend/tests/rfc359-t2b-clarify-decision.test.ts:109:26)`,
+    `error: collaboration review decision command is not composed
+      at requireReviewDecisionCommand (rfc359-p0-mutation:collaboration-command-omission:84:11)
+      at submitReviewDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:199:10)
+      at <anonymous> (/repo/packages/backend/tests/rfc359-t2c-review-decision.test.ts:94:26)`,
+  ],
+  'p0-1-ambient-context': [
+    `[rfc359-p0-1-call] {"taskId":"t7_01M205XPBD8YRRQH8Q06222AJ1","explicitContext":false,"ambientTaskId":"t7_01M205XPBD8YRRQH8Q06222AJ1"}
+TaskExecutionError: ownerless task mutation refused durable owner for 't7_01M205XPBD8YRRQH8Q06222AJ1'
+  status: 409,
+ details: {},
+    code: "task-execution-stale-owner"
+      at assertTaskOwnerlessTx (rfc359-p0-mutation:ambient-owner-context:29:11)`,
+  ],
   'p0-12-protocol': [
     String.raw`error: expect(received).toContain(expected)
 Expected to contain: "<workflow-clarify>"
@@ -172,6 +202,115 @@ function verdict(id: string, log: string, exitCode = 1) {
 }
 
 describe('RFC-359 AC7 historical mutation verdict', () => {
+  test('P0-2 requires an actual advanced heartbeat snapshot and its same-task native error', () => {
+    const id = 'p0-2-owner-snapshot'
+    const log = transcript(id)
+    const diagnostic = diagnostics[id]![0]!
+    const witness = diagnostic.split('\n')[0]!
+    expect(verdict(id, log).valid).toBe(true)
+    for (const [from, to] of [
+      ['"taskId":"t7_01M20746EQP6RMXG9PVEAYH351"', '"taskId":"t7_01M20746EQP6RMXG9PVEAYH352"'],
+      ["task 't7_01M20746EQP6RMXG9PVEAYH351'", "task 't7_01M20746EQP6RMXG9PVEAYH352'"],
+      ['"rowRevision":2', '"rowRevision":1'],
+      ['"rowRevision":2', '"rowRevision":0'],
+      ['"rowRevision":2', '"rowRevision":null'],
+      ['"rowRevision":2', '"rowRevision":1.5'],
+      ['"rowRevision":2', '"rowRevision":"2"'],
+      ['"rowRevision":2', '"rowRevision":9007199254740992'],
+      ['"tokenRevision":1', '"tokenRevision":0'],
+      ['"rowLeaseUntil":1788861476519', '"rowLeaseUntil":1788861416509'],
+      ['"rowLeaseUntil":1788861476519', '"rowLeaseUntil":1788861416508'],
+      ['"tokenLeaseUntil":1788861416509', '"tokenLeaseUntil":0'],
+      ['TaskExecutionError:', 'Error:'],
+      ['mutation was fenced', 'unrelated setup failed'],
+      ['status: 409,', 'status: 500,'],
+      ['code: "task-execution-stale-owner"', 'code: "unrelated"'],
+      ['at assertHistoricalEffectOwner (', 'at unrelatedSetup ('],
+      ['rfc359-p0-mutation:effect-owner-snapshot:', 'rfc359-p0-mutation:other:'],
+    ] as const)
+      expect(verdict(id, log.replace(diagnostic, diagnostic.replace(from, to))).valid).toBe(false)
+    for (const replacement of [
+      'error: Test timed out after 5000ms',
+      'TypeError: Cannot read properties of undefined',
+      '',
+    ])
+      expect(verdict(id, log.replace(diagnostic, replacement)).valid).toBe(false)
+    expect(verdict(id, log.replace(`${witness}\n`, '')).valid).toBe(false)
+    expect(verdict(id, log.replace(witness, `${witness}\n${witness}`)).valid).toBe(false)
+    expect(verdict(id, `${diagnostic}\n${log.replace(diagnostic, '')}`).valid).toBe(false)
+    expect(verdict('current-before', `${witness}\n${transcript('current-before')}`, 0).valid).toBe(
+      false,
+    )
+  })
+
+  test('P0-8 requires all three original missing commands at their own public entries', () => {
+    const id = 'p0-8-command-omission'
+    const log = transcript(id)
+    expect(verdict(id, log).valid).toBe(true)
+    for (const [index, diagnostic] of diagnostics[id]!.entries()) {
+      for (const replacement of [
+        diagnostics[id]![(index + 1) % 3]!,
+        diagnostic.replace('error: collaboration', 'error: unrelated'),
+        diagnostic.replace('rfc359-p0-mutation:collaboration-command-omission:', 'unrelated.ts:'),
+        diagnostic.replace(/at require\w+ \(/, 'at unrelatedSetup ('),
+        diagnostic.replace(
+          /at (dispatchTaskQuestions|submitClarifyDecision|submitReviewDecision) \(/,
+          'at unrelatedPublicEntry (',
+        ),
+        diagnostic.replace('collaboration/public/commands.ts:', 'unrelated/commands.ts:'),
+        diagnostic.replace(/rfc359-t2[^)]+/, 'unrelated.test.ts:1:1)'),
+        'error: Test timed out after 5000ms',
+        'TypeError: Cannot read properties of undefined',
+        '',
+      ])
+        expect(verdict(id, log.replace(diagnostic, replacement)).valid).toBe(false)
+    }
+    expect(verdict(id, log.replace(/^\(pass\) .+\n/m, '')).valid).toBe(false)
+    expect(verdict(id, log.replace(/^\(fail\) .+\n/m, '')).valid).toBe(false)
+    expect(verdict(id, log.replace(/^\(pass\)/m, '(skip)')).valid).toBe(false)
+    expect(
+      verdict(id, `${log}\n# Unhandled error between tests\nerror: import failed\n`).valid,
+    ).toBe(false)
+    expect(verdict(id, log, 0).valid).toBe(false)
+  })
+
+  test('P0-1 requires the failed call, ambient context and native error to identify the same task', () => {
+    const id = 'p0-1-ambient-context'
+    const log = transcript(id)
+    const diagnostic = diagnostics[id]![0]!
+    const witness = diagnostic.split('\n')[0]!
+    expect(verdict(id, log).valid).toBe(true)
+    for (const [from, to] of [
+      ['"taskId":"t7_01M205XPBD8YRRQH8Q06222AJ1"', '"taskId":"t7_01M205XPBD8YRRQH8Q06222AJ2"'],
+      [
+        '"ambientTaskId":"t7_01M205XPBD8YRRQH8Q06222AJ1"',
+        '"ambientTaskId":"t7_01M205XPBD8YRRQH8Q06222AJ2"',
+      ],
+      ["for 't7_01M205XPBD8YRRQH8Q06222AJ1'", "for 't7_01M205XPBD8YRRQH8Q06222AJ2'"],
+      ['"explicitContext":false', '"explicitContext":true'],
+      ['"ambientTaskId":"t7_01M205XPBD8YRRQH8Q06222AJ1"', '"ambientTaskId":null'],
+      ['TaskExecutionError: ownerless', 'Error: ownerless'],
+      ['ownerless task mutation refused durable owner', 'unrelated setup failure'],
+      ['status: 409,', 'status: 500,'],
+      ['code: "task-execution-stale-owner"', 'code: "unrelated"'],
+      ['at assertTaskOwnerlessTx (', 'at unrelatedSetup ('],
+      ['rfc359-p0-mutation:ambient-owner-context:', 'rfc359-p0-mutation:other:'],
+    ] as const)
+      expect(verdict(id, log.replace(diagnostic, diagnostic.replace(from, to))).valid).toBe(false)
+    for (const replacement of [
+      'error: Test timed out after 5000ms',
+      'TypeError: Cannot read properties of undefined',
+      '',
+    ])
+      expect(verdict(id, log.replace(diagnostic, replacement)).valid).toBe(false)
+    expect(verdict(id, log.replace(`${witness}\n`, '')).valid).toBe(false)
+    expect(verdict(id, log.replace(witness, `${witness}\n${witness}`)).valid).toBe(false)
+    expect(verdict(id, `${diagnostic}\n${log.replace(diagnostic, '')}`).valid).toBe(false)
+    expect(verdict('current-before', `${witness}\n${transcript('current-before')}`, 0).valid).toBe(
+      false,
+    )
+  })
+
   test('accepts current controls and each observed failure transcript, including ANSI output', () => {
     for (const item of PHASES) {
       const code = item.mutation ? 1 : 0

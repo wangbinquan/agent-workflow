@@ -12,6 +12,7 @@ import {
 import {
   verifyLogicalDatabaseArtifactTree,
   restoreLogicalDatabaseBackup,
+  resolveLogicalDatabaseRestoreSourceContract,
   type LogicalDatabaseArtifactVerification,
   type LogicalDatabaseRestoreProgress,
   type LogicalDatabaseRestoreReceipt,
@@ -138,6 +139,23 @@ function validateEnvelope(
   }
 }
 
+async function sourceContractForRestore(
+  manifest: BackupManifestV2,
+  targetContract: LogicalSchemaContract,
+): Promise<LogicalSchemaContract> {
+  try {
+    return await resolveLogicalDatabaseRestoreSourceContract({
+      sourceSchemaDigest: manifest.database.schemaDigest,
+      targetContract,
+    })
+  } catch {
+    throw new PortableDatabaseRestoreError(
+      'portable-restore-schema',
+      'portable database restore schema does not match this binary',
+    )
+  }
+}
+
 /**
  * Verify the complete portable artifact without opening or mutating a target.
  * System Operations uses this before it admits a staged restore, so corrupt
@@ -174,12 +192,13 @@ export async function inspectPortableDatabaseBackup(
         'portable database restore logical envelope is corrupt',
       )
     }
-    validateEnvelope(manifest, envelope, options.contract)
+    const sourceContract = await sourceContractForRestore(manifest, options.contract)
+    validateEnvelope(manifest, envelope, sourceContract)
     const verification = verifyLogicalDatabaseArtifactTree({
       artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
       expectedManifestDigest: envelope.payload.logicalManifestDigest,
       expectedLegacyArchiveFileDigest: envelope.payload.legacyArchiveFileDigest,
-      contract: options.contract,
+      contract: sourceContract,
     })
     return Object.freeze({ manifest, envelope, verification })
   } finally {
@@ -222,7 +241,8 @@ export async function restorePortableDatabaseBackup(
         'portable database restore logical envelope is corrupt',
       )
     }
-    validateEnvelope(manifest, envelope, options.contract)
+    const sourceContract = await sourceContractForRestore(manifest, options.contract)
+    validateEnvelope(manifest, envelope, sourceContract)
 
     const opened =
       options.openTarget === undefined
@@ -245,7 +265,8 @@ export async function restorePortableDatabaseBackup(
         artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
         expectedEnvelopeFileDigest: manifest.database.envelopeFileDigest,
         restoreOperationId: options.restoreOperationId,
-        contract: options.contract,
+        contract: sourceContract,
+        targetContract: options.contract,
         target,
         now: options.now,
         onProgress: options.onProgress,

@@ -2,6 +2,20 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第十八批（2026-09-08）**：T19h 追加不可变 PG schema 历史和真实增量升级，
+> 原 baseline SQL/journal 保留；两条 task 覆盖索引同时进入 SQLite 0225 与 PG 0001。
+> boot/手动迁移/备份共用 schema 准备；原 copy 合同恢复至 accepting-writes 后再升级，
+> old receipt、旧备份与源文件保持，live pointer/新恢复目标使用已验证的当前 schema。
+> 已补真实旧 PG、多步回滚、pointer 补写、两处 SIGKILL 恢复及旧备份恢复用例，真 PG 待 hosted。
+> P0-1/2/8 新历史证明：SQLite 17 阶段/89 次执行，67 pass+22 指定历史红/827 expect，99 源码摘要稳定。
+> 上批 8fdb 的独立 PG 产物已核：双库各14阶段50 pass+17指定红，S4 取得真双库证据；
+> Main 34210383091 为32 success/3 failure/1 cancelled。autokill 原夹具改等值批写，
+> macOS refresh 加原阶段/实际子进程等待诊断，均保留原断言与超时，不能称整仓已绿。
+> full HTTP 34205739420 已结束，原语料/360样本可比但8/9项PG更慢，严格 AC11 未通过。
+> 本批完整 backend tsc、220 项定向功能架构检查通过；SQLite/Worker 阶段矩阵24 pass/528 expect。
+> 当前1921测试文件，660文件/1403次实际构库，354文件harness；T19f742，旧套件迁移累计仍184。
+> RFC 仍 In Progress；当前批次和逐项验证见 RFC359 plan §0b/§0c。
+
 > **RFC-359 W12 第十七批（2026-09-08）**：再迁移10个旧套件，累计184个；原后86 pass/417 expect，
 > 75个原case默认双库，真实种子整行/JSON与纯case保持。终态化算法共享，生产净删19行，原同步/异步合同保留。
 > S4历史证明补齐SQLite；65源码最终14阶段50 pass+17指定历史红/686 expect，真PG待hosted。

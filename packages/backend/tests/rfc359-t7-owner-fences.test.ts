@@ -9,13 +9,22 @@
 // 这里在两个引擎上各验：环境上下文内不传 executionContext 的写入成功；心跳之后旧 token 仍能开 effect。
 
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
+import {
+  nodeRunOutputs,
+  nodeRuns,
+  taskExecutionEffectAttempts,
+  taskExecutionEffectFences,
+  taskExecutionEffects,
+  taskExecutionLineageOperationRecords,
+  tasks,
+  workflows,
+} from '@/db/schema'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
@@ -98,6 +107,76 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
   module.claimGate.leave(claimed.permit)
   const context = createTaskExecutionContext({ intentId, token: claimed.token, persistence })
   return { taskId, runId, intentId, persistence, module, token: claimed.token, context }
+}
+
+async function expectSettledEffect(
+  db: ProviderNeutralDatabase,
+  seeded: Awaited<ReturnType<typeof seedClaimedTask>>,
+  prepared: { effectId: string; attemptId: string },
+  failureCode: string,
+): Promise<void> {
+  const effects = await db
+    .select()
+    .from(taskExecutionEffects)
+    .where(eq(taskExecutionEffects.id, prepared.effectId))
+  expect(effects).toHaveLength(1)
+  expect(effects[0]).toMatchObject({
+    id: prepared.effectId,
+    taskId: seeded.taskId,
+    originIntentId: seeded.intentId,
+    currentIntentId: seeded.intentId,
+    state: 'failed',
+    operationGeneration: 0,
+    failureCode,
+    receiptJson: JSON.stringify({
+      v: 1,
+      appliedAttemptNo: null,
+      priorAmbiguityCount: 0,
+      lastAttemptReceipt: null,
+    }),
+  })
+  expect(effects[0]!.settledAt).not.toBeNull()
+  const attempts = await db
+    .select()
+    .from(taskExecutionEffectAttempts)
+    .where(eq(taskExecutionEffectAttempts.effectId, prepared.effectId))
+  expect(attempts).toHaveLength(1)
+  expect(attempts[0]).toMatchObject({
+    id: prepared.attemptId,
+    effectId: prepared.effectId,
+    epoch: seeded.token.epoch,
+    state: 'failed-not-applied',
+    applicationEvidence: 'definitely-not-applied',
+    retryAuthority: 'none',
+    failureCode,
+  })
+  expect(attempts[0]!.settledAt).toBe(effects[0]!.settledAt)
+  const fences = await db
+    .select()
+    .from(taskExecutionEffectFences)
+    .where(eq(taskExecutionEffectFences.effectAttemptId, prepared.attemptId))
+  expect(fences).toHaveLength(1)
+  expect(fences[0]).toMatchObject({
+    fenceKey: `process:${seeded.taskId}:${seeded.runId}`,
+    effectAttemptId: prepared.attemptId,
+    acquiredEpoch: seeded.token.epoch,
+    releasedAt: effects[0]!.settledAt,
+  })
+  const watermark = await db
+    .select()
+    .from(taskExecutionLineageOperationRecords)
+    .where(
+      and(
+        eq(taskExecutionLineageOperationRecords.executionLineageId, seeded.taskId),
+        eq(taskExecutionLineageOperationRecords.recordKind, 'generation-watermark'),
+      ),
+    )
+  expect(watermark).toHaveLength(1)
+  expect(watermark[0]).toMatchObject({
+    highestSettledGeneration: 0,
+    lastOutcome: 'failed',
+    currentAnchorTaskId: seeded.taskId,
+  })
 }
 
 describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2）', (harness) => {
@@ -189,6 +268,47 @@ describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2�
       retryAuthority: 'none',
       failureCode: 'test-settled-after-heartbeat',
     })
+    await expectSettledEffect(db, seeded, prepared, 'test-settled-after-heartbeat')
+    seeded.module.resetForTesting()
+  })
+
+  test('P0-2：没有心跳时，同一真实工厂仍创建并结算非空 effect 和资源围栏', async () => {
+    const db = harness.db
+    const seeded = await seedClaimedTask(db)
+    const pathJson = canonicalJson(rootPath(seeded.taskId))
+    const prepared = await seeded.persistence.effects.prepareAndAcquire({
+      token: seeded.token,
+      intentId: seeded.intentId,
+      operationKey: `${seeded.taskId}:process:agent`,
+      executionLineageId: seeded.taskId,
+      operationFamilyKey: operationFamilyKey({
+        executionLineageId: seeded.taskId,
+        slotPath: rootPath(seeded.taskId),
+        effectKind: 'process',
+        stableActionOrdinal: 'managed-agent',
+      }),
+      operationGeneration: 0,
+      kind: 'process',
+      requestHash: requestHash({ argv: ['/opt/opencode'] }),
+      slotPathJson: pathJson,
+      slotPathDigest: requestHash(pathJson),
+      candidateId: `agent:${seeded.runId}`,
+      recoveryClass: 'managed-process-preactivation',
+      classifierVersion: 'rfc328-managed-process-v1',
+      transportPolicyVersion: 'rfc328-preactivation-v1',
+      retryAuthority: 'none',
+      resourceKeys: [`process:${seeded.taskId}:${seeded.runId}`],
+    })
+    await seeded.persistence.effects.settle({
+      token: seeded.token,
+      effectId: prepared.effectId,
+      attemptId: prepared.attemptId,
+      state: 'failed-not-applied',
+      applicationEvidence: 'definitely-not-applied',
+      retryAuthority: 'none',
+      failureCode: 'test-settled-without-heartbeat',
+    })
+    await expectSettledEffect(db, seeded, prepared, 'test-settled-without-heartbeat')
     seeded.module.resetForTesting()
   })
 })

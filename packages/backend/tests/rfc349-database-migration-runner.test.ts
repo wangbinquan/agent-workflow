@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
@@ -98,6 +98,7 @@ function harness(
     cancelAfterFirstChunk?: boolean
     failFinalizeOnce?: boolean
     frozenSourceFingerprint?: string
+    targetSchemaDigest?: () => string
     failAt?: 'target-activation' | 'target-readiness' | 'admission-activation' | 'admission-open'
   } = {},
 ) {
@@ -264,6 +265,7 @@ function harness(
     target,
     targetRuntime: runtime,
     contract: CONTRACT,
+    targetSchemaDigest: options.targetSchemaDigest,
     admission,
     safetyBackup: {
       create: async () => ({ path: join(root, 'backup.sqlite'), digest: PLAN_DIGEST }),
@@ -575,5 +577,43 @@ describe('RFC-349 database migration runner', () => {
 
     expect((await fixture.runner.finalize('dbm_operation_01')).phase).toBe('finalized')
     expect(fixture.calls.filter((call) => call === 'target:finalized')).toHaveLength(2)
+  })
+
+  test('schema upgrade preserves the frozen copy receipt while finalize refreshes the live pointer', async () => {
+    let currentDigest = DIGEST
+    const fixture = harness({ targetSchemaDigest: () => currentDigest, failFinalizeOnce: true })
+    await fixture.runner.run('dbm_operation_01')
+    const manifest = fixture.controlPlane.readManifest('dbm_operation_01')
+    currentDigest = `sha256:${'c'.repeat(64)}`
+    await expect(fixture.runner.finalize('dbm_operation_01')).rejects.toThrow(
+      'target finalize interrupted',
+    )
+    const receiptPath = join(fixture.migrationsDir, 'dbm_operation_01', 'receipt.json')
+    const originalReceipt = readFileSync(receiptPath, 'utf8')
+    expect(JSON.parse(originalReceipt).schemaDigest).toBe(manifest.payload.source.schemaDigest)
+    expect((await fixture.runner.finalize('dbm_operation_01')).phase).toBe('finalized')
+    expect(readFileSync(receiptPath, 'utf8')).toBe(originalReceipt)
+    expect(
+      readDatabaseGeneration({
+        pointerPath: join(fixture.root, 'database-generation.json'),
+        migrationsDir: fixture.migrationsDir,
+        expectedSchemaDigest: currentDigest,
+      }).payload.schemaDigest,
+    ).toBe(currentDigest)
+  })
+
+  test('rollback after a schema upgrade selects the original SQLite contract', async () => {
+    let currentDigest = DIGEST
+    const fixture = harness({ targetSchemaDigest: () => currentDigest })
+    await fixture.runner.run('dbm_operation_01')
+    currentDigest = `sha256:${'c'.repeat(64)}`
+    await fixture.runner.rollback('dbm_operation_01')
+    expect(
+      readDatabaseGeneration({
+        pointerPath: join(fixture.root, 'database-generation.json'),
+        migrationsDir: fixture.migrationsDir,
+        expectedSchemaDigest: DIGEST,
+      }).payload,
+    ).toMatchObject({ provider: 'sqlite', schemaDigest: DIGEST, generationId: 'dbg_source_0001' })
   })
 })

@@ -278,6 +278,8 @@ export function createDatabaseMigrationRunner(deps: {
   readonly safetyBackup: DatabaseMigrationSafetyBackupPort
   readonly artifacts: DatabaseMigrationArtifactStorePort
   readonly generationPointerPath: string
+  /** A resumed historical copy may now be serving a newer, verified target schema. */
+  readonly targetSchemaDigest?: () => string
   readonly chunkRows?: number
   readonly drainTimeoutMs?: number
   readonly ownerLeaseMs?: number
@@ -339,7 +341,7 @@ export function createDatabaseMigrationRunner(deps: {
         generationId: targetGenerationId(operationId),
         provider: 'postgresql',
         operationId,
-        schemaDigest: deps.contract.digest,
+        schemaDigest: deps.targetSchemaDigest?.() ?? deps.contract.digest,
         manifestDigest: deps.artifacts.manifestFileDigest(operationId),
         activatedAt: switched?.committedAt ?? now(),
       },
@@ -795,7 +797,7 @@ export function createDatabaseMigrationRunner(deps: {
         operationId,
         sourceGenerationId: manifest.payload.source.generationId,
         targetGenerationId: targetGenerationId(operationId),
-        schemaDigest: deps.contract.digest,
+        schemaDigest: manifest.payload.source.schemaDigest,
         logicalBackupDigest: manifest.payload.logicalBackupDigest,
         legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
         verificationDigest: manifest.payload.verificationDigest,

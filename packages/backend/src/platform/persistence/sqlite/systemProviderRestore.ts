@@ -41,6 +41,8 @@ import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSou
 import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
 import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persistence/logicalDatabaseRestore'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { resolvePostgresqlIndexOnlyRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
 import { Paths } from '@/util/paths'
 import {
   type BackupManifest,
@@ -91,16 +93,25 @@ async function verifyPortableDatabasePayload(
   prefix: 'stage refused' | 'restore refused',
 ): Promise<void> {
   if (manifest?.manifestVersion !== 2) return
-  const contract = buildLogicalSchemaContract()
+  let contract = buildLogicalSchemaContract()
   const database = manifest.database
-  if (
-    database.provider !== 'sqlite' ||
-    database.rawSqlitePath !== 'db.sqlite' ||
-    database.schemaDigest !== contract.digest
-  ) {
+  if (database.provider !== 'sqlite' || database.rawSqlitePath !== 'db.sqlite') {
     throw new Error(
       `${prefix}: this restore path requires a matching SQLite raw+logical database payload`,
     )
+  }
+  if (database.schemaDigest !== contract.digest) {
+    try {
+      const history = await loadPostgresqlMigrationHistory()
+      contract = resolvePostgresqlIndexOnlyRowBridge(history, {
+        fromContractDigest: database.schemaDigest,
+        toContractDigest: contract.digest,
+      }).source
+    } catch {
+      throw new Error(
+        `${prefix}: this restore path requires a matching SQLite raw+logical database payload`,
+      )
+    }
   }
   const artifactRoot = join(staging, database.logicalPath)
   const envelope = readLogicalDatabaseBackupEnvelope({

@@ -147,7 +147,7 @@ const DAEMON_ENTRY_FILES: readonly string[] = [
  * 不许再写成「入口里按 provider 拐一下」。
  */
 const PROVIDER_EXECUTION_BRANCH_DEBT: readonly string[] = [
-  "packages/backend/src/cli/start.ts | databaseProviderTraits(bootGeneration.payload.provider).storage === 'embedded-file'",
+  "packages/backend/src/cli/start.ts | databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file'",
 ]
 
 // ---------------------------------------------------------------------------

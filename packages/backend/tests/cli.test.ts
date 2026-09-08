@@ -108,10 +108,16 @@ describe('CLI subcommands (P-1-05)', () => {
   // too. (Root-caused on the ARM64 VM: 0 lingering processes, leaked DB handle.)
   test('migrateCommand closes its DB handle (no leaked bun:sqlite lock)', () => {
     const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'migrate.ts'), 'utf8')
-    const openAt = source.indexOf('provider.openClient(')
-    const closeAt = source.indexOf('await provider.close()', openAt)
+    // RFC-359 T19h prepares and adopts the client before returning it. Keep
+    // both the PG finally-close and the SQLite close-before-output pinned.
+    const openAt = source.indexOf('await prepareDatabaseProviderForBoot(')
+    const closeAt = source.indexOf(
+      'await provider.close()\n  return { output: `migrations applied',
+      openAt,
+    )
     expect(openAt).toBeGreaterThan(-1)
     expect(closeAt).toBeGreaterThan(openAt)
+    expect(source.match(/await provider\.close\(\)/g)).toHaveLength(2)
   })
 
   // --- doctor ---

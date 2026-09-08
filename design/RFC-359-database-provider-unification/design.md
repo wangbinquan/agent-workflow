@@ -1,5 +1,23 @@
 # RFC-359：技术设计
 
+## T19h 增量迁移实施约束（2026-09-08；实施中）
+
+- 已发布的 PostgreSQL 0000 SQL 与 journal 保持原字节，另保存完整原逻辑合同、投影计划及
+  SQLite 迁移前缀。后续 SQL/entry 只追加，以精确 contract/plan pair 和连续 entry digest
+  重建当前计划；这批先支持保持行编码与 archive-only 完整合同不变的新增索引。
+- 原 baseline receipt 保留；每步的 DDL、独立 upgrade receipt、当前 schema_contract 和
+  active generation 摘要在同一个保留连接/事务提交。先持有跨版本稳定锁，再取得所有已知
+  版本的原 schema 锁，保持与旧二进制的并发互斥。读取完整 receipt 链，不按 applied_at 猜顺序。
+- 数据库提交后、释放锁前原子更新 generation pointer，只推进 schemaDigest；若文件写入失败，
+  下次从已提交 receipt 补写 pointer，不重放已完成 DDL。原复制操作、chunk 和备份文件保持原摘要。
+- 启动、手动迁移和 backup 必须在业务装配前完成这条准备链。SQLite 原备份、pending restore、
+  swap 与 openDb 迁移次序保持；旧备份由其历史合同验证，再由原实际迁移推进到当前版本。
+- 尚在复制/校验/cutover 的操作继续使用原 manifest 的完整合同与计划，按原 resume 规则收尾到
+  accepting-writes 后再升级；不自动 finalize。已升级目标后续 finalize 仍为原复制写原 schema
+  receipt，live pointer 保持当前 schema，不能把旧复制伪装为一次新复制。
+- 真旧目标的非空行、DDL 回滚、多步与重复执行、提交后 pointer 恢复、备份/恢复及未完成复制
+  的续跑均需实际功能证据；纯历史链和 SQLite 检查不能代替 hosted PostgreSQL 与二进制验证。
+
 ## W12 已落地的装配约束（2026-09-08）
 
 - task-intent 终态化的两份事务内算法共用一个 sequence；native 保留同步执行且不检查返回行，
@@ -24,7 +42,7 @@
   no-op 分支和事件回调位置保持；不能用共享名义静默改变旧合同。
 - PG 借用内部工作区的宿主任务必须沿用 internal 分类，与已有 platform input roster 一致。
   真执行证明从实际租约写入一路经过原 artifact path 查询，再到子进程、task done 与终态观察。
-- P0 历史变异保留原阶段并追加 boot/revoked-owner/release 场景，现14阶段，使用真实任务或非空恢复状态。
+- P0 历史变异保留原阶段并追加 boot/revoked-owner/release 场景，现17阶段，使用真实任务或非空恢复状态。
   原调用遗漏的重建与字面历史函数替换分别记证据，全部以指定失败和前后真实控制判定。
 - Workgroup 的规范化、快照、hash、行/修订/详情解码共用纯函数；legacy 的数组 slice 与中立
   数组展开仍各在原边界执行，保留稀疏数组、自定义迭代器及异常语义。共享 codec 不改变 SQL、

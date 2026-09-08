@@ -1,0 +1,114 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94', 178, 6)"
+    },
+    "beforeDigest": "sha256:c6e29bbc15b4a759fb97ed9e179eebec72b9d11160876a3efe6c8862d6a67c97"
+  },
+  "digest": "sha256:097e05c346175a2c9ade3a04f78122b39e9057b6fbd06c8cea1ae5052008c929",
+  "executableStatements": [
+    {
+      "kind": "index",
+      "logicalId": "tasks:index:idx_tasks_cached_repo_task",
+      "sql": "CREATE INDEX \"idx_tasks_cached_repo_task\" ON \"agent_workflow\".\"tasks\" (\"cached_repo_id\", \"id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "tasks:index:idx_tasks_overview_counts",
+      "sql": "CREATE INDEX \"idx_tasks_overview_counts\" ON \"agent_workflow\".\"tasks\" (\"status\", \"parent_task_id\", \"catalog_visibility\", \"finished_at\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94', active_table_count = 178, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:9aabfa484e39f2fa45bfbd7e67a0cffe0b92ead58ebdfa69e14855ec80036b4e' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:9aabfa484e39f2fa45bfbd7e67a0cffe0b92ead58ebdfa69e14855ec80036b4e",
+    "planDigest": "sha256:35a4a5ce169d9988a9487cd2dd4c71cd45fb7b5ac3aaa618ca31e87e88dbebd4"
+  },
+  "id": "0001_rfc359_task_coverage_indexes",
+  "indexAdditions": [
+    {
+      "position": 466,
+      "statement": {
+        "kind": "index",
+        "logicalId": "tasks:index:idx_tasks_cached_repo_task",
+        "sql": "CREATE INDEX \"idx_tasks_cached_repo_task\" ON \"agent_workflow\".\"tasks\" (\"cached_repo_id\", \"id\")"
+      }
+    },
+    {
+      "position": 483,
+      "statement": {
+        "kind": "index",
+        "logicalId": "tasks:index:idx_tasks_overview_counts",
+        "sql": "CREATE INDEX \"idx_tasks_overview_counts\" ON \"agent_workflow\".\"tasks\" (\"status\", \"parent_task_id\", \"catalog_visibility\", \"finished_at\")"
+      }
+    }
+  ],
+  "logicalIndexes": [
+    {
+      "index": {
+        "columns": ["cached_repo_id", "id"],
+        "name": "idx_tasks_cached_repo_task",
+        "unique": false,
+        "where": null
+      },
+      "position": 4,
+      "tableId": "tasks"
+    },
+    {
+      "index": {
+        "columns": ["status", "parent_task_id", "catalog_visibility", "finished_at"],
+        "name": "idx_tasks_overview_counts",
+        "unique": false,
+        "where": null
+      },
+      "position": 21,
+      "tableId": "tasks"
+    }
+  ],
+  "previousEntryDigest": "sha256:8be9d8f03e476f3f403e2669e97e33fd624b28209e0d83e30645271769c9bcd0",
+  "sequence": 1,
+  "sqlDigest": "sha256:8eb2f29b1dd5ee771ffec6fc32a6a8178b06604b64666c0d38078996a581c4f3",
+  "sqlFile": "0001_rfc359_task_coverage_indexes.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790092812066,
+        "hash": "d95bfa070dc94fc4ea66626556d008b8408cc392ca53bfdb6ad5159211f1c310",
+        "index": 224,
+        "tag": "0225_rfc359_task_count_indexes"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:ad79840f69f423cec1211fe90472e72670b4707fed7adc1e5b591345872eb193",
+      "count": 224,
+      "last": {
+        "folderMillis": 1790006412066,
+        "hash": "916143e85dabc64bd323f3c14c486affa79ce691488a78683da2ae42efc77a03",
+        "index": 223,
+        "tag": "0224_rfc359_node_run_lineage_explicit"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:9dd402d02facaaa8dd3e0f028a0b57ee2e854c2118539caecb32ddf3e7ac048b",
+      "count": 225,
+      "last": {
+        "folderMillis": 1790092812066,
+        "hash": "d95bfa070dc94fc4ea66626556d008b8408cc392ca53bfdb6ad5159211f1c310",
+        "index": 224,
+        "tag": "0225_rfc359_task_count_indexes"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94",
+    "planDigest": "sha256:c7da5aac3234d9937a51ec7b6546fe20275afe727ec7dda48568870b830a2d0d"
+  },
+  "version": 1
+}

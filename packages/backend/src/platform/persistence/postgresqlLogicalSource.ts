@@ -180,7 +180,9 @@ export async function openPostgresqlLogicalSource(input: {
         )
       }
       const migrations = await connection.unsafe(
-        `SELECT contract_digest FROM ${metadataTable('schema_migrations')} ORDER BY applied_at DESC LIMIT 1`,
+        // Receipts retain every schema version and can share a timestamp. The
+        // current singleton identifies the committed receipt, not clock order.
+        `SELECT migration.contract_digest FROM ${metadataTable('schema_migrations')} migration INNER JOIN ${metadataTable('schema_contract')} current_schema ON current_schema.contract_digest = migration.contract_digest WHERE current_schema.singleton = TRUE`,
       )
       if (migrations.length !== 1 || migrations[0]?.contract_digest !== input.contract.digest) {
         throw new PostgresqlLogicalSourceError(

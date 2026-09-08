@@ -141,6 +141,106 @@ export interface ReadDatabaseGenerationOptions {
   readonly expectedSchemaDigest: string
 }
 
+export type DatabaseGenerationBootstrapCandidate =
+  | { readonly kind: 'current'; readonly generation: ResolvedDatabaseGeneration }
+  | {
+      readonly kind: 'schema-upgrade'
+      readonly payload: DatabaseGenerationPayload
+      readonly pointerDigest: string
+    }
+  | {
+      readonly kind: 'operation-recovery'
+      readonly payload: DatabaseGenerationPayload
+      readonly pointerDigest: string
+      readonly recoveryManifestDigest: string
+    }
+
+interface GenerationOperationRecoveryInput {
+  readonly payload: DatabaseGenerationPayload
+  readonly manifestText: string
+}
+
+function verifyGenerationManifest(
+  file: DatabaseGenerationFile,
+  migrationsDir: string,
+  verifyInterruptedOperation?: (input: GenerationOperationRecoveryInput) => void,
+): string | null {
+  if (file.payload.operationId !== null && file.payload.manifestDigest !== null) {
+    const manifestPath = join(migrationsDir, file.payload.operationId, 'manifest.json')
+    if (!existsSync(manifestPath)) {
+      throw new DatabaseGenerationError(
+        'generation-manifest-missing',
+        `database generation manifest is missing for ${file.payload.operationId}`,
+      )
+    }
+    const manifestBytes = readFileSync(manifestPath)
+    const actualManifestDigest = digestDatabaseArtifact(manifestBytes)
+    if (actualManifestDigest !== file.payload.manifestDigest) {
+      if (verifyInterruptedOperation !== undefined) {
+        verifyInterruptedOperation({
+          payload: file.payload,
+          manifestText: manifestBytes.toString('utf8'),
+        })
+        return actualManifestDigest
+      }
+      throw new DatabaseGenerationError(
+        'generation-manifest-digest-mismatch',
+        `database generation manifest digest mismatch for ${file.payload.operationId}`,
+      )
+    }
+  }
+  return null
+}
+
+/**
+ * Bootstrap discovery only. An older pointer is a candidate for a verified
+ * schema upgrade, never an admitted provider generation. Callers obtain the
+ * supported digests from the complete immutable migration history and still
+ * verify the actual database before publishing its new pointer.
+ */
+export function readDatabaseGenerationForBootstrap(
+  options: ReadDatabaseGenerationOptions & {
+    readonly supportedSchemaDigests: readonly string[]
+    /** The operation owner must verify the complete durable checkpoint and its
+     * generation identity. A recovered candidate still cannot enter runtime. */
+    readonly verifyInterruptedOperation?: (input: GenerationOperationRecoveryInput) => void
+  },
+): DatabaseGenerationBootstrapCandidate {
+  if (!existsSync(options.pointerPath)) {
+    return { kind: 'current', generation: readDatabaseGeneration(options) }
+  }
+  const file = parseGenerationFile(options.pointerPath)
+  if (
+    file.payload.schemaDigest !== options.expectedSchemaDigest &&
+    !options.supportedSchemaDigests.includes(file.payload.schemaDigest)
+  ) {
+    throw new DatabaseGenerationError(
+      'generation-schema-mismatch',
+      'database generation schema digest does not match this binary',
+    )
+  }
+  const recoveryManifestDigest = verifyGenerationManifest(
+    file,
+    options.migrationsDir,
+    options.verifyInterruptedOperation,
+  )
+  if (recoveryManifestDigest !== null) {
+    return {
+      kind: 'operation-recovery',
+      payload: file.payload,
+      pointerDigest: file.digest,
+      recoveryManifestDigest,
+    }
+  }
+  if (file.payload.schemaDigest === options.expectedSchemaDigest) {
+    return {
+      kind: 'current',
+      generation: { source: 'verified-pointer', payload: file.payload },
+    }
+  }
+  return { kind: 'schema-upgrade', payload: file.payload, pointerDigest: file.digest }
+}
+
 export function readDatabaseGeneration(
   options: ReadDatabaseGenerationOptions,
 ): ResolvedDatabaseGeneration {
@@ -158,22 +258,7 @@ export function readDatabaseGeneration(
       `database generation schema digest does not match this binary`,
     )
   }
-  if (file.payload.operationId !== null && file.payload.manifestDigest !== null) {
-    const manifestPath = join(options.migrationsDir, file.payload.operationId, 'manifest.json')
-    if (!existsSync(manifestPath)) {
-      throw new DatabaseGenerationError(
-        'generation-manifest-missing',
-        `database generation manifest is missing for ${file.payload.operationId}`,
-      )
-    }
-    const actualManifestDigest = digestDatabaseArtifact(readFileSync(manifestPath))
-    if (actualManifestDigest !== file.payload.manifestDigest) {
-      throw new DatabaseGenerationError(
-        'generation-manifest-digest-mismatch',
-        `database generation manifest digest mismatch for ${file.payload.operationId}`,
-      )
-    }
-  }
+  verifyGenerationManifest(file, options.migrationsDir)
   return { source: 'verified-pointer', payload: file.payload }
 }
 

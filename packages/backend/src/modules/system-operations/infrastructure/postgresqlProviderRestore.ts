@@ -68,12 +68,12 @@ export async function restorePostgresqlProviderBackup(
     filesystem: options.filesystem,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
-    async openTarget({ envelope }) {
+    async openTarget({ envelope, contract }) {
       const target = await openTarget({
         runtime: options.runtime,
         operationId: options.restoreOperationId,
         sourceGenerationId: envelope.payload.sourceGenerationId,
-        contract: options.contract,
+        contract,
         plan: options.plan,
       })
       return Object.freeze({

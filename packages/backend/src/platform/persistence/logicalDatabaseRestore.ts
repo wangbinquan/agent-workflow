@@ -34,6 +34,8 @@ import {
   type LogicalSchemaContract,
   type LogicalTableContract,
 } from './schemaContract'
+import { loadPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
+import { resolvePostgresqlIndexOnlyRowBridge } from './postgresqlMigrationSequence'
 
 export interface LogicalDatabaseRestoreTarget {
   readonly provider: DatabaseProvider
@@ -115,6 +117,37 @@ function corrupt(detail: string): never {
 
 function assertExact(actual: unknown, expected: unknown, detail: string): void {
   if (canonicalSchemaJson(actual) !== canonicalSchemaJson(expected)) corrupt(detail)
+}
+
+/** The source keeps its published identity; only a verified index-only edge can
+ * supply rows to the current complete target contract. Same-contract restores
+ * retain their original path, including explicit infrastructure fixtures. */
+export async function resolveLogicalDatabaseRestoreSourceContract(input: {
+  readonly sourceSchemaDigest: string
+  readonly targetContract: LogicalSchemaContract
+}): Promise<LogicalSchemaContract> {
+  if (input.sourceSchemaDigest === input.targetContract.digest) return input.targetContract
+  try {
+    const history = await loadPostgresqlMigrationHistory()
+    assertExact(
+      history.head.contract,
+      input.targetContract,
+      'restore target differs from the complete current schema head',
+    )
+    const bridge = resolvePostgresqlIndexOnlyRowBridge(history, {
+      fromContractDigest: input.sourceSchemaDigest,
+      toContractDigest: input.targetContract.digest,
+    })
+    assertExact(
+      bridge.target,
+      input.targetContract,
+      'restore target differs from its whole history contract',
+    )
+    return bridge.source
+  } catch (error) {
+    if (error instanceof LogicalDatabaseRestoreError) throw error
+    return corrupt('restore source and target have no verified index-only schema bridge')
+  }
 }
 
 function readCanonicalJson(path: string, detail: string): unknown {
@@ -441,6 +474,9 @@ export async function restoreLogicalDatabaseArtifact(input: {
   readonly expectedLegacyArchiveFileDigest: string
   readonly restoreOperationId: string
   readonly contract: LogicalSchemaContract
+  /** Source artifacts retain contract; a verified bridge re-encodes only the
+   * in-memory target chunks and the new restore receipt for this target. */
+  readonly targetContract?: LogicalSchemaContract
   readonly target: LogicalDatabaseRestoreTarget
   readonly envelope?: LogicalDatabaseBackupEnvelope
   readonly now?: () => number
@@ -471,12 +507,26 @@ export async function restoreLogicalDatabaseArtifact(input: {
       corrupt('logical backup envelope differs from its manifest, chunks, or schema contract')
     }
   }
+  const targetContract = input.targetContract ?? input.contract
+  if (targetContract !== input.contract) {
+    const sourceContract = await resolveLogicalDatabaseRestoreSourceContract({
+      sourceSchemaDigest: input.contract.digest,
+      targetContract,
+    })
+    assertExact(
+      sourceContract,
+      input.contract,
+      'restore source differs from its whole history contract',
+    )
+  }
   const now = input.now ?? Date.now
   await input.target.prepare(now())
   let chunksRestored = 0
   let rowsRestored = 0
   for (const table of input.contract.tables) {
     if (table.disposition === 'ARCHIVE_THEN_OMIT') continue
+    const targetTable = targetContract.tables.find((candidate) => candidate.id === table.id)
+    if (targetTable === undefined) corrupt(`restore target is missing ${table.id}`)
     const entry = verified.manifest.payload.tables.find((candidate) => candidate.table === table.id)
     if (entry === undefined) corrupt(`logical manifest is missing ${table.id}`)
     for (let chunkIndex = 0; chunkIndex < entry.chunkCount; chunkIndex += 1) {
@@ -490,12 +540,17 @@ export async function restoreLogicalDatabaseArtifact(input: {
       })
       const targetChunk = createLogicalTableChunk({
         operationId: input.restoreOperationId,
-        contract: input.contract,
-        table,
+        contract: targetContract,
+        table: targetTable,
         chunkIndex,
-        rows: sourceChunk.payload.rows,
+        rows:
+          targetContract === input.contract
+            ? sourceChunk.payload.rows
+            : sourceChunk.payload.rows.map((row) =>
+                encodeLogicalRow(targetTable, decodeLogicalRow(table, row)),
+              ),
       })
-      await input.target.copyChunk(table, targetChunk, now())
+      await input.target.copyChunk(targetTable, targetChunk, now())
       chunksRestored += 1
       rowsRestored += targetChunk.payload.rows.length
       input.onProgress?.({
@@ -524,11 +579,11 @@ export async function restoreLogicalDatabaseArtifact(input: {
     sourceProvider: verified.manifest.payload.sourceProvider,
     sourceGenerationId: verified.manifest.payload.sourceGenerationId,
     targetProvider: input.target.provider,
-    schemaDigest: input.contract.digest,
+    schemaDigest: targetContract.digest,
     logicalManifestDigest: verified.manifest.digest,
     legacyArchiveFileDigest: input.expectedLegacyArchiveFileDigest,
-    activeTablesRestored: input.contract.activeTableCount,
-    archiveTablesPreserved: input.contract.archiveOnlyTableCount,
+    activeTablesRestored: targetContract.activeTableCount,
+    archiveTablesPreserved: targetContract.archiveOnlyTableCount,
     rowsRestored,
     archiveRowsPreserved: verified.archiveRows,
     chunksRestored,
@@ -541,6 +596,7 @@ export async function restoreLogicalDatabaseBackup(input: {
   readonly expectedEnvelopeFileDigest: string
   readonly restoreOperationId: string
   readonly contract: LogicalSchemaContract
+  readonly targetContract?: LogicalSchemaContract
   readonly target: LogicalDatabaseRestoreTarget
   readonly now?: () => number
   readonly onProgress?: (progress: LogicalDatabaseRestoreProgress) => void

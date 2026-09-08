@@ -673,6 +673,12 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc358-intent-graph-validation.test.ts: 1',
   'rfc359-database-transaction.test.ts: 1',
   'rfc359-engine-capabilities.test.ts: 1',
+  // T19h mechanisms read the actual immutable SQLite prefix before any head
+  // migration. The upgrade/restore files also select real PostgreSQL cases by
+  // default; this records the native sources and readonly SQLite witness.
+  'rfc359-t19h-generation-upgrade.test.ts: 4',
+  'rfc359-t19h-logical-backup-restore.test.ts: 1',
+  'rfc359-t19h-postgresql-upgrade.integration.test.ts: 1',
   // 原同步资源包提交必须在返回前写完并可回滚；这条真 SQLite 机制判据照样精确入账。
   'rfc359-w14-agent-commit-sequence.test.ts: 1',
   // 四条原生同步 companion/CAS/回滚判据共用一处构库；十条公共写入行为仍跑双引擎。

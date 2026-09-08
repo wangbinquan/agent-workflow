@@ -28,12 +28,12 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                             | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                      | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 657 个测试文件、1398 次实际 `createInMemoryDb` 调用，其中 647 文件没有 `describeEachProvider`；尚未达到全量行为对拍                   | 进行中 |
-| AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；P0-3/4 periodic/5/6/7/9/10/11/12 共12个历史变异及 legacy mission 已获真双库证明；新增 S4 已获指定 SQLite 历史红，真 PG 待 hosted；P0-1/2/8 证明仍待补齐                                 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 660 个测试文件、1403 次实际 `createInMemoryDb` 调用，其中 650 文件没有 `describeEachProvider`；尚未达到全量行为对拍                   | 进行中 |
+| AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；P0-3/4（含S4）/5/6/7/9/10/11/12 已获指定真双库历史失败；P0-1/2/8 新证明在SQLite通过17阶段/89次执行，真 PG 待 hosted                                            | 进行中 |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                      | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                                     | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                      | ✅     |
-| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 原始九端点同语料 HTTP full 已完成两轮；最新 7a19e5744 的 360 样本可比但六项 PG P95 更慢，仍未达到原条款；实际 SQL 诊断后已修正公共 task 查询与写 CTE 的计划模式，下一轮原规模 P95 待 hosted                                     | 进行中 |
+| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新原始 full 8e55ebe35 的360样本与整表见证可比，8/9项 PG P95 更慢；写 CTE 计划已齐，任务页/overview等原绝对预算仍失败；两条覆盖索引候选须由下一轮原规模 hosted 验证                  | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 9，未构造根账本 0 项；协作四能力与完整动态工作流合同已收紧，九个诊断为四个作用域查询、四个协作检查和一个保留的兼容诊断；provider 命名文件 88 → 61，残余继续核验 | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
@@ -816,6 +816,80 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
   imports9进8出、例外8进7出、共享sequence文件/函数新增2符号，旧全扫描判据保持。
   完整backend tsc通过；14个功能账本/边界/参数化套件173 pass/313 expect，canonical相关13 pass/55 expect。
   原规模HTTP run34205739420仍独立运行，不因新HEAD取消；严格AC11和RFC完整验收继续开放。
+
+### W12 第十八批：不可变 schema 升级、历史恢复与 P0-1/2/8 证明
+
+- PostgreSQL 历史不再通过覆盖旧 baseline 更新。原 `0000` SQL 和 journal 字节全留，另冻结
+  完整逻辑合同、855 条原投影语句和 224 条 SQLite 迁移身份；`0001` 只追加两条 task 覆盖
+  索引与条件 schema_contract 更新。SQLite 同步追加 `0225`，schema.ts 为两侧公共声明。
+  原 root contract/plan 为 `9aabfa484e39… / 35a4a5ce169d…`，当前 head 为
+  `4cf10ecd7bdb… / c7da5aac3234…`；历史边界不允许改列、行编码、原索引或 archive-only 合同。
+- migrator 在同一保留连接持有稳定锁及各已知版本原锁；全部待执行索引、独立 upgrade receipt、
+  schema_contract CAS 和 active generation 摘要同事务提交。原 baseline receipt 保留，
+  全链按精确身份读取，不按 applied_at 排序；fresh head 不伪造历史 upgrade receipts。
+  提交后仍持锁原子补写 pointer，文件失败时下一次只补 pointer，不重放已提交 DDL。
+  6 个受控协议例为 6 pass/37 expect；同一测试装入原已发布 migrator 为 1 pass/5 指定失败。
+- boot、手动迁移和 backup 在构造业务模块前准备 schema；SQLite 原 pending restore、pre-restore
+  备份和 forward openDb 次序保留。已有 copy 使用原完整合同和计划恢复至 accepting-writes 后
+  再升级；自动路径不恢复 failed/cancelled，显式 resume 保留该职责，且不自动 finalize。
+  旧 copy 的 finalize receipt 保持原 schema，live pointer 使用已验证的当前目标 schema；
+  rollback 仍选择原 SQLite schema。原 runner 加两例后 17 pass/87 expect；原实现会在新例的
+  live pointer 检查报 `generation-schema-mismatch`，不能用改写原复制摘要绕过。
+- 历史备份按原完整合同验证、解码，只有已验证的 index-only bridge 可以向当前完整目标合同
+  重新编码内存 chunk；原 manifest、envelope、archive 和备份文件不改写。新 restore receipt
+  和目标 generation 使用当前 schema。真实旧 PG 复制、索引失败事务回滚、同时间多步 receipts、
+  fresh/upgrade 收敛、pointer 补写、新 backup 与旧 backup restore 已有默认真 PG 用例，等待
+  hosted 执行。另有实际 SIGKILL 停在首个 chunk 提交后与 health-checked checkpoint 的用例，
+  由正式 prepare 入口恢复旧 copy；本地 SQLite/协议检查不代替这些机制证明。
+- 两条新增覆盖索引服务原 overview 四次读取和 repo 引用三次读取；没有合并语句或改原筛选。
+  微型 SQLite 对拍覆盖空集、两种 awaiting、parent/catalog 分区、截止点 inclusive、NULL、
+  explicit 对 legacy 的遮蔽及 schedule 去重；原 SQL、参数值、结果和事务回滚前后全行保持。
+  真实目录检查锁住完整列序，SQLite 原查询使用 covering index。没有采用会改变无排序列表
+  次序的 workgroup partial index，索引存在与本地计划通过均不代表严格 HTTP P95 已通过。
+- P0-1 追加真实 ambient context 遗失、P0-2 追加 heartbeat owner revision 变化后的 effect 入账、
+  P0-8 追加三个真实缺失能力调用与同工厂非空控制。原阶段、旧 case、参数和预算保留；最终
+  SQLite 17 阶段/89 次执行为 67 pass+22 条指定历史失败/827 expect，前后各26 pass/307 expect。
+  99 份真实源码/构库输入前后摘要与17份原始日志一致，新增 PG 证明等待本批独立 hosted 作业。
+  证明范围不扩写为完整 daemon 或长期子进程 heartbeat 场景。
+- 上批 `8fdb37939e9daaccfc174553f72e75abdc021dbd` 的 Main CI `34210383091` 终态 failure：
+  32 success/3 failure/1 cancelled，Ubuntu2 与 macOS4 后端分片和汇总失败；独立真 PG、全部
+  10 个 E2E 与三平台 binary 成功。其独立 PG job `102009694751` 的产物 `10049599094` 已核：
+  Bun1.4.0 两侧各14阶段/67次执行、50 pass+17条指定历史红/686 expect，65源码与 exact SHA
+  全同、28份原始日志摘要全核；S4 由此取得真双库证据。
+- Ubuntu2 的 autokill 结构例原5秒预算超时于5233ms。原夹具在开始录制前逐条写入15/1200个
+  事件，全部往返落在测试预算内；改为原顺序的公共 batch helper 后，六组真实 SQLite 全7列
+  及行序与原夹具相同，原6 case/17 expect、4条测量语句、5/400样本和5000ms均保留。
+  macOS4 的 manual cached-repo refresh 在120062ms超时，现场缺少具体阻塞阶段，不能将唯一
+  已完成的 background clone 日志归给 manual fetch。原测试增加阶段、实际子进程 PID、流读取
+  与 exit 等待诊断；原调用参数/顺序、2 case/7 个完整断言与120000ms保持，原子进程和 Promise
+  直接返回，没有增加 reader、await 或重试。tiny 非网络子进程验证8 pass/237 expect，包含
+  cleanup 抛错时恢复观察器；原网络用例未在本地运行，等待链仍待 hosted 定位，不能称整仓已绿。
+- 原 full HTTP `34205739420`（exact `8e55ebe35d97e0fe861655d4587b15c533629b26`）现已完成。
+  500 repositories/10万 tasks/300万 runs/1000万 events/10万 deliveries 的原完整语料、
+  1次 warmup+20轮×9端点×2库共360个样本及全表前后见证均核对；9个原稳定 wire 投影相同。
+  8个完整响应摘要相同，overview 的时钟正文摘要不同，由原比较器的稳定投影规则处理。
+  两库 P95（SQLite/PG，ms）为：tasks first 245.008/334.487、second 201.352/290.012、
+  running 50.441/51.938、repos first 9.118/13.092、referenced 6.649/12.267、
+  reviews 4.658/5.252、clarify 1.449/5.679、workgroup 34.848/8.385、overview 9.704/19.937。
+  8/9项 PG 更慢，两侧任务页、SQLite workgroup 与 PG overview 仍有原绝对预算失败。
+  比较器 comparable/fullAcceptance=true、acceptancePassed=false；原 floor P95 与阈值不改。
+  计时后 PG 79 个计划/SQLite 69 个计划均无错误，写 CTE 计划缺失已解决；它们不是第21个样本。
+  本批不运行本地 PG、服务、完整性能库、soak、E2E 或全量门禁；RFC 与 AC11 继续 In Progress。
+- 最终启动/恢复矩阵为24 pass/528 expect：历史与当前合同、真实 SQLite Worker、失败/取消的
+  显式恢复、已完成状态拒绝再次 resume、COMMIT 后 pointer 补写均有定向判据。已接受写入且
+  pointer 为 current 的目标不会因为旧 copy receipt 再抢离线锁；实际数据库机制准备在既有
+  persistence runtime 内分派，history/copy/锁/pointer 编排由 system-operations 保持。
+  原18 case/62 matcher AST 保留，最后三个非空类型收窄的 emitted JS 逐字相同。
+- 当前AST为1921测试文件、660文件/1403次实际 createInMemoryDb 调用，650个构库文件无harness、
+  354文件使用harness；旧行为迁移累计仍184。三份历史机制测试新增5次实际构库，另有一个
+  只读 new Database 见证，全部记入T19f，文件账目739→742。LogicalSource 直接引用/驱动为
+  SQLite12/8、PG6/4；新增原SQLite源夹具和真实PG备份源分别计数，不用间接生产调用虚增直接驱动数。
+- canonical入口1737、事务272、导入5324、例外4791、public983、符号25040；新增3个历史
+  纯构造/回放入口、29条实际依赖、81个符号并退役2个，扫描判据不改。手动 migrate 复用
+  system-operations composition 的单条真实入边按W4-E7登记，R1为287→288，没有扩大bootstrap豁免。
+  原CLI关闭句柄源锁随真实prepare开库点更新，两个关闭位置继续受约束；原真实migrate例与
+  更新后的源锁2 pass/6 expect，旧源锁先按缺失openClient锚点报红。
+  完整backend tsc、173项功能账本/边界检查、13项canonical功能检查及34项T19/T19c检查全部通过。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 
@@ -2093,8 +2167,7 @@ PG daemon 从目录查询拼上下文——两边拼法不同，随「动态工�
 - **T19g（D2 新增）** 「迁移后 `sqlite_master` vs 逻辑契约」对账守卫：把 SQLite 迁移跑完后的索引（含部分索引谓词）/ CHECK /
   触发器与 `buildLogicalSchemaContract()` 逐项对拍，差异要么补进 drizzle 声明（PG 随之投影），要么显式登记为 SQLite 专属并写明理由。
   已知差异：`repo_group_nodes` group 挂载 CHECK、`repository_transport_connections` 摘要 / token_hint CHECK（B6 记）。
-- **T19h（D2 新增）** PG 目标的增量迁移：目前 `migratePostgresqlSchema` 只认 empty / ready，plan 变了已部署目标只能重做 cutover。
-  设计 PG 侧的 journal 追加与按语句补齐，让 schema 演进对两个引擎同一套流程。
+- **T19h（D2 新增；W18 实施中）** PG 目标的增量迁移：不可变 root、追加 journal/SQL 与精确 upgrade receipts 已实现，先支持新增索引；原复制/备份合同保持，schema 准备发生在业务装配前。真实旧库、多步、SIGKILL 恢复及旧备份恢复已接 hosted 用例，待 exact-SHA 验证，见 §0c 第十八批。
 
 - **T17** provider 命名文件只允许在 `platform/persistence/`（棘轮到 0）。
 - **T18** 裸 `db.transaction(` 只允许在事务原语文件。

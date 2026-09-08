@@ -25,6 +25,7 @@ import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { findStalledRunningChildren } from '../src/services/autoKill'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { insertInBatches } from '../src/platform/persistence/batchInsert'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_000_000_000
@@ -66,10 +67,16 @@ async function seedRun(
     pid: 4242,
     startedAt: opts.startedAt,
   })
-  // 逐条插入：id 顺序 == 插入顺序，这正是被测判据依赖的东西。
-  for (const e of opts.events) {
-    await db.insert(nodeRunEvents).values({ nodeRunId, ts: e.ts, kind: 'text', payload: '{}' })
-  }
+  // 顺序切批保留事件行与自增 id 的顺序；recordStatements 仍在所有 seed 之后开始。
+  const eventRows = opts.events.map((e): typeof nodeRunEvents.$inferInsert => ({
+    nodeRunId,
+    ts: e.ts,
+    kind: 'text',
+    payload: '{}',
+  }))
+  await insertInBatches(db, nodeRunEvents, eventRows, (batch) =>
+    db.insert(nodeRunEvents).values([...batch]),
+  )
   return nodeRunId
 }
 

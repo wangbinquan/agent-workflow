@@ -1569,6 +1569,13 @@
       "when": 1790006412066,
       "tag": "0224_rfc359_node_run_lineage_explicit",
       "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "6",
+      "when": 1790092812066,
+      "tag": "0225_rfc359_task_count_indexes",
+      "breakpoints": true
     }
   ]
 }

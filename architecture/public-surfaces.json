@@ -79938,7 +79938,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.create.kind",
           "type": "'command'"
@@ -80054,7 +80055,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.delete.kind",
           "type": "'command'"
@@ -80170,7 +80172,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.get.kind",
           "type": "'query'"
@@ -80286,7 +80289,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.getAcl.kind",
           "type": "'query'"
@@ -80402,7 +80406,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.list.kind",
           "type": "'query'"
@@ -80518,7 +80523,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.rename.kind",
           "type": "'command'"
@@ -80634,7 +80640,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.update.kind",
           "type": "'command'"
@@ -80750,7 +80757,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722"
+            "import:04008840d850b6541722",
+            "import:a9d66dac04e373fc7662"
           ],
           "fieldPath": "operations.updateAcl.kind",
           "type": "'command'"
@@ -137357,7 +137365,8 @@
             "import:52aebe854233bde53a8c",
             "import:62f92a1725e7d433c0cf",
             "import:87d1ccd8f09aeeb9e2c0",
-            "import:924a40dfc07194923acc"
+            "import:924a40dfc07194923acc",
+            "import:d6081cab0c06792087a4"
           ],
           "fieldPath": "$method:cancelChild.$parameter:input.cause.kind",
           "type": "'parent-cascade'"
@@ -161831,7 +161840,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ec887f8b27c4b485781ee05f1e1bd1adedd434d8c078166db5f61e95a0d3f625",
+  "sourceDigest": "sha256:562d3e0a70143d39c7cd1459e5d3d75366fcadc928f9651ed508a5740021455d",
   "targetContexts": [
     "collaboration",
     "development-automation",

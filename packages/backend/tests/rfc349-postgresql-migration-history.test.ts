@@ -3,11 +3,19 @@
 // logical target preparation and by the standalone schema migrator.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { verifyPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import {
+  loadPostgresqlMigrationHistory,
+  verifyPostgresqlMigrationHistory,
+} from '@/platform/persistence/postgresqlMigrationHistory'
+import { postgresqlMigrationJournal } from '@/platform/persistence/postgresqlMigrationSequence'
+import {
+  buildPostgresqlSchemaPlan,
+  renderPostgresqlBaselineSql,
+} from '@/platform/persistence/postgresqlSchema'
+import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
 
 const committedHistory = resolve(import.meta.dir, '..', 'db', 'postgresql-migrations')
 const roots: string[] = []
@@ -25,6 +33,47 @@ afterEach(() => {
 })
 
 describe('RFC-349 PostgreSQL migration history admission', () => {
+  test('accepts an exact historical plan only after the complete current history is verified', async () => {
+    const history = await loadPostgresqlMigrationHistory()
+    await expect(
+      verifyPostgresqlMigrationHistory({ plan: history.root.plan }),
+    ).resolves.toMatchObject({
+      contractDigest: history.root.contract.digest,
+      planDigest: history.root.plan.digest,
+      statementCount: history.root.plan.statements.length,
+    })
+    await expect(
+      verifyPostgresqlMigrationHistory({ plan: { ...history.root.plan, statements: [] } }),
+    ).rejects.toMatchObject({ code: 'postgresql-migration-history-drift' })
+  })
+
+  test('retains the exact explicit flat custom-baseline contract', async () => {
+    const history = await loadPostgresqlMigrationHistory()
+    const folder = mkdtempSync(join(tmpdir(), 'rfc349-custom-pg-history-'))
+    roots.push(folder)
+    mkdirSync(join(folder, 'meta'))
+    writeFileSync(
+      join(folder, '0000_rfc349_baseline.sql'),
+      renderPostgresqlBaselineSql(history.root.plan),
+    )
+    writeFileSync(
+      join(folder, 'meta', '_journal.json'),
+      canonicalSchemaJson(postgresqlMigrationJournal(history.root.plan)),
+    )
+    await expect(
+      verifyPostgresqlMigrationHistory({ plan: history.root.plan, migrationsFolder: folder }),
+    ).resolves.toEqual({
+      migrationsFolder: folder,
+      baselineId: history.root.plan.baselineId,
+      contractDigest: history.root.contract.digest,
+      planDigest: history.root.plan.digest,
+      statementCount: history.root.plan.statements.length,
+    })
+    await expect(
+      loadPostgresqlMigrationHistory({ migrationsFolder: folder }),
+    ).rejects.toMatchObject({ code: 'postgresql-migration-history-missing' })
+  })
+
   test('accepts the committed baseline and exact statement journal', async () => {
     const plan = buildPostgresqlSchemaPlan()
     await expect(

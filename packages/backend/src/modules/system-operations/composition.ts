@@ -3,7 +3,7 @@
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
-import { loadConfig } from '@/config'
+import { applyConfigPatch, loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
@@ -14,7 +14,14 @@ import {
   composeSqliteRepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import {
+  resolveDatabaseProviderRuntime,
+  type ResolvedDatabaseProviderRuntime,
+} from '@/platform/persistence/databaseProviderRuntime'
+import {
+  prepareDatabaseSchemaUpgrade,
+  type DatabaseSchemaUpgradeOptions,
+} from './infrastructure/databaseSchemaUpgradeCoordinator'
 import {
   buildLogicalSchemaContract,
   type LogicalSchemaContract,
@@ -60,6 +67,7 @@ import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 
 export { createHealthDatabaseReadModel } from './infrastructure/healthReadModel'
+export { readDatabaseSchemaUpgradeGeneration } from './infrastructure/databaseMigrationCoordinator'
 export {
   createDatabaseMigrationDaemonAdmission,
   type DatabaseMigrationDaemonAdmission,
@@ -67,6 +75,22 @@ export {
 } from './infrastructure/databaseMigrationDaemonAdmission'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+
+/** Boot/manual-command preparation; the returned provider owns the prepared mechanism. */
+export async function prepareDatabaseProviderForBoot(
+  input: Omit<DatabaseSchemaUpgradeOptions, 'readConfig' | 'writeConfig'> & {
+    readonly configPath?: string
+  },
+) {
+  const { configPath = Paths.config, ...options } = input
+  return await prepareDatabaseSchemaUpgrade({
+    ...options,
+    readConfig: () => loadConfig(configPath).database,
+    writeConfig: (database) => {
+      applyConfigPatch(configPath, { database })
+    },
+  })
+}
 
 export interface SystemOperationsModule {
   readonly application: SystemOperationsApplication
@@ -228,18 +252,21 @@ export function composeLocalSystemOperations(
   deps: {
     readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
     readonly databaseConfig?: DatabaseConfig
+    readonly providerRuntime?: ResolvedDatabaseProviderRuntime
   } = {},
 ): LocalSystemOperations {
   const appHome = Paths.root
   const databaseConfig = deps.databaseConfig ?? loadConfig(Paths.config).database
   const contract = buildLogicalSchemaContract()
-  const provider = resolveDatabaseProviderRuntime({
-    config: databaseConfig,
-    sqlitePath: Paths.db,
-    generationPointerPath: Paths.databaseGenerationPointer,
-    operationsRoot: Paths.databaseMigrationsDir,
-    contract,
-  })
+  const provider =
+    deps.providerRuntime ??
+    resolveDatabaseProviderRuntime({
+      config: databaseConfig,
+      sqlitePath: Paths.db,
+      generationPointerPath: Paths.databaseGenerationPointer,
+      operationsRoot: Paths.databaseMigrationsDir,
+      contract,
+    })
   let module: SystemOperationsModule
   let prepareRestoreArtifact: (path: string) => Promise<RestoreArtifactRef>
   if (provider.provider === 'postgresql') {

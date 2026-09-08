@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1734,
+    "entries": 1737,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -995,7 +995,7 @@
         "audit": false,
         "authority": "system",
         "authorization": true,
-        "event": false,
+        "event": true,
         "fenceOrOcc": true,
         "transaction": false
       },
@@ -1004,7 +1004,6 @@
       "id": "mutation:packages/backend/src/cli/start.ts#startCommand",
       "missingControls": [
         "audit",
-        "event",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
@@ -31009,6 +31008,79 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyPostgresqlIndexUpgrade",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyPostgresqlIndexUpgrade",
+      "symbol": "applyPostgresqlIndexUpgrade",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlIndexUpgrade",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlIndexUpgrade",
+      "symbol": "createPostgresqlIndexUpgrade",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlMigrationRoot",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlMigrationRoot",
+      "symbol": "createPostgresqlMigrationRoot",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -41424,7 +41496,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ec887f8b27c4b485781ee05f1e1bd1adedd434d8c078166db5f61e95a0d3f625",
+  "sourceDigest": "sha256:562d3e0a70143d39c7cd1459e5d3d75366fcadc928f9651ed508a5740021455d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

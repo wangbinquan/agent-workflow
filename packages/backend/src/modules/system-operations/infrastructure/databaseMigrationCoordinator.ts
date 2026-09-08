@@ -4,12 +4,14 @@
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { randomUUID } from 'node:crypto'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { sha256Hex } from '@/util/hash'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createDatabaseMigrationControlPlane } from '../application/databaseMigrationControlPlane'
 import {
   classifyDatabaseMigrationFailure,
+  DatabaseMigrationRunnerError,
   createDatabaseMigrationRunner,
   type DatabaseMigrationAdmissionPort,
   type DatabaseMigrationSafetyBackupPort,
@@ -28,7 +30,19 @@ import type {
   DatabaseRuntimeOverview,
   StartDatabaseMigrationInput,
 } from '../public/types'
-import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
+import {
+  readDatabaseGeneration,
+  readDatabaseGenerationForBootstrap,
+  DatabaseGenerationError,
+  type DatabaseGenerationBootstrapCandidate,
+  type DatabaseGenerationPayload,
+} from '@/platform/persistence/generationStore'
+import { verifyDatabaseMigrationManifest } from '../domain/databaseMigration'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import {
+  resolvePostgresqlIndexOnlyRowBridge,
+  type PostgresqlMigrationHistory,
+} from '@/platform/persistence/postgresqlMigrationSequence'
 import {
   openPostgresqlLogicalTarget,
   type PostgresqlLogicalTarget,
@@ -99,6 +113,8 @@ export interface DatabaseMigrationCoordinatorOptions {
   /** HTTP/Settings returns the durable planned status and runs in-process in
    * the background; offline CLI and boot recovery keep inline completion. */
   readonly executionMode?: 'inline' | 'background'
+  /** Boot recovery pins the operation discovered before any schema upgrade. */
+  readonly interruptedOperationId?: string
   readonly onBackgroundFailure?: (input: {
     readonly operationId: string
     readonly error: unknown
@@ -149,6 +165,95 @@ export function isDatabaseMigrationTargetProbeUnavailable(error: unknown): boole
   )
 }
 
+/** Discovery admits no runtime. An operation checkpoint may explain a stale
+ * manifest link only when the complete original copy and target identity agree. */
+export function readDatabaseSchemaUpgradeGeneration(options: {
+  readonly generationPointerPath: string
+  readonly operationsRoot: string
+  readonly contract: LogicalSchemaContract
+  readonly history: PostgresqlMigrationHistory
+  /** Only the explicit operation command may resume a failed target. */
+  readonly explicitOperationId?: string
+  /** Boot pins a healthy interrupted target without granting failed resume. */
+  readonly pendingOperationId?: string
+}): DatabaseGenerationBootstrapCandidate {
+  const selectedOperationId = options.explicitOperationId ?? options.pendingOperationId
+  const verifyInterruptedOperation = ({
+    payload,
+    manifestText,
+  }: {
+    readonly payload: DatabaseGenerationPayload
+    readonly manifestText: string
+  }): void => {
+    const manifest = verifyDatabaseMigrationManifest(JSON.parse(manifestText))
+    const operation = manifest.payload
+    if (
+      options.explicitOperationId !== operation.operationId &&
+      (operation.failure !== null ||
+        operation.cancelledAt !== null ||
+        operation.cancellationRequestedAt !== null)
+    ) {
+      throw new DatabaseMigrationRunnerError(
+        'database-migration-resume-required',
+        'migration is failed or cancelled and requires an explicit resume before schema upgrade',
+      )
+    }
+    if (
+      (selectedOperationId !== undefined && selectedOperationId !== operation.operationId) ||
+      databaseProviderTraits(payload.provider).migrationRole !== 'target' ||
+      payload.operationId !== operation.operationId ||
+      payload.generationId !== `dbg_pg_${operation.operationId.slice(4)}` ||
+      operation.rolledBackAt !== null ||
+      !['switched', 'health-checked', 'accepting-writes', 'finalized'].includes(operation.phase) ||
+      operation.sourceBackupDigest === null ||
+      operation.logicalBackupDigest === null ||
+      operation.legacyArchiveDigest === null ||
+      operation.verificationDigest === null
+    ) {
+      throw new DatabaseGenerationError(
+        'generation-manifest-digest-mismatch',
+        'database generation manifest does not identify a recoverable copy checkpoint',
+      )
+    }
+    const bridge = resolvePostgresqlIndexOnlyRowBridge(options.history, {
+      fromContractDigest: operation.source.schemaDigest,
+      toContractDigest: payload.schemaDigest,
+    })
+    const controlPlane = createDatabaseMigrationControlPlane({
+      store: createFileDatabaseMigrationStore({ root: options.operationsRoot }),
+    })
+    createDatabaseMigrationArtifactReader({
+      operationsRoot: options.operationsRoot,
+      controlPlane,
+      contract: bridge.source,
+    }).readArtifact({ operationId: operation.operationId, kind: 'verification' })
+  }
+  const candidate = readDatabaseGenerationForBootstrap({
+    pointerPath: options.generationPointerPath,
+    migrationsDir: options.operationsRoot,
+    expectedSchemaDigest: options.contract.digest,
+    supportedSchemaDigests: options.history.versions.map((version) => version.contract.digest),
+    verifyInterruptedOperation,
+  })
+  const payload = candidate.kind === 'current' ? candidate.generation.payload : candidate.payload
+  if (
+    selectedOperationId !== undefined &&
+    databaseProviderTraits(payload.provider).migrationRole === 'target' &&
+    candidate.kind !== 'operation-recovery'
+  ) {
+    // A pending operation can have a fully refreshed pointer. Apply the same
+    // target/phase/receipt checks before recovery as for a stale manifest link.
+    verifyInterruptedOperation({
+      payload,
+      manifestText: readFileSync(
+        join(options.operationsRoot, selectedOperationId, 'manifest.json'),
+        'utf8',
+      ),
+    })
+  }
+  return candidate
+}
+
 export function createDatabaseMigrationCoordinator(
   options: DatabaseMigrationCoordinatorOptions,
 ): DatabaseMigrationCoordinatorPort {
@@ -170,6 +275,33 @@ export function createDatabaseMigrationCoordinator(
   // duplicate resume requests cannot race the same durable owner fence, and
   // let the active runner settle cancellation at a safe phase/chunk boundary.
   const activeRuns = new Map<string, Promise<DatabaseMigrationStatusView>>()
+  let historyPromise: Promise<PostgresqlMigrationHistory> | undefined
+  const history = () => (historyPromise ??= loadPostgresqlMigrationHistory())
+  const operationVersion = async (operationId: string) => {
+    const manifest = controlPlane.readManifest(operationId)
+    if (manifest.payload.source.schemaDigest === contract.digest) return { contract, plan }
+    const verified = await history()
+    resolvePostgresqlIndexOnlyRowBridge(verified, {
+      fromContractDigest: manifest.payload.source.schemaDigest,
+      toContractDigest: contract.digest,
+    })
+    const version = verified.versions.find(
+      (candidate) => candidate.contract.digest === manifest.payload.source.schemaDigest,
+    )
+    if (version === undefined)
+      throw new Error('database migration historical schema is unavailable')
+    return version
+  }
+  const readOperationArtifact = async (operationId: string) => {
+    const version = await operationVersion(operationId)
+    return version.contract === contract
+      ? artifactReader
+      : createDatabaseMigrationArtifactReader({
+          operationsRoot: options.operationsRoot,
+          controlPlane,
+          contract: version.contract,
+        })
+  }
 
   const liveGeneration = () =>
     readDatabaseGeneration({
@@ -227,9 +359,35 @@ export function createDatabaseMigrationCoordinator(
     requireSourcePreflight = true,
   ): Promise<T> => {
     const manifest = controlPlane.readManifest(operationId)
+    const version = await operationVersion(operationId)
+    const targetSchemaDigest = await (async () => {
+      if (version.contract.digest === contract.digest) return version.contract.digest
+      const pointer = readDatabaseSchemaUpgradeGeneration({
+        generationPointerPath: options.generationPointerPath,
+        operationsRoot: options.operationsRoot,
+        contract,
+        history: await history(),
+        explicitOperationId: operationId,
+      })
+      const live = pointer.kind === 'current' ? pointer.generation.payload : pointer.payload
+      if (
+        databaseProviderTraits(live.provider).migrationRole !== 'target' ||
+        live.operationId !== operationId ||
+        live.generationId !== `dbg_pg_${operationId.slice(4)}`
+      )
+        return version.contract.digest
+      resolvePostgresqlIndexOnlyRowBridge(await history(), {
+        fromContractDigest: version.contract.digest,
+        toContractDigest: live.schemaDigest,
+      })
+      return live.schemaDigest
+    })()
     const target = manifest.payload.target
     const source: SqliteLogicalSource = requireSourcePreflight
-      ? await openSqliteLogicalSourceWorker({ path: options.sqlitePath, contract })
+      ? await openSqliteLogicalSourceWorker({
+          path: options.sqlitePath,
+          contract: version.contract,
+        })
       : {
           provider: 'sqlite',
           path: options.sqlitePath,
@@ -244,22 +402,29 @@ export function createDatabaseMigrationCoordinator(
           },
           async close() {},
         }
-    const sourceSnapshot: SqliteLogicalSourceSnapshot = requireSourcePreflight
-      ? await source.preflight()
-      : {
-          databaseFingerprint: manifest.payload.source.databaseFingerprint,
-          dataVersion: 0,
-          pageCount: 0,
-          pageSize: 0,
-          fileBytes: 0,
-          totalRows: 0,
-          tableRows: Object.freeze({}),
-        }
-    const runtime = createPostgresqlDatabaseRuntime({
-      config: targetConfig(target),
-      generationId: `dbg_pg_${operationId.slice(4)}`,
-      env: options.env,
-    })
+    let sourceSnapshot: SqliteLogicalSourceSnapshot
+    let runtime: ReturnType<typeof createPostgresqlDatabaseRuntime>
+    try {
+      sourceSnapshot = requireSourcePreflight
+        ? await source.preflight()
+        : {
+            databaseFingerprint: manifest.payload.source.databaseFingerprint,
+            dataVersion: 0,
+            pageCount: 0,
+            pageSize: 0,
+            fileBytes: 0,
+            totalRows: 0,
+            tableRows: Object.freeze({}),
+          }
+      runtime = createPostgresqlDatabaseRuntime({
+        config: targetConfig(target),
+        generationId: `dbg_pg_${operationId.slice(4)}`,
+        env: options.env,
+      })
+    } catch (error) {
+      await source.close()
+      throw error
+    }
     // Opening the logical target reserves one PostgreSQL session for the
     // operation-scoped advisory lock. Keep it lazy so planned-phase readiness
     // and permission probes can run even when the configured pool has max=1.
@@ -270,8 +435,8 @@ export function createDatabaseMigrationCoordinator(
         runtime,
         operationId,
         sourceGenerationId: manifest.payload.source.generationId,
-        contract,
-        plan,
+        contract: version.contract,
+        plan: version.plan,
       })
       return openingTarget
     }
@@ -337,7 +502,8 @@ export function createDatabaseMigrationCoordinator(
       sourceSnapshot,
       target: logicalTarget,
       targetRuntime: runtime,
-      contract,
+      contract: version.contract,
+      targetSchemaDigest: () => targetSchemaDigest,
       admission,
       safetyBackup,
       artifacts,
@@ -521,7 +687,50 @@ export function createDatabaseMigrationCoordinator(
     },
 
     async resume(input: DatabaseMigrationOperationInput) {
-      assertSqliteSource()
+      const version = await operationVersion(input.operationId)
+      const readExplicitTarget = async () =>
+        readDatabaseSchemaUpgradeGeneration({
+          generationPointerPath: options.generationPointerPath,
+          operationsRoot: options.operationsRoot,
+          contract,
+          history: await history(),
+          explicitOperationId: input.operationId,
+        })
+      let generation: DatabaseGenerationBootstrapCandidate
+      try {
+        generation = readDatabaseGenerationForBootstrap({
+          pointerPath: options.generationPointerPath,
+          migrationsDir: options.operationsRoot,
+          expectedSchemaDigest: contract.digest,
+          supportedSchemaDigests: [version.contract.digest],
+        })
+      } catch (error) {
+        if (
+          !(error instanceof DatabaseGenerationError) ||
+          error.code !== 'generation-manifest-digest-mismatch'
+        )
+          throw error
+        generation = await readExplicitTarget()
+      }
+      const payload =
+        generation.kind === 'current' ? generation.generation.payload : generation.payload
+      const operation = controlPlane.readManifest(input.operationId).payload
+      if (
+        databaseProviderTraits(payload.provider).migrationRole === 'target' &&
+        (operation.phase === 'finalized' ||
+          (operation.phase === 'accepting-writes' && operation.failure === null))
+      ) {
+        throw new DatabaseMigrationCoordinatorError(
+          'database-migration-source-not-sqlite',
+          'one-click migration requires the live database generation to be SQLite',
+        )
+      }
+      if (
+        databaseProviderTraits(payload.provider).migrationRole === 'target' &&
+        generation.kind !== 'operation-recovery'
+      ) {
+        await readExplicitTarget()
+      }
       return await executeOperation(input.operationId, { resumeFailed: true })
     },
 
@@ -619,21 +828,26 @@ export function createDatabaseMigrationCoordinator(
     },
 
     async readArtifact(input) {
-      return artifactReader.readArtifact(input)
+      return (await readOperationArtifact(input.operationId)).readArtifact(input)
     },
 
     async inspectLegacyTable(input) {
-      return artifactReader.inspectLegacyTable(input)
+      return (await readOperationArtifact(input.operationId)).inspectLegacyTable(input)
     },
 
     async readLegacyChunk(input) {
-      return artifactReader.readLegacyChunk(input)
+      return (await readOperationArtifact(input.operationId)).readLegacyChunk(input)
     },
 
     async resumeInterrupted(target: DatabaseMigrationTargetView) {
       const candidate = controlPlane
         .list()
         .filter((status) => status.phase !== 'finalized' && status.rolledBackAt === null)
+        .filter(
+          (status) =>
+            options.interruptedOperationId === undefined ||
+            status.operationId === options.interruptedOperationId,
+        )
         .sort((left, right) => right.updatedAt - left.updatedAt)[0]
       if (candidate === undefined) return null
       if (!sameTarget(candidate.target, target)) {

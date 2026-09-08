@@ -14,6 +14,8 @@ import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type * as CollaborationContext from '../../src/modules/collaboration/composition/commandContext'
+import type * as TaskEffectPersistence from '../../src/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import type * as ClarifySeal from '../../src/modules/collaboration/infrastructure/clarify/seal'
 import type * as TaskDagCollaboration from '../../src/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import type {
@@ -25,6 +27,7 @@ import type * as WorkflowRepository from '../../src/modules/resource-catalog/inf
 import type * as DevelopmentAutomation from '../../src/modules/development-automation/composition'
 import type * as SkillCatalogBoot from '../../src/modules/resource-catalog/composition/skillCatalogBoot'
 import { TaskExecutionError } from '../../src/modules/task-execution/application/taskExecutionError'
+import { currentTaskExecutionContext } from '../../src/modules/task-execution/application/taskExecutionContext'
 import type * as TaskDriverRelease from '../../src/modules/task-execution/infrastructure/taskDriverRelease'
 import type * as OwnedTaskExecution from '../../src/modules/task-execution/infrastructure/ownedTaskExecution'
 
@@ -142,7 +145,14 @@ async function restoreDecodeBeforeWorkflowDelete(): Promise<void> {
 function registerMemorySource(
   target: string,
   changed: string,
-  name: 'seal' | 'workflow-delete' | 'driver-release' | 'ownerless-recovery',
+  name:
+    | 'seal'
+    | 'workflow-delete'
+    | 'driver-release'
+    | 'ownerless-recovery'
+    | 'ambient-owner-context'
+    | 'effect-owner-snapshot'
+    | 'collaboration-command-omission',
 ): string {
   const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'bun' })
   const javascript = transpiler.transformSync(changed)
@@ -373,6 +383,133 @@ async function restoreRevokedOwnerReconcileRefusal(): Promise<void> {
   }))
 }
 
+async function restoreMissingAmbientContext(): Promise<void> {
+  const target = sourcePath('modules/task-execution/infrastructure/ownedTaskExecution.ts')
+  const original: typeof OwnedTaskExecution = await import(target)
+  const source = readFileSync(target, 'utf8')
+  const current = 'const context = input.context ?? currentTaskExecutionContext(input.taskId)'
+  if (source.split(current).length !== 2) throw new Error('P0-1 mutation site drifted')
+  // 01e4b1b7b: postgresqlNodeRunLifecyclePersistence.ts:30–47 selects only
+  // explicit context. Restore that omission at today's shared primitive;
+  // its real owner row query supplies the native error. This is a signature
+  // adaptation of the missing fallback, not the entire old function's bytes.
+  const changed = source.replace(current, 'const context = input.context')
+  const mutated: typeof OwnedTaskExecution = await import(
+    registerMemorySource(target, changed, 'ambient-owner-context')
+  )
+  const fenceTaskWrite: typeof OwnedTaskExecution.fenceTaskWrite = async (tx, input) => {
+    const ambient = currentTaskExecutionContext(input.taskId)
+    try {
+      await mutated.fenceTaskWrite(tx, input)
+    } catch (error) {
+      // Observe the actual failed call and its existing drive context. The
+      // runner correlates this task with the unchanged native error below.
+      console.error(
+        `[rfc359-p0-1-call] ${JSON.stringify({
+          taskId: input.taskId,
+          explicitContext: input.context !== undefined,
+          ambientTaskId: ambient?.token.taskId ?? null,
+        })}`,
+      )
+      throw error
+    }
+  }
+  mock.module(target, () => ({ ...original, fenceTaskWrite }))
+}
+
+async function restoreFrozenEffectOwnerSnapshot(): Promise<void> {
+  const target = sourcePath(
+    'modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts',
+  )
+  const original: typeof TaskEffectPersistence = await import(target)
+  const source = readFileSync(target, 'utf8')
+  const current = 'await assertTaskOwnerTx(tx, input.token, now)'
+  if (source.split(current).length !== 4) throw new Error('P0-2 mutation sites drifted')
+  // 01e4b1b7b: postgresqlTaskExecutionEffectPersistence.ts:72–102. This is the
+  // original private read predicate and native throw. Only its function/Tx
+  // names and imports are adapted. The diagnostic observes the same real row;
+  // it does not supply the error or change the predicate. All three real calls
+  // (prepare, settle, spawn receipt) use this historical function in memory.
+  const historical = `
+async function assertHistoricalEffectOwner(
+  tx: TaskExecutionTransaction, token: OwnershipToken, now: number,
+): Promise<void> {
+  assertOwnershipToken(token)
+  const rows = await tx
+    .select({
+      ownerId: taskExecutionOwners.ownerId,
+      daemonGeneration: taskExecutionOwners.daemonGeneration,
+      epoch: taskExecutionOwners.epoch,
+      state: taskExecutionOwners.state,
+      leaseUntil: taskExecutionOwners.leaseUntil,
+      revision: taskExecutionOwners.revision,
+    })
+    .from(taskExecutionOwners)
+    .where(eq(taskExecutionOwners.taskId, token.taskId))
+    .limit(1)
+  const owner = rows[0]
+  if (
+    owner === undefined ||
+    owner.ownerId !== token.ownerId ||
+    owner.daemonGeneration !== token.daemonGeneration ||
+    owner.epoch !== token.epoch ||
+    owner.state !== 'claimed' ||
+    owner.revision !== token.ownerRevision ||
+    owner.leaseUntil !== token.leaseUntil ||
+    owner.leaseUntil < now
+  ) {
+    console.error('[rfc359-p0-2-snapshot] ' + JSON.stringify({
+      taskId: token.taskId,
+      tokenRevision: token.ownerRevision,
+      rowRevision: owner?.revision ?? null,
+      tokenLeaseUntil: token.leaseUntil,
+      rowLeaseUntil: owner?.leaseUntil ?? null,
+    }))
+    throw new TaskExecutionError(
+      'task-execution-stale-owner',
+      \`task '\${token.taskId}' mutation was fenced\`,
+    )
+  }
+}
+`
+  const changed = `import { taskExecutionOwners } from '@/db/schema'
+import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
+${source.replaceAll(current, 'await assertHistoricalEffectOwner(tx, input.token, now)')}
+${historical}`
+  const mutated: typeof TaskEffectPersistence = await import(
+    registerMemorySource(target, changed, 'effect-owner-snapshot')
+  )
+  mock.module(target, () => ({
+    ...original,
+    DrizzleTaskExecutionEffectPersistence: mutated.DrizzleTaskExecutionEffectPersistence,
+  }))
+}
+
+async function restoreMissingCollaborationCommands(): Promise<void> {
+  const target = sourcePath('modules/collaboration/composition/commandContext.ts')
+  const source = readFileSync(target, 'utf8')
+  const current = `return createCollaborationCommandContextFromPersistence({
+    ...input,`
+  if (source.split(current).length !== 3) throw new Error('P0-8 mutation sites drifted')
+  // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:706–711 omitted all three
+  // command dependencies. Restore that omission at both current DB factory
+  // boundaries; the real constructor/persistence and public require functions
+  // still execute. This models the historical root call, not old function bytes
+  // or a complete daemon startup. Keep all exports in the same real module so
+  // constructed contexts and their resolver retain the same dependency map.
+  const changed = source.replaceAll(
+    current,
+    `${current}
+    questionDispatches: undefined,
+    clarifyDecisions: undefined,
+    reviewDecisions: undefined,`,
+  )
+  const mutated: typeof CollaborationContext = await import(
+    registerMemorySource(target, changed, 'collaboration-command-omission')
+  )
+  mock.module(target, () => mutated)
+}
+
 const mutation = process.env['RFC359_P0_MUTATION']
 switch (mutation) {
   case 'p0-12-protocol':
@@ -410,6 +547,15 @@ switch (mutation) {
     break
   case 'p0-4-revoked-reconcile':
     await restoreRevokedOwnerReconcileRefusal()
+    break
+  case 'p0-2-owner-snapshot':
+    await restoreFrozenEffectOwnerSnapshot()
+    break
+  case 'p0-8-command-omission':
+    await restoreMissingCollaborationCommands()
+    break
+  case 'p0-1-ambient-context':
+    await restoreMissingAmbientContext()
     break
   default:
     throw new Error(`Unknown RFC359_P0_MUTATION: ${mutation ?? '(missing)'}`)

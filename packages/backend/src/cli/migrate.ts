@@ -5,8 +5,7 @@
 
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { loadConfig } from '@/config'
-import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
@@ -14,21 +13,25 @@ import { Paths } from '@/util/paths'
 export async function migrateCommand(): Promise<{ output: string }> {
   const config = loadConfig(Paths.config)
   const contract = buildLogicalSchemaContract()
-  const provider = resolveDatabaseProviderRuntime({
+  const prepared = await prepareDatabaseProviderForBoot({
     config: config.database,
     sqlitePath: Paths.db,
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract,
+    configPath: Paths.config,
+    lockPath: Paths.lock,
+    sqliteOptions: { migrationsFolder: await resolveMigrationsFolder() },
   })
+  const provider = prepared.runtime
   // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
   // this and stops compiling, instead of falling into the SQLite path below.
   if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
     return unhandledDatabaseProvider(provider)
   }
-  if (provider.provider === 'postgresql') {
+  if (prepared.provider === 'postgresql') {
     try {
-      const receipt = await migratePostgresqlSchema({ runtime: provider.runtime })
+      const receipt = prepared.receipt
       return {
         output:
           `PostgreSQL schema ${receipt.applied ? 'applied' : 'verified'} ` +
@@ -45,7 +48,6 @@ export async function migrateCommand(): Promise<{ output: string }> {
   // handle keeps db.sqlite (+ WAL -wal/-shm) OPEN, which locks the containing
   // directory — the caller's `rm(tempDir)` then fails EBUSY (POSIX lets you
   // unlink an open file; Windows does not). RFC-254 T31 (cli.test.ts teardown).
-  provider.openClient({ migrationsFolder: await resolveMigrationsFolder() })
   await provider.close()
   return { output: `migrations applied (database: ${Paths.db})\n` }
 }

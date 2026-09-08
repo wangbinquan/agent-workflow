@@ -50,11 +50,17 @@ import {
 } from './modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createMcpTransactionLifecycle } from './modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from './modules/code-capability/composition/capabilityTemplateOperations'
-import { composeLocalSystemOperations } from './modules/system-operations/composition'
+import {
+  composeLocalSystemOperations,
+  prepareDatabaseProviderForBoot,
+} from './modules/system-operations/composition'
 import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
-import { resolveDatabaseProviderRuntime } from './platform/persistence/databaseProviderRuntime'
-import { migratePostgresqlSchema } from './platform/persistence/postgresqlMigrator'
 import { buildLogicalSchemaContract } from './platform/persistence/schemaContract'
+import { databaseProviderTraits } from './platform/persistence/providerTraits'
+import { resolveDatabaseProviderRuntime } from './platform/persistence/databaseProviderRuntime'
+import { readDatabaseGenerationForBootstrap } from './platform/persistence/generationStore'
+import { loadPostgresqlMigrationHistory } from './platform/persistence/postgresqlMigrationHistory'
+import { resolvePostgresqlHistoricalContract } from './platform/persistence/postgresqlMigrationSequence'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from './platform/persistence/postgresqlResourcePackageAtomicApply'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
@@ -138,16 +144,19 @@ async function composeUserCommandBootstrap() {
 async function resolveCommandProvider() {
   const config = loadConfig(Paths.config)
   const contract = buildLogicalSchemaContract()
-  const runtime = resolveDatabaseProviderRuntime({
+  const prepared = await prepareDatabaseProviderForBoot({
     config: config.database,
     sqlitePath: Paths.db,
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract,
+    configPath: Paths.config,
+    lockPath: Paths.lock,
+    sqliteOptions: { migrationsFolder: await resolveMigrationsFolder() },
   })
+  const runtime = prepared.runtime
   try {
     if (runtime.provider === 'postgresql') {
-      await migratePostgresqlSchema({ runtime: runtime.runtime })
       return Object.freeze({
         provider: 'postgresql' as const,
         runtime,
@@ -306,9 +315,6 @@ async function main(): Promise<void> {
     process.exit(await runManagedProcessLauncher(Bun.argv))
   }
   const sub = Bun.argv[2] ?? 'help'
-  let localSystemOperations: ReturnType<typeof composeLocalSystemOperations> | undefined
-  const requireLocalSystemOperations = () =>
-    (localSystemOperations ??= composeLocalSystemOperations())
   let localDatabaseMigrationOperations:
     | ReturnType<typeof composeLocalDatabaseMigrationOperations>
     | undefined
@@ -521,9 +527,17 @@ async function main(): Promise<void> {
       break
 
     case 'backup': {
-      const operations = requireLocalSystemOperations()
+      const provider = await resolveCommandProvider()
+      const operations = await (async () => {
+        try {
+          return composeLocalSystemOperations({ providerRuntime: provider.runtime })
+        } catch (error) {
+          await provider.runtime.close()
+          throw error
+        }
+      })()
       try {
-        const result = await backupCommand(Bun.argv.slice(3), requireLocalSystemOperations())
+        const result = await backupCommand(Bun.argv.slice(3), operations)
         process.stdout.write(result.output)
         if (result.status !== 'ok') process.exit(1)
       } finally {
@@ -533,9 +547,31 @@ async function main(): Promise<void> {
     }
 
     case 'restore': {
-      const operations = requireLocalSystemOperations()
+      // Restore must inspect/stage the incoming artifact before any forward
+      // migration. Select a verified old SQLite runtime lazily for this one
+      // command; the restore owner keeps its existing backup/swap/open order.
+      const contract = buildLogicalSchemaContract()
+      const history = await loadPostgresqlMigrationHistory()
+      const generation = readDatabaseGenerationForBootstrap({
+        pointerPath: Paths.databaseGenerationPointer,
+        migrationsDir: Paths.databaseMigrationsDir,
+        expectedSchemaDigest: contract.digest,
+        supportedSchemaDigests: history.versions.map((version) => version.contract.digest),
+      })
+      const providerRuntime = resolveDatabaseProviderRuntime({
+        config: loadConfig(Paths.config).database,
+        sqlitePath: Paths.db,
+        generationPointerPath: Paths.databaseGenerationPointer,
+        operationsRoot: Paths.databaseMigrationsDir,
+        contract:
+          generation.kind === 'schema-upgrade' &&
+          databaseProviderTraits(generation.payload.provider).migrationRole === 'source'
+            ? resolvePostgresqlHistoricalContract(history, generation.payload.schemaDigest)
+            : contract,
+      })
+      const operations = composeLocalSystemOperations({ providerRuntime })
       try {
-        const result = await restoreCommand(Bun.argv.slice(3), requireLocalSystemOperations())
+        const result = await restoreCommand(Bun.argv.slice(3), operations)
         process.stdout.write(result.output)
         if (result.status !== 'ok') process.exit(1)
       } finally {

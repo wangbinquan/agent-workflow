@@ -1297,6 +1297,8 @@ export const tasks = sqliteTable(
     // RFC-311 索引批（migration 0180）：
     branchStartedIdx: index('idx_tasks_branch_started_id').on(t.branchStartedAt, t.id),
     cachedRepoIdx: index('idx_tasks_cached_repo').on(t.cachedRepoId),
+    // RFC-359 T19h / W18: cover legacy repository reference counts without wide task reads.
+    cachedRepoTaskIdx: index('idx_tasks_cached_repo_task').on(t.cachedRepoId, t.id),
     statusFinishedIdx: index('idx_tasks_status_finished').on(t.status, t.finishedAt),
     sourceAgentIdx: index('idx_tasks_source_agent').on(t.sourceAgentId),
     codeRoundIdx: index('idx_tasks_code_round').on(t.codeRoundId),
@@ -1332,6 +1334,12 @@ export const tasks = sqliteTable(
     statusParentFinishedIdx: index('idx_tasks_status_parent_finished').on(
       t.status,
       t.parentTaskId,
+      t.finishedAt,
+    ),
+    overviewCountsIdx: index('idx_tasks_overview_counts').on(
+      t.status,
+      t.parentTaskId,
+      t.catalogVisibility,
       t.finishedAt,
     ),
     statusWorkgroupIdx: index('idx_tasks_status_workgroup').on(t.status, t.workgroupId),

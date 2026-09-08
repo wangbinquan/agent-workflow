@@ -113,6 +113,38 @@ const revokedOwnerAutomaticRepair: TestCase = {
   suite: 'RFC-359 manual and automatic repair share the same engine',
   name: 'P0-4 S4：前代 owner 已真实撤销时，自动修复仍落库并发出一次 resume',
 }
+const ambientOwnerContext: TestCase = {
+  file: 'packages/backend/tests/rfc359-t7-owner-fences.test.ts',
+  suite: 'RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2）',
+  name: 'P0-1：drive 上下文内不传 executionContext 的节点写入按 owner token 放行',
+}
+const explicitOwnerContext: TestCase = {
+  ...ambientOwnerContext,
+  name: 'P0-1：显式 executionContext 仍然优先于环境上下文',
+}
+const heartbeatEffect: TestCase = {
+  ...ambientOwnerContext,
+  name: 'P0-2：心跳推进 revision / lease 之后，attach 时冻结的 token 仍能开 effect 并结算',
+}
+const unchangedEffectOwner: TestCase = {
+  ...ambientOwnerContext,
+  name: 'P0-2：没有心跳时，同一真实工厂仍创建并结算非空 effect 和资源围栏',
+}
+const questionDecision: TestCase = {
+  file: 'packages/backend/tests/rfc359-t2-question-dispatch-command.test.ts',
+  suite: 'RFC-359 T2a —— 问题派发命令端口',
+  name: '决定 + 派发 + rerun 铸造 + receipt 一起落地；同 key 重放返回同一 receipt',
+}
+const reviewDecision: TestCase = {
+  file: 'packages/backend/tests/rfc359-t2c-review-decision.test.ts',
+  suite: 'RFC-359 T2c —— 评审决定命令（reviewDecisions）',
+  name: 'approve：评审 run done、doc_version approved、approved_doc + approval_meta 落 outputs、回执 + 决定事件',
+}
+const collaborationDraft: TestCase = {
+  file: 'packages/backend/tests/rfc359-w12-collaboration-composition.test.ts',
+  suite: 'RFC-359 W12 — collaboration route composition',
+  name: 'clarify.saveDraft —— 逐题草稿 + 归属落库，重复保存后写胜出',
+}
 const currentCases = [
   clarifyTurn,
   spentBudget,
@@ -133,6 +165,13 @@ const currentCases = [
   revokedOwnerReconcile,
   emptyTaskBootRecovery,
   revokedOwnerAutomaticRepair,
+  ambientOwnerContext,
+  explicitOwnerContext,
+  heartbeatEffect,
+  unchangedEffectOwner,
+  questionDecision,
+  reviewDecision,
+  collaborationDraft,
 ]
 
 export const PHASES: readonly Phase[] = [
@@ -378,6 +417,72 @@ export const PHASES: readonly Phase[] = [
       },
     ],
   },
+  {
+    id: 'p0-1-ambient-context',
+    mutation: 'p0-1-ambient-context',
+    passes: [explicitOwnerContext],
+    failures: [
+      {
+        test: ambientOwnerContext,
+        diagnostics: [
+          /^\[rfc359-p0-1-call\] \{"taskId":"(?<ambientTaskId>t7_[0-9A-HJKMNP-TV-Z]{26})","explicitContext":false,"ambientTaskId":"\k<ambientTaskId>"\}\n[\s\S]*^TaskExecutionError: ownerless task mutation refused durable owner for '\k<ambientTaskId>'$/m,
+          /^\s+status: 409,$/m,
+          /^\s+code: "task-execution-stale-owner"$/m,
+          /at assertTaskOwnerlessTx \(rfc359-p0-mutation:ambient-owner-context:\d+:\d+\)/,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'p0-2-owner-snapshot',
+    mutation: 'p0-2-owner-snapshot',
+    passes: [unchangedEffectOwner],
+    failures: [
+      {
+        test: heartbeatEffect,
+        diagnostics: [
+          /^\[rfc359-p0-2-snapshot\] \{"taskId":"(?<effectTaskId>t7_[0-9A-HJKMNP-TV-Z]{26})","tokenRevision":\d+,"rowRevision":\d+,"tokenLeaseUntil":\d+,"rowLeaseUntil":\d+\}\n[\s\S]*^TaskExecutionError: task '\k<effectTaskId>' mutation was fenced$/m,
+          /^\s+status: 409,$/m,
+          /^\s+code: "task-execution-stale-owner"$/m,
+          /at assertHistoricalEffectOwner \(rfc359-p0-mutation:effect-owner-snapshot:\d+:\d+\)/,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'p0-8-command-omission',
+    mutation: 'p0-8-command-omission',
+    passes: [collaborationDraft],
+    failures: [
+      {
+        test: questionDecision,
+        diagnostics: [
+          /^error: collaboration question dispatch command is not composed$/m,
+          /at requireQuestionDispatchCommand \(rfc359-p0-mutation:collaboration-command-omission:\d+:\d+\)/,
+          /at dispatchTaskQuestions \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
+          /rfc359-t2-question-dispatch-command\.test\.ts:\d+:\d+/,
+        ],
+      },
+      {
+        test: finalize,
+        diagnostics: [
+          /^error: collaboration clarify decision command is not composed$/m,
+          /at requireClarifyDecisionCommand \(rfc359-p0-mutation:collaboration-command-omission:\d+:\d+\)/,
+          /at submitClarifyDecision \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
+          /rfc359-t2b-clarify-decision\.test\.ts:\d+:\d+/,
+        ],
+      },
+      {
+        test: reviewDecision,
+        diagnostics: [
+          /^error: collaboration review decision command is not composed$/m,
+          /at requireReviewDecisionCommand \(rfc359-p0-mutation:collaboration-command-omission:\d+:\d+\)/,
+          /at submitReviewDecision \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
+          /rfc359-t2c-review-decision\.test\.ts:\d+:\d+/,
+        ],
+      },
+    ],
+  },
   { id: 'current-after', passes: currentCases, failures: [] },
 ]
 
@@ -442,6 +547,26 @@ export function validatePhaseLog(raw: string, exitCode: number, phase: Phase, pr
   const releaseWitnesses = [...log.matchAll(/^\[rfc359-p0-10-state\] (.+)$/gm)]
   if (releaseWitnesses.length !== (phase.mutation === 'p0-10-unsettled-release' ? 1 : 0))
     reasons.push('durable release witness count differs')
+  const ambientWitnesses = [...log.matchAll(/^\[rfc359-p0-1-call\] (.+)$/gm)]
+  if (ambientWitnesses.length !== (phase.mutation === 'p0-1-ambient-context' ? 1 : 0))
+    reasons.push('ambient owner call witness count differs')
+  const effectSnapshots = [...log.matchAll(/^\[rfc359-p0-2-snapshot\] (.+)$/gm)]
+  if (effectSnapshots.length !== (phase.mutation === 'p0-2-owner-snapshot' ? 1 : 0))
+    reasons.push('effect owner snapshot witness count differs')
+  if (phase.mutation === 'p0-2-owner-snapshot' && effectSnapshots.length === 1) {
+    const snapshot =
+      /^\{"taskId":"t7_[0-9A-HJKMNP-TV-Z]{26}","tokenRevision":(\d+),"rowRevision":(\d+),"tokenLeaseUntil":(\d+),"rowLeaseUntil":(\d+)\}$/.exec(
+        effectSnapshots[0]![1]!,
+      )
+    const values = snapshot?.slice(1).map(Number)
+    if (
+      values === undefined ||
+      !values.every((value) => Number.isSafeInteger(value) && value > 0) ||
+      values[1]! <= values[0]! ||
+      values[3]! <= values[2]!
+    )
+      reasons.push('effect owner snapshot does not show the actual heartbeat advance')
+  }
   for (const failure of phase.failures) {
     const name = fullName(failure.test, provider)
     const event = events.find((item) => item.status === 'fail' && item.name === name)
@@ -492,6 +617,12 @@ const sourceFiles = [
   'packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts',
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts',
+  'packages/backend/src/modules/task-execution/application/taskExecutionContext.ts',
+  'packages/backend/src/modules/task-execution/application/taskExecutionError.ts',
+  'packages/backend/src/modules/task-execution/domain/ownership.ts',
+  'packages/backend/src/platform/persistence/batchInsert.ts',
+  'packages/backend/src/util/errors.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts',
   'packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts',
@@ -536,6 +667,30 @@ const sourceFiles = [
   'packages/backend/src/modules/resource-catalog/infrastructure/skillCatalogBootAdapter.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
+  'packages/backend/src/modules/task-execution/domain/executionEffect.ts',
+  'packages/backend/src/modules/collaboration/composition/commandContext.ts',
+  'packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts',
+  'packages/backend/src/modules/collaboration/public/commands.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/collaborationRouteOperations.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts',
+  'packages/backend/tests/helpers/questionDispatchFixture.ts',
+  'packages/backend/tests/helpers/reviewDecisionFixture.ts',
+  'packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts',
+  'packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts',
+  'packages/backend/src/platform/persistence/postgresqlMigrator.ts',
+  'packages/backend/src/db/schema.ts',
+  'packages/backend/db/postgresql-migrations/meta/0000_rfc349_baseline.plan.json',
+  'packages/backend/db/postgresql-migrations/0001_rfc359_task_coverage_indexes.sql',
+  'packages/backend/db/postgresql-migrations/meta/0001_rfc359_task_coverage_indexes.upgrade.json',
+  'packages/backend/db/postgresql-migrations/0000_rfc349_baseline.sql',
+  'packages/backend/db/postgresql-migrations/meta/_journal.json',
+  'packages/backend/db/migrations/0225_rfc359_task_count_indexes.sql',
+  'packages/backend/db/migrations/meta/_journal.json',
+  'packages/backend/tests/migration-freeze.ts',
   'packages/backend/tests/helpers/eachProvider.ts',
   'packages/backend/tests/helpers/eachProviderTaskExecution.ts',
   ...new Set(currentCases.map((test) => test.file)),

@@ -16,6 +16,8 @@ import {
   type PostgresqlLogicalSource,
 } from '@/platform/persistence/postgresqlLogicalSource'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { resolvePostgresqlIndexOnlyRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
 import {
   buildLogicalSchemaContract,
   type LogicalSchemaContract,
@@ -96,7 +98,6 @@ export async function createPostgresqlProviderBackup(
     !['accepting-writes', 'finalized'].includes(migration.payload.phase) ||
     migration.payload.failure !== null ||
     migration.payload.rolledBackAt !== null ||
-    migration.payload.source.schemaDigest !== contract.digest ||
     migration.payload.logicalBackupDigest === null ||
     migration.payload.legacyArchiveDigest === null
   ) {
@@ -106,13 +107,29 @@ export async function createPostgresqlProviderBackup(
     )
   }
 
+  let archiveContract = contract
+  if (migration.payload.source.schemaDigest !== contract.digest) {
+    try {
+      const history = await loadPostgresqlMigrationHistory()
+      archiveContract = resolvePostgresqlIndexOnlyRowBridge(history, {
+        fromContractDigest: migration.payload.source.schemaDigest,
+        toContractDigest: contract.digest,
+      }).source
+    } catch {
+      throw new PostgresqlProviderBackupError(
+        'postgresql-backup-operation',
+        'PostgreSQL backup source migration is not a complete live operation',
+      )
+    }
+  }
+
   let preservedArchive: ReturnType<typeof openVerifiedLogicalDatabaseArtifactSource>
   try {
     preservedArchive = openVerifiedLogicalDatabaseArtifactSource({
       artifactRoot: join(operationsRoot, generation.operationId),
       expectedManifestDigest: migration.payload.logicalBackupDigest,
       expectedLegacyArchiveFileDigest: migration.payload.legacyArchiveDigest,
-      contract,
+      contract: archiveContract,
     })
   } catch {
     throw new PostgresqlProviderBackupError(

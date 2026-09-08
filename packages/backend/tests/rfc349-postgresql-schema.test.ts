@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
   buildPostgresqlSchemaPlan,
   renderPostgresqlBaselineSql,
@@ -81,8 +82,12 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     )
   })
 
-  test('committed immutable baseline and journal match the current projector', () => {
-    const plan = buildPostgresqlSchemaPlan()
+  test('committed immutable baseline and journal match the current projector', async () => {
+    const currentPlan = buildPostgresqlSchemaPlan()
+    const history = await loadPostgresqlMigrationHistory()
+    // The original byte/journal oracles still bind the immutable baseline;
+    // replaying its verified append-only history must reach today's projector.
+    const plan = history.root.plan
     const migrationRoot = resolve(import.meta.dir, '..', 'db', 'postgresql-migrations')
     expect(readFileSync(resolve(migrationRoot, '0000_rfc349_baseline.sql'), 'utf8')).toBe(
       renderPostgresqlBaselineSql(plan),
@@ -104,5 +109,7 @@ describe('RFC-349 PostgreSQL schema projection', () => {
         (statement) => `sha256:${createHash('sha256').update(statement.sql).digest('hex')}`,
       ),
     )
+    expect(history.head.plan).toEqual(currentPlan)
+    expect(history.head.contract).toEqual(buildLogicalSchemaContract())
   })
 })

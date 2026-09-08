@@ -3,7 +3,15 @@
 // fail-closed corruption behavior, manifest binding and crash-safe replacement.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -11,6 +19,7 @@ import {
   digestDatabaseArtifact,
   digestGenerationPayload,
   readDatabaseGeneration,
+  readDatabaseGenerationForBootstrap,
   writeDatabaseGenerationAtomic,
   type DatabaseGenerationPayload,
 } from '@/platform/persistence/generationStore'
@@ -45,6 +54,106 @@ function postgresqlPayload(
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+describe('RFC-359 historical generation discovery', () => {
+  const headDigest = `sha256:${'c'.repeat(64)}`
+
+  test('missing and current pointers keep their original resolved generations', () => {
+    const paths = fixture()
+    const options = {
+      ...paths,
+      expectedSchemaDigest: headDigest,
+      supportedSchemaDigests: [SCHEMA_DIGEST, headDigest],
+    }
+    expect(readDatabaseGenerationForBootstrap(options)).toEqual({
+      kind: 'current',
+      generation: readDatabaseGeneration(options),
+    })
+    expect(existsSync(paths.pointerPath)).toBe(false)
+
+    const payload = postgresqlPayload({
+      provider: 'sqlite',
+      operationId: null,
+      manifestDigest: null,
+      schemaDigest: headDigest,
+    })
+    writeDatabaseGenerationAtomic({ pointerPath: paths.pointerPath, payload })
+    const before = readFileSync(paths.pointerPath, 'utf8')
+    expect(readDatabaseGenerationForBootstrap(options)).toEqual({
+      kind: 'current',
+      generation: readDatabaseGeneration(options),
+    })
+    expect(readFileSync(paths.pointerPath, 'utf8')).toBe(before)
+  })
+
+  test.each(['sqlite', 'postgresql'] as const)(
+    'a known old %s pointer is only an upgrade candidate and preserves every field',
+    (provider) => {
+      const paths = fixture()
+      const manifest = '{"operationId":"dbm_operation_01","phase":"finalized"}\n'
+      const manifestDir = join(paths.migrationsDir, 'dbm_operation_01')
+      mkdirSync(manifestDir, { recursive: true })
+      writeFileSync(join(manifestDir, 'manifest.json'), manifest)
+      const payload = postgresqlPayload({
+        provider,
+        operationId: provider === 'sqlite' ? null : 'dbm_operation_01',
+        manifestDigest: provider === 'sqlite' ? null : digestDatabaseArtifact(manifest),
+      })
+      writeDatabaseGenerationAtomic({ pointerPath: paths.pointerPath, payload })
+      const before = readFileSync(paths.pointerPath, 'utf8')
+      const options = {
+        ...paths,
+        expectedSchemaDigest: headDigest,
+        supportedSchemaDigests: [SCHEMA_DIGEST, headDigest],
+      }
+
+      expect(readDatabaseGenerationForBootstrap(options)).toEqual({
+        kind: 'schema-upgrade',
+        payload,
+        pointerDigest: digestGenerationPayload(payload),
+      })
+      expect(() => readDatabaseGeneration(options)).toThrow('schema digest does not match')
+      expect(readFileSync(paths.pointerPath, 'utf8')).toBe(before)
+      expect(readFileSync(join(manifestDir, 'manifest.json'), 'utf8')).toBe(manifest)
+    },
+  )
+
+  test('unknown contracts retain schema mismatch before checking an absent manifest', () => {
+    const paths = fixture()
+    writeDatabaseGenerationAtomic({
+      pointerPath: paths.pointerPath,
+      payload: postgresqlPayload(),
+    })
+    expect(() =>
+      readDatabaseGenerationForBootstrap({
+        ...paths,
+        expectedSchemaDigest: headDigest,
+        supportedSchemaDigests: [headDigest],
+      }),
+    ).toThrow('schema digest does not match')
+  })
+
+  test('known history never bypasses the original pointer or manifest digest', () => {
+    const paths = fixture()
+    const options = {
+      ...paths,
+      expectedSchemaDigest: headDigest,
+      supportedSchemaDigests: [SCHEMA_DIGEST, headDigest],
+    }
+    const payload = postgresqlPayload()
+    writeDatabaseGenerationAtomic({ pointerPath: paths.pointerPath, payload })
+    expect(() => readDatabaseGenerationForBootstrap(options)).toThrow('manifest is missing')
+    const manifestDir = join(paths.migrationsDir, 'dbm_operation_01')
+    mkdirSync(manifestDir, { recursive: true })
+    writeFileSync(join(manifestDir, 'manifest.json'), '{}')
+    expect(() => readDatabaseGenerationForBootstrap(options)).toThrow('manifest digest mismatch')
+    writeFileSync(
+      paths.pointerPath,
+      JSON.stringify({ payload, digest: `sha256:${'0'.repeat(64)}` }),
+    )
+    expect(() => readDatabaseGenerationForBootstrap(options)).toThrow('pointer digest mismatch')
+  })
 })
 
 describe('RFC-349 database generation store', () => {

@@ -510,8 +510,11 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 739,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
+      "baseline": 742,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。",
+      "allowGrowth": {
+        "why": "RFC-359 W18 explicitly records three historical-schema mechanism test files. They construct genuine pre-0225 SQLite sources and a readonly SQLite witness before schema upgrades; the real PostgreSQL upgrade and old-backup restore cases remain selected by default. Both constructor spellings remain counted with no new exemption."
+      }
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -776,8 +779,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1734,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1737,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W18 records the three new pure historical-schema constructors and replay functions by their actual source names. The immutable root and index-only sequence are needed for existing PostgreSQL upgrades; the inventory classifier and all existing entries remain unchanged."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -811,10 +817,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5295,
+      "baseline": 5324,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W17 adds nine and retires eight exact imports, net plus one, while the native and async task-intent terminalization wrappers delegate to one shared sequence and reuse the existing transaction interpreters. Public signatures, original write-check differences and caller-owned transactions remain unchanged. The import scanner is unchanged."
+        "why": "RFC-359 W18 adds the exact history, boot preparation, source-worker and backup/restore composition dependencies. These edges carry verified original schema contracts through unfinished copies and index-only upgrades; public surfaces and scanner classifications stay unchanged."
       }
     },
     {
@@ -835,10 +841,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4762,
+      "baseline": 4791,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W17 adds eight and retires seven exact existing-category exception edges, net plus one, for the task-intent terminalization shared body and its two retained mechanism wrappers. This records the actual schema and transaction-program imports; classifications, expiry and scanner rules stay unchanged."
+        "why": "RFC-359 W18 records every actual existing-category history and boot-preparation edge, including SQLite worker historical-contract replay and portable restore source/target separation. No scanner rule, category or expiry is relaxed."
       }
     },
     {
@@ -873,15 +879,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24961,
+      "baseline": 25040,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W17 adds the exact taskExecutionIntentTerminalSequence file and function ownership entries. Both previous public entry points remain, and their shared physical steps preserve the original sync and async contracts. The three production files shrink from 189 to 170 lines; all new symbols remain explicitly counted."
+        "why": "RFC-359 W18 adds the immutable history/sequence and shared boot-preparation ownership, plus the exact new types and helper functions used by migration and restore. This is functional upgrade infrastructure; every added and retired symbol remains counted."
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ec887f8b27c4b485781ee05f1e1bd1adedd434d8c078166db5f61e95a0d3f625",
+    "sourceDigest": "sha256:562d3e0a70143d39c7cd1459e5d3d75366fcadc928f9651ed508a5740021455d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -894,8 +900,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8e55ebe35d97e0fe861655d4587b15c533629b26",
-    "contentDigest": "sha256:3e0ada6d30405a8971921a1e9294d7df88729ade0c503052d37d3a9697bdb317",
+    "currentSnapshotSha": "8fdb37939e9daaccfc174553f72e75abdc021dbd",
+    "contentDigest": "sha256:77ef71614f49cebf6fb5bfbb7778091afc695f6c578eb51d5e8f469470fabdfa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

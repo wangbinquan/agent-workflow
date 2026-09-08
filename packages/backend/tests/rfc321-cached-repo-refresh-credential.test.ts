@@ -8,7 +8,18 @@
 // a real Basic-authenticated Git smart-HTTP remote so removing the refresh lease
 // makes both cases deterministically red.
 
-import { afterAll, afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  spyOn,
+  test,
+} from 'bun:test'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { readdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -59,30 +70,229 @@ setDefaultTimeout(120_000)
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
 const roots: string[] = []
 
+type RefreshStage =
+  | 'init'
+  | 'commit'
+  | 'bare-clone'
+  | 'resolve-cached-repo'
+  | 'manual-refresh'
+  | 'background-refresh'
+  | 'origin-query'
+  | 'cleanup'
+type PromiseObservation = 'unobserved' | 'pending' | 'fulfilled' | 'rejected'
+type RefreshEvent =
+  | `stage-${'start' | 'complete' | 'rejected' | 'pending'}`
+  | `spawn-${'start' | 'complete' | 'rejected'}`
+  | `exit-observe-${'start' | 'complete' | 'rejected'}`
+  | `${'stdout' | 'stderr'}-read-${'start' | 'complete' | 'rejected'}`
+  | `${'stdout' | 'stderr' | 'exit'}-${PromiseObservation}`
+
+interface RefreshDiagnostics {
+  stage<T>(label: RefreshStage, action: () => T): T
+  snapshot(): void
+  restore(): void
+}
+
+let diagnosticRun = 0
+let activeDiagnostics: RefreshDiagnostics | undefined
+
+function refreshDiagnostics(): RefreshDiagnostics {
+  if (activeDiagnostics === undefined) throw new Error('refresh diagnostics is not installed')
+  return activeDiagnostics
+}
+
+function installRefreshDiagnostics(): RefreshDiagnostics {
+  const runId = `${process.pid}-${++diagnosticRun}`
+  const started = performance.now()
+  const cpuStarted = process.cpuUsage()
+  const scope = new AsyncLocalStorage<RefreshStage>()
+  const pendingStages = new Set<{ label: RefreshStage }>()
+  const children: {
+    pid: number
+    stage: RefreshStage
+    stdout: PromiseObservation
+    stderr: PromiseObservation
+    exit: PromiseObservation
+    exitCode: number | null
+  }[] = []
+  type Child = (typeof children)[number]
+  const streams = new WeakMap<ReadableStream, { child: Child; pipe: 'stdout' | 'stderr' }>()
+  // Only predefined labels and numeric process/timing observations are emitted.
+  // CPU is this test worker's CPU, not an inferred child/grandchild identity.
+  const emit = (
+    stage: RefreshStage,
+    event: RefreshEvent,
+    pid: number | null = null,
+    exitCode: number | null = null,
+  ): void => {
+    try {
+      const cpu = process.cpuUsage(cpuStarted)
+      console.error(
+        `[rfc321-process] ${JSON.stringify({
+          runId,
+          stage,
+          event,
+          pid,
+          wallMs: Math.round(performance.now() - started),
+          cpuUserUs: cpu.user,
+          cpuSystemUs: cpu.system,
+          exitCode,
+        })}`,
+      )
+    } catch {
+      // Observation must not replace the original operation's outcome.
+    }
+  }
+  const originalSpawn = Bun.spawn
+  const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(
+    new Proxy(originalSpawn, {
+      apply(target, receiver, args) {
+        const stage = scope.getStore()
+        if (stage === undefined) return Reflect.apply(target, receiver, args)
+        emit(stage, 'spawn-start')
+        let proc: ReturnType<typeof Bun.spawn>
+        try {
+          proc = Reflect.apply(target, receiver, args)
+        } catch (error) {
+          emit(stage, 'spawn-rejected')
+          throw error
+        }
+        const child: Child = {
+          pid: proc.pid,
+          stage,
+          stdout: 'unobserved',
+          stderr: 'unobserved',
+          exit: 'pending',
+          exitCode: null,
+        }
+        children.push(child)
+        emit(stage, 'spawn-complete', child.pid)
+        // Register the existing streams without taking a reader or consuming
+        // any bytes. The production caller still owns its original process.
+        if (proc.stdout instanceof ReadableStream)
+          streams.set(proc.stdout, { child, pipe: 'stdout' })
+        if (proc.stderr instanceof ReadableStream)
+          streams.set(proc.stderr, { child, pipe: 'stderr' })
+        emit(stage, 'exit-observe-start', child.pid)
+        void proc.exited.then(
+          (exitCode) => {
+            child.exit = 'fulfilled'
+            child.exitCode = exitCode
+            emit(stage, 'exit-observe-complete', child.pid, exitCode)
+          },
+          () => {
+            child.exit = 'rejected'
+            emit(stage, 'exit-observe-rejected', child.pid)
+          },
+        )
+        return proc
+      },
+    }),
+  )
+  const originalText = Response.prototype.text
+  let textSpy: { mockRestore(): void }
+  try {
+    textSpy = spyOn(Response.prototype, 'text').mockImplementation(function (this: Response) {
+      if (scope.getStore() === undefined) return originalText.call(this)
+      const observed = this.body === null ? undefined : streams.get(this.body)
+      if (observed === undefined) return originalText.call(this)
+      const { child, pipe } = observed
+      child[pipe] = 'pending'
+      emit(child.stage, `${pipe}-read-start`, child.pid)
+      let promise: Promise<string>
+      try {
+        promise = originalText.call(this)
+      } catch (error) {
+        child[pipe] = 'rejected'
+        emit(child.stage, `${pipe}-read-rejected`, child.pid)
+        throw error
+      }
+      void promise.then(
+        () => {
+          child[pipe] = 'fulfilled'
+          emit(child.stage, `${pipe}-read-complete`, child.pid)
+        },
+        () => {
+          child[pipe] = 'rejected'
+          emit(child.stage, `${pipe}-read-rejected`, child.pid)
+        },
+      )
+      return promise
+    })
+  } catch (error) {
+    spawnSpy.mockRestore()
+    throw error
+  }
+  return {
+    stage<T>(label: RefreshStage, action: () => T): T {
+      const pending = { label }
+      pendingStages.add(pending)
+      emit(label, 'stage-start')
+      const finish = (event: 'stage-complete' | 'stage-rejected'): void => {
+        pendingStages.delete(pending)
+        emit(label, event)
+      }
+      try {
+        const value = scope.run(label, action)
+        if (value instanceof Promise)
+          void value.then(
+            () => finish('stage-complete'),
+            () => finish('stage-rejected'),
+          )
+        else finish('stage-complete')
+        return value
+      } catch (error) {
+        finish('stage-rejected')
+        throw error
+      }
+    },
+    snapshot() {
+      for (const { label } of pendingStages) emit(label, 'stage-pending')
+      for (const child of children) {
+        emit(child.stage, `stdout-${child.stdout}`, child.pid)
+        emit(child.stage, `stderr-${child.stderr}`, child.pid)
+        emit(child.stage, `exit-${child.exit}`, child.pid, child.exitCode)
+      }
+    },
+    restore() {
+      try {
+        textSpy.mockRestore()
+      } finally {
+        spawnSpy.mockRestore()
+      }
+    },
+  }
+}
+
 async function authenticatedFixture() {
+  const diagnostics = refreshDiagnostics()
   const root = mkdtempSync(join(tmpdir(), 'aw-private-refresh-'))
   const appHome = mkdtempSync(join(tmpdir(), 'aw-private-refresh-home-'))
   roots.push(root, appHome)
   const working = join(root, 'working')
   const bare = join(root, 'remote.git')
-  await runGit(root, ['init', '-q', '-b', 'main', working])
-  await runGit(working, [
-    '-c',
-    'user.name=Refresh Test',
-    '-c',
-    'user.email=refresh@example.test',
-    'commit',
-    '--allow-empty',
-    '-q',
-    '-m',
-    'init',
-  ])
-  await runGit(root, ['clone', '--bare', working, bare])
+  await diagnostics.stage('init', () => runGit(root, ['init', '-q', '-b', 'main', working]))
+  await diagnostics.stage('commit', () =>
+    runGit(working, [
+      '-c',
+      'user.name=Refresh Test',
+      '-c',
+      'user.email=refresh@example.test',
+      'commit',
+      '--allow-empty',
+      '-q',
+      '-m',
+      'init',
+    ]),
+  )
+  await diagnostics.stage('bare-clone', () => runGit(root, ['clone', '--bare', working, bare]))
   const url = credentialedRemoteUrlFor(bare, 'refresh-bot', 'refresh-secret')
   const db = createInMemoryDb(MIGRATIONS)
-  const cached = await resolveCachedRepo(
-    { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
-    { url },
+  const cached = await diagnostics.stage('resolve-cached-repo', () =>
+    resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+      { url },
+    ),
   )
   return { appHome, cached, db, url }
 }
@@ -91,8 +301,30 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
+beforeEach(() => {
+  activeDiagnostics = installRefreshDiagnostics()
+})
+
 afterEach(() => {
-  while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true })
+  const diagnostics = activeDiagnostics
+  const cleanup = () => {
+    while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true })
+  }
+  try {
+    diagnostics?.snapshot()
+    if (diagnostics === undefined) cleanup()
+    else diagnostics.stage('cleanup', cleanup)
+  } finally {
+    try {
+      diagnostics?.snapshot()
+    } finally {
+      try {
+        diagnostics?.restore()
+      } finally {
+        activeDiagnostics = undefined
+      }
+    }
+  }
 })
 
 afterAll(() => {
@@ -101,27 +333,35 @@ afterAll(() => {
 
 describe('private cached-repo refresh credential lease', () => {
   test('manual refresh unseals the URL for one fetch and keeps origin credential-free', async () => {
+    const diagnostics = refreshDiagnostics()
     const { appHome, cached, db } = await authenticatedFixture()
 
-    const refreshed = await refreshCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
-      cached.cached.id,
+    const refreshed = await diagnostics.stage('manual-refresh', () =>
+      refreshCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+        cached.cached.id,
+      ),
     )
     expect(refreshed.fetchOk).toBe(true)
 
-    const origin = await runGit(cached.cached.localPath, ['remote', 'get-url', 'origin'])
+    const origin = await diagnostics.stage('origin-query', () =>
+      runGit(cached.cached.localPath, ['remote', 'get-url', 'origin']),
+    )
     expect(origin.exitCode).toBe(0)
     expect(origin.stdout).not.toContain('refresh-secret')
     expect(readdirSync(appHome).filter((name) => name.startsWith('.gitcred-'))).toEqual([])
   })
 
   test('background refresh threads the same SecretBox into the cached fetch', async () => {
+    const diagnostics = refreshDiagnostics()
     const { appHome, cached, db } = await authenticatedFixture()
     const now = Date.now()
-    const result = await refreshDueRepos(
-      composeSqliteRepositoryWorkspaceStore(db),
-      { submoduleAutoRefresh: { enabled: true, intervalMs: 1, onlyRecentDays: 30 } },
-      { appHome, secretBox: box, now: () => now },
+    const result = await diagnostics.stage('background-refresh', () =>
+      refreshDueRepos(
+        composeSqliteRepositoryWorkspaceStore(db),
+        { submoduleAutoRefresh: { enabled: true, intervalMs: 1, onlyRecentDays: 30 } },
+        { appHome, secretBox: box, now: () => now },
+      ),
     )
 
     expect(result).toEqual({ refreshed: 1, failed: 0 })

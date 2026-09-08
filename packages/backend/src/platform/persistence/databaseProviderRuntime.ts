@@ -10,7 +10,11 @@ import {
   createSqliteDatabaseOperationalAdapter,
   type DatabaseOperationalAdapter,
 } from './databaseOperationalAdapter'
-import { readDatabaseGeneration, type ResolvedDatabaseGeneration } from './generationStore'
+import {
+  readDatabaseGeneration,
+  type ResolvedDatabaseGeneration,
+  type DatabaseGenerationBootstrapCandidate,
+} from './generationStore'
 import {
   createPostgresqlDatabaseRuntime,
   type InstrumentedPostgresqlDatabaseRuntime,
@@ -22,6 +26,9 @@ import {
   type PostgresqlDatabaseClient,
 } from './postgresqlDatabaseClient'
 import type { LogicalSchemaContract } from './schemaContract'
+import type { PostgresqlMigrationHistory } from './postgresqlMigrationSequence'
+import { migratePostgresqlSchema, type PostgresqlMigrationReceipt } from './postgresqlMigrator'
+import { readDbMigrationIdentity } from './sqlite/systemBackupManifest'
 
 export class DatabaseProviderRuntimeError extends Error {
   constructor(
@@ -119,41 +126,93 @@ export function requireDatabaseProviderRuntime(
   return runtime
 }
 
+function composeSqliteProviderRuntime(
+  options: ResolveDatabaseProviderRuntimeOptions,
+  generation: ResolvedDatabaseGeneration,
+  initialClient: DbClient | null,
+): SqliteDatabaseProviderRuntime {
+  let client = initialClient
+  return Object.freeze({
+    provider: 'sqlite' as const,
+    generation,
+    operations: createSqliteDatabaseOperationalAdapter({
+      path: options.sqlitePath,
+      generationId: generation.payload.generationId,
+    }),
+    telemetry: () => Object.freeze({ version: 1, provider: 'sqlite', poolWait: null }),
+    openClient(input: Omit<OpenDbOptions, 'path'>) {
+      return (client ??= openDb({ ...input, path: options.sqlitePath }))
+    },
+    async close() {
+      client?.$client.close()
+      client = null
+    },
+  })
+}
+
+function composePostgresqlProviderRuntime(
+  options: ResolveDatabaseProviderRuntimeOptions,
+  generation: ResolvedDatabaseGeneration,
+  runtime: InstrumentedPostgresqlDatabaseRuntime,
+): PostgresqlDatabaseProviderRuntime {
+  let client: PostgresqlDatabaseClient | null = null
+  return Object.freeze({
+    provider: 'postgresql' as const,
+    generation,
+    runtime,
+    operations: createPostgresqlDatabaseOperationalAdapter({ runtime, contract: options.contract }),
+    telemetry: runtime.telemetry,
+    openClient: () => (client ??= createPostgresqlDatabaseClient(runtime)),
+    close: () => runtime.close(),
+  })
+}
+
+type PreparedDatabaseProviderMechanism =
+  | { readonly provider: 'sqlite'; readonly client: DbClient }
+  | { readonly provider: 'postgresql'; readonly runtime: InstrumentedPostgresqlDatabaseRuntime }
+
+/** Transfer an actually prepared mechanism only after the strict pointer read. */
+export function adoptPreparedDatabaseProviderRuntime(
+  options: ResolveDatabaseProviderRuntimeOptions,
+  prepared: Extract<PreparedDatabaseProviderMechanism, { readonly provider: 'sqlite' }>,
+): SqliteDatabaseProviderRuntime
+export function adoptPreparedDatabaseProviderRuntime(
+  options: ResolveDatabaseProviderRuntimeOptions,
+  prepared: Extract<PreparedDatabaseProviderMechanism, { readonly provider: 'postgresql' }>,
+): PostgresqlDatabaseProviderRuntime
+export function adoptPreparedDatabaseProviderRuntime(
+  options: ResolveDatabaseProviderRuntimeOptions,
+  prepared: PreparedDatabaseProviderMechanism,
+): ResolvedDatabaseProviderRuntime {
+  const generation = resolveDatabaseProviderSelection(options)
+  if (prepared.provider !== generation.payload.provider) {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-config-generation-mismatch',
+      'prepared database mechanism differs from the verified generation',
+    )
+  }
+  if (prepared.provider === 'sqlite') {
+    return composeSqliteProviderRuntime(options, generation, prepared.client)
+  }
+  if (prepared.runtime.generationId !== generation.payload.generationId) {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-config-generation-mismatch',
+      'prepared PostgreSQL runtime differs from the verified generation',
+    )
+  }
+  return composePostgresqlProviderRuntime(options, generation, prepared.runtime)
+}
+
 export function resolveDatabaseProviderRuntime(
   options: ResolveDatabaseProviderRuntimeOptions,
 ): ResolvedDatabaseProviderRuntime {
   const generation = resolveDatabaseProviderSelection(options)
-
   if (generation.payload.provider === 'sqlite') {
-    let client: DbClient | null = null
-    return Object.freeze({
-      provider: 'sqlite' as const,
-      generation,
-      operations: createSqliteDatabaseOperationalAdapter({
-        path: options.sqlitePath,
-        generationId: generation.payload.generationId,
-      }),
-      telemetry: () => Object.freeze({ version: 1, provider: 'sqlite', poolWait: null }),
-      openClient(input: Omit<OpenDbOptions, 'path'>) {
-        return (client ??= openDb({
-          ...input,
-          path: options.sqlitePath,
-        }))
-      },
-      async close() {
-        client?.$client.close()
-        client = null
-      },
-    })
+    return composeSqliteProviderRuntime(options, generation, null)
   }
-
-  // The residual after the SQLite branch must be exactly 'postgresql'; adding a
-  // provider to DATABASE_PROVIDERS widens it and this call stops compiling,
-  // instead of the new provider quietly reaching the PostgreSQL body below.
   if (generation.payload.provider !== 'postgresql') {
     return unhandledDatabaseProvider(generation.payload.provider)
   }
-  // The provider equality above narrows config independently of the pointer.
   if (options.config.provider !== 'postgresql') {
     throw new DatabaseProviderRuntimeError(
       'database-provider-config-generation-mismatch',
@@ -166,17 +225,133 @@ export function resolveDatabaseProviderRuntime(
     env: options.env,
     poolFactory: options.postgresqlPoolFactory,
   })
-  let client: PostgresqlDatabaseClient | null = null
-  return Object.freeze({
-    provider: 'postgresql' as const,
-    generation,
-    runtime,
-    operations: createPostgresqlDatabaseOperationalAdapter({
-      runtime,
-      contract: options.contract,
-    }),
-    telemetry: runtime.telemetry,
-    openClient: () => (client ??= createPostgresqlDatabaseClient(runtime)),
-    close: () => runtime.close(),
+  return composePostgresqlProviderRuntime(options, generation, runtime)
+}
+
+interface PrepareDatabaseProviderRuntimeOptions extends ResolveDatabaseProviderRuntimeOptions {
+  readonly candidate: DatabaseGenerationBootstrapCandidate
+  readonly history: PostgresqlMigrationHistory
+  readonly sqliteOptions: Omit<OpenDbOptions, 'path'>
+  readonly beforeSqliteOpen?: () => void | Promise<void>
+  readonly requireUpgradeLock: () => void
+  readonly advancePointer: () => void
+}
+
+type PreparedDatabaseProviderSchema =
+  | {
+      readonly provider: 'sqlite'
+      readonly runtime: SqliteDatabaseProviderRuntime
+      readonly databaseConfig: DatabaseConfig
+    }
+  | {
+      readonly provider: 'postgresql'
+      readonly runtime: PostgresqlDatabaseProviderRuntime
+      readonly databaseConfig: DatabaseConfig
+      readonly receipt: PostgresqlMigrationReceipt
+    }
+
+/**
+ * Called before opening SQLite, including before its migration backup. This
+ * compares the known node boundary; openDb still verifies every receipt and the
+ * complete physical schema on its actual connection before we publish a pointer.
+ */
+function assertSqliteUpgradeBoundary(
+  options: PrepareDatabaseProviderRuntimeOptions,
+  history: PostgresqlMigrationHistory,
+  candidate: DatabaseGenerationBootstrapCandidate,
+): void {
+  if (candidate.kind !== 'schema-upgrade') return
+  const observed = readDbMigrationIdentity(options.sqlitePath)
+  const from = history.versions.findIndex(
+    (version) => version.contract.digest === candidate.payload.schemaDigest,
+  )
+  const observedNode = history.versions.findIndex(
+    (version) =>
+      version.sqliteMigration.last.hash === observed?.lastHash &&
+      version.sqliteMigration.last.folderMillis === observed?.lastCreatedAt,
+  )
+  if (from < 0 || observedNode < from) {
+    throw new Error('SQLite schema receipts do not match the historical generation upgrade')
+  }
+}
+
+/** Prepare the selected mechanism, then transfer that same instance after the
+ * caller's durable pointer commit. Copy recovery and its lock remain with the
+ * operation coordinator; engine dispatch and resource cleanup stay here. */
+export async function prepareDatabaseProviderRuntime(
+  options: PrepareDatabaseProviderRuntimeOptions,
+): Promise<PreparedDatabaseProviderSchema> {
+  const { candidate, config, history } = options
+  const generation = candidate.kind === 'current' ? candidate.generation.payload : candidate.payload
+  if (
+    generation.provider === 'sqlite' &&
+    (readDbMigrationIdentity(options.sqlitePath)?.lastCreatedAt ?? Infinity) <
+      history.head.sqliteMigration.last.folderMillis
+  )
+    options.requireUpgradeLock()
+  if (generation.provider !== config.provider) {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-config-generation-mismatch',
+      `database provider config is ${config.provider} but the verified live generation is ${generation.provider}`,
+    )
+  }
+  const runtimeOptions = options
+  if (generation.provider === 'sqlite') {
+    assertSqliteUpgradeBoundary(options, history, candidate)
+    await options.beforeSqliteOpen?.()
+    const client = openDb({ ...options.sqliteOptions, path: options.sqlitePath })
+    try {
+      options.advancePointer()
+      return {
+        provider: 'sqlite',
+        databaseConfig: config,
+        runtime: adoptPreparedDatabaseProviderRuntime(runtimeOptions, {
+          provider: 'sqlite',
+          client,
+        }),
+      }
+    } catch (error) {
+      client.$client.close()
+      throw error
+    }
+  }
+  if (config.provider !== 'postgresql') {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-config-generation-mismatch',
+      'verified PostgreSQL generation has no PostgreSQL runtime configuration',
+    )
+  }
+  const runtime = createPostgresqlDatabaseRuntime({
+    config,
+    generationId: generation.generationId,
+    env: options.env,
+    poolFactory: options.postgresqlPoolFactory,
   })
+  try {
+    const receipt = await migratePostgresqlSchema({
+      runtime,
+      history,
+      activeGeneration:
+        generation.operationId === null
+          ? undefined
+          : {
+              generationId: generation.generationId,
+              operationId: generation.operationId,
+              expectedContractDigest: generation.schemaDigest,
+            },
+      afterCommitted: () => options.advancePointer(),
+    })
+    return {
+      provider: 'postgresql',
+      databaseConfig: config,
+      runtime: adoptPreparedDatabaseProviderRuntime(runtimeOptions, {
+        provider: 'postgresql',
+        runtime,
+      }),
+      receipt,
+    }
+  } catch (error) {
+    await runtime.close()
+    throw error
+  }
 }

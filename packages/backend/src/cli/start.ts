@@ -109,7 +109,11 @@ import { composeSqliteWorkspaceMaintenanceCommand } from '@/modules/source-contr
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
-import { composeSqlitePostRestoreRecovery } from '@/modules/system-operations/composition'
+import {
+  composeSqlitePostRestoreRecovery,
+  prepareDatabaseProviderForBoot,
+  readDatabaseSchemaUpgradeGeneration,
+} from '@/modules/system-operations/composition'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
@@ -238,7 +242,7 @@ import {
   type ResolvedDatabaseProviderRuntime,
 } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
 import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
@@ -1338,17 +1342,21 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
   })
   const logicalSchemaContract = buildLogicalSchemaContract()
-  const bootGeneration = readDatabaseGeneration({
-    pointerPath: Paths.databaseGenerationPointer,
-    migrationsDir: Paths.databaseMigrationsDir,
-    expectedSchemaDigest: logicalSchemaContract.digest,
+  const schemaHistory = await loadPostgresqlMigrationHistory()
+  const bootGeneration = readDatabaseSchemaUpgradeGeneration({
+    generationPointerPath: Paths.databaseGenerationPointer,
+    operationsRoot: Paths.databaseMigrationsDir,
+    contract: logicalSchemaContract,
+    history: schemaHistory,
   })
+  const bootGenerationPayload =
+    bootGeneration.kind === 'current' ? bootGeneration.generation.payload : bootGeneration.payload
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
   // catch below only guards truly unexpected filesystem-level throws.
   // Staging a restore dir next to the db file is an embedded-file operation;
   // an external-server provider restores through its own target path.
-  if (databaseProviderTraits(bootGeneration.payload.provider).storage === 'embedded-file') {
+  if (databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file') {
     try {
       const applied = await applyPendingRestoreIfAny({
         appHome: Paths.root,
@@ -1370,7 +1378,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
 
   // 3. Load config; honor logLevel if user set non-default in config.
-  const config = loadConfig(Paths.config)
+  let config = loadConfig(Paths.config)
   if (config.logLevel !== 'info') {
     configureLogger({ level: config.logLevel })
   }
@@ -1434,13 +1442,49 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 5. DB — resolve the verified live generation before opening any provider
   // client. The pointer is authoritative; config may supply mechanism settings
   // but cannot silently select a different database.
-  const databaseProvider = resolveDatabaseProviderRuntime({
+  const preparedDatabase = await prepareDatabaseProviderForBoot({
     config: config.database,
+    configPath: Paths.config,
     sqlitePath: Paths.db,
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract: logicalSchemaContract,
+    history: schemaHistory,
+    lockPath: Paths.lock,
+    lock,
+    sqliteOptions: {
+      migrationsFolder,
+      synchronous: config.sqliteSynchronous,
+      pageCacheMib: config.sqlitePageCacheMib,
+      mmapMib: config.sqliteMmapMib,
+      slowQueryMs: config.sqliteSlowQueryMs,
+      skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
+    },
+    beforeSqliteOpen: () =>
+      maybePreMigrationBackup({
+        appHome: Paths.root,
+        dbPath: Paths.db,
+        migrationsFolder,
+        enabled: config.backupOnMigration,
+      }).then(() => undefined),
+  }).catch((err: unknown) => {
+    if (isDbCorruptionFailure(err)) {
+      // RFC-213 fail-closed: never serve a corrupt DB. Print the available
+      // backups + the exact restore command, then exit non-zero. The DB is
+      // unwritable, so this does NOT record a recovery_event.
+      lock.release()
+      process.stderr.write(formatDbCorruptionGuidance(err))
+      process.exit(1)
+    }
+    if (err instanceof DbSchemaDriftError) {
+      lock.release()
+      process.stderr.write(formatDbSchemaDriftGuidance(err))
+      process.exit(1)
+    }
+    throw err
   })
+  config = { ...config, database: preparedDatabase.databaseConfig }
+  const databaseProvider = preparedDatabase.runtime
 
   // DB — open + apply migrations. dbVersion = number of SQL files in the
   // bundled migrations folder (== the highest version we've applied, since
@@ -1554,40 +1598,8 @@ async function composeSqliteProviderSession(
     digitalEmployeeTypePackageDriftPolicy,
     lifecycle,
   } = input
-  await maybePreMigrationBackup({
-    appHome: Paths.root,
-    dbPath: Paths.db,
-    migrationsFolder,
-    enabled: config.backupOnMigration,
-  })
-
-  let db: ReturnType<typeof databaseProvider.openClient>
-  try {
-    db = databaseProvider.openClient({
-      migrationsFolder,
-      synchronous: config.sqliteSynchronous,
-      // RFC-311 capacity/telemetry pragmas (all settings-configurable).
-      pageCacheMib: config.sqlitePageCacheMib,
-      mmapMib: config.sqliteMmapMib,
-      slowQueryMs: config.sqliteSlowQueryMs,
-      skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
-    })
-  } catch (err) {
-    if (isDbCorruptionFailure(err)) {
-      // RFC-213 fail-closed: never serve a corrupt DB. Print the available
-      // backups + the exact restore command, then exit non-zero. The DB is
-      // unwritable, so this does NOT record a recovery_event.
-      lock.release()
-      process.stderr.write(formatDbCorruptionGuidance(err))
-      process.exit(1)
-    }
-    if (err instanceof DbSchemaDriftError) {
-      lock.release()
-      process.stderr.write(formatDbSchemaDriftGuidance(err))
-      process.exit(1)
-    }
-    throw err
-  }
+  // Boot preparation already applied and verified migrations on this exact client.
+  const db = databaseProvider.openClient({ migrationsFolder })
 
   // RFC-300 composition: integration owns the direct-Webhook attribution
   // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
