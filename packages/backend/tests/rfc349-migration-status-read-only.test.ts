@@ -26,9 +26,13 @@ import {
 import { PostgresqlLogicalTargetError } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
 import { DATABASE_MIGRATION_PHASES } from '@/modules/system-operations/domain/databaseMigration'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 
 const roots: string[] = []
-const SCHEMA_DIGEST = `sha256:${'a'.repeat(64)}`
+// A status probe validates its copy's schema before opening the target runtime.
+// Keep this accepting-writes fixture on the real frozen historical contract so
+// the missing-URL sentinel below continues to observe that runtime boundary.
+const HISTORICAL_CONTRACT = (await loadPostgresqlMigrationHistory()).root.contract
 const ARTIFACT_DIGEST = `sha256:${'b'.repeat(64)}`
 const OPERATION_ID = 'dbm_operation_0001'
 const TARGET = {
@@ -61,10 +65,14 @@ function acceptingWrites(): {
   control.start({
     idempotencyKey: 'settings-click-0001',
     sourceGenerationId: 'dbg_legacy_sqlite',
-    sourceSchemaDigest: SCHEMA_DIGEST,
+    sourceSchemaDigest: HISTORICAL_CONTRACT.digest,
     sourceDatabaseFingerprint: 'sqlite:fixture',
     target: TARGET,
-    tableCounts: { source: 184, active: 178, archiveOnly: 6 },
+    tableCounts: {
+      source: HISTORICAL_CONTRACT.sourceTableCount,
+      active: HISTORICAL_CONTRACT.activeTableCount,
+      archiveOnly: HISTORICAL_CONTRACT.archiveOnlyTableCount,
+    },
     ownerLeaseMs: 30_000,
     now: 1_000,
   })
@@ -176,5 +184,8 @@ describe('RFC-349 migration status stays read-only', () => {
         code: 'postgresql-url-env-missing',
       })
     }
+    // Each runtime construction creates its own error. Identical object identity
+    // proves these concurrent readers shared the one real target probe.
+    expect(new Set(settled.map((entry) => (entry as PromiseRejectedResult).reason)).size).toBe(1)
   })
 })

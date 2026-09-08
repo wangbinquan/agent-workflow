@@ -12,11 +12,10 @@
 // sourceDigest 复跑稳定是 cutover preflight 对账的前提，一并锁住。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-import type { DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   actionTemplates,
   automationPolicies,
@@ -38,8 +37,6 @@ import {
   MIGRATION_REPORT_KEY,
   readPersistedMigrationRun,
 } from '../src/modules/development-automation/infrastructure/migrationAssets'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function legacyRow(overrides: Partial<LegacyTemplateRow> & { id: string }): LegacyTemplateRow {
   return {
@@ -334,7 +331,7 @@ describe('rfc310 pr9 migration analyzer (T94)', () => {
 // T95：真 sqlite 落库（读 legacy 表 → 分析 → materialize draft）。
 // ---------------------------------------------------------------------------
 
-async function seedLegacy(db: DbClient): Promise<void> {
+async function seedLegacy(db: ProviderNeutralDatabase): Promise<void> {
   const now = 1_700_000_000_000
   await db.insert(capabilityTemplates).values([
     {
@@ -368,9 +365,9 @@ async function seedLegacy(db: DbClient): Promise<void> {
   ])
 }
 
-describe('rfc310 pr9 migration materialize (T95)', () => {
+describeEachProvider('rfc310 pr9 migration materialize (T95)', (harness) => {
   test('creates drafts only (never published), preserves owner/visibility, skips proposals, idempotent on rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedLegacy(db)
     let tick = 1_700_000_100_000
     const now = () => tick++
@@ -430,7 +427,7 @@ describe('rfc310 pr9 migration materialize (T95)', () => {
   })
 
   test('five-cell matrix closure materializes the employee draft; adapter/assignment targets stay proposals', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now0 = 1_700_000_000_000
     await db.insert(capabilityTemplates).values(
       [

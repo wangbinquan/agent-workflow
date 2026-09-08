@@ -109,7 +109,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // actual source drivers; the old-PG backup/restore case adds one PG driver.
   // Other real PG reads go through the production backup/upgrade entrypoints,
   // so this direct-import census does not claim to count all behavior coverage.
-  'platform/persistence/LogicalSource: sqlite 12/8, postgresql 6/4',
+  // W19: the hosted SQL regression directly constructs the actual PG source
+  // with a controlled connection; this is a driver count, not a real-PG claim.
+  'platform/persistence/LogicalSource: sqlite 12/8, postgresql 7/5',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -124,7 +126,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   'modules/intent/infrastructure/IntentApplyOperations: 20 vs 5',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 6',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
-  'platform/persistence/LogicalSource: 12 vs 6',
+  'platform/persistence/LogicalSource: 12 vs 7',
 ]
 
 interface Side {

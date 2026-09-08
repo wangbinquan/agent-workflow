@@ -2,7 +2,7 @@
   "activeTableCount": 178,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:9aabfa484e39f2fa45bfbd7e67a0cffe0b92ead58ebdfa69e14855ec80036b4e",
+  "digest": "sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94",
   "sourceProjection": "sqlite",
   "sourceTableCount": 184,
   "tables": [
@@ -52713,6 +52713,15 @@
         },
         {
           "columns": [
+            "cached_repo_id",
+            "id"
+          ],
+          "name": "idx_tasks_cached_repo_task",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
             "status",
             "finished_at"
           ],
@@ -52848,6 +52857,17 @@
             "finished_at"
           ],
           "name": "idx_tasks_status_parent_finished",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
+            "status",
+            "parent_task_id",
+            "catalog_visibility",
+            "finished_at"
+          ],
+          "name": "idx_tasks_overview_counts",
           "unique": false,
           "where": null
         },

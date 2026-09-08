@@ -4,9 +4,9 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
+import type { ProviderNeutralDatabase } from '@/db/query'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
@@ -28,14 +28,13 @@ import {
   rotateRuntimeSessionLease,
 } from '@/services/runtimeSessionLease'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedTaskRuns() {
-  const db = createInMemoryDb(MIGRATIONS)
-  db.insert(workflows)
+async function seedTaskRuns(db: ProviderNeutralDatabase) {
+  await db
+    .insert(workflows)
     .values({ id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
     .run()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: 'task-lease',
       name: 'task-lease',
@@ -50,7 +49,8 @@ function seedTaskRuns() {
       startedAt: 1,
     })
     .run()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values(
       ['run-1', 'run-2', 'run-3'].map((id) => ({
         id,
@@ -122,8 +122,40 @@ afterEach(() => {
 })
 
 describe('RFC-349 runtime-session lease provider operations', () => {
+  test('PostgreSQL claim uses the selected schema and generation-fenced transaction', async () => {
+    const fake = postgresqlFixture()
+    await expect(
+      claimNewRuntimeSession(fake.operations, {
+        protocol: 'opencode',
+        sessionId: 'native-pg',
+        taskId: 'task-pg',
+        nodeId: 'node-pg',
+        currentNodeRunId: 'run-1',
+        leaseNonceDigest: 'nonce-pg',
+        leasedAt: 30,
+      }),
+    ).resolves.toEqual({
+      protocol: 'opencode',
+      sessionId: 'native-pg',
+      nodeRunId: 'run-1',
+      leaseNonceDigest: 'nonce-pg',
+    })
+
+    const statements = fake.executions.map((execution) => execution.sql.toLowerCase())
+    expect(statements).toContain('set transaction isolation level serializable')
+    expect(statements.some((sql) => sql.includes('task_execution_owners'))).toBe(true)
+    expect(
+      statements.some((sql) =>
+        sql.includes('insert into "agent_workflow"."runtime_session_leases"'),
+      ),
+    ).toBe(true)
+    expect(statements.some((sql) => sql.includes('database_generations'))).toBe(true)
+  })
+})
+
+describeEachProvider('RFC-349 runtime-session lease provider operations', (harness) => {
   test('SQLite preserves claim, reset rotation, resume, and terminal repair semantics', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -134,7 +166,8 @@ describe('RFC-349 runtime-session lease provider operations', () => {
       leaseNonceDigest: 'nonce-1',
       leasedAt: 10,
     })
-    db.insert(nodeRunEvents)
+    await db
+      .insert(nodeRunEvents)
       .values({
         nodeRunId: 'run-1',
         ts: 1,
@@ -168,7 +201,9 @@ describe('RFC-349 runtime-session lease provider operations', () => {
     await expect(
       getRuntimeSessionLease(operations, 'claude-code', rotated.sessionId),
     ).resolves.toMatchObject({ createdNodeRunId: 'run-1', leaseNodeRunId: 'run-1' })
-    expect(db.select({ sessionId: nodeRunEvents.sessionId }).from(nodeRunEvents).get()).toEqual({
+    expect(
+      await db.select({ sessionId: nodeRunEvents.sessionId }).from(nodeRunEvents).get(),
+    ).toEqual({
       sessionId: rotated.sessionId,
     })
     await expect(releaseRuntimeSessionLease(operations, rotated)).resolves.toBe(true)
@@ -183,13 +218,13 @@ describe('RFC-349 runtime-session lease provider operations', () => {
       leasedAt: 20,
     })
     await expect(confirmRuntimeSessionResume(operations, resumed)).resolves.toBe(true)
-    db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-2')).run()
+    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-2')).run()
     await expect(repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).resolves.toBe(1)
     await expect(releaseRuntimeSessionLease(operations, resumed)).resolves.toBe(false)
   })
 
   test('facade rejects malformed claims before reaching provider infrastructure', async () => {
-    const operations = createRuntimeSessionLeaseOperations(seedTaskRuns())
+    const operations = createRuntimeSessionLeaseOperations(await seedTaskRuns(harness.db))
     await expect(
       claimNewRuntimeSession(operations, {
         protocol: 'opencode',
@@ -200,35 +235,5 @@ describe('RFC-349 runtime-session lease provider operations', () => {
         leaseNonceDigest: 'nonce',
       }),
     ).rejects.toMatchObject({ code: 'runtime-session-conflict', reason: 'invalid-input' })
-  })
-
-  test('PostgreSQL claim uses the selected schema and generation-fenced transaction', async () => {
-    const fake = postgresqlFixture()
-    await expect(
-      claimNewRuntimeSession(fake.operations, {
-        protocol: 'opencode',
-        sessionId: 'native-pg',
-        taskId: 'task-pg',
-        nodeId: 'node-pg',
-        currentNodeRunId: 'run-1',
-        leaseNonceDigest: 'nonce-pg',
-        leasedAt: 30,
-      }),
-    ).resolves.toEqual({
-      protocol: 'opencode',
-      sessionId: 'native-pg',
-      nodeRunId: 'run-1',
-      leaseNonceDigest: 'nonce-pg',
-    })
-
-    const statements = fake.executions.map((execution) => execution.sql.toLowerCase())
-    expect(statements).toContain('set transaction isolation level serializable')
-    expect(statements.some((sql) => sql.includes('task_execution_owners'))).toBe(true)
-    expect(
-      statements.some((sql) =>
-        sql.includes('insert into "agent_workflow"."runtime_session_leases"'),
-      ),
-    ).toBe(true)
-    expect(statements.some((sql) => sql.includes('database_generations'))).toBe(true)
   })
 })

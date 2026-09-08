@@ -17,10 +17,11 @@
 // 循环本身遵循仓里既定样板（eventsArchive / gc）：{stop} 句柄、重入保护、
 // 每 tick 读一次 config、错误只记日志不抛——后台刷新绝不能把 daemon 拖挂。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { cachedRepos } from '../src/db/schema'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   DEFAULT_ONLY_RECENT_DAYS,
   DEFAULT_REFRESH_INTERVAL_MS,
@@ -30,17 +31,16 @@ import {
 } from '@/services/submoduleRefresh'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_800_000_000_000
 const DAY = 24 * 60 * 60 * 1000
 
 async function seed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   rows: Array<{ id: string; fetchedAt: number; autoRefreshAt: number | null }>,
 ): Promise<void> {
   for (const r of rows) {
     await db.run(sql`
-      INSERT INTO cached_repos (id, url_hash, url_redacted, local_path,
+      INSERT INTO ${cachedRepos} (id, url_hash, url_redacted, local_path,
         last_fetched_at, created_at, last_auto_refresh_at)
       VALUES (${r.id}, ${r.id}, ${'https://x/' + r.id}, ${'/tmp/' + r.id},
         ${r.fetchedAt}, 0, ${r.autoRefreshAt})
@@ -48,9 +48,9 @@ async function seed(
   }
 }
 
-describe('RFC-210 background refresh — repo selection', () => {
+describeEachProvider('RFC-210 background refresh — repo selection', (harness) => {
   test('picks repos never auto-refreshed, skips ones refreshed within the interval', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, [
       { id: 'never', fetchedAt: NOW - DAY, autoRefreshAt: null },
       { id: 'stale', fetchedAt: NOW - DAY, autoRefreshAt: NOW - 12 * 60 * 60 * 1000 },
@@ -65,7 +65,7 @@ describe('RFC-210 background refresh — repo selection', () => {
   })
 
   test('skips repos nobody has used lately, however stale they are', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, [
       { id: 'recent', fetchedAt: NOW - 5 * DAY, autoRefreshAt: null },
       // Untouched for a year: refreshing it forever serves nobody.
@@ -80,7 +80,7 @@ describe('RFC-210 background refresh — repo selection', () => {
   })
 
   test('the recency window is configurable', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, [{ id: 'r', fetchedAt: NOW - 40 * DAY, autoRefreshAt: null }])
     const narrow = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       now: NOW,
@@ -97,16 +97,16 @@ describe('RFC-210 background refresh — repo selection', () => {
   })
 })
 
-describe('RFC-210 background refresh — tick behaviour', () => {
+describeEachProvider('RFC-210 background refresh — tick behaviour', (harness) => {
   test('disabled config makes the tick a no-op that touches nothing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, [{ id: 'r', fetchedAt: NOW - DAY, autoRefreshAt: null }])
     const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       submoduleAutoRefresh: { enabled: false },
     })
     expect(res).toEqual({ refreshed: 0, failed: 0 })
     const row = (await db.all(
-      sql`SELECT last_auto_refresh_at AS a FROM cached_repos WHERE id='r'`,
+      sql`SELECT last_auto_refresh_at AS a FROM ${cachedRepos} WHERE id='r'`,
     )) as Array<{ a: number | null }>
     expect(row[0]?.a).toBeNull()
   })
@@ -114,7 +114,7 @@ describe('RFC-210 background refresh — tick behaviour', () => {
   test('a repo whose local path is gone is counted failed, not thrown', async () => {
     // refreshCachedRepo raises repo-cache-corrupt for a missing cache dir. One
     // broken repo must not abort the whole sweep.
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, [{ id: 'gone', fetchedAt: NOW - DAY, autoRefreshAt: null }])
     const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       submoduleAutoRefresh: { enabled: true },
@@ -123,13 +123,13 @@ describe('RFC-210 background refresh — tick behaviour', () => {
     expect(res.refreshed).toBe(0)
     // Still stamped, so a permanently broken repo cannot spin every tick.
     const row = (await db.all(
-      sql`SELECT last_auto_refresh_at AS a FROM cached_repos WHERE id='gone'`,
+      sql`SELECT last_auto_refresh_at AS a FROM ${cachedRepos} WHERE id='gone'`,
     )) as Array<{ a: number | null }>
     expect(row[0]?.a).not.toBeNull()
   })
 
   test('nothing due ⟹ no writes at all', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, [{ id: 'fresh', fetchedAt: NOW - DAY, autoRefreshAt: Date.now() }])
     const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       submoduleAutoRefresh: { enabled: true },
@@ -138,9 +138,9 @@ describe('RFC-210 background refresh — tick behaviour', () => {
   })
 })
 
-describe('RFC-210 background refresh — loop contract', () => {
+describeEachProvider('RFC-210 background refresh — loop contract', (harness) => {
   test('returns a stop handle and does not fire synchronously', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     let ticks = 0
     const loop = startSubmoduleRefreshLoop(
       composeSqliteRepositoryWorkspaceStore(db),
@@ -150,17 +150,20 @@ describe('RFC-210 background refresh — loop contract', () => {
       },
       50,
     )
-    expect(ticks).toBe(0) // no eager first run — matches gc/eventsArchive
-    await new Promise((r) => setTimeout(r, 120))
-    expect(ticks).toBeGreaterThan(0)
-    loop.stop()
+    try {
+      expect(ticks).toBe(0) // no eager first run — matches gc/eventsArchive
+      await new Promise((r) => setTimeout(r, 120))
+      expect(ticks).toBeGreaterThan(0)
+    } finally {
+      loop.stop()
+    }
     const after = ticks
     await new Promise((r) => setTimeout(r, 120))
     expect(ticks).toBe(after) // stop() really stops it
   })
 
   test('reconfigure applies the current enabled state without restarting', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     let ticks = 0
     let enabled = true
     const loop = startSubmoduleRefreshLoop(
@@ -173,14 +176,17 @@ describe('RFC-210 background refresh — loop contract', () => {
       },
       20,
     )
-    await new Promise((r) => setTimeout(r, 55))
-    expect(ticks).toBeGreaterThan(0)
+    try {
+      await new Promise((r) => setTimeout(r, 55))
+      expect(ticks).toBeGreaterThan(0)
 
-    enabled = false
-    expect(loop.reconfigure()).toBe(true)
-    const afterDisable = ticks
-    await new Promise((r) => setTimeout(r, 55))
-    expect(ticks).toBe(afterDisable)
-    loop.stop()
+      enabled = false
+      expect(loop.reconfigure()).toBe(true)
+      const afterDisable = ticks
+      await new Promise((r) => setTimeout(r, 55))
+      expect(ticks).toBe(afterDisable)
+    } finally {
+      loop.stop()
+    }
   })
 })

@@ -9,6 +9,7 @@ import { composeRepositoryWorkspaceStore } from '@/modules/source-control/infras
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import type { RecordedStatement } from './helpers/statementRecorder'
 
 const since = 1_700_000_000_000
 const repoIds = ['w18-repo-a', 'w18-repo-b', 'w18-repo-c'] as const
@@ -113,6 +114,76 @@ async function counts(harness: ProviderHarness) {
   }
 }
 
+function countStatementContract(
+  statements: readonly Pick<RecordedStatement, 'sql' | 'params' | 'values'>[],
+) {
+  const projected = statements.map(({ sql, params, values }) => ({ sql, params, values }))
+  // PG records completion order. Only the first four overview reads run in
+  // Promise.all; the three repository reads start afterwards and are serial.
+  const overview = projected.slice(0, 4).sort((left, right) => {
+    const leftKey = JSON.stringify(left)
+    const rightKey = JSON.stringify(right)
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+  })
+  return [...overview, ...projected.slice(4)]
+}
+
+test('count statement comparison ignores only concurrent completion order', () => {
+  const statement = (sql: string, values: readonly unknown[]) => ({
+    sql,
+    params: values.length,
+    values,
+  })
+  const running = statement('SELECT count(*) FROM tasks WHERE status = ?', ['running'])
+  const awaiting = statement('SELECT count(*) FROM tasks WHERE status IN (?, ?)', [
+    'awaiting_review',
+    'awaiting_human',
+  ])
+  const done = statement('SELECT count(*) FROM tasks WHERE status = ? AND finished_at >= ?', [
+    'done',
+    since,
+  ])
+  const failed = statement('SELECT count(*) FROM tasks WHERE status = ? AND finished_at >= ?', [
+    'failed',
+    since,
+  ])
+  const explicit = statement('SELECT explicit references', repoIds)
+  const legacy = statement('SELECT legacy references', repoIds)
+  const scheduled = statement('SELECT scheduled references', [])
+  const original = [running, awaiting, done, failed, explicit, legacy, scheduled]
+  const expected = countStatementContract(original)
+
+  for (const first of [running, awaiting, done, failed]) {
+    for (const second of [running, awaiting, done, failed].filter((item) => item !== first)) {
+      for (const third of [running, awaiting, done, failed].filter(
+        (item) => item !== first && item !== second,
+      )) {
+        const fourth = [running, awaiting, done, failed].find(
+          (item) => item !== first && item !== second && item !== third,
+        )!
+        expect(
+          countStatementContract([first, second, third, fourth, explicit, legacy, scheduled]),
+        ).toEqual(expected)
+      }
+    }
+  }
+  const changed = [
+    [running, awaiting, done, done, explicit, legacy, scheduled],
+    [running, awaiting, done, failed, explicit, legacy, scheduled, scheduled],
+    [running, awaiting, done, failed, explicit, legacy],
+    [{ ...running, sql: running.sql + ' LIMIT 1' }, ...original.slice(1)],
+    [{ ...running, params: running.params + 1 }, ...original.slice(1)],
+    [{ ...running, values: ['done'] }, ...original.slice(1)],
+    [running, awaiting, done, failed, legacy, explicit, scheduled],
+    [running, awaiting, done, explicit, failed, legacy, scheduled],
+  ]
+  for (const statements of changed) expect(countStatementContract(statements)).not.toEqual(expected)
+  expect(
+    countStatementContract([running, running, done, failed, explicit, legacy, scheduled]),
+  ).toEqual(countStatementContract([failed, running, done, running, explicit, legacy, scheduled]))
+  expect(original).toEqual([running, awaiting, done, failed, explicit, legacy, scheduled])
+})
+
 describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
   test('actual provider catalogs contain both exact column sequences', async () => {
     for (const index of indexes) {
@@ -176,9 +247,9 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       const original = await counts(harness)
       expect(original.overview).toEqual(withIndexes.overview)
       expect(original.references).toEqual(withIndexes.references)
-      expect(
-        original.statements.map(({ sql, params, values }) => ({ sql, params, values })),
-      ).toEqual(withIndexes.statements.map(({ sql, params, values }) => ({ sql, params, values })))
+      expect(countStatementContract(original.statements)).toEqual(
+        countStatementContract(withIndexes.statements),
+      )
       expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(beforeRows)
     } finally {
       for (const statement of recreate.slice(0, removed)) await harness.executeFixtureDdl(statement)

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1737,
+    "entries": 1739,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -18747,6 +18747,30 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#createMcpInsertValues",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#createMcpInsertValues",
+      "symbol": "createMcpInsertValues",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": true
       },
@@ -19186,6 +19210,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#commitLegacyPluginPublishInTx",
       "symbol": "commitLegacyPluginPublishInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#createPluginInsertValues",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#createPluginInsertValues",
+      "symbol": "createPluginInsertValues",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -41496,7 +41544,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:562d3e0a70143d39c7cd1459e5d3d75366fcadc928f9651ed508a5740021455d",
+  "sourceDigest": "sha256:a24d0825fe238dbf3c8066423af3a81902f7ca18d319819e4e94e1329e34bb68",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -57,7 +57,7 @@
 //
 // # 什么算消费
 //
-// 该符号在 `src` 里出现在**值位置**——`createSqliteFoo(db)`、`new SqliteFoo()`，以及
+// 该符号在 `src` 或可执行 `packages/backend/scripts` 里出现在**值位置**——`createSqliteFoo(db)`、`new SqliteFoo()`，以及
 // `input.createBackup ?? createPostgresqlProviderBackup` 这种把工厂当值注入的形状
 // （`modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts:23` 就是它，
 // 漏掉它会当场误报一条活着的适配器）。声明文件**自己**也算：
@@ -74,7 +74,7 @@
 //     （`tests/rfc349-resource-catalog-provider-contributions.test.ts:28` 的 `toContain('…')`）
 //     ——一条守卫按名字钉着一个没有任何调用方的函数。W8 销账时那条锁翻成了 `not.toContain`，
 //     函数与字符串一起走；但判据必须继续把字符串排除在消费之外，否则下一个同形的就看不见了；
-//   · **测试**。语料只有 `src`：「只有测试在调它」正是本守卫要报的那种死法。
+//   · **测试**。语料只含 `src` 与可执行 `packages/backend/scripts`：「只有测试在调它」正是本守卫要报的那种死法。
 //
 // 判据用 AST 不用正则，是本仓写死的教训（`docs/dev-gotchas.md`）：判「某名字有没有被调用」
 // 只能用 AST——正则分不清调用与再导出、分不清值位置与类型位置、也分不清注释与代码。
@@ -119,6 +119,7 @@
 //   · **减**了也红 —— 收敛发生了；把账本一起改小，让每一次销账都留下一次有署名的提交记录。
 
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import ts from 'typescript'
@@ -290,7 +291,18 @@ export function adaptersWithoutProductionConsumer(units: readonly SourceUnit[]):
     .map((declaration) => declaration.key)
 }
 
-const UNITS: readonly SourceUnit[] = packageSrcUnits(REPO_ROOT, 'backend')
+// RFC-359 T19h: the shipped migration authoring commands are executable consumers.
+// Their directory is separate from src; tests remain outside both production roots.
+const SCRIPT_PREFIX = 'packages/backend/scripts/'
+const SCRIPT_UNITS: readonly SourceUnit[] = [
+  ...new Bun.Glob('**/*.ts').scanSync({ cwd: resolve(REPO_ROOT, SCRIPT_PREFIX), onlyFiles: true }),
+]
+  .sort()
+  .map((path) => {
+    const relative = SCRIPT_PREFIX + path.replaceAll('\\', '/')
+    return sourceUnit(relative, readFileSync(resolve(REPO_ROOT, relative), 'utf8'))
+  })
+const UNITS: readonly SourceUnit[] = packageSrcUnits(REPO_ROOT, 'backend').concat(SCRIPT_UNITS)
 const DECLARATIONS: readonly ProviderAdapterDeclaration[] = providerAdapterDeclarations(UNITS)
 
 /**
@@ -310,6 +322,26 @@ export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] 
 ]
 
 describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
+  test('migration authoring commands must actually call their immutable artifact constructors', () => {
+    const sequence = UNITS.find((unit) => unit.path.endsWith('/postgresqlMigrationSequence.ts'))!
+    const authoring = SCRIPT_UNITS.find((unit) =>
+      unit.path.endsWith('/rfc349-postgresql-schema.ts'),
+    )!
+    expect(adaptersWithoutProductionConsumer([sequence, authoring])).toEqual([])
+    const constructors = ['createPostgresqlIndexUpgrade', 'createPostgresqlMigrationRoot']
+    let withoutCalls = authoring.text
+    for (const symbol of constructors) {
+      withoutCalls = withoutCalls.replaceAll(`${symbol}({`, 'unrelatedAuthoringCall({')
+    }
+    expect(
+      adaptersWithoutProductionConsumer([sequence, sourceUnit(authoring.path, withoutCalls)]),
+    ).toEqual(
+      constructors.map(
+        (symbol) => `platform/persistence/postgresqlMigrationSequence.ts::${symbol}`,
+      ),
+    )
+  })
+
   test('语料非空：确实扫到了整棵 backend 源码树（扫成 0 说明扫描根失效，此刻零预言力）', () => {
     expect(UNITS.length).toBeGreaterThanOrEqual(1500)
   })

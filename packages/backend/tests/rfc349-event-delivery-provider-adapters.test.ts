@@ -3,9 +3,8 @@
 // Promise-shaped PostgreSQL adapters.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createEventStore } from '@/modules/event-center/infrastructure/eventStore'
 import {
@@ -23,8 +22,6 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SOURCE: EventSourceDescriptor = {
   schemaVersion: 1,
@@ -126,64 +123,6 @@ afterEach(() => {
 })
 
 describe('RFC-349 Event Center provider behavior', () => {
-  test('SQLite notification settlement rejects a stale attempt and accepts the live lease', async () => {
-    const store = createEventStore(createInMemoryDb(MIGRATIONS))
-    await store.registerSource(SOURCE, eventContentDigest(SOURCE), 1)
-    await store.registerEventType(EVENT_TYPE, eventTypeContentDigest(EVENT_TYPE), 1)
-    await store.subscribe({
-      id: 'subscription-1',
-      eventType: EVENT_TYPE,
-      source: SOURCE,
-      subject: OBSERVATION.subject,
-      subscriber: { kind: 'automation', subscriberRef: 'automation-1' },
-      identityKey: 'fixture-subscription-1',
-      replayLatest: false,
-      now: 2,
-    })
-    await store.recordObservation({
-      eventId: 'event-1',
-      observation: OBSERVATION,
-      eventType: EVENT_TYPE,
-      observedAt: 100,
-      nextId: () => 'delivery-1',
-      routingSubscriptions: [],
-      triggerContext: null,
-    })
-
-    const claim = await store.claimNotificationDelivery({
-      subscriberKinds: ['automation'],
-      now: 101,
-      leaseOwner: 'worker-1',
-      leaseMs: 1_000,
-    })
-    expect(claim).toMatchObject({ deliveryId: 'delivery-1', attemptCount: 1 })
-    expect(
-      await store.settleNotificationDelivery({
-        deliveryId: 'delivery-1',
-        leaseOwner: 'worker-1',
-        attemptCount: 0,
-        now: 102,
-        state: 'accepted',
-        nextAttemptAt: 102,
-        error: null,
-      }),
-    ).toBe(false)
-    expect(
-      await store.settleNotificationDelivery({
-        deliveryId: 'delivery-1',
-        leaseOwner: 'worker-1',
-        attemptCount: 1,
-        now: 102,
-        state: 'accepted',
-        nextAttemptAt: 102,
-        error: null,
-      }),
-    ).toBe(true)
-    await expect(store.listDeliveryStatusPage({ limit: 10, offset: 0 })).resolves.toMatchObject({
-      items: [{ state: 'accepted', attemptCount: 1 }],
-    })
-  })
-
   test('PostgreSQL notification settlement fences both lease owner and attempt count', async () => {
     const fake = postgresqlFixture([{}, { values: [['delivery-1']] }, {}, {}, { values: [] }, {}])
     const store = createEventStore(fake.db)
@@ -313,5 +252,65 @@ describe('RFC-349 Event Center provider behavior', () => {
     expect(headInsertIndex).toBeGreaterThan(lockIndex)
     expect(eventInsertIndex).toBeGreaterThan(headInsertIndex)
     expect(deliveryInsertIndex).toBeGreaterThan(eventInsertIndex)
+  })
+})
+
+describeEachProvider('RFC-349 Event Center provider behavior', (harness) => {
+  test('SQLite notification settlement rejects a stale attempt and accepts the live lease', async () => {
+    const store = createEventStore(harness.db)
+    await store.registerSource(SOURCE, eventContentDigest(SOURCE), 1)
+    await store.registerEventType(EVENT_TYPE, eventTypeContentDigest(EVENT_TYPE), 1)
+    await store.subscribe({
+      id: 'subscription-1',
+      eventType: EVENT_TYPE,
+      source: SOURCE,
+      subject: OBSERVATION.subject,
+      subscriber: { kind: 'automation', subscriberRef: 'automation-1' },
+      identityKey: 'fixture-subscription-1',
+      replayLatest: false,
+      now: 2,
+    })
+    await store.recordObservation({
+      eventId: 'event-1',
+      observation: OBSERVATION,
+      eventType: EVENT_TYPE,
+      observedAt: 100,
+      nextId: () => 'delivery-1',
+      routingSubscriptions: [],
+      triggerContext: null,
+    })
+
+    const claim = await store.claimNotificationDelivery({
+      subscriberKinds: ['automation'],
+      now: 101,
+      leaseOwner: 'worker-1',
+      leaseMs: 1_000,
+    })
+    expect(claim).toMatchObject({ deliveryId: 'delivery-1', attemptCount: 1 })
+    expect(
+      await store.settleNotificationDelivery({
+        deliveryId: 'delivery-1',
+        leaseOwner: 'worker-1',
+        attemptCount: 0,
+        now: 102,
+        state: 'accepted',
+        nextAttemptAt: 102,
+        error: null,
+      }),
+    ).toBe(false)
+    expect(
+      await store.settleNotificationDelivery({
+        deliveryId: 'delivery-1',
+        leaseOwner: 'worker-1',
+        attemptCount: 1,
+        now: 102,
+        state: 'accepted',
+        nextAttemptAt: 102,
+        error: null,
+      }),
+    ).toBe(true)
+    await expect(store.listDeliveryStatusPage({ limit: 10, offset: 0 })).resolves.toMatchObject({
+      items: [{ state: 'accepted', attemptCount: 1 }],
+    })
   })
 })

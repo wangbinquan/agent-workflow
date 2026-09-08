@@ -14,11 +14,11 @@
 // So the tests below pin the four buckets as four, and pin the two cases where
 // the signals DISAGREE, since those are the ones a single rate destroys.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
-import { resolve } from 'node:path'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { codeFindings, codeWorkItems, codeWorkRounds } from '../src/db/schema'
 import {
   createCodeMetricsQuery as createCodeMetricsQueryFromPort,
@@ -30,20 +30,16 @@ import { mountCodeRoutes } from '../src/routes/code'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
 import { errorHandler } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
-const createCodeMetricsQuery = (db: DbClient) =>
+const createCodeMetricsQuery = (db: ProviderNeutralDatabase) =>
   createCodeMetricsQueryFromPort(createCodeMetricsRead(db))
 
-describe('RFC-304 T58 — adoption buckets', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => {
-    db.$client.close()
+    db = harness.db
   })
 
   let seq = 0
@@ -133,11 +129,11 @@ describe('RFC-304 T58 — adoption buckets', () => {
   })
 })
 
-describe('RFC-304 T58 — run counts', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 T58 — run counts', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await db.insert(codeWorkItems).values({
       id: 'item-1',
       codeHostEndpointId: 'ep-1',
@@ -150,9 +146,6 @@ describe('RFC-304 T58 — run counts', () => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-  })
-  afterEach(() => {
-    db.$client.close()
   })
 
   let rseq = 0
@@ -231,8 +224,8 @@ describe('RFC-304 T58 — run counts', () => {
 // exercised rather than merely mentioned. `route-error-code-coverage` requires
 // every code to be NAMED by some test; naming it in a tautology would satisfy
 // that guard while proving nothing, which is worse than the gap it closes.
-describe('RFC-304 T58 — the metrics route', () => {
-  const appWith = (db: DbClient) => {
+describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
+  const appWith = (db: ProviderNeutralDatabase) => {
     const app = new Hono()
     const actor = buildActor({
       user: {
@@ -254,15 +247,14 @@ describe('RFC-304 T58 — the metrics route', () => {
     return app
   }
 
-  const get = async (db: DbClient, path: string) => await appWith(db).request(path)
+  const get = async (db: ProviderNeutralDatabase, path: string) => await appWith(db).request(path)
 
-  let db: DbClient
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetRouteMetaRegistry()
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
-    db.$client.close()
     resetRouteMetaRegistry()
   })
 

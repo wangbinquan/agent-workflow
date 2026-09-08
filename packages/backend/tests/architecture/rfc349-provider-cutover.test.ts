@@ -60,7 +60,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
 const PROVIDER_SELECTION_SITES = [
   'packages/backend/src/cli/dbCompact.ts',
   'packages/backend/src/cli/doctor.ts',
-  'packages/backend/src/cli/migrate.ts',
   'packages/backend/src/cli/start.ts',
   'packages/backend/src/main.ts',
   'packages/backend/src/modules/system-operations/composition.ts',

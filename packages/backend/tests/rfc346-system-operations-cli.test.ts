@@ -28,8 +28,17 @@ describe('RFC-346 CLI typed cutover', () => {
   test('the real CLI process root owns local composition and injects both adapters', () => {
     const source = readFileSync(join(SOURCE_ROOT, 'main.ts'), 'utf8')
     expect(source).toContain("from './modules/system-operations/composition'")
-    expect(source).toContain('backupCommand(Bun.argv.slice(3), requireLocalSystemOperations())')
-    expect(source).toContain('restoreCommand(Bun.argv.slice(3), requireLocalSystemOperations())')
+    const backup = source.split("case 'backup': {")[1]!.split("case 'restore': {")[0]!
+    const restore = source.split("case 'restore': {")[1]!.split("case '")[0]!
+    expect(backup).toContain('const provider = await resolveCommandProvider()')
+    expect(backup).toContain('composeLocalSystemOperations({ providerRuntime: provider.runtime })')
+    expect(backup).toContain('backupCommand(Bun.argv.slice(3), operations)')
+    expect(restore).toContain(
+      'const operations = composeLocalSystemOperations({ providerRuntime })',
+    )
+    expect(restore).toContain('restoreCommand(Bun.argv.slice(3), operations)')
+    for (const command of [backup, restore])
+      expect(command).toContain('await operations.shutdown()')
   })
 
   test('RFC-295 downgrade audit remains an explicit direct compatibility command', () => {

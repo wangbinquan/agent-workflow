@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { sql } from 'drizzle-orm'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -26,6 +27,7 @@ import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logica
 import { openVerifiedLogicalDatabaseArtifactSource } from '@/platform/persistence/logicalDatabaseRestore'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
   createPostgresqlIndexUpgrade,
@@ -38,7 +40,12 @@ import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrat
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { digestSchemaContract } from '@/platform/persistence/schemaContract'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
-import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import {
+  createPostgresqlDatabaseRuntime,
+  type PostgresqlDatabaseRuntime,
+  type PostgresqlPool,
+  type SqlRows,
+} from '@/platform/persistence/postgresqlRuntime'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readManifest } from '@/services/backupManifest'
 import { extractTarGz } from '@/util/archive'
@@ -50,6 +57,7 @@ const providers = resolveTestProviders(process.env)
 const operationId = 'dbm_rfc359_historical_upgrade'
 const generationId = 'dbg_pg_rfc359_historical_upgrade'
 const sourceGenerationId = 'dbg_rfc359_historical_sqlite'
+const recoveredTasksQuery = sql`SELECT id, inputs FROM tasks ORDER BY id`
 
 afterEach(() => {
   for (const path of roots.splice(0).reverse()) rmSync(path, { recursive: true, force: true })
@@ -274,11 +282,9 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           for (const [path, digest] of chunks)
             expect(fileDigest(join(operationRoot, path))).toBe(digest)
           const client = prepared.runtime.openClient()
-          expect(
-            await client.all<{ id: string; inputs: string }>(
-              'SELECT id, inputs FROM tasks ORDER BY id',
-            ),
-          ).toEqual([{ id: 't19h-task', inputs: ' { "source" : "old", "empty": null } ' }])
+          expect(await client.all<{ id: string; inputs: string }>(recoveredTasksQuery)).toEqual([
+            { id: 't19h-task', inputs: ' { "source" : "old", "empty": null } ' },
+          ])
         } finally {
           await prepared.runtime.close()
         }
@@ -661,4 +667,124 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
       }
     }, 120_000)
   }
+})
+
+// No network: only the pool response is controlled. These cases still execute
+// the real business-query compiler and reserved logical-source query emitter.
+function queryRuntime(answer: (query: string) => readonly Record<string, unknown>[]) {
+  const executions: Array<{
+    scope: 'pool' | 'snapshot'
+    query: string
+    parameters: readonly unknown[] | undefined
+  }> = []
+  let releases = 0
+  const execute = (
+    scope: 'pool' | 'snapshot',
+    query: string,
+    parameters?: readonly unknown[],
+  ): SqlRows => {
+    executions.push({ scope, query, parameters })
+    const rows = answer(query)
+    return Object.assign(Promise.resolve(rows), {
+      async values() {
+        return rows.map((row) => Object.values(row))
+      },
+    })
+  }
+  const pool: PostgresqlPool = {
+    unsafe: (query, parameters) => execute('pool', query, parameters),
+    async reserve() {
+      return {
+        unsafe: (query, parameters) => execute('snapshot', query, parameters),
+        release() {
+          releases += 1
+        },
+      }
+    },
+    async close() {},
+  }
+  const runtime: PostgresqlDatabaseRuntime = {
+    provider: 'postgresql',
+    generationId,
+    providerPool: () => pool,
+    async health() {
+      throw new Error('health is outside query compilation')
+    },
+    async readiness() {
+      return {
+        provider: 'postgresql',
+        generationId,
+        ok: true,
+        latencyMs: 0,
+        databaseFingerprint: 'pg:0123456789abcdef01234567',
+        serverVersion: 'controlled query protocol',
+        errorCategory: null,
+      }
+    },
+    async acquireMigrationAdvisoryLock() {
+      throw new Error('query-only runtime does not migrate')
+    },
+    async close() {},
+  }
+  return { runtime, executions, releases: () => releases }
+}
+
+test('the interruption readback compiles through the actual PostgreSQL client without a network', async () => {
+  const controlled = queryRuntime(() => [])
+  const restoreProvider = selectDatabaseSchemaProvider('postgresql')
+  try {
+    const client = createPostgresqlDatabaseClient(controlled.runtime)
+    expect(await client.all(recoveredTasksQuery)).toEqual([])
+    expect(controlled.executions).toEqual([
+      {
+        scope: 'pool',
+        query: 'SELECT id, inputs FROM tasks ORDER BY id',
+        parameters: [],
+      },
+    ])
+  } finally {
+    await controlled.runtime.close()
+    restoreProvider()
+  }
+})
+
+test('logical snapshot emits the current receipt join inside its reserved read-only transaction', async () => {
+  const { head } = await loadPostgresqlMigrationHistory()
+  const controlled = queryRuntime((query) => {
+    if (query.includes('information_schema.tables')) {
+      return head.contract.tables
+        .filter((table) => table.disposition !== 'ARCHIVE_THEN_OMIT')
+        .map((table) => ({ table_name: table.providerTables.postgresql }))
+    }
+    if (query.includes('schema_migrations')) {
+      expect(query).toBe(
+        'SELECT migration.contract_digest FROM "agent_workflow_meta"."schema_migrations" migration INNER JOIN "agent_workflow_meta"."schema_contract" current_contract ON current_contract.contract_digest = migration.contract_digest WHERE current_contract.singleton = TRUE',
+      )
+      return [{ contract_digest: head.contract.digest }]
+    }
+    if (query.includes('database_generations'))
+      return [{ state: 'active', contract_digest: head.contract.digest }]
+    if (query.includes('count(*)')) return [{ count: '0' }]
+    return []
+  })
+  const source = await openPostgresqlLogicalSource({
+    runtime: controlled.runtime,
+    generationId,
+    contract: head.contract,
+  })
+  try {
+    await source.preflight()
+    expect(controlled.executions.every((entry) => entry.scope === 'snapshot')).toBe(true)
+    expect(controlled.executions[0]?.query).toBe(
+      'BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY',
+    )
+    expect(
+      controlled.executions.filter((entry) => entry.query.includes('schema_migrations')),
+    ).toHaveLength(1)
+  } finally {
+    await source.close()
+    await controlled.runtime.close()
+  }
+  expect(controlled.executions.at(-1)?.query).toBe('ROLLBACK')
+  expect(controlled.releases()).toBe(1)
 })

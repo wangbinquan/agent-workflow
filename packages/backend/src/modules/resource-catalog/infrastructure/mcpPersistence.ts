@@ -140,6 +140,23 @@ export type McpRowMatch =
   | { readonly kind: 'id'; readonly id: string }
   | { readonly kind: 'captured-row'; readonly row: typeof mcps.$inferSelect }
 
+/** The caller retains its explicit schema version or database-default mechanism. */
+export function createMcpInsertValues(record: McpInsertRecord) {
+  return {
+    id: record.id,
+    name: record.input.name,
+    description: record.input.description,
+    type: record.input.type,
+    config: JSON.stringify(record.input.config),
+    enabled: record.input.enabled,
+    ownerUserId: record.ownerUserId,
+    visibility: record.visibility,
+    aclRevision: record.aclRevision,
+    createdAt: record.now,
+    updatedAt: record.now,
+  } satisfies Omit<typeof mcps.$inferInsert, 'schemaVersion'>
+}
+
 export async function insertMcpRowInTx(
   tx: DatabaseTransaction,
   record: McpInsertRecord,
@@ -147,18 +164,8 @@ export async function insertMcpRowInTx(
   return await tx
     .insert(mcps)
     .values({
-      id: record.id,
-      name: record.input.name,
-      description: record.input.description,
-      type: record.input.type,
-      config: JSON.stringify(record.input.config),
-      enabled: record.input.enabled,
-      ownerUserId: record.ownerUserId,
-      visibility: record.visibility,
-      aclRevision: record.aclRevision,
+      ...createMcpInsertValues(record),
       schemaVersion: 1,
-      createdAt: record.now,
-      updatedAt: record.now,
     })
     .returning()
 }

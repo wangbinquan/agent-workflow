@@ -20,6 +20,12 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W19 filtered任务页以限页fam中的相同谓词决定qualified初始集合，保留完整页/游标/计数合同。
+  MCP/plugin只共用INSERT行构造；显式schemaVersion与数据库默认列、原返回和事务机制由调用方保持。
+- 性能夹具按客户端实际getter选择PG owner查询；先前in判断误进legacy只属于测试/性能装配，
+  生产daemon入口正确。原报告必须按实际被测路径归属，不能将改正路径前的overview结果记作owner性能。
+  四个原并发计数继续是四次独立语句，只归一诊断记录的完成序，不能以优化名义合并快照。
+
 - task-intent 终态化的两份事务内算法共用一个 sequence；native 保留同步执行且不检查返回行，
   async 保留原 RETURNING 数量/旧记录 CAS 检查。boot 根原 CAS 前后位置与两种时钟采样不变。
 - 冲突夹具必须明确建立 snapshot → competing write → CAS 的实际数据库顺序，不能把启动两个

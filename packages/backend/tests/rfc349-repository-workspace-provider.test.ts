@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { cachedRepos } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeRepositoryWorkspaceOperations } from '@/modules/source-control/composition'
@@ -15,8 +15,6 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function rows(direct: readonly Record<string, unknown>[] = []): SqlRows {
   return Object.assign(Promise.resolve(direct), {
@@ -77,8 +75,92 @@ afterEach(() => {
 })
 
 describe('RFC-349 repository workspace provider boundary', () => {
+  test('production consumers contain no database mechanism and PostgreSQL has a native adapter', () => {
+    const production = [
+      'services/repoCredentials.ts',
+      'services/repoBatchImport.ts',
+      'services/gitRepoCache.ts',
+      'services/repoGroup.ts',
+      'services/submoduleRefresh.ts',
+      'services/worktreeFileContent.ts',
+      'routes/cached-repos.ts',
+      'routes/repoGroups.ts',
+      'routes/repos.ts',
+      'routes/worktree-files.ts',
+    ]
+    for (const path of production) {
+      const source = readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
+      expect(source).not.toMatch(/from ['"]@\/db(?:\/|['"])/)
+      expect(source).not.toMatch(/from ['"]drizzle-orm(?:\/|['"])/)
+      expect(source).not.toContain('bun:sqlite')
+    }
+
+    const postgresql = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts',
+      ),
+      'utf8',
+    )
+    expect(postgresql).toContain('ProviderNeutralDatabase')
+    expect(postgresql).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
+    expect(postgresql).not.toContain('createInMemoryDb')
+    expect(postgresql).not.toContain('deasync')
+  })
+
+  test('PostgreSQL adapter emits native unqualified mutation columns behind the same port', async () => {
+    const fixture = postgresqlFixture()
+    await expect(
+      fixture.store.insertCachedRepo({
+        id: 'repo-pg',
+        urlHash: 'hash-pg',
+        urlEnc: null,
+        urlRedacted: 'https://example.test/acme/pg.git',
+        localPath: '/cache/repo-pg',
+        defaultBranch: 'main',
+        lastFetchedAt: 200,
+        createdAt: 100,
+        hasSubmodules: false,
+        lastSubmoduleSyncOk: null,
+        lastSubmoduleSyncError: null,
+        lastAutoRefreshAt: null,
+      }),
+    ).resolves.toBeTrue()
+    await expect(fixture.store.countCachedRepos()).resolves.toBe(1)
+    const insert = fixture.executions.find((query) => /^\s*insert into/i.test(query))
+    expect(insert).toMatch(/insert into "agent_workflow"\."cached_repos" \(\s*"id", "url_hash"/i)
+    expect(insert).not.toContain('("cached_repos"."id"')
+    expect(fixture.executions.some((query) => query.includes('database_generations'))).toBeTrue()
+  })
+
+  // RFC-349 —— 这条守卫来自托管取证跑（真外置 PostgreSQL）：`/api/cached-repos`
+  // 与 `/api/overview` 的分面统计在 `postgresql-normal` / `postgresql-maintenance`
+  // 两个相位共打出 563 次
+  // `argument of OR must be type boolean, not type integer` —— 全是 500。
+  // 成因是 referenced 谓词在「没有定时任务引用」时用 `sql\`0\`` 当 OR 的一个分支：
+  // SQLite 把 0 当 false，PostgreSQL 不接受整数做布尔。两个 dialect 都认的字面量
+  // 是 `false`（drizzle 自己的空 `inArray` 也是这么发的）。
+  test('the cached-repo facet predicate uses a boolean literal both dialects accept', async () => {
+    const fixture = postgresqlFixture()
+    await fixture.store.listCachedRepoPage({ limit: 20 })
+
+    const facets = fixture.executions.find((query) => query.includes('scheduled_count'))
+    expect(facets).toBeDefined()
+    // The empty-set literal for "no scheduled task references this repo". RFC-349:
+    // PostgreSQL types `0` as integer and rejects the whole statement the moment it
+    // lands in a boolean position — that arm read `or 0` before, and reads
+    // `WHERE 0 and …` after the W8-T26 reshape, so the guard follows the literal
+    // rather than the surrounding operator. `false` is what both dialects accept,
+    // and what drizzle's own empty `inArray` emits.
+    expect(facets).toContain('WHERE false')
+    expect(facets).not.toMatch(/\b(?:where|or|and)\s+0\b/i)
+  })
+})
+
+describeEachProvider('RFC-349 repository workspace provider boundary', (harness) => {
   test('SQLite adapter preserves cache paging, due selection and group transactions', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const store = new DrizzleRepositoryWorkspaceStore(db)
     const inserted = await store.insertCachedRepo({
       id: 'repo-1',
@@ -184,45 +266,11 @@ describe('RFC-349 repository workspace provider boundary', () => {
       attachmentKind: null,
       cachedRepoId: null,
     })
-    expect(db.select().from(cachedRepos).all()).toHaveLength(0)
-  })
-
-  test('production consumers contain no database mechanism and PostgreSQL has a native adapter', () => {
-    const production = [
-      'services/repoCredentials.ts',
-      'services/repoBatchImport.ts',
-      'services/gitRepoCache.ts',
-      'services/repoGroup.ts',
-      'services/submoduleRefresh.ts',
-      'services/worktreeFileContent.ts',
-      'routes/cached-repos.ts',
-      'routes/repoGroups.ts',
-      'routes/repos.ts',
-      'routes/worktree-files.ts',
-    ]
-    for (const path of production) {
-      const source = readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
-      expect(source).not.toMatch(/from ['"]@\/db(?:\/|['"])/)
-      expect(source).not.toMatch(/from ['"]drizzle-orm(?:\/|['"])/)
-      expect(source).not.toContain('bun:sqlite')
-    }
-
-    const postgresql = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts',
-      ),
-      'utf8',
-    )
-    expect(postgresql).toContain('ProviderNeutralDatabase')
-    expect(postgresql).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
-    expect(postgresql).not.toContain('createInMemoryDb')
-    expect(postgresql).not.toContain('deasync')
+    expect(await db.select().from(cachedRepos).all()).toHaveLength(0)
   })
 
   test('facets retain the short cache and expose explicit cross-store invalidation', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const store = new DrizzleRepositoryWorkspaceStore(db)
     const record = {
       id: 'repo-cache-1',
@@ -240,8 +288,8 @@ describe('RFC-349 repository workspace provider boundary', () => {
     } as const
     await store.insertCachedRepo(record)
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(1)
-
-    db.insert(cachedRepos)
+    await db
+      .insert(cachedRepos)
       .values({
         ...record,
         id: 'repo-cache-2',
@@ -252,53 +300,5 @@ describe('RFC-349 repository workspace provider boundary', () => {
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(1)
     invalidateRepositoryWorkspaceFacetCaches()
     expect((await store.listCachedRepoPage({ limit: 20 })).facets.all).toBe(2)
-  })
-
-  test('PostgreSQL adapter emits native unqualified mutation columns behind the same port', async () => {
-    const fixture = postgresqlFixture()
-    await expect(
-      fixture.store.insertCachedRepo({
-        id: 'repo-pg',
-        urlHash: 'hash-pg',
-        urlEnc: null,
-        urlRedacted: 'https://example.test/acme/pg.git',
-        localPath: '/cache/repo-pg',
-        defaultBranch: 'main',
-        lastFetchedAt: 200,
-        createdAt: 100,
-        hasSubmodules: false,
-        lastSubmoduleSyncOk: null,
-        lastSubmoduleSyncError: null,
-        lastAutoRefreshAt: null,
-      }),
-    ).resolves.toBeTrue()
-    await expect(fixture.store.countCachedRepos()).resolves.toBe(1)
-    const insert = fixture.executions.find((query) => /^\s*insert into/i.test(query))
-    expect(insert).toMatch(/insert into "agent_workflow"\."cached_repos" \(\s*"id", "url_hash"/i)
-    expect(insert).not.toContain('("cached_repos"."id"')
-    expect(fixture.executions.some((query) => query.includes('database_generations'))).toBeTrue()
-  })
-
-  // RFC-349 —— 这条守卫来自托管取证跑（真外置 PostgreSQL）：`/api/cached-repos`
-  // 与 `/api/overview` 的分面统计在 `postgresql-normal` / `postgresql-maintenance`
-  // 两个相位共打出 563 次
-  // `argument of OR must be type boolean, not type integer` —— 全是 500。
-  // 成因是 referenced 谓词在「没有定时任务引用」时用 `sql\`0\`` 当 OR 的一个分支：
-  // SQLite 把 0 当 false，PostgreSQL 不接受整数做布尔。两个 dialect 都认的字面量
-  // 是 `false`（drizzle 自己的空 `inArray` 也是这么发的）。
-  test('the cached-repo facet predicate uses a boolean literal both dialects accept', async () => {
-    const fixture = postgresqlFixture()
-    await fixture.store.listCachedRepoPage({ limit: 20 })
-
-    const facets = fixture.executions.find((query) => query.includes('scheduled_count'))
-    expect(facets).toBeDefined()
-    // The empty-set literal for "no scheduled task references this repo". RFC-349:
-    // PostgreSQL types `0` as integer and rejects the whole statement the moment it
-    // lands in a boolean position — that arm read `or 0` before, and reads
-    // `WHERE 0 and …` after the W8-T26 reshape, so the guard follows the literal
-    // rather than the surrounding operator. `false` is what both dialects accept,
-    // and what drizzle's own empty `inArray` emits.
-    expect(facets).toContain('WHERE false')
-    expect(facets).not.toMatch(/\b(?:where|or|and)\s+0\b/i)
   })
 })

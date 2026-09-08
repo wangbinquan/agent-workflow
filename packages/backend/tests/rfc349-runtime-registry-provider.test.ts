@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   composePostgresqlRuntimeRegistryOperations,
@@ -19,8 +19,6 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function source(relativePath: string): string {
   return readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
@@ -118,10 +116,33 @@ describe('RFC-349 runtime registry provider operations', () => {
     )
   })
 
+  test('PostgreSQL composition resolves the same closed row without a SQLite facade', async () => {
+    const fixture = postgresqlFixture()
+    await expect(fixture.registry.getRuntime('pg-claude')).resolves.toMatchObject({
+      id: 'runtime-pg-1',
+      name: 'pg-claude',
+      protocol: 'claude-code',
+      binaryPath: '/opt/claude-pg',
+      enabled: true,
+    })
+    await expect(fixture.registry.resolveRuntimeByName('pg-claude')).resolves.toMatchObject({
+      name: 'pg-claude',
+      protocol: 'claude-code',
+      binaryPath: '/opt/claude-pg',
+      model: 'anthropic/claude-sonnet-4-5',
+    })
+    expect(
+      fixture.executions.every((execution) =>
+        execution.sql.includes('"agent_workflow"."runtimes"'),
+      ),
+    ).toBe(true)
+    expect(fixture.executions[0]?.parameters).toEqual(['pg-claude'])
+  })
+})
+
+describeEachProvider('RFC-349 runtime registry provider operations', (harness) => {
   test('SQLite composition preserves seed, CRUD, resolution and delete guards', async () => {
-    const registry = composeSqliteRuntimeRegistryOperations(
-      createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' }),
-    )
+    const registry = composeSqliteRuntimeRegistryOperations(harness.db)
     await registry.seedBuiltinRuntimes()
     expect((await registry.listRuntimes()).map((row) => row.name).sort()).toEqual([
       'claude-code',
@@ -145,28 +166,5 @@ describe('RFC-349 runtime registry provider operations', () => {
     expect((await registry.getRuntime('custom-claude'))?.enabled).toBe(false)
     await registry.deleteRuntime('custom-claude', {})
     await expect(registry.getRuntime('custom-claude')).resolves.toBeNull()
-  })
-
-  test('PostgreSQL composition resolves the same closed row without a SQLite facade', async () => {
-    const fixture = postgresqlFixture()
-    await expect(fixture.registry.getRuntime('pg-claude')).resolves.toMatchObject({
-      id: 'runtime-pg-1',
-      name: 'pg-claude',
-      protocol: 'claude-code',
-      binaryPath: '/opt/claude-pg',
-      enabled: true,
-    })
-    await expect(fixture.registry.resolveRuntimeByName('pg-claude')).resolves.toMatchObject({
-      name: 'pg-claude',
-      protocol: 'claude-code',
-      binaryPath: '/opt/claude-pg',
-      model: 'anthropic/claude-sonnet-4-5',
-    })
-    expect(
-      fixture.executions.every((execution) =>
-        execution.sql.includes('"agent_workflow"."runtimes"'),
-      ),
-    ).toBe(true)
-    expect(fixture.executions[0]?.parameters).toEqual(['pg-claude'])
   })
 })

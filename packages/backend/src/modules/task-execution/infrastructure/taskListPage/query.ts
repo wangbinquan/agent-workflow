@@ -513,11 +513,11 @@ export function fastFilteredRootQuery(
         AND ${catalogVisibilityCondition('t', catalogVisibility)}
         AND ${nonView}
     ),
-    matches AS MATERIALIZED (
+    matches AS NOT MATERIALIZED (
       SELECT nvm.id, nvm.rid, nvm.started_at FROM non_view_matches nvm
       WHERE ${viewCondition(parsed.filters.view, 'nvm', sql`nvm.has_open_alert`)}
     ),
-    roots AS MATERIALIZED (
+    roots AS NOT MATERIALIZED (
       SELECT
         m.rid AS rid,
         MAX(m.started_at) AS bsa,
@@ -535,14 +535,18 @@ export function fastFilteredRootQuery(
     ),
     -- 页内 root 的整棵树。root_task_id 让它是一次索引取回，而不是递归下钻。
     fam AS MATERIALIZED (
-      SELECT t.id, t.parent_task_id
+      SELECT t.id, t.parent_task_id,
+        CASE WHEN (${nonView})
+          AND ${viewCondition(parsed.filters.view, 't', sql`(open_alerts.task_id IS NOT NULL)`)}
+          THEN 1 ELSE 0 END AS is_match
       FROM tasks t
+      ${parsed.filters.view === 'attention' ? openAlertTasks : sql``}
       WHERE t.root_task_id IN (SELECT pr.rid FROM page_roots pr)
         AND ${authOf('t')} AND ${catalogVisibilityCondition('t', catalogVisibility)}
     ),
     -- Q = 匹配行 ∪ 其祖先（自底向上闭包；UNION 去重顺带防成环）。
     qualified(id) AS (
-      SELECT m.id FROM matches m JOIN page_roots pr ON pr.rid = m.rid
+      SELECT f.id FROM fam f WHERE f.is_match = 1
       UNION
       SELECT f.parent_task_id FROM qualified q JOIN fam f ON f.id = q.id
       WHERE f.parent_task_id IS NOT NULL

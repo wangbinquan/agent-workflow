@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第十九批（2026-09-08）**：filtered任务页从限页fam构造匹配闭包，MCP/plugin共享INSERT行算法。
+> 再迁12旧套件，原后88 pass/361 expect，59原DB用例默认双库，累计196套件；当前1924测试文件，
+> 648文件/1376次实际构库，638构库文件无harness，368文件harness，T19f742→730。
+> 67e2独立真PG产物已核：Bun1.4双库各17阶段89次执行，67 pass+22指定历史红/827expect，
+> 99源码与34原始日志摘要全核；12条P0的AC7收口。Main34219640735仍failure，26success/7failure/3cancelled，
+> Windows RuntimeInventory为重试通过，不能记首轮干净。其余功能红已对应修正源锁/夹具/真实SQL，待下一轮hosted。
+> 恢复测试用SQLWrapper，实际PG逻辑源修正保留词别名；旧升级、备份与LogicalSource真库例仍须复验。
+> 性能helper的代理getter分派已修，先前PG overview样本实际走legacy；生产daemon接线正确。
+> W18原full34219807721完整语料/360样本已核，排除overview后8端点中6项PG更慢，原绝对预算仍有失败；
+> 新task页与正确owner夹具的完整P95等待后继SHA。原语料/样本/floor分位数/预算不改，RFC继续In Progress。
+> 最终完整backend tsc、31代码路径lint/format与功能架构检查通过；新谱系夹具全行/JSON字节与原触发器结果相同。
+> 本批未启动本地PG、服务、完整性能库、soak、E2E或全量门禁；逐项证据见RFC359 plan §0b/§0c。
+
 > **RFC-359 W12 第十八批（2026-09-08）**：T19h 追加不可变 PG schema 历史和真实增量升级，
 > 原 baseline SQL/journal 保留；两条 task 覆盖索引同时进入 SQLite 0225 与 PG 0001。
 > boot/手动迁移/备份共用 schema 准备；原 copy 合同恢复至 accepting-writes 后再升级，

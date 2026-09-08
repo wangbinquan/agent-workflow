@@ -164,6 +164,27 @@ type PluginInsertRecord = Omit<PluginCreateRecord, 'ownerUserId'> & {
   readonly ownerUserId: string | null
 }
 
+/** Captured installation metadata and clock are shared without choosing a schema default. */
+export function createPluginInsertValues(record: PluginInsertRecord) {
+  return {
+    id: record.id,
+    name: record.name,
+    spec: record.spec,
+    optionsJson: JSON.stringify(record.options),
+    description: record.description,
+    enabled: record.enabled,
+    sourceKind: record.sourceKind,
+    cachedPath: record.cachedPath,
+    resolvedVersion: record.resolvedVersion,
+    installedAt: record.now,
+    ownerUserId: record.ownerUserId,
+    visibility: record.visibility,
+    aclRevision: record.aclRevision,
+    createdAt: record.now,
+    updatedAt: record.now,
+  } satisfies Omit<typeof plugins.$inferInsert, 'schemaVersion'>
+}
+
 /** Join the caller's transaction; timestamps and installed artifacts are already captured. */
 export async function insertPluginRowInTx(
   tx: DatabaseTransaction,
@@ -172,22 +193,8 @@ export async function insertPluginRowInTx(
   return await tx
     .insert(plugins)
     .values({
-      id: record.id,
-      name: record.name,
-      spec: record.spec,
-      optionsJson: JSON.stringify(record.options),
-      description: record.description,
-      enabled: record.enabled,
-      sourceKind: record.sourceKind,
-      cachedPath: record.cachedPath,
-      resolvedVersion: record.resolvedVersion,
-      installedAt: record.now,
-      ownerUserId: record.ownerUserId,
-      visibility: record.visibility,
-      aclRevision: record.aclRevision,
+      ...createPluginInsertValues(record),
       schemaVersion: 1,
-      createdAt: record.now,
-      updatedAt: record.now,
     })
     .returning()
 }

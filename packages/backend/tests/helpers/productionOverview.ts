@@ -28,11 +28,11 @@ import { memoryCatalogOf } from './memoryCatalog'
 import { resourceScopeAuthority, TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 
 function isPostgresql(db: ProviderNeutralDatabase): db is PostgresqlDatabaseClient {
-  return '$provider' in db && db.$provider === 'postgresql'
+  return Reflect.get(db, '$provider') === 'postgresql'
 }
 
 function assertSqlite(db: ProviderNeutralDatabase): asserts db is DbClient {
-  if ('$provider' in db) throw new Error('unsupported-overview-test-provider')
+  if (isPostgresql(db)) throw new Error('unsupported-overview-test-provider')
 }
 
 function unusedCapability(): never {

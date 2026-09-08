@@ -17,26 +17,42 @@
 //   - **≥2 条**：**无法自愈**——框架没法替用户凭空造一个仓库组（挂载布局 /
 //     ref / 只读是人的设计意图，不是能从两个 URL 推出来的）。停发并说清怎么改。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { rejectRetiredStartTaskKeys } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { scheduledTasks } from '../src/db/schema'
-import { healScheduledLaunchPayloads } from './helpers/integrationTriggerResourceBinding'
+import { integrationTriggerResourceBinding } from './helpers/integrationTriggerResourceBinding'
+import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/composition/scheduledTasks'
+import { healScheduledLaunchPayloads as healScheduledLaunchPayloadsWithPort } from '../src/services/scheduledTasks'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+let db: ProviderNeutralDatabase
 
-let db: DbClient
-beforeEach(() => {
-  db = createInMemoryDb(MIGRATIONS)
-})
+// The healer uses the real neutral persistence. Other runtime operations are
+// outside these stored-payload cases and must stay unused.
+function healScheduledLaunchPayloads(database: ProviderNeutralDatabase) {
+  const unusedOperation = (): never => {
+    throw new Error('stored payload healing reached an unrelated runtime operation')
+  }
+  const runtime = composeScheduledTaskRuntimeFor({
+    db: database,
+    resourceSnapshots: integrationTriggerResourceBinding(),
+    validation: {
+      assertWorkflowLaunchable: unusedOperation,
+      assertAgentIntegrity: unusedOperation,
+    },
+    resourceAclChanged: unusedOperation,
+  })
+  return healScheduledLaunchPayloadsWithPort(runtime.operations)
+}
 
-function seed(payload: unknown): string {
+async function seed(payload: unknown): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(scheduledTasks)
+  await db
+    .insert(scheduledTasks)
     .values({
       id,
       name: 's',
@@ -54,12 +70,17 @@ function seed(payload: unknown): string {
   return id
 }
 
-const read = (id: string) => db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).get()
-const payloadOf = (id: string) => JSON.parse(read(id)!.launchPayload) as Record<string, unknown>
+const read = async (id: string) =>
+  await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).get()
+const payloadOf = async (id: string) =>
+  JSON.parse((await read(id))!.launchPayload) as Record<string, unknown>
 
-describe('RFC-248 —— 存量 repos[] 定时任务 payload', () => {
+describeEachProvider('RFC-248 —— 存量 repos[] 定时任务 payload', (harness) => {
+  beforeEach(() => {
+    db = harness.db
+  })
   test('单条 repos ⇒ 摊平进顶层单仓字段并删除数组，payload 变 v2-clean', async () => {
-    const id = seed({
+    const id = await seed({
       workflowId: 'wf',
       name: 't',
       inputs: {},
@@ -67,18 +88,18 @@ describe('RFC-248 —— 存量 repos[] 定时任务 payload', () => {
     })
     await healScheduledLaunchPayloads(db)
 
-    const p = payloadOf(id)
+    const p = await payloadOf(id)
     expect(p.repos).toBeUndefined()
     expect(p.repoUrl).toBe('https://git.example/a.git')
     expect(p.ref).toBe('dev')
     // 关键：真的干净了——否则下一轮扫描还会把它捡起来。
     expect(rejectRetiredStartTaskKeys(p)).toBeNull()
     // 计划保持启用：它本来就是个能跑的单仓计划。
-    expect(read(id)!.enabled).toBe(true)
+    expect((await read(id))!.enabled).toBe(true)
   })
 
   test('多条 repos ⇒ **停发**并给出可操作的原因（不是留着反复失败）', async () => {
-    const id = seed({
+    const id = await seed({
       workflowId: 'wf',
       name: 't',
       inputs: {},
@@ -86,7 +107,7 @@ describe('RFC-248 —— 存量 repos[] 定时任务 payload', () => {
     })
     await healScheduledLaunchPayloads(db)
 
-    const row = read(id)!
+    const row = (await read(id))!
     expect(row.enabled).toBe(false)
     // next_run_at 置 null ⇒ 轮询直接跳过（disable 的既有语义）。
     expect(row.nextRunAt).toBeNull()
@@ -97,7 +118,7 @@ describe('RFC-248 —— 存量 repos[] 定时任务 payload', () => {
 
   test('幂等：再扫一遍不会把已 healed 的行重新计为待转换', async () => {
     // 这条锁住那个「永远清不干净」的循环——第一轮之后必须收敛。
-    const id = seed({
+    const id = await seed({
       workflowId: 'wf',
       name: 't',
       inputs: {},
@@ -107,11 +128,11 @@ describe('RFC-248 —— 存量 repos[] 定时任务 payload', () => {
     expect(first.converted).toBe(1)
     const second = await healScheduledLaunchPayloads(db)
     expect(second.converted).toBe(0)
-    expect(payloadOf(id).repos).toBeUndefined()
+    expect((await payloadOf(id)).repos).toBeUndefined()
   })
 
   test('顶层已有单仓字段时不被数组覆盖（自相矛盾的 payload 取顶层）', async () => {
-    const id = seed({
+    const id = await seed({
       workflowId: 'wf',
       name: 't',
       inputs: {},
@@ -119,17 +140,17 @@ describe('RFC-248 —— 存量 repos[] 定时任务 payload', () => {
       repos: [{ repoUrl: 'https://git.example/inner.git' }],
     })
     await healScheduledLaunchPayloads(db)
-    const p = payloadOf(id)
+    const p = await payloadOf(id)
     expect(p.repoUrl).toBe('https://git.example/top.git')
     expect(p.repos).toBeUndefined()
   })
 
   test('已经是 v2-clean 的行完全不动', async () => {
-    const id = seed({ workflowId: 'wf', name: 't', inputs: {}, repoGroupId: 'grp_1' })
-    const before = read(id)!.updatedAt
+    const id = await seed({ workflowId: 'wf', name: 't', inputs: {}, repoGroupId: 'grp_1' })
+    const before = (await read(id))!.updatedAt
     const r = await healScheduledLaunchPayloads(db)
     expect(r.converted).toBe(0)
-    expect(read(id)!.updatedAt).toBe(before)
-    expect(payloadOf(id).repoGroupId).toBe('grp_1')
+    expect((await read(id))!.updatedAt).toBe(before)
+    expect((await payloadOf(id)).repoGroupId).toBe('grp_1')
   })
 })

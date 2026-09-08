@@ -12,10 +12,10 @@
 //  2. **与真实展平同语义**。组套组、深度上限、循环检测、只读并集、挂载点冲突
 //     全部按真实规则报错，而不是「预览通过、保存 422」。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { cachedRepos, repoGroupNodes, repoGroups } from '../src/db/schema'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { previewRepoGroupLayout as previewRepoGroupLayoutImpl } from '../src/services/repoGroup'
@@ -24,17 +24,13 @@ import {
   type RepoGroupAttachmentSpec,
 } from './helpers/repoGroupFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+let db: ProviderNeutralDatabase
 
-let db: DbClient
-beforeEach(() => {
-  db = createInMemoryDb(MIGRATIONS)
-})
-
-function seedRepo(slug: string): string {
+async function seedRepo(slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(cachedRepos)
+  await db
+    .insert(cachedRepos)
     .values({
       id,
       urlHash: `${slug}0000000`.slice(0, 8),
@@ -49,7 +45,7 @@ function seedRepo(slug: string): string {
 }
 
 function previewRepoGroupLayout(
-  database: DbClient,
+  database: ProviderNeutralDatabase,
   input: { name?: string; attachments: readonly RepoGroupAttachmentSpec[] },
 ) {
   return previewRepoGroupLayoutImpl(composeSqliteRepositoryWorkspaceStore(database), {
@@ -59,10 +55,11 @@ function previewRepoGroupLayout(
 }
 
 /** 建一个真实的组（预览里可以被 `kind:'group'` 成员引用）。 */
-function seedGroup(name: string, repoIds: readonly string[]): string {
+async function seedGroup(name: string, repoIds: readonly string[]): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(repoGroups)
+  await db
+    .insert(repoGroups)
     .values({
       id,
       name,
@@ -73,8 +70,9 @@ function seedGroup(name: string, repoIds: readonly string[]): string {
       updatedAt: now,
     })
     .run()
-  repoIds.forEach((rid, i) => {
-    db.insert(repoGroupNodes)
+  for (const [i, rid] of repoIds.entries()) {
+    await db
+      .insert(repoGroupNodes)
       .values({
         groupId: id,
         path: i === 0 ? '' : `m${i}`,
@@ -85,11 +83,14 @@ function seedGroup(name: string, repoIds: readonly string[]): string {
         readonly: false,
       })
       .run()
-  })
+  }
   return id
 }
 
-describe('RFC-248 —— 干跑布局预览', () => {
+describeEachProvider('RFC-248 —— 干跑布局预览', (harness) => {
+  beforeEach(() => {
+    db = harness.db
+  })
   test('空成员表返回空布局，而不是 422', async () => {
     // 用户刚点开「新建」时就是这个状态，那时报错毫无意义。
     const r = await previewRepoGroupLayout(db, { attachments: [] })
@@ -99,8 +100,8 @@ describe('RFC-248 —— 干跑布局预览', () => {
   })
 
   test('按 cachedRepoId 的成员正常展平，挂载路径原样带出', async () => {
-    const app = seedRepo('app')
-    const sdk = seedRepo('sdk')
+    const app = await seedRepo('app')
+    const sdk = await seedRepo('sdk')
     const r = await previewRepoGroupLayout(db, {
       name: '全栈',
       attachments: [
@@ -121,7 +122,7 @@ describe('RFC-248 —— 干跑布局预览', () => {
   })
 
   test('**零副作用**：只给 URL 的成员不导入、不落库，只计入 pendingImports', async () => {
-    const before = db.select().from(cachedRepos).all().length
+    const before = (await db.select().from(cachedRepos).all()).length
     const r = await previewRepoGroupLayout(db, {
       attachments: [
         {
@@ -137,15 +138,15 @@ describe('RFC-248 —— 干跑布局预览', () => {
     expect(r.pendingImports).toBe(1)
     expect(r.repos).toEqual([])
     // 关键：一行镜像都没多。
-    expect(db.select().from(cachedRepos).all()).toHaveLength(before)
+    expect(await db.select().from(cachedRepos).all()).toHaveLength(before)
     // 组表同样不能多出行来——预览是纯读。
-    expect(db.select().from(repoGroups).all()).toHaveLength(0)
+    expect(await db.select().from(repoGroups).all()).toHaveLength(0)
   })
 
   test('引用真实子组 ⇒ 递归展平，子组成员带上外层挂载前缀', async () => {
-    const a = seedRepo('a')
-    const b = seedRepo('b')
-    const child = seedGroup('child', [a, b])
+    const a = await seedRepo('a')
+    const b = await seedRepo('b')
+    const child = await seedGroup('child', [a, b])
     const r = await previewRepoGroupLayout(db, {
       attachments: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: false }],
     })
@@ -155,8 +156,8 @@ describe('RFC-248 —— 干跑布局预览', () => {
   })
 
   test('外层标只读 ⇒ 子组成员全部只读（D20 并集）', async () => {
-    const a = seedRepo('a')
-    const child = seedGroup('child', [a])
+    const a = await seedRepo('a')
+    const child = await seedGroup('child', [a])
     const r = await previewRepoGroupLayout(db, {
       attachments: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: true }],
     })
@@ -172,8 +173,8 @@ describe('RFC-248 —— 干跑布局预览', () => {
   })
 
   test('挂载点冲突在预览期就报出来——不是「预览通过、保存 422」', async () => {
-    const a = seedRepo('a')
-    const b = seedRepo('b')
+    const a = await seedRepo('a')
+    const b = await seedRepo('b')
     let code = ''
     try {
       await previewRepoGroupLayout(db, {
@@ -191,8 +192,8 @@ describe('RFC-248 —— 干跑布局预览', () => {
   })
 
   test('两个成员都想挂根 ⇒ 报错（D2：至多一个挂根）', async () => {
-    const a = seedRepo('a')
-    const b = seedRepo('b')
+    const a = await seedRepo('a')
+    const b = await seedRepo('b')
     await expect(
       previewRepoGroupLayout(db, {
         attachments: [

@@ -62,8 +62,12 @@ import {
   createAgentPersistenceValues,
   updateAgentPersistenceValues,
 } from '../agentPersistence'
-import { mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
-import { pluginConfigHash, pluginFromPersistenceRow } from '../pluginPersistence'
+import { createMcpInsertValues, mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
+import {
+  createPluginInsertValues,
+  pluginConfigHash,
+  pluginFromPersistenceRow,
+} from '../pluginPersistence'
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
@@ -660,19 +664,16 @@ function createMcpPort(
         const at = now()
         const inserted = await transaction
           .insert(mcps)
-          .values({
-            id: plan.resourceId,
-            name: prepared.input.name,
-            description: prepared.input.description,
-            type: prepared.input.type,
-            config: JSON.stringify(prepared.input.config),
-            enabled: prepared.input.enabled,
-            ownerUserId: actor.user.id,
-            visibility: 'private',
-            aclRevision: 0,
-            createdAt: at,
-            updatedAt: at,
-          })
+          .values(
+            createMcpInsertValues({
+              id: plan.resourceId,
+              input: prepared.input,
+              ownerUserId: actor.user.id,
+              visibility: 'private',
+              aclRevision: 0,
+              now: at,
+            }),
+          )
           .returning()
           .get()
         if (inserted === undefined) throw new Error('mcp insert returned no row')
@@ -759,23 +760,23 @@ function createPluginPort(
         const at = now()
         const inserted = await transaction
           .insert(plugins)
-          .values({
-            id: plan.resourceId,
-            name: plan.payload.name,
-            spec: plan.payload.spec,
-            optionsJson: JSON.stringify(plan.payload.optionsJson ?? {}),
-            description: plan.payload.description,
-            enabled: plan.payload.enabled ?? true,
-            sourceKind: prepared.staged.sourceKind,
-            cachedPath: prepared.staged.cachedPath,
-            resolvedVersion: prepared.staged.resolvedVersion,
-            installedAt: at,
-            ownerUserId: actor.user.id,
-            visibility: 'private',
-            aclRevision: 0,
-            createdAt: at,
-            updatedAt: at,
-          })
+          .values(
+            createPluginInsertValues({
+              id: plan.resourceId,
+              name: plan.payload.name,
+              spec: plan.payload.spec,
+              options: plan.payload.optionsJson ?? {},
+              description: plan.payload.description,
+              enabled: plan.payload.enabled ?? true,
+              sourceKind: prepared.staged.sourceKind,
+              cachedPath: prepared.staged.cachedPath,
+              resolvedVersion: prepared.staged.resolvedVersion,
+              ownerUserId: actor.user.id,
+              visibility: 'private',
+              aclRevision: 0,
+              now: at,
+            }),
+          )
           .returning()
           .get()
         if (inserted === undefined) throw new Error('plugin insert returned no row')

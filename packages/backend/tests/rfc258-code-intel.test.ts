@@ -13,8 +13,9 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import {
@@ -32,10 +33,12 @@ import {
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import type { IndexerProbe } from '../src/services/structuralDiff/deep/indexers'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-const getCodeIntel = (db: DbClient, taskId: string, query: CodeIntelQuery, deps?: CodeIntelDeps) =>
-  getCodeIntelWithPort(createCodeWorkspaceRead(db), taskId, query, deps)
+const getCodeIntel = (
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  query: CodeIntelQuery,
+  deps?: CodeIntelDeps,
+) => getCodeIntelWithPort(createCodeWorkspaceRead(db), taskId, query, deps)
 
 const dirs: string[] = []
 afterAll(() => {
@@ -61,7 +64,7 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
 }
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { worktreePath: string; baseCommit: string | null },
 ): Promise<string> {
   const taskId = `01CI${Math.random().toString(36).slice(2, 10).toUpperCase()}`
@@ -88,10 +91,6 @@ async function seedTask(
     repoCount: 1,
   })
   return taskId
-}
-
-function db(): DbClient {
-  return createInMemoryDb(MIGRATIONS)
 }
 
 const availableProbe = async (): Promise<IndexerProbe> =>
@@ -334,7 +333,8 @@ describe('ScipIndexCache — weight eviction and oversize refusal (P1-9⑥)', ()
   })
 })
 
-describe('getCodeIntel — engines and degradation', () => {
+describeEachProvider('getCodeIntel — engines and degradation', (harness) => {
+  const db = (): ProviderNeutralDatabase => harness.db
   test('deep resolves definition + cross-file references from the cached index', async () => {
     const d = db()
     const repo = await makeRepo({ 'a.ts': 'export function f() {}\nf()\n' })
