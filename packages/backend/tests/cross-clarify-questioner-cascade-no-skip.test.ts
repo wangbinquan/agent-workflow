@@ -52,21 +52,19 @@
 // If any of these go red, do NOT relax — re-read
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacyCrossClarify } from './clarify-fixtures'
-import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -75,7 +73,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // the answered round's questioner card to the graph designer node + a dispatch of that designer
 // entry; the retry_index / freshness bump this file locks is minted by the SAME buildFrontierMintPlan.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   intermediaryNodeRunId: string,
 ) {
@@ -202,7 +200,7 @@ function selfClarifyDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
   await db.insert(workflows).values({
@@ -213,8 +211,15 @@ async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<string> 
     version: 1,
     schemaVersion: 4,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
@@ -226,11 +231,22 @@ async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<string> 
     inputs: '{}',
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: Partial<typeof nodeRuns.$inferInsert> = {},
@@ -258,261 +274,264 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inheritance', () => {
-  // -----------------------------------------------------------------------
-  // §2.1 + §2.2 combined: production-shape behavioural lock.
-  // -----------------------------------------------------------------------
+describeEachProvider(
+  'RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inheritance',
+  (harness) => {
+    // -----------------------------------------------------------------------
+    // §2.1 + §2.2 combined: production-shape behavioural lock.
+    // -----------------------------------------------------------------------
 
-  test('§2.1+§2.2 — questioner stuck at clarify-only cci=1 gets re-cascaded; designer rerun jumps to cci=2', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = liveDef()
-    const taskId = await seedTask(db, def)
+    test('§2.1+§2.2 — questioner stuck at clarify-only cci=1 gets re-cascaded; designer rerun jumps to cci=2', async () => {
+      const db = harness.db
+      const def = liveDef()
+      const taskId = await seedTask(db, def)
 
-    // Production-shape DB state (mirrors 01KS86DPCSERV7S41GQA5Y81RN at the
-    // moment HWDACF's continue arrives):
-    //   designer  done @ cci=0, retryIndex=9 (with docpath in node_run_outputs)
-    //   rev1      done @ cci=0
-    //   questioner done @ cci=1 retryIndex=3, CLARIFY-ONLY (no outputs row)
-    //   prior cross-clarify session at iteration=0 already answered + consumed
-    //   new cross-clarify session at iteration=1 awaiting_human
-    await seedRun(db, taskId, 'in', { id: 'in_v0' })
-    const designerV0 = await seedRun(db, taskId, 'designer', {
-      id: 'designer_v0',
-      retryIndex: 9,
-      preSnapshot: 'snap-designer-v0',
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: designerV0,
-      portName: 'docpath',
-      content: 'docs/tank-battle-design.md',
-    })
-    await seedRun(db, taskId, 'rev1', { id: 'rev1_v0' })
-    const questionerV1 = await seedRun(db, taskId, 'questioner', {
-      id: 'questioner_v1',
-      retryIndex: 3,
-      // RFC-064: under the unified counter, the questioner's prior round
-      // sits at clarifyIteration=1 (was crossClarifyIteration=1 pre-unify).
-      preSnapshot: 'snap-questioner-v1',
-      // Intentionally no node_run_outputs row — this is the "emitted only
-      // <workflow-clarify>" state the patch addresses.
-    })
+      // Production-shape DB state (mirrors 01KS86DPCSERV7S41GQA5Y81RN at the
+      // moment HWDACF's continue arrives):
+      //   designer  done @ cci=0, retryIndex=9 (with docpath in node_run_outputs)
+      //   rev1      done @ cci=0
+      //   questioner done @ cci=1 retryIndex=3, CLARIFY-ONLY (no outputs row)
+      //   prior cross-clarify session at iteration=0 already answered + consumed
+      //   new cross-clarify session at iteration=1 awaiting_human
+      await seedRun(db, taskId, 'in', { id: 'in_v0' })
+      const designerV0 = await seedRun(db, taskId, 'designer', {
+        id: 'designer_v0',
+        retryIndex: 9,
+        preSnapshot: 'snap-designer-v0',
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: designerV0,
+        portName: 'docpath',
+        content: 'docs/tank-battle-design.md',
+      })
+      await seedRun(db, taskId, 'rev1', { id: 'rev1_v0' })
+      const questionerV1 = await seedRun(db, taskId, 'questioner', {
+        id: 'questioner_v1',
+        retryIndex: 3,
+        // RFC-064: under the unified counter, the questioner's prior round
+        // sits at clarifyIteration=1 (was crossClarifyIteration=1 pre-unify).
+        preSnapshot: 'snap-questioner-v1',
+        // Intentionally no node_run_outputs row — this is the "emitted only
+        // <workflow-clarify>" state the patch addresses.
+      })
 
-    // Prior session FH7895-equivalent (iteration=0 answered + consumed).
-    // node_run for the cross-clarify node MUST exist before the session
-    // row references it (FK).
-    await db.insert(nodeRuns).values({
-      id: 'cross1_iter0',
-      taskId,
-      nodeId: 'cross1',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 120_000,
-      finishedAt: Date.now() - 90_000,
-    })
-    await insertLegacyCrossClarify(db, {
-      id: 'sess_iter0',
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      crossClarifyNodeRunId: 'cross1_iter0',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: questionerV1,
-      targetDesignerNodeId: 'designer',
-      loopIter: 0,
-      iteration: 0,
-      questionsJson: JSON.stringify([makeQ('prior')]),
-      answersJson: JSON.stringify([makeAns('prior')]),
-      directive: 'continue',
-      status: 'answered',
-      designerRunTriggeredAt: Date.now() - 60_000,
-      createdAt: Date.now() - 120_000,
-      answeredAt: Date.now() - 90_000,
-      abandonedAt: null,
-    })
+      // Prior session FH7895-equivalent (iteration=0 answered + consumed).
+      // node_run for the cross-clarify node MUST exist before the session
+      // row references it (FK).
+      await db.insert(nodeRuns).values({
+        id: 'cross1_iter0',
+        taskId,
+        nodeId: 'cross1',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 120_000,
+        finishedAt: Date.now() - 90_000,
+      })
+      await insertLegacyCrossClarify(db, {
+        id: 'sess_iter0',
+        taskId,
+        crossClarifyNodeId: 'cross1',
+        crossClarifyNodeRunId: 'cross1_iter0',
+        sourceQuestionerNodeId: 'questioner',
+        sourceQuestionerNodeRunId: questionerV1,
+        targetDesignerNodeId: 'designer',
+        loopIter: 0,
+        iteration: 0,
+        questionsJson: JSON.stringify([makeQ('prior')]),
+        answersJson: JSON.stringify([makeAns('prior')]),
+        directive: 'continue',
+        status: 'answered',
+        designerRunTriggeredAt: Date.now() - 60_000,
+        createdAt: Date.now() - 120_000,
+        answeredAt: Date.now() - 90_000,
+        abandonedAt: null,
+      })
 
-    // New session HWDACF-equivalent (iteration=1, awaiting_human, from
-    // questioner_v1 emitting clarify).
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: questionerV1,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('hwdacf')],
-    })
-    expect(sess.round.iteration).toBe(1)
+      // New session HWDACF-equivalent (iteration=1, awaiting_human, from
+      // questioner_v1 emitting clarify).
+      const sess = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: questionerV1,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('hwdacf')],
+      })
+      expect(sess.round.iteration).toBe(1)
 
-    // User continues.
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('hwdacf')],
-      actor,
-    })
-    // RFC-162: the designer revision is an explicit reassign+dispatch of the answered round.
-    const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
-    expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
+      // User continues.
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('hwdacf')],
+        actor,
+      })
+      // RFC-162: the designer revision is an explicit reassign+dispatch of the answered round.
+      const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
+      expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
-    // Fix B — designer rerun must jump to cci=2, NOT 1. With the pre-patch
-    // `(lastDesigner.cci ?? 0) + 1` formula, lastDesigner picks designerV0
-    // at cci=0 → newCci=1 → equals questioner.cci → §2.1 skip fires.
-    const designerRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
-    const designerFresh = designerRows.find((r) => r.status === 'pending')
-    expect(designerFresh, 'designer must have a fresh pending row after rerun').toBeDefined()
-    // RFC-074 PR-C: the designer rerun is identified by being a fresh pending
-    // insert (latest id), not by a clarifyIteration bump (counter retired).
+      // Fix B — designer rerun must jump to cci=2, NOT 1. With the pre-patch
+      // `(lastDesigner.cci ?? 0) + 1` formula, lastDesigner picks designerV0
+      // at cci=0 → newCci=1 → equals questioner.cci → §2.1 skip fires.
+      const designerRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
+      const designerFresh = designerRows.find((r) => r.status === 'pending')
+      expect(designerFresh, 'designer must have a fresh pending row after rerun').toBeDefined()
+      // RFC-074 PR-C: the designer rerun is identified by being a fresh pending
+      // insert (latest id), not by a clarifyIteration bump (counter retired).
 
-    // RFC-132 (§6 delta 1): the questioner gets exactly ONE continuation rerun,
-    // minted unconditionally by the unified dispatch (cause
-    // 'cross-clarify-questioner-rerun') — the patch-25 "questioner must not be
-    // stranded" intent, now guaranteed structurally instead of via cascade
-    // no-skip logic. Rev-style downstream stays lazy (see
-    // cross-clarify-downstream-cascade.test.ts); the underlying
-    // review-source-port-missing risk is prevented at read time by
-    // resolveUpstreamInputs' done-only freshest-row picker (B17).
-    const qRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'questioner')))
-    const qFresh = qRows.filter((r) => r.status === 'pending')
-    expect(qFresh.length, 'exactly one questioner continuation rerun').toBe(1)
-    expect(qFresh[0]?.rerunCause).toBe('cross-clarify-questioner-rerun')
+      // RFC-132 (§6 delta 1): the questioner gets exactly ONE continuation rerun,
+      // minted unconditionally by the unified dispatch (cause
+      // 'cross-clarify-questioner-rerun') — the patch-25 "questioner must not be
+      // stranded" intent, now guaranteed structurally instead of via cascade
+      // no-skip logic. Rev-style downstream stays lazy (see
+      // cross-clarify-downstream-cascade.test.ts); the underlying
+      // review-source-port-missing risk is prevented at read time by
+      // resolveUpstreamInputs' done-only freshest-row picker (B17).
+      const qRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'questioner')))
+      const qFresh = qRows.filter((r) => r.status === 'pending')
+      expect(qFresh.length, 'exactly one questioner continuation rerun').toBe(1)
+      expect(qFresh[0]?.rerunCause).toBe('cross-clarify-questioner-rerun')
 
-    // Prior questioner_v1 row is left untouched.
-    const qPriorRow = qRows.find((r) => r.id === questionerV1)
-    expect(qPriorRow?.status).toBe('done')
-  })
-
-  // -----------------------------------------------------------------------
-  // §2.3 — Fix C, clarify.ts:406 path (self-clarify rerun mint).
-  // -----------------------------------------------------------------------
-
-  test('§2.3 — answering a self-clarify round mints exactly one fresh rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = selfClarifyDef()
-    const taskId = await seedTask(db, def)
-
-    // Agent already advanced to cci=1 (e.g. from a prior cross-clarify
-    // round), then emitted a self-clarify session. Seed:
-    //   agent_x done @ cci=1
-    //   self-clarify session awaiting_human pointing at that run
-    const agentRunId = await seedRun(db, taskId, 'agent_x', {
-      id: 'agent_x_v1',
-      retryIndex: 0,
-      preSnapshot: 'snap-x-v1',
+      // Prior questioner_v1 row is left untouched.
+      const qPriorRow = qRows.find((r) => r.id === questionerV1)
+      expect(qPriorRow?.status).toBe('done')
     })
 
-    const sess = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'agent_x',
-      askingNodeRunId: agentRunId,
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify_x',
-      iteration: 0,
-      questions: [makeQ('cx1')],
-      truncationWarnings: [],
+    // -----------------------------------------------------------------------
+    // §2.3 — Fix C, clarify.ts:406 path (self-clarify rerun mint).
+    // -----------------------------------------------------------------------
+
+    test('§2.3 — answering a self-clarify round mints exactly one fresh rerun', async () => {
+      const db = harness.db
+      const def = selfClarifyDef()
+      const taskId = await seedTask(db, def)
+
+      // Agent already advanced to cci=1 (e.g. from a prior cross-clarify
+      // round), then emitted a self-clarify session. Seed:
+      //   agent_x done @ cci=1
+      //   self-clarify session awaiting_human pointing at that run
+      const agentRunId = await seedRun(db, taskId, 'agent_x', {
+        id: 'agent_x_v1',
+        retryIndex: 0,
+        preSnapshot: 'snap-x-v1',
+      })
+
+      const sess = await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'agent_x',
+        askingNodeRunId: agentRunId,
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify_x',
+        iteration: 0,
+        questions: [makeQ('cx1')],
+        truncationWarnings: [],
+      })
+
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('cx1')],
+        actor,
+      })
+
+      const rerunRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            eq(nodeRuns.nodeId, 'agent_x'),
+            eq(nodeRuns.status, 'pending'),
+          ),
+        )
+      // RFC-074 PR-C: exactly one fresh pending rerun row is minted. Freshness is
+      // pure id-order, so the rerun (latest insert) wins without a cci bump.
+      expect(rerunRows.length).toBe(1)
     })
 
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('cx1')],
-      actor,
+    // -----------------------------------------------------------------------
+    // §2.1 — direct cascade lock: prior-iteration row must NOT count as
+    // "already cascaded" when it's clarify-only.
+    // -----------------------------------------------------------------------
+
+    test('§2.1 (RFC-074/132) — a clarify-only questioner gets its continuation rerun; downstream stays lazy', async () => {
+      const db = harness.db
+      const def = liveDef()
+      const taskId = await seedTask(db, def)
+
+      // Equivalent state to the §2.1+§2.2 test, but designer already advanced
+      // to cci=1 too — so Fix B's max-aware bump gives newCci=2 naturally,
+      // isolating Fix A's contribution: cascade walks questioner at cci=1
+      // (clarify-only) and §2.1's output-aware idempotency must NOT skip it.
+      await seedRun(db, taskId, 'in')
+      const designerV1 = await seedRun(db, taskId, 'designer', {
+        retryIndex: 5,
+        preSnapshot: 'snap-d-v1',
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: designerV1,
+        portName: 'docpath',
+        content: 'docs/v1.md',
+      })
+      const questionerV1 = await seedRun(db, taskId, 'questioner', {
+        retryIndex: 2,
+        // Clarify-only — empty outputs.
+      })
+
+      const sess = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: questionerV1,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      })
+
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor,
+      })
+
+      const qRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'questioner')))
+      // RFC-074: no cascade row is minted; RFC-132 (§6 delta 1): the ONE pending row is
+      // the questioner's unconditional continuation rerun (clarify channel), never an
+      // eager downstream cascade. The clarify-only done row stays; downstream re-run is
+      // lazy (scheduler freshness), and the empty-output row can never be mistaken for
+      // the upstream content because resolveUpstreamInputs only reads DONE rows that
+      // actually emit the port.
+      const qFresh = qRows.filter((r) => r.status === 'pending')
+      expect(qFresh.length, 'exactly one questioner continuation rerun').toBe(1)
+      expect(qFresh[0]?.rerunCause).toBe('cross-clarify-questioner-rerun')
+      expect(qRows.length, 'clarify-only done row + the continuation rerun').toBe(2)
     })
 
-    const rerunRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, 'agent_x'),
-          eq(nodeRuns.status, 'pending'),
-        ),
-      )
-    // RFC-074 PR-C: exactly one fresh pending rerun row is minted. Freshness is
-    // pure id-order, so the rerun (latest insert) wins without a cci bump.
-    expect(rerunRows.length).toBe(1)
-  })
-
-  // -----------------------------------------------------------------------
-  // §2.1 — direct cascade lock: prior-iteration row must NOT count as
-  // "already cascaded" when it's clarify-only.
-  // -----------------------------------------------------------------------
-
-  test('§2.1 (RFC-074/132) — a clarify-only questioner gets its continuation rerun; downstream stays lazy', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = liveDef()
-    const taskId = await seedTask(db, def)
-
-    // Equivalent state to the §2.1+§2.2 test, but designer already advanced
-    // to cci=1 too — so Fix B's max-aware bump gives newCci=2 naturally,
-    // isolating Fix A's contribution: cascade walks questioner at cci=1
-    // (clarify-only) and §2.1's output-aware idempotency must NOT skip it.
-    await seedRun(db, taskId, 'in')
-    const designerV1 = await seedRun(db, taskId, 'designer', {
-      retryIndex: 5,
-      preSnapshot: 'snap-d-v1',
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: designerV1,
-      portName: 'docpath',
-      content: 'docs/v1.md',
-    })
-    const questionerV1 = await seedRun(db, taskId, 'questioner', {
-      retryIndex: 2,
-      // Clarify-only — empty outputs.
-    })
-
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: questionerV1,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
-
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor,
-    })
-
-    const qRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'questioner')))
-    // RFC-074: no cascade row is minted; RFC-132 (§6 delta 1): the ONE pending row is
-    // the questioner's unconditional continuation rerun (clarify channel), never an
-    // eager downstream cascade. The clarify-only done row stays; downstream re-run is
-    // lazy (scheduler freshness), and the empty-output row can never be mistaken for
-    // the upstream content because resolveUpstreamInputs only reads DONE rows that
-    // actually emit the port.
-    const qFresh = qRows.filter((r) => r.status === 'pending')
-    expect(qFresh.length, 'exactly one questioner continuation rerun').toBe(1)
-    expect(qFresh[0]?.rerunCause).toBe('cross-clarify-questioner-rerun')
-    expect(qRows.length, 'clarify-only done row + the continuation rerun').toBe(2)
-  })
-
-  // -----------------------------------------------------------------------
-  // §2.3 source-text guards removed (RFC-074 PR-C): they asserted every
-  // node_runs insert SET clarifyIteration and that the cascade computed a
-  // max-aware cci bump — exactly the mechanics this RFC retires. Freshness is
-  // pure id-order; there is no cci to preserve or bump.
-})
+    // -----------------------------------------------------------------------
+    // §2.3 source-text guards removed (RFC-074 PR-C): they asserted every
+    // node_runs insert SET clarifyIteration and that the cascade computed a
+    // max-aware cci bump — exactly the mechanics this RFC retires. Freshness is
+    // pure id-order; there is no cci to preserve or bump.
+  },
+)

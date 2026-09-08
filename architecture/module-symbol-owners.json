@@ -6,7 +6,7 @@
     "moduleFiles": 1185,
     "productionFiles": 2563,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24930
+    "symbolsIncludingFileRoots": 24932
   },
   "entries": [
     {
@@ -16676,6 +16676,18 @@
     {
       "currentContext": "collaboration",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/composition/commandContext.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#CollaborationContextCapability",
+      "removeAfterWave": "W4",
+      "status": "current-module",
+      "symbol": "CollaborationContextCapability",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/collaboration/composition/commandContext.ts",
       "id": "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#CollaborationPersistence",
@@ -26144,11 +26156,10 @@
     {
       "currentContext": "collaboration",
       "currentLayer": "public",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/collaboration/public/types.ts",
       "id": "owner:packages/backend/src/modules/collaboration/public/types.ts#CollaborationContextCapability",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:1adc42bb478da27e762b7cb6d85730d7dabcea230729606a1ceac548f9c3d9d4",
       "status": "current-module",
       "symbol": "CollaborationContextCapability",
       "targetContext": "collaboration",
@@ -120984,6 +120995,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "SelectedTaskExecutionProviderRuntimeBase",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#SqliteRouteCollaborationContext",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "SqliteRouteCollaborationContext",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -299863,5 +299886,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d0b58338f3a010d8da35542e77c1d2fced0032d60abb9b13daecfb92a2ac03af"
+  "sourceDigest": "sha256:dcb9e0e0ac116bd8c730c18aac20fcab33892655d31a88e1ae5ede5a869a50be"
 }

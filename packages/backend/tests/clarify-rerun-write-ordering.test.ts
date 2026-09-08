@@ -22,18 +22,16 @@
 //   lock below stays: answering a self-clarify still yields exactly one pending
 //   rerun + a done clarify row.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function makeQ(id: string): ClarifyQuestion {
   return {
@@ -81,7 +79,7 @@ function selfClarifyDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
   await db.insert(workflows).values({
@@ -92,8 +90,15 @@ async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<string> 
     version: 1,
     schemaVersion: 4,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
@@ -105,15 +110,26 @@ async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<string> 
     inputs: '{}',
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-describe('RFC-076 PR-0 — clarify rerun write-ordering', () => {
+describeEachProvider('RFC-076 PR-0 — clarify rerun write-ordering', (harness) => {
   test('functional: answering a self-clarify yields exactly one pending rerun + a done clarify row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, selfClarifyDef())
 
     // Source agent run (done, with a pre-snapshot to also exercise the rollback path —

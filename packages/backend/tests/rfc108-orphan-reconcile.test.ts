@@ -9,13 +9,12 @@
 // 判活口径（pid===null ⇒ 已消失）永远走不到真实代码，正是那次 wrapper 误收事故的测试
 // 盲区。判活语义本身由 rfc230-run-liveness.test.ts 直测真函数。
 
-import { resolve } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
@@ -23,20 +22,23 @@ import {
   claimNewRuntimeSession,
   markRuntimeSessionResetPending,
 } from '../src/services/runtimeSessionLease'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_000_000
 
 afterEach(() => __resetRecoveryCountersForTest())
 
-async function seedRunningTask(db: DbClient): Promise<string> {
+async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
   await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -53,7 +55,7 @@ async function seedRunningTask(db: DbClient): Promise<string> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   status: string,
   startedAt: number | null,
@@ -70,13 +72,13 @@ async function seedRun(
   return id
 }
 
-describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
+describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
   test('gone run past grace → reaps run + task + records periodic-reap', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000) // older than grace
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -87,14 +89,17 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
     expect(t[0]!.status).toBe('interrupted')
     expect(
-      (await listRecoveryEventsForTask(taskRecoveryOperations(db), taskId)).some(
-        (e) => e.kind === 'periodic-reap',
-      ),
+      (
+        await listRecoveryEventsForTask(
+          createTaskExecutionPersistence(db).recoveryAdministration,
+          taskId,
+        )
+      ).some((e) => e.kind === 'periodic-reap'),
     ).toBe(true)
   })
 
   test('periodic reap deletes a reset-pending native lease instead of leaking it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
     const leaseOperations = createRuntimeSessionLeaseOperations(db)
@@ -110,7 +115,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     expect(await markRuntimeSessionResetPending(leaseOperations, lease)).toBe(true)
 
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -120,7 +125,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
 
     expect(res.reapedRuns).toEqual([runId])
     expect(
-      db
+      await db
         .select()
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'periodic-reset-old'))
@@ -129,10 +134,10 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
   })
 
   test('periodic reap keeps a held native lease when a missing PID leaves child reap unproven', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
-    db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId)).run()
+    await db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId)).run()
     await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(db), {
       protocol: 'claude-code',
       sessionId: 'periodic-unproven-native',
@@ -143,7 +148,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     })
 
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -154,13 +159,17 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     expect(res.reapedRuns).toEqual([])
     expect(res.reapedTasks).toEqual([])
     expect(
-      db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, runId)).get(),
+      await db
+        .select({ status: nodeRuns.status })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, runId))
+        .get(),
     ).toEqual({ status: 'running' })
     expect(
-      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+      await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
     ).toEqual({ status: 'running' })
     expect(
-      db
+      await db
         .select({ holder: runtimeSessionLeases.leaseNodeRunId })
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'periodic-unproven-native'))
@@ -169,7 +178,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
   })
 
   test('periodic reap keeps a held native lease when a live PID has a command mismatch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
     await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(db), {
@@ -182,7 +191,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     })
 
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       // The coarse probe cannot tell a dead process from a recycled/live PID
@@ -195,13 +204,17 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     expect(res.reapedRuns).toEqual([])
     expect(res.reapedTasks).toEqual([])
     expect(
-      db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, runId)).get(),
+      await db
+        .select({ status: nodeRuns.status })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, runId))
+        .get(),
     ).toEqual({ status: 'running' })
     expect(
-      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+      await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
     ).toEqual({ status: 'running' })
     expect(
-      db
+      await db
         .select({ holder: runtimeSessionLeases.leaseNodeRunId })
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'periodic-command-mismatch-native'))
@@ -210,11 +223,11 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
   })
 
   test('run within grace is not even a candidate', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 100) // newer than grace 1000
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -224,11 +237,11 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
   })
 
   test('alive run (probe says alive) is left running', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 50_000)
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => true,
@@ -239,12 +252,12 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
   })
 
   test('task with another active run is not flipped', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
     const goneId = await seedRun(db, taskId, 'running', NOW - 50_000)
     await seedRun(db, taskId, 'pending', NOW - 50_000) // still active
     const res = await reconcileDeadRunningRuns({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,

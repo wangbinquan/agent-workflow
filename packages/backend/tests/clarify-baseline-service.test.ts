@@ -16,11 +16,11 @@
 // equivalents are locked by rfc128-p5-d-autodispatch.test.ts.)
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
+import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { clarifyRounds, nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
@@ -38,8 +38,6 @@ import type {
 } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 const actor = { userId: 'u1', role: 'owner' as const }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +46,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // ---------------------------------------------------------------------------
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { id?: string; definition?: WorkflowDefinition } = {},
 ): Promise<{ taskId: string }> {
   const taskId = opts.id ?? `task_${Math.random().toString(36).slice(2, 8)}`
@@ -94,12 +92,17 @@ async function seedTask(
     status: 'running' as const,
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
+    // Match the root lineage that SQLite migration 0210 supplied to this fixture.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return { taskId }
 }
 
 async function seedCrossClarifyTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: {
     id?: string
     questionerNodeIds?: string[]
@@ -177,6 +180,11 @@ async function seedCrossClarifyTask(
     status: 'running',
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
+    // Match the root lineage that SQLite migration 0210 supplied to this fixture.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return { taskId, definition: def }
 }
@@ -223,93 +231,98 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 for (const kind of ['self', 'cross'] as const) {
-  describe(`RFC-217 T9 baseline — createClarifyRound symmetric invariants (kind=${kind})`, () => {
-    async function seedAndCreate(db: DbClient): Promise<{
-      taskId: string
-      round: Awaited<ReturnType<typeof createClarifyRound>>['round']
-      intermediaryNodeRunId: string
-      events: Array<{ type: string }>
-    }> {
-      const events: Array<{ type: string }> = []
-      if (kind === 'self') {
-        const { taskId } = await seedTask(db)
+  describeEachProvider(
+    `RFC-217 T9 baseline — createClarifyRound symmetric invariants (kind=${kind})`,
+    (harness) => {
+      async function seedAndCreate(db: ProviderNeutralDatabase): Promise<{
+        taskId: string
+        round: Awaited<ReturnType<typeof createClarifyRound>>['round']
+        intermediaryNodeRunId: string
+        events: Array<{ type: string }>
+      }> {
+        const events: Array<{ type: string }> = []
+        if (kind === 'self') {
+          const { taskId } = await seedTask(db)
+          await db.insert(nodeRuns).values({
+            id: 'nr_sym_src',
+            taskId,
+            nodeId: 'designer',
+            status: 'done',
+            retryIndex: 0,
+            iteration: 0,
+          })
+          taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => events.push(m as { type: string }))
+          const { round, intermediaryNodeRunId } = await createClarifyRound({
+            kind: 'self',
+            db,
+            taskId,
+            askingNodeId: 'designer',
+            askingNodeRunId: 'nr_sym_src',
+            askingShardKey: null,
+            intermediaryNodeId: 'clarify1',
+            iteration: 0,
+            questions: [makeQuestion()],
+          })
+          return { taskId, round, intermediaryNodeRunId, events }
+        }
+        const { taskId } = await seedCrossClarifyTask(db)
         await db.insert(nodeRuns).values({
           id: 'nr_sym_src',
           taskId,
-          nodeId: 'designer',
+          nodeId: 'questioner',
           status: 'done',
           retryIndex: 0,
           iteration: 0,
         })
         taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => events.push(m as { type: string }))
         const { round, intermediaryNodeRunId } = await createClarifyRound({
-          kind: 'self',
+          kind: 'cross',
           db,
           taskId,
-          askingNodeId: 'designer',
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
           askingNodeRunId: 'nr_sym_src',
-          askingShardKey: null,
-          intermediaryNodeId: 'clarify1',
-          iteration: 0,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
           questions: [makeQuestion()],
         })
         return { taskId, round, intermediaryNodeRunId, events }
       }
-      const { taskId } = await seedCrossClarifyTask(db)
-      await db.insert(nodeRuns).values({
-        id: 'nr_sym_src',
-        taskId,
-        nodeId: 'questioner',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-      })
-      taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => events.push(m as { type: string }))
-      const { round, intermediaryNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_sym_src',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
-      return { taskId, round, intermediaryNodeRunId, events }
-    }
 
-    test('row stamped with kind + awaiting_human; intermediary run parked; terminatedAs null', async () => {
-      const db = createInMemoryDb(MIGRATIONS)
-      const { taskId, round, intermediaryNodeRunId } = await seedAndCreate(db)
-      expect(round.kind).toBe(kind)
-      expect(round.status).toBe('awaiting_human')
-      expect(round.terminatedAs).toBeNull()
-      const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round.id)))[0]
-      expect(row?.kind).toBe(kind)
-      expect(row?.taskId).toBe(taskId)
-      expect(row?.status).toBe('awaiting_human')
-      const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, intermediaryNodeRunId)))[0]
-      expect(nr?.status).toBe('awaiting_human')
-    })
+      test('row stamped with kind + awaiting_human; intermediary run parked; terminatedAs null', async () => {
+        const db = harness.db
+        const { taskId, round, intermediaryNodeRunId } = await seedAndCreate(db)
+        expect(round.kind).toBe(kind)
+        expect(round.status).toBe('awaiting_human')
+        expect(round.terminatedAs).toBeNull()
+        const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round.id)))[0]
+        expect(row?.kind).toBe(kind)
+        expect(row?.taskId).toBe(taskId)
+        expect(row?.status).toBe('awaiting_human')
+        const nr = (
+          await db.select().from(nodeRuns).where(eq(nodeRuns.id, intermediaryNodeRunId))
+        )[0]
+        expect(nr?.status).toBe('awaiting_human')
+      })
 
-    test('created WS event fires with the kind-correct FROZEN type string', async () => {
-      const db = createInMemoryDb(MIGRATIONS)
-      uninstallProjection = installCommittedEventProjectionHarness(db)
-      const { events } = await seedAndCreate(db)
-      const expected = kind === 'self' ? 'clarify.created' : 'cross-clarify.created'
-      expect(events.map((e) => e.type)).toContain(expected)
-    })
-  })
+      test('created WS event fires with the kind-correct FROZEN type string', async () => {
+        const db = harness.db
+        uninstallProjection = await installCommittedEventProjectionHarness(db)
+        const { events } = await seedAndCreate(db)
+        const expected = kind === 'self' ? 'clarify.created' : 'cross-clarify.created'
+        expect(events.map((e) => e.type)).toContain(expected)
+      })
+    },
+  )
 }
 
 // ---------------------------------------------------------------------------
 // self-specific
 // ---------------------------------------------------------------------------
 
-describe('RFC-058 baseline T2 — createClarifyRound / row shape', () => {
+describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (harness) => {
   test('agent-single: session row carries source agent + shard NULL; clarify node_run awaiting_human', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await db.insert(nodeRuns).values({
       id: 'nr_source_1',
@@ -340,7 +353,7 @@ describe('RFC-058 baseline T2 — createClarifyRound / row shape', () => {
   })
 
   test('agent-multi shard child: session row carries shardKey + parent_node_run_id', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await db.insert(nodeRuns).values({
       id: 'nr_multi',
@@ -399,76 +412,82 @@ describe('RFC-058 baseline T2 — sealAnswersServerSide forgery defence', () => 
   })
 })
 
-describe('RFC-058 baseline T2 — task delete clears clarify rounds (FK cascade)', () => {
-  // RFC-217 T9: the explicit cleanupSessionsForTask helper is gone — task
-  // delete rides clarify_rounds' ON DELETE CASCADE FK to tasks(id). This
-  // locks the cascade itself so a future FK rebuild can't silently drop it.
-  test('deleting the task row cascades away its clarify rounds', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTask(db)
-    await db.insert(nodeRuns).values({
-      id: 'nr_cleanup_src',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
+describeEachProvider(
+  'RFC-058 baseline T2 — task delete clears clarify rounds (FK cascade)',
+  (harness) => {
+    // RFC-217 T9: the explicit cleanupSessionsForTask helper is gone — task
+    // delete rides clarify_rounds' ON DELETE CASCADE FK to tasks(id). This
+    // locks the cascade itself so a future FK rebuild can't silently drop it.
+    test('deleting the task row cascades away its clarify rounds', async () => {
+      const db = harness.db
+      const { taskId } = await seedTask(db)
+      await db.insert(nodeRuns).values({
+        id: 'nr_cleanup_src',
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      const { round: session } = await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_cleanup_src',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      })
+      expect(session.status).toBe('awaiting_human')
+      // RFC-341 committed lifecycle facts have no restrictive task FK and
+      // intentionally survive as Event Center audit evidence.
+      await db.delete(tasks).where(eq(tasks.id, taskId))
+      const fresh = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+      // Deletion (not a transition to canceled) — cancel-on-task-end is RFC-053
+      // invariant CR-1 territory and happens at a different layer.
+      expect(fresh.length).toBe(0)
     })
-    const { round: session } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_cleanup_src',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
-    })
-    expect(session.status).toBe('awaiting_human')
-    // RFC-341 committed lifecycle facts have no restrictive task FK and
-    // intentionally survive as Event Center audit evidence.
-    await db.delete(tasks).where(eq(tasks.id, taskId))
-    const fresh = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
-    // Deletion (not a transition to canceled) — cancel-on-task-end is RFC-053
-    // invariant CR-1 territory and happens at a different layer.
-    expect(fresh.length).toBe(0)
-  })
-})
+  },
+)
 
-describe('RFC-058 baseline T2 — nodeRunOutputs interaction (aging context)', () => {
-  test('node_run_outputs row presence is the trigger for the GENERAL aging cutoff (sanity probe)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTask(db)
-    // A done run with outputs — this is what scheduler keys on for cutoff
-    await db.insert(nodeRuns).values({
-      id: 'nr_with_outputs',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
+describeEachProvider(
+  'RFC-058 baseline T2 — nodeRunOutputs interaction (aging context)',
+  (harness) => {
+    test('node_run_outputs row presence is the trigger for the GENERAL aging cutoff (sanity probe)', async () => {
+      const db = harness.db
+      const { taskId } = await seedTask(db)
+      // A done run with outputs — this is what scheduler keys on for cutoff
+      await db.insert(nodeRuns).values({
+        id: 'nr_with_outputs',
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: 'nr_with_outputs',
+        portName: 'plan',
+        content: 'done output',
+      })
+      const rows = await db
+        .select({ id: nodeRunOutputs.nodeRunId })
+        .from(nodeRunOutputs)
+        .where(eq(nodeRunOutputs.nodeRunId, 'nr_with_outputs'))
+      expect(rows.length).toBe(1)
     })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: 'nr_with_outputs',
-      portName: 'plan',
-      content: 'done output',
-    })
-    const rows = await db
-      .select({ id: nodeRunOutputs.nodeRunId })
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, 'nr_with_outputs'))
-    expect(rows.length).toBe(1)
-  })
-})
+  },
+)
 
 // ---------------------------------------------------------------------------
 // cross-specific
 // ---------------------------------------------------------------------------
 
-describe('RFC-058 baseline T3 — createClarifyRound iteration counter', () => {
+describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration counter', (harness) => {
   test('first session: iteration=0 + row carries source / target / loopIter', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
     await db.insert(nodeRuns).values({
       id: 'nr_q_1',
@@ -499,7 +518,7 @@ describe('RFC-058 baseline T3 — createClarifyRound iteration counter', () => {
   })
 
   test('same (node, loopIter): iteration increments to 1 after another mint', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
     await db.insert(nodeRuns).values({
       id: 'nr_q_1',
@@ -535,7 +554,7 @@ describe('RFC-058 baseline T3 — createClarifyRound iteration counter', () => {
   })
 
   test('loop_iter isolation: same node, different loopIter → both start at iteration=0', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
     await db.insert(nodeRuns).values({
       id: 'nr_q_1',
@@ -572,7 +591,7 @@ describe('RFC-058 baseline T3 — createClarifyRound iteration counter', () => {
   })
 
   test('different cross-clarify nodes are independent counters', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db, {
       crossClarifyNodeIds: ['cc_a', 'cc_b'],
       questionerNodeIds: ['questioner'],
@@ -617,128 +636,134 @@ describe('RFC-058 baseline T3 — createClarifyRound iteration counter', () => {
 // rfc128-p5-d-autodispatch.test.ts: iteration-mismatch → 'clarify-iteration-mismatch',
 // double-answer → 'clarify-already-answered', stop → questioner rerun + node directive.)
 
-describe('RFC-058 baseline T3 — evaluateDesignerRerunReadiness ready/pending logic', () => {
-  test('after 1 of 2 submits: ready=false + pending lists unsubmitted cc', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, definition } = await seedCrossClarifyTask(db, {
-      crossClarifyNodeIds: ['cc_alpha', 'cc_zeta'],
-      questionerNodeIds: ['questioner_alpha', 'questioner_zeta'],
-    })
-    await db.insert(nodeRuns).values({
-      id: 'nr_designer_prior',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 100,
-    })
-    for (const [qid, ccid] of [
-      ['questioner_alpha', 'cc_alpha'],
-      ['questioner_zeta', 'cc_zeta'],
-    ] as const) {
-      const runId = `nr_${qid}`
+describeEachProvider(
+  'RFC-058 baseline T3 — evaluateDesignerRerunReadiness ready/pending logic',
+  (harness) => {
+    test('after 1 of 2 submits: ready=false + pending lists unsubmitted cc', async () => {
+      const db = harness.db
+      const { taskId, definition } = await seedCrossClarifyTask(db, {
+        crossClarifyNodeIds: ['cc_alpha', 'cc_zeta'],
+        questionerNodeIds: ['questioner_alpha', 'questioner_zeta'],
+      })
       await db.insert(nodeRuns).values({
-        id: runId,
+        id: 'nr_designer_prior',
         taskId,
-        nodeId: qid,
+        nodeId: 'designer',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
+        startedAt: Date.now() - 100,
       })
-      await createClarifyRound({
+      for (const [qid, ccid] of [
+        ['questioner_alpha', 'cc_alpha'],
+        ['questioner_zeta', 'cc_zeta'],
+      ] as const) {
+        const runId = `nr_${qid}`
+        await db.insert(nodeRuns).values({
+          id: runId,
+          taskId,
+          nodeId: qid,
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        })
+        await createClarifyRound({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: ccid,
+          askingNodeId: qid,
+          askingNodeRunId: runId,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        })
+      }
+      // Answer only cc_alpha (unified quick channel; the designer auto-dispatch parks on the
+      // not-ready sibling). cc_zeta still awaiting_human.
+      const ccAlphaRunRows = await db
+        .select()
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeId, 'cc_alpha'))
+      const cnrA = ccAlphaRunRows[0]!.intermediaryNodeRunId
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: cnrA!,
+        answers: [makeAnswer()],
+        ifMatchIteration: 0,
+        actor,
+      })
+      const r = await evaluateDesignerRerunReadiness({
+        db,
+        taskId,
+        designerNodeId: 'designer',
+        definition,
+        loopIter: 0,
+      })
+      expect(r.ready).toBe(false)
+      expect(r.pendingCrossClarifyNodeIds).toContain('cc_zeta')
+    })
+  },
+)
+
+describeEachProvider(
+  'RFC-058 baseline T3 — resolveCrossNodeStopped reject persistence',
+  (harness) => {
+    test('returns false when no stop submit yet', async () => {
+      const db = harness.db
+      const { taskId } = await seedCrossClarifyTask(db)
+      expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(false)
+    })
+
+    test('returns true after stop submit, persists across additional continue submits on other ccs', async () => {
+      const db = harness.db
+      const { taskId } = await seedCrossClarifyTask(db, {
+        crossClarifyNodeIds: ['cc_stop', 'cc_continue'],
+        questionerNodeIds: ['questioner_a', 'questioner_b'],
+      })
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_qa',
+          taskId,
+          nodeId: 'questioner_a',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+        {
+          id: 'nr_qb',
+          taskId,
+          nodeId: 'questioner_b',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      const { intermediaryNodeRunId: cnrStop } = await createClarifyRound({
         kind: 'cross',
         db,
         taskId,
-        intermediaryNodeId: ccid,
-        askingNodeId: qid,
-        askingNodeRunId: runId,
+        intermediaryNodeId: 'cc_stop',
+        askingNodeId: 'questioner_a',
+        askingNodeRunId: 'nr_qa',
         targetConsumerNodeId: 'designer',
         loopIter: 0,
         questions: [makeQuestion()],
       })
-    }
-    // Answer only cc_alpha (unified quick channel; the designer auto-dispatch parks on the
-    // not-ready sibling). cc_zeta still awaiting_human.
-    const ccAlphaRunRows = await db
-      .select()
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.intermediaryNodeId, 'cc_alpha'))
-    const cnrA = ccAlphaRunRows[0]!.intermediaryNodeRunId
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: cnrA!,
-      answers: [makeAnswer()],
-      ifMatchIteration: 0,
-      actor,
+      // RFC-132: the stop answer (unified quick channel) writes the questioner's node-level
+      // directive; resolveCrossNodeStopped reads it (RFC-132 T7 single source).
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: cnrStop,
+        answers: [makeAnswer()],
+        directive: 'stop',
+        ifMatchIteration: 0,
+        actor,
+      })
+      expect(await resolveCrossNodeStopped(db, taskId, 'questioner_a')).toBe(true)
+      expect(await resolveCrossNodeStopped(db, taskId, 'questioner_b')).toBe(false)
     })
-    const r = await evaluateDesignerRerunReadiness({
-      db,
-      taskId,
-      designerNodeId: 'designer',
-      definition,
-      loopIter: 0,
-    })
-    expect(r.ready).toBe(false)
-    expect(r.pendingCrossClarifyNodeIds).toContain('cc_zeta')
-  })
-})
-
-describe('RFC-058 baseline T3 — resolveCrossNodeStopped reject persistence', () => {
-  test('returns false when no stop submit yet', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedCrossClarifyTask(db)
-    expect(await resolveCrossNodeStopped(db, taskId, 'questioner')).toBe(false)
-  })
-
-  test('returns true after stop submit, persists across additional continue submits on other ccs', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedCrossClarifyTask(db, {
-      crossClarifyNodeIds: ['cc_stop', 'cc_continue'],
-      questionerNodeIds: ['questioner_a', 'questioner_b'],
-    })
-    await db.insert(nodeRuns).values([
-      {
-        id: 'nr_qa',
-        taskId,
-        nodeId: 'questioner_a',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-      },
-      {
-        id: 'nr_qb',
-        taskId,
-        nodeId: 'questioner_b',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-      },
-    ])
-    const { intermediaryNodeRunId: cnrStop } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc_stop',
-      askingNodeId: 'questioner_a',
-      askingNodeRunId: 'nr_qa',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    // RFC-132: the stop answer (unified quick channel) writes the questioner's node-level
-    // directive; resolveCrossNodeStopped reads it (RFC-132 T7 single source).
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: cnrStop,
-      answers: [makeAnswer()],
-      directive: 'stop',
-      ifMatchIteration: 0,
-      actor,
-    })
-    expect(await resolveCrossNodeStopped(db, taskId, 'questioner_a')).toBe(true)
-    expect(await resolveCrossNodeStopped(db, taskId, 'questioner_b')).toBe(false)
-  })
-})
+  },
+)

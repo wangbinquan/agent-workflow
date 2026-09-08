@@ -117,7 +117,7 @@ const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
 describe('RFC-009-T1 updateReviewCommentText service', () => {
   test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
     const s = await seed()
-    const uninstallProjection = installCommittedEventProjectionHarness(s.db)
+    const uninstallProjection = await installCommittedEventProjectionHarness(s.db)
 
     let captured: unknown = null
     const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(s.taskId), (evt) => {

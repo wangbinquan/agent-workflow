@@ -14,12 +14,12 @@
 //   B's dispatch alone fires exactly one designer rerun; A contributes no designer entry
 //   to the batch.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -28,14 +28,12 @@ import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 const actor = { userId: 'u1', role: 'owner' as const }
 
 // RFC-162: a designer handler is created by an explicit reassign of the answered round's
 // questioner card to the graph designer node, then dispatched to mint the designer rerun.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -51,7 +49,9 @@ async function reassignThenDispatchDesigner(
   return dispatchTaskQuestions(db, taskId, [designer.id], actor)
 }
 
-async function seedTwoSource(db: DbClient): Promise<{ taskId: string; def: WorkflowDefinition }> {
+async function seedTwoSource(
+  db: ProviderNeutralDatabase,
+): Promise<{ taskId: string; def: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const nodes: WorkflowNode[] = [
     { id: 'designer', kind: 'agent-single', agentName: 'designer' } as WorkflowNode,
@@ -97,8 +97,15 @@ async function seedTwoSource(db: DbClient): Promise<{ taskId: string; def: Workf
     version: 1,
     schemaVersion: 4,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     name: 'rfc-059-c4',
     workflowId,
     workflowSnapshot: JSON.stringify(def),
@@ -110,6 +117,17 @@ async function seedTwoSource(db: DbClient): Promise<{ taskId: string; def: Workf
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   await db.insert(nodeRuns).values({
     id: 'nr_d_1',
     taskId,
@@ -136,7 +154,7 @@ function mkQ(id: string, title: string): ClarifyQuestion {
 }
 
 async function spawnSession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   args: {
     questionerNodeId: string
@@ -171,58 +189,73 @@ async function spawnSession(
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-describe('RFC-059 C4 — questioner-scope sibling resolution unblocks the designer', () => {
-  test('peer A questioner-only + B reassigned-to-designer → the designer rerun fires from B alone', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTwoSource(db)
-    const aRunId = await spawnSession(db, taskId, {
-      questionerNodeId: 'q_a',
-      questionerRunId: 'nr_q_a',
-      ccNodeId: 'cc_a',
-      questions: [mkQ('a1', 'a-first')],
-    })
-    const bRunId = await spawnSession(db, taskId, {
-      questionerNodeId: 'q_b',
-      questionerRunId: 'nr_q_b',
-      ccNodeId: 'cc_b',
-      questions: [mkQ('b1', 'b-first')],
-    })
-    // Peer A answers and is left as a questioner-only continuation (RFC-162: NOT reassigned to
-    // the designer → NO designer entry). The designer must NOT rerun on A's answer.
-    const aResult = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: aRunId,
-      answers: [
-        { questionId: 'a1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
-      ],
-      actor,
-    })
-    expect(aResult.dispatch.reruns.some((r) => r.targetNodeId === 'designer')).toBe(false)
-    const aEntries = await db
-      .select()
-      .from(taskQuestions)
-      .where(eq(taskQuestions.originNodeRunId, aRunId))
-    expect(aEntries.some((e) => e.roleKind === 'designer')).toBe(false)
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'designer'))).length).toBe(1)
+describeEachProvider(
+  'RFC-059 C4 — questioner-scope sibling resolution unblocks the designer',
+  (harness) => {
+    test('peer A questioner-only + B reassigned-to-designer → the designer rerun fires from B alone', async () => {
+      const db = harness.db
+      const { taskId } = await seedTwoSource(db)
+      const aRunId = await spawnSession(db, taskId, {
+        questionerNodeId: 'q_a',
+        questionerRunId: 'nr_q_a',
+        ccNodeId: 'cc_a',
+        questions: [mkQ('a1', 'a-first')],
+      })
+      const bRunId = await spawnSession(db, taskId, {
+        questionerNodeId: 'q_b',
+        questionerRunId: 'nr_q_b',
+        ccNodeId: 'cc_b',
+        questions: [mkQ('b1', 'b-first')],
+      })
+      // Peer A answers and is left as a questioner-only continuation (RFC-162: NOT reassigned to
+      // the designer → NO designer entry). The designer must NOT rerun on A's answer.
+      const aResult = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: aRunId,
+        answers: [
+          {
+            questionId: 'a1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: [],
+            customText: '',
+          },
+        ],
+        actor,
+      })
+      expect(aResult.dispatch.reruns.some((r) => r.targetNodeId === 'designer')).toBe(false)
+      const aEntries = await db
+        .select()
+        .from(taskQuestions)
+        .where(eq(taskQuestions.originNodeRunId, aRunId))
+      expect(aEntries.some((e) => e.roleKind === 'designer')).toBe(false)
+      expect((await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'designer'))).length).toBe(
+        1,
+      )
 
-    // Peer B answers, then is reassigned to the designer + dispatched. A reads as RESOLVED
-    // (answered) in the readiness scan, so B's dispatch alone fires the designer — exactly one
-    // rerun, carrying only B's designer entry (A never produced one).
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: bRunId,
-      answers: [
-        { questionId: 'b1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
-      ],
-      actor,
+      // Peer B answers, then is reassigned to the designer + dispatched. A reads as RESOLVED
+      // (answered) in the readiness scan, so B's dispatch alone fires the designer — exactly one
+      // rerun, carrying only B's designer entry (A never produced one).
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: bRunId,
+        answers: [
+          {
+            questionId: 'b1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: [],
+            customText: '',
+          },
+        ],
+        actor,
+      })
+      const bDisp = await reassignThenDispatchDesigner(db, taskId, bRunId)
+      const designerRerun = bDisp.reruns.find((r) => r.targetNodeId === 'designer')
+      expect(designerRerun).toBeDefined()
+      expect(designerRerun!.entryIds).toHaveLength(1)
+      const designerRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'designer'))
+      expect(designerRuns.length).toBe(2) // initial done + new rerun
     })
-    const bDisp = await reassignThenDispatchDesigner(db, taskId, bRunId)
-    const designerRerun = bDisp.reruns.find((r) => r.targetNodeId === 'designer')
-    expect(designerRerun).toBeDefined()
-    expect(designerRerun!.entryIds).toHaveLength(1)
-    const designerRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'designer'))
-    expect(designerRuns.length).toBe(2) // initial done + new rerun
-  })
-})
+  },
+)

@@ -77,7 +77,7 @@ export interface ReviewActor {
   readonly authorityRevision?: number
 }
 
-export type CollaborationContextCapability =
+type CollaborationContextCapability =
   | 'reviewDecisions'
   | 'questionDispatches'
   | 'clarifyDecisions'

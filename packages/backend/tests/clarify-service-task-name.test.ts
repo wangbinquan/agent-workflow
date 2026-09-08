@@ -3,18 +3,16 @@
 // for ordinary tasks; if the join silently drops the field, every row
 // renders empty.
 
-import { describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 async function seed(
-  db: ReturnType<typeof createInMemoryDb>,
+  db: ProviderNeutralDatabase,
   args: { taskName: string; status?: 'awaiting_human' | 'answered' },
 ) {
   const wfId = ulid()
@@ -22,7 +20,8 @@ async function seed(
   const nrId = ulid()
   const csId = ulid()
   const now = Date.now()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -34,8 +33,13 @@ async function seed(
       updatedAt: now,
     })
     .run()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
+      executionLineageId: tId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: tId, workflowRevision: null },
+      ]),
       id: tId,
       name: args.taskName,
       workflowId: wfId,
@@ -49,7 +53,8 @@ async function seed(
       startedAt: now,
     })
     .run()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id: nrId,
       taskId: tId,
@@ -83,9 +88,9 @@ async function seed(
   return { tId, csId }
 }
 
-describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () => {
+describeEachProvider('RFC-037 — listClarifySummaries joins tasks.name → taskName', (harness) => {
   test('summary row carries taskName equal to tasks.name', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, { taskName: 'PR-1234 fix' })
     const summaries = await listClarifyRoundSummaries(db, { status: 'awaiting_human' })
     expect(summaries.length).toBe(1)
@@ -93,7 +98,7 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
   })
 
   test('multiple sessions across multiple tasks → each row has its own taskName', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, { taskName: 'alpha' })
     await seed(db, { taskName: 'beta' })
     const summaries = await listClarifyRoundSummaries(db, { status: 'awaiting_human' })
@@ -103,7 +108,7 @@ describe('RFC-037 — listClarifySummaries joins tasks.name → taskName', () =>
   })
 
   test('summary still includes taskName when status filter narrows results', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, { taskName: 'answered-task', status: 'answered' })
     const summaries = await listClarifyRoundSummaries(db, { status: 'answered' })
     expect(summaries[0]?.taskName).toBe('answered-task')

@@ -13,6 +13,9 @@
 // Single-document review is locked separately by the full RFC-005 suite; here
 // every doc_version carries item_index, so a leak into the single-doc path
 // would change those (still-green) tests.
+// RFC-359: PG scope lookups may finish out of invocation order. The two winning
+// cases hold real writes until the intended winner owns the mutation queue and
+// both requests are in flight; array order alone does not establish the winner.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -40,6 +43,8 @@ import {
 } from '../src/services/review'
 import { ConflictError } from '../src/util/errors'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { acquireWriterLease } from '../src/platform/persistence/writerLease'
+import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
 
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -62,6 +67,110 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   })
 
   const PATHS = ['cases/a.md', 'cases/b.md', 'cases/c.md']
+
+  function gate(): { promise: Promise<void>; release: () => void } {
+    let release!: () => void
+    const promise = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    return { promise, release }
+  }
+
+  async function holdReviewWrites(
+    taskId: string,
+    docVersionId: string,
+  ): Promise<() => Promise<void>> {
+    if (harness.capabilities.isolation === 'exclusive') {
+      // Hold the actual writer lease before BEGIN, leaving ordinary scope
+      // SELECTs outside any foreign SQLite transaction free to finish.
+      const release = await acquireWriterLease(db)
+      return async () => release()
+    }
+
+    const acquired = gate()
+    const release = gate()
+    const transaction = harness.session.transaction(async (tx) => {
+      // A decision writes the task; a selection writes the document. Both locks
+      // belong to this one real PG transaction and neither changes fixture data.
+      await harness.session.engine.lockAggregateRoot(tx, tasks, tasks.id, taskId)
+      await harness.session.engine.lockAggregateRoot(tx, docVersions, docVersions.id, docVersionId)
+      acquired.release()
+      await release.promise
+    })
+    try {
+      await Promise.race([acquired.promise, transaction])
+    } catch (error) {
+      release.release()
+      await Promise.allSettled([transaction])
+      throw error
+    }
+    return async () => {
+      release.release()
+      await transaction
+    }
+  }
+
+  async function waitForMutationQueue(taskId: string, winner: Promise<unknown>): Promise<void> {
+    let immediate: ReturnType<typeof setImmediate> | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const inspect = (): void => {
+          if (__hasTaskReviewMutationQueueForTesting(taskId)) resolve()
+          else immediate = setImmediate(inspect)
+        }
+        // This bounds a broken fixture; progress depends on the real queue
+        // state, never on sleeping long enough to guess that a SELECT finished.
+        timer = setTimeout(() => reject(new Error('review winner did not enter its queue')), 2_000)
+        void winner.then(
+          () => reject(new Error('review winner settled before the write barrier was released')),
+          reject,
+        )
+        inspect()
+      })
+    } finally {
+      if (immediate !== undefined) clearImmediate(immediate)
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }
+
+  async function concurrentReviewMutations<Winner, Contender>(
+    taskId: string,
+    docVersionId: string,
+    winner: () => Promise<Winner>,
+    contender: () => Promise<Contender>,
+  ) {
+    expect(__hasTaskReviewMutationQueueForTesting(taskId)).toBe(false)
+    const release = await holdReviewWrites(taskId, docVersionId)
+    const started: Promise<unknown>[] = []
+    try {
+      let winnerSettled = false
+      const first = winner()
+      started.push(first)
+      void first.then(
+        () => {
+          winnerSettled = true
+        },
+        () => {
+          winnerSettled = true
+        },
+      )
+      await waitForMutationQueue(taskId, first)
+      const second = contender()
+      started.push(second)
+      const results = Promise.allSettled([first, second])
+      expect(__hasTaskReviewMutationQueueForTesting(taskId)).toBe(true)
+      expect(winnerSettled).toBe(false)
+      await release()
+      return await results
+    } finally {
+      try {
+        await release()
+      } finally {
+        await Promise.allSettled(started)
+      }
+    }
+  }
 
   async function seed(): Promise<{
     taskId: string
@@ -302,7 +411,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   })
 
   test('decision winning against a concurrent selection keeps output and audit selection consistent', async () => {
-    const { reviewNodeRunId, docs } = await dispatchRound()
+    const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     for (const doc of docs) {
       await setDocumentSelection({
         db,
@@ -312,21 +421,25 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       })
     }
 
-    const results = await Promise.allSettled([
-      submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: reviewNodeRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      }),
-      setDocumentSelection({
-        db,
-        nodeRunId: reviewNodeRunId,
-        docVersionId: docs[0]!.id,
-        selection: 'not_accepted',
-      }),
-    ])
+    const results = await concurrentReviewMutations(
+      taskId,
+      docs[0]!.id,
+      () =>
+        submitReviewDecision({
+          db,
+          appHome,
+          nodeRunId: reviewNodeRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+        }),
+      () =>
+        setDocumentSelection({
+          db,
+          nodeRunId: reviewNodeRunId,
+          docVersionId: docs[0]!.id,
+          selection: 'not_accepted',
+        }),
+    )
     expect(results[0]!.status).toBe('fulfilled')
     expect(results[1]!.status).toBe('rejected')
     if (results[1]!.status === 'rejected') {
@@ -350,7 +463,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   })
 
   test('selection winning against a concurrent decision is included in the approved subset', async () => {
-    const { reviewNodeRunId, docs } = await dispatchRound()
+    const { taskId, reviewNodeRunId, docs } = await dispatchRound()
     for (const doc of docs) {
       await setDocumentSelection({
         db,
@@ -360,21 +473,25 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       })
     }
 
-    const results = await Promise.allSettled([
-      setDocumentSelection({
-        db,
-        nodeRunId: reviewNodeRunId,
-        docVersionId: docs[1]!.id,
-        selection: 'not_accepted',
-      }),
-      submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: reviewNodeRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      }),
-    ])
+    const results = await concurrentReviewMutations(
+      taskId,
+      docs[1]!.id,
+      () =>
+        setDocumentSelection({
+          db,
+          nodeRunId: reviewNodeRunId,
+          docVersionId: docs[1]!.id,
+          selection: 'not_accepted',
+        }),
+      () =>
+        submitReviewDecision({
+          db,
+          appHome,
+          nodeRunId: reviewNodeRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+        }),
+    )
     expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
 
     const second = (await db.select().from(docVersions).where(eq(docVersions.id, docs[1]!.id)))[0]!

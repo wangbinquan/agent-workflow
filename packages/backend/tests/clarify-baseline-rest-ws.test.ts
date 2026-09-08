@@ -158,9 +158,9 @@ async function reassignThenDispatchDesigner(
 
 let uninstallProjection = (): void => {}
 
-function createProjectionDb(): DbClient {
+async function createProjectionDb(): Promise<DbClient> {
   const db = createInMemoryDb(MIGRATIONS)
-  uninstallProjection = installCommittedEventProjectionHarness(db)
+  uninstallProjection = await installCommittedEventProjectionHarness(db)
   return db
 }
 
@@ -176,7 +176,7 @@ afterAll(() => {
 
 describe('RFC-058 baseline T6 — list summaries shape', () => {
   test('listClarifySummaries: rows carry taskName + sourceAgent + iteration', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const { taskId } = await seedTask(db, false)
     await db.insert(nodeRuns).values({
       id: 'nr_src',
@@ -360,7 +360,7 @@ describe('RFC-058 baseline T6 — detail wire shape', () => {
 
 describe('RFC-058 baseline T6 — WS event payload shape', () => {
   test('clarify.created event carries clarifyNodeId + iterationIndex + session summary', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const { taskId } = await seedTask(db, false)
     await db.insert(nodeRuns).values({
       id: 'nr_src',
@@ -390,7 +390,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
   })
 
   test('cross-clarify.created event carries crossClarifyNodeId + iteration + targetDesigner', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const { taskId } = await seedTask(db, true)
     await db.insert(nodeRuns).values({
       id: 'nr_q1',
@@ -418,7 +418,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
   })
 
   test('cross-clarify.answered + designer rerun dispatched on successful continue submit', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const { taskId } = await seedTask(db, true)
     await db.insert(nodeRuns).values([
       {
@@ -472,7 +472,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
   })
 
   test('cross-clarify.rejected on stop submit', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const { taskId } = await seedTask(db, true)
     await db.insert(nodeRuns).values([
       {
@@ -521,7 +521,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
   })
 
   test('clarify.answered on self-clarify submit', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const { taskId } = await seedTask(db, false)
     await db.insert(nodeRuns).values({
       id: 'nr_src',

@@ -22,37 +22,35 @@
 //      pending 残留。收割后 resumeTask 可从 interrupted 恢复（完整恢复闭环见
 //      rfc097-pending-orphan-reap.test.ts）。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 // Same-ms inserts must keep a deterministic id order (freshness is pure ULID
 // id-order elsewhere; here it just keeps row identification stable). See the
 // precedent + rationale in scheduler-clarify-dispatch.test.ts:33-40.
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   tmp: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(db: ProviderNeutralDatabase): Harness {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-gap5-orphans-'))
-  const db = createInMemoryDb(MIGRATIONS)
   return { db, tmp, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
 }
 
-async function seedTask(db: DbClient, status: string): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase, status: string): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -63,6 +61,10 @@ async function seedTask(db: DbClient, status: string): Promise<string> {
     updatedAt: Date.now(),
   })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -79,7 +81,7 @@ async function seedTask(db: DbClient, status: string): Promise<string> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   status: typeof nodeRuns.$inferInsert.status,
@@ -97,74 +99,77 @@ async function seedRun(
   return id
 }
 
-async function runStatus(db: DbClient, id: string): Promise<string | undefined> {
+async function runStatus(db: ProviderNeutralDatabase, id: string): Promise<string | undefined> {
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]?.status
 }
 
-describe('gap5 — reapOrphanRuns vs task status（锚点行缺陷锁 + RFC-097 pending 任务收割新语义）', () => {
-  let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
-  })
-  afterEach(() => h.cleanup())
+describeEachProvider(
+  'gap5 — reapOrphanRuns vs task status（锚点行缺陷锁 + RFC-097 pending 任务收割新语义）',
+  (harness) => {
+    let h: Harness
+    beforeEach(() => {
+      h = buildHarness(harness.db)
+    })
+    afterEach(() => h.cleanup())
 
-  test('awaiting_human task: pending anchor row is reaped to interrupted while the task itself is untouched', async () => {
-    const taskId = await seedTask(h.db, 'awaiting_human')
-    // The parked clarify row itself (status awaiting_human) — NOT selected by
-    // the reap query, stays put in both current and correct semantics.
-    const clarifyRunId = await seedRun(h.db, taskId, 'clarify-1', 'awaiting_human')
-    // The pending anchor row for the source agent (the row a clarify answer
-    // submit would mint / the scheduler would reuse via pendingExisting).
-    const anchorRunId = await seedRun(h.db, taskId, 'designer', 'pending')
+    test('awaiting_human task: pending anchor row is reaped to interrupted while the task itself is untouched', async () => {
+      const taskId = await seedTask(h.db, 'awaiting_human')
+      // The parked clarify row itself (status awaiting_human) — NOT selected by
+      // the reap query, stays put in both current and correct semantics.
+      const clarifyRunId = await seedRun(h.db, taskId, 'clarify-1', 'awaiting_human')
+      // The pending anchor row for the source agent (the row a clarify answer
+      // submit would mint / the scheduler would reuse via pendingExisting).
+      const anchorRunId = await seedRun(h.db, taskId, 'designer', 'pending')
 
-    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
+      const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
 
-    // Task-level reap scans task.status ∈ {'running','pending'} (RFC-097) →
-    // awaiting_human is outside the set, 0 tasks flipped.
-    expect(r.tasks).toBe(0)
-    // DEFECT LOCK: the pending anchor row of a legally-paused task is counted
-    // as an orphan and flipped. After fix: expect(r.runs).toBe(0).
-    expect(r.runs).toBe(1)
+      // Task-level reap scans task.status ∈ {'running','pending'} (RFC-097) →
+      // awaiting_human is outside the set, 0 tasks flipped.
+      expect(r.tasks).toBe(0)
+      // DEFECT LOCK: the pending anchor row of a legally-paused task is counted
+      // as an orphan and flipped. After fix: expect(r.runs).toBe(0).
+      expect(r.runs).toBe(1)
 
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    expect(t?.status).toBe('awaiting_human') // task untouched (status filter is task-side only)
-    expect(t?.errorSummary).toBeNull()
+      const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      expect(t?.status).toBe('awaiting_human') // task untouched (status filter is task-side only)
+      expect(t?.errorSummary).toBeNull()
 
-    // DEFECT LOCK: anchor row flipped pending → interrupted (mark-interrupted
-    // allows any non-terminal source, shared/lifecycle.ts:111-113).
-    // After fix this row must stay 'pending' — flip the expectation.
-    expect(await runStatus(h.db, anchorRunId)).toBe('interrupted')
+      // DEFECT LOCK: anchor row flipped pending → interrupted (mark-interrupted
+      // allows any non-terminal source, shared/lifecycle.ts:111-113).
+      // After fix this row must stay 'pending' — flip the expectation.
+      expect(await runStatus(h.db, anchorRunId)).toBe('interrupted')
 
-    // awaiting_human row is outside the query's status set — untouched today.
-    // (node-kind-behavior.ts's 'leave-alone' only holds via this row-status
-    // filter; it provides no task-status protection.)
-    expect(await runStatus(h.db, clarifyRunId)).toBe('awaiting_human')
-  })
+      // awaiting_human row is outside the query's status set — untouched today.
+      // (node-kind-behavior.ts's 'leave-alone' only holds via this row-status
+      // filter; it provides no task-status protection.)
+      expect(await runStatus(h.db, clarifyRunId)).toBe('awaiting_human')
+    })
 
-  test('pending task (crashed resume residue): RFC-097 reaps the task itself to interrupted(daemon-restart) so resume can recover', async () => {
-    const taskId = await seedTask(h.db, 'pending')
-    const runId = await seedRun(h.db, taskId, 'a', 'pending')
+    test('pending task (crashed resume residue): RFC-097 reaps the task itself to interrupted(daemon-restart) so resume can recover', async () => {
+      const taskId = await seedTask(h.db, 'pending')
+      const runId = await seedRun(h.db, taskId, 'a', 'pending')
 
-    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
+      const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
 
-    // RFC-097 (design §3): a pending task at boot time is by construction an
-    // orphan (boot reap runs before HTTP listen; startTask kicks in-process)
-    // — the old "stays pending forever, S4 alerts only" asymmetry is closed.
-    expect(r.tasks).toBe(1)
-    expect(r.runs).toBe(1)
-    expect(await runStatus(h.db, runId)).toBe('interrupted')
+      // RFC-097 (design §3): a pending task at boot time is by construction an
+      // orphan (boot reap runs before HTTP listen; startTask kicks in-process)
+      // — the old "stays pending forever, S4 alerts only" asymmetry is closed.
+      expect(r.tasks).toBe(1)
+      expect(r.runs).toBe(1)
+      expect(await runStatus(h.db, runId)).toBe('interrupted')
 
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    expect(t?.status).toBe('interrupted')
-    expect(t?.errorSummary).toBe('daemon-restart')
-    // interrupted ∈ resumeTask's recoverable set — the user-visible escape
-    // hatch the pending wedge never had. Full recovery loop is exercised in
-    // rfc097-pending-orphan-reap.test.ts (no duplication here).
-  })
+      const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      expect(t?.status).toBe('interrupted')
+      expect(t?.errorSummary).toBe('daemon-restart')
+      // interrupted ∈ resumeTask's recoverable set — the user-visible escape
+      // hatch the pending wedge never had. Full recovery loop is exercised in
+      // rfc097-pending-orphan-reap.test.ts (no duplication here).
+    })
 
-  // Contrast row of the (task-status × reap-outcome) matrix — running task +
-  // running row both reaped to interrupted with daemon-restart — is the
-  // intended P-4-07 behavior and is already locked verbatim by
-  // orphans.test.ts ('flips running tasks + node_runs to interrupted with
-  // daemon-restart message'). Not duplicated here per the no-duplication rule.
-})
+    // Contrast row of the (task-status × reap-outcome) matrix — running task +
+    // running row both reaped to interrupted with daemon-restart — is the
+    // intended P-4-07 behavior and is already locked verbatim by
+    // orphans.test.ts ('flips running tasks + node_runs to interrupted with
+    // daemon-restart message'). Not duplicated here per the no-duplication rule.
+  },
+)

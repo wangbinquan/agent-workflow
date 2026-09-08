@@ -1,32 +1,30 @@
 // P-4-07: daemon-restart orphan reaper.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import {
   claimNewRuntimeSession,
   repairRuntimeSessionLeasesAfterOrphanReap,
 } from '../src/services/runtimeSessionLease'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(db: ProviderNeutralDatabase): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-orphans-'))
-  const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
     appHome,
@@ -34,7 +32,9 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedRunning(db: DbClient): Promise<{ taskId: string; runId: string }> {
+async function seedRunning(
+  db: ProviderNeutralDatabase,
+): Promise<{ taskId: string; runId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
   const runId = ulid()
@@ -46,6 +46,10 @@ async function seedRunning(db: DbClient): Promise<{ taskId: string; runId: strin
     updatedAt: Date.now(),
   })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture-task',
 
     id: taskId,
@@ -71,21 +75,21 @@ async function seedRunning(db: DbClient): Promise<{ taskId: string; runId: strin
   return { taskId, runId }
 }
 
-describe('reapOrphanRuns', () => {
+describeEachProvider('reapOrphanRuns', (harness) => {
   let h: Harness
   beforeEach(() => {
-    h = buildHarness()
+    h = buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 
   test('no-op when no running rows exist', async () => {
-    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
+    const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
     expect(r).toEqual({ tasks: 0, runs: 0 })
   })
 
   test('flips running tasks + node_runs to interrupted with daemon-restart message', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
+    const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
     expect(r).toEqual({ tasks: 1, runs: 1 })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('interrupted')
@@ -97,7 +101,7 @@ describe('reapOrphanRuns', () => {
   test('a child which survives SIGKILL aborts the barrier and leaves its run live', async () => {
     const { runId } = await seedRunning(h.db)
     await expect(
-      reapOrphanRuns(taskRecoveryOperations(h.db), {
+      reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
         killStaleRunProcessTree: async () => 'kill-failed',
       }),
     ).rejects.toThrow('boot recovery refused')
@@ -121,7 +125,7 @@ describe('reapOrphanRuns', () => {
       .where(eq(nodeRuns.id, runId))
     const calls: string[] = []
 
-    await reapOrphanRuns(taskRecoveryOperations(h.db), {
+    await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
       killStaleRunProcessTree: async (row) => {
         calls.push(`kill:${row.pid}`)
         return 'killed'
@@ -135,7 +139,7 @@ describe('reapOrphanRuns', () => {
       ),
     ).toBe(1)
     expect(
-      h.db
+      await h.db
         .select()
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'terminal-held-native'))
@@ -156,12 +160,12 @@ describe('reapOrphanRuns', () => {
     await h.db.update(nodeRuns).set({ status: 'failed', pid: 4343 }).where(eq(nodeRuns.id, runId))
 
     await expect(
-      reapOrphanRuns(taskRecoveryOperations(h.db), {
+      reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
         killStaleRunProcessTree: async () => 'kill-failed',
       }),
     ).rejects.toThrow('boot recovery refused')
     expect(
-      h.db
+      await h.db
         .select({ holder: runtimeSessionLeases.leaseNodeRunId })
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'terminal-live-native'))
@@ -181,12 +185,12 @@ describe('reapOrphanRuns', () => {
     })
 
     await expect(
-      reapOrphanRuns(taskRecoveryOperations(h.db), {
+      reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
         killStaleRunProcessTree: async () => 'no-pid',
       }),
     ).rejects.toThrow('reap was unproven')
     expect(
-      h.db
+      await h.db
         .select({ holder: runtimeSessionLeases.leaseNodeRunId })
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'held-without-pid'))

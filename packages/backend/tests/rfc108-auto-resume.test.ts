@@ -5,12 +5,11 @@
 // （放过其它状态/其它 errorSummary）；② 每条成功 resume 记 auto-resume recovery_event；
 // ③ 已隔离任务跳过；④ resume 抛错不中断循环、计入熔断；⑤ 熔断触顶后续跳过。
 
-import { resolve } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
@@ -19,9 +18,8 @@ import {
   clearAutoRecoverySuspension,
   recordAutoRecoveryAttempt,
 } from '../src/services/recoveryBreaker'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
 afterEach(() => {
@@ -30,7 +28,7 @@ afterEach(() => {
 })
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   status: string,
   errorSummary: string | null,
   workgroup?: { workgroupId: string; mode: string },
@@ -40,6 +38,10 @@ async function seedTask(
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
   await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -62,14 +64,14 @@ async function seedTask(
   return taskId
 }
 
-describe('RFC-108 T18 — boot auto-resume', () => {
+describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
   test('resumes only interrupted+daemon-restart; records an auto-resume event each', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
     await seedTask(db, 'interrupted', 'node-timeout') // other errorSummary → skipped
     await seedTask(db, 'failed', 'daemon-restart') // other status → skipped
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const resumedCalls: string[] = []
     const res = await autoResumeInterruptedTasks({
       operations,
@@ -86,7 +88,7 @@ describe('RFC-108 T18 — boot auto-resume', () => {
   })
 
   test('RFC-186 PR-2: turn-engine workgroup tasks ALSO auto-resume (were previously excluded)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const lw = await seedTask(db, 'interrupted', 'daemon-restart', {
       workgroupId: 'wg-lw',
       mode: 'leader_worker',
@@ -99,7 +101,7 @@ describe('RFC-108 T18 — boot auto-resume', () => {
       workgroupId: 'wg-dyn',
       mode: 'dynamic_workflow',
     })
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const res = await autoResumeInterruptedTasks({
       operations,
       breaker: BREAKER,
@@ -113,9 +115,9 @@ describe('RFC-108 T18 — boot auto-resume', () => {
   })
 
   test('skips a quarantined task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     // Trip the breaker for `a` (4 attempts > maxPerWindow 3 → suspended).
     for (let i = 0; i < 4; i++) {
       await recordAutoRecoveryAttempt(operations, a, BREAKER, 1000)
@@ -138,10 +140,10 @@ describe('RFC-108 T18 — boot auto-resume', () => {
   })
 
   test('a throwing resume does not abort the loop and is not counted as resumed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const res = await autoResumeInterruptedTasks({
       operations,
       breaker: BREAKER,

@@ -47,6 +47,12 @@
   malformed JSON、NULL、数组 sidecar、字段省略与错误先后不能因提取公共实现而改变。
 - 旧测试夹具从 SQLite 迁到双引擎时，要显式保留原触发器已经生成的行值；不能只复制 insert
   参数而让 PG 以不同初始行进入业务流程。涉及原串 hash 的字段也保留原字节序。
+- 初始化事件夹具必须等待 cutover 设置写入，再创建 pump/dispatcher 并返回句柄；调用方完整 await。
+  原全局清理与工作生命周期保持，不能让 SQLite 同步执行掩盖 PostgreSQL 未完成初始化。
+- 原始 fixture 的等价性以当前迁移完成后的实际行证明。0224 已退役 node-run lineage 插入触发器，
+  不能照旧迁移文本给直接 node-run seed 增加原本为 NULL 的值；仍在生效的 task 根 lineage 要保留。
+- Overview 性能与计划用例分别走各引擎的生产查询：SQLite buildOverview，PG 的五组 owner 查询组合。
+  用真库写入后再次计数证明查询活着执行；测量不包含 HTTP daemon，结构阈值与 P95 诊断继续分开。
 - provider 文件改名只适用于已经中立的实现；真正重复的实现先合一，必要机制差异保持明确命名与对拍。
 
 ## 1. RFC-294 对齐（CLAUDE.md §RFC workflow 第 8 条）

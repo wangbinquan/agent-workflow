@@ -10,16 +10,14 @@
 // Mirrors the equivalent enrichment review summaries already do for
 // review nodes (see services/review.ts listReviewSummaries).
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function buildDef(agentNode: WorkflowNode): WorkflowDefinition {
   return {
@@ -43,7 +41,7 @@ function buildDef(agentNode: WorkflowNode): WorkflowDefinition {
 }
 
 async function seedSessionForSnapshot(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   snapshotJson: string,
   agentNodeId: string,
 ): Promise<{ taskId: string; sessionId: string }> {
@@ -57,6 +55,10 @@ async function seedSessionForSnapshot(
     schemaVersion: 3,
   })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture-task',
 
     id: taskId,
@@ -103,9 +105,9 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
+describeEachProvider('listClarifySummaries — sourceAgentNodeTitle enrichment', (harness) => {
   test('surfaces the agent node title from the workflow snapshot', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({
       id: 'agent_coder_01',
       kind: 'agent-single',
@@ -122,7 +124,7 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
   })
 
   test('returns null when the agent node has no title set', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({
       id: 'agent_designer_07',
       kind: 'agent-single',
@@ -137,7 +139,7 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
   })
 
   test('returns null when the title is an empty / whitespace-only string', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({
       id: 'agent_writer_03',
       kind: 'agent-single',
@@ -152,7 +154,7 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
   })
 
   test('returns null when the workflow snapshot is corrupt (no throw)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedSessionForSnapshot(db, '{not valid json', 'agent_ghost')
 
     const out = await listClarifyRoundSummaries(db)
@@ -162,7 +164,7 @@ describe('listClarifySummaries — sourceAgentNodeTitle enrichment', () => {
   })
 
   test('returns null when the snapshot does not contain the source agent node id', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     // The session points at agent_typo_99 but the snapshot only knows about
     // agent_coder_01 — simulates a snapshot rewrite that orphaned a session.
     const def = buildDef({

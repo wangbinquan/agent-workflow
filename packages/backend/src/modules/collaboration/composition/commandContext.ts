@@ -4,7 +4,7 @@
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { CollaborationCommandContext, CollaborationContextCapability } from '../public/types'
+import type { CollaborationCommandContext, CollaborationRouteContext } from '../public/types'
 import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
 import type { QuestionDispatchCommandPort } from '../application/ports/questionDispatchCommand'
 import type { ClarifyDecisionCommandPort } from '../application/ports/clarifyDecisionCommand'
@@ -59,6 +59,9 @@ export interface CollaborationCommandDependencies {
 }
 
 const dependencies = new WeakMap<object, CollaborationCommandDependencies>()
+
+type CollaborationContextCapability =
+  CollaborationRouteContext extends CollaborationCommandContext<infer C> ? C : never
 
 type CollaborationCapabilityDependencies = Required<
   Pick<CollaborationCommandDependencies, CollaborationContextCapability>

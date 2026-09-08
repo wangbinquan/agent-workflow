@@ -153,7 +153,7 @@ describe('RFC-161 defer full-seal node.status broadcast', () => {
   beforeEach(async () => {
     resetBroadcastersForTests()
     h = await buildHarness()
-    uninstallProjection = installCommittedEventProjectionHarness(h.db)
+    uninstallProjection = await installCommittedEventProjectionHarness(h.db)
   })
   afterEach(() => {
     uninstallProjection()

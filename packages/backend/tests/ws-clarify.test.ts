@@ -99,7 +99,7 @@ let installCleanup = (): void => {}
 describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
   test('createClarifyRound dispatches clarify.created with sourceShardKey + iterationIndex + session summary', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    installCleanup = installCommittedEventProjectionHarness(db)
+    installCleanup = await installCommittedEventProjectionHarness(db)
     const { taskId, sourceRunId } = await seedTask(db)
 
     const received: TaskWsMessage[] = []
@@ -129,7 +129,7 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
 
   test('answering the round dispatches clarify.answered with rerunNodeRunId so subscribers can refocus', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    installCleanup = installCommittedEventProjectionHarness(db)
+    installCleanup = await installCommittedEventProjectionHarness(db)
     const { taskId, sourceRunId } = await seedTask(db)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
       kind: 'self',

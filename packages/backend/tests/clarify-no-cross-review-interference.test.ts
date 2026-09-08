@@ -14,19 +14,17 @@
 //     inheritance) preserves reviewIteration on the new source-agent row
 //     (locked here too).
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ulid } from 'ulid'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const QUESTION: ClarifyQuestion = {
   id: 'q-color',
@@ -40,7 +38,7 @@ const QUESTION: ClarifyQuestion = {
 }
 
 async function seed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): Promise<{ taskId: string; reviewRunId: string; docVersionId: string; sourceRunId: string }> {
   const taskId = `task_${ulid()}`
   const def: WorkflowDefinition = {
@@ -63,10 +61,17 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     name: 'fixture-task',
 
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
     repoPath: '/tmp/aw-cross/repo',
@@ -77,6 +82,17 @@ async function seed(
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
 
   // Source agent node_run that produced both an output and a clarify envelope.
   const sourceRunId = ulid()
@@ -126,9 +142,9 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('clarify activity does not perturb in-flight reviews', () => {
+describeEachProvider('clarify activity does not perturb in-flight reviews', (harness) => {
   test('createClarifyRound + answering the round leave review node_run + doc_version untouched, and preserve reviewIteration on the rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId, reviewRunId, docVersionId, sourceRunId } = await seed(db)
 
     const reviewBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]

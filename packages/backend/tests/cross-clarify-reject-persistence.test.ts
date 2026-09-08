@@ -23,13 +23,13 @@
 // user's "I refuse to be asked again" intent is being lost — investigate
 // before relaxing.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
@@ -38,8 +38,6 @@ import {
   resolveCrossNodeStopped,
 } from '../src/services/clarify/service'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -97,7 +95,7 @@ function twoCrossDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = twoCrossDef()
   const wfId = `wf_${taskId}`
@@ -109,8 +107,15 @@ async function seedTask(db: DbClient): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
@@ -122,10 +127,25 @@ async function seedTask(db: DbClient): Promise<string> {
     inputs: '{}',
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
-async function seedQRun(db: DbClient, taskId: string, nodeId: string): Promise<string> {
+async function seedQRun(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  nodeId: string,
+): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 6)}`
   await db.insert(nodeRuns).values({
     id,
@@ -138,7 +158,7 @@ async function seedQRun(db: DbClient, taskId: string, nodeId: string): Promise<s
   return id
 }
 
-async function seedDesignerRun(db: DbClient, taskId: string): Promise<string> {
+async function seedDesignerRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = `nr_d_${Math.random().toString(36).slice(2, 6)}`
   await db.insert(nodeRuns).values({
     id,
@@ -159,9 +179,9 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 C4 — reject persistence cross-cascade', () => {
+describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness) => {
   test('after one reject on cross1, resolveCrossNodeStopped(task, qA) is true', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
@@ -189,7 +209,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
   })
 
   test('persistence survives a sibling cross-clarify submit on a different cross node', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
@@ -237,7 +257,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
   })
 
   test('persistence survives a designer self-clarify iterate on the same designer node', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
@@ -289,7 +309,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
   })
 
   test('persistence is keyed by (task, node_id) — a different cross node remains unaffected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
@@ -317,7 +337,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
   })
 
   test('dispatchCrossClarifyNode on a fresh node_run for the stopped node short-circuits to done (no new awaiting session)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')

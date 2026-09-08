@@ -2,20 +2,19 @@
 // review decision both enqueue a `memory_distill_jobs` row (best-effort,
 // must not break the original decision path).
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { clarifyRounds, memoryDistillJobs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedFixture(db: DbClient): Promise<{
+async function seedFixture(db: ProviderNeutralDatabase): Promise<{
   taskId: string
   workflowId: string
   intermediaryNodeRunId: string
@@ -23,7 +22,8 @@ async function seedFixture(db: DbClient): Promise<{
   clarifySessionId: string
 }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -42,9 +42,17 @@ async function seedFixture(db: DbClient): Promise<{
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
+  await db
+    .insert(tasks)
     .values({
       id: taskId,
+      executionLineageId: taskId,
+      lineageSlotPathJson,
       name: 'fixture-task',
       workflowId: wfId,
       workflowSnapshot: JSON.stringify({
@@ -64,8 +72,20 @@ async function seedFixture(db: DbClient): Promise<{
       startedAt: Date.now(),
     })
     .run()
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   const sourceRunId = ulid()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id: sourceRunId,
       taskId,
@@ -102,66 +122,67 @@ async function seedFixture(db: DbClient): Promise<{
   }
 }
 
-describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回归锁)', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    resetBroadcastersForTests()
-  })
-
-  test('after a successful finalize, exactly one feedback-source-job row exists with the matching debounce key', async () => {
-    const fx = await seedFixture(db)
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: fx.intermediaryNodeRunId,
-      answers: [
-        {
-          questionId: 'q1',
-          selectedOptionIndices: [],
-          selectedOptionLabels: [],
-          customText: 'an answer',
-        },
-      ],
-      actor: { userId: 'u1', role: 'owner' },
-    }).catch(() => {
-      /* a post-seal dispatch conflict must not hide the enqueue assertion below */
+describeEachProvider(
+  'autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回归锁)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+      resetBroadcastersForTests()
     })
-    const jobs = db.select().from(memoryDistillJobs).all()
-    expect(jobs.length).toBe(1)
-    expect(jobs[0]!.sourceKind).toBe('clarify')
-    expect(jobs[0]!.sourceEventId).toBe(fx.clarifySessionId)
-    expect(jobs[0]!.debounceKey).toBe(`${fx.taskId}:clarify`)
-    expect(jobs[0]!.taskId).toBe(fx.taskId)
-  })
 
-  test('clarify session row reflects the answered status (independent of the enqueue side-effect)', async () => {
-    const fx = await seedFixture(db)
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: fx.intermediaryNodeRunId,
-      answers: [
-        {
-          questionId: 'q1',
-          selectedOptionIndices: [],
-          selectedOptionLabels: [],
-          customText: 'an answer',
-        },
-      ],
-      actor: { userId: 'u1', role: 'owner' },
-    }).catch(() => {
-      /* seal commits before any post-seal dispatch conflict — the row assertions stand */
+    test('after a successful finalize, exactly one feedback-source-job row exists with the matching debounce key', async () => {
+      const fx = await seedFixture(db)
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: fx.intermediaryNodeRunId,
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [],
+            selectedOptionLabels: [],
+            customText: 'an answer',
+          },
+        ],
+        actor: { userId: 'u1', role: 'owner' },
+      }).catch(() => {
+        /* a post-seal dispatch conflict must not hide the enqueue assertion below */
+      })
+      const jobs = await db.select().from(memoryDistillJobs).all()
+      expect(jobs.length).toBe(1)
+      expect(jobs[0]!.sourceKind).toBe('clarify')
+      expect(jobs[0]!.sourceEventId).toBe(fx.clarifySessionId)
+      expect(jobs[0]!.debounceKey).toBe(`${fx.taskId}:clarify`)
+      expect(jobs[0]!.taskId).toBe(fx.taskId)
     })
-    const row = db
-      .select()
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, fx.clarifySessionId))
-      .all()[0]!
-    expect(row.status).toBe('answered')
-    expect(row.answeredAt).not.toBeNull()
-  })
-})
+
+    test('clarify session row reflects the answered status (independent of the enqueue side-effect)', async () => {
+      const fx = await seedFixture(db)
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: fx.intermediaryNodeRunId,
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [],
+            selectedOptionLabels: [],
+            customText: 'an answer',
+          },
+        ],
+        actor: { userId: 'u1', role: 'owner' },
+      }).catch(() => {
+        /* seal commits before any post-seal dispatch conflict — the row assertions stand */
+      })
+      const row = (
+        await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, fx.clarifySessionId)).all()
+      )[0]!
+      expect(row.status).toBe('answered')
+      expect(row.answeredAt).not.toBeNull()
+    })
+  },
+)
 
 describe('source-code grep guard — review distill is a durable committed-event consumer', () => {
   // RFC-341 moves distill out of the request owner. review.ts commits the

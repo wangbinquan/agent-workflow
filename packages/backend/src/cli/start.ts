@@ -1797,7 +1797,7 @@ async function composeSqliteProviderSession(
       : { subagentLiveCapture: config.subagentLiveCapture }),
     ...resolveLaunchRuntimeConfig(Paths.config),
   })
-  const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime =
+  const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       runtime: {
         memoryInjectionQueries,

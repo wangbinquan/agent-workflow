@@ -67,10 +67,7 @@ import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
 } from '@/modules/development-automation/infrastructure/missionReadModels'
-import {
-  composeRepositoryWorkspaceOperations,
-  composeSqliteRepositoryWorkspaceStore,
-} from '@/modules/source-control/composition'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { RFC349_ARCHIVE_THEN_OMIT_TABLES } from '@/platform/persistence/schemaContract'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
@@ -80,10 +77,8 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { archiveEvents } from '@/services/eventsArchive'
 import { listCachedReposPage } from '@/services/gitRepoCache'
-import { buildOverview } from '@/services/overview'
-import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
-import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
+import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -341,16 +336,7 @@ const AUDITED: readonly AuditedPath[] = [
   },
   {
     name: '/api/overview — 计数面板',
-    run: (db) => {
-      const actor = actorOf('admin')
-      const store = composeSqliteRepositoryWorkspaceStore(db as never)
-      return buildOverview(
-        db as never,
-        resourceScopeAuthority(db as never, actor),
-        composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
-        memoryCatalogOf(db as never),
-      )
-    },
+    run: (db) => runProductionOverview(db, actorOf('admin')),
   },
   {
     name: '事件归档器（小时级 sweep）',

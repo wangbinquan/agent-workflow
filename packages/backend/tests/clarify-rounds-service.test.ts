@@ -13,10 +13,10 @@
 //     drops the legacy tables + migrates all writers to clarify_rounds, the
 //     PR-A baseline tests will exercise these helpers indirectly.
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   getClarifyRoundDetail,
@@ -27,9 +27,9 @@ import { NotFoundError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedTask(db: DbClient): Promise<{ taskId: string; definition: WorkflowDefinition }> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+): Promise<{ taskId: string; definition: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const definition: WorkflowDefinition = {
     $schema_version: 4,
@@ -53,6 +53,10 @@ async function seedTask(db: DbClient): Promise<{ taskId: string; definition: Wor
     schemaVersion: 4,
   })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     id: taskId,
     name: 'rounds-test',
     workflowId,
@@ -104,9 +108,9 @@ afterAll(() => resetBroadcastersForTests())
 // `rfc070-aging-stamp-behavior.test.ts` B-group cases against the mark
 // helper + the read-side `IS NULL` filter.
 
-describe('RFC-058 T12 — listClarifyRounds filter dispatch', () => {
+describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harness) => {
   test('kind=all returns both self + cross; kind filter narrows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await db.insert(nodeRuns).values([
       {
@@ -184,7 +188,7 @@ describe('RFC-058 T12 — listClarifyRounds filter dispatch', () => {
   })
 
   test('limit caps the result set; default status=awaiting_human filters answered', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await db.insert(nodeRuns).values([
       {
@@ -247,7 +251,7 @@ describe('RFC-058 T12 — listClarifyRounds filter dispatch', () => {
 // ---------------------------------------------------------------------------
 
 async function seedNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   id: string,
   nodeId: string,
@@ -262,9 +266,9 @@ async function seedNodeRun(
   })
 }
 
-describe('RFC-058 T14 — listClarifyRoundSummaries (REST projector)', () => {
+describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)', (harness) => {
   test('projects clarify_rounds row to ClarifyRoundSummary with task name + node titles', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
@@ -311,7 +315,7 @@ describe('RFC-058 T14 — listClarifyRoundSummaries (REST projector)', () => {
   })
 
   test('filters by status and limits result count', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c1', 'clarify1')
@@ -356,7 +360,7 @@ describe('RFC-058 T14 — listClarifyRoundSummaries (REST projector)', () => {
   })
 
   test('filters by kind (self / cross / all)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_q', 'questioner')
@@ -401,9 +405,9 @@ describe('RFC-058 T14 — listClarifyRoundSummaries (REST projector)', () => {
   })
 })
 
-describe('RFC-058 T14 — getClarifyRoundDetail (REST projector)', () => {
+describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (harness) => {
   test('projects clarify_rounds row to ClarifyRound with questions parsed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
@@ -433,7 +437,7 @@ describe('RFC-058 T14 — getClarifyRoundDetail (REST projector)', () => {
   })
 
   test('parses answersJson when present', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
@@ -461,7 +465,7 @@ describe('RFC-058 T14 — getClarifyRoundDetail (REST projector)', () => {
   })
 
   test('throws NotFoundError when intermediary node_run id has no row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedTask(db)
     await expect(getClarifyRoundDetail(db, 'does-not-exist')).rejects.toThrow(NotFoundError)
   })

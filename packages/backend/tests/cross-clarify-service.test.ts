@@ -26,11 +26,11 @@
 // relaxing.
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import { describeEachProvider } from './helpers/eachProvider'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   listTaskQuestions,
@@ -53,8 +53,6 @@ import type {
   WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface SeedOptions {
   taskId?: string
@@ -92,7 +90,7 @@ function makeAns(qid: string, idx = 0): ClarifyAnswer {
 // roleKind='designer' handler row targeting it), then a dispatch of that designer entry — which
 // mints the designer rerun through the SAME multi-source readiness gate + frontier mint.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -145,7 +143,10 @@ function defaultDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient, opts: SeedOptions = {}): Promise<{ taskId: string }> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  opts: SeedOptions = {},
+): Promise<{ taskId: string }> {
   const taskId = opts.taskId ?? `task_${Math.random().toString(36).slice(2, 8)}`
   const def = opts.definition ?? defaultDef()
   const workflowId = `wf_${taskId}`
@@ -169,12 +170,17 @@ async function seedTask(db: DbClient, opts: SeedOptions = {}): Promise<{ taskId:
     status: opts.status ?? 'running',
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
+    // Match the root lineage that SQLite migration 0210 supplied to this fixture.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return { taskId }
 }
 
 async function seedQuestionerRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: { id?: string; nodeId?: string } = {},
 ): Promise<string> {
@@ -191,7 +197,7 @@ async function seedQuestionerRun(
 }
 
 async function seedDesignerRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: { id?: string; nodeId?: string; clarifyIteration?: number; status?: string } = {},
 ): Promise<string> {
@@ -220,10 +226,10 @@ afterEach(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 createClarifyRound', () => {
+describeEachProvider('RFC-056 createClarifyRound', (harness) => {
   test('mints row + parks cross-clarify node_run awaiting_human + broadcasts cross-clarify.created', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    uninstallProjection = installCommittedEventProjectionHarness(db)
+    const db = harness.db
+    uninstallProjection = await installCommittedEventProjectionHarness(db)
     const { taskId } = await seedTask(db)
     const qRunId = await seedQuestionerRun(db, taskId)
 
@@ -286,7 +292,7 @@ describe('RFC-056 createClarifyRound', () => {
   })
 
   test('iteration counter increments per (node, loop_iter) when a prior session already exists', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     const qRunId1 = await seedQuestionerRun(db, taskId)
     const qRunId2 = await seedQuestionerRun(db, taskId)
@@ -324,253 +330,256 @@ describe('RFC-056 createClarifyRound', () => {
 // equivalents — 'clarify-iteration-mismatch' / 'clarify-already-answered' + the stop
 // questioner rerun with its canvas directive — are locked by rfc128-p5-d-autodispatch.test.ts.)
 
-describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', () => {
-  test('single source answered=continue → ready, sources includes it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = defaultDef()
-    const { taskId } = await seedTask(db, { definition: def })
-    const qRunId = await seedQuestionerRun(db, taskId)
-    await seedDesignerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't')],
-    })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAns('q1')],
-      actor: { userId: 'u1', role: 'owner' },
+describeEachProvider(
+  'RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation',
+  (harness) => {
+    test('single source answered=continue → ready, sources includes it', async () => {
+      const db = harness.db
+      const def = defaultDef()
+      const { taskId } = await seedTask(db, { definition: def })
+      const qRunId = await seedQuestionerRun(db, taskId)
+      await seedDesignerRun(db, taskId)
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't')],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAns('q1')],
+        actor: { userId: 'u1', role: 'owner' },
+      })
+
+      // After the answer, the round is consumed (its designer entries dispatched).
+      // Insert a SECOND awaiting session to verify the readiness scan
+      // correctly handles the "fresh source after a prior consumed batch" case.
+      const qRunId2 = await seedQuestionerRun(db, taskId)
+      await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId2,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't2')],
+      })
+      const readiness = await evaluateDesignerRerunReadiness({
+        db,
+        taskId,
+        designerNodeId: 'designer',
+        definition: def,
+        loopIter: 0,
+      })
+      expect(readiness.ready).toBe(false)
+      expect(readiness.pendingCrossClarifyNodeIds).toContain('cross1')
     })
 
-    // After the answer, the round is consumed (its designer entries dispatched).
-    // Insert a SECOND awaiting session to verify the readiness scan
-    // correctly handles the "fresh source after a prior consumed batch" case.
-    const qRunId2 = await seedQuestionerRun(db, taskId)
-    await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId2,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't2')],
-    })
-    const readiness = await evaluateDesignerRerunReadiness({
-      db,
-      taskId,
-      designerNodeId: 'designer',
-      definition: def,
-      loopIter: 0,
-    })
-    expect(readiness.ready).toBe(false)
-    expect(readiness.pendingCrossClarifyNodeIds).toContain('cross1')
-  })
+    test('two siblings, only one answered → not ready, pending lists the other', async () => {
+      const db = harness.db
+      // Build def with TWO cross-clarify nodes pointing at the same designer.
+      const def: WorkflowDefinition = {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+          { id: 'qSec', kind: 'agent-single', agentName: 'questioner' },
+          { id: 'qUx', kind: 'agent-single', agentName: 'questioner' },
+          { id: 'crossSec', kind: 'clarify-cross-agent' },
+          { id: 'crossUx', kind: 'clarify-cross-agent' },
+        ],
+        edges: [
+          {
+            id: 'e_d_qsec',
+            source: { nodeId: 'designer', portName: 'design' },
+            target: { nodeId: 'qSec', portName: 'design' },
+          },
+          {
+            id: 'e_d_qux',
+            source: { nodeId: 'designer', portName: 'design' },
+            target: { nodeId: 'qUx', portName: 'design' },
+          },
+          {
+            id: 'e_qsec_cross',
+            source: { nodeId: 'qSec', portName: '__clarify__' },
+            target: { nodeId: 'crossSec', portName: 'questions' },
+          },
+          {
+            id: 'e_qux_cross',
+            source: { nodeId: 'qUx', portName: '__clarify__' },
+            target: { nodeId: 'crossUx', portName: 'questions' },
+          },
+          {
+            id: 'e_csec_q',
+            source: { nodeId: 'crossSec', portName: 'to_questioner' },
+            target: { nodeId: 'qSec', portName: '__clarify_response__' },
+          },
+          {
+            id: 'e_cux_q',
+            source: { nodeId: 'crossUx', portName: 'to_questioner' },
+            target: { nodeId: 'qUx', portName: '__clarify_response__' },
+          },
+          {
+            id: 'e_csec_d',
+            source: { nodeId: 'crossSec', portName: 'to_designer' },
+            target: { nodeId: 'designer', portName: '__external_feedback__' },
+          },
+          {
+            id: 'e_cux_d',
+            source: { nodeId: 'crossUx', portName: 'to_designer' },
+            target: { nodeId: 'designer', portName: '__external_feedback__' },
+          },
+        ],
+        outputs: [],
+      }
+      const { taskId } = await seedTask(db, { definition: def })
+      const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
+      const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
+      await seedDesignerRun(db, taskId)
+      await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'crossSec',
+        askingNodeId: 'qSec',
+        askingNodeRunId: qSecRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 'sec')],
+      })
+      const ux = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'crossUx',
+        askingNodeId: 'qUx',
+        askingNodeRunId: qUxRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 'ux')],
+      })
 
-  test('two siblings, only one answered → not ready, pending lists the other', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // Build def with TWO cross-clarify nodes pointing at the same designer.
-    const def: WorkflowDefinition = {
-      $schema_version: 4,
-      inputs: [],
-      nodes: [
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
-        { id: 'qSec', kind: 'agent-single', agentName: 'questioner' },
-        { id: 'qUx', kind: 'agent-single', agentName: 'questioner' },
-        { id: 'crossSec', kind: 'clarify-cross-agent' },
-        { id: 'crossUx', kind: 'clarify-cross-agent' },
-      ],
-      edges: [
-        {
-          id: 'e_d_qsec',
-          source: { nodeId: 'designer', portName: 'design' },
-          target: { nodeId: 'qSec', portName: 'design' },
-        },
-        {
-          id: 'e_d_qux',
-          source: { nodeId: 'designer', portName: 'design' },
-          target: { nodeId: 'qUx', portName: 'design' },
-        },
-        {
-          id: 'e_qsec_cross',
-          source: { nodeId: 'qSec', portName: '__clarify__' },
-          target: { nodeId: 'crossSec', portName: 'questions' },
-        },
-        {
-          id: 'e_qux_cross',
-          source: { nodeId: 'qUx', portName: '__clarify__' },
-          target: { nodeId: 'crossUx', portName: 'questions' },
-        },
-        {
-          id: 'e_csec_q',
-          source: { nodeId: 'crossSec', portName: 'to_questioner' },
-          target: { nodeId: 'qSec', portName: '__clarify_response__' },
-        },
-        {
-          id: 'e_cux_q',
-          source: { nodeId: 'crossUx', portName: 'to_questioner' },
-          target: { nodeId: 'qUx', portName: '__clarify_response__' },
-        },
-        {
-          id: 'e_csec_d',
-          source: { nodeId: 'crossSec', portName: 'to_designer' },
-          target: { nodeId: 'designer', portName: '__external_feedback__' },
-        },
-        {
-          id: 'e_cux_d',
-          source: { nodeId: 'crossUx', portName: 'to_designer' },
-          target: { nodeId: 'designer', portName: '__external_feedback__' },
-        },
-      ],
-      outputs: [],
-    }
-    const { taskId } = await seedTask(db, { definition: def })
-    const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
-    const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
-    await seedDesignerRun(db, taskId)
-    await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'crossSec',
-      askingNodeId: 'qSec',
-      askingNodeRunId: qSecRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 'sec')],
-    })
-    const ux = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'crossUx',
-      askingNodeId: 'qUx',
-      askingNodeRunId: qUxRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 'ux')],
+      // Answer only crossUx; crossSec still awaiting → the designer dispatch parks
+      // (no designer rerun) and the readiness scan lists crossSec pending.
+      const ret = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: ux.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor: { userId: 'u1', role: 'owner' },
+      })
+      expect(ret.dispatch.reruns.some((r) => r.targetNodeId === 'designer')).toBe(false)
+      const readiness = await evaluateDesignerRerunReadiness({
+        db,
+        taskId,
+        designerNodeId: 'designer',
+        definition: def,
+        loopIter: 0,
+      })
+      expect(readiness.ready).toBe(false)
+      expect(readiness.pendingCrossClarifyNodeIds).toEqual(['crossSec'])
     })
 
-    // Answer only crossUx; crossSec still awaiting → the designer dispatch parks
-    // (no designer rerun) and the readiness scan lists crossSec pending.
-    const ret = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: ux.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor: { userId: 'u1', role: 'owner' },
-    })
-    expect(ret.dispatch.reruns.some((r) => r.targetNodeId === 'designer')).toBe(false)
-    const readiness = await evaluateDesignerRerunReadiness({
-      db,
-      taskId,
-      designerNodeId: 'designer',
-      definition: def,
-      loopIter: 0,
-    })
-    expect(readiness.ready).toBe(false)
-    expect(readiness.pendingCrossClarifyNodeIds).toEqual(['crossSec'])
-  })
+    test('one sibling reject + one submit → ready; sources includes only submit', async () => {
+      const db = harness.db
+      const def: WorkflowDefinition = {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+          { id: 'qSec', kind: 'agent-single', agentName: 'questioner' },
+          { id: 'qUx', kind: 'agent-single', agentName: 'questioner' },
+          { id: 'crossSec', kind: 'clarify-cross-agent' },
+          { id: 'crossUx', kind: 'clarify-cross-agent' },
+        ],
+        edges: [
+          {
+            id: 'e_qsec_cross',
+            source: { nodeId: 'qSec', portName: '__clarify__' },
+            target: { nodeId: 'crossSec', portName: 'questions' },
+          },
+          {
+            id: 'e_qux_cross',
+            source: { nodeId: 'qUx', portName: '__clarify__' },
+            target: { nodeId: 'crossUx', portName: 'questions' },
+          },
+          {
+            id: 'e_csec_d',
+            source: { nodeId: 'crossSec', portName: 'to_designer' },
+            target: { nodeId: 'designer', portName: '__external_feedback__' },
+          },
+          {
+            id: 'e_cux_d',
+            source: { nodeId: 'crossUx', portName: 'to_designer' },
+            target: { nodeId: 'designer', portName: '__external_feedback__' },
+          },
+        ],
+        outputs: [],
+      }
+      const { taskId } = await seedTask(db, { definition: def })
+      const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
+      const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
+      await seedDesignerRun(db, taskId)
+      const sec = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'crossSec',
+        askingNodeId: 'qSec',
+        askingNodeRunId: qSecRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 'sec')],
+      })
+      const ux = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'crossUx',
+        askingNodeId: 'qUx',
+        askingNodeRunId: qUxRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 'ux')],
+      })
 
-  test('one sibling reject + one submit → ready; sources includes only submit', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def: WorkflowDefinition = {
-      $schema_version: 4,
-      inputs: [],
-      nodes: [
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
-        { id: 'qSec', kind: 'agent-single', agentName: 'questioner' },
-        { id: 'qUx', kind: 'agent-single', agentName: 'questioner' },
-        { id: 'crossSec', kind: 'clarify-cross-agent' },
-        { id: 'crossUx', kind: 'clarify-cross-agent' },
-      ],
-      edges: [
-        {
-          id: 'e_qsec_cross',
-          source: { nodeId: 'qSec', portName: '__clarify__' },
-          target: { nodeId: 'crossSec', portName: 'questions' },
-        },
-        {
-          id: 'e_qux_cross',
-          source: { nodeId: 'qUx', portName: '__clarify__' },
-          target: { nodeId: 'crossUx', portName: 'questions' },
-        },
-        {
-          id: 'e_csec_d',
-          source: { nodeId: 'crossSec', portName: 'to_designer' },
-          target: { nodeId: 'designer', portName: '__external_feedback__' },
-        },
-        {
-          id: 'e_cux_d',
-          source: { nodeId: 'crossUx', portName: 'to_designer' },
-          target: { nodeId: 'designer', portName: '__external_feedback__' },
-        },
-      ],
-      outputs: [],
-    }
-    const { taskId } = await seedTask(db, { definition: def })
-    const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
-    const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
-    await seedDesignerRun(db, taskId)
-    const sec = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'crossSec',
-      askingNodeId: 'qSec',
-      askingNodeRunId: qSecRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 'sec')],
+      // Reject sec first (does NOT trigger designer; a stop round produces no
+      // designer entries at all).
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sec.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        directive: 'stop',
+        actor: { userId: 'u1', role: 'owner' },
+      })
+      // Now answer ux — only remaining sibling, sec is stopped (resolved without
+      // feeding). RFC-162: reassign ux's answered round to the designer + dispatch it. Readiness
+      // passes (sec answered-stop = resolved, not pending) and the designer rerun mints carrying
+      // ONLY ux's designer entry (the legacy sources=[ux only] / sourceCount=1).
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: ux.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor: { userId: 'u1', role: 'owner' },
+      })
+      const disp = await reassignThenDispatchDesigner(db, taskId, ux.intermediaryNodeRunId)
+      const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
+      expect(designerRerun).toBeDefined()
+      expect(designerRerun!.entryIds).toHaveLength(1)
     })
-    const ux = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'crossUx',
-      askingNodeId: 'qUx',
-      askingNodeRunId: qUxRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 'ux')],
-    })
-
-    // Reject sec first (does NOT trigger designer; a stop round produces no
-    // designer entries at all).
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sec.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      directive: 'stop',
-      actor: { userId: 'u1', role: 'owner' },
-    })
-    // Now answer ux — only remaining sibling, sec is stopped (resolved without
-    // feeding). RFC-162: reassign ux's answered round to the designer + dispatch it. Readiness
-    // passes (sec answered-stop = resolved, not pending) and the designer rerun mints carrying
-    // ONLY ux's designer entry (the legacy sources=[ux only] / sourceCount=1).
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: ux.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor: { userId: 'u1', role: 'owner' },
-    })
-    const disp = await reassignThenDispatchDesigner(db, taskId, ux.intermediaryNodeRunId)
-    const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
-    expect(designerRerun).toBeDefined()
-    expect(designerRerun!.entryIds).toHaveLength(1)
-  })
-})
+  },
+)
 
 // (The legacy designer-rerun-mint describe was DELETED by RFC-132 — it tested the retired
 // immediate mint itself. The unified dispatch mint's retry_index=max+1 formula is locked by
@@ -578,32 +587,35 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
 // cross-clarify-multi-source-wait.test.ts; inherit-passthrough by the shared
 // buildMintNodeRunValues coverage.)
 
-describe('RFC-056 dispatchCrossClarifyNode persistent-stop short-circuit', () => {
-  test('no persistent stop → dispatch returns "awaiting" (no row mutation)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = defaultDef()
-    const { taskId } = await seedTask(db, { definition: def })
-    const nrId = 'nr_pending_cross'
-    await db.insert(nodeRuns).values({
-      id: nrId,
-      taskId,
-      nodeId: 'cross1',
-      status: 'pending',
-      retryIndex: 0,
-      iteration: 0,
+describeEachProvider(
+  'RFC-056 dispatchCrossClarifyNode persistent-stop short-circuit',
+  (harness) => {
+    test('no persistent stop → dispatch returns "awaiting" (no row mutation)', async () => {
+      const db = harness.db
+      const def = defaultDef()
+      const { taskId } = await seedTask(db, { definition: def })
+      const nrId = 'nr_pending_cross'
+      await db.insert(nodeRuns).values({
+        id: nrId,
+        taskId,
+        nodeId: 'cross1',
+        status: 'pending',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      const out = await dispatchCrossClarifyNode({
+        db,
+        taskId,
+        crossClarifyNodeId: 'cross1',
+        nodeRunId: nrId,
+        definition: def,
+      })
+      expect(out.kind).toBe('awaiting')
+      const fresh = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nrId)))[0]
+      expect(fresh?.status).toBe('pending')
     })
-    const out = await dispatchCrossClarifyNode({
-      db,
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      nodeRunId: nrId,
-      definition: def,
-    })
-    expect(out.kind).toBe('awaiting')
-    const fresh = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nrId)))[0]
-    expect(fresh?.status).toBe('pending')
-  })
-})
+  },
+)
 
 // RFC-128 P0 net: 整轮 seal 现状，P1 逐题改造勿破。这是 cross 「designer 承接链」的
 // 现状锁——整轮答案经此整批注入 designer 的 External Feedback。P1 designer 逐题下发后，
@@ -621,51 +633,58 @@ describe('RFC-056 dispatchCrossClarifyNode persistent-stop short-circuit', () =>
 // RFC-128 P0 net (behavior #4): 整轮 seal 现状，P1 逐题改造勿破。这是 RFC-126
 // 「failed→resume 答过的反问存活」的现成复现，per-question seal 改造后整轮 answered 不变量
 // 仍须成立（轮只在「全题 seal」时翻 answered，partial 纯派生）——此锁不可放松。
-describe('RFC-125 follow-up — failed→resume must NOT drop answered cross-clarify feedback', () => {
-  test('answered cross-clarify feedback survives a fail → CR-1 → resume cycle', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const def = defaultDef()
-    const { taskId } = await seedTask(db, { definition: def })
-    const qRunId = await seedQuestionerRun(db, taskId)
-    await seedDesignerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 'Why Redis?')],
-    })
-    // Human answers; directive=continue dispatches the designer rerun, but it never
-    // completes-with-output (the task fails) → the round stays answered+UNCONSUMED.
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAns('q1')],
-      actor: { userId: 'u1', role: 'owner' },
-    })
+describeEachProvider(
+  'RFC-125 follow-up — failed→resume must NOT drop answered cross-clarify feedback',
+  (harness) => {
+    test('answered cross-clarify feedback survives a fail → CR-1 → resume cycle', async () => {
+      const db = harness.db
+      const def = defaultDef()
+      const { taskId } = await seedTask(db, { definition: def })
+      const qRunId = await seedQuestionerRun(db, taskId)
+      await seedDesignerRun(db, taskId)
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 'Why Redis?')],
+      })
+      // Human answers; directive=continue dispatches the designer rerun, but it never
+      // completes-with-output (the task fails) → the round stays answered+UNCONSUMED.
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAns('q1')],
+        actor: { userId: 'u1', role: 'owner' },
+      })
 
-    // Task fails before the designer consumes the feedback. RFC-126: CR-1 is
-    // RETIRED → the lifecycle scan must NOT abandon the round; it stays 'answered'
-    // so the human's answer is preserved (the deferred queue re-injects it on resume).
-    await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
-    await runLifecycleInvariants({ operations: taskRecoveryOperations(db) })
-    const sess = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0]
-    expect(sess?.status).toBe('answered') // RFC-126: NOT abandoned anymore
+      // Task fails before the designer consumes the feedback. RFC-126: CR-1 is
+      // RETIRED → the lifecycle scan must NOT abandon the round; it stays 'answered'
+      // so the human's answer is preserved (the deferred queue re-injects it on resume).
+      await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
+      await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      })
+      const sess = (
+        await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+      )[0]
+      expect(sess?.status).toBe('answered') // RFC-126: NOT abandoned anymore
 
-    // RESUME the task. RFC-126 fix: the answered round survives — never abandoned —
-    // so its human answer stays available to the designer rerun.
-    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
-    const afterResume = (
-      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
-    )[0]
-    expect(afterResume?.status).toBe('answered')
-  })
-})
+      // RESUME the task. RFC-126 fix: the answered round survives — never abandoned —
+      // so its human answer stays available to the designer rerun.
+      await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+      const afterResume = (
+        await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+      )[0]
+      expect(afterResume?.status).toBe('answered')
+    })
+  },
+)
 
 // ===========================================================================
 // RFC-128 P5-BC §5.2.14 — questioner write-flow invariants, under the RFC-132 unified driver
@@ -674,7 +693,7 @@ describe('RFC-125 follow-up — failed→resume must NOT drop answered cross-cla
 // re-dispatchable, exactly one rerun); a concurrent double answer has ONE winner; an open
 // dispatched questioner entry on the home defers a second mint.
 // ===========================================================================
-describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
+describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', (harness) => {
   const actor = { userId: 'u1', role: 'owner' as const }
 
   // finding 2 + finding 3 (regression ②): a quick whole-round finalize that continues the
@@ -682,7 +701,7 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
   // (dispatched_at is the unified consumed stamp) → home not parked, entries not
   // re-dispatchable, and exactly ONE questioner rerun (no park starvation, no duplicate).
   test('finding 2/3 — quick-finalize continuing the questioner consumes its entries (not parked, not re-dispatchable, single rerun)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
     const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
@@ -736,7 +755,7 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
   // round mint EXACTLY ONE questioner rerun — the seal's per-question lock rejects the loser
   // (ConflictError 'clarify-already-answered' / 'clarify-question-already-sealed').
   test('finding 1 — concurrent cross double-answer mints exactly ONE questioner rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
     const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
@@ -787,7 +806,7 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
   // RECOVERABLE park — the answer commits (round answered, entries sealed-undispatched),
   // the call returns success with dispatchDeferredReason, and NO second rerun mints.
   test('finding 2 (reciprocal) — an OPEN dispatched questioner entry on the home defers the mint (no double rerun)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
     const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({

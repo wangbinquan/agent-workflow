@@ -560,9 +560,9 @@ function entriesByOrigin(db: DbClient, originNodeRunId: string) {
 
 let uninstallProjection = (): void => {}
 
-function createProjectionDb(): DbClient {
+async function createProjectionDb(): Promise<DbClient> {
   const db = createInMemoryDb(MIGRATIONS)
-  uninstallProjection = installCommittedEventProjectionHarness(db)
+  uninstallProjection = await installCommittedEventProjectionHarness(db)
   return db
 }
 
@@ -915,7 +915,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
   // Codex impl-gate (high) — a round FULLY sealed via the CONTROL channel (staged for explicit manual
   // board dispatch) must NOT be hijacked into an auto-dispatch by a stale defer=false submit.
   test('a control-channel fully-sealed round → a stale quick submit is REJECTED (clarify-already-answered), entries NOT auto-dispatched', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
@@ -1413,7 +1413,7 @@ describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idemp
 // ===========================================================================
 describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
   test('self autodispatch → broadcastSelfClarifyAnsweredForRound emits clarify.answered (other clients invalidate)', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
@@ -1432,7 +1432,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
   })
 
   test('cross autodispatch → broadcastCrossClarifyAnsweredForRound emits cross-clarify.answered; stop also emits rejected', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
@@ -1452,7 +1452,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
   })
 
   test('broadcast helper is a NO-OP for a still-awaiting (un-answered) round', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
@@ -1471,7 +1471,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
 
 describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex round-6 finding 2)', () => {
   test('a NON-recoverable dispatch conflict (unparseable snapshot) is RETHROWN, not masked as a deferred success', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [

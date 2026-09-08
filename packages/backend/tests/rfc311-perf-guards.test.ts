@@ -59,15 +59,19 @@ import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
+import ts from 'typescript'
 
+import { OverviewResponseSchema } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { ProviderNeutralDatabase } from '../src/db/query'
+import { eq, type ProviderNeutralDatabase } from '../src/db/query'
 import {
   cachedRepos,
   developmentMissions,
   lifecycleAlerts,
+  memories,
   nodeRunEvents,
   nodeRuns,
+  scheduledTasks,
   taskRepos,
   tasks,
   users,
@@ -77,21 +81,16 @@ import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
 } from '../src/modules/development-automation/infrastructure/missionReadModels'
-import {
-  composeRepositoryWorkspaceOperations,
-  composeSqliteRepositoryWorkspaceStore,
-} from '../src/modules/source-control/composition'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
-import { buildOverview } from '../src/services/overview'
 import {
   describeEachProvider,
   resolveTestProviders,
   type ProviderHarness,
 } from './helpers/eachProvider'
-import { memoryCatalogOf } from './helpers/memoryCatalog'
-import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
+import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import type { RecordedStatement } from './helpers/statementRecorder'
 
@@ -302,19 +301,10 @@ const GUARDED: GuardedPath[] = [
     run: async (db) => listMissionTerminalOutcomeGroups(db as never),
   },
   {
-    // 这里只量现有 legacy overview 算法在两个引擎上的执行。PG daemon 实际使用
-    // composeSystemOverviewQuery 的 owner ports，不能据此宣称已测真实 PG 端点。
+    // 各 provider 的生产查询入口：SQLite buildOverview / PG composeSystemOverviewQuery。
+    // 五组 owner 端口均读真库；这里覆盖 in-process 查询，不启动 HTTP daemon。
     name: '/api/overview — 计数面板',
-    run: (db) => {
-      const actor = actorOf('admin')
-      const store = composeSqliteRepositoryWorkspaceStore(db as never)
-      return buildOverview(
-        db as never,
-        resourceScopeAuthority(db as never, actor),
-        composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
-        memoryCatalogOf(db as never),
-      )
-    },
+    run: (db) => runProductionOverview(db, actorOf('admin')),
   },
   // 周期任务：历史事故密度最高的地方（归档器无界 IN 撞 32766 死循环、备份 VACUUM
   // 全站冻结 30-90 秒），而它们此前一条都没被防护网跑到。
@@ -448,6 +438,90 @@ async function assertPlans(
 }
 
 describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结构性不变量', (harness) => {
+  // 独立于原 200/500 行性能语料及计时：五组 owner 查询都要读到真实非空数据。
+  test('生产 overview 的五组查询在写入后重新计数', async () => {
+    const db = harness.db
+    await seed(db, 3)
+    await db.insert(scheduledTasks).values({
+      id: 'overview-schedule',
+      name: 'nightly',
+      ownerUserId: 'admin',
+      launchKind: 'workflow',
+      launchPayload: JSON.stringify({ workflowId: 'wf1', name: 'nightly', inputs: {} }),
+      scheduleSpec: JSON.stringify({ kind: 'cron', expression: '0 0 * * *', timezone: 'UTC' }),
+      enabled: true,
+      createdAt: T0,
+      updatedAt: T0,
+    })
+    await db.insert(memories).values({
+      id: 'overview-memory',
+      scopeType: 'global',
+      scopeId: null,
+      title: 'Overview count fixture',
+      bodyMd: 'An approved memory counted by the production catalog.',
+      status: 'approved',
+      sourceKind: 'manual',
+      approvedByUserId: 'admin',
+      approvedAt: T0,
+      createdAt: T0,
+    })
+    const overview = GUARDED.find((path) => path.name === '/api/overview — 计数面板')
+    if (overview === undefined) throw new Error('overview-benchmark-not-registered')
+
+    const firstStartedAt = Date.now()
+    const first = OverviewResponseSchema.parse(await overview.run(db))
+    const firstCompletedAt = Date.now()
+    expect(first.resources).toEqual({
+      agents: 0,
+      skills: 0,
+      mcps: 0,
+      plugins: 0,
+      workflows: 1,
+      workgroups: 0,
+      repos: 3,
+      scheduled: 1,
+      memories: 1,
+    })
+    expect(first.tasks).toEqual({ running: 1, awaiting: 0, done7d: 0, failed7d: 0 })
+    expect(Date.parse(first.generatedAt)).toBeGreaterThanOrEqual(firstStartedAt)
+    expect(Date.parse(first.generatedAt)).toBeLessThanOrEqual(firstCompletedAt)
+
+    await db.insert(workflows).values({ id: 'wf2', name: 'daily', definition: '{}' })
+    await db.insert(cachedRepos).values({
+      id: 'overview-extra-repo',
+      urlHash: 'overview-extra-hash',
+      urlRedacted: 'https://example.test/overview.git',
+      localPath: '/cache/overview-extra',
+      defaultBranch: 'main',
+      lastFetchedAt: T0,
+      createdAt: T0,
+    })
+    await db.delete(scheduledTasks).where(eq(scheduledTasks.id, 'overview-schedule'))
+    await db.update(memories).set({ status: 'archived' }).where(eq(memories.id, 'overview-memory'))
+    await db
+      .update(tasks)
+      .set({ status: 'done', finishedAt: Date.now() })
+      .where(eq(tasks.id, 't0000'))
+
+    const secondStartedAt = Date.now()
+    const second = OverviewResponseSchema.parse(await overview.run(db))
+    const secondCompletedAt = Date.now()
+    expect(second.resources).toEqual({
+      agents: 0,
+      skills: 0,
+      mcps: 0,
+      plugins: 0,
+      workflows: 2,
+      workgroups: 0,
+      repos: 4,
+      scheduled: 0,
+      memories: 0,
+    })
+    expect(second.tasks).toEqual({ running: 0, awaiting: 0, done7d: 1, failed7d: 0 })
+    expect(Date.parse(second.generatedAt)).toBeGreaterThanOrEqual(secondStartedAt)
+    expect(Date.parse(second.generatedAt)).toBeLessThanOrEqual(secondCompletedAt)
+  })
+
   test.each(GUARDED.map((p) => [p.name, p] as const))(
     '%s',
     async (name, path) => {
@@ -605,6 +679,80 @@ describe('RFC-311 性能防护 —— 防护面本身不许缩水', () => {
     expect(GUARDED.length).toBeGreaterThanOrEqual(5)
     expect(new Set(GUARDED.map((p) => p.name)).size).toBe(GUARDED.length)
     expect(UNBOUNDED_TABLES.length).toBeGreaterThanOrEqual(6)
+  })
+
+  test('两个 overview 性能入口都执行实际生产查询组合', () => {
+    const sourceOf = (name: string): ts.SourceFile => {
+      const path = resolve(import.meta.dir, name)
+      return ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true)
+    }
+    for (const [file, registry] of [
+      ['rfc311-perf-guards.test.ts', 'GUARDED'],
+      ['rfc359-w6-t26-postgresql-plan-audit.test.ts', 'AUDITED'],
+    ] as const) {
+      const source = sourceOf(file)
+      const declaration = source.statements
+        .filter(ts.isVariableStatement)
+        .flatMap((statement) => statement.declarationList.declarations)
+        .find((node) => node.name.getText(source) === registry)
+      if (
+        declaration?.initializer === undefined ||
+        !ts.isArrayLiteralExpression(declaration.initializer)
+      )
+        throw new Error(`missing-overview-registry: ${file}`)
+      const overview = declaration.initializer.elements
+        .filter(ts.isObjectLiteralExpression)
+        .find((entry) =>
+          entry.properties.some(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              property.name.getText(source) === 'name' &&
+              ts.isStringLiteral(property.initializer) &&
+              property.initializer.text === '/api/overview — 计数面板',
+          ),
+        )
+      const run = overview?.properties.find(
+        (property) => ts.isPropertyAssignment(property) && property.name.getText(source) === 'run',
+      )
+      if (
+        run === undefined ||
+        !ts.isPropertyAssignment(run) ||
+        !ts.isArrowFunction(run.initializer)
+      )
+        throw new Error(`missing-overview-run: ${file}`)
+      const body = run.initializer.body
+      expect(ts.isCallExpression(body), `${file}: overview 必须直接执行生产装配`).toBe(true)
+      if (!ts.isCallExpression(body)) throw new Error(`legacy-overview-benchmark: ${file}`)
+      expect(body.expression.getText(source)).toBe('runProductionOverview')
+      expect(body.arguments.map((argument) => argument.getText(source))).toEqual([
+        'db',
+        "actorOf('admin')",
+      ])
+    }
+
+    const helper = sourceOf('helpers/productionOverview.ts')
+    const entry = helper.statements
+      .filter(ts.isFunctionDeclaration)
+      .find((node) => node.name?.text === 'runProductionOverview')
+    const pgBranch = entry?.body?.statements.find(ts.isIfStatement)
+    if (pgBranch === undefined || !ts.isBlock(pgBranch.thenStatement))
+      throw new Error('missing-postgresql-overview-branch')
+    expect(pgBranch.expression.getText(helper)).toBe('isPostgresql(db)')
+    const pgReturn = pgBranch.thenStatement.statements.find(ts.isReturnStatement)?.expression
+    if (
+      pgReturn === undefined ||
+      !ts.isCallExpression(pgReturn) ||
+      !ts.isPropertyAccessExpression(pgReturn.expression)
+    )
+      throw new Error('missing-postgresql-overview-execute')
+    expect(pgReturn.expression.name.text).toBe('execute')
+    const root = pgReturn.expression.expression
+    if (!ts.isCallExpression(root)) throw new Error('missing-system-overview-composition')
+    expect(root.expression.getText(helper)).toBe('composeSystemOverviewQuery')
+    const sqliteReturn = entry?.body?.statements.find(ts.isReturnStatement)?.expression
+    if (sqliteReturn === undefined || !ts.isCallExpression(sqliteReturn))
+      throw new Error('missing-sqlite-overview-execute')
+    expect(sqliteReturn.expression.getText(helper)).toBe('buildOverview')
   })
 })
 

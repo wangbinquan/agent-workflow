@@ -158,7 +158,7 @@ async function buildSingle(
   const appHome = join(tmp, 'appHome')
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
-  const uninstallProjection = installCommittedEventProjectionHarness(db)
+  const uninstallProjection = await installCommittedEventProjectionHarness(db)
 
   const [ownerId, memberId, strangerId] = ['owner', 'member', 'stranger'].map(() => ulid())
   await db.insert(users).values(
@@ -301,7 +301,7 @@ async function buildMulti(
   mkdirSync(appHome, { recursive: true })
   mkdirSync(worktree, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
-  const uninstallProjection = installCommittedEventProjectionHarness(db)
+  const uninstallProjection = await installCommittedEventProjectionHarness(db)
   const caseGenId = ulid()
   await db.insert(agentsTable).values({
     id: caseGenId,

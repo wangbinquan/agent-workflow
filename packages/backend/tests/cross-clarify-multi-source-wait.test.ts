@@ -22,20 +22,18 @@
 // If any of these go red the multi-source aggregation contract drifted —
 // investigate before relaxing.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound, evaluateDesignerRerunReadiness } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -47,7 +45,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // aggregates every source. The park/pending assertions before all siblings answer are unchanged
 // (a not-yet-answered sibling still keeps the designer parked in evaluateDesignerRerunReadiness).
 async function reassignAllThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunIds: string[],
 ) {
@@ -130,7 +128,7 @@ function threeSiblingDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = threeSiblingDef()
   const wfId = `wf_${taskId}`
@@ -142,8 +140,15 @@ async function seedTask(db: DbClient): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
@@ -155,10 +160,25 @@ async function seedTask(db: DbClient): Promise<string> {
     inputs: '{}',
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
-async function seedQRun(db: DbClient, taskId: string, nodeId: string): Promise<string> {
+async function seedQRun(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  nodeId: string,
+): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 6)}`
   await db.insert(nodeRuns).values({
     id,
@@ -171,7 +191,7 @@ async function seedQRun(db: DbClient, taskId: string, nodeId: string): Promise<s
   return id
 }
 
-async function seedDesignerRun(db: DbClient, taskId: string): Promise<string> {
+async function seedDesignerRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = `nr_d_${Math.random().toString(36).slice(2, 6)}`
   await db.insert(nodeRuns).values({
     id,
@@ -185,14 +205,13 @@ async function seedDesignerRun(db: DbClient, taskId: string): Promise<string> {
   return id
 }
 
-async function buildHarness(): Promise<{
-  db: DbClient
+async function buildHarness(db: ProviderNeutralDatabase): Promise<{
+  db: ProviderNeutralDatabase
   taskId: string
   sec: string
   ux: string
   perf: string
 }> {
-  const db = createInMemoryDb(MIGRATIONS)
   const taskId = await seedTask(db)
   await seedDesignerRun(db, taskId)
   const qSec = await seedQRun(db, taskId, 'qSec')
@@ -247,9 +266,9 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 C3 — multi-source wait', () => {
+describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
   test('1/3 answered → designer PARKS (no designer rerun); readiness lists the OTHER two pending', async () => {
-    const { db, taskId, sec } = await buildHarness()
+    const { db, taskId, sec } = await buildHarness(harness.db)
     const ret = await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -274,7 +293,7 @@ describe('RFC-056 C3 — multi-source wait', () => {
   })
 
   test('2/3 answered → designer still parked; readiness lists the LAST one pending', async () => {
-    const { db, taskId, sec, ux } = await buildHarness()
+    const { db, taskId, sec, ux } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -302,7 +321,7 @@ describe('RFC-056 C3 — multi-source wait', () => {
   })
 
   test('partial answer does NOT create a new pending designer node_run', async () => {
-    const { db, taskId, sec, ux } = await buildHarness()
+    const { db, taskId, sec, ux } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -326,7 +345,7 @@ describe('RFC-056 C3 — multi-source wait', () => {
   })
 
   test('3/3 answered → dispatching the designer entries mints ONE rerun aggregating all 3 sources', async () => {
-    const { db, taskId, sec, ux, perf } = await buildHarness()
+    const { db, taskId, sec, ux, perf } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -358,7 +377,7 @@ describe('RFC-056 C3 — multi-source wait', () => {
   })
 
   test('final answer creates exactly ONE elevated designer node_run + consumes ALL 3 rounds', async () => {
-    const { db, taskId, sec, ux, perf } = await buildHarness()
+    const { db, taskId, sec, ux, perf } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

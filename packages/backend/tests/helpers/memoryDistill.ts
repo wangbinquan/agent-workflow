@@ -1,4 +1,4 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { createMemoryDistillSessionCapture } from '@/modules/memory/infrastructure/memoryDistillSessionCapture'
@@ -7,7 +7,10 @@ import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants
 import { enqueueDistillJob } from '@/modules/memory/application/distill/schedule'
 import { appHome } from '@/util/paths'
 
-export function createSqliteMemoryDistillTestContext(db: DbClient, root = appHome()) {
+export function createSqliteMemoryDistillTestContext(
+  db: ProviderNeutralDatabase,
+  root = appHome(),
+) {
   const reviewedArtifacts = new DatabaseCommittedReviewArtifactReader(db, root)
   return Object.freeze({
     store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
@@ -17,7 +20,9 @@ export function createSqliteMemoryDistillTestContext(db: DbClient, root = appHom
 }
 
 /** Provider-real test participant for consumers that only enqueue work. */
-export function createSqliteMemoryDistillEnqueuer(db: DbClient): MemoryDistillEnqueuer {
+export function createSqliteMemoryDistillEnqueuer(
+  db: ProviderNeutralDatabase,
+): MemoryDistillEnqueuer {
   const store = new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db))
   return Object.freeze({
     enqueue: async (input) => await enqueueDistillJob(store, input),

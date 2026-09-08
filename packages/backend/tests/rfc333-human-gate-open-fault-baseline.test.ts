@@ -208,7 +208,7 @@ describe('RFC-333 open fault witnesses', () => {
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
     const db = createInMemoryDb(MIGRATIONS)
-    const uninstallProjection = installCommittedEventProjectionHarness(db)
+    const uninstallProjection = await installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
     try {
@@ -338,7 +338,7 @@ describe('RFC-333 open fault witnesses', () => {
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
     const db = createInMemoryDb(MIGRATIONS)
-    const uninstallProjection = installCommittedEventProjectionHarness(db)
+    const uninstallProjection = await installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
     try {
@@ -403,7 +403,7 @@ describe('RFC-333 open fault witnesses', () => {
 
   test('clarify round failure leaves only a retryable prepared manifest, then retries atomically', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const uninstallProjection = installCommittedEventProjectionHarness(db)
+    const uninstallProjection = await installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
     try {

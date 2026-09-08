@@ -63,7 +63,7 @@ async function buildHarness(opts?: {
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
   const db = createInMemoryDb(MIGRATIONS)
-  const committedEvents = installCommittedEventDeliveryHarness(db)
+  const committedEvents = await installCommittedEventDeliveryHarness(db)
   await db.insert(agentsTable).values({
     id: ulid(),
     name: 'doc',

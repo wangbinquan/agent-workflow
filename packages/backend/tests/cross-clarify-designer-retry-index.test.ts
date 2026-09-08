@@ -26,20 +26,18 @@
 // retry_index at the same wrapper-loop iteration. If this test goes red,
 // the freshness shield is gone — investigate before relaxing.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -50,7 +48,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // designer rerun via the SAME buildFrontierMintPlan retry_index bump this file locks. This helper
 // preserves the exact designer-rerun-mint coverage through the new path.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -124,7 +122,7 @@ function fixtureDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = fixtureDef()
   const wfId = `wf_${taskId}`
@@ -136,8 +134,15 @@ async function seedTask(db: DbClient): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
+  // RFC-359: preserve migration 0210's original SQLite root fields and JSON key order.
+  // continuationSlotKey hashes this raw string.
+  const lineageSlotPathJson = JSON.stringify([
+    { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+  ])
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson,
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
@@ -149,6 +154,17 @@ async function seedTask(db: DbClient): Promise<string> {
     inputs: '{}',
     startedAt: Date.now(),
   })
+  // Both providers start from the original SQLite-materialized row.
+  expect(
+    await db
+      .select({
+        executionLineageId: tasks.executionLineageId,
+        lineageSlotPathJson: tasks.lineageSlotPathJson,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get(),
+  ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
@@ -158,7 +174,7 @@ async function seedTask(db: DbClient): Promise<string> {
 // order, matching how production mints rows).
 let seedSeq = 0
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: Partial<typeof nodeRuns.$inferInsert>,
@@ -184,9 +200,9 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
+describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', (harness) => {
   test('designer prior retry_index=9 (self-clarify storm) — new pending row strictly beats it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
 
     // Mirror the live failure shape: designer ran many self-clarify rounds
@@ -254,7 +270,7 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
     // No clarify storm: prior designer ran exactly once at retry_index=0.
     // The bump must still produce a strictly greater retry_index so the
     // contract is invariant w.r.t. the prior retry depth.
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRun(db, taskId, 'designer', { retryIndex: 0, preSnapshot: 'snap-d' })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 0 })
@@ -294,7 +310,7 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
     // RFC-096: `lastDesigner` is picked by pure ULID id order — the
     // iteration=1 row is seeded LAST so it has the largest id and wins
     // deterministically (startedAt fields kept for row realism only).
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRun(db, taskId, 'designer', { iteration: 0, retryIndex: 0, startedAt: 100 })
     await seedRun(db, taskId, 'designer', { iteration: 0, retryIndex: 5, startedAt: 200 })

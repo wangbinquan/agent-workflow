@@ -4,9 +4,9 @@
 // of a 51-file reshape; internally everything lands in `clarify_rounds`.
 
 import { clarifyRounds, nodeRuns } from '../src/db/schema'
-import type { DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 
-type DbLike = Pick<DbClient, 'insert'>
+type DbLike = Pick<ProviderNeutralDatabase, 'insert'>
 
 export interface LegacySelfClarifyValues {
   id: string
@@ -39,7 +39,7 @@ async function ensureRunStubs(
 ): Promise<void> {
   for (const id of runIds) {
     if (id === null || id === '') continue
-    await (db as unknown as DbClient)
+    await db
       .insert(nodeRuns)
       .values({ id, taskId, nodeId: `stub:${id}`, status: 'done', retryIndex: 0, iteration: 0 })
       .onConflictDoNothing()

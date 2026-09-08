@@ -183,7 +183,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   writeFileSync(join(repo, 'stray.txt'), 'stray\n')
 
   const db = createInMemoryDb(MIGRATIONS)
-  const committedEvents = installCommittedEventDeliveryHarness(db)
+  const committedEvents = await installCommittedEventDeliveryHarness(db)
   const [owner, member, stranger, extraUser] = [ulid(), ulid(), ulid(), ulid()]
   await db.insert(users).values(
     [owner, member, stranger, extraUser].map((id, i) => ({

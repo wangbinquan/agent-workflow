@@ -10,16 +10,14 @@
 //      falls back to clarifyNodeId.
 //   3. Snapshot JSON is corrupt → field is null (no throw).
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function buildDef(clarifyNode: WorkflowNode): WorkflowDefinition {
   return {
@@ -46,7 +44,7 @@ function buildDef(clarifyNode: WorkflowNode): WorkflowDefinition {
 }
 
 async function seedSessionForSnapshot(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   snapshotJson: string,
   clarifyNodeId: string,
 ): Promise<{ taskId: string; intermediaryNodeRunId: string }> {
@@ -60,6 +58,10 @@ async function seedSessionForSnapshot(
     schemaVersion: 3,
   })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture-task',
     id: taskId,
     workflowId: `wf_${taskId}`,
@@ -105,9 +107,9 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
+describeEachProvider('clarify summary + detail — clarifyNodeTitle enrichment', (harness) => {
   test('list surfaces clarify node title from the workflow snapshot', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({
       id: 'clarify_db',
       kind: 'clarify',
@@ -123,7 +125,7 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
   })
 
   test('detail surfaces clarify node title from the workflow snapshot', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({
       id: 'clarify_db',
       kind: 'clarify',
@@ -140,7 +142,7 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
   })
 
   test('list returns null clarifyNodeTitle when the clarify node has no title set', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({ id: 'clarify_legacy', kind: 'clarify' } as WorkflowNode)
     const { taskId } = await seedSessionForSnapshot(db, JSON.stringify(def), 'clarify_legacy')
 
@@ -151,7 +153,7 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
   })
 
   test('detail returns null clarifyNodeTitle for whitespace-only title (no false-positive)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const def = buildDef({
       id: 'clarify_blank',
       kind: 'clarify',
@@ -167,7 +169,7 @@ describe('clarify summary + detail — clarifyNodeTitle enrichment', () => {
   })
 
   test('list returns null clarifyNodeTitle when the workflow snapshot is corrupt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedSessionForSnapshot(db, '{not valid json', 'clarify_ghost')
 
     const out = await listClarifyRoundSummaries(db)

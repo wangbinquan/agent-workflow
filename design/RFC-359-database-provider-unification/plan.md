@@ -28,7 +28,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                              | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                           | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                    | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 727 个测试文件、1661 次实际 `createInMemoryDb` 调用，其中 723 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 704 个测试文件、1572 次实际 `createInMemoryDb` 调用，其中 700 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；W12 增补生产启动内核到 task done 的双引擎完整执行链                                                                                          | 进行中 |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                    | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                   | 待办   |
@@ -365,6 +365,49 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
   `composeSystemOverviewQuery` 装配链。500 行/9 样本的 P95 是该组最大值，也不是完整
   RFC-311 性能基线。本批只更正误称结构指标已完成性能验收的注释，执行 AST、断言与阈值均不变。
   真正剩余重复实现、全量行为覆盖、生产 overview 性能证据与原 P95 条款仍未闭合，RFC 保持 In Progress。
+
+
+### W12 第十一批：事件装配、行为迁移与实际 Overview 查询取证
+
+- `committedEventHarness` 的 cutover 写入、两个安装入口及全部 12 个旧调用文件形成完整 await 链；
+  原 pump/dispatcher 参数、返回句柄、清理顺序与消费者保持。九个未迁移的调用文件只改异步接线，
+  独立运行 AST 比较确认差异仅为 async/await；不把这些文件计作双引擎迁移。
+- 23 个旧行为套件迁入 harness：恢复/查询 11 个、澄清 9 个、事件投影依赖 3 个。保留 106 个
+  本地范围内的原功能用例与 332 次原动态期望，候选 106 pass / 357 expect（新增 25 次同库起点见证）。
+  其中 105 个数据库场景按 provider 运行、1 个源码场景单跑；另 4 个纯场景原样保留，未重复执行。
+  恢复夹具使用真实 provider persistence，原服务与实际被调查询保持。没有把旧物理 SQLite helper
+  仅靠类型断言包装成中立 helper；memoryDistill 与 clarify-fixtures 两个 helper 的运行 JS 字节不变。
+- 实际旧 SQLite 行对照保留 task 根 lineage 与原 JSON 字节/hash。11 套件另核验 118 对实际起点
+  （57 task / 61 node-run）全字段相同。0224 已删除 node-run 插入触发器，直接 run seed 仍保持 NULL；
+  不能只看 0210 的历史 SQL 给夹具凭空补值。review refresh 的原故障点在两个引擎用真实 trigger
+  注入，原错误文本及回滚/重试期望保持，PostgreSQL 执行结果待本批 hosted CI。
+- 全树 AST 清点：1898 个测试文件，704 文件 / 1572 次直接 SQLite 构库（本批减 23 文件 / 89 调用），
+  700 个含构库文件无 harness、287 个文件调用 harness；W12 已迁旧套件 108 → 131。
+  T19f 精确文件账本 807 → 784。机制专属测试仍在分母内，不能把这一清点当作业务遗漏的精确数量。
+- Overview 的 RFC-311 性能守卫及 T26 计划审计均接实际生产查询：SQLite 保留 buildOverview，PG
+  以同库的五组真实 owner 端口执行 composeSystemOverviewQuery。新增独立非空语料与变更后重读，
+  防止只量空库或错误根；原 8 条性能路径、7 条计划路径及阈值/采样量保持。SQLite 两文件 17 pass /
+  80 expect，真实 PG 查询、EXPLAIN 与 P95 仍待 hosted；这里不包含 HTTP daemon 开销。
+- 第十批 `e613c252c` / Main CI `34180742753` 终态 failure：29/36 job success。三条类型/架构
+  账本失败各在两个 OS 出现，另有两个 PG review-multidoc 并发用例失败；真 PG 专项、全部 10 个
+  E2E 与三个 binary job 通过。维护 soak `34180742732` 和 Git 协议 `34180742743` 同 SHA 成功。
+  不能把这些子任务通过记作 Main 全绿。
+- 第十批 AC-11 诊断仍未达原条款：同 job `101919180351` 的八条 PG P95 均高于 SQLite，
+  比值 1.5–10.6×；overview 3.51ms / 2.34ms 当时仍量 legacy 算法，不作为实际 PG 根的证据。
+  原 P95 判据保持，不能以本批改正确测量入口代替性能达标。
+- 三条类型/架构失败按真实合同修正：能力 discriminator 留在模块内部；providerRuntime 只按自己
+  实际消费的 reads 能力约束并原样透传调用方类型，启动根继续显式要求四能力。没有新增 DAG 例外，
+  四个生产文件运行 JS 字节不变；原 34 个类型负例保持，新增完整/窄/联合/可选输入透传证明。
+- 两个 review-multidoc 并发夹具通过真实写屏障与任务队列建立预定赢家，再发出另一服务请求；
+  两个 Promise 在释放前同时在途。原测试误用数组顺序推断异步 scope 查询完成顺序，PG 不保证该顺序。
+  原结果、失败码、输出及审计选择断言全部保留，SQLite 9 pass / 88 expect（原 82 + 6 并发见证）；
+  PostgreSQL 屏障执行仍待 hosted，不将同机 SQLite 通过等同于真 PG 修复证明。
+- 当前候选完整 backend tsc、45 个核心文件 lint/格式、父事件调用链的类型感知 Promise 检查及
+  T19b/d/f 定向守卫通过。架构与导出/依赖检查的 139 项中，首次只有两个生成工件摘要过期；按当前
+  内容刷新 provenance 后定向复验通过，其他原通过项沿用相同候选内容。没有放松守卫或跑全量本地门。
+  canonical 维持 1728 入口 / 272 事务；导入 5281、例外 4749、public surface 983、符号 24932。
+- 本批继续保持 In Progress；未运行本地 PostgreSQL、daemon、soak 或 E2E。真实重复实现、
+  全量行为参数化与原 P95 判据仍须继续完成，最终整仓结论仍待包含本批的 exact-SHA hosted CI。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

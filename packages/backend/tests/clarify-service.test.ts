@@ -19,10 +19,10 @@
 // Together with clarify-no-cross-review-interference (separate file), this
 // keeps the create/seal unit lock.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -42,10 +42,8 @@ import type {
 } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { id?: string; worktreePath?: string; definition?: WorkflowDefinition } = {},
 ): Promise<{ taskId: string }> {
   const taskId = opts.id ?? `task_${Math.random().toString(36).slice(2, 8)}`
@@ -93,6 +91,11 @@ async function seedTask(
     status: 'running',
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
+    // Match the root lineage that SQLite migration 0210 supplied to this fixture.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return { taskId }
 }
@@ -124,9 +127,8 @@ function makeAnswer(overrides: Partial<ClarifyAnswer> = {}): ClarifyAnswer {
 
 let uninstallProjection = (): void => {}
 
-function createProjectionDb(): DbClient {
-  const db = createInMemoryDb(MIGRATIONS)
-  uninstallProjection = installCommittedEventProjectionHarness(db)
+async function createProjectionDb(db: ProviderNeutralDatabase): Promise<ProviderNeutralDatabase> {
+  uninstallProjection = await installCommittedEventProjectionHarness(db)
   return db
 }
 
@@ -140,9 +142,9 @@ afterEach(() => {
   resetBroadcastersForTests()
 })
 
-describe('createClarifyRound', () => {
+describeEachProvider('createClarifyRound', (harness) => {
   test('inserts row, parks clarify node_run awaiting_human, broadcasts clarify.created', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb(harness.db)
     const { taskId } = await seedTask(db)
 
     // Pre-existing source agent node_run (asking node_run).
@@ -184,9 +186,11 @@ describe('createClarifyRound', () => {
     const nrRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
     expect(nrRows[0]?.status).toBe('awaiting_human')
     expect(nrRows[0]?.nodeId).toBe('clarify1')
-    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('awaiting_human')
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)).get())?.status).toBe(
+      'awaiting_human',
+    )
     expect(
-      db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).get(),
+      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).get(),
     ).toMatchObject({
       originNodeRunId: clarifyNodeRunId,
       questionId: 'q1',
@@ -200,7 +204,7 @@ describe('createClarifyRound', () => {
   })
 
   test('exact re-emit replays one round/question/event; changed content advances the stable gate', async () => {
-    const db = createProjectionDb()
+    const db = await createProjectionDb(harness.db)
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_source_reemit'
     await db.insert(nodeRuns).values({
@@ -229,10 +233,10 @@ describe('createClarifyRound', () => {
     expect(replay.round.id).toBe(first.round.id)
     expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(1)
     expect(
-      db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
     ).toHaveLength(1)
     expect(
-      db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
     ).toHaveLength(1)
 
     const changed = await createClarifyRound({
@@ -243,24 +247,28 @@ describe('createClarifyRound', () => {
     expect(changed.intermediaryNodeRunId).toBe(first.intermediaryNodeRunId)
     expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(2)
     expect(
-      db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
     ).toHaveLength(2)
-    expect(db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all()).toEqual([
+    expect(
+      await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+    ).toEqual([
       expect.objectContaining({ questionId: 'q1', questionTitle: 'Which durable database?' }),
     ])
     expect(
-      db
-        .select({ revision: collaborationGateOperations.resultGateRevision })
-        .from(collaborationGateOperations)
-        .where(eq(collaborationGateOperations.taskId, taskId))
-        .all()
+      (
+        await db
+          .select({ revision: collaborationGateOperations.resultGateRevision })
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.taskId, taskId))
+          .all()
+      )
         .map((operation) => operation.revision)
         .sort((left, right) => (left ?? 0) - (right ?? 0)),
     ).toEqual([1, 2])
   })
 
   test('passes through sourceShardKey for agent-multi and clarifyIteration on the node_run row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_multi_shard'
     await db.insert(nodeRuns).values({

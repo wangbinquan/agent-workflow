@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第十批：协作能力合同、Agent 解码合一与 17 套件迁移；逐批 CI 与未达 AC 继续以记分板为准
+- W12 第十一批：23 套件迁移、事件夹具异步装配与真实 PG Overview 测量；逐批 CI 与未达 AC 继续以记分板为准
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）
@@ -169,7 +169,7 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
   的公共扫描/收据与每目标事务 atom 均已合一，保留既有提交后停止和无 driver 收尾机制。
   自动修复循环已合一；跨目录、内联实现继续按实际端口核验。
 - AC-6 仍未达成：CI 的真 PG 服务已经到位，但仍有大量行为用例直接创建 SQLite 内存库。
-  W12 已迁 108 个技能/MCP/memory/开发自动化等行为套件，真实任务经过完整 provider 工厂执行到 done；
+  W12 已迁 131 个技能/MCP/memory/开发自动化等行为套件，真实任务经过完整 provider 工厂执行到 done；
   尚未迁完的行为用例与机制专属测试必须逐项区分。
 - AC-11 原条款未变：当前结构成本守卫和 P95 诊断不能证明“PG 各端点 P95 不劣于 SQLite”。
   验收不得用前者替代后者，也不得仅凭 CI 绿色把本 RFC 标为 Done。

@@ -1,4 +1,3 @@
-import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
@@ -128,10 +127,14 @@ interface SelectedTaskExecutionProviderRuntimeBase {
   readonly background: TaskExecutionBackgroundControl
 }
 
-export interface SelectedSqliteTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
+type SqliteRouteCollaborationContext = SqliteTaskRouteOperationsDependencies['collaboration']
+
+export interface SelectedSqliteTaskExecutionProviderRuntime<
+  C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
+> extends SelectedTaskExecutionProviderRuntimeBase {
   readonly provider: 'sqlite'
   /** The route context constructed in this same provider graph. */
-  readonly collaboration: CollaborationRouteContext
+  readonly collaboration: C
 }
 
 export interface SelectedPostgresqlTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
@@ -155,9 +158,9 @@ export interface SelectedPostgresqlTaskExecutionProviderRuntime extends Selected
   readonly workgroupTaskRoom: WorkgroupTaskRoomTaskParticipantFactory
 }
 
-export type SelectedTaskExecutionProviderRuntime =
-  | SelectedSqliteTaskExecutionProviderRuntime
-  | SelectedPostgresqlTaskExecutionProviderRuntime
+export type SelectedTaskExecutionProviderRuntime<
+  C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
+> = SelectedSqliteTaskExecutionProviderRuntime<C> | SelectedPostgresqlTaskExecutionProviderRuntime
 
 /** Late route composition breaks the Collaboration↔TaskExecution read-model cycle. */
 export interface TaskExecutionProviderRouteContext {
@@ -175,7 +178,9 @@ function cancellationCommand(
   })
 }
 
-export interface SqliteTaskExecutionProviderRuntimeDependencies {
+export interface SqliteTaskExecutionProviderRuntimeDependencies<
+  C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
+> {
   readonly runtime: Omit<
     Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0],
     'db' | 'persistence' | 'codeHostConnections'
@@ -191,7 +196,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies {
     SqliteTaskRouteOperationsDependencies,
     'db' | 'recovery' | 'collaboration'
   > & {
-    readonly collaboration: CollaborationRouteContext
+    readonly collaboration: C
   }
   readonly lifecycleRepair: Omit<Parameters<typeof bindTaskLifecycleRepair>[0], 'db' | 'operations'>
   readonly fusion: Omit<
@@ -208,10 +213,12 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies {
 }
 
 /** Complete SQLite binding retained for direct tests and legacy bootstrap. */
-export function composeSqliteTaskExecutionProviderRuntime(
+export function composeSqliteTaskExecutionProviderRuntime<
+  C extends SqliteRouteCollaborationContext,
+>(
   db: DbClient,
-  dependencies: SqliteTaskExecutionProviderRuntimeDependencies,
-): SelectedSqliteTaskExecutionProviderRuntime {
+  dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
+): SelectedSqliteTaskExecutionProviderRuntime<C> {
   const persistence = createSqliteTaskExecutionPersistence(db)
   const participants = createSqliteTaskExecutionRuntimeParticipants({
     db,

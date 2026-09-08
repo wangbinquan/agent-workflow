@@ -5,12 +5,11 @@
 // → 记 heartbeat-kill 事件；disabled → no-op；隔离 → 跳；kill 非 'killed' → 跳）；
 // ② findStalledRunningChildren 真查询（running+pid+静默 → 命中；近期/非 running/无 pid → 排除）。
 
-import { resolve } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   findStalledRunningChildren,
@@ -20,9 +19,8 @@ import {
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
 afterEach(() => {
@@ -30,12 +28,16 @@ afterEach(() => {
   __resetRecoveryCountersForTest()
 })
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
   await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -55,12 +57,12 @@ function stalled(taskId: string, id = ulid()): StalledRun {
   return { id, taskId, pid: 4242, startedAt: 1000, spawnBinaryPath: '/x/opencode', lastTs: 1000 }
 }
 
-describe('RFC-108 T20 — heartbeat-kill loop', () => {
+describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
   test('enabled + stalled + killed → killed list + records heartbeat-kill event', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const run = stalled(taskId)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const res = await runHeartbeatKillOnce({
       operations,
       enabled: true,
@@ -77,8 +79,8 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
   })
 
   test('disabled → no-op (never queries or kills)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const operations = taskRecoveryOperations(db)
+    const db = harness.db
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     let queried = false
     const res = await runHeartbeatKillOnce({
       operations,
@@ -95,9 +97,9 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
   })
 
   test('quarantined task → skipped', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     for (let i = 0; i < 4; i++) {
       await recordAutoRecoveryAttempt(operations, taskId, BREAKER, 1000)
     }
@@ -113,9 +115,9 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
   })
 
   test('kill outcome other than killed → skipped (window-expired / command-mismatch)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const res = await runHeartbeatKillOnce({
       operations,
       enabled: true,
@@ -128,9 +130,9 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
   })
 })
 
-describe('RFC-108 T20 — findStalledRunningChildren query', () => {
+describeEachProvider('RFC-108 T20 — findStalledRunningChildren query', (harness) => {
   async function seedRun(
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     taskId: string,
     opts: { status: string; pid: number | null; startedAt: number | null },
   ): Promise<string> {
@@ -147,7 +149,7 @@ describe('RFC-108 T20 — findStalledRunningChildren query', () => {
   }
 
   test('returns running+pid+silent runs; excludes recent / non-running / no-pid', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const now = 1_000_000
     const stallMs = 1000
@@ -156,7 +158,11 @@ describe('RFC-108 T20 — findStalledRunningChildren query', () => {
     await seedRun(db, taskId, { status: 'done', pid: 333, startedAt: now - 5000 }) // not running → excluded
     await seedRun(db, taskId, { status: 'running', pid: null, startedAt: now - 5000 }) // no pid → excluded
 
-    const found = await findStalledRunningChildren(taskRecoveryOperations(db), stallMs, now)
+    const found = await findStalledRunningChildren(
+      createTaskExecutionPersistence(db).recoveryAdministration,
+      stallMs,
+      now,
+    )
     expect(found.map((r) => r.id)).toEqual([silent])
   })
 })

@@ -5,19 +5,19 @@
 // → S6 告警；② 属主活跃 → 无 S6；③ system-owned（无人类成员边界）→ 无 S6；④ 属主停用
 // 但有活跃协作者 → 无 S6（仍有人能应答）。
 
-import { resolve } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedUser(db: DbClient, status: 'active' | 'disabled' | 'invited'): Promise<string> {
+async function seedUser(
+  db: ProviderNeutralDatabase,
+  status: 'active' | 'disabled' | 'invited',
+): Promise<string> {
   const id = ulid()
   await db.insert(users).values({
     id,
@@ -31,12 +31,19 @@ async function seedUser(db: DbClient, status: 'active' | 'disabled' | 'invited')
   return id
 }
 
-async function seedAwaitingTask(db: DbClient, ownerUserId: string | null): Promise<string> {
+async function seedAwaitingTask(
+  db: ProviderNeutralDatabase,
+  ownerUserId: string | null,
+): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
   await db.insert(workflows).values({ id: wfId, name: 'w', definition: JSON.stringify(def) })
   await db.insert(tasks).values({
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -56,41 +63,41 @@ async function seedAwaitingTask(db: DbClient, ownerUserId: string | null): Promi
 const s6 = (r: { openAlerts: Array<{ taskId: string; rule: string }> }, taskId: string): boolean =>
   r.openAlerts.some((a) => a.taskId === taskId && a.rule === 'S6')
 
-describe('RFC-108 T14 — S6 member-deadlock', () => {
+describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
   test('awaiting task whose owner is disabled → S6 alert', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = await seedUser(db, 'disabled')
     const taskId = await seedAwaitingTask(db, owner)
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(true)
   })
 
   test('awaiting task with an ACTIVE owner → no S6', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = await seedUser(db, 'active')
     const taskId = await seedAwaitingTask(db, owner)
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(false)
   })
 
   test('system-owned / no human members → no S6 (no membership boundary)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAwaitingTask(db, '__system__')
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(false)
   })
 
   test('disabled owner but an ACTIVE collaborator → no S6 (someone can still answer)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const owner = await seedUser(db, 'disabled')
     const collab = await seedUser(db, 'active')
     const taskId = await seedAwaitingTask(db, owner)
@@ -102,7 +109,7 @@ describe('RFC-108 T14 — S6 member-deadlock', () => {
       addedAt: Date.now(),
     })
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(false)
