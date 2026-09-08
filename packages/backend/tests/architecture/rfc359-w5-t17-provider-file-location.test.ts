@@ -34,7 +34,6 @@ const PROVIDER_NAMED = /^(sqlite|postgresql|legacySqlite|legacyPostgresql)/
 /** 还落在 `platform/persistence/` 之外的 provider 命名文件（相对 `src`），按路径字典序。只降不升。 */
 export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'cli/postgresqlDaemonApplication.ts',
-  'db/postgresqlSerializationRetry.ts',
   'db/sqliteMigrator.ts',
   'db/sqliteWriteRetry.ts',
   'modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts',

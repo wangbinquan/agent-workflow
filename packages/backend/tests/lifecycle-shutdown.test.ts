@@ -10,27 +10,28 @@
 // drive the timers forward via fake timers + assert that runs do NOT
 // fire after stop(). This locks the cleanup contract.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { startLifecycleInvariantsLoop } from '../src/services/lifecycleInvariants'
 import { startStuckTaskDetectorLoop } from '../src/services/stuckTaskDetector'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function freshDb(): { db: DbClient; cleanup: () => void } {
+function freshDb(db: ProviderNeutralDatabase): {
+  db: ProviderNeutralDatabase
+  cleanup: () => void
+} {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-shutdown-'))
   mkdirSync(tmp, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   return { db, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
 }
 
-async function seedRunningTask(db: DbClient): Promise<void> {
+async function seedRunningTask(db: ProviderNeutralDatabase): Promise<void> {
   const wfId = 'wf-shutdown'
   const tId = 't-shutdown'
   await db.insert(workflows).values({
@@ -40,6 +41,11 @@ async function seedRunningTask(db: DbClient): Promise<void> {
   })
   await db.insert(tasks).values({
     id: tId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: tId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: tId, workflowRevision: null },
+    ]),
     name: 't',
     workflowId: wfId,
     workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
@@ -53,7 +59,7 @@ async function seedRunningTask(db: DbClient): Promise<void> {
   })
 }
 
-describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
+describeEachProvider('RFC-053 — startLifecycleInvariantsLoop.stop()', (harness) => {
   let cleanup: () => void
   beforeEach(() => {
     cleanup = () => {}
@@ -61,7 +67,7 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
   afterEach(() => cleanup())
 
   test('returns a handle whose stop() clears both bootTimer + periodicTimer', async () => {
-    const env = freshDb()
+    const env = freshDb(harness.db)
     cleanup = env.cleanup
     await seedRunningTask(env.db)
     let scans = 0
@@ -101,7 +107,7 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
     try {
       // Use absurdly large intervals so they never fire during the test.
       const ticker = startLifecycleInvariantsLoop({
-        operations: taskRecoveryOperations(env.db),
+        operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
         bootDelayMs: 60_000,
         intervalMs: 60_000,
         onAlert: () => {
@@ -128,11 +134,11 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
   })
 
   test('stop() can be called multiple times without throwing', async () => {
-    const env = freshDb()
+    const env = freshDb(harness.db)
     cleanup = env.cleanup
     await seedRunningTask(env.db)
     const ticker = startLifecycleInvariantsLoop({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       bootDelayMs: 60_000,
       intervalMs: 60_000,
     })
@@ -141,7 +147,7 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
   })
 })
 
-describe('RFC-053 — startStuckTaskDetectorLoop.stop()', () => {
+describeEachProvider('RFC-053 — startStuckTaskDetectorLoop.stop()', (harness) => {
   let cleanup: () => void
   beforeEach(() => {
     cleanup = () => {}
@@ -149,7 +155,7 @@ describe('RFC-053 — startStuckTaskDetectorLoop.stop()', () => {
   afterEach(() => cleanup())
 
   test('returns a handle whose stop() clears the setInterval', async () => {
-    const env = freshDb()
+    const env = freshDb(harness.db)
     cleanup = env.cleanup
     await seedRunningTask(env.db)
     const orig = setInterval
@@ -161,7 +167,7 @@ describe('RFC-053 — startStuckTaskDetectorLoop.stop()', () => {
     }) as typeof clearInterval
     try {
       const ticker = startStuckTaskDetectorLoop({
-        operations: taskRecoveryOperations(env.db),
+        operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
         intervalMs: 60_000,
       })
       ticker.stop()
@@ -173,11 +179,11 @@ describe('RFC-053 — startStuckTaskDetectorLoop.stop()', () => {
   })
 
   test('idempotent stop()', async () => {
-    const env = freshDb()
+    const env = freshDb(harness.db)
     cleanup = env.cleanup
     await seedRunningTask(env.db)
     const ticker = startStuckTaskDetectorLoop({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       intervalMs: 60_000,
     })
     ticker.stop()

@@ -1,4 +1,4 @@
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { EventCenterService } from './application/eventCenterService'
 import {
   createEventResponseDeliveryConsumer,
@@ -226,7 +226,7 @@ export const DEFAULT_TARGET_LAUNCH_PERMISSIONS: TargetLaunchPermissions = {
 }
 
 export interface ComposeEventCenterOptions {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly typePackageDescriptorJsons: readonly string[]
   /**
    * RFC-317 T30（DE-04）—— 每类响应目标的启动权限门。省略时用

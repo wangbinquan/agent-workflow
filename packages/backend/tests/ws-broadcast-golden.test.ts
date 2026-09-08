@@ -26,11 +26,11 @@
 // service function. That's the contract surface — anything below that is
 // implementation detail.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import {
@@ -42,8 +42,6 @@ import {
 } from '../src/ws/broadcaster'
 
 import type { TaskStatus, TaskWsMessage, TasksListWsMessage } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 /**
  * A "type | type" tag is enough to lock the sequence — payload details
@@ -118,7 +116,7 @@ interface Recorded {
   task: TaskWsMessage[]
 }
 
-async function seedTask(db: DbClient, status: 'pending' | 'running' = 'pending') {
+async function seedTask(db: ProviderNeutralDatabase, status: 'pending' | 'running' = 'pending') {
   const taskId = `task_${ulid()}`
   const wfId = `wf_${ulid()}`
   const def = JSON.stringify({
@@ -138,6 +136,11 @@ async function seedTask(db: DbClient, status: 'pending' | 'running' = 'pending')
   })
   await db.insert(tasks).values({
     id: taskId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'golden-fixture-task',
     workflowId: wfId,
     workflowSnapshot: def,
@@ -196,7 +199,7 @@ function subscribeInterleaved(taskId: string): {
 }
 
 async function projectStatus(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: {
     taskId: string
     revision: number
@@ -241,10 +244,10 @@ async function projectStatus(
 beforeEach(() => resetBroadcastersForTests())
 afterEach(() => resetBroadcastersForTests())
 
-describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
+describeEachProvider('RFC-054 W2-2 — WS broadcast golden sequences', (harness) => {
   test('RFC-341 committed-event projector preserves terminal and canceled-node ordering', async () => {
     const taskId = `task_${ulid()}`
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { received, unsubscribe } = subscribeBoth(taskId)
     await projectStatus(db, {
       taskId,
@@ -271,7 +274,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
   })
 
   test('happy path: pending → running → done emits the canonical 5-message sequence', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
@@ -303,7 +306,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
   })
 
   test('failed path: pending → running → failed emits identical cadence (failed IS terminal)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
@@ -327,7 +330,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
   })
 
   test('awaiting_review NOT terminal: per-task channel must NOT emit task.done', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
@@ -355,7 +358,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
   })
 
   test('payload sanity: tasks-list message carries taskId; per-task message carries errorSummary when failing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedTask(db)
     const { received, unsubscribe } = subscribeBoth(taskId)
 

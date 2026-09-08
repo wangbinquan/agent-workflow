@@ -19,11 +19,12 @@
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -39,8 +40,6 @@ import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const DESIGNER = 'designer'
 const QUESTIONER = 'questioner'
@@ -95,7 +94,10 @@ function mkQ(id: string, title: string): ClarifyQuestion {
 
 /** Seed a deferred task + workflow snapshot + a prior `done` run on FIXER (so a frontier
  *  dispatch to it is not rejected as never-run). No clarify round needed for manual. */
-async function seedTask(db: DbClient, _opts: { deferred?: boolean } = {}): Promise<string> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  _opts: { deferred?: boolean } = {},
+): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   await db.insert(workflows).values({
@@ -108,6 +110,10 @@ async function seedTask(db: DbClient, _opts: { deferred?: boolean } = {}): Promi
   })
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'rfc120-manual',
     ownerUserId: '__system__',
     workflowId: `wf_${taskId}`,
@@ -133,7 +139,7 @@ async function seedTask(db: DbClient, _opts: { deferred?: boolean } = {}): Promi
   return taskId
 }
 
-async function listOne(db: DbClient, taskId: string) {
+async function listOne(db: ProviderNeutralDatabase, taskId: string) {
   const all = await listTaskQuestions(db, taskId)
   return all.find((e) => e.sourceKind === 'manual')
 }
@@ -141,437 +147,689 @@ async function listOne(db: DbClient, taskId: string) {
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-// ---------------------------------------------------------------------------
-// A — full manual lifecycle.
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — manual question lifecycle', () => {
-  test('create(target=DESIGNER) → reassign(FIXER) → dispatch → inject manual_body+bind → done → confirm', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // DESIGNER needs a prior run too (the §15 re-gate requires the manual handler to have run).
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: DESIGNER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 900,
+describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harness) => {
+  // ---------------------------------------------------------------------------
+  // A — full manual lifecycle.
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — manual question lifecycle', () => {
+    test('create(target=DESIGNER) → reassign(FIXER) → dispatch → inject manual_body+bind → done → confirm', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // DESIGNER needs a prior run too (the §15 re-gate requires the manual handler to have run).
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: DESIGNER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 900,
+      })
+
+      // create WITH a handler (required, §15) → 待下发 (staged). DESIGNER first to exercise reassign.
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        {
+          title: 'Tighten the retry backoff',
+          body: 'Cap retries at 3 with jitter.',
+          targetNodeId: DESIGNER,
+        },
+        actor,
+      )
+      let dto = await listOne(db, taskId)
+      expect(dto).toBeDefined()
+      expect(dto?.sourceKind).toBe('manual')
+      expect(dto?.roleKind).toBe('designer')
+      expect(dto?.questionTitle).toBe('Tighten the retry backoff')
+      expect(dto?.answerSummary).toBe('Cap retries at 3 with jitter.')
+      expect(dto?.sourceNodeId).toBeNull()
+      expect(dto?.originNodeRunId).toBeNull()
+      expect(dto?.effectiveTargetNodeId).toBe(DESIGNER)
+      expect(dto?.phase).toBe('staged')
+
+      // re-target the handler via the SAME reassign service used for clarify designer entries.
+      await reassignTaskQuestion(db, id, FIXER, actor)
+      dto = await listOne(db, taskId)
+      expect(dto?.effectiveTargetNodeId).toBe(FIXER)
+      // still staged (reassign only moves the handler) → awaiting dispatch.
+      expect(dto?.phase).toBe('staged')
+
+      // dispatch via the §18 per-node-queue (UNCHANGED) → frontier mint on FIXER.
+      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
+      const runId = result.reruns[0]!.nodeRunId
+      // dispatched_at stamped, not yet bound → processing.
+      let row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+      expect(row?.dispatchedAt).not.toBeNull()
+      expect(row?.dispatchedBy).toBe('u1')
+      expect(row?.triggerRunId).toBeNull()
+      expect((await listOne(db, taskId))?.phase).toBe('processing')
+
+      // FIXER reruns → the unified queue injector binds the manual entry (per-node queue).
+      await buildClarifyQueueContext({
+        db,
+        definition: liveDef(),
+        taskId,
+        consumerNodeId: FIXER,
+        dispatchedRunId: runId,
+        iteration: 0,
+      })
+      row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+      expect(row?.triggerRunId).toBe(runId) // bound at rerun
+      expect((await listOne(db, taskId))?.phase).toBe('processing') // run still pending
+
+      // run finishes done+output → 已处理待确认.
+      await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
+      await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
+      expect((await listOne(db, taskId))?.phase).toBe('awaiting_confirm')
+
+      // confirm → 完成.
+      await confirmTaskQuestion(db, id, actor)
+      const done = await listOne(db, taskId)
+      expect(done?.phase).toBe('done')
+      expect(done?.confirmation).toBe('confirmed')
     })
 
-    // create WITH a handler (required, §15) → 待下发 (staged). DESIGNER first to exercise reassign.
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      {
-        title: 'Tighten the retry backoff',
-        body: 'Cap retries at 3 with jitter.',
-        targetNodeId: DESIGNER,
-      },
-      actor,
-    )
-    let dto = await listOne(db, taskId)
-    expect(dto).toBeDefined()
-    expect(dto?.sourceKind).toBe('manual')
-    expect(dto?.roleKind).toBe('designer')
-    expect(dto?.questionTitle).toBe('Tighten the retry backoff')
-    expect(dto?.answerSummary).toBe('Cap retries at 3 with jitter.')
-    expect(dto?.sourceNodeId).toBeNull()
-    expect(dto?.originNodeRunId).toBeNull()
-    expect(dto?.effectiveTargetNodeId).toBe(DESIGNER)
-    expect(dto?.phase).toBe('staged')
-
-    // re-target the handler via the SAME reassign service used for clarify designer entries.
-    await reassignTaskQuestion(db, id, FIXER, actor)
-    dto = await listOne(db, taskId)
-    expect(dto?.effectiveTargetNodeId).toBe(FIXER)
-    // still staged (reassign only moves the handler) → awaiting dispatch.
-    expect(dto?.phase).toBe('staged')
-
-    // dispatch via the §18 per-node-queue (UNCHANGED) → frontier mint on FIXER.
-    const result = await dispatchTaskQuestions(db, taskId, [id], actor)
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
-    const runId = result.reruns[0]!.nodeRunId
-    // dispatched_at stamped, not yet bound → processing.
-    let row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
-    expect(row?.dispatchedAt).not.toBeNull()
-    expect(row?.dispatchedBy).toBe('u1')
-    expect(row?.triggerRunId).toBeNull()
-    expect((await listOne(db, taskId))?.phase).toBe('processing')
-
-    // FIXER reruns → the unified queue injector binds the manual entry (per-node queue).
-    await buildClarifyQueueContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerNodeId: FIXER,
-      dispatchedRunId: runId,
-      iteration: 0,
-    })
-    row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
-    expect(row?.triggerRunId).toBe(runId) // bound at rerun
-    expect((await listOne(db, taskId))?.phase).toBe('processing') // run still pending
-
-    // run finishes done+output → 已处理待确认.
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-    await db.insert(nodeRunOutputs).values({ nodeRunId: runId, portName: 'result', content: 'x' })
-    expect((await listOne(db, taskId))?.phase).toBe('awaiting_confirm')
-
-    // confirm → 完成.
-    await confirmTaskQuestion(db, id, actor)
-    const done = await listOne(db, taskId)
-    expect(done?.phase).toBe('done')
-    expect(done?.confirmation).toBe('confirmed')
-  })
-
-  test('create WITH a target → staged (待下发) immediately, ready for batch-dispatch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'Add a smoke test', body: 'Cover the happy path.', targetNodeId: FIXER },
-      actor,
-    )
-    const dto = await listOne(db, taskId)
-    expect(dto?.phase).toBe('staged')
-    expect(dto?.staged).toBe(true)
-    expect(dto?.effectiveTargetNodeId).toBe(FIXER)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// B — §16 H4: synthetic identity (no collision) + visible-when-dispatched.
-// ---------------------------------------------------------------------------
-describe('RFC-120 §16 H4 — manual identity + visibility', () => {
-  test('two manual rows with the SAME title/body coexist (no unique collision) + both visible', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const a = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'dupe', body: 'same', targetNodeId: FIXER },
-      actor,
-    )
-    const b = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'dupe', body: 'same', targetNodeId: FIXER },
-      actor,
-    )
-    expect(a.id).not.toBe(b.id)
-    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
-    expect(rows.length).toBe(2)
-    // distinct synthetic origins keep the full uniq_task_questions_identity collision-free.
-    expect(rows[0]?.originNodeRunId).not.toBe(rows[1]?.originNodeRunId)
-    const list = await listTaskQuestions(db, taskId)
-    expect(list.filter((e) => e.sourceKind === 'manual').length).toBe(2)
-  })
-
-  test('a DISPATCHED manual row is VISIBLE in the list with the correct phase', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'visible?', body: 'yes', targetNodeId: FIXER },
-      actor,
-    )
-    await dispatchTaskQuestions(db, taskId, [id], actor)
-    const list = await listTaskQuestions(db, taskId)
-    const dto = list.find((e) => e.id === id)
-    expect(dto).toBeDefined() // would be undefined under the old origin→round skip (H4 bug)
-    expect(dto?.phase).toBe('processing')
-  })
-
-  test('manual rows never match a sourceNodeId filter (they have no source node)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    const filtered = await listTaskQuestions(db, taskId, { sourceNodeId: FIXER })
-    expect(filtered.length).toBe(0)
-    const unfiltered = await listTaskQuestions(db, taskId)
-    expect(unfiltered.length).toBe(1)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// C — dispatch fit (pure-override path, no graph readiness block).
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — manual flows through dispatch like a pure-override', () => {
-  test('dispatch to a node with NO __external_feedback__ edge succeeds (no designer-not-ready)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // FIXER has a prior run but no cross-clarify graph wiring. assertDesignerReady self-scopes
-    // to default_target==node (NULL for manual) → skipped. assertSafeFrontierTarget passes
-    // (prior run). So a manual entry dispatches like a pure-override with no readiness gate.
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    const result = await dispatchTaskQuestions(db, taskId, [id], actor)
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
-  })
-
-  test('two manual rows assigned to DIFFERENT nodes dispatch together (synthetic origins ⇒ no round-multi-target)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // DESIGNER also needs a prior run to be a valid frontier mint target.
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: DESIGNER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 800,
-    })
-    const a = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'a', body: 'aa', targetNodeId: FIXER },
-      actor,
-    )
-    const b = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'b', body: 'bb', targetNodeId: DESIGNER },
-      actor,
-    )
-    // Each manual row is its own (synthetic) origin → the per-origin single-target guard
-    // never trips even though the two go to different handlers.
-    const result = await dispatchTaskQuestions(db, taskId, [a.id, b.id], actor)
-    expect(result.reruns.map((r) => r.targetNodeId).sort()).toEqual([DESIGNER, FIXER].sort())
-  })
-
-  test('Codex re-gate H1: a never-run target is rejected at CREATION (not parked-then-undispatchable)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // QUESTIONER has no prior run. The §15 re-gate rejects it at CREATION (a manual on a never-
-    // run node would park via H1 but dispatch's assertSafeFrontierTarget could never mint it →
-    // stranded). So the unsafe-dispatch state is now unreachable for manual: nothing inserted.
-    let threw: unknown = null
-    try {
+    test('create WITH a target → staged (待下发) immediately, ready for batch-dispatch', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
       await createManualTaskQuestion(
         db,
         taskId,
-        { title: 't', body: 'b', targetNodeId: QUESTIONER },
+        { title: 'Add a smoke test', body: 'Cover the happy path.', targetNodeId: FIXER },
         actor,
       )
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
-    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
-    expect(rows.length).toBe(0)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// D — create semantics + validation + prompt isolation.
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — create validation + audit isolation', () => {
-  test('empty title / empty body → ValidationError', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    expect(
-      createManualTaskQuestion(db, taskId, { title: '  ', body: 'b', targetNodeId: FIXER }, actor),
-    ).rejects.toThrow()
-    expect(
-      createManualTaskQuestion(db, taskId, { title: 't', body: ' ', targetNodeId: FIXER }, actor),
-    ).rejects.toThrow()
-  })
-
-  test('Codex re-gate: a handler is REQUIRED — create WITHOUT targetNodeId → rejected, nothing inserted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    let threw: unknown = null
-    try {
-      await createManualTaskQuestion(db, taskId, { title: 't', body: 'b' }, actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('manual-question-target-required')
-    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
-    expect(rows.length).toBe(0) // nothing inserted
-  })
-
-  test('non-agent / unknown target node → ValidationError (canReassign parity)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // CC is a clarify-cross-agent (NOT kind=agent) → rejected.
-    expect(
-      createManualTaskQuestion(db, taskId, { title: 't', body: 'b', targetNodeId: CC }, actor),
-    ).rejects.toThrow()
-    expect(
-      createManualTaskQuestion(db, taskId, { title: 't', body: 'b', targetNodeId: 'ghost' }, actor),
-    ).rejects.toThrow()
-  })
-
-  test('audit author (manual_created_by) is stored but NEVER appears in the injected prompt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const secretActor = { userId: 'SECRET-AUTHOR-ID', role: 'owner' as const }
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 'T', body: 'B', targetNodeId: FIXER },
-      secretActor,
-    )
-    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
-    expect(row?.manualCreatedBy).toBe('SECRET-AUTHOR-ID') // recorded for audit
-    const result = await dispatchTaskQuestions(db, taskId, [id], actor)
-    const ctx = await buildClarifyQueueContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerNodeId: FIXER,
-      dispatchedRunId: result.reruns[0]!.nodeRunId,
-      iteration: 0,
+      const dto = await listOne(db, taskId)
+      expect(dto?.phase).toBe('staged')
+      expect(dto?.staged).toBe(true)
+      expect(dto?.effectiveTargetNodeId).toBe(FIXER)
     })
-    expect(ctx?.block).not.toContain('SECRET-AUTHOR-ID') // prompt isolation (RFC-099)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// F — Codex impl-gate H1: a staged manual row parks the deferred task (scheduler-level).
-// A synthetic-origin manual row has NO clarify round, so the park gate's INNER JOIN used to
-// miss it → the scheduler could complete the task past an undispatched manual question (then
-// a later dispatch can't resume a `done` task → instruction lost). The gate now includes
-// manual designer rows via their own content-ready semantics.
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — Codex impl-gate H1 (manual park gate)', () => {
-  test('a staged-undispatched manual row enters loadUndispatchedDesignerTargets; dispatch releases it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db) // deferred; FIXER has a prior run
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
-    // the synthetic origin has no clarify round so the INNER JOIN dropped it).
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(true)
-    await dispatchTaskQuestions(db, taskId, [id], actor)
-    // dispatched → leaves the undispatched set (gate released).
-    expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(false)
   })
 
-  test('scheduler deriveFrontier PARKS the manual handler (awaiting_human, not completed) until dispatched', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
-    const scopeIds = new Set(scopeNodes.map((n) => n.id))
-    const NONE: ReadonlySet<string> = new Set()
-
-    // BEFORE dispatch: FIXER is undispatched → deriveFrontier must NOT complete it (the
-    // scheduler keeps the task awaiting_human so it can't finish past the manual question).
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    const deferredBefore = await loadUndispatchedDesignerTargets(db, taskId)
-    expect(deferredBefore.has(FIXER)).toBe(true)
-    const fBefore = deriveFrontier(
-      rows,
-      liveDef(),
-      scopeNodes,
-      scopeIds,
-      { containerRunId: null, iteration: 0 },
-      new Map(),
-      NONE,
-      NONE,
-      NONE,
-      NONE,
-      NONE,
-      deferredBefore,
-    )
-    expect(fBefore.awaitingHuman).toContain(FIXER)
-    expect(fBefore.completed.has(FIXER)).toBe(false)
-
-    // AFTER dispatch: FIXER leaves the set → deriveFrontier no longer parks it (its rerun runs).
-    await dispatchTaskQuestions(db, taskId, [id], actor)
-    const rows2 = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    const deferredAfter = await loadUndispatchedDesignerTargets(db, taskId)
-    expect(deferredAfter.has(FIXER)).toBe(false)
-    const fAfter = deriveFrontier(
-      rows2,
-      liveDef(),
-      scopeNodes,
-      scopeIds,
-      { containerRunId: null, iteration: 0 },
-      new Map(),
-      NONE,
-      NONE,
-      NONE,
-      NONE,
-      NONE,
-      deferredAfter,
-    )
-    expect(fAfter.awaitingHuman).not.toContain(FIXER)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// G — RFC-132 步骤1 (T8 flag 停读): 统一模型下所有任务都是 deferred-dispatch，manual 恒可
-// 创建（旧 RFC-120 「non-deferred create rejected」门移除）。此测试锁定 non-deferred 也成功
-// 的新行为 —— 旧断言（reject task-not-deferred-dispatch）随 flag 停读作废。
-// ---------------------------------------------------------------------------
-describe('RFC-132 步骤1 (T8 flag 停读) — manual 恒可创建（旧 non-deferred 门移除）', () => {
-  test('create on a (旧)non-deferred task → 现在也成功（统一模型所有任务 deferred-dispatch）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db, { deferred: false })
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    expect(id).toBeTruthy()
-    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
-    expect(rows.length).toBe(1) // now inserted (flag 停读)
-  })
-
-  test('create on a deferred task → succeeds (control)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db) // deferred
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    expect(id).toBeTruthy()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// H — Codex re-gate: create + dispatch rejected on a TERMINAL task (done/canceled) so no row
-// is inserted / no node_run minted on a finished task with no scheduler to run it.
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — Codex re-gate (terminal task guard)', () => {
-  for (const status of ['done', 'canceled'] as const) {
-    test(`create on a ${status} deferred task → rejected task-terminal; nothing inserted`, async () => {
-      const db = createInMemoryDb(MIGRATIONS)
+  // ---------------------------------------------------------------------------
+  // B — §16 H4: synthetic identity (no collision) + visible-when-dispatched.
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §16 H4 — manual identity + visibility', () => {
+    test('two manual rows with the SAME title/body coexist (no unique collision) + both visible', async () => {
+      const db = harness.db
       const taskId = await seedTask(db)
-      await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+      const a = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 'dupe', body: 'same', targetNodeId: FIXER },
+        actor,
+      )
+      const b = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 'dupe', body: 'same', targetNodeId: FIXER },
+        actor,
+      )
+      expect(a.id).not.toBe(b.id)
+      const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+      expect(rows.length).toBe(2)
+      // distinct synthetic origins keep the full uniq_task_questions_identity collision-free.
+      expect(rows[0]?.originNodeRunId).not.toBe(rows[1]?.originNodeRunId)
+      const list = await listTaskQuestions(db, taskId)
+      expect(list.filter((e) => e.sourceKind === 'manual').length).toBe(2)
+    })
+
+    test('a DISPATCHED manual row is VISIBLE in the list with the correct phase', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 'visible?', body: 'yes', targetNodeId: FIXER },
+        actor,
+      )
+      await dispatchTaskQuestions(db, taskId, [id], actor)
+      const list = await listTaskQuestions(db, taskId)
+      const dto = list.find((e) => e.id === id)
+      expect(dto).toBeDefined() // would be undefined under the old origin→round skip (H4 bug)
+      expect(dto?.phase).toBe('processing')
+    })
+
+    test('manual rows never match a sourceNodeId filter (they have no source node)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      const filtered = await listTaskQuestions(db, taskId, { sourceNodeId: FIXER })
+      expect(filtered.length).toBe(0)
+      const unfiltered = await listTaskQuestions(db, taskId)
+      expect(unfiltered.length).toBe(1)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // C — dispatch fit (pure-override path, no graph readiness block).
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — manual flows through dispatch like a pure-override', () => {
+    test('dispatch to a node with NO __external_feedback__ edge succeeds (no designer-not-ready)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // FIXER has a prior run but no cross-clarify graph wiring. assertDesignerReady self-scopes
+      // to default_target==node (NULL for manual) → skipped. assertSafeFrontierTarget passes
+      // (prior run). So a manual entry dispatches like a pure-override with no readiness gate.
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
+    })
+
+    test('two manual rows assigned to DIFFERENT nodes dispatch together (synthetic origins ⇒ no round-multi-target)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // DESIGNER also needs a prior run to be a valid frontier mint target.
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: DESIGNER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 800,
+      })
+      const a = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 'a', body: 'aa', targetNodeId: FIXER },
+        actor,
+      )
+      const b = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 'b', body: 'bb', targetNodeId: DESIGNER },
+        actor,
+      )
+      // Each manual row is its own (synthetic) origin → the per-origin single-target guard
+      // never trips even though the two go to different handlers.
+      const result = await dispatchTaskQuestions(db, taskId, [a.id, b.id], actor)
+      expect(result.reruns.map((r) => r.targetNodeId).sort()).toEqual([DESIGNER, FIXER].sort())
+    })
+
+    test('Codex re-gate H1: a never-run target is rejected at CREATION (not parked-then-undispatchable)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // QUESTIONER has no prior run. The §15 re-gate rejects it at CREATION (a manual on a never-
+      // run node would park via H1 but dispatch's assertSafeFrontierTarget could never mint it →
+      // stranded). So the unsafe-dispatch state is now unreachable for manual: nothing inserted.
       let threw: unknown = null
       try {
         await createManualTaskQuestion(
           db,
+          taskId,
+          { title: 't', body: 'b', targetNodeId: QUESTIONER },
+          actor,
+        )
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
+      const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+      expect(rows.length).toBe(0)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // D — create semantics + validation + prompt isolation.
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — create validation + audit isolation', () => {
+    test('empty title / empty body → ValidationError', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await expect(
+        createManualTaskQuestion(
+          db,
+          taskId,
+          { title: '  ', body: 'b', targetNodeId: FIXER },
+          actor,
+        ),
+      ).rejects.toThrow()
+      await expect(
+        createManualTaskQuestion(db, taskId, { title: 't', body: ' ', targetNodeId: FIXER }, actor),
+      ).rejects.toThrow()
+    })
+
+    test('Codex re-gate: a handler is REQUIRED — create WITHOUT targetNodeId → rejected, nothing inserted', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      let threw: unknown = null
+      try {
+        await createManualTaskQuestion(db, taskId, { title: 't', body: 'b' }, actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('manual-question-target-required')
+      const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+      expect(rows.length).toBe(0) // nothing inserted
+    })
+
+    test('non-agent / unknown target node → ValidationError (canReassign parity)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // CC is a clarify-cross-agent (NOT kind=agent) → rejected.
+      await expect(
+        createManualTaskQuestion(db, taskId, { title: 't', body: 'b', targetNodeId: CC }, actor),
+      ).rejects.toThrow()
+      await expect(
+        createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: 'b', targetNodeId: 'ghost' },
+          actor,
+        ),
+      ).rejects.toThrow()
+    })
+
+    test('audit author (manual_created_by) is stored but NEVER appears in the injected prompt', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      const secretActor = { userId: 'SECRET-AUTHOR-ID', role: 'owner' as const }
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 'T', body: 'B', targetNodeId: FIXER },
+        secretActor,
+      )
+      const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+      expect(row?.manualCreatedBy).toBe('SECRET-AUTHOR-ID') // recorded for audit
+      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      const ctx = await buildClarifyQueueContext({
+        db,
+        definition: liveDef(),
+        taskId,
+        consumerNodeId: FIXER,
+        dispatchedRunId: result.reruns[0]!.nodeRunId,
+        iteration: 0,
+      })
+      expect(ctx?.block).not.toContain('SECRET-AUTHOR-ID') // prompt isolation (RFC-099)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // F — Codex impl-gate H1: a staged manual row parks the deferred task (scheduler-level).
+  // A synthetic-origin manual row has NO clarify round, so the park gate's INNER JOIN used to
+  // miss it → the scheduler could complete the task past an undispatched manual question (then
+  // a later dispatch can't resume a `done` task → instruction lost). The gate now includes
+  // manual designer rows via their own content-ready semantics.
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — Codex impl-gate H1 (manual park gate)', () => {
+    test('a staged-undispatched manual row enters loadUndispatchedDesignerTargets; dispatch releases it', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db) // deferred; FIXER has a prior run
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
+      // the synthetic origin has no clarify round so the INNER JOIN dropped it).
+      expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(true)
+      await dispatchTaskQuestions(db, taskId, [id], actor)
+      // dispatched → leaves the undispatched set (gate released).
+      expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(false)
+    })
+
+    test('scheduler deriveFrontier PARKS the manual handler (awaiting_human, not completed) until dispatched', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
+      const scopeIds = new Set(scopeNodes.map((n) => n.id))
+      const NONE: ReadonlySet<string> = new Set()
+
+      // BEFORE dispatch: FIXER is undispatched → deriveFrontier must NOT complete it (the
+      // scheduler keeps the task awaiting_human so it can't finish past the manual question).
+      const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const deferredBefore = await loadUndispatchedDesignerTargets(db, taskId)
+      expect(deferredBefore.has(FIXER)).toBe(true)
+      const fBefore = deriveFrontier(
+        rows,
+        liveDef(),
+        scopeNodes,
+        scopeIds,
+        { containerRunId: null, iteration: 0 },
+        new Map(),
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        deferredBefore,
+      )
+      expect(fBefore.awaitingHuman).toContain(FIXER)
+      expect(fBefore.completed.has(FIXER)).toBe(false)
+
+      // AFTER dispatch: FIXER leaves the set → deriveFrontier no longer parks it (its rerun runs).
+      await dispatchTaskQuestions(db, taskId, [id], actor)
+      const rows2 = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const deferredAfter = await loadUndispatchedDesignerTargets(db, taskId)
+      expect(deferredAfter.has(FIXER)).toBe(false)
+      const fAfter = deriveFrontier(
+        rows2,
+        liveDef(),
+        scopeNodes,
+        scopeIds,
+        { containerRunId: null, iteration: 0 },
+        new Map(),
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        deferredAfter,
+      )
+      expect(fAfter.awaitingHuman).not.toContain(FIXER)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // G — RFC-132 步骤1 (T8 flag 停读): 统一模型下所有任务都是 deferred-dispatch，manual 恒可
+  // 创建（旧 RFC-120 「non-deferred create rejected」门移除）。此测试锁定 non-deferred 也成功
+  // 的新行为 —— 旧断言（reject task-not-deferred-dispatch）随 flag 停读作废。
+  // ---------------------------------------------------------------------------
+  describe('RFC-132 步骤1 (T8 flag 停读) — manual 恒可创建（旧 non-deferred 门移除）', () => {
+    test('create on a (旧)non-deferred task → 现在也成功（统一模型所有任务 deferred-dispatch）', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db, { deferred: false })
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      expect(id).toBeTruthy()
+      const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+      expect(rows.length).toBe(1) // now inserted (flag 停读)
+    })
+
+    test('create on a deferred task → succeeds (control)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db) // deferred
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      expect(id).toBeTruthy()
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // H — Codex re-gate: create + dispatch rejected on a TERMINAL task (done/canceled) so no row
+  // is inserted / no node_run minted on a finished task with no scheduler to run it.
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — Codex re-gate (terminal task guard)', () => {
+    for (const status of ['done', 'canceled'] as const) {
+      test(`create on a ${status} deferred task → rejected task-terminal; nothing inserted`, async () => {
+        const db = harness.db
+        const taskId = await seedTask(db)
+        await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+        let threw: unknown = null
+        try {
+          await createManualTaskQuestion(
+            db,
+            taskId,
+            { title: 't', body: 'b', targetNodeId: FIXER },
+            actor,
+          )
+        } catch (e) {
+          threw = e
+        }
+        expect((threw as { code?: string }).code).toBe('task-terminal')
+        const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
+        expect(rows.length).toBe(0)
+      })
+
+      test(`dispatch on a ${status} deferred task → rejected task-terminal; no dispatched_at, no node_run minted`, async () => {
+        const db = harness.db
+        const taskId = await seedTask(db)
+        // create + stage WHILE running (allowed), then the task goes terminal before dispatch.
+        const { id } = await createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: 'b', targetNodeId: FIXER },
+          actor,
+        )
+        const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+          .length
+        await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+        let threw: unknown = null
+        try {
+          await dispatchTaskQuestions(db, taskId, [id], actor)
+        } catch (e) {
+          threw = e
+        }
+        expect((threw as { code?: string }).code).toBe('task-terminal')
+        // nothing stamped, nothing minted.
+        const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
+        expect(row?.dispatchedAt).toBeNull()
+        const runsAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+          .length
+        expect(runsAfter).toBe(runsBefore) // no new node_run
+      })
+    }
+
+    test('control: create + dispatch on a FAILED (resumable) deferred task → allowed (not terminal)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
+      // failed is resumable (resumeTask resumes it), so manual create + dispatch are allowed.
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // E — golden-lock: zero manual rows ⇒ clarify injection byte-identical.
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — golden-lock (no manual rows ⇒ clarify unchanged)', () => {
+    test('a deferred cross-clarify designer injection is unaffected (no Manual instruction section)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // Seed a cross-clarify round + answer (deferred) so the designer has a per-node queue.
+      const qRunId = ulid()
+      await db.insert(nodeRuns).values({
+        id: qRunId,
+        taskId,
+        nodeId: QUESTIONER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: DESIGNER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 700,
+      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: CC,
+        askingNodeId: QUESTIONER,
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: DESIGNER,
+        loopIter: 0,
+        questions: [mkQ('q1', 'CLARIFY-Q-MARKER?')],
+      })
+      // RFC-162 (designer-by-default deleted): the quick channel seals the round + AUTO-dispatches the
+      // QUESTIONER only. To exercise a DESIGNER per-node queue, reassign the questioner entry → DESIGNER
+      // (ADDS a designer handler) then dispatch it through the SAME board flow — dispatch backfills
+      // sealed_at (round answered) so the queue injector (selectAgentQueue requires sealed_at || manual)
+      // selects it without manual stamping.
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: ['A'],
+            customText: '',
+          },
+        ],
+        directive: 'continue',
+        actor,
+      })
+      const questioner = (
+        await db
+          .select()
+          .from(taskQuestions)
+          .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
+      )[0]!
+      await reassignTaskQuestion(db, questioner.id, DESIGNER, actor)
+      const designerEntryId = (
+        await db
+          .select()
+          .from(taskQuestions)
+          .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
+      ).find((e) => e.sourceKind === 'cross')!.id
+      const disp = await dispatchTaskQuestions(db, taskId, [designerEntryId], actor)
+      const designer = (
+        await db
+          .select()
+          .from(taskQuestions)
+          .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
+      ).find((e) => e.sourceKind === 'cross')!
+      expect(designer.sealedAt).not.toBeNull()
+      expect(designer.dispatchedAt).not.toBeNull()
+      const ctx = await buildClarifyQueueContext({
+        db,
+        definition: liveDef(),
+        taskId,
+        consumerNodeId: DESIGNER,
+        dispatchedRunId: disp.reruns.find((r) => r.targetNodeId === DESIGNER)!.nodeRunId,
+        iteration: 0,
+      })
+      expect(ctx?.block).toContain('CLARIFY-Q-MARKER?')
+      expect(ctx?.block).not.toContain('Manual instruction') // no manual contamination
+      // RFC-141: the RFC-120 §18 suppress member is gone from the context entirely.
+      expect(Object.keys(ctx!)).not.toContain('suppressPriorOutput')
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // I — Codex re-gate: H1 (manual reassign to a never-run node rejected) + H2 (terminal status
+  // is an IN-TX CAS, not just a pre-check — a status flip between guard and write rolls back).
+  // (The clarify-designer OVERRIDE path keeps its shipped reject-at-dispatch design — proven by
+  // rfc120-deferred-dispatch.test.ts's "never-run override target → rejected"; the manual guard
+  // is scoped to source_kind='manual', so that override test is unaffected.)
+  // ---------------------------------------------------------------------------
+  describe('RFC-120 §15 — Codex re-gate H1 (manual reassign never-run) + H2 (terminal CAS)', () => {
+    test('H1: reassign a manual question to a never-run node → rejected; to a run node → allowed', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // DESIGNER gets a run so it is a valid (runnable) re-target; QUESTIONER stays never-run.
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: DESIGNER,
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 900,
+      })
+      const { id } = await createManualTaskQuestion(
+        db,
+        taskId,
+        { title: 't', body: 'b', targetNodeId: FIXER },
+        actor,
+      )
+      // never-run QUESTIONER → rejected (no park-but-undispatchable).
+      let threw: unknown = null
+      try {
+        await reassignTaskQuestion(db, id, QUESTIONER, actor)
+      } catch (e) {
+        threw = e
+      }
+      expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
+      expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(FIXER) // unchanged
+      // run DESIGNER → allowed.
+      await reassignTaskQuestion(db, id, DESIGNER, actor)
+      expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(DESIGNER)
+    })
+
+    // A db Proxy that flips tasks.status to `status` exactly once, on the FIRST nodeRuns read —
+    // which for BOTH create (taskNodeHasRun) and dispatch (assertSafeFrontierTarget) is the last
+    // async read BEFORE the write tx. So the pre-check sees a live task, the status flips, and
+    // the in-tx CAS re-read must catch it. Mirrors the dispatch/reassign-race test's Proxy.
+    function flipStatusOnFirstNodeRunsRead(
+      db: ProviderNeutralDatabase,
+      taskId: string,
+      status: string,
+    ) {
+      let fired = false
+      return new Proxy(db, {
+        get(target, prop, receiver) {
+          const orig = Reflect.get(target, prop, receiver)
+          if (prop !== 'select') return orig
+          return (...selectArgs: unknown[]) => {
+            const builder = (orig as (...a: unknown[]) => Record<string, unknown>).apply(
+              target,
+              selectArgs,
+            )
+            const origFrom = (builder.from as (t: unknown) => Record<string, unknown>).bind(builder)
+            builder.from = (tbl: unknown) => {
+              const q = origFrom(tbl)
+              if (tbl === nodeRuns && !fired) {
+                fired = true
+                const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
+                q.then = (onF: unknown, onR: unknown) =>
+                  db
+                    .update(tasks)
+                    .set({ status: status as never })
+                    .where(eq(tasks.id, taskId))
+                    .then(() => origThen(onF, onR), onR as never)
+              }
+              return q
+            }
+            return builder
+          }
+        },
+      }) as typeof db
+    }
+
+    test('H2: create — task flips to done BETWEEN the pre-check and the insert tx → rolls back, nothing inserted', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db) // running; FIXER has a run
+      const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'done')
+      let threw: unknown = null
+      try {
+        await createManualTaskQuestion(
+          racingDb,
           taskId,
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
@@ -580,14 +838,14 @@ describe('RFC-120 §15 — Codex re-gate (terminal task guard)', () => {
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('task-terminal')
+      // in-tx CAS rolled back → NO row inserted.
       const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
       expect(rows.length).toBe(0)
     })
 
-    test(`dispatch on a ${status} deferred task → rejected task-terminal; no dispatched_at, no node_run minted`, async () => {
-      const db = createInMemoryDb(MIGRATIONS)
+    test('H2: dispatch — task flips to canceled BETWEEN the pre-check and the stamp+mint tx → rolls back, no dispatched_at / no node_run', async () => {
+      const db = harness.db
       const taskId = await seedTask(db)
-      // create + stage WHILE running (allowed), then the task goes terminal before dispatch.
       const { id } = await createManualTaskQuestion(
         db,
         taskId,
@@ -596,253 +854,19 @@ describe('RFC-120 §15 — Codex re-gate (terminal task guard)', () => {
       )
       const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
         .length
-      await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+      const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'canceled')
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [id], actor)
+        await dispatchTaskQuestions(racingDb, taskId, [id], actor)
       } catch (e) {
         threw = e
       }
       expect((threw as { code?: string }).code).toBe('task-terminal')
-      // nothing stamped, nothing minted.
+      // in-tx CAS rolled back → entry NOT stamped, NO node_run minted.
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
       expect(row?.dispatchedAt).toBeNull()
       const runsAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
-      expect(runsAfter).toBe(runsBefore) // no new node_run
+      expect(runsAfter).toBe(runsBefore)
     })
-  }
-
-  test('control: create + dispatch on a FAILED (resumable) deferred task → allowed (not terminal)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
-    // failed is resumable (resumeTask resumes it), so manual create + dispatch are allowed.
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    const result = await dispatchTaskQuestions(db, taskId, [id], actor)
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// E — golden-lock: zero manual rows ⇒ clarify injection byte-identical.
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — golden-lock (no manual rows ⇒ clarify unchanged)', () => {
-  test('a deferred cross-clarify designer injection is unaffected (no Manual instruction section)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // Seed a cross-clarify round + answer (deferred) so the designer has a per-node queue.
-    const qRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: qRunId,
-      taskId,
-      nodeId: QUESTIONER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: DESIGNER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 700,
-    })
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: CC,
-      askingNodeId: QUESTIONER,
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: DESIGNER,
-      loopIter: 0,
-      questions: [mkQ('q1', 'CLARIFY-Q-MARKER?')],
-    })
-    // RFC-162 (designer-by-default deleted): the quick channel seals the round + AUTO-dispatches the
-    // QUESTIONER only. To exercise a DESIGNER per-node queue, reassign the questioner entry → DESIGNER
-    // (ADDS a designer handler) then dispatch it through the SAME board flow — dispatch backfills
-    // sealed_at (round answered) so the queue injector (selectAgentQueue requires sealed_at || manual)
-    // selects it without manual stamping.
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [
-        {
-          questionId: 'q1',
-          selectedOptionIndices: [0],
-          selectedOptionLabels: ['A'],
-          customText: '',
-        },
-      ],
-      directive: 'continue',
-      actor,
-    })
-    const questioner = (
-      await db
-        .select()
-        .from(taskQuestions)
-        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
-    )[0]!
-    await reassignTaskQuestion(db, questioner.id, DESIGNER, actor)
-    const designerEntryId = (
-      await db
-        .select()
-        .from(taskQuestions)
-        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
-    ).find((e) => e.sourceKind === 'cross')!.id
-    const disp = await dispatchTaskQuestions(db, taskId, [designerEntryId], actor)
-    const designer = (
-      await db
-        .select()
-        .from(taskQuestions)
-        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
-    ).find((e) => e.sourceKind === 'cross')!
-    expect(designer.sealedAt).not.toBeNull()
-    expect(designer.dispatchedAt).not.toBeNull()
-    const ctx = await buildClarifyQueueContext({
-      db,
-      definition: liveDef(),
-      taskId,
-      consumerNodeId: DESIGNER,
-      dispatchedRunId: disp.reruns.find((r) => r.targetNodeId === DESIGNER)!.nodeRunId,
-      iteration: 0,
-    })
-    expect(ctx?.block).toContain('CLARIFY-Q-MARKER?')
-    expect(ctx?.block).not.toContain('Manual instruction') // no manual contamination
-    // RFC-141: the RFC-120 §18 suppress member is gone from the context entirely.
-    expect(Object.keys(ctx!)).not.toContain('suppressPriorOutput')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// I — Codex re-gate: H1 (manual reassign to a never-run node rejected) + H2 (terminal status
-// is an IN-TX CAS, not just a pre-check — a status flip between guard and write rolls back).
-// (The clarify-designer OVERRIDE path keeps its shipped reject-at-dispatch design — proven by
-// rfc120-deferred-dispatch.test.ts's "never-run override target → rejected"; the manual guard
-// is scoped to source_kind='manual', so that override test is unaffected.)
-// ---------------------------------------------------------------------------
-describe('RFC-120 §15 — Codex re-gate H1 (manual reassign never-run) + H2 (terminal CAS)', () => {
-  test('H1: reassign a manual question to a never-run node → rejected; to a run node → allowed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // DESIGNER gets a run so it is a valid (runnable) re-target; QUESTIONER stays never-run.
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: DESIGNER,
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 900,
-    })
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    // never-run QUESTIONER → rejected (no park-but-undispatchable).
-    let threw: unknown = null
-    try {
-      await reassignTaskQuestion(db, id, QUESTIONER, actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('manual-question-target-never-run')
-    expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(FIXER) // unchanged
-    // run DESIGNER → allowed.
-    await reassignTaskQuestion(db, id, DESIGNER, actor)
-    expect((await listOne(db, taskId))?.effectiveTargetNodeId).toBe(DESIGNER)
-  })
-
-  // A db Proxy that flips tasks.status to `status` exactly once, on the FIRST nodeRuns read —
-  // which for BOTH create (taskNodeHasRun) and dispatch (assertSafeFrontierTarget) is the last
-  // async read BEFORE the write tx. So the pre-check sees a live task, the status flips, and
-  // the in-tx CAS re-read must catch it. Mirrors the dispatch/reassign-race test's Proxy.
-  function flipStatusOnFirstNodeRunsRead(db: DbClient, taskId: string, status: string) {
-    let fired = false
-    return new Proxy(db, {
-      get(target, prop, receiver) {
-        const orig = Reflect.get(target, prop, receiver)
-        if (prop !== 'select') return orig
-        return (...selectArgs: unknown[]) => {
-          const builder = (orig as (...a: unknown[]) => Record<string, unknown>).apply(
-            target,
-            selectArgs,
-          )
-          const origFrom = (builder.from as (t: unknown) => Record<string, unknown>).bind(builder)
-          builder.from = (tbl: unknown) => {
-            const q = origFrom(tbl)
-            if (tbl === nodeRuns && !fired) {
-              fired = true
-              const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
-              q.then = (onF: unknown, onR: unknown) =>
-                db
-                  .update(tasks)
-                  .set({ status: status as never })
-                  .where(eq(tasks.id, taskId))
-                  .then(() => origThen(onF, onR), onR as never)
-            }
-            return q
-          }
-          return builder
-        }
-      },
-    }) as typeof db
-  }
-
-  test('H2: create — task flips to done BETWEEN the pre-check and the insert tx → rolls back, nothing inserted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db) // running; FIXER has a run
-    const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'done')
-    let threw: unknown = null
-    try {
-      await createManualTaskQuestion(
-        racingDb,
-        taskId,
-        { title: 't', body: 'b', targetNodeId: FIXER },
-        actor,
-      )
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-terminal')
-    // in-tx CAS rolled back → NO row inserted.
-    const rows = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
-    expect(rows.length).toBe(0)
-  })
-
-  test('H2: dispatch — task flips to canceled BETWEEN the pre-check and the stamp+mint tx → rolls back, no dispatched_at / no node_run', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const { id } = await createManualTaskQuestion(
-      db,
-      taskId,
-      { title: 't', body: 'b', targetNodeId: FIXER },
-      actor,
-    )
-    const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
-    const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'canceled')
-    let threw: unknown = null
-    try {
-      await dispatchTaskQuestions(racingDb, taskId, [id], actor)
-    } catch (e) {
-      threw = e
-    }
-    expect((threw as { code?: string }).code).toBe('task-terminal')
-    // in-tx CAS rolled back → entry NOT stamped, NO node_run minted.
-    const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
-    expect(row?.dispatchedAt).toBeNull()
-    const runsAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
-    expect(runsAfter).toBe(runsBefore)
   })
 })

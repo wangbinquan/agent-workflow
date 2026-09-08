@@ -21,12 +21,13 @@
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
@@ -35,7 +36,6 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const ASKER = 'asker' // self-clarifying upstream agent (QMGP5's agent_m7p3n1)
 const DOWN = 'down' // never-run downstream agent (QMGP5's agent_1k2ftd)
@@ -114,7 +114,7 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: DbClient, taskId: string): Promise<void> {
+async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   const def = liveDef()
   await db.insert(workflows).values({
     id: `wf_${taskId}`,
@@ -126,6 +126,10 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
   })
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'rfc133',
     workflowId: `wf_${taskId}`,
     workflowSnapshot: JSON.stringify(def),
@@ -140,7 +144,7 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
@@ -172,7 +176,11 @@ interface EntrySeed {
   stagedAt?: number | null
 }
 
-async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<string> {
+async function insertEntry(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  e: EntrySeed,
+): Promise<string> {
   const id = ulid()
   await db.insert(taskQuestions).values({
     id,
@@ -198,301 +206,303 @@ async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<
   return id
 }
 
-const entryRow = (db: DbClient, id: string) =>
+const entryRow = (db: ProviderNeutralDatabase, id: string) =>
   db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
-const taskRuns = (db: DbClient, taskId: string) =>
+const taskRuns = (db: ProviderNeutralDatabase, taskId: string) =>
   db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
 
 beforeEach(() => resetBroadcastersForTests())
 
-describe('RFC-133 dispatch gate — queued entries stop wedging never-run / idle targets', () => {
-  test('QMGP5 repro (red→green): second batch with a reassigned entry to a NEVER-RUN downstream dispatches', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    // QMGP5 state: the asker finished each round done-NO-output (it only asked follow-ups);
-    // DOWN never ran at all.
-    await seedRun(db, taskId, ASKER, { status: 'done' })
-    const round4Origin = await seedRun(db, taskId, CL, { status: 'done' })
-    const round5Origin = await seedRun(db, taskId, CL, { status: 'done' })
-    // Round-4 analog: grid-spec — dispatched, reassigned to DOWN, forever queued (trigger NULL).
-    const gridSpec = await insertEntry(db, taskId, {
-      originNodeRunId: round4Origin,
-      questionId: 'grid-spec',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      overrideTargetNodeId: DOWN,
-      dispatchedAt: Date.now() - 1000,
-    })
-    // Round-5 analog: powerup (reassigned to DOWN too) + one native asker question, both staged.
-    const powerup = await insertEntry(db, taskId, {
-      originNodeRunId: round5Origin,
-      questionId: 'powerup',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      overrideTargetNodeId: DOWN,
-      stagedAt: Date.now(),
-    })
-    const native = await insertEntry(db, taskId, {
-      originNodeRunId: round5Origin,
-      questionId: 'native',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      stagedAt: Date.now(),
+describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior', (harness) => {
+  describe('RFC-133 dispatch gate — queued entries stop wedging never-run / idle targets', () => {
+    test('QMGP5 repro (red→green): second batch with a reassigned entry to a NEVER-RUN downstream dispatches', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      // QMGP5 state: the asker finished each round done-NO-output (it only asked follow-ups);
+      // DOWN never ran at all.
+      await seedRun(db, taskId, ASKER, { status: 'done' })
+      const round4Origin = await seedRun(db, taskId, CL, { status: 'done' })
+      const round5Origin = await seedRun(db, taskId, CL, { status: 'done' })
+      // Round-4 analog: grid-spec — dispatched, reassigned to DOWN, forever queued (trigger NULL).
+      const gridSpec = await insertEntry(db, taskId, {
+        originNodeRunId: round4Origin,
+        questionId: 'grid-spec',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        overrideTargetNodeId: DOWN,
+        dispatchedAt: Date.now() - 1000,
+      })
+      // Round-5 analog: powerup (reassigned to DOWN too) + one native asker question, both staged.
+      const powerup = await insertEntry(db, taskId, {
+        originNodeRunId: round5Origin,
+        questionId: 'powerup',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        overrideTargetNodeId: DOWN,
+        stagedAt: Date.now(),
+      })
+      const native = await insertEntry(db, taskId, {
+        originNodeRunId: round5Origin,
+        questionId: 'native',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        stagedAt: Date.now(),
+      })
+
+      const result = await dispatchTaskQuestions(db, taskId, [powerup, native], actor)
+
+      // Frontier-only mint: ONE clarify-answer rerun on ASKER, NOTHING on DOWN.
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]!.targetNodeId).toBe(ASKER)
+      expect(result.dispatchedEntryIds.sort()).toEqual([powerup, native].sort())
+      const runs = await taskRuns(db, taskId)
+      expect(runs.filter((r) => r.nodeId === DOWN).length).toBe(0)
+      const minted = runs.find((r) => r.id === result.reruns[0]!.nodeRunId)
+      expect(minted?.nodeId).toBe(ASKER)
+      expect(minted?.rerunCause).toBe('clarify-answer')
+      // Both DOWN-bound entries stay QUEUED (trigger NULL) — DOWN's first natural run binds them.
+      expect((await entryRow(db, gridSpec))[0]!.triggerRunId).toBeNull()
+      const powerupRow = (await entryRow(db, powerup))[0]!
+      expect(powerupRow.dispatchedAt).not.toBeNull()
+      expect(powerupRow.triggerRunId).toBeNull()
     })
 
-    const result = await dispatchTaskQuestions(db, taskId, [powerup, native], actor)
+    test('idle target (all runs done) + SAME cause: a later dispatch to it releases and mints', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
+      const origin = await seedRun(db, taskId, CL, { status: 'done' })
+      // A previously dispatched entry on ASKER that never got bound (queued) — e.g. its dispatch
+      // crashed before the rerun spawned and the rerun was later GC'd... state: dispatched+NULL.
+      await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: 'old-queued',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        dispatchedAt: Date.now() - 1000,
+      })
+      const fresh = await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: 'fresh',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        stagedAt: Date.now(),
+      })
+      const result = await dispatchTaskQuestions(db, taskId, [fresh], actor)
+      expect(result.reruns.length).toBe(1)
+      expect(result.reruns[0]!.targetNodeId).toBe(ASKER)
+      expect((await entryRow(db, fresh))[0]!.dispatchedAt).not.toBeNull()
+    })
 
-    // Frontier-only mint: ONE clarify-answer rerun on ASKER, NOTHING on DOWN.
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]!.targetNodeId).toBe(ASKER)
-    expect(result.dispatchedEntryIds.sort()).toEqual([powerup, native].sort())
-    const runs = await taskRuns(db, taskId)
-    expect(runs.filter((r) => r.nodeId === DOWN).length).toBe(0)
-    const minted = runs.find((r) => r.id === result.reruns[0]!.nodeRunId)
-    expect(minted?.nodeId).toBe(ASKER)
-    expect(minted?.rerunCause).toBe('clarify-answer')
-    // Both DOWN-bound entries stay QUEUED (trigger NULL) — DOWN's first natural run binds them.
-    expect((await entryRow(db, gridSpec))[0]!.triggerRunId).toBeNull()
-    const powerupRow = (await entryRow(db, powerup))[0]!
-    expect(powerupRow.dispatchedAt).not.toBeNull()
-    expect(powerupRow.triggerRunId).toBeNull()
+    test('ALIEN-cause queued entry on the mint target still 409s (Codex P2), details carry the node, nothing stamped', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
+      const origin = await seedRun(db, taskId, CC, { status: 'done' })
+      // A queued DESIGNER (cross-clarify-answer) entry on ASKER…
+      await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: 'designer-queued',
+        roleKind: 'designer',
+        defaultTargetNodeId: ASKER,
+        dispatchedAt: Date.now() - 1000,
+      })
+      // …must block a SELF (clarify-answer) mint on ASKER even though ASKER has no open run.
+      const selfOrigin = await seedRun(db, taskId, CL, { status: 'done' })
+      const selfEntry = await insertEntry(db, taskId, {
+        originNodeRunId: selfOrigin,
+        questionId: 'self-fresh',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        stagedAt: Date.now(),
+      })
+      const runsBefore = (await taskRuns(db, taskId)).length
+      let caught: unknown
+      try {
+        await dispatchTaskQuestions(db, taskId, [selfEntry], actor)
+      } catch (e) {
+        caught = e
+      }
+      expect(caught).toBeInstanceOf(ConflictError)
+      const err = caught as ConflictError
+      expect(err.code).toBe('task-question-node-dispatch-in-flight')
+      expect((err.details as { nodeId?: string }).nodeId).toBe(ASKER)
+      // Pure cause-serialization block: no open run to point at.
+      expect((err.details as { runId?: string }).runId).toBeUndefined()
+      // Fail-fast: nothing stamped, nothing minted.
+      expect((await entryRow(db, selfEntry))[0]!.dispatchedAt).toBeNull()
+      expect((await taskRuns(db, taskId)).length).toBe(runsBefore)
+    })
+
+    test('run obligation (pending rerun on the target) still 409s, details carry the blocking run', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      await seedRun(db, taskId, ASKER, { status: 'done' })
+      const pendingRun = await seedRun(db, taskId, ASKER, {
+        status: 'pending',
+        rerunCause: 'clarify-answer',
+      })
+      const origin = await seedRun(db, taskId, CL, { status: 'done' })
+      // The pending rerun belongs to this already-dispatched (still unbound) entry.
+      await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: 'in-flight',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        dispatchedAt: Date.now() - 1000,
+      })
+      const nextEntry = await insertEntry(db, taskId, {
+        originNodeRunId: origin,
+        questionId: 'next',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        stagedAt: Date.now(),
+      })
+      let caught: unknown
+      try {
+        await dispatchTaskQuestions(db, taskId, [nextEntry], actor)
+      } catch (e) {
+        caught = e
+      }
+      expect(caught).toBeInstanceOf(ConflictError)
+      const err = caught as ConflictError
+      expect(err.code).toBe('task-question-node-dispatch-in-flight')
+      const details = err.details as { nodeId?: string; runId?: string; runStatus?: string }
+      expect(details.nodeId).toBe(ASKER)
+      expect(details.runId).toBe(pendingRun)
+      expect(details.runStatus).toBe('pending')
+    })
   })
 
-  test('idle target (all runs done) + SAME cause: a later dispatch to it releases and mints', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
-    const origin = await seedRun(db, taskId, CL, { status: 'done' })
-    // A previously dispatched entry on ASKER that never got bound (queued) — e.g. its dispatch
-    // crashed before the rerun spawned and the rerun was later GC'd... state: dispatched+NULL.
-    await insertEntry(db, taskId, {
-      originNodeRunId: origin,
-      questionId: 'old-queued',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      dispatchedAt: Date.now() - 1000,
+  describe('RFC-133 quick-channel mint guards — same-cause queued entry no longer wedges the submit', () => {
+    test('clarify self quick-finalize: queued SAME-cause entry on a no-obligation home → submit succeeds and mints', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      // QMGP5-style: the asking run is DONE (it finished by asking); no other ASKER runs.
+      const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: ASKER,
+        askingNodeRunId: askRun,
+        askingShardKey: null,
+        intermediaryNodeId: CL,
+        iteration: 0,
+        questions: [mkQ('q1')],
+      })
+      // Another round's SELF entry on home ASKER: dispatched but never bound (queued).
+      const otherOrigin = await seedRun(db, taskId, CL, { status: 'done' })
+      await insertEntry(db, taskId, {
+        originNodeRunId: otherOrigin,
+        questionId: 'queued-self',
+        roleKind: 'self',
+        defaultTargetNodeId: ASKER,
+        dispatchedAt: Date.now() - 1000,
+      })
+      const ret = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: clarifyNodeRunId,
+        answers: [ans('q1')],
+        actor,
+      })
+      expect(ret).toBeDefined()
+      // The clarify-answer continuation WAS minted on the home (not parked).
+      expect(ret.dispatchDeferredReason).toBeUndefined()
+      const conts = (await taskRuns(db, taskId)).filter(
+        (r) => r.nodeId === ASKER && r.rerunCause === 'clarify-answer',
+      )
+      expect(conts.length).toBe(1)
     })
-    const fresh = await insertEntry(db, taskId, {
-      originNodeRunId: origin,
-      questionId: 'fresh',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      stagedAt: Date.now(),
-    })
-    const result = await dispatchTaskQuestions(db, taskId, [fresh], actor)
-    expect(result.reruns.length).toBe(1)
-    expect(result.reruns[0]!.targetNodeId).toBe(ASKER)
-    expect((await entryRow(db, fresh))[0]!.dispatchedAt).not.toBeNull()
-  })
 
-  test('ALIEN-cause queued entry on the mint target still 409s (Codex P2), details carry the node, nothing stamped', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
-    const origin = await seedRun(db, taskId, CC, { status: 'done' })
-    // A queued DESIGNER (cross-clarify-answer) entry on ASKER…
-    await insertEntry(db, taskId, {
-      originNodeRunId: origin,
-      questionId: 'designer-queued',
-      roleKind: 'designer',
-      defaultTargetNodeId: ASKER,
-      dispatchedAt: Date.now() - 1000,
+    test('clarify self quick-finalize: queued ALIEN-cause (designer) entry on the home still blocks the mint (parked, no rerun)', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: ASKER,
+        askingNodeRunId: askRun,
+        askingShardKey: null,
+        intermediaryNodeId: CL,
+        iteration: 0,
+        questions: [mkQ('q1')],
+      })
+      const ccOrigin = await seedRun(db, taskId, CC, { status: 'done' })
+      await insertEntry(db, taskId, {
+        originNodeRunId: ccOrigin,
+        questionId: 'queued-designer',
+        roleKind: 'designer',
+        defaultTargetNodeId: ASKER,
+        dispatchedAt: Date.now() - 1000,
+      })
+      const runsBefore = (await taskRuns(db, taskId)).length
+      // RFC-132 unified quick channel: the alien-cause gate fires AFTER the seal committed, so the
+      // answer is saved + the dispatch PARKS (dispatchDeferredReason) instead of the legacy pre-seal
+      // ConflictError — the mint is still blocked: no rerun, no new node_run.
+      const ret = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: clarifyNodeRunId,
+        answers: [ans('q1')],
+        actor,
+      })
+      expect(ret.dispatchDeferredReason).toBe('task-question-node-dispatch-in-flight')
+      expect(ret.dispatch.reruns).toHaveLength(0)
+      expect((await taskRuns(db, taskId)).length).toBe(runsBefore)
     })
-    // …must block a SELF (clarify-answer) mint on ASKER even though ASKER has no open run.
-    const selfOrigin = await seedRun(db, taskId, CL, { status: 'done' })
-    const selfEntry = await insertEntry(db, taskId, {
-      originNodeRunId: selfOrigin,
-      questionId: 'self-fresh',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      stagedAt: Date.now(),
-    })
-    const runsBefore = (await taskRuns(db, taskId)).length
-    let caught: unknown
-    try {
-      await dispatchTaskQuestions(db, taskId, [selfEntry], actor)
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(ConflictError)
-    const err = caught as ConflictError
-    expect(err.code).toBe('task-question-node-dispatch-in-flight')
-    expect((err.details as { nodeId?: string }).nodeId).toBe(ASKER)
-    // Pure cause-serialization block: no open run to point at.
-    expect((err.details as { runId?: string }).runId).toBeUndefined()
-    // Fail-fast: nothing stamped, nothing minted.
-    expect((await entryRow(db, selfEntry))[0]!.dispatchedAt).toBeNull()
-    expect((await taskRuns(db, taskId)).length).toBe(runsBefore)
-  })
 
-  test('run obligation (pending rerun on the target) still 409s, details carry the blocking run', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    await seedRun(db, taskId, ASKER, { status: 'done' })
-    const pendingRun = await seedRun(db, taskId, ASKER, {
-      status: 'pending',
-      rerunCause: 'clarify-answer',
+    test('cross questioner submit: queued SAME-cause questioner entry on the questioner home → cascade rerun mints', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId)
+      // designer (feedback consumer) has a prior done draft; questioner home DOWN asked and is done.
+      await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
+      const qRun = await seedRun(db, taskId, DOWN, { status: 'done' })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: CC,
+        askingNodeId: DOWN,
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: ASKER,
+        loopIter: 0,
+        questions: [mkQ('q1')],
+      })
+      // Another round's QUESTIONER entry on home DOWN: dispatched, queued.
+      const otherOrigin = await seedRun(db, taskId, CC, { status: 'done' })
+      await insertEntry(db, taskId, {
+        originNodeRunId: otherOrigin,
+        questionId: 'queued-questioner',
+        roleKind: 'questioner',
+        defaultTargetNodeId: DOWN,
+        dispatchedAt: Date.now() - 1000,
+      })
+      // cross answer + continue → mints the questioner cascade rerun on DOWN (RFC-162: scope deleted).
+      const ret = await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+        actor,
+      })
+      expect(ret).toBeDefined()
+      const qReruns = (await taskRuns(db, taskId)).filter(
+        (r) => r.nodeId === DOWN && r.rerunCause === 'cross-clarify-questioner-rerun',
+      )
+      expect(qReruns.length).toBe(1)
     })
-    const origin = await seedRun(db, taskId, CL, { status: 'done' })
-    // The pending rerun belongs to this already-dispatched (still unbound) entry.
-    await insertEntry(db, taskId, {
-      originNodeRunId: origin,
-      questionId: 'in-flight',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      dispatchedAt: Date.now() - 1000,
-    })
-    const nextEntry = await insertEntry(db, taskId, {
-      originNodeRunId: origin,
-      questionId: 'next',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      stagedAt: Date.now(),
-    })
-    let caught: unknown
-    try {
-      await dispatchTaskQuestions(db, taskId, [nextEntry], actor)
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(ConflictError)
-    const err = caught as ConflictError
-    expect(err.code).toBe('task-question-node-dispatch-in-flight')
-    const details = err.details as { nodeId?: string; runId?: string; runStatus?: string }
-    expect(details.nodeId).toBe(ASKER)
-    expect(details.runId).toBe(pendingRun)
-    expect(details.runStatus).toBe('pending')
-  })
-})
-
-describe('RFC-133 quick-channel mint guards — same-cause queued entry no longer wedges the submit', () => {
-  test('clarify self quick-finalize: queued SAME-cause entry on a no-obligation home → submit succeeds and mints', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    // QMGP5-style: the asking run is DONE (it finished by asking); no other ASKER runs.
-    const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: ASKER,
-      askingNodeRunId: askRun,
-      askingShardKey: null,
-      intermediaryNodeId: CL,
-      iteration: 0,
-      questions: [mkQ('q1')],
-    })
-    // Another round's SELF entry on home ASKER: dispatched but never bound (queued).
-    const otherOrigin = await seedRun(db, taskId, CL, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: otherOrigin,
-      questionId: 'queued-self',
-      roleKind: 'self',
-      defaultTargetNodeId: ASKER,
-      dispatchedAt: Date.now() - 1000,
-    })
-    const ret = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: clarifyNodeRunId,
-      answers: [ans('q1')],
-      actor,
-    })
-    expect(ret).toBeDefined()
-    // The clarify-answer continuation WAS minted on the home (not parked).
-    expect(ret.dispatchDeferredReason).toBeUndefined()
-    const conts = (await taskRuns(db, taskId)).filter(
-      (r) => r.nodeId === ASKER && r.rerunCause === 'clarify-answer',
-    )
-    expect(conts.length).toBe(1)
-  })
-
-  test('clarify self quick-finalize: queued ALIEN-cause (designer) entry on the home still blocks the mint (parked, no rerun)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: ASKER,
-      askingNodeRunId: askRun,
-      askingShardKey: null,
-      intermediaryNodeId: CL,
-      iteration: 0,
-      questions: [mkQ('q1')],
-    })
-    const ccOrigin = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: ccOrigin,
-      questionId: 'queued-designer',
-      roleKind: 'designer',
-      defaultTargetNodeId: ASKER,
-      dispatchedAt: Date.now() - 1000,
-    })
-    const runsBefore = (await taskRuns(db, taskId)).length
-    // RFC-132 unified quick channel: the alien-cause gate fires AFTER the seal committed, so the
-    // answer is saved + the dispatch PARKS (dispatchDeferredReason) instead of the legacy pre-seal
-    // ConflictError — the mint is still blocked: no rerun, no new node_run.
-    const ret = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: clarifyNodeRunId,
-      answers: [ans('q1')],
-      actor,
-    })
-    expect(ret.dispatchDeferredReason).toBe('task-question-node-dispatch-in-flight')
-    expect(ret.dispatch.reruns).toHaveLength(0)
-    expect((await taskRuns(db, taskId)).length).toBe(runsBefore)
-  })
-
-  test('cross questioner submit: queued SAME-cause questioner entry on the questioner home → cascade rerun mints', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    // designer (feedback consumer) has a prior done draft; questioner home DOWN asked and is done.
-    await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
-    const qRun = await seedRun(db, taskId, DOWN, { status: 'done' })
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: CC,
-      askingNodeId: DOWN,
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: ASKER,
-      loopIter: 0,
-      questions: [mkQ('q1')],
-    })
-    // Another round's QUESTIONER entry on home DOWN: dispatched, queued.
-    const otherOrigin = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: otherOrigin,
-      questionId: 'queued-questioner',
-      roleKind: 'questioner',
-      defaultTargetNodeId: DOWN,
-      dispatchedAt: Date.now() - 1000,
-    })
-    // cross answer + continue → mints the questioner cascade rerun on DOWN (RFC-162: scope deleted).
-    const ret = await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
-      actor,
-    })
-    expect(ret).toBeDefined()
-    const qReruns = (await taskRuns(db, taskId)).filter(
-      (r) => r.nodeId === DOWN && r.rerunCause === 'cross-clarify-questioner-rerun',
-    )
-    expect(qReruns.length).toBe(1)
   })
 })
 

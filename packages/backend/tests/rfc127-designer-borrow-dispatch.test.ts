@@ -21,19 +21,18 @@
 // override — so a refactor that re-introduces borrow through the reassign path goes red here.
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { reassignTaskQuestion } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const DESIGNER = 'designer'
 const QUESTIONER = 'questioner'
@@ -100,7 +99,9 @@ function ans(qid: string) {
 
 /** Seed a task on liveDef + the designer's prior `done` draft + the questioner's `done` asking run,
  *  then open one cross-clarify session (awaiting_human). */
-async function seedTask(db: DbClient): Promise<{ taskId: string; crossClarifyNodeRunId: string }> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+): Promise<{ taskId: string; crossClarifyNodeRunId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   const workflowId = `wf_${taskId}`
@@ -114,6 +115,10 @@ async function seedTask(db: DbClient): Promise<{ taskId: string; crossClarifyNod
   })
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'rfc127-retired',
     workflowId,
     workflowSnapshot: JSON.stringify(def),
@@ -158,7 +163,7 @@ async function seedTask(db: DbClient): Promise<{ taskId: string; crossClarifyNod
   return { taskId, crossClarifyNodeRunId }
 }
 
-async function designerEntries(db: DbClient, taskId: string) {
+async function designerEntries(db: ProviderNeutralDatabase, taskId: string) {
   return db
     .select()
     .from(taskQuestions)
@@ -168,30 +173,32 @@ async function designerEntries(db: DbClient, taskId: string) {
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-describe('RFC-162 — 借壳 (borrow) retired: a clarify reassign sets NO override', () => {
-  test('reassign the asker UPSTREAM → designer handler with default=target, overrideTargetNodeId NULL', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, crossClarifyNodeRunId } = await seedTask(db)
-    // Control-channel seal → answered round + ONE questioner entry (RFC-162: no designer by default).
-    await sealRoundQuestions({
-      db,
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [ans('q1')],
-      directive: 'continue',
+describeEachProvider('RFC-359 rfc127-designer-borrow-dispatch database behavior', (harness) => {
+  describe('RFC-162 — 借壳 (borrow) retired: a clarify reassign sets NO override', () => {
+    test('reassign the asker UPSTREAM → designer handler with default=target, overrideTargetNodeId NULL', async () => {
+      const db = harness.db
+      const { taskId, crossClarifyNodeRunId } = await seedTask(db)
+      // Control-channel seal → answered round + ONE questioner entry (RFC-162: no designer by default).
+      await sealRoundQuestions({
+        db,
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [ans('q1')],
+        directive: 'continue',
+      })
+      const questioner = (
+        await db
+          .select()
+          .from(taskQuestions)
+          .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
+      )[0]!
+      // Reassign the asker upstream to a DIFFERENT agent node → ADDS a designer handler on it.
+      const action = await reassignTaskQuestion(db, questioner.id, OTHER, actor)
+      expect(action).toBe('added-designer')
+      const designer = (await designerEntries(db, taskId))[0]!
+      expect(designer.defaultTargetNodeId).toBe(OTHER)
+      // 借壳 dead: the reassign records the target as the handler's DEFAULT, never as an override —
+      // so resolveBorrowForNode can never see an override and no agent is ever borrowed.
+      expect(designer.overrideTargetNodeId).toBeNull()
     })
-    const questioner = (
-      await db
-        .select()
-        .from(taskQuestions)
-        .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'questioner')))
-    )[0]!
-    // Reassign the asker upstream to a DIFFERENT agent node → ADDS a designer handler on it.
-    const action = await reassignTaskQuestion(db, questioner.id, OTHER, actor)
-    expect(action).toBe('added-designer')
-    const designer = (await designerEntries(db, taskId))[0]!
-    expect(designer.defaultTargetNodeId).toBe(OTHER)
-    // 借壳 dead: the reassign records the target as the handler's DEFAULT, never as an override —
-    // so resolveBorrowForNode can never see an override and no agent is ever borrowed.
-    expect(designer.overrideTargetNodeId).toBeNull()
   })
 })

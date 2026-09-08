@@ -24,9 +24,10 @@
 // running handler → open (revival still owed); dual-queued reject (rfc128-p5-bc three cases).
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   clarifyRounds,
   nodeRuns,
@@ -46,7 +47,6 @@ import type {
 } from '../src/db/schema'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const D = 'D' // the designer / home node both ledgers land on (QMGP5's agent_m7p3n1)
 const Q = 'Q' // cross questioner
@@ -63,7 +63,7 @@ function liveDef(): WorkflowDefinition {
   return { $schema_version: 4, inputs: [], nodes, edges: [], outputs: [] }
 }
 
-async function seedTask(db: DbClient, taskId: string): Promise<void> {
+async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   const def = liveDef()
   await db.insert(workflows).values({
     id: `wf_${taskId}`,
@@ -75,6 +75,10 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
   })
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture',
     workflowId: `wf_${taskId}`,
     workflowSnapshot: JSON.stringify(def),
@@ -89,7 +93,7 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   over: { status?: string; iteration?: number; hasOutput?: boolean; rerunCause?: string } = {},
@@ -114,7 +118,7 @@ async function seedRun(
  *  questions were asked BY the ledger's own handler run — seedAnsweredRound-style helpers mint a
  *  fresh asking run, which would pollute the handler lineage window on the same node). */
 async function seedSelfRoundAskedBy(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   askingRunId: string,
 ): Promise<{ intermediaryNodeRunId: string }> {
@@ -146,7 +150,11 @@ interface EntrySeed {
   triggerRunId?: string | null
 }
 
-async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<string> {
+async function insertEntry(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  e: EntrySeed,
+): Promise<string> {
   const id = ulid()
   await db.insert(taskQuestions).values({
     id,
@@ -250,204 +258,210 @@ describe('RFC-139 ① — bound done (regardless of output) = consumed in BOTH m
   })
 })
 
-// ===========================================================================
-// ② resolveBorrowForNode — QMGP5 shapes + anchor coalescing + preserved rejects
-// ===========================================================================
+describeEachProvider(
+  'RFC-359 rfc139-clarify-ask-closes-ledger database behavior',
+  (harness) => {
+    // ===========================================================================
+    // ② resolveBorrowForNode — QMGP5 shapes + anchor coalescing + preserved rejects
+    // ===========================================================================
 
-describe('RFC-139 ② — resolveBorrowForNode ledger conflict scope', () => {
-  test('pre-bind (QMGP5 main shape): designer bound→done-no-output + self queued + pending rerun → no conflict', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    // retry-11 analogue: the designer revision rerun, done with NO output (it asked round 9).
-    const crossAnswerRun = await seedRun(db, taskId, D, {
-      status: 'done',
-      rerunCause: 'cross-clarify-answer',
-    })
-    const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: ccRun,
-      questionId: 'dq1',
-      roleKind: 'designer',
-      triggerRunId: crossAnswerRun,
-    })
-    // round 9, asked BY retry 11; its 5 entries freshly dispatched (queued — trigger NULL).
-    const round9 = await seedSelfRoundAskedBy(db, taskId, crossAnswerRun)
-    await insertEntry(db, taskId, {
-      originNodeRunId: round9.intermediaryNodeRunId,
-      questionId: 'sq1',
-      roleKind: 'self',
-      triggerRunId: null,
-    })
-    // retry-12 analogue: the freshly minted clarify-answer rerun (upper bound of the designer
-    // entry's lineage window — the designer ledger resolves to retry 11, not to this).
-    await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'clarify-answer' })
+    describe('RFC-139 ② — resolveBorrowForNode ledger conflict scope', () => {
+      test('pre-bind (QMGP5 main shape): designer bound→done-no-output + self queued + pending rerun → no conflict', async () => {
+        const db = harness.db
+        const taskId = `t_${ulid()}`
+        await seedTask(db, taskId)
+        // retry-11 analogue: the designer revision rerun, done with NO output (it asked round 9).
+        const crossAnswerRun = await seedRun(db, taskId, D, {
+          status: 'done',
+          rerunCause: 'cross-clarify-answer',
+        })
+        const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
+        await insertEntry(db, taskId, {
+          originNodeRunId: ccRun,
+          questionId: 'dq1',
+          roleKind: 'designer',
+          triggerRunId: crossAnswerRun,
+        })
+        // round 9, asked BY retry 11; its 5 entries freshly dispatched (queued — trigger NULL).
+        const round9 = await seedSelfRoundAskedBy(db, taskId, crossAnswerRun)
+        await insertEntry(db, taskId, {
+          originNodeRunId: round9.intermediaryNodeRunId,
+          questionId: 'sq1',
+          roleKind: 'self',
+          triggerRunId: null,
+        })
+        // retry-12 analogue: the freshly minted clarify-answer rerun (upper bound of the designer
+        // entry's lineage window — the designer ledger resolves to retry 11, not to this).
+        await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'clarify-answer' })
 
-    expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
-  })
-
-  test('post-bind (Codex design-gate P1): both ledgers rebound to ONE failed run + revival pending → coalesced, no conflict', async () => {
-    for (const crashedStatus of ['failed', 'interrupted'] as const) {
-      const db = createInMemoryDb(MIGRATIONS)
-      const taskId = `t_${ulid()}`
-      await seedTask(db, taskId)
-      // retry 11: asked round 9 (kept for the round's asking-run iteration match).
-      const askedBy = await seedRun(db, taskId, D, {
-        status: 'done',
-        rerunCause: 'cross-clarify-answer',
+        expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
       })
-      // retry 12: the released rerun — bindTriggerRun rebound BOTH ledgers to it — then crashed.
-      const crashed = await seedRun(db, taskId, D, {
-        status: crashedStatus,
-        rerunCause: 'clarify-answer',
+
+      test('post-bind (Codex design-gate P1): both ledgers rebound to ONE failed run + revival pending → coalesced, no conflict', async () => {
+        for (const crashedStatus of ['failed', 'interrupted'] as const) {
+          const db = harness.database(crashedStatus === 'failed' ? 0 : 1).db
+          const taskId = `t_${ulid()}`
+          await seedTask(db, taskId)
+          // retry 11: asked round 9 (kept for the round's asking-run iteration match).
+          const askedBy = await seedRun(db, taskId, D, {
+            status: 'done',
+            rerunCause: 'cross-clarify-answer',
+          })
+          // retry 12: the released rerun — bindTriggerRun rebound BOTH ledgers to it — then crashed.
+          const crashed = await seedRun(db, taskId, D, {
+            status: crashedStatus,
+            rerunCause: 'clarify-answer',
+          })
+          const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
+          await insertEntry(db, taskId, {
+            originNodeRunId: ccRun,
+            questionId: 'dq1',
+            roleKind: 'designer',
+            triggerRunId: crashed,
+          })
+          const round9 = await seedSelfRoundAskedBy(db, taskId, askedBy)
+          await insertEntry(db, taskId, {
+            originNodeRunId: round9.intermediaryNodeRunId,
+            questionId: 'sq1',
+            roleKind: 'self',
+            triggerRunId: crashed,
+          })
+          // retry 13: the revival (non-clarify cause — falls INSIDE both windows).
+          await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'revival' })
+
+          expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
+        }
       })
-      const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
-      await insertEntry(db, taskId, {
-        originNodeRunId: ccRun,
-        questionId: 'dq1',
-        roleKind: 'designer',
-        triggerRunId: crashed,
+
+      test('symmetric pre-bind: self ledger bound→done-no-output + designer queued → no conflict', async () => {
+        const db = harness.db
+        const taskId = `t_${ulid()}`
+        await seedTask(db, taskId)
+        const askedBy = await seedRun(db, taskId, D, { status: 'done' })
+        const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
+        // the self continuation ran and ended in ANOTHER ask (done, no output).
+        const selfContinuation = await seedRun(db, taskId, D, {
+          status: 'done',
+          rerunCause: 'clarify-answer',
+        })
+        await insertEntry(db, taskId, {
+          originNodeRunId: round.intermediaryNodeRunId,
+          questionId: 'sq1',
+          roleKind: 'self',
+          triggerRunId: selfContinuation,
+        })
+        const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
+        await insertEntry(db, taskId, {
+          originNodeRunId: ccRun,
+          questionId: 'dq1',
+          roleKind: 'designer',
+          triggerRunId: null,
+        })
+        await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'cross-clarify-answer' })
+
+        expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
       })
-      const round9 = await seedSelfRoundAskedBy(db, taskId, askedBy)
-      await insertEntry(db, taskId, {
-        originNodeRunId: round9.intermediaryNodeRunId,
-        questionId: 'sq1',
-        roleKind: 'self',
-        triggerRunId: crashed,
+
+      test('true conflict preserved: dual-queued (∅ vs ∅ anchors) → still rejects', async () => {
+        const db = harness.db
+        const taskId = `t_${ulid()}`
+        await seedTask(db, taskId)
+        const askedBy = await seedRun(db, taskId, D, { status: 'done' })
+        const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
+        await insertEntry(db, taskId, {
+          originNodeRunId: round.intermediaryNodeRunId,
+          questionId: 'sq1',
+          roleKind: 'self',
+          triggerRunId: null,
+        })
+        const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
+        await insertEntry(db, taskId, {
+          originNodeRunId: ccRun,
+          questionId: 'dq1',
+          roleKind: 'designer',
+          triggerRunId: null,
+        })
+
+        let caught: unknown
+        try {
+          await resolveBorrowForNode(db, taskId, D, 0, liveDef())
+        } catch (e) {
+          caught = e
+        }
+        expect(caught).toBeInstanceOf(ConflictError)
+        expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
       })
-      // retry 13: the revival (non-clarify cause — falls INSIDE both windows).
-      await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'revival' })
 
-      expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
-    }
-  })
+      test('true conflict preserved: disjoint bound anchors ({X} vs {Y}, both un-done) → still rejects', async () => {
+        const db = harness.db
+        const taskId = `t_${ulid()}`
+        await seedTask(db, taskId)
+        const askedBy = await seedRun(db, taskId, D, { status: 'done' })
+        const f1 = await seedRun(db, taskId, D, {
+          status: 'failed',
+          rerunCause: 'cross-clarify-answer',
+        })
+        const f2 = await seedRun(db, taskId, D, { status: 'failed', rerunCause: 'clarify-answer' })
+        const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
+        await insertEntry(db, taskId, {
+          originNodeRunId: ccRun,
+          questionId: 'dq1',
+          roleKind: 'designer',
+          triggerRunId: f1,
+        })
+        const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
+        await insertEntry(db, taskId, {
+          originNodeRunId: round.intermediaryNodeRunId,
+          questionId: 'sq1',
+          roleKind: 'self',
+          triggerRunId: f2,
+        })
 
-  test('symmetric pre-bind: self ledger bound→done-no-output + designer queued → no conflict', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const askedBy = await seedRun(db, taskId, D, { status: 'done' })
-    const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
-    // the self continuation ran and ended in ANOTHER ask (done, no output).
-    const selfContinuation = await seedRun(db, taskId, D, {
-      status: 'done',
-      rerunCause: 'clarify-answer',
-    })
-    await insertEntry(db, taskId, {
-      originNodeRunId: round.intermediaryNodeRunId,
-      questionId: 'sq1',
-      roleKind: 'self',
-      triggerRunId: selfContinuation,
-    })
-    const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: ccRun,
-      questionId: 'dq1',
-      roleKind: 'designer',
-      triggerRunId: null,
-    })
-    await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'cross-clarify-answer' })
+        let caught: unknown
+        try {
+          await resolveBorrowForNode(db, taskId, D, 0, liveDef())
+        } catch (e) {
+          caught = e
+        }
+        expect(caught).toBeInstanceOf(ConflictError)
+        expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
+      })
 
-    expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
-  })
+      test('mixed ride: designer bound {X} + self bound {X}+queued sibling → anchors intersect, no conflict', async () => {
+        const db = harness.db
+        const taskId = `t_${ulid()}`
+        await seedTask(db, taskId)
+        const askedBy = await seedRun(db, taskId, D, { status: 'done' })
+        const crashed = await seedRun(db, taskId, D, {
+          status: 'failed',
+          rerunCause: 'clarify-answer',
+        })
+        const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
+        await insertEntry(db, taskId, {
+          originNodeRunId: ccRun,
+          questionId: 'dq1',
+          roleKind: 'designer',
+          triggerRunId: crashed,
+        })
+        const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
+        await insertEntry(db, taskId, {
+          originNodeRunId: round.intermediaryNodeRunId,
+          questionId: 'sq1',
+          roleKind: 'self',
+          triggerRunId: crashed,
+        })
+        // a later same-cause sibling still queued — rides the same chain (RFC-133 case 7 semantics).
+        await insertEntry(db, taskId, {
+          originNodeRunId: round.intermediaryNodeRunId,
+          questionId: 'sq2',
+          roleKind: 'self',
+          triggerRunId: null,
+        })
+        await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'revival' })
 
-  test('true conflict preserved: dual-queued (∅ vs ∅ anchors) → still rejects', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const askedBy = await seedRun(db, taskId, D, { status: 'done' })
-    const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
-    await insertEntry(db, taskId, {
-      originNodeRunId: round.intermediaryNodeRunId,
-      questionId: 'sq1',
-      roleKind: 'self',
-      triggerRunId: null,
+        expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
+      })
     })
-    const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: ccRun,
-      questionId: 'dq1',
-      roleKind: 'designer',
-      triggerRunId: null,
-    })
-
-    let caught: unknown
-    try {
-      await resolveBorrowForNode(db, taskId, D, 0, liveDef())
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(ConflictError)
-    expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
-  })
-
-  test('true conflict preserved: disjoint bound anchors ({X} vs {Y}, both un-done) → still rejects', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const askedBy = await seedRun(db, taskId, D, { status: 'done' })
-    const f1 = await seedRun(db, taskId, D, {
-      status: 'failed',
-      rerunCause: 'cross-clarify-answer',
-    })
-    const f2 = await seedRun(db, taskId, D, { status: 'failed', rerunCause: 'clarify-answer' })
-    const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: ccRun,
-      questionId: 'dq1',
-      roleKind: 'designer',
-      triggerRunId: f1,
-    })
-    const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
-    await insertEntry(db, taskId, {
-      originNodeRunId: round.intermediaryNodeRunId,
-      questionId: 'sq1',
-      roleKind: 'self',
-      triggerRunId: f2,
-    })
-
-    let caught: unknown
-    try {
-      await resolveBorrowForNode(db, taskId, D, 0, liveDef())
-    } catch (e) {
-      caught = e
-    }
-    expect(caught).toBeInstanceOf(ConflictError)
-    expect((caught as ConflictError).code).toBe('task-question-borrow-ledger-conflict')
-  })
-
-  test('mixed ride: designer bound {X} + self bound {X}+queued sibling → anchors intersect, no conflict', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId)
-    const askedBy = await seedRun(db, taskId, D, { status: 'done' })
-    const crashed = await seedRun(db, taskId, D, {
-      status: 'failed',
-      rerunCause: 'clarify-answer',
-    })
-    const ccRun = await seedRun(db, taskId, CC, { status: 'done' })
-    await insertEntry(db, taskId, {
-      originNodeRunId: ccRun,
-      questionId: 'dq1',
-      roleKind: 'designer',
-      triggerRunId: crashed,
-    })
-    const round = await seedSelfRoundAskedBy(db, taskId, askedBy)
-    await insertEntry(db, taskId, {
-      originNodeRunId: round.intermediaryNodeRunId,
-      questionId: 'sq1',
-      roleKind: 'self',
-      triggerRunId: crashed,
-    })
-    // a later same-cause sibling still queued — rides the same chain (RFC-133 case 7 semantics).
-    await insertEntry(db, taskId, {
-      originNodeRunId: round.intermediaryNodeRunId,
-      questionId: 'sq2',
-      roleKind: 'self',
-      triggerRunId: null,
-    })
-    await seedRun(db, taskId, D, { status: 'pending', rerunCause: 'revival' })
-
-    expect(await resolveBorrowForNode(db, taskId, D, 0, liveDef())).toBeNull()
-  })
-})
+  },
+  { databaseCount: 2 },
+)

@@ -6,34 +6,31 @@
 // node_run was never promoted out of awaiting_human, leaving the task
 // permanently parked.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-prd-clarify-'))
   mkdirSync(tmp, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
   const def: WorkflowDefinition = {
     $schema_version: 3,
     inputs: [],
@@ -45,6 +42,11 @@ async function buildHarness(): Promise<Harness> {
   const taskId = ulid()
   await db.insert(tasks).values({
     id: taskId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 't',
     workflowId,
     workflowSnapshot: JSON.stringify(def),
@@ -61,7 +63,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function insertClarifyRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   status: 'awaiting_human' | 'running' | 'done' | 'canceled',
 ): Promise<string> {
@@ -81,7 +83,7 @@ async function insertClarifyRun(
 }
 
 async function insertClarifySession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     clarifyNodeRunId: string
@@ -106,100 +108,103 @@ async function insertClarifySession(
   return id
 }
 
-describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not awaiting_human)', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+describeEachProvider(
+  'RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not awaiting_human)',
+  (harness) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('satisfied: answered session + done clarify run → no C1 alert', async () => {
-    h = await buildHarness()
-    const run = await insertClarifyRun(h.db, h.taskId, 'done')
-    await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('satisfied: answered session + done clarify run → no C1 alert', async () => {
+      h = await buildHarness(harness.db)
+      const run = await insertClarifyRun(h.db, h.taskId, 'done')
+      await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
-  })
 
-  test('satisfied: answered session + running clarify run → no C1 alert', async () => {
-    h = await buildHarness()
-    const run = await insertClarifyRun(h.db, h.taskId, 'running')
-    await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('satisfied: answered session + running clarify run → no C1 alert', async () => {
+      h = await buildHarness(harness.db)
+      const run = await insertClarifyRun(h.db, h.taskId, 'running')
+      await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
-  })
 
-  test('open session is allowed: awaiting_human session + awaiting_human run → no C1 alert', async () => {
-    h = await buildHarness()
-    const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
-    await insertClarifySession(h.db, h.taskId, {
-      clarifyNodeRunId: run,
-      status: 'awaiting_human',
+    test('open session is allowed: awaiting_human session + awaiting_human run → no C1 alert', async () => {
+      h = await buildHarness(harness.db)
+      const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
+      await insertClarifySession(h.db, h.taskId, {
+        clarifyNodeRunId: run,
+        status: 'awaiting_human',
+      })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      // C1 only fires on closed sessions; an open one is fine.
+      expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
     })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
-    })
-    // C1 only fires on closed sessions; an open one is fine.
-    expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
-  })
 
-  test('violated: answered session but clarify run still awaiting_human → C1 alert', async () => {
-    h = await buildHarness()
-    const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
-    const session = await insertClarifySession(h.db, h.taskId, {
-      clarifyNodeRunId: run,
-      status: 'answered',
+    test('violated: answered session but clarify run still awaiting_human → C1 alert', async () => {
+      h = await buildHarness(harness.db)
+      const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
+      const session = await insertClarifySession(h.db, h.taskId, {
+        clarifyNodeRunId: run,
+        status: 'answered',
+      })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      const c1 = result.openAlerts.filter((a) => a.rule === 'C1')
+      expect(c1).toHaveLength(1)
+      expect(c1[0]!.detail).toMatchObject({
+        clarifySessionId: session,
+        clarifySessionStatus: 'answered',
+        clarifyNodeRunId: run,
+        actualStatus: 'awaiting_human',
+      })
     })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
-    })
-    const c1 = result.openAlerts.filter((a) => a.rule === 'C1')
-    expect(c1).toHaveLength(1)
-    expect(c1[0]!.detail).toMatchObject({
-      clarifySessionId: session,
-      clarifySessionStatus: 'answered',
-      clarifyNodeRunId: run,
-      actualStatus: 'awaiting_human',
-    })
-  })
 
-  test('violated: canceled session but clarify run still awaiting_human → C1 alert', async () => {
-    h = await buildHarness()
-    const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
-    await insertClarifySession(h.db, h.taskId, {
-      clarifyNodeRunId: run,
-      status: 'canceled',
+    test('violated: canceled session but clarify run still awaiting_human → C1 alert', async () => {
+      h = await buildHarness(harness.db)
+      const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
+      await insertClarifySession(h.db, h.taskId, {
+        clarifyNodeRunId: run,
+        status: 'canceled',
+      })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(1)
     })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
-    })
-    expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(1)
-  })
 
-  test('resolution: promoting the run to done flips the C1 row', async () => {
-    h = await buildHarness()
-    const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
-    await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
-    const r1 = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('resolution: promoting the run to done flips the C1 row', async () => {
+      h = await buildHarness(harness.db)
+      const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
+      await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
+      const r1 = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(r1.newAlerts).toBe(1)
+      await h.db
+        .update(nodeRuns)
+        .set({ status: 'done', finishedAt: Date.now() })
+        .where(eq(nodeRuns.id, run))
+      const r2 = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(r2.resolvedAlerts).toBe(1)
+      expect(r2.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
     })
-    expect(r1.newAlerts).toBe(1)
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, run))
-    const r2 = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
-    })
-    expect(r2.resolvedAlerts).toBe(1)
-    expect(r2.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
-  })
-})
+  },
+)

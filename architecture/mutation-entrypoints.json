@@ -1300,30 +1300,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
-      "symbol": "retryPostgresqlSerialization",
-      "targetContext": "platform",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": true,
@@ -16655,7 +16631,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -16666,6 +16642,7 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event",
         "transaction"
       ],
@@ -17531,7 +17508,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": true
@@ -17542,6 +17519,7 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentCreateInTx",
@@ -31055,6 +31033,30 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlSerializationRetry.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "symbol": "retryPostgresqlSerialization",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -41280,7 +41282,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dcb9e0e0ac116bd8c730c18aac20fcab33892655d31a88e1ae5ede5a869a50be",
+  "sourceDigest": "sha256:57e8e6e8d7d4f58ca1d40a785a785edcdb94d1f92e86ffbd673d638a590e8684",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

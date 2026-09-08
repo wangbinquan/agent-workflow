@@ -16,22 +16,21 @@
 // the same observable values. Every case also asserts the recorded `consumed`
 // provenance map — the new return field driving read-time freshness.
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { createLogger } from '../src/util/log'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test-picker-baseline')
 
-const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
+const nodePersistence = (db: ProviderNeutralDatabase) => new DrizzleNodeExecutionPersistence(db)
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
   await db.insert(workflows).values({
@@ -44,6 +43,11 @@ async function seedTask(db: DbClient): Promise<string> {
   })
   await db.insert(tasks).values({
     id: taskId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'pick',
     workflowId: wfId,
     workflowSnapshot: '{}',
@@ -62,7 +66,7 @@ let seq = 0
 // Seed a top-level node_run plus one output port, returning the run id. `id` is
 // passed explicitly so tests control ULID ordering deterministically.
 async function seedRunWithOutput(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: {
@@ -107,318 +111,321 @@ function edge(
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance', () => {
-  // PB1 — THE HEADLINE LATENT BUG, now FIXED (design §5.1). Upstream has two
-  // top-level done rows at the same iteration: a retry-storm row at the OLD
-  // generation (cci=0, retry=5) and the post-clarify rerun (cci=1, retry=0).
-  // The OLD picker sorted by retryIndex desc, IGNORED cci, and read the STALE
-  // pre-clarify content. The unified picker uses isFresherNodeRun within the
-  // iteration → reads the fresh clarify rerun, and records it as consumed.
-  test('PB1: unified picker reads the fresh clarify rerun (corrected stale read)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // gen0 retry-storm done row — LARGER retryIndex, but minted EARLIER (smaller id).
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'designer',
-      { id: '01A_STALE', iteration: 0, retryIndex: 5, clarifyIteration: 0, status: 'done' },
-      { spec: 'STALE-pre-clarify' },
-    )
-    // gen1 clarify rerun — freshest generation, minted LATER (larger id).
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'designer',
-      { id: '01B_FRESH', iteration: 0, retryIndex: 0, clarifyIteration: 1, status: 'done' },
-      { spec: 'FRESH-post-clarify' },
-    )
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [edge('designer', 'spec', 'review', 'doc')],
-      'review',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
-    // FLIPPED vs PR-A baseline: the fresh clarify rerun wins (corrected read).
-    expect(inputs.doc).toBe('FRESH-post-clarify')
-    // Provenance records the actual run read — the fresh one.
-    expect(consumed.designer).toBe('01B_FRESH')
-  })
+describeEachProvider(
+  'RFC-074 — resolveUpstreamInputs unified picker + consumed provenance',
+  (harness) => {
+    // PB1 — THE HEADLINE LATENT BUG, now FIXED (design §5.1). Upstream has two
+    // top-level done rows at the same iteration: a retry-storm row at the OLD
+    // generation (cci=0, retry=5) and the post-clarify rerun (cci=1, retry=0).
+    // The OLD picker sorted by retryIndex desc, IGNORED cci, and read the STALE
+    // pre-clarify content. The unified picker uses isFresherNodeRun within the
+    // iteration → reads the fresh clarify rerun, and records it as consumed.
+    test('PB1: unified picker reads the fresh clarify rerun (corrected stale read)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // gen0 retry-storm done row — LARGER retryIndex, but minted EARLIER (smaller id).
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'designer',
+        { id: '01A_STALE', iteration: 0, retryIndex: 5, clarifyIteration: 0, status: 'done' },
+        { spec: 'STALE-pre-clarify' },
+      )
+      // gen1 clarify rerun — freshest generation, minted LATER (larger id).
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'designer',
+        { id: '01B_FRESH', iteration: 0, retryIndex: 0, clarifyIteration: 1, status: 'done' },
+        { spec: 'FRESH-post-clarify' },
+      )
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [edge('designer', 'spec', 'review', 'doc')],
+        'review',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
+      // FLIPPED vs PR-A baseline: the fresh clarify rerun wins (corrected read).
+      expect(inputs.doc).toBe('FRESH-post-clarify')
+      // Provenance records the actual run read — the fresh one.
+      expect(consumed.designer).toBe('01B_FRESH')
+    })
 
-  // PB2 — done-only filter, now FIXED. A pending rerun (no output yet) at
-  // higher retryIndex used to shadow the done row → empty input. The done-only
-  // filter now skips the pending row and reads the real content.
-  test('PB2: done-only filter reads real content (pending no longer shadows)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'designer',
-      { id: '01DONE', iteration: 0, retryIndex: 0, status: 'done' },
-      { spec: 'real-content' },
-    )
-    // Pending rerun, higher retryIndex, no outputs persisted yet.
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'designer',
-      { id: '01PEND', iteration: 0, retryIndex: 1, status: 'pending' },
-      {},
-    )
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [edge('designer', 'spec', 'review', 'doc')],
-      'review',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
-    // FLIPPED vs PR-A baseline: done row read, pending skipped (corrected read).
-    expect(inputs.doc).toBe('real-content')
-    expect(consumed.designer).toBe('01DONE')
-  })
+    // PB2 — done-only filter, now FIXED. A pending rerun (no output yet) at
+    // higher retryIndex used to shadow the done row → empty input. The done-only
+    // filter now skips the pending row and reads the real content.
+    test('PB2: done-only filter reads real content (pending no longer shadows)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'designer',
+        { id: '01DONE', iteration: 0, retryIndex: 0, status: 'done' },
+        { spec: 'real-content' },
+      )
+      // Pending rerun, higher retryIndex, no outputs persisted yet.
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'designer',
+        { id: '01PEND', iteration: 0, retryIndex: 1, status: 'pending' },
+        {},
+      )
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [edge('designer', 'spec', 'review', 'doc')],
+        'review',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
+      // FLIPPED vs PR-A baseline: done row read, pending skipped (corrected read).
+      expect(inputs.doc).toBe('real-content')
+      expect(consumed.designer).toBe('01DONE')
+    })
 
-  // PB3 — iteration windowing. Rows with iteration > target are excluded; among
-  // iteration <= target the highest iteration wins. Resolving at iter 0 must
-  // NOT see iter 1's content; resolving at iter 1 sees iter 1.
-  test('PB3: iteration windowing — iteration <= target, highest in-window wins', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'builder',
-      { id: '01ITER0', iteration: 0, retryIndex: 0, status: 'done' },
-      { out: 'ITER0' },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'builder',
-      { id: '01ITER1', iteration: 1, retryIndex: 0, status: 'done' },
-      { out: 'ITER1' },
-    )
-    const e = [edge('builder', 'out', 'sink', 'in')]
-    expect(
-      (
-        await resolveUpstreamInputs(
-          nodePersistence(db),
-          taskId,
-          e,
-          'sink',
-          { containerRunId: null, iteration: 0 },
-          log,
-        )
-      ).inputs.in,
-    ).toBe('ITER0')
-    expect(
-      (
-        await resolveUpstreamInputs(
-          nodePersistence(db),
-          taskId,
-          e,
-          'sink',
-          { containerRunId: null, iteration: 1 },
-          log,
-        )
-      ).inputs.in,
-    ).toBe('ITER1')
-  })
+    // PB3 — iteration windowing. Rows with iteration > target are excluded; among
+    // iteration <= target the highest iteration wins. Resolving at iter 0 must
+    // NOT see iter 1's content; resolving at iter 1 sees iter 1.
+    test('PB3: iteration windowing — iteration <= target, highest in-window wins', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'builder',
+        { id: '01ITER0', iteration: 0, retryIndex: 0, status: 'done' },
+        { out: 'ITER0' },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'builder',
+        { id: '01ITER1', iteration: 1, retryIndex: 0, status: 'done' },
+        { out: 'ITER1' },
+      )
+      const e = [edge('builder', 'out', 'sink', 'in')]
+      expect(
+        (
+          await resolveUpstreamInputs(
+            nodePersistence(db),
+            taskId,
+            e,
+            'sink',
+            { containerRunId: null, iteration: 0 },
+            log,
+          )
+        ).inputs.in,
+      ).toBe('ITER0')
+      expect(
+        (
+          await resolveUpstreamInputs(
+            nodePersistence(db),
+            taskId,
+            e,
+            'sink',
+            { containerRunId: null, iteration: 1 },
+            log,
+          )
+        ).inputs.in,
+      ).toBe('ITER1')
+    })
 
-  // PB4 — multi-source join + child-row exclusion. Two upstream nodes feed the
-  // same target port → contents joined with the framework separator; a child
-  // (parentNodeRunId != null) shard row is excluded from top-level selection.
-  test('PB4: two sources joined; child shard rows excluded from selection', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'a',
-      { id: '01A', iteration: 0, status: 'done' },
-      { o: 'AAA' },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'b',
-      { id: '01B', iteration: 0, status: 'done' },
-      { o: 'BBB' },
-    )
-    // A child shard row under 'a' with a higher retryIndex — must be ignored
-    // because parentNodeRunId != null (top-level filter).
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'a',
-      { id: '01ACHILD', iteration: 0, retryIndex: 9, status: 'done', parentNodeRunId: '01A' },
-      { o: 'CHILD-should-not-win' },
-    )
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [edge('a', 'o', 'sink', 'merged'), edge('b', 'o', 'sink', 'merged')],
-      'sink',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
-    expect(inputs.merged).toBe('AAA\n\n---\n\nBBB')
-    // Both top-level parents recorded as consumed; the child shard row excluded.
-    expect(consumed).toEqual({ a: '01A', b: '01B' })
-  })
+    // PB4 — multi-source join + child-row exclusion. Two upstream nodes feed the
+    // same target port → contents joined with the framework separator; a child
+    // (parentNodeRunId != null) shard row is excluded from top-level selection.
+    test('PB4: two sources joined; child shard rows excluded from selection', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'a',
+        { id: '01A', iteration: 0, status: 'done' },
+        { o: 'AAA' },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'b',
+        { id: '01B', iteration: 0, status: 'done' },
+        { o: 'BBB' },
+      )
+      // A child shard row under 'a' with a higher retryIndex — must be ignored
+      // because parentNodeRunId != null (top-level filter).
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'a',
+        { id: '01ACHILD', iteration: 0, retryIndex: 9, status: 'done', parentNodeRunId: '01A' },
+        { o: 'CHILD-should-not-win' },
+      )
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [edge('a', 'o', 'sink', 'merged'), edge('b', 'o', 'sink', 'merged')],
+        'sink',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
+      expect(inputs.merged).toBe('AAA\n\n---\n\nBBB')
+      // Both top-level parents recorded as consumed; the child shard row excluded.
+      expect(consumed).toEqual({ a: '01A', b: '01B' })
+    })
 
-  // PB5 (B17) — clarify-only-no-output upstream. A questioner/agent that emitted
-  // only <workflow-clarify> finishes `done` with NO output for the port. After
-  // the answer, it reruns with real output. The freshest-done picker selects the
-  // OUTPUT-bearing rerun (higher cci) and reads its content — it never reads the
-  // clarify-only row, so a downstream review can't trip review-source-port-missing.
-  test('PB5 (B17): clarify-only done row is passed over for the output-bearing rerun', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // Clarify-only done row: no output for the port (the agent only asked).
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'questioner',
-      { id: '01CLARIFYONLY', iteration: 0, retryIndex: 0, clarifyIteration: 1, status: 'done' },
-      {},
-    )
-    // Post-answer rerun: done WITH the real output, at a higher generation.
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'questioner',
-      { id: '01WITHOUTPUT', iteration: 0, retryIndex: 1, clarifyIteration: 2, status: 'done' },
-      { spec: 'answered content' },
-    )
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [edge('questioner', 'spec', 'review', 'doc')],
-      'review',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
-    expect(inputs.doc).toBe('answered content')
-    expect(consumed.questioner).toBe('01WITHOUTPUT')
-  })
+    // PB5 (B17) — clarify-only-no-output upstream. A questioner/agent that emitted
+    // only <workflow-clarify> finishes `done` with NO output for the port. After
+    // the answer, it reruns with real output. The freshest-done picker selects the
+    // OUTPUT-bearing rerun (higher cci) and reads its content — it never reads the
+    // clarify-only row, so a downstream review can't trip review-source-port-missing.
+    test('PB5 (B17): clarify-only done row is passed over for the output-bearing rerun', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // Clarify-only done row: no output for the port (the agent only asked).
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'questioner',
+        { id: '01CLARIFYONLY', iteration: 0, retryIndex: 0, clarifyIteration: 1, status: 'done' },
+        {},
+      )
+      // Post-answer rerun: done WITH the real output, at a higher generation.
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'questioner',
+        { id: '01WITHOUTPUT', iteration: 0, retryIndex: 1, clarifyIteration: 2, status: 'done' },
+        { spec: 'answered content' },
+      )
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [edge('questioner', 'spec', 'review', 'doc')],
+        'review',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
+      expect(inputs.doc).toBe('answered content')
+      expect(consumed.questioner).toBe('01WITHOUTPUT')
+    })
 
-  test('PB6: fanout boundary mirrors are never consumed as ordinary dataflow rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'source',
-      { id: '01SOURCE', status: 'done' },
-      { out: 'REAL-DATAFLOW' },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'fan',
-      { id: '01FAN', status: 'done' },
-      { items: 'STRUCTURAL-MIRROR' },
-    )
-    const mirror = edge('fan', 'items', 'sink', 'item')
-    mirror.boundary = 'wrapper-input'
+    test('PB6: fanout boundary mirrors are never consumed as ordinary dataflow rows', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'source',
+        { id: '01SOURCE', status: 'done' },
+        { out: 'REAL-DATAFLOW' },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'fan',
+        { id: '01FAN', status: 'done' },
+        { items: 'STRUCTURAL-MIRROR' },
+      )
+      const mirror = edge('fan', 'items', 'sink', 'item')
+      mirror.boundary = 'wrapper-input'
 
-    const { inputs, consumed } = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      [edge('source', 'out', 'sink', 'normal'), mirror],
-      'sink',
-      { containerRunId: null, iteration: 0 },
-      log,
-    )
+      const { inputs, consumed } = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        [edge('source', 'out', 'sink', 'normal'), mirror],
+        'sink',
+        { containerRunId: null, iteration: 0 },
+        log,
+      )
 
-    expect(inputs).toEqual({ normal: 'REAL-DATAFLOW' })
-    expect(consumed).toEqual({ source: '01SOURCE' })
-  })
+      expect(inputs).toEqual({ normal: 'REAL-DATAFLOW' })
+      expect(consumed).toEqual({ source: '01SOURCE' })
+    })
 
-  test('PB7: prompt-injected system channels never become ordinary upstream inputs', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'source',
-      { id: '01SOURCE', status: 'done' },
-      { out: 'REAL-DATAFLOW' },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'questioner',
-      { id: '01QUESTIONER', status: 'done' },
-      { __clarify__: 'REAL-CROSS-CLARIFY-DEPENDENCY' },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'cross',
-      { id: '01CROSS', status: 'done' },
-      {
-        to_questioner: 'PROMPT-INJECTED-QUESTIONER-RESPONSE',
-        to_designer: 'PROMPT-INJECTED-DESIGNER-FEEDBACK',
-      },
-    )
-    await seedRunWithOutput(
-      db,
-      taskId,
-      'clarify',
-      { id: '01CLARIFY', status: 'done' },
-      { answers: 'PROMPT-INJECTED-CLARIFY-RESPONSE' },
-    )
+    test('PB7: prompt-injected system channels never become ordinary upstream inputs', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'source',
+        { id: '01SOURCE', status: 'done' },
+        { out: 'REAL-DATAFLOW' },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'questioner',
+        { id: '01QUESTIONER', status: 'done' },
+        { __clarify__: 'REAL-CROSS-CLARIFY-DEPENDENCY' },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'cross',
+        { id: '01CROSS', status: 'done' },
+        {
+          to_questioner: 'PROMPT-INJECTED-QUESTIONER-RESPONSE',
+          to_designer: 'PROMPT-INJECTED-DESIGNER-FEEDBACK',
+        },
+      )
+      await seedRunWithOutput(
+        db,
+        taskId,
+        'clarify',
+        { id: '01CLARIFY', status: 'done' },
+        { answers: 'PROMPT-INJECTED-CLARIFY-RESPONSE' },
+      )
 
-    const edges = [
-      edge('source', 'out', 'sink', 'normal'),
-      edge('cross', 'to_questioner', 'sink', '__clarify_response__'),
-      edge('clarify', 'answers', 'sink', '__clarify_response__'),
-      edge('cross', 'to_designer', 'sink', '__external_feedback__'),
-      edge('questioner', '__clarify__', 'cross', 'questions'),
-    ]
-    const definition: WorkflowDefinition = {
-      $schema_version: 4,
-      inputs: [],
-      nodes: [
-        { id: 'source', kind: 'agent-single' },
-        { id: 'questioner', kind: 'agent-single' },
-        { id: 'cross', kind: 'clarify-cross-agent' },
-        { id: 'clarify', kind: 'clarify' },
-        { id: 'sink', kind: 'agent-single' },
-      ],
-      edges,
-    }
+      const edges = [
+        edge('source', 'out', 'sink', 'normal'),
+        edge('cross', 'to_questioner', 'sink', '__clarify_response__'),
+        edge('clarify', 'answers', 'sink', '__clarify_response__'),
+        edge('cross', 'to_designer', 'sink', '__external_feedback__'),
+        edge('questioner', '__clarify__', 'cross', 'questions'),
+      ]
+      const definition: WorkflowDefinition = {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [
+          { id: 'source', kind: 'agent-single' },
+          { id: 'questioner', kind: 'agent-single' },
+          { id: 'cross', kind: 'clarify-cross-agent' },
+          { id: 'clarify', kind: 'clarify' },
+          { id: 'sink', kind: 'agent-single' },
+        ],
+        edges,
+      }
 
-    const sink = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      edges,
-      'sink',
-      { containerRunId: null, iteration: 0 },
-      log,
-      definition,
-    )
-    expect(sink.inputs).toEqual({ normal: 'REAL-DATAFLOW' })
-    expect(sink.consumed).toEqual({ source: '01SOURCE' })
+      const sink = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        edges,
+        'sink',
+        { containerRunId: null, iteration: 0 },
+        log,
+        definition,
+      )
+      expect(sink.inputs).toEqual({ normal: 'REAL-DATAFLOW' })
+      expect(sink.consumed).toEqual({ source: '01SOURCE' })
 
-    // The agent question edge into cross-agent clarify is deliberately a real
-    // dependency. Only the prompt-injected response/feedback directions skip
-    // ordinary dataflow resolution.
-    const cross = await resolveUpstreamInputs(
-      nodePersistence(db),
-      taskId,
-      edges,
-      'cross',
-      { containerRunId: null, iteration: 0 },
-      log,
-      definition,
-    )
-    expect(cross.inputs).toEqual({ questions: 'REAL-CROSS-CLARIFY-DEPENDENCY' })
-    expect(cross.consumed).toEqual({ questioner: '01QUESTIONER' })
-  })
-})
+      // The agent question edge into cross-agent clarify is deliberately a real
+      // dependency. Only the prompt-injected response/feedback directions skip
+      // ordinary dataflow resolution.
+      const cross = await resolveUpstreamInputs(
+        nodePersistence(db),
+        taskId,
+        edges,
+        'cross',
+        { containerRunId: null, iteration: 0 },
+        log,
+        definition,
+      )
+      expect(cross.inputs).toEqual({ questions: 'REAL-CROSS-CLARIFY-DEPENDENCY' })
+      expect(cross.consumed).toEqual({ questioner: '01QUESTIONER' })
+    })
+  },
+)

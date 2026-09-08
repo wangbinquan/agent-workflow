@@ -5,14 +5,12 @@
 
 import type {
   Agent,
-  AgentInputPort,
   AgentSkillRef,
   CreateAgent,
   RenameAgent,
   ResourceAccess,
   UpdateAgent,
 } from '@agent-workflow/shared'
-import { AgentInputPortsSchema } from '@agent-workflow/shared'
 import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -81,7 +79,11 @@ import {
   reconcileUpdatedAgentExecutionContractPorts,
 } from '@/modules/execution-contract/public/commands'
 
-import { agentFromStoredJsonRow } from '../agentPersistence'
+import {
+  agentContentPersistenceValues,
+  agentFromStoredJsonRow,
+  serializeAgentInputs,
+} from '../agentPersistence'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -384,22 +386,13 @@ export function commitAgentCreateInTx(tx: DbTxSync, p: PreparedAgentCreate): voi
     .values({
       id,
       name: input.name,
-      description: input.description,
-      outputs: JSON.stringify(input.outputs),
-      // RFC-166: declarative input ports (own column, symmetrical to outputs).
-      inputs: serializeInputs(input.inputs),
-      syncOutputsOnIterate: input.syncOutputsOnIterate,
-      runtime: input.runtime ?? null, // RFC-111
-      permission: JSON.stringify(input.permission),
       // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
-      skills: serializeSkillRefs(skillRefs),
-      dependsOn: JSON.stringify(dependsOnIds),
-      mcp: JSON.stringify(mcpIds),
-      // RFC-031: plugin id array; T6 enforces existence + enabled at save
-      // time, T7 unions across the dependsOn closure at runner injection time.
-      plugins: JSON.stringify(pluginIds),
-      frontmatterExtra: JSON.stringify(fmExtra),
-      bodyMd: input.bodyMd,
+      ...agentContentPersistenceValues(input, fmExtra, {
+        skills: skillRefs,
+        dependsOn: dependsOnIds,
+        mcp: mcpIds,
+        plugins: pluginIds,
+      }),
       // RFC-231: user resources are private; framework built-ins stay public.
       ...initialAcl,
       // RFC-104: built-in marker — only platform-owned seeders pass builtin:true;
@@ -559,7 +552,7 @@ export async function prepareAgentUpdate(
   const set: Partial<typeof agents.$inferInsert> = {}
   if (patch.description !== undefined) set.description = patch.description
   if (patch.outputs !== undefined) set.outputs = JSON.stringify(patch.outputs)
-  if (patch.inputs !== undefined) set.inputs = serializeInputs(patch.inputs) // RFC-166
+  if (patch.inputs !== undefined) set.inputs = serializeAgentInputs(patch.inputs) // RFC-166
   if (patch.syncOutputsOnIterate !== undefined)
     set.syncOutputsOnIterate = patch.syncOutputsOnIterate
   if (patch.permission !== undefined) set.permission = JSON.stringify(patch.permission)
@@ -570,7 +563,7 @@ export async function prepareAgentUpdate(
   if (patch.runtime !== undefined) set.runtime = patch.runtime
   // RFC-223 (PR-1): persist the resolved id refs / typed skill refs (deduped by
   // the resolver), never the raw name-or-id wire values.
-  if (skillRefs !== undefined) set.skills = serializeSkillRefs(skillRefs)
+  if (skillRefs !== undefined) set.skills = JSON.stringify(skillRefs)
   if (dependsOnIds !== undefined) set.dependsOn = JSON.stringify(dependsOnIds)
   if (mcpIds !== undefined) set.mcp = JSON.stringify(mcpIds)
   if (pluginIds !== undefined) set.plugins = JSON.stringify(pluginIds)
@@ -1211,21 +1204,6 @@ async function validatePluginReferences(db: DbClient, ids: readonly string[]): P
       { disabled },
     )
   }
-}
-
-/** RFC-223 (PR-1): canonical JSON for the `agents.skills` typed-ref column. */
-function serializeSkillRefs(refs: readonly AgentSkillRef[]): string {
-  return JSON.stringify(refs)
-}
-
-/** RFC-166 — canonicalize declared input ports for the agents.inputs column:
- *  apply the `kind` default, strip unknown keys, and REJECT duplicate port
- *  names (persistence guard mirroring the DTO — port name is an identity key),
- *  so the stored JSON is identical whether or not the caller pre-parsed through
- *  CreateAgentSchema. Throws a ZodError on a dupe from a service-layer caller
- *  that bypassed the route's CreateAgentSchema validation. */
-function serializeInputs(inputs: AgentInputPort[] | undefined): string {
-  return JSON.stringify(AgentInputPortsSchema.parse(inputs ?? []))
 }
 
 export function rowToAgent(row: AgentRow): Agent {

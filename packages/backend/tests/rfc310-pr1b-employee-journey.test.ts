@@ -1,17 +1,16 @@
 // RFC-310 PR-1B 验收旅程（T13–T18 合龙）——「用户定义多套数字员工，并在
 // repository facts 上得到唯一、可解释、可重放的结果」。
 //
-// 全程走真实 store（in-memory SQLite + 全量迁移链）：
+// 全程走真实 store（双引擎 harness + 全量迁移链）：
 //   模板（java/cpp/polyglot）publish → policy publish → adapter publish →
 //   Java/polyglot 员工 publish（真实闭包检查，经 publishLookup 同步绑定）→
 //   assignment（repo-group 规则选择）→ resolveEmployeeSelection +
 //   selectActionTemplate 端到端 → 同 facts 重放 100 次结果逐字节一致。
 // 反向：闭包缺模板的员工 publish 被拒（不产生 revision 行）。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   createActionTemplate,
   publishActionTemplate,
@@ -47,8 +46,6 @@ import {
   type EmployeeSelectionRule,
 } from '../src/modules/development-automation/engine/policy/workSelection'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
-
 function known(value: FactCellValue): FactCell<FactCellValue> {
   return { state: 'known', value, sourceRevision: 'r1' }
 }
@@ -74,9 +71,9 @@ function agentTemplateDraft(capabilityId: string) {
   }
 }
 
-describe('rfc310 pr1b employee journey', () => {
+describeEachProvider('rfc310 pr1b employee journey', (harness) => {
   test('define templates/policy/adapter/employees, then deterministic selection end-to-end', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now = () => Date.now()
     const templates = createActionTemplatePersistence(db)
     const adapters = createDevelopmentAdapterStore(db)

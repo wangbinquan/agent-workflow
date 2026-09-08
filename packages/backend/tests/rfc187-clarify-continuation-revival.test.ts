@@ -13,12 +13,13 @@
 // Fix = revive-by-re-mint at engine entry (like the DAG revives a terminal row) + an
 // auto-resume sweep that recognises this second wedge shape.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 // RFC-359 W4-D19c-tail：判据 + 复活都改指生产那份（中立回合驱动）。合一时这两样**都没带过来**
@@ -26,15 +27,13 @@ import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 // 血缘的 rerun 上，于是人的回答照样丢。本次一并补回。
 import { isKilledClarifyContinuation } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
 // recovery counters. bun shares the module registry across test files under CI's
 // coverage run, so leaving them bumped made another suite's exact-count assertion
 // (rfc108-recovery-events) fail depending on file order. Leave no residue.
 afterEach(() => __resetRecoveryCountersForTest())
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('RFC-187 T13 — isKilledClarifyContinuation', () => {
   test('an interrupted clarify-answer row = a continuation the restart killed', () => {
@@ -71,7 +70,7 @@ type TaskInsert = typeof tasks.$inferInsert
 type NodeRunInsert = typeof nodeRuns.$inferInsert
 
 async function seedWedged(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: {
     taskStatus: TaskInsert['status']
     runStatus: NodeRunInsert['status']
@@ -83,6 +82,11 @@ async function seedWedged(
   await db.insert(workflows).values({ id: wfId, name: `wf-${taskId}`, definition: '{}' })
   await db.insert(tasks).values({
     id: taskId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'wedged',
     workflowId: wfId,
     workflowSnapshot: '{}',
@@ -108,11 +112,11 @@ async function seedWedged(
   return taskId
 }
 
-describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
-  const sweep = async (db: DbClient) => {
+describeEachProvider('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', (harness) => {
+  const sweep = async (db: ProviderNeutralDatabase) => {
     const resumed: string[] = []
     const res = await autoResumeInterruptedTasks({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
       resume: (id) => {
         resumed.push(id)
@@ -123,7 +127,7 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
   }
 
   test('awaiting_human + an interrupted clarify-answer row IS resumed (the wedge)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedWedged(db, {
       taskStatus: 'awaiting_human',
       runStatus: 'interrupted',
@@ -137,7 +141,7 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
   test('a task legitimately PARKED on an unanswered clarify is NOT resumed', async () => {
     // no killed continuation row ⇒ it is genuinely waiting for a human; resuming it would
     // yank a task out from under the person answering it.
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedWedged(db, {
       taskStatus: 'awaiting_human',
       runStatus: 'awaiting_human',
@@ -148,7 +152,7 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
   })
 
   test('awaiting_human + an interrupted NON-clarify row is NOT resumed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedWedged(db, {
       taskStatus: 'awaiting_human',
       runStatus: 'interrupted',

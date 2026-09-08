@@ -20,7 +20,9 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -34,8 +36,6 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 const actor = { userId: 'u1', role: 'owner' as const }
 
 // RFC-162: designer-by-default is DELETED — answering a cross round no longer auto-creates a
@@ -43,7 +43,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // patch-25 dispatched_at consumed marker) is now minted by an explicit reassign of the answered
 // round's questioner card to the graph designer node + a dispatch of that designer entry.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -60,7 +60,7 @@ async function reassignThenDispatchDesigner(
 }
 
 async function seedTriad(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): Promise<{ taskId: string; definition: WorkflowDefinition }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const nodes: WorkflowNode[] = [
@@ -103,6 +103,10 @@ async function seedTriad(
   await db.insert(tasks).values({
     name: 'patch-baseline',
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     workflowId,
     workflowSnapshot: JSON.stringify(definition),
     repoPath: '/tmp/aw-patch-baseline/repo',
@@ -142,96 +146,254 @@ function makeAnswer(): ClarifyAnswer {
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-describe('RFC-058 baseline T4 — patch-2026-05-23 designer retry index', () => {
-  test('answering the awaiting cross round mints a fresh pending designer attempt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTriad(db)
-    // Seed designer at cci=2 (i.e. has been pumped before)
-    await db.insert(nodeRuns).values({
-      id: 'nr_designer_old',
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 1000,
+describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior', (harness) => {
+  describe('RFC-058 baseline T4 — patch-2026-05-23 designer retry index', () => {
+    test('answering the awaiting cross round mints a fresh pending designer attempt', async () => {
+      const db = harness.db
+      const { taskId } = await seedTriad(db)
+      // Seed designer at cci=2 (i.e. has been pumped before)
+      await db.insert(nodeRuns).values({
+        id: 'nr_designer_old',
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 1000,
+      })
+      await db.insert(nodeRuns).values({
+        id: 'nr_q1',
+        taskId,
+        nodeId: 'questioner',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      // RFC-162: the designer rerun comes from reassigning the answered round to the graph
+      // designer node + dispatching that designer entry (the legacy scope/direct trigger is gone).
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAnswer()],
+        actor,
+      })
+      const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
+      const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
+      expect(designerRerun).toBeDefined()
+      const newRun = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.id, designerRerun!.nodeRunId))
+      )[0]
+      // RFC-074 PR-C: the designer rerun is a fresh pending insert (latest id wins
+      // freshness); no cci to assert.
+      expect(newRun?.status).toBe('pending')
     })
-    await db.insert(nodeRuns).values({
-      id: 'nr_q1',
-      taskId,
-      nodeId: 'questioner',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    // RFC-162: the designer rerun comes from reassigning the answered round to the graph
-    // designer node + dispatching that designer entry (the legacy scope/direct trigger is gone).
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAnswer()],
-      actor,
-    })
-    const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
-    const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
-    expect(designerRerun).toBeDefined()
-    const newRun = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, designerRerun!.nodeRunId))
-    )[0]
-    // RFC-074 PR-C: the designer rerun is a fresh pending insert (latest id wins
-    // freshness); no cci to assert.
-    expect(newRun?.status).toBe('pending')
   })
-})
 
-describe('RFC-058 baseline T4 — patch-2026-05-24 cci inheritance', () => {
-  test('cross-clarify session cci row inherits from latest questioner cci value', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTriad(db)
-    // Questioner has been around — has cci=3
-    await db.insert(nodeRuns).values({
-      id: 'nr_q3',
-      taskId,
-      nodeId: 'questioner',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 100,
+  describe('RFC-058 baseline T4 — patch-2026-05-24 cci inheritance', () => {
+    test('cross-clarify session cci row inherits from latest questioner cci value', async () => {
+      const db = harness.db
+      const { taskId } = await seedTriad(db)
+      // Questioner has been around — has cci=3
+      await db.insert(nodeRuns).values({
+        id: 'nr_q3',
+        taskId,
+        nodeId: 'questioner',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 100,
+      })
+      // createClarifyRound iteration counter is per (cc node, loopIter)
+      // — cci on the cross-clarify node_run is the session iteration. So this
+      // test pivots to: session iteration is per (cc, loopIter), not inheriting
+      // from the questioner's cci.
+      const { round: session } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q3',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      expect(session.iteration).toBe(0)
+      // RFC-074 PR-C: the cross-clarify node_run no longer carries a cci counter;
+      // assert the row exists and is parked for human input.
+      const nr = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.id, session.intermediaryNodeRunId))
+      )[0]
+      expect(nr?.status).toBe('awaiting_human')
     })
-    // createClarifyRound iteration counter is per (cc node, loopIter)
-    // — cci on the cross-clarify node_run is the session iteration. So this
-    // test pivots to: session iteration is per (cc, loopIter), not inheriting
-    // from the questioner's cci.
-    const { round: session } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q3',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
+  })
+
+  describe('RFC-058 baseline T4 — patch-2026-05-22 cascade BFS smoke', () => {
+    test('the answer dispatch returns the designer rerun nodeRunId (cascade caller hooks in)', async () => {
+      const db = harness.db
+      const { taskId } = await seedTriad(db)
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_designer_prior',
+          taskId,
+          nodeId: 'designer',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+          startedAt: Date.now() - 100,
+        },
+        {
+          id: 'nr_q1',
+          taskId,
+          nodeId: 'questioner',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAnswer()],
+        actor,
+      })
+      // RFC-162: reassign the answered round to the designer + dispatch it → the mint returns the
+      // designer rerun nodeRunId the cascade caller hooks into.
+      const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
+      expect(disp.reruns.find((r) => r.targetNodeId === 'designer')?.nodeRunId).toBeTruthy()
     })
-    expect(session.iteration).toBe(0)
-    // RFC-074 PR-C: the cross-clarify node_run no longer carries a cci counter;
-    // assert the row exists and is parked for human input.
-    const nr = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, session.intermediaryNodeRunId))
-    )[0]
-    expect(nr?.status).toBe('awaiting_human')
+  })
+
+  describe('RFC-058 baseline T4 — patch-2026-05-25 questioner cascade visibility', () => {
+    test('submit continue stamps dispatched_at on the consumed designer entries', async () => {
+      const db = harness.db
+      const { taskId } = await seedTriad(db)
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_designer_prior',
+          taskId,
+          nodeId: 'designer',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+          startedAt: Date.now() - 100,
+        },
+        {
+          id: 'nr_q1',
+          taskId,
+          nodeId: 'questioner',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAnswer()],
+        ifMatchIteration: 0,
+        actor,
+      })
+      // RFC-162: reassign the answered round to the designer + dispatch it. The unified path does
+      // not stamp designerRunTriggeredAt (legacy bookkeeping); the "consumed" marker is
+      // dispatched_at on the round's designer entries.
+      const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
+      expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
+      const designerEntries = (
+        await db
+          .select()
+          .from(taskQuestions)
+          .where(eq(taskQuestions.originNodeRunId, crossClarifyNodeRunId))
+      ).filter((e) => e.roleKind === 'designer')
+      expect(designerEntries.length).toBeGreaterThan(0)
+      for (const e of designerEntries) expect(e.dispatchedAt).not.toBeNull()
+    })
+
+    test('cascade BFS does not strand questioner — runner can find the next attempt', async () => {
+      const db = harness.db
+      const { taskId } = await seedTriad(db)
+      await db.insert(nodeRuns).values([
+        {
+          id: 'nr_designer_prior',
+          taskId,
+          nodeId: 'designer',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+          startedAt: Date.now() - 100,
+        },
+        {
+          id: 'nr_q1',
+          taskId,
+          nodeId: 'questioner',
+          status: 'done',
+          retryIndex: 0,
+          iteration: 0,
+        },
+      ])
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAnswer()],
+        directive: 'stop',
+        ifMatchIteration: 0,
+        actor,
+      })
+      // After stop, a new questioner attempt should exist (the cascaded rerun).
+      const questionerRuns = await db
+        .select()
+        .from(nodeRuns)
+        .where(eq(nodeRuns.nodeId, 'questioner'))
+      expect(questionerRuns.length).toBeGreaterThan(1) // original + cascade rerun
+    })
   })
 })
 
@@ -274,158 +436,5 @@ describe('RFC-074 PR-C baseline T4 — clarify generation is derived, not inheri
     // policy, which keeps cross-clarify dependencies while skipping prompt-
     // injected channel edges.
     expect(txt).toContain('channelEdgeDataflowSkip')
-  })
-})
-
-describe('RFC-058 baseline T4 — patch-2026-05-22 cascade BFS smoke', () => {
-  test('the answer dispatch returns the designer rerun nodeRunId (cascade caller hooks in)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTriad(db)
-    await db.insert(nodeRuns).values([
-      {
-        id: 'nr_designer_prior',
-        taskId,
-        nodeId: 'designer',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-        startedAt: Date.now() - 100,
-      },
-      {
-        id: 'nr_q1',
-        taskId,
-        nodeId: 'questioner',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-      },
-    ])
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAnswer()],
-      actor,
-    })
-    // RFC-162: reassign the answered round to the designer + dispatch it → the mint returns the
-    // designer rerun nodeRunId the cascade caller hooks into.
-    const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
-    expect(disp.reruns.find((r) => r.targetNodeId === 'designer')?.nodeRunId).toBeTruthy()
-  })
-})
-
-describe('RFC-058 baseline T4 — patch-2026-05-25 questioner cascade visibility', () => {
-  test('submit continue stamps dispatched_at on the consumed designer entries', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTriad(db)
-    await db.insert(nodeRuns).values([
-      {
-        id: 'nr_designer_prior',
-        taskId,
-        nodeId: 'designer',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-        startedAt: Date.now() - 100,
-      },
-      {
-        id: 'nr_q1',
-        taskId,
-        nodeId: 'questioner',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-      },
-    ])
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAnswer()],
-      ifMatchIteration: 0,
-      actor,
-    })
-    // RFC-162: reassign the answered round to the designer + dispatch it. The unified path does
-    // not stamp designerRunTriggeredAt (legacy bookkeeping); the "consumed" marker is
-    // dispatched_at on the round's designer entries.
-    const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
-    expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
-    const designerEntries = (
-      await db
-        .select()
-        .from(taskQuestions)
-        .where(eq(taskQuestions.originNodeRunId, crossClarifyNodeRunId))
-    ).filter((e) => e.roleKind === 'designer')
-    expect(designerEntries.length).toBeGreaterThan(0)
-    for (const e of designerEntries) expect(e.dispatchedAt).not.toBeNull()
-  })
-
-  test('cascade BFS does not strand questioner — runner can find the next attempt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId } = await seedTriad(db)
-    await db.insert(nodeRuns).values([
-      {
-        id: 'nr_designer_prior',
-        taskId,
-        nodeId: 'designer',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-        startedAt: Date.now() - 100,
-      },
-      {
-        id: 'nr_q1',
-        taskId,
-        nodeId: 'questioner',
-        status: 'done',
-        retryIndex: 0,
-        iteration: 0,
-      },
-    ])
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAnswer()],
-      directive: 'stop',
-      ifMatchIteration: 0,
-      actor,
-    })
-    // After stop, a new questioner attempt should exist (the cascaded rerun).
-    const questionerRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'questioner'))
-    expect(questionerRuns.length).toBeGreaterThan(1) // original + cascade rerun
   })
 })

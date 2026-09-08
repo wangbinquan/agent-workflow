@@ -8,7 +8,7 @@
 //
 //   · **8 处不可达**：这 10 处**全部**位于 `runResourceCatalogTransaction(db, tx => …)` 里，而它
 //     等于 `databaseSessionFor(db).serializable(...)`——PG 上是 `SET TRANSACTION ISOLATION LEVEL
-//     SERIALIZABLE` + 40001/40P01 整笔重放（`db/postgresqlSerializationRetry.ts`，预算 10 次），
+//     SERIALIZABLE` + 40001/40P01 整笔重放（`platform/persistence/postgresqlSerializationRetry.ts`，预算 10 次），
 //     SQLite 上是 `BEGIN IMMEDIATE` 全库独占。两个并发写手落在**同一行**上时，后一笔在 PG 上拿到
 //     40001 并被整笔重跑，重跑时读到的是新快照 —— 丢更新在这里根本发生不了。账本的判据只认
 //     `serializable` / `withTaskExecutionSerializable` / `withPostgresqlTaskAggregateTransaction`

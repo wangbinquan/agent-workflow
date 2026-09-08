@@ -41,7 +41,7 @@ import { SQLiteSyncDialect, type SQLiteColumn, type SQLiteTable } from 'drizzle-
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 
-import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
+import { postgresqlSerializationFailureCode } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 import { SQL_IN_CHUNK } from '@/util/sqlChunk'
 import type { DatabaseTransaction } from './databaseTransaction'

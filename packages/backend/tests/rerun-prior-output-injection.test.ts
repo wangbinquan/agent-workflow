@@ -16,11 +16,11 @@
 // and (RFC-141) an ask-back round renders the draft with the ask-back directive
 // variant instead of the update pair.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   composePriorOutputBlock,
@@ -34,12 +34,11 @@ import {
   renderUserPrompt,
 } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const seedUlid = monotonicFactory()
 
-const nodePersistence = (db: DbClient) => new DrizzleNodeExecutionPersistence(db)
+const nodePersistence = (db: ProviderNeutralDatabase) => new DrizzleNodeExecutionPersistence(db)
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${seedUlid()}`
   const wfId = `wf_${taskId}`
   const def = '{"schema_version":1,"nodes":[],"edges":[],"inputs":[]}'
@@ -53,6 +52,11 @@ async function seedTask(db: DbClient): Promise<string> {
   })
   await db.insert(tasks).values({
     id: taskId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: def,
@@ -70,7 +74,7 @@ async function seedTask(db: DbClient): Promise<string> {
 /** Insert a node_run; returns its (monotonic) id. Defaults: top-level done at
  *  iteration 0, shardKey null. */
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: Partial<typeof nodeRuns.$inferInsert> = {},
@@ -90,7 +94,7 @@ async function seedRun(
 }
 
 async function seedOutput(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   portName: string,
   content: string,
@@ -104,9 +108,9 @@ async function seedOutput(
   })
 }
 
-describe('RFC-119 — freshestPriorRunWithOutput', () => {
+describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
   test('returns the done prior run that captured output', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const prior = await seedRun(db, taskId, 'agent', { status: 'done' })
     await seedOutput(db, prior, 'design', '# draft v1')
@@ -123,7 +127,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('D2: returns a CANCELED (review-superseded) prior run — done-only would miss it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     // Review reject/iterate flips the prior done row to canceled but keeps its
     // node_run_outputs. The selector MUST still surface it.
@@ -146,7 +150,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('no prior run → undefined', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
@@ -159,7 +163,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('prior at a DIFFERENT iteration is not returned (loop next-iteration is not a rerun)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const priorIter0 = await seedRun(db, taskId, 'agent', { status: 'done', iteration: 0 })
     await seedOutput(db, priorIter0, 'design', '# iter0 output')
@@ -177,7 +181,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('shardKey isolation: only same-shard prior is returned', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const otherShard = await seedRun(db, taskId, 'agent', { status: 'done', shardKey: 'shardB' })
     await seedOutput(db, otherShard, 'design', '# shardB output')
@@ -196,7 +200,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('skips a failed prior with NO output, falls back to an earlier done-with-output', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     // done(output) → failed(no output, freshest). Selector skips the failed and
     // returns the earlier done that actually produced output.
@@ -221,7 +225,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   // No node has both top-level AND child runs at the same (nodeId, shardKey), so
   // dropping the parent filter is safe; the (nodeId, shardKey) tuple scopes it.
   test('parent-agnostic: a prior aggregator CHILD (shardKey null) IS found', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const wrapper = await seedRun(db, taskId, 'wrapper', { status: 'done' })
     const priorAgg = await seedRun(db, taskId, 'aggnode', {
@@ -242,7 +246,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('parent-agnostic shard lineage: matches prior child with the SAME shardKey only', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const wrapper = await seedRun(db, taskId, 'wrapper', { status: 'done' })
     const shardA = await seedRun(db, taskId, 'inner', {
@@ -271,7 +275,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 
   test('returns the FRESHEST among multiple done-with-output priors', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const older = await seedRun(db, taskId, 'agent', { status: 'done' })
     await seedOutput(db, older, 'design', '# v1')
@@ -290,9 +294,9 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   })
 })
 
-describe('RFC-119 — composePriorOutputBlock', () => {
+describeEachProvider('RFC-119 — composePriorOutputBlock', (harness) => {
   test('renders in declared-output order, drops empty ports', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const run = await seedRun(db, taskId, 'agent', { status: 'done' })
     await seedOutput(db, run, 'summary', 'one-liner')
@@ -314,14 +318,14 @@ describe('RFC-119 — composePriorOutputBlock', () => {
   })
 
   test('no captured output → empty string', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const run = await seedRun(db, taskId, 'agent', { status: 'done' })
     expect(await composePriorOutputBlock(nodePersistence(db), run, ['design'])).toBe('')
   })
 
   test('D10 onlyPorts restricts to the given ports (review-iterate target)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const run = await seedRun(db, taskId, 'agent', { status: 'done' })
     await seedOutput(db, run, 'design', '# design body')
@@ -340,7 +344,7 @@ describe('RFC-119 — composePriorOutputBlock', () => {
   })
 
   test('D8 file-port content (a worktree-relative path) renders verbatim', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     const run = await seedRun(db, taskId, 'agent', { status: 'done' })
     // markdown_file port: node_run_outputs.content is the path, not the body.
@@ -352,77 +356,80 @@ describe('RFC-119 — composePriorOutputBlock', () => {
   })
 })
 
-describe('RFC-119 — end-to-end: canceled prior outputs render into the prompt', () => {
-  test('superseded run output flows through composePriorOutputBlock → renderUserPrompt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const prior = await seedRun(db, taskId, 'agent', {
-      status: 'canceled',
-      errorMessage: 'superseded-by-review-rejected',
-    })
-    await seedOutput(db, prior, 'design', '# the prior draft body')
-    const currentId = seedUlid()
+describeEachProvider(
+  'RFC-119 — end-to-end: canceled prior outputs render into the prompt',
+  (harness) => {
+    test('superseded run output flows through composePriorOutputBlock → renderUserPrompt', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      const prior = await seedRun(db, taskId, 'agent', {
+        status: 'canceled',
+        errorMessage: 'superseded-by-review-rejected',
+      })
+      await seedOutput(db, prior, 'design', '# the prior draft body')
+      const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      taskId,
-      nodeId: 'agent',
-      iteration: 0,
-      shardKey: null,
-      id: currentId,
-    })
-    expect(found?.id).toBe(prior)
+      const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+        taskId,
+        nodeId: 'agent',
+        iteration: 0,
+        shardKey: null,
+        id: currentId,
+      })
+      expect(found?.id).toBe(prior)
 
-    const block = await composePriorOutputBlock(nodePersistence(db), found!.id, ['design'])
-    const prompt = renderUserPrompt({
-      promptTemplate: 'Body.',
-      inputs: {},
-      meta: { repoPath: '', baseBranch: '', taskId },
-      agentOutputs: ['design'],
-      reviewContext: { rejection: 'wrong direction' },
-      priorOutputUpdate: { block },
+      const block = await composePriorOutputBlock(nodePersistence(db), found!.id, ['design'])
+      const prompt = renderUserPrompt({
+        promptTemplate: 'Body.',
+        inputs: {},
+        meta: { repoPath: '', baseBranch: '', taskId },
+        agentOutputs: ['design'],
+        reviewContext: { rejection: 'wrong direction' },
+        priorOutputUpdate: { block },
+      })
+      expect(prompt).toContain(PRIOR_OUTPUT_BLOCK_TITLE)
+      expect(prompt).toContain('# the prior draft body')
+      expect(prompt).toContain('## Review Rejection')
     })
-    expect(prompt).toContain(PRIOR_OUTPUT_BLOCK_TITLE)
-    expect(prompt).toContain('# the prior draft body')
-    expect(prompt).toContain('## Review Rejection')
-  })
 
-  test('RFC-141: an ask-back round renders the draft with the ask-back directive variant', async () => {
-    // Evidence case: QMGP5 agent_m7p3n1 retry 17 — the node had 4 docpath
-    // generations, a cross-clarify answer re-triggered it with mandatory
-    // ask-back active, and RFC-119 D6 dropped the draft from the prompt.
-    // RFC-141 (user ruling) injects it with the clarify-flavored pair instead.
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    const prior = await seedRun(db, taskId, 'agent')
-    await seedOutput(db, prior, 'docpath', 'docs/snake-game-design.md')
-    const currentId = seedUlid()
+    test('RFC-141: an ask-back round renders the draft with the ask-back directive variant', async () => {
+      // Evidence case: QMGP5 agent_m7p3n1 retry 17 — the node had 4 docpath
+      // generations, a cross-clarify answer re-triggered it with mandatory
+      // ask-back active, and RFC-119 D6 dropped the draft from the prompt.
+      // RFC-141 (user ruling) injects it with the clarify-flavored pair instead.
+      const db = harness.db
+      const taskId = await seedTask(db)
+      const prior = await seedRun(db, taskId, 'agent')
+      await seedOutput(db, prior, 'docpath', 'docs/snake-game-design.md')
+      const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      taskId,
-      nodeId: 'agent',
-      iteration: 0,
-      shardKey: null,
-      id: currentId,
+      const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+        taskId,
+        nodeId: 'agent',
+        iteration: 0,
+        shardKey: null,
+        id: currentId,
+      })
+      expect(found?.id).toBe(prior)
+
+      const block = await composePriorOutputBlock(nodePersistence(db), found!.id, ['docpath'])
+      const prompt = renderUserPrompt({
+        promptTemplate: 'Body.',
+        inputs: {},
+        meta: { repoPath: '', baseBranch: '', taskId },
+        agentOutputs: ['docpath'],
+        clarifyChannel: { kind: 'self', directive: 'mandatory', injectStopNotice: false },
+        clarifyContext: { flatBlock: '## Clarify Q&A\n- Q1 → yes' },
+        priorOutputUpdate: { block },
+      })
+      // draft present, ask-back variant pair, clarify-only protocol intact
+      expect(prompt).toContain(ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE)
+      expect(prompt).toContain('docs/snake-game-design.md')
+      expect(prompt).toContain(ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE)
+      expect(prompt).toContain('MANDATORY ASK-BACK')
+      // the update pair must not leak into the ask-back round
+      expect(prompt).not.toContain(PRIOR_OUTPUT_BLOCK_TITLE)
+      expect(prompt).not.toContain('## Update Directive')
     })
-    expect(found?.id).toBe(prior)
-
-    const block = await composePriorOutputBlock(nodePersistence(db), found!.id, ['docpath'])
-    const prompt = renderUserPrompt({
-      promptTemplate: 'Body.',
-      inputs: {},
-      meta: { repoPath: '', baseBranch: '', taskId },
-      agentOutputs: ['docpath'],
-      clarifyChannel: { kind: 'self', directive: 'mandatory', injectStopNotice: false },
-      clarifyContext: { flatBlock: '## Clarify Q&A\n- Q1 → yes' },
-      priorOutputUpdate: { block },
-    })
-    // draft present, ask-back variant pair, clarify-only protocol intact
-    expect(prompt).toContain(ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE)
-    expect(prompt).toContain('docs/snake-game-design.md')
-    expect(prompt).toContain(ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE)
-    expect(prompt).toContain('MANDATORY ASK-BACK')
-    // the update pair must not leak into the ask-back round
-    expect(prompt).not.toContain(PRIOR_OUTPUT_BLOCK_TITLE)
-    expect(prompt).not.toContain('## Update Directive')
-  })
-})
+  },
+)

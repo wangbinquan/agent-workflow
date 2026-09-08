@@ -36,7 +36,9 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, taskNodeClarifyDirectives, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
@@ -45,8 +47,6 @@ import {
   setNodeClarifyDirective,
 } from '../src/services/taskClarifyDirective'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function makeQ(id = 'q1'): ClarifyQuestion {
   return {
@@ -65,7 +65,7 @@ function makeAns(qid = 'q1'): ClarifyAnswer {
   return { questionId: qid, selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' }
 }
 
-async function insertTask(db: DbClient, def: WorkflowDefinition): Promise<string> {
+async function insertTask(db: ProviderNeutralDatabase, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
   await db.insert(workflows).values({
@@ -78,6 +78,10 @@ async function insertTask(db: DbClient, def: WorkflowDefinition): Promise<string
   })
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'rfc123-fixture',
     workflowId,
     workflowSnapshot: JSON.stringify(def),
@@ -142,7 +146,7 @@ function crossDef(): WorkflowDefinition {
 }
 
 async function seedSelfStopAnswered(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     directive: 'stop' | 'continue'
@@ -184,7 +188,7 @@ async function seedSelfStopAnswered(
 }
 
 async function seedCrossStopAnswered(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   directive: 'stop' | 'continue',
 ): Promise<void> {
@@ -230,132 +234,183 @@ async function seedCrossStopAnswered(
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-// ---------------------------------------------------------------------------
-// A. stop 写（self + cross）— 答 stop 回写画布开关单一事实源
-// ---------------------------------------------------------------------------
-describe('RFC-123 A: 答 stop 回写 task_node_clarify_directives', () => {
-  test('self-clarify 答 stop → asking 节点 directive=stop（setBy=answeredBy）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, selfDef())
-    await seedSelfStopAnswered(db, taskId, { directive: 'stop', answeredBy: 'user_x' })
+describeEachProvider(
+  'RFC-359 rfc123-clarify-directive-single-source database behavior',
+  (harness) => {
+    // ---------------------------------------------------------------------------
+    // A. stop 写（self + cross）— 答 stop 回写画布开关单一事实源
+    // ---------------------------------------------------------------------------
+    describe('RFC-123 A: 答 stop 回写 task_node_clarify_directives', () => {
+      test('self-clarify 答 stop → asking 节点 directive=stop（setBy=answeredBy）', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, selfDef())
+        await seedSelfStopAnswered(db, taskId, { directive: 'stop', answeredBy: 'user_x' })
 
-    expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBe('stop')
-    const row = (
-      await db
-        .select()
-        .from(taskNodeClarifyDirectives)
-        .where(
-          and(
-            eq(taskNodeClarifyDirectives.taskId, taskId),
-            eq(taskNodeClarifyDirectives.nodeId, 'designer'),
-          ),
-        )
-    )[0]
-    expect(row?.setBy).toBe('user_x')
-  })
+        expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBe('stop')
+        const row = (
+          await db
+            .select()
+            .from(taskNodeClarifyDirectives)
+            .where(
+              and(
+                eq(taskNodeClarifyDirectives.taskId, taskId),
+                eq(taskNodeClarifyDirectives.nodeId, 'designer'),
+              ),
+            )
+        )[0]
+        expect(row?.setBy).toBe('user_x')
+      })
 
-  test('self-clarify 答 continue → 不写该表（golden-lock）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, selfDef())
-    await seedSelfStopAnswered(db, taskId, { directive: 'continue' })
+      test('self-clarify 答 continue → 不写该表（golden-lock）', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, selfDef())
+        await seedSelfStopAnswered(db, taskId, { directive: 'continue' })
 
-    expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBeUndefined()
-  })
+        expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBeUndefined()
+      })
 
-  test('cross-clarify 答 stop → questioner 节点 directive=stop', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, crossDef())
-    await seedCrossStopAnswered(db, taskId, 'stop')
+      test('cross-clarify 答 stop → questioner 节点 directive=stop', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, crossDef())
+        await seedCrossStopAnswered(db, taskId, 'stop')
 
-    expect(await getNodeClarifyDirective(db, taskId, 'qA')).toBe('stop')
-  })
+        expect(await getNodeClarifyDirective(db, taskId, 'qA')).toBe('stop')
+      })
 
-  test('cross-clarify 答 continue → questioner 节点不写该表（golden-lock）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, crossDef())
-    await seedCrossStopAnswered(db, taskId, 'continue')
+      test('cross-clarify 答 continue → questioner 节点不写该表（golden-lock）', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, crossDef())
+        await seedCrossStopAnswered(db, taskId, 'continue')
 
-    expect(await getNodeClarifyDirective(db, taskId, 'qA')).toBeUndefined()
-  })
+        expect(await getNodeClarifyDirective(db, taskId, 'qA')).toBeUndefined()
+      })
 
-  test('幂等：手点 continue 后答 stop → 行终值 stop', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, selfDef())
-    await setNodeClarifyDirective(db, taskId, 'designer', 'continue', 'manual')
-    await seedSelfStopAnswered(db, taskId, { directive: 'stop' })
+      test('幂等：手点 continue 后答 stop → 行终值 stop', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, selfDef())
+        await setNodeClarifyDirective(db, taskId, 'designer', 'continue', 'manual')
+        await seedSelfStopAnswered(db, taskId, { directive: 'stop' })
 
-    expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBe('stop')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// B. 重启用 B1（prompt 路径）— directiveOverride='continue' 覆盖 stale stop
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// C. 重启用 B2（cross 节点短路）— questioner node 级 directive last-write-wins（RFC-132 T7）
-// ---------------------------------------------------------------------------
-describe('RFC-123 C: questioner node 级 directive 决定 cross 节点短路（RFC-132 T7 last-write-wins）', () => {
-  async function seedRejectedCross(db: DbClient, taskId: string): Promise<void> {
-    await seedCrossStopAnswered(db, taskId, 'stop')
-    // sanity: the questioner node's node-level directive is 'stop'.
-    expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
-  }
-
-  async function dispatchFresh(db: DbClient, taskId: string) {
-    const freshId = `nr_cross1_${Math.random().toString(36).slice(2, 6)}`
-    await db.insert(nodeRuns).values({
-      id: freshId,
-      taskId,
-      nodeId: 'cross1',
-      status: 'pending',
-      retryIndex: 0,
-      iteration: 0,
+        expect(await getNodeClarifyDirective(db, taskId, 'designer')).toBe('stop')
+      })
     })
-    const ret = await dispatchCrossClarifyNode({
-      db,
-      taskId,
-      crossClarifyNodeId: 'cross1',
-      nodeRunId: freshId,
-      definition: crossDef(),
+
+    // ---------------------------------------------------------------------------
+    // B. 重启用 B1（prompt 路径）— directiveOverride='continue' 覆盖 stale stop
+    // ---------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------
+    // C. 重启用 B2（cross 节点短路）— questioner node 级 directive last-write-wins（RFC-132 T7）
+    // ---------------------------------------------------------------------------
+    describe('RFC-123 C: questioner node 级 directive 决定 cross 节点短路（RFC-132 T7 last-write-wins）', () => {
+      async function seedRejectedCross(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+        await seedCrossStopAnswered(db, taskId, 'stop')
+        // sanity: the questioner node's node-level directive is 'stop'.
+        expect(await resolveCrossNodeStopped(db, taskId, 'qA')).toBe(true)
+      }
+
+      async function dispatchFresh(db: ProviderNeutralDatabase, taskId: string) {
+        const freshId = `nr_cross1_${Math.random().toString(36).slice(2, 6)}`
+        await db.insert(nodeRuns).values({
+          id: freshId,
+          taskId,
+          nodeId: 'cross1',
+          status: 'pending',
+          retryIndex: 0,
+          iteration: 0,
+        })
+        const ret = await dispatchCrossClarifyNode({
+          db,
+          taskId,
+          crossClarifyNodeId: 'cross1',
+          nodeRunId: freshId,
+          definition: crossDef(),
+        })
+        const finalRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, freshId)))[0]
+        return { ret, finalStatus: finalRun?.status }
+      }
+
+      test('答 stop 写了 toggle=stop → short-circuit-stop', async () => {
+        // seedCrossStopAnswered(stop) 走 submit，按 RFC-123 改动 A 顺带写 questioner toggle=stop。
+        const db = harness.db
+        const taskId = await insertTask(db, crossDef())
+        await seedRejectedCross(db, taskId)
+
+        const { ret, finalStatus } = await dispatchFresh(db, taskId)
+        expect(ret.kind).toBe('short-circuit-stop')
+        expect(finalStatus).toBe('done')
+      })
+
+      test('questioner toggle=continue → 不再 short-circuit（awaiting；node_run 留 pending）', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, crossDef())
+        await seedRejectedCross(db, taskId)
+        // 用户手点画布开关把 questioner 翻回 continue（重启用）。
+        await setNodeClarifyDirective(db, taskId, 'qA', 'continue', 'user_x')
+
+        const { ret, finalStatus } = await dispatchFresh(db, taskId)
+        expect(ret.kind).not.toBe('short-circuit-stop')
+        expect(finalStatus).toBe('pending')
+      })
+
+      test('questioner toggle=stop → 仍 short-circuit（不影响 stop 方向）', async () => {
+        const db = harness.db
+        const taskId = await insertTask(db, crossDef())
+        await seedRejectedCross(db, taskId)
+        await setNodeClarifyDirective(db, taskId, 'qA', 'stop', 'user_x')
+
+        const { ret } = await dispatchFresh(db, taskId)
+        expect(ret.kind).toBe('short-circuit-stop')
+      })
     })
-    const finalRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, freshId)))[0]
-    return { ret, finalStatus: finalRun?.status }
-  }
 
-  test('答 stop 写了 toggle=stop → short-circuit-stop', async () => {
-    // seedCrossStopAnswered(stop) 走 submit，按 RFC-123 改动 A 顺带写 questioner toggle=stop。
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, crossDef())
-    await seedRejectedCross(db, taskId)
+    // ---------------------------------------------------------------------------
+    // E. recency 闸 — stale 'continue' toggle 不得重启用更晚的 stop（Codex impl-gate P2）
+    // ---------------------------------------------------------------------------
 
-    const { ret, finalStatus } = await dispatchFresh(db, taskId)
-    expect(ret.kind).toBe('short-circuit-stop')
-    expect(finalStatus).toBe('done')
-  })
+    // ---------------------------------------------------------------------------
+    // RFC-207 — per-asker stop. A workgroup runs every member assignment on ONE host
+    // node id, so a node-level directive would silence every worker at once; and a
+    // node-level "continue" has to be able to undo a per-asker stop, or stopping
+    // becomes a one-way door with no UI to reverse it.
+    // ---------------------------------------------------------------------------
 
-  test('questioner toggle=continue → 不再 short-circuit（awaiting；node_run 留 pending）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, crossDef())
-    await seedRejectedCross(db, taskId)
-    // 用户手点画布开关把 questioner 翻回 continue（重启用）。
-    await setNodeClarifyDirective(db, taskId, 'qA', 'continue', 'user_x')
+    describe('RFC-207 — 逐提问方的停止反问', () => {
+      let db2: ProviderNeutralDatabase
+      let T: string
 
-    const { ret, finalStatus } = await dispatchFresh(db, taskId)
-    expect(ret.kind).not.toBe('short-circuit-stop')
-    expect(finalStatus).toBe('pending')
-  })
+      beforeEach(async () => {
+        db2 = harness.db
+        T = await insertTask(db2, { $schema_version: 4, inputs: [], nodes: [], edges: [] })
+      })
 
-  test('questioner toggle=stop → 仍 short-circuit（不影响 stop 方向）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await insertTask(db, crossDef())
-    await seedRejectedCross(db, taskId)
-    await setNodeClarifyDirective(db, taskId, 'qA', 'stop', 'user_x')
+      test('停一个提问方不影响另一个；节点级行作为回落', async () => {
+        await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'asg:A')
+        expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:A')).toBe('stop')
+        expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:B')).toBeUndefined()
 
-    const { ret } = await dispatchFresh(db, taskId)
-    expect(ret.kind).toBe('short-circuit-stop')
-  })
-})
+        // A node-level row applies to askers with no row of their own.
+        await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', null)
+        expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:B')).toBe('stop')
+      })
+
+      test('节点级 continue 清掉该节点全部分片行（否则停了就恢复不了）', async () => {
+        await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'asg:A')
+        await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'mem:m1')
+        await setNodeClarifyDirective(db2, T, '__wg_member__', 'continue', 'u1', null)
+        expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:A')).toBe('continue')
+        expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'mem:m1')).toBe('continue')
+      })
+
+      test('画布视图只看节点级行——分片停止不该染色整个节点', async () => {
+        await setNodeClarifyDirective(db2, T, 'n1', 'stop', 'u1', 'shard-9')
+        expect(await listNodeClarifyDirectives(db2, T)).toEqual({})
+        await setNodeClarifyDirective(db2, T, 'n1', 'stop', 'u1', null)
+        expect(await listNodeClarifyDirectives(db2, T)).toEqual({ n1: 'stop' })
+      })
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // D. 源码 wiring 守卫 — 锁定单一事实源接线，防 refactor 漂移
@@ -451,51 +506,5 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
       "setNodeClarifyDirectiveTx( tx, round.taskId, round.askingNodeId, 'stop', args.sealedBy ?? 'local', wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null), ts, )",
     )
     expect(sealSrc).not.toContain('await setNodeClarifyDirective(')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// E. recency 闸 — stale 'continue' toggle 不得重启用更晚的 stop（Codex impl-gate P2）
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// RFC-207 — per-asker stop. A workgroup runs every member assignment on ONE host
-// node id, so a node-level directive would silence every worker at once; and a
-// node-level "continue" has to be able to undo a per-asker stop, or stopping
-// becomes a one-way door with no UI to reverse it.
-// ---------------------------------------------------------------------------
-
-describe('RFC-207 — 逐提问方的停止反问', () => {
-  let db2: DbClient
-  let T: string
-
-  beforeEach(async () => {
-    db2 = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
-    T = await insertTask(db2, { $schema_version: 4, inputs: [], nodes: [], edges: [] })
-  })
-
-  test('停一个提问方不影响另一个；节点级行作为回落', async () => {
-    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'asg:A')
-    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:A')).toBe('stop')
-    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:B')).toBeUndefined()
-
-    // A node-level row applies to askers with no row of their own.
-    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', null)
-    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:B')).toBe('stop')
-  })
-
-  test('节点级 continue 清掉该节点全部分片行（否则停了就恢复不了）', async () => {
-    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'asg:A')
-    await setNodeClarifyDirective(db2, T, '__wg_member__', 'stop', 'u1', 'mem:m1')
-    await setNodeClarifyDirective(db2, T, '__wg_member__', 'continue', 'u1', null)
-    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'asg:A')).toBe('continue')
-    expect(await getNodeClarifyDirective(db2, T, '__wg_member__', 'mem:m1')).toBe('continue')
-  })
-
-  test('画布视图只看节点级行——分片停止不该染色整个节点', async () => {
-    await setNodeClarifyDirective(db2, T, 'n1', 'stop', 'u1', 'shard-9')
-    expect(await listNodeClarifyDirectives(db2, T)).toEqual({})
-    await setNodeClarifyDirective(db2, T, 'n1', 'stop', 'u1', null)
-    expect(await listNodeClarifyDirectives(db2, T)).toEqual({ n1: 'stop' })
   })
 })

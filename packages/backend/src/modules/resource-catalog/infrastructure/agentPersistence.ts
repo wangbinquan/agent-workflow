@@ -199,6 +199,42 @@ function persistedFrontmatter(
   return JSON.stringify(value)
 }
 
+/** RFC-166 — canonicalize declared input ports for the agents.inputs column:
+ *  apply the `kind` default, strip unknown keys, and REJECT duplicate port
+ *  names (persistence guard mirroring the DTO — port name is an identity key),
+ *  so the stored JSON is identical whether or not the caller pre-parsed through
+ *  CreateAgentSchema. Throws a ZodError on a dupe from a service-layer caller
+ *  that bypassed the route's CreateAgentSchema validation. */
+export function serializeAgentInputs(inputs: CreateAgent['inputs']): string {
+  return JSON.stringify(AgentInputPortsSchema.parse(inputs ?? []))
+}
+
+/** Encode content at the caller's original write point, with its prepared refs/sidecars. */
+export function agentContentPersistenceValues(
+  agent: CreateAgent,
+  preparedFrontmatter?: Record<string, unknown>,
+  resolvedRefs?: Pick<Agent, 'skills' | 'dependsOn' | 'mcp' | 'plugins'>,
+) {
+  const refs = resolvedRefs ?? agent
+  return {
+    description: agent.description,
+    outputs: JSON.stringify(agent.outputs),
+    inputs: serializeAgentInputs(agent.inputs),
+    syncOutputsOnIterate: agent.syncOutputsOnIterate,
+    runtime: agent.runtime ?? null,
+    permission: JSON.stringify(agent.permission),
+    skills: JSON.stringify(refs.skills),
+    dependsOn: JSON.stringify(refs.dependsOn),
+    mcp: JSON.stringify(refs.mcp),
+    plugins: JSON.stringify(refs.plugins),
+    frontmatterExtra:
+      preparedFrontmatter === undefined
+        ? persistedFrontmatter(agent)
+        : JSON.stringify(preparedFrontmatter),
+    bodyMd: agent.bodyMd,
+  }
+}
+
 export function createAgentPersistenceValues(input: {
   readonly id: string
   readonly agent: CreateAgent
@@ -220,18 +256,7 @@ export function createAgentPersistenceValues(input: {
   return {
     id: candidate.id,
     name: candidate.name,
-    description: candidate.description,
-    outputs: JSON.stringify(candidate.outputs),
-    inputs: JSON.stringify(AgentInputPortsSchema.parse(candidate.inputs ?? [])),
-    syncOutputsOnIterate: candidate.syncOutputsOnIterate,
-    runtime: candidate.runtime ?? null,
-    permission: JSON.stringify(candidate.permission),
-    skills: JSON.stringify(candidate.skills),
-    dependsOn: JSON.stringify(candidate.dependsOn),
-    mcp: JSON.stringify(candidate.mcp),
-    plugins: JSON.stringify(candidate.plugins),
-    frontmatterExtra: persistedFrontmatter(candidate),
-    bodyMd: candidate.bodyMd,
+    ...agentContentPersistenceValues(candidate),
     ownerUserId: candidate.ownerUserId ?? null,
     visibility: candidate.visibility ?? 'private',
     aclRevision: candidate.aclRevision ?? 0,
@@ -267,18 +292,7 @@ export function updateAgentPersistenceValues(
     updatedAt,
   }
   return {
-    description: next.description,
-    outputs: JSON.stringify(next.outputs),
-    inputs: JSON.stringify(AgentInputPortsSchema.parse(next.inputs ?? [])),
-    syncOutputsOnIterate: next.syncOutputsOnIterate,
-    runtime: next.runtime ?? null,
-    permission: JSON.stringify(next.permission),
-    skills: JSON.stringify(next.skills),
-    dependsOn: JSON.stringify(next.dependsOn),
-    mcp: JSON.stringify(next.mcp),
-    plugins: JSON.stringify(next.plugins),
-    frontmatterExtra: persistedFrontmatter(next),
-    bodyMd: next.bodyMd,
+    ...agentContentPersistenceValues(next),
     updatedAt,
   }
 }

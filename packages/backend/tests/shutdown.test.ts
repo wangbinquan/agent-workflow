@@ -4,29 +4,27 @@
 // for tasks in `running` and flips survivors to `interrupted`. We seed a
 // task that stays running and verify the survivor path.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { gracefulShutdown } from '../src/services/shutdown'
 import { taskExecutionModule } from '../src/modules/task-execution/composition'
-import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(db: ProviderNeutralDatabase): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-shutdown-'))
-  const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
     appHome,
@@ -34,7 +32,7 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedRunning(db: DbClient): Promise<string> {
+async function seedRunning(db: ProviderNeutralDatabase): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -48,6 +46,11 @@ async function seedRunning(db: DbClient): Promise<string> {
     name: 'fixture-task',
 
     id: taskId,
+    // Preserve the root lineage supplied by the original SQLite INSERT trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     workflowId,
     workflowSnapshot: '{}',
     repoPath: '/tmp/repo',
@@ -61,10 +64,10 @@ async function seedRunning(db: DbClient): Promise<string> {
   return taskId
 }
 
-describe('gracefulShutdown', () => {
+describeEachProvider('gracefulShutdown', (harness) => {
   let h: Harness
   beforeEach(() => {
-    h = buildHarness()
+    h = buildHarness(harness.db)
   })
   afterEach(() => {
     taskExecutionModule.resetForTesting()
@@ -73,7 +76,7 @@ describe('gracefulShutdown', () => {
 
   test('returns immediately when no tasks are running', async () => {
     const t0 = Date.now()
-    const persistence = createSqliteTaskExecutionPersistence(h.db)
+    const persistence = createTaskExecutionPersistence(h.db)
     await gracefulShutdown(
       {
         controller: {
@@ -94,7 +97,7 @@ describe('gracefulShutdown', () => {
     // No AbortController registered — abortAllActiveTasks is a no-op, and
     // the row stays running. After the short budget, the survivor path
     // marks it interrupted.
-    const persistence = createSqliteTaskExecutionPersistence(h.db)
+    const persistence = createTaskExecutionPersistence(h.db)
     await gracefulShutdown(
       {
         controller: {

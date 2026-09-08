@@ -14,7 +14,7 @@
 // compile error the moment a provider is added: the new provider cannot be
 // declared without answering every field here.
 
-import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
+import { postgresqlSerializationFailureCode } from '@/platform/persistence/postgresqlSerializationRetry'
 import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
 
 import { type DatabaseProvider } from './databaseProviders'

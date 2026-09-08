@@ -79,7 +79,7 @@ import {
   routeMaintenanceWorkerRequest,
   type MaintenanceWorkerInitRequest,
 } from './maintenanceWorkerMessageRouter'
-import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
+import { postgresqlSerializationFailureCode } from '@/platform/persistence/postgresqlSerializationRetry'
 import {
   createMaintenanceSliceDiagnostics,
   type MaintenanceSliceDiagnostics,

@@ -45,8 +45,13 @@
   WeakMap、对象身份及运行诊断。构造合同与实际双引擎执行仍是两层证据。
 - Agent 解码共用一份字段/sidecar 投影，normalized 与 stored-json 保留原入口的数据格式合同；
   malformed JSON、NULL、数组 sidecar、字段省略与错误先后不能因提取公共实现而改变。
+- Agent 完整写入字段共享一个 encoder；原输入、已解析引用与 prepared frontmatter 分别传入，
+  不用对象展开提前求值。legacy 显式空数组与中立省略空 sidecar、稀疏更新字段存在性保持原合同。
+- PostgreSQL 重试策略位于 platform/persistence，调用者共用原策略；机制归位不改变重试预算或时序。
 - 旧测试夹具从 SQLite 迁到双引擎时，要显式保留原触发器已经生成的行值；不能只复制 insert
   参数而让 PG 以不同初始行进入业务流程。涉及原串 hash 的字段也保留原字节序。
+- Event Center 构造参数与其四个实际存储共用中立数据库类型；原装配函数及完整端口保持，
+  不能仅因底层实现已合一就推断外层参数也已开放。
 - 初始化事件夹具必须等待 cutover 设置写入，再创建 pump/dispatcher 并返回句柄；调用方完整 await。
   原全局清理与工作生命周期保持，不能让 SQLite 同步执行掩盖 PostgreSQL 未完成初始化。
 - 原始 fixture 的等价性以当前迁移完成后的实际行证明。0224 已退役 node-run lineage 插入触发器，

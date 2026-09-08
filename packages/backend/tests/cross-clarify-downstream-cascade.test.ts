@@ -26,18 +26,17 @@
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -47,7 +46,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // designer entry mints the designer rerun. The RFC-074 no-eager-cascade contract this file locks
 // is unchanged — the dispatch still mints ONLY the frontier designer rerun, never downstream rows.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -140,7 +139,7 @@ function cascadeDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = cascadeDef()
   const wfId = `wf_${taskId}`
@@ -154,6 +153,10 @@ async function seedTask(db: DbClient): Promise<string> {
   })
   await db.insert(tasks).values({
     id: taskId,
+    executionLineageId: taskId,
+    lineageSlotPathJson: encodeLineageSlotPath([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'fixture-task',
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(def),
@@ -169,7 +172,7 @@ async function seedTask(db: DbClient): Promise<string> {
 }
 
 async function seedDoneRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: Partial<typeof nodeRuns.$inferInsert> = {},
@@ -194,207 +197,209 @@ afterAll(() => {
   resetBroadcastersForTests()
 })
 
-describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () => {
-  test('submit mints ONLY the designer rerun; downstream nodes are NOT pre-cascaded', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    // Seed a done designer + done downstream chain mirroring the
-    // production failure shape.
-    await seedDoneRun(db, taskId, 'in')
-    await seedDoneRun(db, taskId, 'designer', { preSnapshot: 'snap-a' })
-    await seedDoneRun(db, taskId, 'rev1')
-    const qRun = await seedDoneRun(db, taskId, 'questioner')
-    // rev2 / out haven't run yet — exercise the "node never ran" branch.
+describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior', (harness) => {
+  describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () => {
+    test('submit mints ONLY the designer rerun; downstream nodes are NOT pre-cascaded', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      // Seed a done designer + done downstream chain mirroring the
+      // production failure shape.
+      await seedDoneRun(db, taskId, 'in')
+      await seedDoneRun(db, taskId, 'designer', { preSnapshot: 'snap-a' })
+      await seedDoneRun(db, taskId, 'rev1')
+      const qRun = await seedDoneRun(db, taskId, 'questioner')
+      // rev2 / out haven't run yet — exercise the "node never ran" branch.
 
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+      const sess = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      })
 
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor,
-    })
-    const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
-    expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor,
+      })
+      const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
+      expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
-    // Designer's new pending row carries clarifyIteration=1.
-    const designerRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
-    expect(designerRows.length).toBe(2)
-    const designerFresh = designerRows.find((r) => r.status === 'pending')
-    // RFC-074 PR-C: the designer rerun is a fresh pending insert (latest id wins).
-    expect(designerFresh).toBeDefined()
-
-    // RFC-074 NO-CASCADE LOCK: rev1 is NOT pre-minted a pending row. It keeps
-    // exactly its single done row from iteration 0; the scheduler will demote +
-    // re-dispatch it lazily once the designer rerun produces a fresher done row
-    // (provenance freshness, recomputeFreshnessAndDemote).
-    const rev1Rows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev1')))
-    expect(rev1Rows.length, 'rev1 should NOT be pre-cascaded (single done row)').toBe(1)
-    expect(rev1Rows[0]?.status).toBe('done')
-
-    // RFC-132 (§6 delta 1): the questioner DOES get exactly one pending rerun — its
-    // unconditional clarify continuation (cause 'cross-clarify-questioner-rerun'),
-    // minted by the unified dispatch alongside the designer rerun. It is a
-    // clarify-channel rerun, NOT an eager downstream cascade.
-    const qRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'questioner')))
-    const qPending = qRows.filter((r) => r.status === 'pending')
-    expect(qPending.length, 'exactly one questioner continuation rerun').toBe(1)
-    expect(qPending[0]?.rerunCause).toBe('cross-clarify-questioner-rerun')
-
-    // Nodes that NEVER ran (rev2, out) have no rows either way.
-    for (const nodeId of ['rev2', 'out']) {
-      const rows = await db
+      // Designer's new pending row carries clarifyIteration=1.
+      const designerRows = await db
         .select()
         .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
-      expect(rows.length, `${nodeId} should have NO rows (never ran)`).toBe(0)
-    }
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
+      expect(designerRows.length).toBe(2)
+      const designerFresh = designerRows.find((r) => r.status === 'pending')
+      // RFC-074 PR-C: the designer rerun is a fresh pending insert (latest id wins).
+      expect(designerFresh).toBeDefined()
 
-    // STRICT downstream only: the upstream `in` node is NOT cascaded.
-    const inRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'in')))
-    expect(inRows.length, 'in should have its single done row only — not cascaded').toBe(1)
-    expect(inRows[0]?.status).toBe('done')
-  })
-
-  test('submit does not pre-mint a downstream rev1 row (no cascade to be idempotent about)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedDoneRun(db, taskId, 'designer')
-    await seedDoneRun(db, taskId, 'rev1')
-    const qRun = await seedDoneRun(db, taskId, 'questioner')
-
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor,
-    })
-    const rev1Count = (
-      await db
+      // RFC-074 NO-CASCADE LOCK: rev1 is NOT pre-minted a pending row. It keeps
+      // exactly its single done row from iteration 0; the scheduler will demote +
+      // re-dispatch it lazily once the designer rerun produces a fresher done row
+      // (provenance freshness, recomputeFreshnessAndDemote).
+      const rev1Rows = await db
         .select()
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev1')))
-    ).length
-    // RFC-074: no cascade row is minted on rev1 — it keeps its single done row.
-    // (The answer mints only the designer rerun + the questioner continuation;
-    // downstream re-runs are driven lazily by the scheduler's freshness recompute.)
-    expect(rev1Count).toBe(1)
-  })
+      expect(rev1Rows.length, 'rev1 should NOT be pre-cascaded (single done row)').toBe(1)
+      expect(rev1Rows[0]?.status).toBe('done')
 
-  test('clarify-channel edges are skipped — cascade does NOT mint a pending row on the cross-clarify node itself', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedDoneRun(db, taskId, 'designer')
-    const qRun = await seedDoneRun(db, taskId, 'questioner')
+      // RFC-132 (§6 delta 1): the questioner DOES get exactly one pending rerun — its
+      // unconditional clarify continuation (cause 'cross-clarify-questioner-rerun'),
+      // minted by the unified dispatch alongside the designer rerun. It is a
+      // clarify-channel rerun, NOT an eager downstream cascade.
+      const qRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'questioner')))
+      const qPending = qRows.filter((r) => r.status === 'pending')
+      expect(qPending.length, 'exactly one questioner continuation rerun').toBe(1)
+      expect(qPending[0]?.rerunCause).toBe('cross-clarify-questioner-rerun')
 
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor,
-    })
-    // The cross-clarify node itself is reachable from designer ONLY via
-    // a clarify-channel edge (to_designer → __external_feedback__), so
-    // the BFS skips it. The cross-clarify node_run minted by
-    // createClarifyRound is the only row, and it transitioned
-    // pending → awaiting_human → done via the answer's full seal.
-    const crossRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'cross1')))
-    expect(crossRows.length, 'cross-clarify node should NOT receive a cascade-minted row').toBe(1)
-  })
+      // Nodes that NEVER ran (rev2, out) have no rows either way.
+      for (const nodeId of ['rev2', 'out']) {
+        const rows = await db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+        expect(rows.length, `${nodeId} should have NO rows (never ran)`).toBe(0)
+      }
 
-  test('a downstream rev1 with rich clarify/retry history is left untouched (no cascade overwrite)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
-    await seedDoneRun(db, taskId, 'designer')
-    // rev1 had been through 3 self-clarify rounds + 2 retries by the time
-    // cross-clarify fired — the cascade must not destroy this history.
-    await seedDoneRun(db, taskId, 'rev1', {
-      retryIndex: 2,
-      preSnapshot: 'snap-r1-final',
-    })
-    const qRun = await seedDoneRun(db, taskId, 'questioner', {
-      preSnapshot: 'snap-q-final',
+      // STRICT downstream only: the upstream `in` node is NOT cascaded.
+      const inRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'in')))
+      expect(inRows.length, 'in should have its single done row only — not cascaded').toBe(1)
+      expect(inRows[0]?.status).toBe('done')
     })
 
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
+    test('submit does not pre-mint a downstream rev1 row (no cascade to be idempotent about)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedDoneRun(db, taskId, 'designer')
+      await seedDoneRun(db, taskId, 'rev1')
+      const qRun = await seedDoneRun(db, taskId, 'questioner')
+
+      const sess = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor,
+      })
+      const rev1Count = (
+        await db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev1')))
+      ).length
+      // RFC-074: no cascade row is minted on rev1 — it keeps its single done row.
+      // (The answer mints only the designer rerun + the questioner continuation;
+      // downstream re-runs are driven lazily by the scheduler's freshness recompute.)
+      expect(rev1Count).toBe(1)
     })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: sess.intermediaryNodeRunId,
-      answers: [makeAns('q1')],
-      actor,
+
+    test('clarify-channel edges are skipped — cascade does NOT mint a pending row on the cross-clarify node itself', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedDoneRun(db, taskId, 'designer')
+      const qRun = await seedDoneRun(db, taskId, 'questioner')
+
+      const sess = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor,
+      })
+      // The cross-clarify node itself is reachable from designer ONLY via
+      // a clarify-channel edge (to_designer → __external_feedback__), so
+      // the BFS skips it. The cross-clarify node_run minted by
+      // createClarifyRound is the only row, and it transitioned
+      // pending → awaiting_human → done via the answer's full seal.
+      const crossRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'cross1')))
+      expect(crossRows.length, 'cross-clarify node should NOT receive a cascade-minted row').toBe(1)
     })
-    const rev1Rows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev1')))
-    // RFC-074: no cascade row is minted, so rev1's hard-won history (cci=3,
-    // retry=2, preSnapshot) is left exactly as-is — there is no append-only
-    // pending row to validate. The designer rerun + lazy freshness will
-    // re-dispatch rev1 later (recording fresh consumed) without destroying this.
-    expect(rev1Rows.length, 'rev1 keeps its single done row').toBe(1)
-    expect(rev1Rows[0]?.status).toBe('done')
-    expect(rev1Rows[0]?.preSnapshot).toBe('snap-r1-final')
-    expect(rev1Rows[0]?.retryIndex).toBe(2)
+
+    test('a downstream rev1 with rich clarify/retry history is left untouched (no cascade overwrite)', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      await seedDoneRun(db, taskId, 'designer')
+      // rev1 had been through 3 self-clarify rounds + 2 retries by the time
+      // cross-clarify fired — the cascade must not destroy this history.
+      await seedDoneRun(db, taskId, 'rev1', {
+        retryIndex: 2,
+        preSnapshot: 'snap-r1-final',
+      })
+      const qRun = await seedDoneRun(db, taskId, 'questioner', {
+        preSnapshot: 'snap-q-final',
+      })
+
+      const sess = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: sess.intermediaryNodeRunId,
+        answers: [makeAns('q1')],
+        actor,
+      })
+      const rev1Rows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev1')))
+      // RFC-074: no cascade row is minted, so rev1's hard-won history (cci=3,
+      // retry=2, preSnapshot) is left exactly as-is — there is no append-only
+      // pending row to validate. The designer rerun + lazy freshness will
+      // re-dispatch rev1 later (recording fresh consumed) without destroying this.
+      expect(rev1Rows.length, 'rev1 keeps its single done row').toBe(1)
+      expect(rev1Rows[0]?.status).toBe('done')
+      expect(rev1Rows[0]?.preSnapshot).toBe('snap-r1-final')
+      expect(rev1Rows[0]?.retryIndex).toBe(2)
+    })
   })
 })
