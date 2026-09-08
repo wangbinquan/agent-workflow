@@ -8,22 +8,22 @@
 //   - S4 has no repairHint (task-level only)
 //   - missing candidate → no repairHint key (not even `undefined`)
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
+
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HOUR_MS = 3_600_000
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: {
     status: 'pending' | 'running' | 'awaiting_review' | 'awaiting_human'
     nodes: WorkflowNode[]
@@ -56,7 +56,7 @@ async function seedTask(
 }
 
 async function addRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   status: 'awaiting_review' | 'awaiting_human' | 'done' | 'interrupted' | 'failed' | 'canceled',
@@ -77,16 +77,16 @@ async function addRun(
   return id
 }
 
-describe('RFC-057 — stuckTaskDetector.repairHint', () => {
+describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
   test('S3 with interrupted review run → repairHint points to it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, {
       status: 'running',
       nodes: [{ id: 'rev_1', kind: 'review' } as WorkflowNode],
     })
     const runId = await addRun(db, taskId, 'rev_1', 'interrupted')
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts).toHaveLength(1)
@@ -97,14 +97,14 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
   })
 
   test('S3 with terminal clarify run only → repairHint.kind=clarify', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, {
       status: 'running',
       nodes: [{ id: 'clarify_1', kind: 'clarify' } as WorkflowNode],
     })
     const runId = await addRun(db, taskId, 'clarify_1', 'interrupted')
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts[0]!.detail).toMatchObject({
@@ -114,7 +114,7 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
   })
 
   test('S1 with awaiting_review run → repairHint.kind=review', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, {
       status: 'awaiting_review',
       nodes: [{ id: 'rev_1', kind: 'review' } as WorkflowNode],
@@ -122,7 +122,7 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
     const runId = await addRun(db, taskId, 'rev_1', 'awaiting_review')
     // No doc_versions → S1 violates.
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts.map((a) => a.rule)).toContain('S1')
@@ -133,14 +133,14 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
   })
 
   test('S2 with awaiting_human clarify run → repairHint.kind=clarify', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, {
       status: 'awaiting_human',
       nodes: [{ id: 'clarify_1', kind: 'clarify' } as WorkflowNode],
     })
     const runId = await addRun(db, taskId, 'clarify_1', 'awaiting_human')
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     const s2 = r.openAlerts.find((a) => a.rule === 'S2')
@@ -150,14 +150,14 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
   })
 
   test('S4 has NO repairHint (task-level only)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, {
       status: 'pending',
       nodes: [],
       startedAtAgoMs: 10 * 60 * 1000,
     })
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     const s4 = r.openAlerts.find((a) => a.rule === 'S4')
@@ -166,7 +166,7 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
   })
 
   test('no candidate → no repairHint key emitted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db, {
       status: 'running',
       // Output node only — neither review nor clarify ever lands here.
@@ -174,7 +174,7 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
     })
     await addRun(db, taskId, 'out_1', 'done')
     const r = await runStuckTaskDetector({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts[0]!.detail).not.toHaveProperty('repairHint')

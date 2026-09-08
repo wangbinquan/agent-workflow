@@ -93,6 +93,7 @@ function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimePa
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     runtimeRegistry: composeSqliteRuntimeRegistryOperations(client),
     workgroupTurns: passthrough('workgroupTurns'),
+    identityAccess: passthrough('identityAccess'),
     repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
   })
 }

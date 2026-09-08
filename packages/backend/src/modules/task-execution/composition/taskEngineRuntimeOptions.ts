@@ -193,4 +193,5 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly workgroupTurns: WorkgroupTurnsOperations
   readonly childLaunch: ChildExecutionLaunchOperations
   readonly processConcurrencyScope: object
+  readonly identityAccess: NonNullable<RunTaskOptions['identityAccess']>
 }

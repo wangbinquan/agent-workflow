@@ -2,22 +2,21 @@
 // per row. Mirrors the clarify list test; the inbox merges both source types
 // and needs taskName on both schemas.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listReviewSummaries } from '../src/services/review'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedReview(db: ReturnType<typeof createInMemoryDb>, taskName: string) {
+async function seedReview(db: ProviderNeutralDatabase, taskName: string): Promise<void> {
   const wfId = ulid()
   const tId = ulid()
   const nrId = ulid()
   const dvId = ulid()
   const now = Date.now()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -29,7 +28,8 @@ function seedReview(db: ReturnType<typeof createInMemoryDb>, taskName: string) {
       updatedAt: now,
     })
     .run()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: tId,
       name: taskName,
@@ -46,7 +46,8 @@ function seedReview(db: ReturnType<typeof createInMemoryDb>, taskName: string) {
       startedAt: now,
     })
     .run()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id: nrId,
       taskId: tId,
@@ -58,7 +59,8 @@ function seedReview(db: ReturnType<typeof createInMemoryDb>, taskName: string) {
       startedAt: now,
     })
     .run()
-  db.insert(docVersions)
+  await db
+    .insert(docVersions)
     .values({
       id: dvId,
       taskId: tId,
@@ -76,19 +78,19 @@ function seedReview(db: ReturnType<typeof createInMemoryDb>, taskName: string) {
     .run()
 }
 
-describe('RFC-037 — listReviewSummaries joins tasks.name → taskName', () => {
+describeEachProvider('RFC-037 — listReviewSummaries joins tasks.name → taskName', (harness) => {
   test('summary row carries taskName equal to tasks.name', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedReview(db, 'PR-9999 doc review')
+    const db = harness.db
+    await seedReview(db, 'PR-9999 doc review')
     const summaries = await listReviewSummaries(db, { status: 'all', limit: 100 })
     expect(summaries.length).toBe(1)
     expect(summaries[0]?.taskName).toBe('PR-9999 doc review')
   })
 
   test('multiple tasks → each row has its own taskName', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedReview(db, 'task-A')
-    seedReview(db, 'task-B')
+    const db = harness.db
+    await seedReview(db, 'task-A')
+    await seedReview(db, 'task-B')
     const summaries = await listReviewSummaries(db, { status: 'all', limit: 100 })
     const names = summaries.map((s) => s.taskName).sort()
     expect(names).toEqual(['task-A', 'task-B'])

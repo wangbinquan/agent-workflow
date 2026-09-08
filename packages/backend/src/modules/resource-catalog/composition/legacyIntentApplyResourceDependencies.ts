@@ -87,10 +87,10 @@ const intentResourceDependencies = {
     const row = await loadLegacyMcpById(db, id)
     return row === null ? null : { ...row, ownerUserId: row.ownerUserId ?? null }
   },
-  commitMcpCreateInTx: (tx, prepared) =>
-    commitLegacyMcpCreateInTx(tx, prepared as LegacyPreparedMcpCreate),
-  commitMcpUpdateInTx: (tx, prepared) =>
-    commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
+  commitMcpCreateInTx: async (tx, prepared) =>
+    await commitLegacyMcpCreateInTx(tx, prepared as LegacyPreparedMcpCreate),
+  commitMcpUpdateInTx: async (tx, prepared) =>
+    await commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
   getPluginById: loadLegacyPluginRow,
   pluginOperationConfigHashOf: (row) => pluginConfigHash(pluginFromPersistenceRow(row)),
   commitPluginCreateInTx: async (tx, input): Promise<void> => {

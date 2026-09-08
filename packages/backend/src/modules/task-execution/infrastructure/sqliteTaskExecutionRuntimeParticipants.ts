@@ -41,7 +41,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
     readonly persistence: DynamicWorkflowPersistence
     readonly validationContext: DynamicWorkflowValidationContextSource
   }>
-  readonly identityAccess?: Readonly<{
+  readonly identityAccess: Readonly<{
     readonly delegatedRequests: DelegatedRequestAuthorityFactory
     readonly taskExecutionResources: TaskExecutionResourceBinding
   }>
@@ -77,7 +77,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
             ? {}
             : { dynamicWorkflow: input.dynamicWorkflow }),
           processConcurrencyScope: input.db,
-          ...(input.identityAccess === undefined ? {} : { identityAccess: input.identityAccess }),
+          identityAccess: input.identityAccess,
           ...(input.codeHostConnections === undefined
             ? {}
             : { codeHostConnections: input.codeHostConnections }),

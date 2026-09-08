@@ -11,16 +11,16 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { mcps } from '@/db/schema'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import {
   assertInitialResourceOwner,
   initialPrivateResourceAcl,
 } from '../application/resourceDefaults'
-import type { McpAgentReference, McpProjection } from '../application/mcps/ports'
+import type { McpAgentReference, McpCreateRecord, McpProjection } from '../application/mcps/ports'
 import type { McpCatalogResource } from '../public/types'
-import { transitionMcpRuntimeTestsInTx } from './legacy/mcpRuntimeTestTransitions'
+import { transitionMcpRuntimeTests } from './mcpRuntimeTestTransitions'
 
 export interface McpPersistenceRow {
   readonly id: string
@@ -132,24 +132,83 @@ export async function loadLegacyMcpById(db: DbClient, id: string): Promise<Mcp |
   return row === undefined ? null : mcpFromPersistenceRow(row)
 }
 
-export function commitLegacyMcpCreateInTx(tx: DbTxSync, prepared: LegacyPreparedMcpCreate): void {
-  tx.insert(mcps)
-    .values({
-      id: prepared.id,
-      name: prepared.input.name,
-      description: prepared.input.description,
-      type: prepared.input.type,
-      config: JSON.stringify(prepared.input.config),
-      enabled: prepared.input.enabled,
-      ...prepared.initialAcl,
-      createdAt: prepared.now,
-      updatedAt: prepared.now,
-    })
-    .run()
+export type McpInsertRecord = Omit<McpCreateRecord, 'ownerUserId'> & {
+  readonly ownerUserId: string | null
 }
 
-export function commitLegacyMcpUpdateInTx(tx: DbTxSync, prepared: LegacyPreparedMcpUpdate): void {
-  const row = tx.select().from(mcps).where(eq(mcps.id, prepared.id)).get()
+export type McpRowMatch =
+  | { readonly kind: 'id'; readonly id: string }
+  | { readonly kind: 'captured-row'; readonly row: typeof mcps.$inferSelect }
+
+export async function insertMcpRowInTx(
+  tx: DatabaseTransaction,
+  record: McpInsertRecord,
+): Promise<McpPersistenceRow[]> {
+  return await tx
+    .insert(mcps)
+    .values({
+      id: record.id,
+      name: record.input.name,
+      description: record.input.description,
+      type: record.input.type,
+      config: JSON.stringify(record.input.config),
+      enabled: record.input.enabled,
+      ownerUserId: record.ownerUserId,
+      visibility: record.visibility,
+      aclRevision: record.aclRevision,
+      schemaVersion: 1,
+      createdAt: record.now,
+      updatedAt: record.now,
+    })
+    .returning()
+}
+
+function fullMcpRowWhere(row: typeof mcps.$inferSelect) {
+  return and(
+    eq(mcps.id, row.id),
+    eq(mcps.name, row.name),
+    eq(mcps.description, row.description),
+    eq(mcps.type, row.type),
+    eq(mcps.config, row.config),
+    eq(mcps.enabled, row.enabled),
+    row.ownerUserId === null ? isNull(mcps.ownerUserId) : eq(mcps.ownerUserId, row.ownerUserId),
+    eq(mcps.visibility, row.visibility),
+    eq(mcps.aclRevision, row.aclRevision),
+    eq(mcps.schemaVersion, row.schemaVersion),
+    eq(mcps.createdAt, row.createdAt),
+    eq(mcps.updatedAt, row.updatedAt),
+  )
+}
+
+export async function updateMcpRowInTx(
+  tx: DatabaseTransaction,
+  match: McpRowMatch,
+  set: Partial<typeof mcps.$inferInsert>,
+): Promise<McpPersistenceRow[]> {
+  return await tx
+    .update(mcps)
+    .set(set)
+    .where(match.kind === 'id' ? eq(mcps.id, match.id) : fullMcpRowWhere(match.row))
+    .returning()
+}
+
+export async function commitLegacyMcpCreateInTx(
+  tx: DatabaseTransaction,
+  prepared: LegacyPreparedMcpCreate,
+): Promise<void> {
+  await insertMcpRowInTx(tx, {
+    id: prepared.id,
+    input: prepared.input,
+    ...prepared.initialAcl,
+    now: prepared.now,
+  })
+}
+
+export async function commitLegacyMcpUpdateInTx(
+  tx: DatabaseTransaction,
+  prepared: LegacyPreparedMcpUpdate,
+): Promise<void> {
+  const row = (await tx.select().from(mcps).where(eq(mcps.id, prepared.id)).limit(1))[0]
   if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
   if (
     prepared.expectedOwnerUserId !== undefined &&
@@ -169,8 +228,8 @@ export function commitLegacyMcpUpdateInTx(tx: DbTxSync, prepared: LegacyPrepared
       })
     }
   }
-  tx.update(mcps).set(prepared.set).where(eq(mcps.id, prepared.id)).run()
-  transitionMcpRuntimeTestsInTx(tx, {
+  await updateMcpRowInTx(tx, { kind: 'id', id: prepared.id }, prepared.set)
+  await transitionMcpRuntimeTests(tx, {
     mcpId: prepared.id,
     reason: (prepared.set.enabled ?? row.enabled) ? 'mcp-config-changed' : 'mcp-disabled',
     now: typeof prepared.set.updatedAt === 'number' ? prepared.set.updatedAt : Date.now(),

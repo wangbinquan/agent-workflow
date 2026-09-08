@@ -306,9 +306,9 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
     const original = await repository.create(record('existing-plugin', f.first))
     await expect(
       databaseSessionFor(harness.db).transaction(async (transaction) => {
-        const inTransaction = createPluginRepository({ db: transaction }).repository
-        await inTransaction.create(record('rolled-back-plugin', f.second))
-        const published = await inTransaction.publish({
+        // Re-entry is keyed by the root client; observe uncommitted rows through the handle.
+        await repository.create(record('rolled-back-plugin', f.second))
+        const published = await repository.publish({
           id: original.id,
           expectedConfigHash: pluginConfigHash(original),
           set: {
@@ -324,7 +324,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
           },
         })
         expect(published).toMatchObject({ cachedPath: f.second, updatedAt: T0 + 3 })
-        expect(await inTransaction.list()).toHaveLength(2)
+        expect(await transaction.select().from(plugins)).toHaveLength(2)
         throw new Error('abort after plugin writes')
       }),
     ).rejects.toThrow('abort after plugin writes')

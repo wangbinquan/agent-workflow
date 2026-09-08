@@ -1,18 +1,16 @@
 // RFC-041 — task feedback service + clarify/review enqueue hooks.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { memoryDistillJobs, taskFeedback, tasks, workflows } from '../src/db/schema'
 import { TaskFeedbackService } from '../src/modules/collaboration/application/taskFeedback'
 import { DrizzleTaskFeedbackStore } from '../src/modules/collaboration/infrastructure/taskFeedbackStore'
 import type { ReviewActor } from '../src/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '../src/modules/memory/public/participants'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const ACTOR: ReviewActor = {
   user: { id: 'u1', username: 'u1', displayName: 'U1', role: 'admin', status: 'active' },
@@ -20,9 +18,10 @@ const ACTOR: ReviewActor = {
   permissions: new Set(),
 }
 
-function seedTask(db: DbClient): string {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -33,7 +32,8 @@ function seedTask(db: DbClient): string {
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: taskId,
       name: 'fixture-task',
@@ -52,7 +52,7 @@ function seedTask(db: DbClient): string {
   return taskId
 }
 
-function createTestDistillEnqueuer(db: DbClient): MemoryDistillEnqueuer {
+function createTestDistillEnqueuer(db: ProviderNeutralDatabase): MemoryDistillEnqueuer {
   return {
     async enqueue(input) {
       const jobId = ulid()
@@ -77,11 +77,11 @@ function createTestDistillEnqueuer(db: DbClient): MemoryDistillEnqueuer {
   }
 }
 
-describe('createTaskFeedback', () => {
-  let db: DbClient
+describeEachProvider('createTaskFeedback', (harness) => {
+  let db: ProviderNeutralDatabase
   let service: TaskFeedbackService
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     service = new TaskFeedbackService(new DrizzleTaskFeedbackStore(db), {
       canManageReviewers: () => true,
       resolveRelationship: async () => ({
@@ -95,7 +95,7 @@ describe('createTaskFeedback', () => {
   })
 
   test('inserts the feedback row + enqueues a distill job + back-links job id', async () => {
-    const taskId = seedTask(db)
+    const taskId = await seedTask(db)
     const r = await service.create(
       {
         actor: ACTOR,
@@ -110,20 +110,22 @@ describe('createTaskFeedback', () => {
     expect(r.feedback.distillJobId).toBe(r.distillJobId)
 
     // Distill job row created
-    const jobs = db.select().from(memoryDistillJobs).all()
+    const jobs = await db.select().from(memoryDistillJobs).all()
     expect(jobs.length).toBe(1)
     expect(jobs[0]!.sourceKind).toBe('feedback')
     expect(jobs[0]!.sourceEventId).toBe(r.feedback.id)
     expect(jobs[0]!.debounceKey).toBe(`${taskId}:feedback`)
 
     // Feedback row updated with distill_job_id
-    const fb = db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)).all()[0]!
+    const fb = (
+      await db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)).all()
+    )[0]!
     expect(fb.distillJobId).toBe(r.distillJobId)
     expect(fb.distilled).toBe(1)
   })
 
   test('listTaskFeedback returns asc by createdAt', async () => {
-    const taskId = seedTask(db)
+    const taskId = await seedTask(db)
     await service.create({ actor: ACTOR, taskId, bodyMd: 'first' }, createTestDistillEnqueuer(db))
     await new Promise((r) => setTimeout(r, 5))
     await service.create({ actor: ACTOR, taskId, bodyMd: 'second' }, createTestDistillEnqueuer(db))

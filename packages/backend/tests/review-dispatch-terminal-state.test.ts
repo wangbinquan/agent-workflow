@@ -11,14 +11,13 @@
 //
 // Locks the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   agents as agentsTable,
   docVersions,
@@ -30,10 +29,10 @@ import {
 import { dispatchReviewNode } from '../src/services/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
-describe('dispatchReviewNode terminal-state short-circuit (RFC-052)', () => {
-  let db: DbClient
+describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let worktree: string
 
@@ -43,7 +42,7 @@ describe('dispatchReviewNode terminal-state short-circuit (RFC-052)', () => {
     worktree = join(tmp, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   afterEach(() => {

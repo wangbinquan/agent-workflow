@@ -17,13 +17,11 @@
 // state changes, ERROR every tick since May).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   logAlertSummary,
@@ -34,7 +32,9 @@ import {
 } from '../src/services/lifecycleInvariants'
 import { configureLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 import { createLogger } from '../src/util/log'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const GRACE_MS = 24 * 3_600_000
 
@@ -216,8 +216,6 @@ describe('logAlertSummary — stateChanged suppression', () => {
 // Part B — end-to-end log tiering through a real promote scan
 // ---------------------------------------------------------------------------
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Captured {
   level: string
   service: string
@@ -241,7 +239,10 @@ function parse(captured: string): Captured[] {
     })
 }
 
-async function seedOffendingTask(db: DbClient, status: 'done' | 'awaiting_human'): Promise<string> {
+async function seedOffendingTask(
+  db: ProviderNeutralDatabase,
+  status: 'done' | 'awaiting_human',
+): Promise<string> {
   // done + an output node with no done run → T3 (terminal).
   // awaiting_human + a run that is NOT awaiting_human → T2 (live/parked).
   const node: WorkflowNode =
@@ -280,7 +281,7 @@ async function seedOffendingTask(db: DbClient, status: 'done' | 'awaiting_human'
   return taskId
 }
 
-describe('lifecycle invariants boot log — tiering by task terminality', () => {
+describeEachProvider('lifecycle invariants boot log — tiering by task terminality', (harness) => {
   let captured: string
 
   beforeEach(() => {
@@ -295,22 +296,22 @@ describe('lifecycle invariants boot log — tiering by task terminality', () => 
 
   // Detect at t0 (severity=warning), rescan past the 24h grace so the finding
   // promotes to error — the state that made the real daemon log ERROR.
-  async function detectThenPromote(db: DbClient, taskId: string): Promise<void> {
+  async function detectThenPromote(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
     await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       scope: { taskId },
       now: () => 0,
     })
     captured = '' // ignore the first (warning) scan; assert on the promoting scan only
     await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       scope: { taskId },
       now: () => GRACE_MS + 1,
     })
   }
 
   test('error finding on a terminal (done) task → WARN, not ERROR', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedOffendingTask(db, 'done')
     await detectThenPromote(db, taskId)
 
@@ -323,7 +324,7 @@ describe('lifecycle invariants boot log — tiering by task terminality', () => 
   })
 
   test('error finding on a live (awaiting_human) task → ERROR with liveErrorCount', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedOffendingTask(db, 'awaiting_human')
     await detectThenPromote(db, taskId)
 
@@ -336,24 +337,24 @@ describe('lifecycle invariants boot log — tiering by task terminality', () => 
   })
 
   test('third scan with no state change → no aggregate ERROR/WARN (suppressed)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedOffendingTask(db, 'awaiting_human')
     // Scan 1: detect (newAlerts=1 → stateChanged=true → logs)
     await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       scope: { taskId },
       now: () => 0,
     })
     // Scan 2: promote (promotedAlerts=1 → stateChanged=true → logs ERROR)
     await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       scope: { taskId },
       now: () => GRACE_MS + 1,
     })
     captured = ''
     // Scan 3: nothing changed (newAlerts=0, promotedAlerts=0, resolvedAlerts=0)
     await runLifecycleInvariants({
-      operations: taskRecoveryOperations(db),
+      operations: createTaskExecutionPersistence(db).recoveryAdministration,
       scope: { taskId },
       now: () => GRACE_MS + 2,
     })

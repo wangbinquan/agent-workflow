@@ -11,19 +11,19 @@
 //      rebuildable from the DB after a restart.
 //   4. Abort rejects a queued waiter and deregisters it.
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 import { tasks, workflows } from '../src/db/schema'
 import { ChildTaskBudget } from '../src/services/execution/childBudget'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function budgetOf(db: DbClient, cap: number): ChildTaskBudget {
+function budgetOf(db: ProviderNeutralDatabase, cap: number): ChildTaskBudget {
   return new ChildTaskBudget(db, () => cap)
 }
 
-const stubDb = null as unknown as DbClient // rebuildFromDb not used in pure tests
+const stubDb = null as unknown as ProviderNeutralDatabase // rebuildFromDb not used in pure tests
 
 describe('RFC-243 §3.2 — grant rules', () => {
   test('under capacity grants immediately and bind converts hold → counted', async () => {
@@ -109,9 +109,9 @@ describe('RFC-243 §3.2 — grant rules', () => {
   })
 })
 
-describe('RFC-243 §3.2 — DB rebuild', () => {
+describeEachProvider('RFC-243 §3.2 — DB rebuild', (harness) => {
   test('rebuildFromDb seeds counted from pending/running child rows only', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const wfId = ulid()
     await db.insert(workflows).values({ id: wfId, name: 'wf-budget', definition: '{}' })
     const base = {

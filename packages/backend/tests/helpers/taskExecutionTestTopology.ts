@@ -48,7 +48,7 @@ export function createTestRepositoryPublicationTransport(runNetwork: typeof runG
   })
 }
 
-function createTaskExecutionTestIdentity(db: DbClient) {
+export function createTaskExecutionTestIdentity(db: DbClient) {
   const identityAccess = createIdentityAccessRuntime({ db })
   return Object.freeze({
     identityAccess,

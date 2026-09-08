@@ -7,21 +7,21 @@
 //        getReviewDetail renders" holds, which is what reviewNavKind !== null
 //        promises the canvas.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getReviewDetail } from '../src/services/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -32,7 +32,8 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: taskId,
       name: 't',
@@ -51,9 +52,10 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
   return { taskId }
 }
 
-function seedReviewRun(db: DbClient, taskId: string): string {
+async function seedReviewRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id,
       taskId,
@@ -69,14 +71,15 @@ function seedReviewRun(db: DbClient, taskId: string): string {
   return id
 }
 
-function seedDocVersion(
-  db: DbClient,
+async function seedDocVersion(
+  db: ProviderNeutralDatabase,
   taskId: string,
   reviewNodeRunId: string,
   opts: { versionIndex: number; createdAt: number; decision?: 'pending' | 'approved' },
-): { bodyPath: string } {
+): Promise<{ bodyPath: string }> {
   const bodyPath = `reviews/rev/docpath/${reviewNodeRunId}-v${opts.versionIndex}.md`
-  db.insert(docVersions)
+  await db
+    .insert(docVersions)
     .values({
       id: ulid(),
       taskId,
@@ -101,54 +104,61 @@ function writeBody(appHome: string, bodyPath: string, text: string): void {
   writeFileSync(abs, text)
 }
 
-describe('RFC-158 — getReviewDetail renders whenever a doc_version exists', () => {
-  let db: DbClient
-  let appHome: string
-  beforeEach(() => {
-    resetBroadcastersForTests()
-    db = createInMemoryDb(MIGRATIONS)
-    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc158-detail-'))
-  })
-  afterEach(() => {
-    resetBroadcastersForTests()
-    rmSync(appHome, { recursive: true, force: true })
-  })
-
-  test('R2b: a review whose versions fall outside the global newest-500 window still renders', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    // The target review — its single OLD doc_version (createdAt far in the past).
-    const targetRun = seedReviewRun(db, taskId)
-    const { bodyPath } = seedDocVersion(db, taskId, targetRun, {
-      versionIndex: 1,
-      createdAt: 1_000,
-      decision: 'pending',
+describeEachProvider(
+  'RFC-158 — getReviewDetail renders whenever a doc_version exists',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    let appHome: string
+    beforeEach(() => {
+      resetBroadcastersForTests()
+      db = harness.db
+      appHome = mkdtempSync(join(tmpdir(), 'aw-rfc158-detail-'))
     })
-    writeBody(appHome, bodyPath, '# target body')
+    afterEach(() => {
+      resetBroadcastersForTests()
+      rmSync(appHome, { recursive: true, force: true })
+    })
 
-    // 600 NEWER doc_versions on other runs — pushing the target out of the
-    // global `ORDER BY created_at DESC LIMIT 500` window listReviewSummaries used.
-    for (let i = 0; i < 600; i++) {
-      const otherRun = seedReviewRun(db, taskId)
-      seedDocVersion(db, taskId, otherRun, {
+    test('R2b: a review whose versions fall outside the global newest-500 window still renders', async () => {
+      const { taskId } = await seedTaskAndWorkflow(db)
+      // The target review — its single OLD doc_version (createdAt far in the past).
+      const targetRun = await seedReviewRun(db, taskId)
+      const { bodyPath } = await seedDocVersion(db, taskId, targetRun, {
         versionIndex: 1,
-        createdAt: 2_000_000 + i, // all newer than the target's 1_000
+        createdAt: 1_000,
+        decision: 'pending',
       })
-    }
+      writeBody(appHome, bodyPath, '# target body')
 
-    const detail = await getReviewDetail(db, appHome, targetRun)
-    expect(detail.summary.nodeRunId).toBe(targetRun)
-    expect(detail.currentVersion.versionIndex).toBe(1)
-    expect(detail.currentBody).toBe('# target body')
-  })
+      // 600 NEWER doc_versions on other runs — pushing the target out of the
+      // global `ORDER BY created_at DESC LIMIT 500` window listReviewSummaries used.
+      for (let i = 0; i < 600; i++) {
+        const otherRun = await seedReviewRun(db, taskId)
+        await seedDocVersion(db, taskId, otherRun, {
+          versionIndex: 1,
+          createdAt: 2_000_000 + i, // all newer than the target's 1_000
+        })
+      }
 
-  test('R6: single-doc review with a MISSING body file renders body="" (no doc-version-body-missing throw)', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const run = seedReviewRun(db, taskId)
-    // Row exists but we deliberately DO NOT write the body file to appHome.
-    seedDocVersion(db, taskId, run, { versionIndex: 1, createdAt: 5_000, decision: 'pending' })
+      const detail = await getReviewDetail(db, appHome, targetRun)
+      expect(detail.summary.nodeRunId).toBe(targetRun)
+      expect(detail.currentVersion.versionIndex).toBe(1)
+      expect(detail.currentBody).toBe('# target body')
+    })
 
-    const detail = await getReviewDetail(db, appHome, run)
-    expect(detail.summary.nodeRunId).toBe(run)
-    expect(detail.currentBody).toBe('')
-  })
-})
+    test('R6: single-doc review with a MISSING body file renders body="" (no doc-version-body-missing throw)', async () => {
+      const { taskId } = await seedTaskAndWorkflow(db)
+      const run = await seedReviewRun(db, taskId)
+      // Row exists but we deliberately DO NOT write the body file to appHome.
+      await seedDocVersion(db, taskId, run, {
+        versionIndex: 1,
+        createdAt: 5_000,
+        decision: 'pending',
+      })
+
+      const detail = await getReviewDetail(db, appHome, run)
+      expect(detail.summary.nodeRunId).toBe(run)
+      expect(detail.currentBody).toBe('')
+    })
+  },
+)

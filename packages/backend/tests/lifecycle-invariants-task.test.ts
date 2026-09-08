@@ -6,21 +6,19 @@
 //   U1  per (task, nodeId, reviewIter, clarifyIter, shardKey) ≤ 1 row in
 //       {awaiting_review, awaiting_human}
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 type TaskStatus =
   | 'pending'
@@ -33,15 +31,19 @@ type TaskStatus =
   | 'interrupted'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   cleanup: () => void
 }
 
-async function buildHarness(taskStatus: TaskStatus, nodes: WorkflowNode[]): Promise<Harness> {
+async function buildHarness(
+  db: ProviderNeutralDatabase,
+  taskStatus: TaskStatus,
+  nodes: WorkflowNode[],
+): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-prd-task-'))
   mkdirSync(tmp, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [] }
   const workflowId = ulid()
   await db.insert(workflows).values({ id: workflowId, name: 'w', definition: JSON.stringify(def) })
@@ -63,7 +65,7 @@ async function buildHarness(taskStatus: TaskStatus, nodes: WorkflowNode[]): Prom
 }
 
 async function insertRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     nodeId: string
@@ -90,127 +92,146 @@ async function insertRun(
   return id
 }
 
-describe('RFC-053 PR-D — T1 (task awaiting_review ⟹ ∃ awaiting_review run)', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+describeEachProvider(
+  'RFC-053 PR-D — T1 (task awaiting_review ⟹ ∃ awaiting_review run)',
+  (harness) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('satisfied: task awaiting_review + one awaiting_review run → no T1 alert', async () => {
-    h = await buildHarness('awaiting_review', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
-    await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('satisfied: task awaiting_review + one awaiting_review run → no T1 alert', async () => {
+      h = await buildHarness(harness.db, 'awaiting_review', [
+        { id: 'rev_1', kind: 'review' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'T1')).toHaveLength(0)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'T1')).toHaveLength(0)
-  })
 
-  test('violated: task awaiting_review + no awaiting_review run → T1 alert', async () => {
-    h = await buildHarness('awaiting_review', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
-    await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('violated: task awaiting_review + no awaiting_review run → T1 alert', async () => {
+      h = await buildHarness(harness.db, 'awaiting_review', [
+        { id: 'rev_1', kind: 'review' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      const t1 = result.openAlerts.filter((a) => a.rule === 'T1')
+      expect(t1).toHaveLength(1)
+      expect(t1[0]!.detail).toMatchObject({ rule: 'T1', taskId: h.taskId })
     })
-    const t1 = result.openAlerts.filter((a) => a.rule === 'T1')
-    expect(t1).toHaveLength(1)
-    expect(t1[0]!.detail).toMatchObject({ rule: 'T1', taskId: h.taskId })
-  })
-})
+  },
+)
 
-describe('RFC-053 PR-D — T2 (task awaiting_human ⟹ ∃ awaiting_human run)', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+describeEachProvider(
+  'RFC-053 PR-D — T2 (task awaiting_human ⟹ ∃ awaiting_human run)',
+  (harness) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('satisfied: task awaiting_human + clarify run awaiting_human → no T2 alert', async () => {
-    h = await buildHarness('awaiting_human', [{ id: 'clr', kind: 'clarify' } as WorkflowNode])
-    await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('satisfied: task awaiting_human + clarify run awaiting_human → no T2 alert', async () => {
+      h = await buildHarness(harness.db, 'awaiting_human', [
+        { id: 'clr', kind: 'clarify' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(0)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(0)
-  })
 
-  test('violated: task awaiting_human + no awaiting_human run → T2 alert', async () => {
-    h = await buildHarness('awaiting_human', [{ id: 'clr', kind: 'clarify' } as WorkflowNode])
-    await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'running' })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('violated: task awaiting_human + no awaiting_human run → T2 alert', async () => {
+      h = await buildHarness(harness.db, 'awaiting_human', [
+        { id: 'clr', kind: 'clarify' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'running' })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(1)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(1)
-  })
-})
+  },
+)
 
-describe('RFC-053 PR-D — T3 (task done ⟹ every output node has done run)', () => {
-  let h: Harness
-  afterEach(() => h?.cleanup())
+describeEachProvider(
+  'RFC-053 PR-D — T3 (task done ⟹ every output node has done run)',
+  (harness) => {
+    let h: Harness
+    afterEach(() => h?.cleanup())
 
-  test('satisfied: task done + all output runs done → no T3 alert', async () => {
-    h = await buildHarness('done', [
-      { id: 'out_a', kind: 'output' } as WorkflowNode,
-      { id: 'out_b', kind: 'output' } as WorkflowNode,
-    ])
-    await insertRun(h.db, h.taskId, { nodeId: 'out_a', status: 'done', finishedAt: Date.now() })
-    await insertRun(h.db, h.taskId, { nodeId: 'out_b', status: 'done', finishedAt: Date.now() })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('satisfied: task done + all output runs done → no T3 alert', async () => {
+      h = await buildHarness(harness.db, 'done', [
+        { id: 'out_a', kind: 'output' } as WorkflowNode,
+        { id: 'out_b', kind: 'output' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'out_a', status: 'done', finishedAt: Date.now() })
+      await insertRun(h.db, h.taskId, { nodeId: 'out_b', status: 'done', finishedAt: Date.now() })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
-  })
 
-  test('violated: task done but one output run still pending → T3 alert', async () => {
-    h = await buildHarness('done', [
-      { id: 'out_a', kind: 'output' } as WorkflowNode,
-      { id: 'out_b', kind: 'output' } as WorkflowNode,
-    ])
-    await insertRun(h.db, h.taskId, { nodeId: 'out_a', status: 'done', finishedAt: Date.now() })
-    await insertRun(h.db, h.taskId, { nodeId: 'out_b', status: 'pending' })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('violated: task done but one output run still pending → T3 alert', async () => {
+      h = await buildHarness(harness.db, 'done', [
+        { id: 'out_a', kind: 'output' } as WorkflowNode,
+        { id: 'out_b', kind: 'output' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'out_a', status: 'done', finishedAt: Date.now() })
+      await insertRun(h.db, h.taskId, { nodeId: 'out_b', status: 'pending' })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      const t3 = result.openAlerts.filter((a) => a.rule === 'T3')
+      expect(t3).toHaveLength(1)
+      expect((t3[0]!.detail as { missingOutputNodeIds: string[] }).missingOutputNodeIds).toEqual([
+        'out_b',
+      ])
     })
-    const t3 = result.openAlerts.filter((a) => a.rule === 'T3')
-    expect(t3).toHaveLength(1)
-    expect((t3[0]!.detail as { missingOutputNodeIds: string[] }).missingOutputNodeIds).toEqual([
-      'out_b',
-    ])
-  })
 
-  test('vacuous: task done + no output nodes in workflow → no T3 alert', async () => {
-    h = await buildHarness('done', [
-      { id: 'a', kind: 'agent-single', agentName: 'a', promptTemplate: '' } as WorkflowNode,
-    ])
-    await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'done', finishedAt: Date.now() })
-    const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
-      scope: { taskId: h.taskId },
+    test('vacuous: task done + no output nodes in workflow → no T3 alert', async () => {
+      h = await buildHarness(harness.db, 'done', [
+        { id: 'a', kind: 'agent-single', agentName: 'a', promptTemplate: '' } as WorkflowNode,
+      ])
+      await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'done', finishedAt: Date.now() })
+      const result = await runLifecycleInvariants({
+        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        scope: { taskId: h.taskId },
+      })
+      expect(result.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
     })
-    expect(result.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
-  })
-})
+  },
+)
 
-describe('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,shard))', () => {
+describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,shard))', (harness) => {
   let h: Harness
   afterEach(() => h?.cleanup())
 
   test('satisfied: one awaiting_review run on a node → no U1 alert', async () => {
-    h = await buildHarness('running', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
+    h = await buildHarness(harness.db, 'running', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
     await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.openAlerts.filter((a) => a.rule === 'U1')).toHaveLength(0)
   })
 
   test('violated: two awaiting_review runs same (node,iter) → U1 alert', async () => {
-    h = await buildHarness('awaiting_review', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
+    h = await buildHarness(harness.db, 'awaiting_review', [
+      { id: 'rev_1', kind: 'review' } as WorkflowNode,
+    ])
     const a = await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
     const b = await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     const u1 = result.openAlerts.filter((a) => a.rule === 'U1')
@@ -220,7 +241,9 @@ describe('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,shard))', ()
   })
 
   test('iteration disambiguates: two runs different reviewIteration → no U1 alert', async () => {
-    h = await buildHarness('awaiting_review', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
+    h = await buildHarness(harness.db, 'awaiting_review', [
+      { id: 'rev_1', kind: 'review' } as WorkflowNode,
+    ])
     await insertRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'awaiting_review',
@@ -232,14 +255,16 @@ describe('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,shard))', ()
       reviewIteration: 1,
     })
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.openAlerts.filter((a) => a.rule === 'U1')).toHaveLength(0)
   })
 
   test('shardKey disambiguates: two runs different shardKey → no U1 alert', async () => {
-    h = await buildHarness('awaiting_review', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
+    h = await buildHarness(harness.db, 'awaiting_review', [
+      { id: 'rev_1', kind: 'review' } as WorkflowNode,
+    ])
     await insertRun(h.db, h.taskId, {
       nodeId: 'rev_1',
       status: 'awaiting_review',
@@ -251,31 +276,33 @@ describe('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,shard))', ()
       shardKey: 'b.md',
     })
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.openAlerts.filter((a) => a.rule === 'U1')).toHaveLength(0)
   })
 })
 
-describe('RFC-053 PR-D — scope selectors', () => {
+describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
   let h: Harness
   afterEach(() => h?.cleanup())
 
   test('{ taskId } scopes to a single task', async () => {
-    h = await buildHarness('awaiting_review', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
+    h = await buildHarness(harness.db, 'awaiting_review', [
+      { id: 'rev_1', kind: 'review' } as WorkflowNode,
+    ])
     await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.scanned).toBe(1)
   })
 
   test('{ taskId } unknown id → scanned=0, no alerts', async () => {
-    h = await buildHarness('running', [])
+    h = await buildHarness(harness.db, 'running', [])
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { taskId: 'nonexistent' },
     })
     expect(result.scanned).toBe(0)
@@ -283,9 +310,9 @@ describe('RFC-053 PR-D — scope selectors', () => {
   })
 
   test('{ all: true } scans every non-deleted task', async () => {
-    h = await buildHarness('running', [])
+    h = await buildHarness(harness.db, 'running', [])
     const result = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(h.db),
+      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       scope: { all: true },
     })
     expect(result.scanned).toBe(1)

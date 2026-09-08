@@ -364,8 +364,8 @@ export interface LegacyResourcePackageMutationDependencies {
     db: DbClient,
     id: string,
   ) => Promise<{ readonly type: 'local' | 'remote'; readonly updatedAt: number } | null>
-  readonly commitMcpCreateInTx: (tx: DbTxSync, prepared: unknown) => void
-  readonly commitMcpUpdateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly commitMcpCreateInTx: (tx: DatabaseTransaction, prepared: unknown) => Promise<void>
+  readonly commitMcpUpdateInTx: (tx: DatabaseTransaction, prepared: unknown) => Promise<void>
   readonly commitPluginCreateInTx: (
     tx: DatabaseTransaction,
     input: {
@@ -917,10 +917,10 @@ export function createLegacyResourcePackageMutationAdapter(
             dependencies.commitAgentUpdateInTx(syncTx, prepared.prepared)
             return
           case 'mcp-create':
-            dependencies.commitMcpCreateInTx(syncTx, prepared.prepared)
+            await dependencies.commitMcpCreateInTx(tx, prepared.prepared)
             return
           case 'mcp-update':
-            dependencies.commitMcpUpdateInTx(syncTx, prepared.prepared)
+            await dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
             return
           case 'plugin-create': {
             const install = pluginInstalls.get(prepared.op.opId)

@@ -10,16 +10,15 @@
 // Each block focuses on one paragraph of the design.md §失败模式 + 边界
 // so a regression there fails a specifically-named test.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { docVersions, lifecycleAlerts, nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   reconcileLifecycleAlerts,
@@ -27,22 +26,25 @@ import {
   STUCK_RULES,
   type LifecycleAlertRow,
 } from '../src/services/lifecycleInvariants'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_MS = 60_000
 const HOUR_MS = 60 * MIN_MS
 const T0 = Date.UTC(2026, 0, 1, 12, 0, 0)
 
-async function freshDb(): Promise<{ db: DbClient; cleanup: () => void }> {
+async function freshDb(
+  db: ProviderNeutralDatabase,
+): Promise<{ db: ProviderNeutralDatabase; cleanup: () => void }> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-edge-'))
   mkdirSync(tmp, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+
   return { db, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
 }
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: {
     status: 'pending' | 'running' | 'awaiting_review' | 'done' | 'failed'
     startedAt: number
@@ -82,12 +84,12 @@ const REVIEW_ONLY_JSON = JSON.stringify(REVIEW_ONLY_DEF)
 // { since } scope
 // ---------------------------------------------------------------------------
 
-describe('RFC-053 — `{ since }` scope filter', () => {
+describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
   let cleanup: () => void
   afterEach(() => cleanup?.())
 
   test('startedAt > since → scanned', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'running',
@@ -95,7 +97,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -104,7 +106,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
   })
 
   test('finishedAt > since → scanned even if startedAt < since', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     await seedTask(env.db, {
       status: 'failed',
@@ -113,7 +115,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -121,7 +123,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
   })
 
   test('still-active task (finishedAt IS NULL) → always scanned by since', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     await seedTask(env.db, {
       status: 'running',
@@ -130,7 +132,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -138,7 +140,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
   })
 
   test('startedAt < since AND finishedAt < since → NOT scanned', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     await seedTask(env.db, {
       status: 'failed',
@@ -147,7 +149,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -159,12 +161,12 @@ describe('RFC-053 — `{ since }` scope filter', () => {
 // snapshot corrupt
 // ---------------------------------------------------------------------------
 
-describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
+describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully', (harness) => {
   let cleanup: () => void
   afterEach(() => cleanup?.())
 
   test('invalid JSON snapshot → R2/T3 silently skip, T1 still works', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     // Plant a review node_run that would trigger R2 if the workflow were
     // parseable (status=done, no approved dv).
@@ -186,7 +188,7 @@ describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
     })
 
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -198,7 +200,7 @@ describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
   })
 
   test('snapshot is JSON but `nodes` is not an array → degrade like corrupt', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'running',
@@ -206,7 +208,7 @@ describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
       snapshotJson: JSON.stringify({ $schema_version: 2, nodes: 'oops', edges: [] }),
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -219,12 +221,12 @@ describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
 // 24h grace boundary
 // ---------------------------------------------------------------------------
 
-describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
+describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error)', (harness) => {
   let cleanup: () => void
   afterEach(() => cleanup?.())
 
   test('exactly 24h elapsed → promote (>= boundary, design rule)', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     // Seed an open warning row with detectedAt exactly 24h ago.
     const taskId = await seedTask(env.db, {
@@ -242,7 +244,7 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
       resolvedAt: null,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -252,7 +254,7 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
   })
 
   test('just under 24h (detectedAt = now - 24h + 1ms) → stays warning', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'awaiting_review',
@@ -269,7 +271,7 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
       resolvedAt: null,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -278,7 +280,7 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
   })
 
   test('after promotion, severity stays error on subsequent scans (no demotion)', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'awaiting_review',
@@ -295,7 +297,7 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
       resolvedAt: null,
     })
     const r = await runLifecycleInvariants({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -309,12 +311,12 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
 // onAlert callback throw
 // ---------------------------------------------------------------------------
 
-describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
+describeEachProvider('RFC-053 — onAlert callback throw does not break reconcile', (harness) => {
   let cleanup: () => void
   afterEach(() => cleanup?.())
 
   test('callback throws on first finding → second finding still upserted, both rows persisted', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     // Two tasks each producing one R1 finding; the first callback throws.
     // Documented invariant: the throw escapes reconcile (we did NOT add a
@@ -361,7 +363,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     let calls = 0
     try {
       await runLifecycleInvariants({
-        operations: taskRecoveryOperations(env.db),
+        operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
         scope: { taskId: t1 },
         now: () => T0 + MIN_MS,
         onAlert: () => {
@@ -380,7 +382,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
   })
 
   test('reconcile.onAlert called once per finding (no double-invoke)', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'running',
@@ -389,7 +391,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     })
     const calls: Array<{ rule: string; transition: 'new' | 'promoted' }> = []
     await reconcileLifecycleAlerts({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       taskIds: [taskId],
       findings: [
         { taskId, rule: 'S1', detail: { rule: 'S1' } },
@@ -404,7 +406,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
   })
 
   test('reconcile.onResolved fires once per task when multiple open alerts close', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'running',
@@ -412,7 +414,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     await reconcileLifecycleAlerts({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       taskIds: [taskId],
       findings: [
         { taskId, rule: 'S1', detail: { rule: 'S1' } },
@@ -423,7 +425,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     })
     const resolved: string[] = []
     const result = await reconcileLifecycleAlerts({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       taskIds: [taskId],
       findings: [],
       now: T0 + MIN_MS,
@@ -440,12 +442,12 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
 // detail JSON with special characters
 // ---------------------------------------------------------------------------
 
-describe('RFC-053 — detail JSON round-trip with special characters', () => {
+describeEachProvider('RFC-053 — detail JSON round-trip with special characters', (harness) => {
   let cleanup: () => void
   afterEach(() => cleanup?.())
 
   test('unicode + emoji + script tag + control chars survive insert/read round-trip', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'running',
@@ -463,7 +465,7 @@ describe('RFC-053 — detail JSON round-trip with special characters', () => {
       quote: 'he said "hi"',
     }
     await reconcileLifecycleAlerts({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       taskIds: [taskId],
       findings: [{ taskId, rule: 'S4', detail: exotic }],
       now: T0,
@@ -477,7 +479,7 @@ describe('RFC-053 — detail JSON round-trip with special characters', () => {
   })
 
   test('arbitrarily deep nested detail object survives round-trip', async () => {
-    const env = await freshDb()
+    const env = await freshDb(harness.db)
     cleanup = env.cleanup
     const taskId = await seedTask(env.db, {
       status: 'running',
@@ -490,7 +492,7 @@ describe('RFC-053 — detail JSON round-trip with special characters', () => {
       deep = { rule: 'S4', nested: deep, depth: i }
     }
     await reconcileLifecycleAlerts({
-      operations: taskRecoveryOperations(env.db),
+      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
       taskIds: [taskId],
       findings: [{ taskId, rule: 'S4', detail: deep as unknown as Record<string, unknown> }],
       now: T0,

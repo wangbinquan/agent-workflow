@@ -1,19 +1,17 @@
 // RFC-303 durable worker locks: the first cancellation receipt remains the
 // audit truth across the fixed-point sweep, and unreaped ownership is never
 // reported as succeeded.
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { webhookMrControlEffects, webhookMrControlTargets } from '@/db/schema'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
 import { createMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 function guards(): MrLaunchGuardCoordinator {
   return {
@@ -24,8 +22,7 @@ function guards(): MrLaunchGuardCoordinator {
   } as unknown as MrLaunchGuardCoordinator
 }
 
-async function fixture(participant: TaskSourceTerminationParticipant) {
-  const db = createInMemoryDb(MIGRATIONS)
+async function fixture(db: ProviderNeutralDatabase, participant: TaskSourceTerminationParticipant) {
   const now = Date.now()
   await db.insert(webhookMrControlEffects).values({
     id: 'effect-1',
@@ -52,10 +49,10 @@ async function fixture(participant: TaskSourceTerminationParticipant) {
   return db
 }
 
-describe('RFC-303 terminal control worker', () => {
+describeEachProvider('RFC-303 terminal control worker', (harness) => {
   test('fixed-point observation cannot rewrite canceled into already-terminal', async () => {
     let calls = 0
-    const db = await fixture({
+    const db = await fixture(harness.db, {
       async apply() {
         calls += 1
         return [
@@ -95,7 +92,7 @@ describe('RFC-303 terminal control worker', () => {
   })
 
   test('unreaped driver remains retryable with an honest error', async () => {
-    const db = await fixture({
+    const db = await fixture(harness.db, {
       async apply() {
         return [
           {
@@ -120,7 +117,7 @@ describe('RFC-303 terminal control worker', () => {
   })
 
   test('shutdown aborts launch owners and waits for the active effect attempt to settle', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now = Date.now()
     await db.insert(webhookMrControlEffects).values({
       id: 'effect-stop',

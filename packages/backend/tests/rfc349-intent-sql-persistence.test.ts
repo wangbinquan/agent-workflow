@@ -5,9 +5,7 @@
 // rejects and PostgreSQL does not accept either.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { join } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { users } from '@/db/schema'
 import type {
@@ -22,8 +20,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const SESSION: IntentSessionRecord = {
   id: 'intent-session-sql-rendering',
@@ -157,24 +154,25 @@ afterEach(() => {
 })
 
 describe('RFC-349 Intent SQL persistence identifier rendering', () => {
-  test('SQLite createSession writes and reads the shared persistence records', async () => {
-    selectDatabaseSchemaProvider('sqlite')
-    const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(users).values({
-      id: SESSION.ownerUserId,
-      username: 'intent-sql-owner',
-      displayName: 'Intent SQL Owner',
-      role: 'user',
-      status: 'active',
-      createdAt: 1,
-      updatedAt: 1,
+  describeEachProvider('shared persistence records', (harness) => {
+    test('SQLite createSession writes and reads the shared persistence records', async () => {
+      const db = harness.db
+      await db.insert(users).values({
+        id: SESSION.ownerUserId,
+        username: 'intent-sql-owner',
+        displayName: 'Intent SQL Owner',
+        role: 'user',
+        status: 'active',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      const persistence = createIntentPersistence(db)
+
+      await persistence.createSession({ session: SESSION, userTurn: USER_TURN })
+
+      await expect(persistence.findSession(SESSION.id)).resolves.toEqual(SESSION)
+      await expect(persistence.listTurns(SESSION.id)).resolves.toEqual([USER_TURN])
     })
-    const persistence = createIntentPersistence(db)
-
-    await persistence.createSession({ session: SESSION, userTurn: USER_TURN })
-
-    await expect(persistence.findSession(SESSION.id)).resolves.toEqual(SESSION)
-    await expect(persistence.listTurns(SESSION.id)).resolves.toEqual([USER_TURN])
   })
 
   test('PostgreSQL createSession keeps table qualification out of INSERT columns', async () => {

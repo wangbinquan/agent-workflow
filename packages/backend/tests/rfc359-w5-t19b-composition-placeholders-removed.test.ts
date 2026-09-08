@@ -53,6 +53,9 @@ import {
   TaskExecutionModule,
 } from '@/modules/task-execution/composition'
 import type { driveTaskEngineApplication } from '@/modules/task-execution/composition/taskEngineApplication'
+import type { SqliteTaskExecutionProviderRuntimeDependencies } from '@/modules/task-execution/composition/providerRuntime'
+import type { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -89,6 +92,7 @@ type ComposedDependencies = Pick<
   | 'workgroupTurns'
   | 'childLaunch'
   | 'processConcurrencyScope'
+  | 'identityAccess'
 >
 
 /**
@@ -111,7 +115,21 @@ const _noneMayBeAbsent: NoneMayBeAbsent = {
   workgroupTurns: true,
   childLaunch: true,
   processConcurrencyScope: true,
+  identityAccess: true,
 }
+
+// W12: narrow the production contract without changing the outer legacy vocabulary.
+const _sqliteIdentityRequired: undefined extends Parameters<
+  typeof createSqliteTaskExecutionRuntimeParticipants
+>[0]['identityAccess']
+  ? 'SQLite runtime participants must receive the runtime during construction'
+  : true = true
+const _providerIdentityRequired: undefined extends SqliteTaskExecutionProviderRuntimeDependencies['runtime']['identityAccess']
+  ? 'The full provider factory must not admit a missing runtime'
+  : true = true
+const _legacyIdentityStillOptional: undefined extends RunTaskOptions['identityAccess']
+  ? true
+  : 'Legacy run options must keep their existing optional input' = true
 
 // ---------------------------------------------------------------------------
 // 2. TaskExecution 模块：claimPersisted 只长在持久化交齐的那个类型上
@@ -177,11 +195,16 @@ describe('RFC-359 W5-T19b —— 组合根占位拆除后的运行期残迹', ()
       'workgroup-turns-not-composed',
       'child-execution-launch-not-composed',
       'task-execution-concurrency-scope-not-composed',
+      'identity-access-runtime-not-composed',
     ]) {
       expect(engine, `${marker} 回来了：drive 的形参又退回成「九个都可选」`).not.toContain(
         `'${marker}'`,
       )
     }
+
+    expect(code('modules/task-execution/composition/nodeMechanics.ts')).not.toContain(
+      'identity-access-runtime-not-composed',
+    )
 
     expect(code('modules/task-execution/composition.ts'), '基类又开始自己判空持久化').not.toContain(
       'task-execution persistence is not composed',

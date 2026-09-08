@@ -14,14 +14,13 @@
 // every doc_version carries item_index, so a leak into the single-doc path
 // would change those (still-green) tests.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   agents as agentsTable,
   docVersions,
@@ -42,10 +41,10 @@ import {
 import { ConflictError } from '../src/util/errors'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
-describe('RFC-079 — review multi-document mode', () => {
-  let db: DbClient
+describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let worktree: string
 
@@ -55,7 +54,7 @@ describe('RFC-079 — review multi-document mode', () => {
     worktree = join(tmp, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })

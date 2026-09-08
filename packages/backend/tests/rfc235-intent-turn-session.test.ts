@@ -1,7 +1,6 @@
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { intentSessions, intentTurnEvents, intentTurns } from '../src/db/schema'
 import { createIntentPersistence } from '../src/modules/intent/composition/persistence'
 import {
@@ -10,12 +9,11 @@ import {
   getIntentTurnSession,
   projectIntentTurnExecution,
 } from '@/modules/intent/application/turnSession'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedAgentTurn(id: string) {
-  const db = createInMemoryDb(MIGRATIONS)
-  db.insert(intentSessions)
+async function seedAgentTurn(db: ProviderNeutralDatabase, id: string) {
+  await db
+    .insert(intentSessions)
     .values({
       id: 'session-1',
       ownerUserId: 'owner-1',
@@ -30,7 +28,8 @@ function seedAgentTurn(id: string) {
       updatedAt: 1,
     })
     .run()
-  db.insert(intentTurns)
+  await db
+    .insert(intentTurns)
     .values({
       id,
       sessionId: 'session-1',
@@ -46,9 +45,9 @@ function seedAgentTurn(id: string) {
   return { db, persistence: createIntentPersistence(db) }
 }
 
-describe('RFC-235 Intent turn Session capture', () => {
+describeEachProvider('RFC-235 Intent turn Session capture', (harness) => {
   test('persists ordered runtime rows and projects them through the shared SessionTree', async () => {
-    const { db, persistence } = seedAgentTurn('turn-1')
+    const { db, persistence } = await seedAgentTurn(harness.db, 'turn-1')
     const observed: number[] = []
     const sink = new IntentTurnSessionEventSink(persistence, 'turn-1', (seq) => observed.push(seq))
     await sink.setRootSessionId('runtime-root')
@@ -87,12 +86,12 @@ describe('RFC-235 Intent turn Session capture', () => {
         text: 'I am building the draft.',
       }),
     ])
-    expect(db.select().from(intentTurnEvents).all()).toHaveLength(1)
+    expect(await db.select().from(intentTurnEvents).all()).toHaveLength(1)
     expect(observed.at(-1)).toBe(1)
   })
 
   test('conversation reset replaces the captured root without marking evidence incomplete', async () => {
-    const { db, persistence } = seedAgentTurn('turn-reset')
+    const { db, persistence } = await seedAgentTurn(harness.db, 'turn-reset')
     const sink = new IntentTurnSessionEventSink(persistence, 'turn-reset')
 
     await sink.setRootSessionId('runtime-before-reset')
@@ -132,7 +131,7 @@ describe('RFC-235 Intent turn Session capture', () => {
     })
     await sink.markTerminal('complete')
 
-    const row = db
+    const row = await db
       .select({
         root: intentTurns.captureRootSessionId,
         state: intentTurns.captureState,
@@ -145,13 +144,19 @@ describe('RFC-235 Intent turn Session capture', () => {
     expect(response.tree.sessionId).toBe('runtime-after-reset')
     expect(response.tree.captureComplete).toBe(true)
     expect(JSON.stringify(response.tree)).toContain('before reset')
-    expect(db.select({ id: intentTurnEvents.sessionId }).from(intentTurnEvents).all()).toEqual([
+    expect(
+      await db
+        .select({ id: intentTurnEvents.sessionId })
+        .from(intentTurnEvents)
+        .orderBy(intentTurnEvents.eventSeq)
+        .all(),
+    ).toEqual([
       { id: 'runtime-after-reset' },
       { id: 'runtime-child-before-reset' },
       { id: 'runtime-after-reset' },
     ])
     expect(
-      db
+      await db
         .select({ parent: intentTurnEvents.parentSessionId })
         .from(intentTurnEvents)
         .where(eq(intentTurnEvents.sessionId, 'runtime-child-before-reset'))
@@ -160,10 +165,11 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('a reset cannot repaint a capture that was already truncated', async () => {
-    const { db, persistence } = seedAgentTurn('turn-reset-after-cap')
+    const { db, persistence } = await seedAgentTurn(harness.db, 'turn-reset-after-cap')
     const sink = new IntentTurnSessionEventSink(persistence, 'turn-reset-after-cap')
     await sink.setRootSessionId('runtime-cap-old')
-    db.update(intentTurns)
+    await db
+      .update(intentTurns)
       .set({ captureState: 'truncated' })
       .where(eq(intentTurns.id, 'turn-reset-after-cap'))
       .run()
@@ -173,7 +179,7 @@ describe('RFC-235 Intent turn Session capture', () => {
     await sink.markTerminal('complete')
 
     expect(
-      db
+      await db
         .select({ root: intentTurns.captureRootSessionId, state: intentTurns.captureState })
         .from(intentTurns)
         .where(eq(intentTurns.id, 'turn-reset-after-cap'))
@@ -182,8 +188,9 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('byte cap marks capture truncated without changing the owning turn kind', async () => {
-    const { db, persistence } = seedAgentTurn('turn-cap')
-    db.update(intentTurns)
+    const { db, persistence } = await seedAgentTurn(harness.db, 'turn-cap')
+    await db
+      .update(intentTurns)
       .set({ captureEventBytes: INTENT_TURN_EVENT_BYTE_LIMIT - 1 })
       .where(eq(intentTurns.id, 'turn-cap'))
       .run()
@@ -197,7 +204,7 @@ describe('RFC-235 Intent turn Session capture', () => {
       source: 'stream',
     })
 
-    const row = db
+    const row = await db
       .select({
         kind: intentTurns.kind,
         captureState: intentTurns.captureState,
@@ -207,7 +214,7 @@ describe('RFC-235 Intent turn Session capture', () => {
       .where(eq(intentTurns.id, 'turn-cap'))
       .get()
     expect(row).toEqual({ kind: 'running', captureState: 'truncated', lastEventSeq: 0 })
-    expect(db.select().from(intentTurnEvents).all()).toEqual([])
+    expect(await db.select().from(intentTurnEvents).all()).toEqual([])
     const response = await getIntentTurnSession(persistence, 'session-1', 'turn-cap')
     expect(response.tree.captureComplete).toBe(false)
 
@@ -215,7 +222,7 @@ describe('RFC-235 Intent turn Session capture', () => {
     // observed lifecycle/persistence failure is stronger and keeps its reason.
     await sink.markTerminal('complete')
     expect(
-      db
+      await db
         .select({ captureState: intentTurns.captureState })
         .from(intentTurns)
         .where(eq(intentTurns.id, 'turn-cap'))
@@ -223,7 +230,7 @@ describe('RFC-235 Intent turn Session capture', () => {
     ).toEqual({ captureState: 'truncated' })
     await sink.markTerminal('incomplete', 'post-exit-flush-timeout')
     expect(
-      db
+      await db
         .select({
           captureState: intentTurns.captureState,
           reason: intentTurns.captureIncompleteReason,
@@ -238,7 +245,7 @@ describe('RFC-235 Intent turn Session capture', () => {
 
     // The sink remembers the cap locally: later observations do not even open
     // another transaction against the now-gone turn.
-    db.delete(intentTurns).where(eq(intentTurns.id, 'turn-cap')).run()
+    await db.delete(intentTurns).where(eq(intentTurns.id, 'turn-cap')).run()
     await sink.append({
       ts: 3,
       kind: 'text',
@@ -250,8 +257,9 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('terminal business turn derives an unresolved live capture as incomplete', async () => {
-    const { db, persistence } = seedAgentTurn('turn-terminal-live')
-    db.update(intentTurns)
+    const { db, persistence } = await seedAgentTurn(harness.db, 'turn-terminal-live')
+    await db
+      .update(intentTurns)
       .set({
         kind: 'changeset',
         contentJson: JSON.stringify({ summary: 'done', opCount: 1 }),
@@ -259,7 +267,11 @@ describe('RFC-235 Intent turn Session capture', () => {
       .where(eq(intentTurns.id, 'turn-terminal-live'))
       .run()
 
-    const turn = db.select().from(intentTurns).where(eq(intentTurns.id, 'turn-terminal-live')).get()
+    const turn = await db
+      .select()
+      .from(intentTurns)
+      .where(eq(intentTurns.id, 'turn-terminal-live'))
+      .get()
     expect(turn).toBeDefined()
     expect(projectIntentTurnExecution(turn!)).toEqual({
       captureState: 'incomplete',

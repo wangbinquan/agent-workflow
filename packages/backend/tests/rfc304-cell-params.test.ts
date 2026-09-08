@@ -11,20 +11,19 @@
 // lets those run with a missing parameter and fail somewhere deep, on
 // somebody's merge request.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { capabilityTemplates, repoCapabilityConfig } from '../src/db/schema'
 import { resolveCellParams as resolveCellParamsWithPort } from '../src/services/codeCapabilityParams'
 import { createCapabilityParamRead } from '../src/modules/code-capability/infrastructure/capabilityParamRead'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const REPO = 'repo-1'
 const NOW = 1_700_000_000_000
 
 const resolveCellParams = (
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: { readonly repoId: string; readonly capability: string },
 ) => resolveCellParamsWithPort(createCapabilityParamRead(db), input)
 
@@ -34,14 +33,11 @@ const TABLE = JSON.stringify([
   { name: 'strategy', kind: 'enum', options: ['fast', 'thorough'] },
 ])
 
-describe('RFC-304 T47 — resolving a cell’s parameters', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 T47 — resolving a cell’s parameters', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => {
-    db.$client.close()
+    db = harness.db
   })
 
   const seed = async (over: {

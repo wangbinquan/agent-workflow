@@ -135,17 +135,17 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // `claimPersisted` 只长在 `ProviderTaskExecutionModule` 上。要持久化认领的能力，就得先拿到
   // 一个持有持久化的模块；这个要求沿装配链一路上浮到 `SelectedPostgresqlTaskExecutionProviderRuntime`
   // （SQLite 那一支用进程级单例、走同步 `claim(db)`，两支不再共用一个「可能没装配」的槽）。
-  'modules/task-execution/composition/nodeMechanics.ts: marker=1, prose=0, holder=0',
   // RFC-359 W5-T19b 收敛：`taskEngineApplication.ts` marker 11 → 2 —— `driveTaskEngineApplication`
   // 的形参从 `RunTaskOptions`（九个装配依赖全可选 + 进门九句 `throw new Error('X-not-composed')`
   // + 一次自我收窄）改成 `BoundRunTaskOptions`，九句 throw 一起消失。三个调用点（PG / SQLite 两个
   // runtime participants + 测试 topology）本来就逐个显式交齐这九项，一字未改。
-  // 剩下的 2 处不是同一回事，故意留着：`identity-access-runtime-not-composed` 走的是
-  // `failRuntimeTask` 的领域收场（不是裸抛），而把 `identityAccess` 改必填实测会连坐 254 处
-  // 编译错误（绝大多数是 legacy 测试夹具）；`dynamic-workflow-operations-not-composed` 是
+  // W12 第九批仅把生产 BoundRunTaskOptions 与 SQLite participant 的 identityAccess 设为必填，
+  // 外层 RunTaskOptions 保持可选；两个仅构造/读模型 fixture 补齐依赖，未扩大到 legacy 调用词汇。
+  // taskEngineApplication 与 nodeMechanics 的同一缺省检查因此一起删除，marker 各减 1。
+  // 仍保留 `dynamic-workflow-operations-not-composed`，它是
   // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
   // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
-  'modules/task-execution/composition/taskEngineApplication.ts: marker=2, prose=0, holder=0',
+  'modules/task-execution/composition/taskEngineApplication.ts: marker=1, prose=0, holder=0',
   // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
   // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、
   // `mcpCatalogRef`），改成直接闭包引用同作用域的 `const`；`collaborationContext` 同理，顺带

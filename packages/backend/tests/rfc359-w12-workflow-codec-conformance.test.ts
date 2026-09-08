@@ -2,6 +2,8 @@
 // 真数据库存量行覆盖 v1–v6、坏行错误、迁移后的详情/修订、普通保存与外层回滚。
 // 两个 hash 入口原来处于不同输入阶段：legacy 先迁移，neutral raw hash 直接编码；
 // 这条区别也锁住，不能为了去重改变已有输入语义。
+// 461f299f4 的 PG CI 暴露：外层事务内必须用回调 tx 观察未提交行；root client
+// 经连接池只能读到旧已提交版本。回滚后仍用原 root client 验证整行恢复。
 
 import { expect, test } from 'bun:test'
 import {
@@ -344,13 +346,13 @@ describeEachProvider('RFC-359 W12 —— workflow codec', (harness) => {
     const sentinel = new Error('codec outer rollback')
     now += 999
     await expect(
-      harness.session.transaction(async () => {
+      harness.session.transaction(async (tx) => {
         const saved = await repository.update(actor, created.id, {
           expectedVersion: 1,
           clientMutationId: ulid(),
           snapshot: { ...legacyDraft(created), description: 'rolled back' },
         })
-        const inTransaction = await readRow(harness.db, created.id)
+        const inTransaction = await readRow(tx, created.id)
         expect(inTransaction).toMatchObject({ version: 2, updatedAt: T0 + 999 })
         expect(saved.revision).toEqual(legacyRevision(rowToWorkflowDetail(inTransaction)))
         throw sentinel

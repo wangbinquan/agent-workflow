@@ -189,8 +189,8 @@ export interface LegacyIntentApplyResourceDependencies {
     readonly updatedAt: number
     readonly ownerUserId: string | null
   } | null>
-  readonly commitMcpCreateInTx: (tx: DbTxSync, prepared: unknown) => void
-  readonly commitMcpUpdateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly commitMcpCreateInTx: (tx: DatabaseTransaction, prepared: unknown) => Promise<void>
+  readonly commitMcpUpdateInTx: (tx: DatabaseTransaction, prepared: unknown) => Promise<void>
 
   readonly getPluginById: (db: DbClient, id: string) => Promise<LegacyIntentPluginRow | null>
   readonly pluginOperationConfigHashOf: (row: LegacyIntentPluginRow) => string
@@ -689,10 +689,10 @@ export function createLegacyIntentApplyResourceSession(
         dependencies.commitAgentUpdateInTx(tx, prepared.prepared)
         break
       case 'mcp-create':
-        dependencies.commitMcpCreateInTx(tx, prepared.prepared)
+        await dependencies.commitMcpCreateInTx(tx, prepared.prepared)
         break
       case 'mcp-update':
-        dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
+        await dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
         break
       case 'plugin-create': {
         const install = pluginInstalls.get(plan.operationId)

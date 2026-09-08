@@ -163,12 +163,14 @@ async function cancelRuntimeTask(
  * `BoundRunTaskOptions` 交给下面。那正是「装配未完成但已经可被调用」——类型层完全合法，
  * 缺口只在真的驱动到某个任务时才炸，而两个 provider 的 daemon 各自跑到它的时机不一样。
  *
- * 现在**形参直接是 `BoundRunTaskOptions`**：九个依赖是它的必填字段，「没装配」在装配处
+ * 现在**形参直接是 `BoundRunTaskOptions`**：这些依赖是它的必填字段，「没装配」在装配处
  * 就编译不过，九句 throw 与那次自我收窄一起消失。三个调用点（PG / SQLite 两个 runtime
  * participants + 测试 topology）本来就逐个显式交齐这九项，一字未改。
  *
  * `RunTaskOptions` 那九格仍然可选：它是**更外层**的调用词汇（`runTask` / `runNode` /
  * 各路由的启动参数）在用，那些路径不经过本函数。
+ * W12 同样在此生产契约要求 identityAccess；SQLite participant 与完整工厂向上传递此要求，
+ * 外层 legacy options 保持可选，避免把完整装配约束扩散到尚未进入驱动的调用词汇。
  */
 export async function driveTaskEngineApplication(
   opts: BoundRunTaskOptions,
@@ -226,14 +228,6 @@ async function runTaskEngineOrchestratorInner(
   }
 
   const taskExecutionIdentity = opts.identityAccess
-  if (taskExecutionIdentity === undefined) {
-    await failRuntimeTask(
-      opts,
-      'task execution authority unavailable',
-      'identity-access-runtime-not-composed',
-    )
-    return
-  }
   const taskExecutionAdmission = await taskExecutionIdentity.delegatedRequests.forTaskExecution({
     ownerUserId: task.ownerUserId,
     taskId,

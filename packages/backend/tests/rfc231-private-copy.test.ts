@@ -358,8 +358,10 @@ describe('RFC-231 private create invariant', () => {
       // reserve-writer in skill.ts — same invisible-until-ready pipeline, same
       // initialPrivateResourceAcl stamp as createManagedSkillWithFiles.
       skills: { 'modules/resource-catalog/infrastructure/legacy/skill.ts': 2 },
-      mcps: { 'modules/resource-catalog/infrastructure/mcpRepository.ts': 1 },
-      plugins: { 'modules/resource-catalog/infrastructure/pluginRepository.ts': 1 },
+      // RFC-359 W12: repositories and package arms delegate the concrete inserts
+      // to their shared persistence atoms. Keep the forwarding repositories scanned.
+      mcps: { 'modules/resource-catalog/infrastructure/mcpPersistence.ts': 1 },
+      plugins: { 'modules/resource-catalog/infrastructure/pluginPersistence.ts': 1 },
       workflows: {
         'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
         'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
@@ -374,6 +376,8 @@ describe('RFC-231 private create invariant', () => {
       'modules/resource-catalog/infrastructure/legacy/skill.ts',
       'modules/resource-catalog/infrastructure/mcpRepository.ts',
       'modules/resource-catalog/infrastructure/pluginRepository.ts',
+      'modules/resource-catalog/infrastructure/mcpPersistence.ts',
+      'modules/resource-catalog/infrastructure/pluginPersistence.ts',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',

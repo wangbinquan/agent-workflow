@@ -40,60 +40,6 @@ function endNow(
     .run()
 }
 
-function blockAfterTurn(
-  tx: DbTxSync,
-  session: SessionRow,
-  reason: 'mcp-config-changed' | 'runtime-profile-changed',
-  now: number,
-): void {
-  tx.update(mcpRuntimeTestSessions)
-    .set(
-      session.inFlightTurnId === null
-        ? {
-            status: 'ending',
-            endReason: reason,
-            continuationBlockedReason: reason,
-            idleDeadlineAt: null,
-            sessionVersion: session.sessionVersion + 1,
-            updatedAt: now,
-          }
-        : {
-            continuationBlockedReason: reason,
-            sessionVersion: session.sessionVersion + 1,
-            updatedAt: now,
-          },
-    )
-    .where(eq(mcpRuntimeTestSessions.id, session.id))
-    .run()
-}
-
-export function transitionMcpRuntimeTestsInTx(
-  tx: DbTxSync,
-  input: {
-    mcpId: string
-    reason: 'mcp-config-changed' | 'mcp-disabled' | 'mcp-deleted'
-    now: number
-  },
-): void {
-  const sessions = tx
-    .select()
-    .from(mcpRuntimeTestSessions)
-    .where(
-      and(
-        eq(mcpRuntimeTestSessions.mcpId, input.mcpId),
-        eq(mcpRuntimeTestSessions.status, 'active'),
-      ),
-    )
-    .all()
-  for (const session of sessions) {
-    if (input.reason === 'mcp-config-changed') {
-      blockAfterTurn(tx, session, input.reason, input.now)
-    } else {
-      endNow(tx, session, input.reason, input.now)
-    }
-  }
-}
-
 export function transitionOwnerRuntimeTestsInTx(
   tx: DbTxSync,
   ownerUserId: string,

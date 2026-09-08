@@ -28,7 +28,7 @@ import {
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import {
   agents,
   mcps,
@@ -52,7 +52,7 @@ import {
   createAgentPersistenceValues,
   updateAgentPersistenceValues,
 } from '../agentPersistence'
-import { mcpFromPersistenceRow } from '../mcpPersistence'
+import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
 import {
   insertPluginRowInTx,
   pluginFromPersistenceRow,
@@ -798,23 +798,6 @@ export async function commitPostgresqlSkillPackageMutation(
   return receipt('skill', input.mutation, input.resourceId)
 }
 
-function fullMcpRowWhere(row: typeof mcps.$inferSelect) {
-  return and(
-    eq(mcps.id, row.id),
-    eq(mcps.name, row.name),
-    eq(mcps.description, row.description),
-    eq(mcps.type, row.type),
-    eq(mcps.config, row.config),
-    eq(mcps.enabled, row.enabled),
-    row.ownerUserId === null ? isNull(mcps.ownerUserId) : eq(mcps.ownerUserId, row.ownerUserId),
-    eq(mcps.visibility, row.visibility),
-    eq(mcps.aclRevision, row.aclRevision),
-    eq(mcps.schemaVersion, row.schemaVersion),
-    eq(mcps.createdAt, row.createdAt),
-    eq(mcps.updatedAt, row.updatedAt),
-  )
-}
-
 export async function commitPostgresqlMcpPackageMutation(
   input: MutationArmInput<McpPackageMutation> & {
     readonly lifecycle: McpTransactionLifecycle
@@ -832,23 +815,14 @@ export async function commitPostgresqlMcpPackageMutation(
     }
     const now = input.now()
     try {
-      await input.transaction
-        .insert(mcps)
-        .values({
-          id: input.resourceId,
-          name: parsed.name,
-          description: parsed.description,
-          type: parsed.type,
-          config: JSON.stringify(parsed.config),
-          enabled: parsed.enabled,
-          ownerUserId: input.context.actor.user.id,
-          visibility: 'private',
-          aclRevision: 0,
-          schemaVersion: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertMcpRowInTx(input.transaction, {
+        id: input.resourceId,
+        input: parsed,
+        ownerUserId: input.context.actor.user.id,
+        visibility: 'private',
+        aclRevision: 0,
+        now,
+      })
     } catch (error) {
       if (isPostgresqlUniqueViolation(error, ['mcps_owner_name_unique'])) {
         throw new ConflictError('mcp-name-in-use', `mcp '${parsed.name}' already exists`)
@@ -874,18 +848,17 @@ export async function commitPostgresqlMcpPackageMutation(
     throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
   }
   const updatedAt = monotonicNow(row.updatedAt)
-  const changed = await input.transaction
-    .update(mcps)
-    .set({
+  const changed = await updateMcpRowInTx(
+    input.transaction,
+    { kind: 'captured-row', row },
+    {
       description: patch.description ?? current.description,
       enabled: patch.enabled ?? current.enabled,
       config: JSON.stringify(patch.config ?? current.config),
       updatedAt,
-    })
-    .where(fullMcpRowWhere(row))
-    .returning({ id: mcps.id })
-    .get()
-  if (changed === undefined) {
+    },
+  )
+  if (changed.length === 0) {
     throw staleConflictError('mcp', 'the MCP changed while saving; reload and retry')
   }
   await input.lifecycle.transitionMutation(input.transaction, {

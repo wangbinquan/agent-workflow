@@ -9,14 +9,13 @@
 //     joined by the boundary), NOT list<path<md>>.
 //   - getReviewDetail still exposes documents[] (titles from the body heading).
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   agents as agentsTable,
   docVersions,
@@ -34,11 +33,11 @@ import {
 import { joinMarkdownDocs } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 const DOCS = ['# Alpha\n\nalpha body\nsecond line', '# Beta\n\nbeta body', '# Gamma\n\ngamma body']
 
-describe('RFC-081 — multi-document review over inline list<markdown>', () => {
-  let db: DbClient
+describeEachProvider('RFC-081 — multi-document review over inline list<markdown>', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let worktree: string
 
@@ -48,7 +47,7 @@ describe('RFC-081 — multi-document review over inline list<markdown>', () => {
     worktree = join(tmp, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })

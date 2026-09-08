@@ -156,9 +156,23 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(postgresqlMutationArms).toContain(`export async function ${implementation}`)
       expect(postgresqlMutationParticipants).toContain(`${implementation}({`)
     }
-    for (const table of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
+    for (const table of ['agents', 'skills', 'workflows', 'workgroups']) {
       expect(postgresqlMutationArms).toContain(`.insert(${table})`)
       expect(postgresqlMutationArms).toContain(`.update(${table})`)
+    }
+    // RFC-359 W12: MCP/plugin creation and publication share their persistence
+    // atoms with the repositories; the repositories retain their separate rename.
+    for (const [table, persistence, insert, update] of [
+      ['mcps', 'mcpPersistence', 'insertMcpRowInTx', 'updateMcpRowInTx'],
+      ['plugins', 'pluginPersistence', 'insertPluginRowInTx', 'publishPluginRowInTx'],
+    ]) {
+      const atom = source(`src/modules/resource-catalog/infrastructure/${persistence}.ts`)
+      expect(postgresqlMutationArms).toContain(`await ${insert}(`)
+      expect(postgresqlMutationArms).toContain(`await ${update}(`)
+      expect(postgresqlMutationArms).not.toContain(`.insert(${table})`)
+      expect(postgresqlMutationArms).not.toContain(`.update(${table})`)
+      expect(atom).toContain(`.insert(${table})`)
+      expect(atom).toContain(`.update(${table})`)
     }
     expect(postgresqlMutationParticipants).toContain(
       'PostgresqlCapabilityTemplatePackageMutationOwner',

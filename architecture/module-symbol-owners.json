@@ -6,7 +6,7 @@
     "moduleFiles": 1185,
     "productionFiles": 2563,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24921
+    "symbolsIncludingFileRoots": 24923
   },
   "entries": [
     {
@@ -88699,18 +88699,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#fullMcpRowWhere",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "fullMcpRowWhere",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#humanMappingSlug",
       "removeAfterWave": null,
       "status": "current-module",
@@ -90881,18 +90869,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#blockAfterTurn",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "blockAfterTurn",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#deletePreparedMcpRuntimeTestsInTx",
@@ -90935,18 +90911,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SessionRow",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#transitionMcpRuntimeTestsInTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "transitionMcpRuntimeTestsInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -96281,6 +96245,30 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#fullMcpRowWhere",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "fullMcpRowWhere",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#insertMcpRowInTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "insertMcpRowInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpCreate",
@@ -96355,6 +96343,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#McpInsertRecord",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpInsertRecord",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#McpPersistenceRow",
       "removeAfterWave": null,
       "status": "current-module",
@@ -96379,10 +96379,34 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#McpRowMatch",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "McpRowMatch",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#prepareLegacyMcpCreate",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "prepareLegacyMcpCreate",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#updateMcpRowInTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "updateMcpRowInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -299753,5 +299777,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:782b859359f25ceed4bcad99ea30d4f08168cf4f6c0ba17696a322d2a1d3b595"
+  "sourceDigest": "sha256:4be1c912a51b87398e4153508b5b4261c23c565af575f057ea9851dc8eee2395"
 }

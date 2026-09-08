@@ -25,7 +25,10 @@ import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-exe
 import { composeTestWorkgroupTurns } from './helpers/workgroupTurns'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
-import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
+import {
+  createTaskExecutionTestIdentity,
+  createTestRepositoryPublicationTransport,
+} from './helpers/taskExecutionTestTopology'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -160,6 +163,7 @@ describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
       readModels,
       participants: createSqliteTaskExecutionRuntimeParticipants({
         db: sqlite,
+        identityAccess: createTaskExecutionTestIdentity(sqlite).resources,
         memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
         collaborationRuntime: createCollaborationRuntimeMechanics(sqlite),
         persistence: createSqliteTaskExecutionPersistence(sqlite),

@@ -5,12 +5,9 @@
 // (auto_recovery_suspended=1)，并记 quarantine recovery_event；② 已隔离再调不二次累加；
 // ③ 人工 clear 重置；④ 窗口滚过后计数重置为 1。
 
-import { resolve } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { listRecoveryEventsForTask } from '../src/services/recovery'
 import {
@@ -18,11 +15,11 @@ import {
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
 } from '../src/services/recoveryBreaker'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
@@ -43,11 +40,11 @@ async function seedTask(db: DbClient): Promise<string> {
   return taskId
 }
 
-describe('RFC-108 T11 — circuit-breaker / quarantine', () => {
+describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) => {
   test('quarantines after maxPerWindow attempts + records event; clear resets', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const cfg = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
     let r = { suspended: false, attempts: 0 }
@@ -74,9 +71,9 @@ describe('RFC-108 T11 — circuit-breaker / quarantine', () => {
   })
 
   test('window rolls over: an attempt outside the window resets the count to 1', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const cfg = { maxPerWindow: 3, windowMs: 1000 }
     await recordAutoRecoveryAttempt(operations, taskId, cfg, 0)
     await recordAutoRecoveryAttempt(operations, taskId, cfg, 500)

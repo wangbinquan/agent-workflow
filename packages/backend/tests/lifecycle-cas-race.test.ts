@@ -4,14 +4,13 @@
 // the helper. The CAS predicate `WHERE id = ? AND status = expectedFrom`
 // guarantees only one of two concurrent writers can succeed.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import {
   ConcurrentNodeRunTransition,
@@ -19,18 +18,18 @@ import {
   transitionNodeRunStatus,
 } from '../src/services/lifecycle'
 import { IllegalNodeRunTransition } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(db: ProviderNeutralDatabase): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-cas-'))
-  const db = createInMemoryDb(MIGRATIONS)
+
   const workflowId = ulid()
   await db.insert(workflows).values({
     id: workflowId,
@@ -59,7 +58,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   status:
     | 'pending'
@@ -86,10 +85,10 @@ async function seedRun(
   return id
 }
 
-describe('RFC-053 PR-B — CAS helpers', () => {
+describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

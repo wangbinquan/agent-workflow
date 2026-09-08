@@ -1,18 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskExecutionIntents, tasks } from '@/db/schema'
 import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { startManagedWorkerDefinition } from '@/platform/events/committed/workerDefinitions'
 import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
-import { MIGRATIONS } from './migration-freeze'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_789_488_200_000
 
-function seedTask(db: ReturnType<typeof createInMemoryDb>, taskId: string): void {
-  db.insert(tasks)
+async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
+  await db
+    .insert(tasks)
     .values({
       id: taskId,
       name: taskId,
@@ -31,9 +32,10 @@ function seedTask(db: ReturnType<typeof createInMemoryDb>, taskId: string): void
     .run()
 }
 
-function seedPendingGate(db: ReturnType<typeof createInMemoryDb>): void {
-  seedTask(db, 'task-gate')
-  db.insert(taskExecutionIntents)
+async function seedPendingGate(db: ProviderNeutralDatabase): Promise<void> {
+  await seedTask(db, 'task-gate')
+  await db
+    .insert(taskExecutionIntents)
     .values({
       id: 'intent-gate',
       taskId: 'task-gate',
@@ -59,9 +61,10 @@ function seedPendingGate(db: ReturnType<typeof createInMemoryDb>): void {
     .run()
 }
 
-function seedLegacyTaskGate(db: ReturnType<typeof createInMemoryDb>): void {
-  seedTask(db, 'task-legacy-gate')
-  db.insert(taskExecutionIntents)
+async function seedLegacyTaskGate(db: ProviderNeutralDatabase): Promise<void> {
+  await seedTask(db, 'task-legacy-gate')
+  await db
+    .insert(taskExecutionIntents)
     .values({
       id: 'intent-legacy-gate',
       taskId: 'task-legacy-gate',
@@ -82,35 +85,38 @@ function seedLegacyTaskGate(db: ReturnType<typeof createInMemoryDb>): void {
 }
 
 describe('RFC-341 human-gate continuation worker', () => {
-  test('initial/reconcile scan owns RFC-333 refs without stealing legacy task gates', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedPendingGate(db)
-    seedLegacyTaskGate(db)
-    const driven: Array<{ taskId: string; continuationRef: string }> = []
-    const worker = createHumanGateContinuationWorkerDefinition({
-      listPending: () =>
-        listPendingHumanGateContinuations(createHumanGateContinuationRecoveryQueries(db)),
-      drive: async (continuation) => {
-        driven.push(continuation)
-        db.update(taskExecutionIntents)
-          .set({ state: 'completed', completedAt: NOW + 1, updatedAt: NOW + 1 })
-          .where(eq(taskExecutionIntents.id, continuation.continuationRef))
-          .run()
-      },
-      now: () => NOW,
+  describeEachProvider('durable continuation recovery', (harness) => {
+    test('initial/reconcile scan owns RFC-333 refs without stealing legacy task gates', async () => {
+      const db = harness.db
+      await seedPendingGate(db)
+      await seedLegacyTaskGate(db)
+      const driven: Array<{ taskId: string; continuationRef: string }> = []
+      const worker = createHumanGateContinuationWorkerDefinition({
+        listPending: () =>
+          listPendingHumanGateContinuations(createHumanGateContinuationRecoveryQueries(db)),
+        drive: async (continuation) => {
+          driven.push(continuation)
+          await db
+            .update(taskExecutionIntents)
+            .set({ state: 'completed', completedAt: NOW + 1, updatedAt: NOW + 1 })
+            .where(eq(taskExecutionIntents.id, continuation.continuationRef))
+            .run()
+        },
+        now: () => NOW,
+      })
+      expect(worker.definition.kind).toBe('long-running')
+      expect(worker.definition.owner).toBe('collaboration')
+      expect(await worker.runCycle()).toEqual({ attempted: 1, completed: 1, failed: 0 })
+      expect(driven).toEqual([{ taskId: 'task-gate', continuationRef: 'intent-gate' }])
+      expect(await worker.runCycle()).toEqual({ attempted: 0, completed: 0, failed: 0 })
+      expect(
+        await db
+          .select({ state: taskExecutionIntents.state })
+          .from(taskExecutionIntents)
+          .where(eq(taskExecutionIntents.id, 'intent-legacy-gate'))
+          .get(),
+      ).toEqual({ state: 'pending' })
     })
-    expect(worker.definition.kind).toBe('long-running')
-    expect(worker.definition.owner).toBe('collaboration')
-    expect(await worker.runCycle()).toEqual({ attempted: 1, completed: 1, failed: 0 })
-    expect(driven).toEqual([{ taskId: 'task-gate', continuationRef: 'intent-gate' }])
-    expect(await worker.runCycle()).toEqual({ attempted: 0, completed: 0, failed: 0 })
-    expect(
-      db
-        .select({ state: taskExecutionIntents.state })
-        .from(taskExecutionIntents)
-        .where(eq(taskExecutionIntents.id, 'intent-legacy-gate'))
-        .get(),
-    ).toEqual({ state: 'pending' })
   })
 
   test('a nudge wakes the continuous owner without carrying the durable work identity', async () => {

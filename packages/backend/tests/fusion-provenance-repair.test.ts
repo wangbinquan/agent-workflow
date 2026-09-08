@@ -1,18 +1,18 @@
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { fusions, memories, skills, skillVersions } from '../src/db/schema'
 import { repairFusionProvenance } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
-import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
+import { composeFusionPersistenceFor } from '../src/modules/knowledge-evolution/composition/fusion'
 import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
-import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function addSkill(db: DbClient, id: string): void {
-  db.insert(skills)
+async function addSkill(db: ProviderNeutralDatabase, id: string): Promise<void> {
+  await db
+    .insert(skills)
     .values({
       id,
       name: `name-${id}`,
@@ -23,13 +23,14 @@ function addSkill(db: DbClient, id: string): void {
     .run()
 }
 
-function addFusionVersion(
-  db: DbClient,
+async function addFusionVersion(
+  db: ProviderNeutralDatabase,
   fusionId: string,
   skillId: string,
   versionIndex: number,
-): void {
-  db.insert(skillVersions)
+): Promise<void> {
+  await db
+    .insert(skillVersions)
     .values({
       id: `version-${fusionId}-${skillId}-${versionIndex}`,
       skillId,
@@ -42,12 +43,13 @@ function addFusionVersion(
     .run()
 }
 
-function addFusion(
-  db: DbClient,
+async function addFusion(
+  db: ProviderNeutralDatabase,
   id: string,
   patch: Partial<typeof fusions.$inferInsert> = {},
-): void {
-  db.insert(fusions)
+): Promise<void> {
+  await db
+    .insert(fusions)
     .values({
       id,
       skillId: QUARANTINED_FUSION_SKILL_ID,
@@ -62,20 +64,20 @@ function addFusion(
     .run()
 }
 
-describe('RFC-223 fusion provenance boot repair', () => {
+describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
   test('uses only trustworthy token/ledger oracles, quarantines conflicts, and is idempotent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const persistence = composeSqliteFusionPersistence({
-      ...TEST_SQLITE_FUSION_PARTICIPANTS,
+    const db = harness.db
+    const persistence = composeFusionPersistenceFor({
+      ...TEST_FUSION_PARTICIPANTS,
       db,
       appHome: resolve(import.meta.dir, '.rfc223-unused-app-home'),
     })
     for (const id of ['skill-ledger', 'skill-other', 'skill-duplicate', 'skill-applied']) {
-      addSkill(db, id)
+      await addSkill(db, id)
     }
 
     // Token-only remains trustworthy even after the current skill row was deleted.
-    addFusion(db, 'token-only', {
+    await addFusion(db, 'token-only', {
       preconditionToken: encodeSkillToken({
         skillId: 'deleted-skill-id',
         contentVersion: 1,
@@ -85,26 +87,26 @@ describe('RFC-223 fusion provenance boot repair', () => {
 
     // A malformed token contributes no identity; the exact single ledger is an
     // independent durable oracle.
-    addFusion(db, 'malformed-ledger', {
+    await addFusion(db, 'malformed-ledger', {
       preconditionToken: 'not-a-token',
       appliedSkillVersion: 2,
     })
-    addFusionVersion(db, 'malformed-ledger', 'skill-ledger', 2)
+    await addFusionVersion(db, 'malformed-ledger', 'skill-ledger', 2)
 
-    addFusion(db, 'token-ledger-disagree', {
+    await addFusion(db, 'token-ledger-disagree', {
       preconditionToken: encodeSkillToken({
         skillId: 'deleted-skill-id',
         contentVersion: 1,
         metaRevision: 0,
       }),
     })
-    addFusionVersion(db, 'token-ledger-disagree', 'skill-other', 2)
+    await addFusionVersion(db, 'token-ledger-disagree', 'skill-other', 2)
 
-    addFusion(db, 'duplicate-ledger', { status: 'applying' })
-    addFusionVersion(db, 'duplicate-ledger', 'skill-duplicate', 1)
-    addFusionVersion(db, 'duplicate-ledger', 'skill-duplicate', 2)
+    await addFusion(db, 'duplicate-ledger', { status: 'applying' })
+    await addFusionVersion(db, 'duplicate-ledger', 'skill-duplicate', 1)
+    await addFusionVersion(db, 'duplicate-ledger', 'skill-duplicate', 2)
 
-    addFusion(db, 'token-base-mismatch', {
+    await addFusion(db, 'token-base-mismatch', {
       preconditionToken: encodeSkillToken({
         skillId: 'deleted-skill-id',
         contentVersion: 2,
@@ -112,10 +114,10 @@ describe('RFC-223 fusion provenance boot repair', () => {
       }),
     })
 
-    addFusion(db, 'applied-version-mismatch', { appliedSkillVersion: 3 })
-    addFusionVersion(db, 'applied-version-mismatch', 'skill-applied', 2)
+    await addFusion(db, 'applied-version-mismatch', { appliedSkillVersion: 3 })
+    await addFusionVersion(db, 'applied-version-mismatch', 'skill-applied', 2)
 
-    addFusion(db, 'sentinel-token', {
+    await addFusion(db, 'sentinel-token', {
       preconditionToken: encodeSkillToken({
         skillId: QUARANTINED_FUSION_SKILL_ID,
         contentVersion: 1,
@@ -123,7 +125,7 @@ describe('RFC-223 fusion provenance boot repair', () => {
       }),
     })
 
-    addFusion(db, 'terminal-conflict', {
+    await addFusion(db, 'terminal-conflict', {
       status: 'done',
       preconditionToken: encodeSkillToken({
         skillId: 'deleted-skill-id',
@@ -132,7 +134,8 @@ describe('RFC-223 fusion provenance boot repair', () => {
       }),
     })
 
-    db.insert(memories)
+    await db
+      .insert(memories)
       .values([
         {
           id: 'memory-exact',
@@ -195,7 +198,7 @@ describe('RFC-223 fusion provenance boot repair', () => {
     expect(first.repairedMemories).toBe(1)
     expect(first.quarantinedMemories).toBe(2)
 
-    const rows = db
+    const rows = await db
       .select({ id: fusions.id, skillId: fusions.skillId, status: fusions.status })
       .from(fusions)
       .all()
@@ -216,12 +219,13 @@ describe('RFC-223 fusion provenance boot repair', () => {
     expect(byId.get('terminal-conflict')?.status).toBe('done')
 
     expect(
-      db
-        .select({ id: memories.id, skillId: memories.fusedIntoSkillId })
-        .from(memories)
-        .where(eq(memories.status, 'fused'))
-        .all()
-        .sort((a, b) => a.id.localeCompare(b.id)),
+      (
+        await db
+          .select({ id: memories.id, skillId: memories.fusedIntoSkillId })
+          .from(memories)
+          .where(eq(memories.status, 'fused'))
+          .all()
+      ).sort((a, b) => a.id.localeCompare(b.id)),
     ).toEqual([
       { id: 'memory-exact', skillId: 'skill-ledger' },
       {
@@ -231,7 +235,7 @@ describe('RFC-223 fusion provenance boot repair', () => {
       { id: 'memory-wrong-version', skillId: QUARANTINED_FUSION_SKILL_ID },
     ])
     expect(
-      db
+      await db
         .select({ skillId: memories.fusedIntoSkillId })
         .from(memories)
         .where(eq(memories.id, 'memory-approved'))

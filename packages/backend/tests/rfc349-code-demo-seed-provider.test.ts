@@ -1,13 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { capabilityTemplates, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
-import {
-  composePostgresqlCodeCapabilityDemoSeedParticipant,
-  composeSqliteCodeCapabilityDemoSeedParticipant,
-} from '@/modules/code-capability/composition/demoSeed'
+import { composePostgresqlCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import { createCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/application/demoSeed'
+import { createCodeCapabilityDemoSeedPersistence } from '@/modules/code-capability/infrastructure/demoSeedPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -15,8 +12,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 function rows(input: {
   readonly objects?: readonly Record<string, unknown>[]
@@ -75,19 +71,23 @@ afterEach(() => {
 })
 
 describe('RFC-349 Code Capability demo-seed participant', () => {
-  test('SQLite creates the complete aggregate once and preserves stable retry counts', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const seed = composeSqliteCodeCapabilityDemoSeedParticipant(db)
+  describeEachProvider('complete aggregate retry counts', (harness) => {
+    test('SQLite creates the complete aggregate once and preserves stable retry counts', async () => {
+      const db = harness.db
+      const seed = createCodeCapabilityDemoSeedParticipant(
+        createCodeCapabilityDemoSeedPersistence(db),
+      )
 
-    const first = await seed.ensure({ agentId: 'demo-agent' })
-    const second = await seed.ensure({ agentId: 'demo-agent' })
+      const first = await seed.ensure({ agentId: 'demo-agent' })
+      const second = await seed.ensure({ agentId: 'demo-agent' })
 
-    expect(second).toEqual(first)
-    expect(db.select().from(capabilityTemplates).all()).toHaveLength(1)
-    expect(db.select().from(codeWorkItems).all()).toHaveLength(1)
-    expect(db.select().from(codeWorkRounds).all()).toHaveLength(1)
-    expect(db.select().from(codeRoundStages).all()).toHaveLength(first.stageIds.length)
-    expect(first.stageIds.length).toBeGreaterThan(0)
+      expect(second).toEqual(first)
+      expect(await db.select().from(capabilityTemplates).all()).toHaveLength(1)
+      expect(await db.select().from(codeWorkItems).all()).toHaveLength(1)
+      expect(await db.select().from(codeWorkRounds).all()).toHaveLength(1)
+      expect(await db.select().from(codeRoundStages).all()).toHaveLength(first.stageIds.length)
+      expect(first.stageIds.length).toBeGreaterThan(0)
+    })
   })
 
   test('PostgreSQL commits template, work item, round and stages in one fenced transaction', async () => {

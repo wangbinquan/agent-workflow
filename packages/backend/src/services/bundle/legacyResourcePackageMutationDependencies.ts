@@ -101,10 +101,10 @@ export const legacyResourcePackageMutationDependencies = Object.freeze({
     id: resourceId,
   }),
   getMcpById: loadLegacyMcpById,
-  commitMcpCreateInTx: (tx, prepared) =>
-    commitLegacyMcpCreateInTx(tx, prepared as LegacyPreparedMcpCreate),
-  commitMcpUpdateInTx: (tx, prepared) =>
-    commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
+  commitMcpCreateInTx: async (tx, prepared) =>
+    await commitLegacyMcpCreateInTx(tx, prepared as LegacyPreparedMcpCreate),
+  commitMcpUpdateInTx: async (tx, prepared) =>
+    await commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
   commitPluginCreateInTx: async (tx, input): Promise<void> => {
     await commitLegacyPluginCreateInTx(tx, input as LegacyPreparedPluginCreate)
   },

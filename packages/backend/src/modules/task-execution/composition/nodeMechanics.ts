@@ -259,8 +259,7 @@ async function delegatedCallActor(
   parentNodeRunId: string,
 ): Promise<Actor | null> {
   if (ownerUserId === null) return OWNERLESS_LEGACY_ACTOR
-  const delegated = state.opts.identityAccess?.delegatedRequests
-  if (delegated === undefined) throw new Error('identity-access-runtime-not-composed')
+  const delegated = state.opts.identityAccess.delegatedRequests
   const admission = await delegated.forCall({
     kind,
     ownerUserId,

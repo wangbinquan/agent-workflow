@@ -9,21 +9,21 @@
 // stored them on the workflow definition, this PR wires them through the
 // API contract.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listReviewSummaries } from '../src/services/review'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 interface SeedOptions {
   workflowSnapshot: string
   reviewNodes: Array<{ nodeId: string; status?: 'awaiting_review' | 'done' }>
 }
 
-async function seed(opts: SeedOptions): Promise<{ db: DbClient; taskId: string }> {
-  const db = await createInMemoryDb(MIGRATIONS)
+async function seed(
+  db: ProviderNeutralDatabase,
+  opts: SeedOptions,
+): Promise<{ db: ProviderNeutralDatabase; taskId: string }> {
   const wfId = 'wf_test_1'
   const taskId = 'task_test_1'
   await db.insert(workflows).values({
@@ -88,133 +88,136 @@ async function seed(opts: SeedOptions): Promise<{ db: DbClient; taskId: string }
   return { db, taskId }
 }
 
-describe('listReviewSummaries surfaces title + description from workflowSnapshot', () => {
-  test('returns title + description when the review node defines both', async () => {
-    const snapshot = JSON.stringify({
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'review_1',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'design' },
-          title: 'Design Review',
-          description: 'Check the architecture before merging.',
-          rerunnableOnReject: [],
-          rerunnableOnIterate: [],
-        },
-      ],
-      edges: [],
+describeEachProvider(
+  'listReviewSummaries surfaces title + description from workflowSnapshot',
+  (harness) => {
+    test('returns title + description when the review node defines both', async () => {
+      const snapshot = JSON.stringify({
+        $schema_version: 2,
+        inputs: [],
+        nodes: [
+          {
+            id: 'review_1',
+            kind: 'review',
+            inputSource: { nodeId: 'designer', portName: 'design' },
+            title: 'Design Review',
+            description: 'Check the architecture before merging.',
+            rerunnableOnReject: [],
+            rerunnableOnIterate: [],
+          },
+        ],
+        edges: [],
+      })
+      const { db } = await seed(harness.db, {
+        workflowSnapshot: snapshot,
+        reviewNodes: [{ nodeId: 'review_1' }],
+      })
+      const list = await listReviewSummaries(db, { status: 'all' })
+      expect(list).toHaveLength(1)
+      expect(list[0]!.title).toBe('Design Review')
+      expect(list[0]!.description).toBe('Check the architecture before merging.')
     })
-    const { db } = await seed({
-      workflowSnapshot: snapshot,
-      reviewNodes: [{ nodeId: 'review_1' }],
-    })
-    const list = await listReviewSummaries(db, { status: 'all' })
-    expect(list).toHaveLength(1)
-    expect(list[0]!.title).toBe('Design Review')
-    expect(list[0]!.description).toBe('Check the architecture before merging.')
-  })
 
-  test('falls back to nodeId when title is empty; description stays empty', async () => {
-    const snapshot = JSON.stringify({
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'review_blank',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'design' },
-          title: '',
-          description: '',
-          rerunnableOnReject: [],
-          rerunnableOnIterate: [],
-        },
-      ],
-      edges: [],
+    test('falls back to nodeId when title is empty; description stays empty', async () => {
+      const snapshot = JSON.stringify({
+        $schema_version: 2,
+        inputs: [],
+        nodes: [
+          {
+            id: 'review_blank',
+            kind: 'review',
+            inputSource: { nodeId: 'designer', portName: 'design' },
+            title: '',
+            description: '',
+            rerunnableOnReject: [],
+            rerunnableOnIterate: [],
+          },
+        ],
+        edges: [],
+      })
+      const { db } = await seed(harness.db, {
+        workflowSnapshot: snapshot,
+        reviewNodes: [{ nodeId: 'review_blank' }],
+      })
+      const list = await listReviewSummaries(db, { status: 'all' })
+      expect(list).toHaveLength(1)
+      expect(list[0]!.title).toBe('review_blank')
+      expect(list[0]!.description).toBe('')
     })
-    const { db } = await seed({
-      workflowSnapshot: snapshot,
-      reviewNodes: [{ nodeId: 'review_blank' }],
-    })
-    const list = await listReviewSummaries(db, { status: 'all' })
-    expect(list).toHaveLength(1)
-    expect(list[0]!.title).toBe('review_blank')
-    expect(list[0]!.description).toBe('')
-  })
 
-  test('whitespace-only title falls back to nodeId', async () => {
-    const snapshot = JSON.stringify({
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'review_ws',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'design' },
-          title: '   ',
-          description: 'has description though',
-          rerunnableOnReject: [],
-          rerunnableOnIterate: [],
-        },
-      ],
-      edges: [],
+    test('whitespace-only title falls back to nodeId', async () => {
+      const snapshot = JSON.stringify({
+        $schema_version: 2,
+        inputs: [],
+        nodes: [
+          {
+            id: 'review_ws',
+            kind: 'review',
+            inputSource: { nodeId: 'designer', portName: 'design' },
+            title: '   ',
+            description: 'has description though',
+            rerunnableOnReject: [],
+            rerunnableOnIterate: [],
+          },
+        ],
+        edges: [],
+      })
+      const { db } = await seed(harness.db, {
+        workflowSnapshot: snapshot,
+        reviewNodes: [{ nodeId: 'review_ws' }],
+      })
+      const list = await listReviewSummaries(db, { status: 'all' })
+      expect(list[0]!.title).toBe('review_ws')
+      expect(list[0]!.description).toBe('has description though')
     })
-    const { db } = await seed({
-      workflowSnapshot: snapshot,
-      reviewNodes: [{ nodeId: 'review_ws' }],
-    })
-    const list = await listReviewSummaries(db, { status: 'all' })
-    expect(list[0]!.title).toBe('review_ws')
-    expect(list[0]!.description).toBe('has description though')
-  })
 
-  test('corrupt workflowSnapshot does not throw — degrades to nodeId / empty', async () => {
-    const { db } = await seed({
-      workflowSnapshot: 'not valid json {{{',
-      reviewNodes: [{ nodeId: 'review_corrupt' }],
+    test('corrupt workflowSnapshot does not throw — degrades to nodeId / empty', async () => {
+      const { db } = await seed(harness.db, {
+        workflowSnapshot: 'not valid json {{{',
+        reviewNodes: [{ nodeId: 'review_corrupt' }],
+      })
+      const list = await listReviewSummaries(db, { status: 'all' })
+      expect(list).toHaveLength(1)
+      expect(list[0]!.title).toBe('review_corrupt')
+      expect(list[0]!.description).toBe('')
     })
-    const list = await listReviewSummaries(db, { status: 'all' })
-    expect(list).toHaveLength(1)
-    expect(list[0]!.title).toBe('review_corrupt')
-    expect(list[0]!.description).toBe('')
-  })
 
-  test('multiple review nodes in the same task each carry their own title / description', async () => {
-    const snapshot = JSON.stringify({
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'review_a',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'design' },
-          title: 'A title',
-          description: 'A desc',
-          rerunnableOnReject: [],
-          rerunnableOnIterate: [],
-        },
-        {
-          id: 'review_b',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'design' },
-          title: 'B title',
-          description: '',
-          rerunnableOnReject: [],
-          rerunnableOnIterate: [],
-        },
-      ],
-      edges: [],
+    test('multiple review nodes in the same task each carry their own title / description', async () => {
+      const snapshot = JSON.stringify({
+        $schema_version: 2,
+        inputs: [],
+        nodes: [
+          {
+            id: 'review_a',
+            kind: 'review',
+            inputSource: { nodeId: 'designer', portName: 'design' },
+            title: 'A title',
+            description: 'A desc',
+            rerunnableOnReject: [],
+            rerunnableOnIterate: [],
+          },
+          {
+            id: 'review_b',
+            kind: 'review',
+            inputSource: { nodeId: 'designer', portName: 'design' },
+            title: 'B title',
+            description: '',
+            rerunnableOnReject: [],
+            rerunnableOnIterate: [],
+          },
+        ],
+        edges: [],
+      })
+      const { db } = await seed(harness.db, {
+        workflowSnapshot: snapshot,
+        reviewNodes: [{ nodeId: 'review_a' }, { nodeId: 'review_b' }],
+      })
+      const list = await listReviewSummaries(db, { status: 'all' })
+      const byNode = new Map(list.map((r) => [r.reviewNodeId, r]))
+      expect(byNode.get('review_a')!.title).toBe('A title')
+      expect(byNode.get('review_a')!.description).toBe('A desc')
+      expect(byNode.get('review_b')!.title).toBe('B title')
+      expect(byNode.get('review_b')!.description).toBe('')
     })
-    const { db } = await seed({
-      workflowSnapshot: snapshot,
-      reviewNodes: [{ nodeId: 'review_a' }, { nodeId: 'review_b' }],
-    })
-    const list = await listReviewSummaries(db, { status: 'all' })
-    const byNode = new Map(list.map((r) => [r.reviewNodeId, r]))
-    expect(byNode.get('review_a')!.title).toBe('A title')
-    expect(byNode.get('review_a')!.description).toBe('A desc')
-    expect(byNode.get('review_b')!.title).toBe('B title')
-    expect(byNode.get('review_b')!.description).toBe('')
-  })
-})
+  },
+)

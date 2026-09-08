@@ -7,9 +7,11 @@ import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
 import {
   collectMcpAgentReferences,
+  insertMcpRowInTx,
   mcpConfigHash,
   mcpFromPersistenceRow,
   mcpProjection,
+  updateMcpRowInTx,
 } from './mcpPersistence'
 import {
   runResourceCatalogTransaction,
@@ -103,22 +105,7 @@ export function createMcpRepository(input: {
     async create(record): Promise<Mcp> {
       try {
         return await runResourceCatalogTransaction(input.db, async (transaction) => {
-          const created = await transaction
-            .insert(mcps)
-            .values({
-              id: record.id,
-              name: record.input.name,
-              description: record.input.description,
-              type: record.input.type,
-              config: JSON.stringify(record.input.config),
-              enabled: record.input.enabled,
-              ownerUserId: record.ownerUserId,
-              visibility: record.visibility,
-              aclRevision: record.aclRevision,
-              createdAt: record.now,
-              updatedAt: record.now,
-            })
-            .returning()
+          const created = await insertMcpRowInTx(transaction, record)
           if (created.length !== 1) throw new Error('mcp insert did not return one row')
           return mcpFromPersistenceRow(created[0]!)
         })
@@ -141,11 +128,7 @@ export function createMcpRepository(input: {
         if (mutation.set.description !== undefined) set.description = mutation.set.description
         if (mutation.set.enabled !== undefined) set.enabled = mutation.set.enabled
         if (mutation.set.config !== undefined) set.config = JSON.stringify(mutation.set.config)
-        const updated = await transaction
-          .update(mcps)
-          .set(set)
-          .where(eq(mcps.id, mutation.id))
-          .returning()
+        const updated = await updateMcpRowInTx(transaction, { kind: 'id', id: mutation.id }, set)
         if (updated.length !== 1) {
           throw staleConflictError('mcp', 'the MCP changed while saving; reload and retry')
         }

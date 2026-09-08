@@ -16,7 +16,7 @@
 //
 // 本文件锁三件事：
 //   ① 判据本身收成一份纯函数（memory domain），选中规则与返回顺序都由它定；
-//   ② 真 SQLite 上跑出来的结果与该纯函数逐字一致——**故意让记忆不按 id 顺序落库**；
+//   ② 两个真数据库上跑出来的结果与该纯函数逐字一致——**故意让记忆不按 id 顺序落库**；
 //   ③ 两个 provider 的适配器都不再手写这条 WHERE / 顺序（源码层断言）。
 //
 // 先红后绿：在补出 participant 之前，②「顺序」这一条必红——SQLite 今天按插入顺序返回。
@@ -25,7 +25,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { memories } from '../src/db/schema'
 import {
   fusedProvenanceStamp,
@@ -34,8 +34,8 @@ import {
 } from '../src/modules/memory/domain/fusionMembership'
 import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // RFC-359 W4-D23b：SQLite 那份同步适配器随 legacy 技能回滚路径改吃中立事务一并退役——
 // 融合 / 解融合从此只有这一份，两个 provider 共用。
 const NEUTRAL_ADAPTER = resolve(
@@ -59,9 +59,10 @@ interface SeedRow {
  * 造记忆行。**插入顺序故意与 id 的字典序相反**——SQLite 无 ORDER BY 的 SELECT
  * 按 rowid（即插入顺序）返回，只有这样才能把「顺序判据」的差异逼出来。
  */
-function seed(db: ReturnType<typeof createInMemoryDb>, rows: readonly SeedRow[]): void {
+async function seed(db: ProviderNeutralDatabase, rows: readonly SeedRow[]): Promise<void> {
   for (const row of rows) {
-    db.insert(memories)
+    await db
+      .insert(memories)
       .values({
         id: row.id,
         scopeType: 'global',
@@ -158,10 +159,10 @@ describe('RFC-353 T1 — 解融合判据（纯函数）', () => {
   })
 })
 
-describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
+describeEachProvider('RFC-353 T1 — 真数据库与纯函数逐字一致', (harness) => {
   test('乱序落库时返回的仍是确定顺序（今天按插入顺序返回 ⇒ 本条先红）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, OUT_OF_ORDER)
+    const db = harness.db
+    await seed(db, OUT_OF_ORDER)
     const expected = memoriesToUnfuseAbove(
       OUT_OF_ORDER.map((r) => ({
         id: r.id,
@@ -194,8 +195,8 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
       // 判据不需要（也不应该）替它防守。这里只放合法形状。
       { id: 'm_u', status: 'archived', skillId: null, version: null },
     ]
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, matrix)
+    const db = harness.db
+    await seed(db, matrix)
     const expected = memoriesToUnfuseAbove(
       matrix.map((r) => ({
         id: r.id,
@@ -216,15 +217,15 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
   })
 
   test('被选中的行状态与 provenance 真的按 stamp 清空了', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, OUT_OF_ORDER)
+    const db = harness.db
+    await seed(db, OUT_OF_ORDER)
     await databaseSessionFor(db).transaction(
       async (tx) =>
         await composeSkillMemoryFusionParticipantFactory()
           .inTransaction(tx)
           .unfuseAboveVersion({ skillId: 'skl_1', aboveVersion: 1 }),
     )
-    const rows = db.select().from(memories).all()
+    const rows = await db.select().from(memories).all()
     const byId = new Map(rows.map((r) => [r.id, r]))
     for (const id of ['m_b', 'm_c', 'm_d']) {
       const row = byId.get(id)!
@@ -293,10 +294,12 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
     ]
     expect(memoriesToMarkFused(candidates, ['m_z', 'm_a'])).toEqual(['m_a', 'm_z'])
   })
+})
 
+describeEachProvider('RFC-353 T6 — 真数据库的融合成员关系', (harness) => {
   test('真库：标记之后 provenance 七列按同一份 stamp 写满', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seed(db, [
+    const db = harness.db
+    await seed(db, [
       { id: 'm_1', status: 'approved', skillId: null, version: null },
       { id: 'm_2', status: 'archived', skillId: null, version: null },
     ])
@@ -316,7 +319,7 @@ describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
           }),
     )
     expect(marked).toEqual(['m_1'])
-    const rows = db.select().from(memories).all()
+    const rows = await db.select().from(memories).all()
     const byId = new Map(rows.map((r) => [r.id, r]))
     const stamp = fusedProvenanceStamp({
       skillId: 'skl_9',
