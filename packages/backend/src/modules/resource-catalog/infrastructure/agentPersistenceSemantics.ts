@@ -17,6 +17,7 @@ import type { AgentOperationContext } from '../public/participants'
 import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
 import type { AgentPersistenceSemantics } from './agentRepository'
+import { assertAgentDependencyTraversal } from './agentDependencyTraversal'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 interface NamedAclRow extends AclRow {
@@ -174,14 +175,7 @@ async function assertDependencyGraph(
   if (dependencyIds.includes(candidateId)) {
     throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
   }
-  const visited = new Set<string>()
-  const visiting = new Set<string>()
-  async function visit(id: string): Promise<void> {
-    if (id === candidateId || visiting.has(id)) {
-      throw new ValidationError('agent-dependency-cycle', 'agent dependency graph contains a cycle')
-    }
-    if (visited.has(id)) return
-    visiting.add(id)
+  await assertAgentDependencyTraversal(candidateId, unique(dependencyIds), async (id) => {
     const row = (
       await transaction
         .select({ dependsOn: agents.dependsOn })
@@ -189,15 +183,7 @@ async function assertDependencyGraph(
         .where(eq(agents.id, id))
         .limit(1)
     )[0]
-    if (row === undefined) {
-      throw new ValidationError(
-        'agent-dependency-not-found',
-        `agent dependency '${id}' not found`,
-        {
-          notFound: [id],
-        },
-      )
-    }
+    if (row === undefined) return undefined
     let nested: readonly string[] = []
     try {
       const decoded: unknown = JSON.parse(row.dependsOn)
@@ -207,11 +193,8 @@ async function assertDependencyGraph(
     } catch {
       nested = []
     }
-    for (const dependency of nested) await visit(dependency)
-    visiting.delete(id)
-    visited.add(id)
-  }
-  for (const dependency of unique(dependencyIds)) await visit(dependency)
+    return nested
+  })
 }
 
 function onlyNew(next: readonly string[], previous: readonly string[] | undefined): string[] {

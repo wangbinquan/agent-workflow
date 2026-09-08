@@ -4,14 +4,18 @@ import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
 
 import { CreateAgentSchema } from '@agent-workflow/shared'
-import { users } from '@/db/schema'
+import { buildActor } from '@/auth/actor'
+import { agents, users } from '@/db/schema'
+import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import type { AgentOperationContext } from '@/modules/resource-catalog/public/participants'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -22,6 +26,107 @@ afterEach(() => {
 })
 
 describeEachProvider('RFC-359 W12 complete classic catalog composition', (harness) => {
+  // RFC-359 W20: exercise the shared dependency traversal through the complete
+  // catalog, keeping the original transaction and create/update entry points.
+  test('agent dependency create and update traverse the real graph and preserve a rejected row', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'rfc359-agent-graph-'))
+    homes.push(home)
+    const owner = 'classic-agent-graph-owner'
+    const actor = buildActor({
+      user: { id: owner, username: owner, displayName: owner, role: 'admin', status: 'active' },
+      source: 'session',
+    })
+    await harness.db.insert(users).values({
+      ...actor.user,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const { actor: authority } = new AuthorityClaimRegistry().mintDirectAuthority(
+      { userId: owner, source: actor.source },
+      { ...actor, userId: owner },
+    )
+    const catalog = composeClassicCatalogs({
+      db: harness.db,
+      appHome: home,
+      resourceCatalog: composeResourceCatalogFor({ db: harness.db }),
+      runtimeProfiles: {
+        async get() {
+          throw new Error('the dependency fixture has no runtime profile')
+        },
+      },
+      restoreMembership: createAsyncSkillRestoreMembership(
+        composeSkillMemoryFusionParticipantFactory(),
+      ),
+    })
+    for (const [id, dependsOn] of [
+      ['graph-leaf', []],
+      ['graph-a', ['graph-leaf']],
+      ['graph-b', ['graph-leaf']],
+    ] as const) {
+      await harness.db.insert(agents).values(
+        createAgentPersistenceValues({
+          id,
+          agent: CreateAgentSchema.parse({ name: id, dependsOn }),
+          ownerUserId: owner,
+          now: 1,
+        }),
+      )
+    }
+    const created = await catalog.agent.operations.create.invoke(
+      authority,
+      CreateAgentSchema.parse({ name: 'graph-root', dependsOn: ['graph-b', 'graph-a'] }),
+    )
+    expect(created.dependsOn).toEqual(['graph-b', 'graph-a'])
+    expect(await catalog.agent.queries.get(authority, { id: created.id })).toEqual(created)
+    const updated = await catalog.agent.operations.update.invoke(authority, {
+      id: created.id,
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify({
+          description: 'same graph, new root order',
+          dependsOn: ['graph-a', 'graph-b'],
+          expectedUpdatedAt: created.updatedAt,
+          expectedAclRevision: created.aclRevision,
+        }),
+      },
+    })
+    expect(updated).toEqual({
+      ...created,
+      description: 'same graph, new root order',
+      dependsOn: ['graph-a', 'graph-b'],
+      updatedAt: updated.updatedAt,
+    })
+    expect(updated.updatedAt).toBeGreaterThan(created.updatedAt)
+    const before = await harness.db.select().from(agents).where(eq(agents.id, created.id)).get()
+    expect(before?.dependsOn).toBe('["graph-a","graph-b"]')
+
+    // Both direct dependencies still exist. Only the nested graph now reaches
+    // the root, so this failure comes from the save-time traversal.
+    await harness.db
+      .update(agents)
+      .set({ dependsOn: JSON.stringify([created.id]) })
+      .where(eq(agents.id, 'graph-b'))
+    await expect(
+      catalog.agent.operations.update.invoke(authority, {
+        id: created.id,
+        submission: {
+          kind: 'json-body',
+          body: JSON.stringify({
+            description: 'must not be written',
+            expectedUpdatedAt: updated.updatedAt,
+            expectedAclRevision: updated.aclRevision,
+          }),
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'agent-dependency-cycle',
+      message: 'agent dependency graph contains a cycle',
+    })
+    expect(await harness.db.select().from(agents).where(eq(agents.id, created.id)).get()).toEqual(
+      before,
+    )
+  })
+
   test('create, read and recompose agent, managed skill and workflow using the same database', async () => {
     const home = mkdtempSync(join(tmpdir(), 'rfc359-classic-'))
     homes.push(home)

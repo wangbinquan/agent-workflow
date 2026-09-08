@@ -1,5 +1,6 @@
 import { and, sql, type SQLWrapper } from 'drizzle-orm'
 
+import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import {
   cachedRepos,
   memories,
@@ -276,16 +277,15 @@ interface RepositoryFacetsCacheEntry {
   readonly facets: CachedRepositoryPageRecords['facets']
 }
 
-function escapeLike(term: string): string {
-  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-}
-
 /** Shared provider-independent SQL projection. Provider-specific transaction
  * implementations wrap the mutation sets exposed by this base class. */
 export class RepositoryWorkspaceSqlStore {
   private facetsCache: RepositoryFacetsCacheEntry | null = null
 
-  constructor(protected readonly executor: RepositoryWorkspaceSqlExecutor) {}
+  constructor(
+    protected readonly executor: RepositoryWorkspaceSqlExecutor,
+    private readonly engine: Pick<EngineCapabilities, 'likeCaseInsensitive' | 'likeEscape'>,
+  ) {}
 
   invalidateCachedRepoFacets(): void {
     this.facetsCache = null
@@ -450,9 +450,7 @@ export class RepositoryWorkspaceSqlStore {
       SELECT ${tasks.cachedRepoId} AS cached_repo_id, count(*) AS count
       FROM ${tasks}
       WHERE ${tasks.cachedRepoId} IN (${idSet})
-        AND NOT EXISTS (
-          SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
-        )
+        AND ${tasks.id} NOT IN (SELECT ${taskRepos.taskId} FROM ${taskRepos})
       GROUP BY ${tasks.cachedRepoId}
     `)
     for (const row of explicitRows) counts.set(row.cached_repo_id, Number(row.count))
@@ -482,11 +480,11 @@ export class RepositoryWorkspaceSqlStore {
     const conditions: SQLWrapper[] = []
     const term = query.q?.trim() ?? ''
     if (term !== '') {
-      const pattern = `%${escapeLike(term)}%`
+      const { pattern, escape } = this.engine.likeEscape(term)
       conditions.push(sql`(
-        coalesce(${cachedRepos.urlRedacted}, '<url unavailable>') like ${pattern} escape ${'\\'}
-        or ${cachedRepos.localPath} like ${pattern} escape ${'\\'}
-        or ${cachedRepos.defaultBranch} like ${pattern} escape ${'\\'}
+        ${this.engine.likeCaseInsensitive(sql`coalesce(${cachedRepos.urlRedacted}, '<url unavailable>')`, pattern, escape)}
+        or ${this.engine.likeCaseInsensitive(cachedRepos.localPath, pattern, escape)}
+        or ${this.engine.likeCaseInsensitive(cachedRepos.defaultBranch, pattern, escape)}
       )`)
     }
     if (query.submodules === 'with') conditions.push(sql`${cachedRepos.hasSubmodules} = ${true}`)

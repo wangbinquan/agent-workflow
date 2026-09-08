@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十批（2026-09-08）**：Agent依赖DFS共享、仓库搜索能力归一与引用计数查询修正。
+> 再迁4旧套件，8 pass/131 expect，6原DB case默认双库，累计200；真正同步生命周期例保留原入口。
+> 当前1927测试文件，644文件/1371次实际构库，634构库文件无harness，375文件harness；T19f730→726。
+> task-page夹具显式保留原触发器继承，原golden/63筛选/全行JSON不变；旧备份extract补实际目录。
+> 任务详情延迟选中修复获真实组件红绿证据；runtime取消在原45秒预算等实际目标启动见证。
+> W19 exact08c06 Main34223843004终态30success/3failure/3cancelled，四mac后端与独立PG成功；
+> Ubuntu记录的四处功能红已逐项修正待新SHA。Windows shard4有1flaky，shard2为0flaky。
+> 原full34223969146的8源码/五表语料/360样本已核，overview已正确走PG owner，仍5/9项PG更慢，
+> 两库首/次task页及SQLite工作组、PG overview原绝对预算失败；严格AC11不改，完整RFC仍In Progress。
+> 完整backend/frontend类型及定向代码检查通过；真实PG、完整E2E及P95仍等待后继托管结果。
+> 一次诊断误入根测试脚本已在61.954秒终止，exit143，不采信为完整门禁；未重跑完整本地门禁。
+> 原始验证边界、独立复核和逐项证据见RFC359 plan §0b/§0c。
+
 > **RFC-359 W12 第十九批（2026-09-08）**：filtered任务页从限页fam构造匹配闭包，MCP/plugin共享INSERT行算法。
 > 再迁12旧套件，原后88 pass/361 expect，59原DB用例默认双库，累计196套件；当前1924测试文件，
 > 648文件/1376次实际构库，638构库文件无harness，368文件harness，T19f742→730。

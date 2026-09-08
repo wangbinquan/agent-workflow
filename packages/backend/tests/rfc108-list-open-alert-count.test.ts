@@ -4,18 +4,16 @@
 // 一条 grouped 查询（非 per-row fetch）。本测试锁定：① 有未决告警的任务 count>0；②
 // 无告警的任务 count=0；③ 已 resolved 的告警不计入。
 
-import { resolve } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
 import { listTaskItems, listTasks } from '../src/services/task'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
@@ -32,11 +30,20 @@ async function seedTask(db: DbClient): Promise<string> {
     status: 'awaiting_human',
     inputs: '{}',
     startedAt: Date.now(),
+    // Preserve the row and JSON bytes previously filled by SQLite migration 0210.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return taskId
 }
 
-async function addAlert(db: DbClient, taskId: string, resolved: boolean): Promise<void> {
+async function addAlert(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  resolved: boolean,
+): Promise<void> {
   await db.insert(lifecycleAlerts).values({
     id: ulid(),
     taskId,
@@ -48,9 +55,9 @@ async function addAlert(db: DbClient, taskId: string, resolved: boolean): Promis
   })
 }
 
-describe('RFC-108 T22 — listTasks openAlertCount', () => {
+describeEachProvider('RFC-108 T22 — listTasks openAlertCount', (harness) => {
   test('counts only OPEN alerts per task; tasks without alerts → 0', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const stuck = await seedTask(db)
     const healthy = await seedTask(db)
     await addAlert(db, stuck, false) // open

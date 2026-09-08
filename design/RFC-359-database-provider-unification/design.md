@@ -20,6 +20,16 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W20 Agent 依赖 DFS 共用一个异步遍历：保留先检测候选环再查 visited、顺序加载、首个 missing
+  错误与原 Error 身份；两个实际消费者保留各自根列表规范化、查询、解析和外层事务。
+- 仓库搜索通过构造时必需的 EngineCapabilities 渲染三列不区分大小写的匹配；SQLite 原 SQL/参数
+  不变，PG 使用 ILIKE。引用计数保留原三次串行语句及各自快照，仅在两列 NOT NULL 的已验证前提下
+  将相关 NOT EXISTS 改为 NOT IN 子查询；收益以原规模 hosted HTTP 证据为准。
+- 任务页夹具显式写出原 SQLite 0196 触发器继承的子任务 launchOrigin；不能靠修改 golden 接受
+  两库种子不同。读取服务仅补齐已中立执行的类型合同，真正同步的旧状态变更仍保留原测试入口。
+- Runtime 取消例的实际 mock 目标进程可通过显式 opt-in 写同任务启动见证；原45秒等待内确认目标
+  已运行再取消。持久化 launcher PID 早于目标激活，不能单独当作目标已启动的证明。
+
 - W19 filtered任务页以限页fam中的相同谓词决定qualified初始集合，保留完整页/游标/计数合同。
   MCP/plugin只共用INSERT行构造；显式schemaVersion与数据库默认列、原返回和事务机制由调用方保持。
 - 性能夹具按客户端实际getter选择PG owner查询；先前in判断误进legacy只属于测试/性能装配，

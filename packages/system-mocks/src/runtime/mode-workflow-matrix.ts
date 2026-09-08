@@ -24,7 +24,7 @@ import {
   requireEnvelopeOpen,
   writeInventoryIfRequested,
 } from './skeleton'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
 const NAME = 'stub-opencode-workflow-matrix'
@@ -366,6 +366,16 @@ export async function run(argv: readonly string[]): Promise<void> {
     }
     if (mode === 'fail') die(13, 'intentional permanent runtime failure')
     if (mode === 'timeout' || mode === 'cancel') {
+      const readyDir = process.env.MATRIX_CANCEL_READY_DIR
+      if (mode === 'cancel' && readyDir !== undefined && readyDir !== '') {
+        // Opt-in E2E observation: this PID belongs to the target runtime,
+        // beyond the daemon's earlier launcher spawn receipt. Publish a complete
+        // per-task record before entering the unchanged sleeping branch.
+        const readyPath = join(ensureStateDir(readyDir, '.'), `cancel-started-${task}.json`)
+        const pendingPath = `${readyPath}.${process.pid}.tmp`
+        writeFileSync(pendingPath, JSON.stringify({ taskId: task, pid: process.pid }))
+        renameSync(pendingPath, readyPath)
+      }
       await Bun.sleep(10_000)
       ports('<port name="result">unexpected-slow-completion</port>')
     }

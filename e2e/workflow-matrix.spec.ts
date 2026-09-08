@@ -9,7 +9,7 @@
 // deterministic MATRIX_* OpenCode stub.
 
 import { expect, test } from '@playwright/test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -72,6 +72,7 @@ interface NodeRunRow {
   shardKey: string | null
   retryIndex: number
   status: string
+  pid: number | null
   errorMessage: string | null
   failureCode?: string | null
   promptText: string | null
@@ -296,7 +297,7 @@ test.beforeAll(async () => {
   matrixStateDir = mkdtempSync(join(tmpdir(), 'aw-workflow-matrix-state-'))
   daemon = await startDaemon({
     stubMode: 'workflow-matrix',
-    extraEnv: { MATRIX_STATE_DIR: matrixStateDir },
+    extraEnv: { MATRIX_STATE_DIR: matrixStateDir, MATRIX_CANCEL_READY_DIR: matrixStateDir },
     configOverrides: {
       defaultNodeRetries: 1,
       // RFC-313: 本处钉住重试预算是为了断言 attempt 次数。attempt 上限现在是两个预算的
@@ -467,6 +468,72 @@ async function waitForTask(
 async function waitForTerminal(taskId: string): Promise<TaskRow> {
   const terminal = new Set(['done', 'failed', 'canceled', 'interrupted', 'exhausted'])
   return waitForTask(taskId, (task) => terminal.has(task.status))
+}
+
+interface RuntimeCancelReady {
+  taskId: string
+  pid: number
+}
+
+function readRuntimeCancelReady(taskId: string): RuntimeCancelReady | null {
+  const markerPath = join(matrixStateDir, `cancel-started-${taskId}.json`)
+  if (!existsSync(markerPath)) return null
+  const marker: unknown = JSON.parse(readFileSync(markerPath, 'utf8'))
+  if (
+    typeof marker === 'object' &&
+    marker !== null &&
+    'taskId' in marker &&
+    marker.taskId === taskId &&
+    'pid' in marker &&
+    typeof marker.pid === 'number' &&
+    Number.isInteger(marker.pid) &&
+    marker.pid > 0
+  ) {
+    return { taskId, pid: marker.pid }
+  }
+  throw new Error(`invalid runtime cancel readiness marker for task ${taskId}`)
+}
+
+async function waitForRuntimeWorkerStarted(
+  taskId: string,
+  timeoutMs = 45_000,
+): Promise<{ nodeRunId: string; targetPid: number }> {
+  // Replace the original task-running wait with one shared deadline. A node's
+  // stored PID belongs to its launcher; the per-task marker proves the target
+  // process has also entered the real cancel branch before we interrupt it.
+  const deadline = Date.now() + timeoutMs
+  let lastTaskStatus = 'pending'
+  let lastRuns: NodeRunRow[] = []
+  let lastReady: RuntimeCancelReady | null = null
+  while (Date.now() < deadline) {
+    const [taskResponse, data] = await Promise.all([
+      apiFetch(`/api/tasks/${taskId}`),
+      nodeRuns(taskId),
+    ])
+    if (taskResponse.ok) lastTaskStatus = ((await taskResponse.json()) as TaskRow).status
+    lastRuns = runsFor(data, 'runtime_worker')
+    lastReady = readRuntimeCancelReady(taskId)
+    const run = lastRuns.length === 1 ? lastRuns[0] : undefined
+    if (
+      lastTaskStatus === 'running' &&
+      run?.status === 'running' &&
+      typeof run.pid === 'number' &&
+      Number.isInteger(run.pid) &&
+      run.pid > 0 &&
+      lastReady !== null
+    ) {
+      return { nodeRunId: run.id, targetPid: lastReady.pid }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  throw new Error(
+    `runtime_worker did not start for task ${taskId} in ${timeoutMs}ms; ` +
+      `last=${JSON.stringify({
+        taskStatus: lastTaskStatus,
+        runs: lastRuns.map(({ id, status, pid }) => ({ id, status, pid })),
+        target: lastReady,
+      })}`,
+  )
 }
 
 async function nodeRuns(taskId: string): Promise<NodeRunsResponse> {
@@ -1398,7 +1465,8 @@ test('runtime lifecycle: the global per-node timeout is applied to every retry a
 
 test('runtime lifecycle: cancel interrupts a running subprocess and prevents output projection', async () => {
   const task = await launchOk('runtime-lifecycle.yaml', { mode: 'cancel' })
-  await waitForTask(task.id, (row) => row.status === 'running')
+  const started = await waitForRuntimeWorkerStarted(task.id)
+  expect(started.targetPid).toBeGreaterThan(0)
 
   const cancel = await apiFetch(`/api/tasks/${task.id}/cancel`, { method: 'POST' })
   await expectHttp(cancel, 200, 'cancel runtime workflow')
@@ -1408,6 +1476,7 @@ test('runtime lifecycle: cancel interrupts a running subprocess and prevents out
   const data = await nodeRuns(task.id)
   const runs = runsFor(data, 'runtime_worker')
   expect(runs).toHaveLength(1)
+  expect(runs[0]?.id).toBe(started.nodeRunId)
   expect(runs[0]?.status).toBe('canceled')
   expect(runsFor(data, 'final_output')).toEqual([])
 })

@@ -6873,7 +6873,7 @@ export async function listTasks(
  * produce an arrow that opens onto an empty list.
  */
 async function loadChildCounts(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   parentIds: readonly string[],
   filters: Pick<ListTasksFilters, 'visibility' | 'catalogVisibility'>,
 ): Promise<Map<string, number>> {
@@ -6896,7 +6896,7 @@ async function loadChildCounts(
 
 /** RFC-232 — list-only owner projection over the canonical summary pipeline. */
 export async function listTaskItems(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   filters: ListTasksFilters = {},
 ): Promise<TaskListItem[]> {
   const rows = await listTaskSummaryRows(db, filters)
@@ -6985,7 +6985,7 @@ export async function loadTaskFailureCodes(
  * sorted by id.
  */
 export async function getTaskNodeRuns(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
 ): Promise<TaskNodeRuns> {
   const task = await getTask(db, taskId)

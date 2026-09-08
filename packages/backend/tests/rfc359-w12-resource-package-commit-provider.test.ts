@@ -10,12 +10,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { Hono, type MiddlewareHandler } from 'hono'
-import { PackageImportReceiptSchema, PackagePreviewSchema } from '@agent-workflow/shared'
+import {
+  CreateAgentSchema,
+  PackageImportReceiptSchema,
+  PackagePreviewSchema,
+} from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import { resourceBundleApplies, skills, skillVersions, users } from '@/db/schema'
+import { agents, resourceBundleApplies, skills, skillVersions, users } from '@/db/schema'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
@@ -30,6 +34,8 @@ import {
   type ResourcePackageProviderComposition,
 } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import type { PostgresqlResourcePackageApplyReceipt } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
+import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
+import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
@@ -99,6 +105,58 @@ danglingCallRefs: []
       path: `skills/skill-guide/files/${file.path}`,
       bytes: file.bytes,
     })),
+  ])
+}
+
+function agentDependencyPackage(revision: number, dependencies: readonly string[]): Uint8Array {
+  return encodeZip([
+    {
+      path: 'manifest.yaml',
+      bytes: utf8(`formatVersion: 1
+exportedAt: 0
+root:
+  slug: dependency-agent
+  type: agent
+  name: package-dependency-agent
+resources:
+  - slug: dependency-agent
+    type: agent
+    name: package-dependency-agent
+requirements: {}
+secrets: []
+danglingCallRefs: []
+`),
+    },
+    {
+      path: 'bundle.json',
+      bytes: utf8(
+        JSON.stringify({
+          bundleVersion: 1,
+          ops: [
+            {
+              opId: 'op-1',
+              kind: 'agent-create',
+              slug: 'dependency-agent',
+              payload: {
+                name: 'package-dependency-agent',
+                description: `dependency revision ${revision}`,
+                outputs: ['report'],
+                inputs: [],
+                syncOutputsOnIterate: true,
+                permission: {},
+                skills: [],
+                dependsOn: dependencies.map((id) => `external:${id}`),
+                mcp: [],
+                plugins: [],
+                frontmatterExtra: { retained: 'sidecar' },
+                bodyMd: 'Follow the dependency graph.',
+              },
+            },
+          ],
+          rootRef: 'local:dependency-agent',
+        }),
+      ),
+    },
   ])
 }
 
@@ -210,8 +268,153 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       return app
     }
 
-    return { appHome, compose, app, box }
+    return { appHome, compose, app, box, actor, context }
   }
+
+  // RFC-359 W20: direct application calls exercise the real package writer and
+  // its dependency traversal, without invoking the HTTP adapter in this file.
+  test('agent dependency package create, overwrite and replay preserve rows and receipts', async () => {
+    const f = await fixture()
+    for (const [id, dependsOn] of [
+      ['package-graph-leaf', []],
+      ['package-graph-a', ['package-graph-leaf']],
+      ['package-graph-b', ['package-graph-leaf']],
+    ] as const) {
+      await harness.db.insert(agents).values(
+        createAgentPersistenceValues({
+          id,
+          agent: CreateAgentSchema.parse({ name: id, dependsOn }),
+          ownerUserId: OWNER,
+          now: NOW,
+        }),
+      )
+    }
+    const { catalog } = f.compose()
+    async function preview(bytes: Uint8Array) {
+      const result = await catalog.operations.inspect.invoke(
+        f.context,
+        catalog.transport.stageInspect(f.actor, bytes),
+      )
+      const view = await catalog.operations.getPreview.invoke(f.context, result)
+      return PackagePreviewSchema.parse(JSON.parse(view.document))
+    }
+    async function apply(
+      bytes: Uint8Array,
+      previewToken: string,
+      decision: ResourcePackageImportDecision,
+      target = catalog,
+    ) {
+      const result = await target.operations.apply.invoke(
+        f.context,
+        target.transport.stageApply(f.actor, {
+          bytes,
+          previewToken,
+          decisions: [decision],
+          humanMemberMappings: [],
+          secretInputs: [],
+        }),
+      )
+      const view = await target.operations.getReceipt.invoke(f.context, result)
+      return PackageImportReceiptSchema.parse(JSON.parse(view.document))
+    }
+    const originalDependencies = ['package-graph-b', 'package-graph-a']
+    const bytes = agentDependencyPackage(1, originalDependencies)
+    const prepared = await preview(bytes)
+    const decision = { localSlug: 'dependency-agent', action: 'new' as const }
+    const receipt = await apply(bytes, prepared.previewToken, decision)
+    if (receipt.root === undefined) throw new Error('package Agent root missing')
+    const id = receipt.root.resourceId
+    const before = await harness.db.select().from(agents).where(eq(agents.id, id)).get()
+    if (before === undefined) throw new Error('package Agent row missing')
+    expect(before).toEqual({
+      id,
+      name: 'package-dependency-agent',
+      description: 'dependency revision 1',
+      outputs: '["report"]',
+      inputs: '[]',
+      syncOutputsOnIterate: true,
+      runtime: null,
+      permission: '{}',
+      skills: '[]',
+      dependsOn: '["package-graph-b","package-graph-a"]',
+      mcp: '[]',
+      plugins: '[]',
+      frontmatterExtra: '{"retained":"sidecar"}',
+      bodyMd: 'Follow the dependency graph.',
+      ownerUserId: OWNER,
+      visibility: 'private',
+      aclRevision: 0,
+      builtin: false,
+      schemaVersion: 1,
+      createdAt: before.createdAt,
+      updatedAt: before.createdAt,
+    })
+    expect(receipt.applied).toEqual([
+      {
+        opId: 'op-1',
+        resourceType: 'agent',
+        resourceId: id,
+        action: 'create',
+        name: 'package-dependency-agent',
+      },
+    ])
+    const journalBeforeReplay = await harness.db
+      .select()
+      .from(resourceBundleApplies)
+      .where(eq(resourceBundleApplies.scope, 'package'))
+      .orderBy(resourceBundleApplies.id)
+    expect(journalBeforeReplay).toHaveLength(1)
+    expect(journalBeforeReplay[0]?.state).toBe('committed')
+    expect(JSON.parse(journalBeforeReplay[0]?.receiptJson ?? '{}').root).toEqual(receipt.root)
+    expect(await apply(bytes, prepared.previewToken, decision, f.compose().catalog)).toEqual(
+      receipt,
+    )
+    expect(await harness.db.select().from(agents).where(eq(agents.id, id)).get()).toEqual(before)
+    expect(
+      await harness.db
+        .select()
+        .from(resourceBundleApplies)
+        .where(eq(resourceBundleApplies.scope, 'package'))
+        .orderBy(resourceBundleApplies.id),
+    ).toEqual(journalBeforeReplay)
+
+    const updateBytes = agentDependencyPackage(2, [...originalDependencies].reverse())
+    const updatePreview = await preview(updateBytes)
+    const updateDecision = {
+      localSlug: 'dependency-agent',
+      action: 'overwrite' as const,
+      targetId: id,
+    }
+    const updateReceipt = await apply(updateBytes, updatePreview.previewToken, updateDecision)
+    const after = await harness.db.select().from(agents).where(eq(agents.id, id)).get()
+    if (after === undefined) throw new Error('updated package Agent row missing')
+    expect(after).toEqual({
+      ...before,
+      description: 'dependency revision 2',
+      dependsOn: '["package-graph-a","package-graph-b"]',
+      updatedAt: after.updatedAt,
+    })
+    expect(after.updatedAt).toBeGreaterThan(before.updatedAt)
+    expect(updateReceipt.applied).toEqual([
+      {
+        opId: 'op-1',
+        resourceType: 'agent',
+        resourceId: id,
+        action: 'update',
+        name: 'package-dependency-agent',
+      },
+    ])
+    expect(
+      await apply(updateBytes, updatePreview.previewToken, updateDecision, f.compose().catalog),
+    ).toEqual(updateReceipt)
+    expect(await harness.db.select().from(agents).where(eq(agents.id, id)).get()).toEqual(after)
+    expect(
+      await harness.db
+        .select()
+        .from(resourceBundleApplies)
+        .where(eq(resourceBundleApplies.scope, 'package')),
+    ).toHaveLength(2)
+  })
 
   test('a committed PostgreSQL receipt crosses the real execution adapter and HTTP response schema', async () => {
     const f = await fixture()

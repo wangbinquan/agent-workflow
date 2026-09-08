@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 730,
+      "baseline": 726,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -777,10 +777,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1739,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 W19 adds the two shared MCP/plugin INSERT value constructors. Both existing neutral row insertion and real Intent apply consume these exact functions, preserving their original SQL/default-column mechanisms; all entrypoint classifications remain unchanged."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -814,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5324,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5326,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W20 counts two real dependencies with the unchanged classifier: the shared resource-catalog dependency traversal preserves ValidationError identity, and source-control explicitly requires the existing EngineCapabilities search contract."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -835,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4791,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4793,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W20 records the new ValidationError value import and EngineCapabilities type import as two measured legacy-outbound edges. Existing consumers remain counted; no dependency classifier or exemption changes."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -870,15 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25042,
+      "baseline": 25043,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W19 records the two shared MCP/plugin INSERT value constructors at their existing resource-catalog infrastructure owners. The real consumers share the original row algorithms and all other production functions remain counted."
+        "why": "RFC-359 W20 adds the agentDependencyTraversal.ts file owner and its exported shared function and removes the now-replaced private escapeLike helper from repositoryWorkspaceSqlStore.ts. The exact net symbol count grows by one; original traversal wrappers remain counted."
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a24d0825fe238dbf3c8066423af3a81902f7ca18d319819e4e94e1329e34bb68",
+    "sourceDigest": "sha256:800e3de7b2b4caa4cf03f8f0f054a0081cd83cd3e6a176e4291639d12b9c8fde",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -891,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "67e2cf8c9a756ca3831a083aa4455cc03c2e2287",
-    "contentDigest": "sha256:539ab34305d90b9ed61054ff21ce574c302126c64bf928a26504d79b430c9834",
+    "currentSnapshotSha": "08c06dea3f4840f9c18328dafa7a497402af9184",
+    "contentDigest": "sha256:82372634683c5109f434190921bbbeb1d182433407b2be5c5d5261dda72dad0c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

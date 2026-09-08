@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1796,
+    "backendFiles": 1797,
     "frontendFiles": 622,
     "legacyFiles": 606,
-    "moduleFiles": 1190,
-    "productionFiles": 2573,
+    "moduleFiles": 1191,
+    "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25042
+    "symbolsIncludingFileRoots": 25043
   },
   "entries": [
     {
@@ -86191,6 +86191,30 @@
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyTraversal.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyTraversal.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyTraversal.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyTraversal.ts#assertAgentDependencyTraversal",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertAgentDependencyTraversal",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts#$file",
       "removeAfterWave": null,
@@ -107559,18 +107583,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "columnName",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "source-control",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
-      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts#escapeLike",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "escapeLike",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -301206,5 +301218,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a24d0825fe238dbf3c8066423af3a81902f7ca18d319819e4e94e1329e34bb68"
+  "sourceDigest": "sha256:800e3de7b2b4caa4cf03f8f0f054a0081cd83cd3e6a176e4291639d12b9c8fde"
 }

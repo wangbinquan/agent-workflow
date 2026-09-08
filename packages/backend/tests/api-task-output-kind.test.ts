@@ -5,20 +5,20 @@
 //   - NULL column (legacy row / undeclared kind) surfaces as null,
 //   - value (content) is unchanged alongside kind.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -29,7 +29,8 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: taskId,
       name: 't',
@@ -43,31 +44,40 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
       status: 'pending',
       inputs: '{}',
       startedAt: Date.now(),
+      // Materialize precisely the values the old SQLite 0210 trigger produced.
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
     })
     .run()
   return { taskId }
 }
 
-function seedRun(db: DbClient, taskId: string, nodeId = 'n'): string {
+async function seedRun(db: ProviderNeutralDatabase, taskId: string, nodeId = 'n'): Promise<string> {
   const id = ulid()
-  db.insert(nodeRuns).values({ id, taskId, nodeId, status: 'done', startedAt: Date.now() }).run()
+  await db
+    .insert(nodeRuns)
+    .values({ id, taskId, nodeId, status: 'done', startedAt: Date.now() })
+    .run()
   return id
 }
 
-describe('RFC-072 — getTaskNodeRuns surfaces output kind', () => {
-  let db: DbClient
+describeEachProvider('RFC-072 — getTaskNodeRuns surfaces output kind', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     resetBroadcastersForTests()
   })
 
   test('persisted kind string surfaces verbatim; content unchanged', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const runId = seedRun(db, taskId)
-    db.insert(nodeRunOutputs)
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const runId = await seedRun(db, taskId)
+    await db
+      .insert(nodeRunOutputs)
       .values({
         nodeRunId: runId,
         portName: 'doc',
@@ -83,9 +93,10 @@ describe('RFC-072 — getTaskNodeRuns surfaces output kind', () => {
   })
 
   test('NULL kind (legacy / undeclared) surfaces as null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const runId = seedRun(db, taskId)
-    db.insert(nodeRunOutputs)
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const runId = await seedRun(db, taskId)
+    await db
+      .insert(nodeRunOutputs)
       .values({ nodeRunId: runId, portName: 'summary', content: 'all good', kind: null })
       .run()
     const res = await getTaskNodeRuns(db, taskId)

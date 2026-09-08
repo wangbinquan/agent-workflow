@@ -9,16 +9,15 @@
 //   - getTaskNodeRuns 响应 mapper 带出 rerunCause（P1-3 勘误缝位：routes 是薄
 //     委托、无 select 可加——wire 缝在 services/task.ts 的手写 mapper）。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { getTaskNodeRuns } from '../src/services/task'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
 describe('RFC-182 — pending 帧源级锁', () => {
@@ -49,13 +48,9 @@ describe('RFC-182 — pending 帧源级锁', () => {
   })
 })
 
-describe('RFC-182 P1-3 — getTaskNodeRuns 响应带 rerunCause', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-
+describeEachProvider('RFC-182 P1-3 — getTaskNodeRuns 响应带 rerunCause', (harness) => {
   test('mapper 透出 mint cause（wg 历轮标签的 wire 依据）', async () => {
+    const db = harness.db
     const taskId = ulid()
     const wfId = ulid()
     await db.insert(workflows).values({ id: wfId, name: `wf-${wfId}`, definition: '{}' })
@@ -71,6 +66,11 @@ describe('RFC-182 P1-3 — getTaskNodeRuns 响应带 rerunCause', () => {
       status: 'running',
       inputs: '{}',
       startedAt: Date.now(),
+      // The original SQLite trigger stored this exact root lineage JSON.
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
     })
     const runId = await mintNodeRun(db, {
       taskId,

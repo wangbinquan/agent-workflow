@@ -144,6 +144,8 @@ function fixtureTasks(): TaskInsert[] {
   add('c09', 'r07', 'r07', 450, { name: 'cycle leaf', status: 'running' })
   return rows.map((row) => ({
     ...row,
+    // Match SQLite 0196's parent-origin inheritance across the seeded tree.
+    launchOrigin: rows.find((root) => root.id === row.rootTaskId)?.launchOrigin ?? row.launchOrigin,
     branchStartedAt: Math.max(
       ...rows
         .filter((child) => child.rootTaskId === row.rootTaskId)

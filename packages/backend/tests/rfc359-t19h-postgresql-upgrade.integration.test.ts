@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -611,6 +611,7 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           application: createPortableBackupApplicationAssets({ db: client }),
         })
         const extracted = join(fixture.appHome, 'extracted')
+        mkdirSync(extracted, { recursive: true })
         await extractTarGz(backup.path, extracted)
         const manifest = readManifest(extracted)
         expect(manifest).toMatchObject({

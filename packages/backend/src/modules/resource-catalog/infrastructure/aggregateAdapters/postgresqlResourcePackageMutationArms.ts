@@ -56,6 +56,7 @@ import {
   createAgentPersistenceValues,
   updateAgentPersistenceValues,
 } from '../agentPersistence'
+import { assertAgentDependencyTraversal } from '../agentDependencyTraversal'
 import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
 import {
   insertPluginRowInTx,
@@ -338,35 +339,14 @@ async function assertAgentDependencyGraph(
   if (dependencyIds.includes(agentId)) {
     throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
   }
-  const visited = new Set<string>()
-  const visiting = new Set<string>()
-
-  async function visit(id: string): Promise<void> {
-    if (id === agentId || visiting.has(id)) {
-      throw new ValidationError('agent-dependency-cycle', 'agent dependency graph contains a cycle')
-    }
-    if (visited.has(id)) return
-    visiting.add(id)
+  await assertAgentDependencyTraversal(agentId, uniqueStrings(dependencyIds), async (id) => {
     const row = await transaction
       .select({ id: agents.id, dependsOn: agents.dependsOn })
       .from(agents)
       .where(eq(agents.id, id))
       .get()
-    if (row === undefined) {
-      throw new ValidationError(
-        'agent-dependency-not-found',
-        `agent dependency '${id}' not found`,
-        {
-          notFound: [id],
-        },
-      )
-    }
-    for (const dependency of stringArray(row.dependsOn)) await visit(dependency)
-    visiting.delete(id)
-    visited.add(id)
-  }
-
-  for (const dependencyId of uniqueStrings(dependencyIds)) await visit(dependencyId)
+    return row === undefined ? undefined : stringArray(row.dependsOn)
+  })
 }
 
 async function resolvedAgentInput(input: {

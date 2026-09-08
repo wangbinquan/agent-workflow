@@ -127,7 +127,7 @@ export class DrizzleRepositoryWorkspaceStore
   readonly runtimeIdentity: object
 
   constructor(private readonly db: ProviderNeutralDatabase) {
-    super(executor(db))
+    super(executor(db), engineOf(db))
     this.runtimeIdentity = db as object
   }
 

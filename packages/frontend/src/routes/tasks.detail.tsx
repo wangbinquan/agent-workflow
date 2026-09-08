@@ -146,7 +146,18 @@ function TaskDetailPage() {
   const { resolved: permissionsReady, permissions: resolvedPermissions } =
     useLastResolvedPermissions()
   useTaskSync(id)
-  const [selectedNodeRunId, setSelectedNodeRunId] = useState<string | null>(null)
+  const [selectedNodeRunId, selectNodeRunId] = useState<string | null>(null)
+  // A pending click has no drawer to render yet. Avoid rebuilding the canvas
+  // before xyflow's own click selection has settled.
+  const pendingNodeId = useRef<string | null>(null)
+  const setSelectedNodeRunId = useCallback((nodeRunId: string | null) => {
+    pendingNodeId.current = null
+    selectNodeRunId(nodeRunId)
+  }, [])
+  const selectPendingNode = useCallback((nodeId: string) => {
+    pendingNodeId.current = nodeId
+    selectNodeRunId(null)
+  }, [])
   const [dismissedBanners, setDismissedBanners] = useState<ReadonlySet<string>>(() => new Set())
   const dismissBanner = useCallback((key: string) => {
     setDismissedBanners((previous) => {
@@ -213,7 +224,7 @@ function TaskDetailPage() {
       setSelectedNodeRunId(nodeRunId)
       navigateTaskTab('workflow-status')
     },
-    [navigateTaskTab],
+    [navigateTaskTab, setSelectedNodeRunId],
   )
 
   const task = useQuery<Task>({
@@ -229,6 +240,27 @@ function TaskDetailPage() {
     refetchInterval: (q) =>
       isTerminal(task.data?.status) && (q.state.data?.runs.length ?? 0) > 0 ? false : 3000,
   })
+
+  const latestRunByNode = useMemo(() => {
+    const m = new Map<string, NodeRun>()
+    for (const r of nodeRuns.data?.runs ?? []) {
+      const prev = m.get(r.nodeId)
+      if (prev === undefined || (r.startedAt ?? 0) >= (prev.startedAt ?? 0)) {
+        m.set(r.nodeId, r)
+      }
+    }
+    const idMap = new Map<string, string>()
+    for (const [nodeId, r] of m) idMap.set(nodeId, r.id)
+    return idMap
+  }, [nodeRuns.data?.runs])
+
+  // Task and run queries settle independently. Resolve a canvas click once its
+  // run arrives; explicit run picks and cleared/replaced selections win over it.
+  useEffect(() => {
+    if (pendingNodeId.current === null) return
+    const runId = latestRunByNode.get(pendingNodeId.current)
+    if (runId !== undefined) setSelectedNodeRunId(runId)
+  }, [latestRunByNode, setSelectedNodeRunId])
 
   // RFC-128: task-question count for the 「问题」tab badge. Same query key as the
   // canvas badges (TaskStatusCanvas) so they share one cache entry + useTaskSync
@@ -998,7 +1030,9 @@ function TaskDetailPage() {
                     task={tk}
                     runs={nodeRuns.data?.runs ?? []}
                     branchTrace={nodeRuns.data?.branchTrace}
+                    latestRunByNode={latestRunByNode}
                     onSelectNodeRun={setSelectedNodeRunId}
+                    onSelectPendingNode={selectPendingNode}
                     onJumpToQuestions={jumpToQuestions}
                   />
                   {selectedNodeRunId !== null && nodeRuns.data !== undefined && (
@@ -1379,7 +1413,9 @@ function TaskStatusCanvas({
   task,
   runs,
   branchTrace,
+  latestRunByNode,
   onSelectNodeRun,
+  onSelectPendingNode,
   onJumpToQuestions,
 }: {
   // RFC-158: RefObject (not the broader React.Ref) — the onSelect review branch
@@ -1389,7 +1425,9 @@ function TaskStatusCanvas({
   runs: NodeRun[]
   /** RFC-306 — server-derived run trace; the canvas renders it, never re-derives it. */
   branchTrace?: BranchTrace
+  latestRunByNode: ReadonlyMap<string, string>
   onSelectNodeRun: (id: string | null) => void
+  onSelectPendingNode: (nodeId: string) => void
   // RFC-120 D13: invoked with a node id when a canvas question badge is clicked.
   onJumpToQuestions: (nodeId: string) => void
 }) {
@@ -1494,19 +1532,6 @@ function TaskStatusCanvas({
     () => (branchTrace?.inactiveEdges ?? []).map((e) => e.edgeId),
     [branchTrace],
   )
-
-  const latestRunByNode = useMemo(() => {
-    const m = new Map<string, NodeRun>()
-    for (const r of runs) {
-      const prev = m.get(r.nodeId)
-      if (prev === undefined || (r.startedAt ?? 0) >= (prev.startedAt ?? 0)) {
-        m.set(r.nodeId, r)
-      }
-    }
-    const idMap = new Map<string, string>()
-    for (const [nodeId, r] of m) idMap.set(nodeId, r.id)
-    return idMap
-  }, [runs])
 
   // RFC-158: review nodes on the canvas open the review page instead of the
   // (near-empty) drawer. `reviewNodeIds` gates the onSelect branch; `reviewNavByNode`
@@ -1661,7 +1686,8 @@ function TaskStatusCanvas({
             return
           }
           const runId = latestRunByNode.get(sel.id)
-          onSelectNodeRun(runId ?? null)
+          if (runId === undefined) onSelectPendingNode(sel.id)
+          else onSelectNodeRun(runId)
         }}
         readOnly
       />
