@@ -53109,6 +53109,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a8f9b062de351a3edbf6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
@@ -81500,9 +81517,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4794,
+    "architectureExceptions": 4795,
     "implementationSccs": 0,
-    "observedEdges": 5327,
+    "observedEdges": 5328,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -137175,6 +137192,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#$file",
+      "id": "import:a8f9b062de351a3edbf6",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
@@ -167280,7 +167313,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9f48bc5b1eba3a92439f8a0cbefe36c89d8d29e24ff96ef2596b5414783dfdfe",
+  "sourceDigest": "sha256:44316c2af9a9102e6cb4dea3681b2fc48a9f6281b6013793f8743caeeaf5778c",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

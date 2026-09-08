@@ -13,16 +13,14 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createInMemoryDb } from '../src/db/client'
 import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const ROOT = join(import.meta.dir, '..')
 const read = (rel: string): string => readFileSync(join(ROOT, rel), 'utf8')
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
+describeEachProvider('RFC-165 T7 — buildWorkflowValidationContext', (harness) => {
   test('assembles agents + skills + plugins (plugins NEVER absent)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const ctx = await buildWorkflowValidationContext(db)
     expect(Array.isArray(ctx.agents)).toBe(true)
     expect(Array.isArray(ctx.skills)).toBe(true)
@@ -30,7 +28,9 @@ describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
     // undefined — undefined is what silently disables the plugin checks.
     expect(Array.isArray(ctx.plugins)).toBe(true)
   })
+})
 
+describe('RFC-165 T7 — buildWorkflowValidationContext', () => {
   test('consistency lock: every production workflow validator caller uses the helper', () => {
     // Files that gate launches / syncs on either validator entry point. Each
     // must load its ctx via the canonical loader (or its legacy alias) — a hand-rolled

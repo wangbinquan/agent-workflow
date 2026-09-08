@@ -103,6 +103,7 @@ import type {
 } from '../../public/types'
 import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   mcps as mcpsTable,
   workflows as workflowsTable,
@@ -184,7 +185,7 @@ export interface WorkflowValidationCandidate {
  * child definition then degrade instead of false-failing (see §4f / rule 2).
  */
 export async function loadWorkflowValidationContext(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   candidate?: WorkflowValidationCandidate,
 ): Promise<ValidatorContext> {
   const [agents, skills, mcps, plugins] = await Promise.all([
@@ -301,7 +302,7 @@ function closureFromFrozen(
  * keyed by BOTH name and id; on a key collision the name entry wins.
  */
 async function loadCallWorkgroupNames(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   definition: WorkflowDefinition,
 ): Promise<ReadonlySet<string>> {
   const wanted = [...new Set(collectWorkgroupCallRefs(definition).map((r) => r.workgroupName))]
@@ -342,7 +343,7 @@ function resolverOverClosure(closure: ReadonlyMap<string, ValidatorWorkflowRef>)
 }
 
 async function loadCallWorkflowClosure(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   definition: WorkflowDefinition,
 ): Promise<ReadonlyMap<string, ValidatorWorkflowRef>> {
   const columns = {

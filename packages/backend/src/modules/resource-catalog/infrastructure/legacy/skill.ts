@@ -37,6 +37,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, skills } from '@/db/schema'
 import { commitSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { skillFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/skillPersistence'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import {
   databaseSessionFor,
@@ -954,24 +955,7 @@ export async function deleteSkillFile(
 // --- helpers ---
 
 function rowToSkill(row: SkillRow): Skill {
-  const out: Skill = {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    // RFC-099 ACL projection — routes filter on these.
-    ownerUserId: row.ownerUserId,
-    visibility: row.visibility,
-    aclRevision: row.aclRevision,
-    // RFC-178: skills are managed-only.
-    sourceKind: 'managed',
-    schemaVersion: row.schemaVersion,
-    contentVersion: row.contentVersion,
-    metaRevision: row.metaRevision,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }
-  if (row.managedPath !== null) out.managedPath = row.managedPath
-  return out
+  return skillFromPersistenceRow(row, 'tail')
 }
 
 /**

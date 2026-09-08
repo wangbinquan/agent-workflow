@@ -19,15 +19,16 @@ import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-let db: DbClient
-beforeEach(() => {
-  db = createInMemoryDb(MIGRATIONS)
-})
-
 describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+
   test('列存在且默认 NULL（存量行不被回填成 0）', () => {
     const cols = db.all<{ name: string; notnull: number; dflt_value: string | null }>(
       sql`PRAGMA table_info(task_repos)`,
@@ -39,13 +40,22 @@ describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
     expect(col!.notnull).toBe(0)
     expect(col!.dflt_value).toBeNull()
   })
+})
 
-  test('三态都能写入并读回', () => {
+describeEachProvider('migration 0133 —— task_repos.readonly_dirty_count', (harness) => {
+  test('三态都能写入并读回', async () => {
+    const db = harness.db
     // 外键链：task_repos.task_id → tasks.id → workflows.id，两级都得先落行。
-    db.insert(workflows).values({ id: 'wf', name: 'w', definition: '{}' }).run()
-    db.insert(tasks)
+    await db.insert(workflows).values({ id: 'wf', name: 'w', definition: '{}' }).run()
+    await db
+      .insert(tasks)
       .values({
         id: 't1',
+        // Preserve the values observed from the original SQLite task-row trigger.
+        executionLineageId: 't1',
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+        ]),
         name: 'n',
         workflowId: 'wf',
         workflowSnapshot: '{}',
@@ -70,14 +80,15 @@ describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
       subdir: '',
       readonly: true,
     }
-    db.insert(taskRepos)
+    await db
+      .insert(taskRepos)
       .values([
         { ...base, repoIndex: 0 },
         { ...base, repoIndex: 1, mountPath: 'clean', readonlyDirtyCount: 0 },
         { ...base, repoIndex: 2, mountPath: 'dirty', readonlyDirtyCount: 7 },
       ])
       .run()
-    const rows = db.select().from(taskRepos).orderBy(taskRepos.repoIndex).all()
+    const rows = await db.select().from(taskRepos).orderBy(taskRepos.repoIndex).all()
     expect(rows.map((r) => r.readonlyDirtyCount)).toEqual([null, 0, 7])
   })
 })

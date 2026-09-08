@@ -32,6 +32,31 @@ function dollarQuoteTag(sql: string, offset: number): string | null {
   return match?.[0] ?? null
 }
 
+// Drizzle still produces fresh bindings before calling this compiler. Retain
+// only successful text translations, with FIFO bounds on entries and combined
+// input/output UTF-16 units; no client, statement or parameter state is stored.
+const COMPILED_SQL_CACHE_MAX_ENTRIES = 256
+const COMPILED_SQL_CACHE_MAX_UNITS = 524_288
+const compiledSqlCache = new Map<string, string>()
+let compiledSqlCacheUnits = 0
+
+function retainCompiledSql(input: string, output: string): string {
+  const units = input.length + output.length
+  if (units > COMPILED_SQL_CACHE_MAX_UNITS) return output
+  while (
+    compiledSqlCache.size >= COMPILED_SQL_CACHE_MAX_ENTRIES ||
+    compiledSqlCacheUnits + units > COMPILED_SQL_CACHE_MAX_UNITS
+  ) {
+    const oldest = compiledSqlCache.entries().next().value
+    if (oldest === undefined) break
+    compiledSqlCache.delete(oldest[0])
+    compiledSqlCacheUnits -= oldest[0].length + oldest[1].length
+  }
+  compiledSqlCache.set(input, output)
+  compiledSqlCacheUnits += units
+  return output
+}
+
 /** Replace only SQLite bind markers, never question marks inside SQL tokens. */
 export function compilePostgresqlSql(sql: string): string {
   if (SQLITE_ONLY_STATEMENT.test(sql)) {
@@ -40,6 +65,9 @@ export function compilePostgresqlSql(sql: string): string {
       'SQLite-only database operation cannot run on PostgreSQL',
     )
   }
+
+  const cached = compiledSqlCache.get(sql)
+  if (cached !== undefined) return cached
 
   let output = ''
   let parameter = 0
@@ -120,7 +148,7 @@ export function compilePostgresqlSql(sql: string): string {
   // qualified columns elsewhere but requires conflict-target column names to
   // be unqualified. Keep this rewrite inside the provider compiler so owner
   // adapters can use one logical query shape without embedding PG syntax.
-  return compilePostgresqlConflictTargets(output)
+  return retainCompiledSql(sql, compilePostgresqlConflictTargets(output))
 }
 
 /** Classify only executable tokens, ignoring quoted text/comments/CTE bodies. */

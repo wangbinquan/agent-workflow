@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   clarifyRounds,
   nodeRunOutputs,
@@ -35,13 +35,12 @@ import {
 import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { describeEachProvider } from './helpers/eachProvider'
 
 // Monotonic ulids: several scenarios seed an asking run + a fresher rerun back-to-back; a
 // monotonic factory guarantees the later-seeded row always sorts freshest (mirrors
 // scheduler-clarify-dispatch.test.ts's note on same-ms ulid inversion).
 const ulid = monotonicFactory()
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // node ids + their agentNames in the frozen snapshot.
 const P = 'P' // self-asking agent
@@ -121,7 +120,11 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: DbClient, taskId: string, _opts: { deferred?: boolean } = {}) {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  _opts: { deferred?: boolean } = {},
+) {
   await db.insert(workflows).values({
     id: `wf-${taskId}`,
     name: 'rfc127-sq',
@@ -132,6 +135,11 @@ async function seedTask(db: DbClient, taskId: string, _opts: { deferred?: boolea
   })
   await db.insert(tasks).values({
     id: taskId,
+    // Preserve the values observed from the original SQLite task-row trigger.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     name: 'rfc127-sq',
     workflowId: `wf-${taskId}`,
     workflowSnapshot: JSON.stringify(liveDef()),
@@ -146,7 +154,7 @@ async function seedTask(db: DbClient, taskId: string, _opts: { deferred?: boolea
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   opts: { status?: 'done' | 'pending' | 'failed'; withOutput?: boolean; iteration?: number } = {},
@@ -173,7 +181,7 @@ async function seedRun(
  *  keys the ledger on the EFFECTIVE TARGET (override ?? default) and mints the rerun ON that target
  *  running its OWN agent — MOVE, not borrow (RFC-131 T4 去借壳). */
 async function seedDispatchedSelfQEntry(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   kind: 'self' | 'cross',
   override: string | null,
@@ -234,33 +242,36 @@ async function seedDispatchedSelfQEntry(
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
 
-describe('RFC-132 PR-B — self/questioner via dispatch is MOVE (去借壳, not borrow)', () => {
-  test('dispatched self entry reassigned to X → resolveBorrowForNode(X)=null (X runs its OWN agent)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'move-self')
-    await seedDispatchedSelfQEntry(db, 'move-self', 'self', X)
-    // X runs its own agent (MOVE) — NOT P borrowing X's brain (the pre-131 borrow).
-    expect(await resolveBorrowForNode(db, 'move-self', X, 0, liveDef())).toBeNull()
-    // the origin home P does not borrow — the run moved to X (its ledger is empty on P).
-    expect(await resolveBorrowForNode(db, 'move-self', P, 0, liveDef())).toBeNull()
-  })
+describeEachProvider(
+  'RFC-132 PR-B — self/questioner via dispatch is MOVE (去借壳, not borrow)',
+  (harness) => {
+    test('dispatched self entry reassigned to X → resolveBorrowForNode(X)=null (X runs its OWN agent)', async () => {
+      const db = harness.db
+      await seedTask(db, 'move-self')
+      await seedDispatchedSelfQEntry(db, 'move-self', 'self', X)
+      // X runs its own agent (MOVE) — NOT P borrowing X's brain (the pre-131 borrow).
+      expect(await resolveBorrowForNode(db, 'move-self', X, 0, liveDef())).toBeNull()
+      // the origin home P does not borrow — the run moved to X (its ledger is empty on P).
+      expect(await resolveBorrowForNode(db, 'move-self', P, 0, liveDef())).toBeNull()
+    })
 
-  test('dispatched questioner entry reassigned to X → resolveBorrowForNode(X)=null (move)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'move-q')
-    await seedDispatchedSelfQEntry(db, 'move-q', 'cross', X)
-    expect(await resolveBorrowForNode(db, 'move-q', X, 0, liveDef())).toBeNull()
-    expect(await resolveBorrowForNode(db, 'move-q', Q, 0, liveDef())).toBeNull()
-  })
+    test('dispatched questioner entry reassigned to X → resolveBorrowForNode(X)=null (move)', async () => {
+      const db = harness.db
+      await seedTask(db, 'move-q')
+      await seedDispatchedSelfQEntry(db, 'move-q', 'cross', X)
+      expect(await resolveBorrowForNode(db, 'move-q', X, 0, liveDef())).toBeNull()
+      expect(await resolveBorrowForNode(db, 'move-q', Q, 0, liveDef())).toBeNull()
+    })
 
-  test('golden: a dispatched self entry with NO override → resolveBorrowForNode(P)=null (P runs itself)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'move-self-noov')
-    // no reassign (override NULL): effectiveTarget == default == P → the rerun mints on P.
-    await seedDispatchedSelfQEntry(db, 'move-self-noov', 'self', null)
-    expect(await resolveBorrowForNode(db, 'move-self-noov', P, 0, liveDef())).toBeNull()
-  })
-})
+    test('golden: a dispatched self entry with NO override → resolveBorrowForNode(P)=null (P runs itself)', async () => {
+      const db = harness.db
+      await seedTask(db, 'move-self-noov')
+      // no reassign (override NULL): effectiveTarget == default == P → the rerun mints on P.
+      await seedDispatchedSelfQEntry(db, 'move-self-noov', 'self', null)
+      expect(await resolveBorrowForNode(db, 'move-self-noov', P, 0, liveDef())).toBeNull()
+    })
+  },
+)
 
 // Source-level lock: the scheduler converts a borrow ConflictError into a NODE-level failure
 // (resolveBorrowForNode runs before runOneNode's try block, so an unguarded throw would reject

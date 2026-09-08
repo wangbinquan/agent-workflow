@@ -56,7 +56,7 @@ describe('RFC-349 T10-A functional evidence contract', () => {
   test('Main discovers every backend and frontend functional oracle', () => {
     expect(BUNFIG).toContain('root = "packages/backend/tests"')
     expect(CI_WORKFLOW).toContain(
-      'bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4',
+      'bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }}',
     )
     expect(FRONTEND_PACKAGE).toContain('"test": "vitest run --sequence.shuffle"')
     expect(CI_WORKFLOW).toContain(

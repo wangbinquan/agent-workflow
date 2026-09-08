@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parse } from 'yaml'
 
 import { classifyDatabaseMigrationFailure } from '@/modules/system-operations/application/databaseMigrationRunner'
 import {
@@ -166,8 +167,21 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
       })
     }
 
-    // Main CI 的后端腿仍是四分片——删掉的那条当年就是照它抄的，也是它兜住这份覆盖。
-    expect(owners['ci.yml']).toContain('shard: [1, 2, 3, 4]')
+    // W21 expands Ubuntu to eight shards while retaining four macOS shards.
+    // Parse the owning job: the old four-shard text must not accept an unrelated
+    // matrix elsewhere in this workflow or reject the stronger expanded leg.
+    const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
+    expect(matrix.os).toEqual(['ubuntu-latest'])
+    expect(matrix.shard).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(matrix.shards).toEqual([8])
+    expect(matrix.include).toEqual(
+      Array.from({ length: 4 }, (_, index) => ({
+        os: 'macos-latest',
+        shard: index + 1,
+        shards: 4,
+      })),
+    )
+    expect(matrix.exclude).toBeUndefined()
     // 全量 e2e 腿不得重新加上 PR 档的过滤，否则 `@nightly` 会全域失守：删掉的那 9 条
     // lane 里的 e2e 正是靠「不过滤」才和它等价。只看真正执行的 `run:` 行——这份 YAML 的
     // 注释里就写着 PR 档用 `--grep-invert '@nightly'`，全文匹配会把注释也算进去。
@@ -187,10 +201,24 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
   test('the owning Main CI backend job still carries the environment that lane needed', () => {
     const mainCi = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
 
-    expect(mainCi).toContain('fetch-depth: 0')
-    expect(mainCi).toContain('bun install -g opencode-ai@latest')
-    // 两个 OS 都要跑：删掉的那条只有 ubuntu，Main CI 是它的超集。
-    expect(mainCi).toContain('os: [ubuntu-latest, macos-latest]')
+    const backend: {
+      strategy: { matrix: { os: string[]; include: { os: string }[] } }
+      steps: { uses?: string; with?: { 'fetch-depth'?: number }; run?: string }[]
+    } = parse(mainCi).jobs['test-backend']
+    expect(
+      backend.steps.some(
+        (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0,
+      ),
+    ).toBe(true)
+    expect(
+      backend.steps.some((step) => step.run?.includes('bun install -g opencode-ai@latest')),
+    ).toBe(true)
+    // Both OS legs still own this same environment, including appended matrix entries.
+    const matrix = backend.strategy.matrix
+    expect([...new Set([...matrix.os, ...matrix.include.map((leg) => leg.os)])].sort()).toEqual([
+      'macos-latest',
+      'ubuntu-latest',
+    ])
   })
 
   test('locks before/after crash coverage for every migration phase and the first target chunk', () => {

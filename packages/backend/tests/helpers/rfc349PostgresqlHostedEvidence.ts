@@ -440,7 +440,7 @@ export const RFC349_T10_WORKFLOW_TEST_FILES = Object.freeze(
  * 套件，workflow 自己的注释这么写，守卫也一直断言那个 job 里不含任何 `RFC349_*`
  * 连接串。逐条对完后确认它们全是别处的重复，而且都是**更弱**的一份：
  *
- *   backend×4 —— Main CI 同命令同 env，但跑 ubuntu + macOS 各 4 片，且种子每轮按
+ *   backend×4 —— 当时 Main CI 同命令同 env，ubuntu + macOS 各 4 片，且种子每轮按
  *                run number 变；这里写死 `--seed=349001`，永远只探同一个顺序。
  *   frontend  —— Main CI 跑 ubuntu + macOS + Windows 各 3 片。
  *   e2e×4     —— `e2e-full-nightly` 逐字相同的 `--shard=N/4 --workers=1` 全量档。
@@ -448,6 +448,8 @@ export const RFC349_T10_WORKFLOW_TEST_FILES = Object.freeze(
  * 而它们被 `needs:` 挂在取证 job 后面（取证红了整批 skip），历史上几乎没真跑过；
  * 代价却是整条 workflow 的墙钟变成两段之和——取证 19 分钟 + 最慢 lane 27 分钟 ⇒
  * 42 分钟（run `33814856037` 实测）。2026-09-04 用户裁决删除。
+ *
+ * RFC-359 W21 将当前 Main CI 后端扩为 Ubuntu 8 片、macOS 4 片；原发现范围和环境保持。
  *
  * 这张表就是删除的**代价清单**：每一行点名那份覆盖搬去了哪条 workflow、由哪条命令
  * 承担。守卫按它逐条回查，所以「搬去的那条腿哪天自己没了」会当场红，而不是安静地
@@ -458,7 +460,7 @@ export const RFC349_T10_REGRESSION_COVERAGE_OWNERS = Object.freeze([
     lane: 'backend',
     evidenceRole: 'provider-neutral-full-regression',
     ownerWorkflow: 'ci.yml',
-    command: '--shard=${{ matrix.shard }}/4',
+    command: '--shard=${{ matrix.shard }}/${{ matrix.shards }}',
     // Main CI 每轮换种子，比这里删掉的写死 349001 强。
     strongerBecause: 'seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))',
   },

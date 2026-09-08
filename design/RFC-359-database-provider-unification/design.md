@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W22只按完整输入SQL字符串复用成功编译的输出字符串；FIFO同时受256项与输入/输出合计
+  524288个UTF-16 code unit约束。命中不改顺序，超大项不保留也不逐出旧项，失败仍重新编译并抛原错误。
+  每次仍由真实Drizzle/client构造当前绑定，不缓存SQL对象、参数数组、结果或native statement。
+  原扫描器、冲突改写与既有入口条件保持；编译次数减少不等于真实PG或HTTP P95已达标。
+- Skill只合一两处既有标量映射：默认inline保留managedPath原中间位置，legacy明确选tail保留末尾位置。
+  NULL省略、空串、own undefined、属性与getter读取顺序均按原入口保持；第三处PG intent映射保持原字节，
+  不将一个局部去重记成整个provider文件或配对已退役。Workflow验证三个既有async参数仅改用中立类型。
+
 - W21 filtered任务页只将实际 fastFilteredRootQuery 的 non_view_matches 改为 NOT MATERIALIZED；
   exhaustive查询、其他CTE、绑定、语句/快照、完整页/游标/facet合同保持。让规划器消除中间物化只是候选，
   两处消费者可能重复扫描，不能以微型对拍或后置EXPLAIN代替原规模HTTP收益证明。

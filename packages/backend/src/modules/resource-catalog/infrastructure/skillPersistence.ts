@@ -35,8 +35,11 @@ export interface SkillVersionPersistenceRow {
   readonly createdAt: number
 }
 
-export function skillFromPersistenceRow(row: SkillPersistenceRow): Skill {
-  return {
+export function skillFromPersistenceRow(
+  row: SkillPersistenceRow,
+  managedPathPlacement: 'inline' | 'tail' = 'inline',
+): Skill {
+  const out: Skill = {
     id: row.id,
     name: row.name,
     description: row.description,
@@ -44,13 +47,19 @@ export function skillFromPersistenceRow(row: SkillPersistenceRow): Skill {
     visibility: row.visibility,
     aclRevision: row.aclRevision,
     sourceKind: 'managed',
-    ...(row.managedPath === null ? {} : { managedPath: row.managedPath }),
+    ...(managedPathPlacement === 'inline' && row.managedPath !== null
+      ? { managedPath: row.managedPath }
+      : {}),
     schemaVersion: row.schemaVersion,
     contentVersion: row.contentVersion,
     metaRevision: row.metaRevision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
+  if (managedPathPlacement === 'tail' && row.managedPath !== null) {
+    out.managedPath = row.managedPath
+  }
+  return out
 }
 
 export function skillVersionFromPersistenceRow(

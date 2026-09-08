@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十二批（2026-09-08）**：有界成功SQL文本编译复用、Skill两处标量映射合一、再迁3旧套件。
+> 编译cache保留新绑定/真实client提交，双界/FIFO/原错误通过；Skill保留两入口原JSON与属性顺序，第三映射不动。
+> 旧套件原后11 pass/28 expect，5原DB例默认双库、6纯/原生例单跑，累计210；原种子23整行/919字段一致。
+> 当前1931测试文件，635构库文件/1351次调用，624构库文件无harness，388文件harness；T19f720→718。
+> Workflow验证三个已async入口仅类型中立化、完整转译JS不变。新测试TS2349已修，最终完整backend tsc通过。
+> W21 exactcb0403 Main34236588166终态35success/5failure；12后端matrix无取消，八Ubuntu1929文件无缺漏。
+> 原7旧套件40个DB例两库均过，task-page/Overview/golden/搜索/升级恢复通过；三个旧CI命令断言已在W22修正。
+> 原full34236805950官方artifact10061729920的8+4源码、六份五表全行原投影收据和360raw/floor P95已核，
+> PG仍4/9项更慢、6项原绝对预算失败；正确PG overview四独立count保持，不能宣布原P95门已过。
+> 完整body摘要八对相等、overview不同，timed body未上传，不能以稳定字段投影代替完整body一致。
+> 定向lint/format、203项功能metadata/419 expect、13项canonical功能检查/55 expect及交叉复核通过。
+> 本批无本地PG/服务/性能/E2E/完整门禁；新SHA托管PG/Main/full待验，AC1/6/8/9/11/12与完整RFC仍开放。
+
 > **RFC-359 W12 第二十一批（2026-09-08）**：任务页只调整实际filtered CTE hint，Overview只复用不可变QueryBuilder。
 > 原语句、完整行/JSON、绑定及独立快照保持；新录参测试经类型检查修正实际values字段后6 pass/1240 expect。
 > 再迁7旧套件，原后45 pass/153 expect，40原DB case默认双库、5纯/原生例单跑，累计207。
