@@ -195,7 +195,7 @@ export interface TaskRouteDeletionEvents {
 
 export interface PostgresqlTaskRouteOperationsDependencies {
   readonly db: PostgresqlDatabaseClient
-  readonly collaboration: CollaborationCommandContext
+  readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   readonly launch: Omit<PostgresqlTaskRouteLaunchDependencies, 'db'>
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant

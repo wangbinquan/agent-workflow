@@ -71,7 +71,7 @@ export function createClarifyDecisionCommandContext(input: {
   readonly actor: Actor
   readonly role: TaskActorRole
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
-}): CollaborationCommandContext {
+}): CollaborationCommandContext<'clarifyDecisions'> {
   return createCollaborationCommandContext({
     db: input.db,
     clarifyDecisions: createClarifyDecisionCommand(input.db, input.memoryDistillEnqueuer),

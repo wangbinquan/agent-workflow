@@ -12,19 +12,18 @@
 //   1. 根仍是**父**会话（朴素保尾会在这里变成子代理，是本测试存在的全部理由）；
 //   2. 最近的内容还在（尾巴没被前缀挤掉）。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const PARENT = 'ses_parent'
 const CHILD = 'ses_child'
 
-async function seed(db: DbClient, childEventCount: number): Promise<void> {
+async function seed(db: ProviderNeutralDatabase, childEventCount: number): Promise<void> {
   await db.insert(users).values({
     id: 'u1',
     username: 'u1',
@@ -104,9 +103,9 @@ async function seed(db: DbClient, childEventCount: number): Promise<void> {
   })
 }
 
-describe('RFC-311 T13 — 会话树 DB 读有界且根不退化', () => {
+describeEachProvider('RFC-311 T13 — 会话树 DB 读有界且根不退化', (harness) => {
   test('事件远超上限时，根仍是父会话，且最近内容还在', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, 120)
     // 压到远小于事件总数：前缀 5 条、尾巴 10 条，中间那段必然被舍弃。
     const { tree } = await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr1', {
@@ -121,7 +120,7 @@ describe('RFC-311 T13 — 会话树 DB 读有界且根不退化', () => {
   })
 
   test('未超限时行为不变（有界不改变正常情况）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, 5)
     const sessions = createTaskExecutionReadModels(db).sessions
     const bounded = await getSessionTree(sessions, 't1', 'nr1', {

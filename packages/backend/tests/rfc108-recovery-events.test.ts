@@ -4,13 +4,12 @@
 // 看起来和健康的一模一样。本测试锁定：① recordRecoveryEvent 落持久行 + bump 计数器 +
 // 按 task 倒序可查；② 真实 actor（boot-reap）会记录事件（防接线漂移）。
 
-import { resolve } from 'node:path'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import {
@@ -19,11 +18,9 @@ import {
   recordRecoveryEvent,
   recoveryCountersSnapshot,
 } from '../src/services/recovery'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seedRunningTask(db: DbClient): Promise<string> {
+async function seedRunningTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
@@ -44,7 +41,7 @@ async function seedRunningTask(db: DbClient): Promise<string> {
   return taskId
 }
 
-describe('RFC-108 T3 — recordRecoveryEvent + counters', () => {
+describeEachProvider('RFC-108 T3 — recordRecoveryEvent + counters', (harness) => {
   // RFC-187: reset BEFORE as well as after. `recoveryCountersSnapshot()` is a
   // process-global, and several suites drive real recovery actions (autoResume /
   // dw-e2e / workgroup-e2e) without resetting — so an afterEach alone made the
@@ -55,9 +52,9 @@ describe('RFC-108 T3 — recordRecoveryEvent + counters', () => {
   afterEach(() => __resetRecoveryCountersForTest())
 
   test('records a durable row, bumps the counter, lists newest-first', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     await recordRecoveryEvent(operations, {
       taskId,
       kind: 'auto-resume',
@@ -74,14 +71,14 @@ describe('RFC-108 T3 — recordRecoveryEvent + counters', () => {
   })
 })
 
-describe('RFC-108 T3 — actors record recovery_events', () => {
+describeEachProvider('RFC-108 T3 — actors record recovery_events', (harness) => {
   beforeEach(() => __resetRecoveryCountersForTest())
   afterEach(() => __resetRecoveryCountersForTest())
 
   test('reapOrphanRuns records a boot-reap event for each flipped task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedRunningTask(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     await reapOrphanRuns(operations)
     const rows = await listRecoveryEventsForTask(operations, taskId)
     expect(rows.some((r) => r.kind === 'boot-reap')).toBe(true)

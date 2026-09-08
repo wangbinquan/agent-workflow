@@ -10,14 +10,14 @@
 // emits, close the run, and return kind:'ok' so the scheduler continues.
 // If any of these go red, the P0 wedge is back.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import {
   agents as agentsTable,
   nodeRunEvents,
@@ -30,10 +30,8 @@ import {
 import { dispatchReviewNode } from '../src/services/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-202 T1 — empty-list review auto-approve', () => {
-  let db: DbClient
+describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let worktree: string
 
@@ -43,7 +41,7 @@ describe('RFC-202 T1 — empty-list review auto-approve', () => {
     worktree = join(tmp, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 856,
+    "consumers": 859,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1062,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20460,
-    "symbols": 982
+    "recursiveFields": 20464,
+    "symbols": 984
   },
   "entries": [
     {
@@ -2589,7 +2589,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:d9480ba60dfe8418825b85156f8843a5d2880099031fdc8c70093a0b931a44fd"
+          "signatureDigest": "sha256:f83f80c405959a9c63534b3c31448a6a38ca9fa767d398569ae2989ab3577d64"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/commands.ts#dispatchTaskQuestions",
@@ -2597,7 +2597,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:d9480ba60dfe8418825b85156f8843a5d2880099031fdc8c70093a0b931a44fd",
+      "signatureDigest": "sha256:f83f80c405959a9c63534b3c31448a6a38ca9fa767d398569ae2989ab3577d64",
       "status": "target-context-current-surface",
       "symbol": "dispatchTaskQuestions",
       "transaction": "own-tx",
@@ -3730,7 +3730,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:77220667f9a91b847e4dfa15808004111e093e59fa7b64b9889d792123c8723d"
+          "signatureDigest": "sha256:b0f94cf787eda23731b35d695dd7517053e285728ebd54380add3cfed5a6ae88"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/commands.ts#replaceReviewNodeReviewers",
@@ -3751,7 +3751,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:77220667f9a91b847e4dfa15808004111e093e59fa7b64b9889d792123c8723d",
+      "signatureDigest": "sha256:b0f94cf787eda23731b35d695dd7517053e285728ebd54380add3cfed5a6ae88",
       "status": "target-context-current-surface",
       "symbol": "replaceReviewNodeReviewers",
       "transaction": "own-tx",
@@ -4175,7 +4175,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:5cc0e236222181cddc3011148874d70e02a509a71d8b00e2e98b85fd8da74250"
+          "signatureDigest": "sha256:90c395da12ad9a8df2479c76a16520b87a036eec818f50ddd1265137b0b2c836"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/commands.ts#submitClarifyDecision",
@@ -4183,7 +4183,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:5cc0e236222181cddc3011148874d70e02a509a71d8b00e2e98b85fd8da74250",
+      "signatureDigest": "sha256:90c395da12ad9a8df2479c76a16520b87a036eec818f50ddd1265137b0b2c836",
       "status": "target-context-current-surface",
       "symbol": "submitClarifyDecision",
       "transaction": "own-tx",
@@ -4454,7 +4454,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:a56a4c3a79372ae5ce195b39e15d158fffb5c41657eff27b14fc0ccd9ede0f66"
+          "signatureDigest": "sha256:4e3549141d7063d5f301116f9f2d828457f5845c21832437e32cf08577630a58"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/commands.ts#submitReviewDecision",
@@ -4462,7 +4462,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:a56a4c3a79372ae5ce195b39e15d158fffb5c41657eff27b14fc0ccd9ede0f66",
+      "signatureDigest": "sha256:4e3549141d7063d5f301116f9f2d828457f5845c21832437e32cf08577630a58",
       "status": "target-context-current-surface",
       "symbol": "submitReviewDecision",
       "transaction": "own-tx",
@@ -11811,7 +11811,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:7af8b2296ee81c6189dcd90347e443b176bc7882381a2291c58700131300951c"
+          "signatureDigest": "sha256:1a370ceac9daed80ae925b2652466c7da9c01f88dd3a19a85e610bf2ed29144e"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/queries.ts#filterReviewSummariesForActor",
@@ -11819,7 +11819,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:7af8b2296ee81c6189dcd90347e443b176bc7882381a2291c58700131300951c",
+      "signatureDigest": "sha256:1a370ceac9daed80ae925b2652466c7da9c01f88dd3a19a85e610bf2ed29144e",
       "status": "target-context-current-surface",
       "symbol": "filterReviewSummariesForActor",
       "transaction": "none",
@@ -12028,7 +12028,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:1b8eb2f3e33f1eb69cc7321569a7c9ec8a6430ac0b03511bb13f2a2721c3d95f"
+          "signatureDigest": "sha256:a914efa43baec4232c683ccd81a8942420428813f6db0041477d5c51146256cc"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/queries.ts#getReviewNodeReviewerConfig",
@@ -12049,7 +12049,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:1b8eb2f3e33f1eb69cc7321569a7c9ec8a6430ac0b03511bb13f2a2721c3d95f",
+      "signatureDigest": "sha256:a914efa43baec4232c683ccd81a8942420428813f6db0041477d5c51146256cc",
       "status": "target-context-current-surface",
       "symbol": "getReviewNodeReviewerConfig",
       "transaction": "none",
@@ -13095,7 +13095,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:38512f30a39b6d1b8ab8499cb4e4dcd9c18562d9f966134ef7e7521200013129"
+          "signatureDigest": "sha256:2be7f8ef527bb74e659d777a0c1496f1a4aa1129b07958590662fb761a97bed7"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/queries.ts#resolveReviewAccess",
@@ -13103,7 +13103,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:38512f30a39b6d1b8ab8499cb4e4dcd9c18562d9f966134ef7e7521200013129",
+      "signatureDigest": "sha256:2be7f8ef527bb74e659d777a0c1496f1a4aa1129b07958590662fb761a97bed7",
       "status": "target-context-current-surface",
       "symbol": "resolveReviewAccess",
       "transaction": "none",
@@ -14207,8 +14207,7 @@
         "import:39b837e82913d484bb16",
         "import:42e5f91985a55d2e9ad3",
         "import:7ed923683179506285e6",
-        "import:c30ce29cb74d0c6d47aa",
-        "import:ce21777db0e0ab491377"
+        "import:c30ce29cb74d0c6d47aa"
       ],
       "context": "collaboration",
       "dataClass": "metadata",
@@ -14244,12 +14243,6 @@
           "edgeId": "import:c30ce29cb74d0c6d47aa",
           "file": "packages/backend/src/routes/taskFeedback.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/taskFeedback.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:ce21777db0e0ab491377",
-          "file": "packages/backend/src/server.ts",
-          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -14276,13 +14269,125 @@
         "public:collaboration:queries:resolveCollaborationNodeRunTaskAccess",
         "public:collaboration:queries:resolveCollaborationTaskAccess",
         "public:collaboration:queries:resolveReviewAccess",
-        "public:collaboration:queries:visibleCollaborationTaskIds"
+        "public:collaboration:queries:visibleCollaborationTaskIds",
+        "public:collaboration:types:CollaborationRouteContext"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:abafa84c6e51acfe8345d45d59a87657150dc30c6156ef2f8d7ab90b4347b073",
+      "signatureDigest": "sha256:4c3ba2ad1a0b11055116d66a611cde03fe5421b82feeabc1723572cb7b30cf15",
       "status": "target-context-current-surface",
       "symbol": "CollaborationCommandContext",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'reviewDecisions'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'questionDispatches'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2",
+          "type": "'clarifyDecisions'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3",
+          "type": "'taskExecutionReadModels'"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:CollaborationContextCapability",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#CollaborationContextCapability",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:1adc42bb478da27e762b7cb6d85730d7dabcea230729606a1ceac548f9c3d9d4",
+      "status": "target-context-current-surface",
+      "symbol": "CollaborationContextCapability",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:00681d784a58af782037",
+        "import:440f85f87fc4bb528f5d",
+        "import:4a8303df14a0dba0e403",
+        "import:6db6872bae1e66bc803d"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:CollaborationRouteContext",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#CollaborationRouteContext",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:00681d784a58af782037",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:440f85f87fc4bb528f5d",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:4a8303df14a0dba0e403",
+          "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:6db6872bae1e66bc803d",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e5aaf846cb08db122597536f69aec4b671f6f614077a49d2894444bda310ef48",
+      "status": "target-context-current-surface",
+      "symbol": "CollaborationRouteContext",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -161792,7 +161897,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4be1c912a51b87398e4153508b5b4261c23c565af575f057ea9851dc8eee2395",
+  "sourceDigest": "sha256:d0b58338f3a010d8da35542e77c1d2fced0032d60abb9b13daecfb92a2ac03af",
   "targetContexts": [
     "collaboration",
     "development-automation",

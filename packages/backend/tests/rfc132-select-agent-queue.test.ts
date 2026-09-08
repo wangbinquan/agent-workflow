@@ -13,12 +13,12 @@
 //
 // selectAgentQueue is UNWIRED in PR-1 (no scheduler caller); these are direct DB fixtures.
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
   nodeRunOutputs,
@@ -32,7 +32,6 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion } from '@agent-workflow/shared'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const P = 'P' // self-asking agent / consumer
 const Q = 'Q' // cross questioner agent / consumer
@@ -56,7 +55,7 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: DbClient, taskId: string): Promise<void> {
+async function seedTask(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   await db.insert(workflows).values({
     id: `wf_${taskId}`,
     name: 'stub',
@@ -81,7 +80,7 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   over: {
@@ -113,7 +112,7 @@ async function seedRun(
 
 /** Seed an answered clarify round; returns its intermediary node_run id (= entries' originNodeRunId). */
 async function seedAnsweredRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     kind: 'self' | 'cross'
@@ -168,7 +167,11 @@ interface EntrySeed {
   manualBody?: string | null
 }
 
-async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<string> {
+async function insertEntry(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  e: EntrySeed,
+): Promise<string> {
   const id = ulid()
   const sourceKind = e.sourceKind ?? (e.roleKind === 'self' ? 'self' : 'cross')
   await db.insert(taskQuestions).values({
@@ -195,7 +198,7 @@ async function insertEntry(db: DbClient, taskId: string, e: EntrySeed): Promise<
   return id
 }
 
-function entryRow(db: DbClient, id: string) {
+function entryRow(db: ProviderNeutralDatabase, id: string) {
   return db.select().from(taskQuestions).where(eq(taskQuestions.id, id))
 }
 
@@ -205,9 +208,9 @@ afterAll(() => resetBroadcastersForTests())
 // ===========================================================================
 // selectAgentQueue — selection + projection + resolution
 // ===========================================================================
-describe('RFC-132 T2 — selectAgentQueue selection', () => {
+describeEachProvider('RFC-132 T2 — selectAgentQueue selection', (harness) => {
   test('positive: a dispatched+sealed self entry resolves to a render-ready Q&A', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -232,7 +235,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('inline-session delta keeps unbound/current-run entries and excludes earlier transcript entries', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const priorRun = await seedRun(db, taskId, P, { status: 'done' })
@@ -282,7 +285,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   // the entries whose origin round was asked on that shard; `undefined` = today's node-only
   // (golden-lock). Without this, member B's rerun would inject member A's answered Q&A.
   test('shardKey scopes SELECTION to the asking shard; undefined = all (golden-lock)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const originA = await seedAnsweredRound(db, taskId, {
@@ -335,7 +338,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   // RFC-172 (route 2): shard AGING isolation. A sibling shard's done+output run must NOT age this
   // shard's entry when shardKey-scoped — the aging window is narrowed to node_runs.shard_key.
   test('shardKey scopes the AGING window — a sibling shard output does not age this shard', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const originA = await seedAnsweredRound(db, taskId, {
@@ -376,7 +379,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('unified query: self + designer entries on the SAME node come back in ONE queue (consumerKind 消失)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     // Node D self-clarifies AND is the designer — both roles project to D.
@@ -412,7 +415,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('sealed 过滤: a dispatched but UNSEALED non-manual entry is excluded', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -436,7 +439,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('manual 无 seal 仍入选: a dispatched manual (§15) entry with no seal injects its body', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const rerun = await seedRun(db, taskId, D, { status: 'running' })
@@ -458,7 +461,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('not-dispatched entry is excluded (park state)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -481,7 +484,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('effectiveTarget(override ?? default) projection: override wins, default ignored when override set', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -511,7 +514,7 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
   })
 
   test('unrenderable: a dispatched+sealed entry whose round was canceled is dropped', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -538,9 +541,9 @@ describe('RFC-132 T2 — selectAgentQueue selection', () => {
 // ===========================================================================
 // selectAgentQueue — RFC-131 derived aging (sole criterion)
 // ===========================================================================
-describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
+describeEachProvider('RFC-132 T2 — selectAgentQueue derived aging', (harness) => {
   test('done+output → aged (excluded)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -565,7 +568,7 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
   })
 
   test('done WITHOUT output → NOT aged (still injected)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -589,7 +592,7 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
   })
 
   test('failed (even with stray output) → NOT aged (revivable)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -614,7 +617,7 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
   })
 
   test('round N+1 id-order anchor: a new entry bound AFTER a prior output is NOT falsely aged', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     // Round 1 — trigger = prodRerun (done+output) → aged.
@@ -657,7 +660,7 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
   })
 
   test('review-superseded canceled+output → aged (design §74: reject flips done+output to canceled)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -688,7 +691,7 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
   })
 
   test('plain canceled (no review marker) + output → NOT aged', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -716,9 +719,9 @@ describe('RFC-132 T2 — selectAgentQueue derived aging', () => {
 // ===========================================================================
 // bindTriggerRun — independent write
 // ===========================================================================
-describe('RFC-132 T2 — bindTriggerRun', () => {
+describeEachProvider('RFC-132 T2 — bindTriggerRun', (harness) => {
   test('binds only rows NOT already pinned to this run (unbound + earlier-lineage rebind)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const origin = await seedAnsweredRound(db, taskId, {
@@ -769,7 +772,7 @@ describe('RFC-132 T2 — bindTriggerRun', () => {
   })
 
   test('empty id list → no-op, returns []', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const run = await seedRun(db, taskId, P, { status: 'running' })

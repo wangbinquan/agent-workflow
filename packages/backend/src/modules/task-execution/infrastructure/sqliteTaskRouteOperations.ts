@@ -52,7 +52,7 @@ import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqlite
 
 export interface SqliteTaskRouteOperationsDependencies {
   readonly db: LegacySqliteTaskDatabase
-  readonly collaboration: CollaborationCommandContext
+  readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   readonly recovery: TaskRecoveryOperations
   readonly startDepsFor: (actor: Actor) => StartTaskDeps
   readonly multipart: Omit<MultipartLaunchDeps, 'db'>

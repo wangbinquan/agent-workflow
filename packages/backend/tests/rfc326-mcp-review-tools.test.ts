@@ -44,7 +44,13 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import { createReviewDecisionCommand } from '../src/modules/collaboration/composition/decisionCommands'
+import {
+  createReviewDecisionCommand,
+  createQuestionDispatchCommand,
+  createClarifyDecisionCommand,
+} from '@/modules/collaboration/composition/decisionCommands'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { composeMemoryOperationsFor } from '@/modules/memory/composition'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,
@@ -127,6 +133,10 @@ async function harness(): Promise<Harness> {
     password: 'pw12345678',
   })
   const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+  const memoryOperations = composeMemoryOperationsFor({
+    db: db,
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome),
+  })
   const deps = {
     token: DAEMON_TOKEN,
     configPath,
@@ -141,6 +151,8 @@ async function harness(): Promise<Harness> {
       appHome,
       taskExecutionReadModels: taskExecutionRuntime.readModels,
       reviewDecisions: createReviewDecisionCommand({ db, appHome }),
+      questionDispatches: createQuestionDispatchCommand(db),
+      clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
     }),
   }
   const app = createApp(deps)

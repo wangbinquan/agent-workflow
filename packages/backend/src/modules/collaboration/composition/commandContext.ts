@@ -4,7 +4,7 @@
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { CollaborationCommandContext } from '../public/types'
+import type { CollaborationCommandContext, CollaborationContextCapability } from '../public/types'
 import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
 import type { QuestionDispatchCommandPort } from '../application/ports/questionDispatchCommand'
 import type { ClarifyDecisionCommandPort } from '../application/ports/clarifyDecisionCommand'
@@ -60,16 +60,37 @@ export interface CollaborationCommandDependencies {
 
 const dependencies = new WeakMap<object, CollaborationCommandDependencies>()
 
+type CollaborationCapabilityDependencies = Required<
+  Pick<CollaborationCommandDependencies, CollaborationContextCapability>
+>
+
+// A union or optional input only guarantees a capability if every branch supplies it.
+type ProvidedCollaborationCapabilities<I> = {
+  [K in CollaborationContextCapability]: [I] extends [Pick<CollaborationCapabilityDependencies, K>]
+    ? K
+    : never
+}[CollaborationContextCapability]
+
+export type CollaborationCommandContextInput = Omit<
+  CollaborationCommandDependencies,
+  'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
+> & {
+  readonly db: ProviderNeutralDatabase
+  readonly appHome?: string
+}
+
+export type PostgresqlCollaborationCommandContextInput = Omit<
+  CollaborationCommandContextInput,
+  'db'
+> & {
+  readonly db: PostgresqlDatabaseClient
+}
+
+export function createCollaborationCommandContext<I extends CollaborationCommandContextInput>(
+  input: I,
+): CollaborationCommandContext<ProvidedCollaborationCapabilities<I>>
 export function createCollaborationCommandContext(
-  input: Omit<
-    CollaborationCommandDependencies,
-    'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
-  > & {
-    // RFC-359 W7：装配面只用中立客户端组合中立实现（`DbClient` 是 SQLite 的具体类型，
-    // 这里从来没用到它的任何 SQLite-专属能力）。
-    readonly db: ProviderNeutralDatabase
-    readonly appHome?: string
-  },
+  input: CollaborationCommandContextInput,
 ): CollaborationCommandContext {
   return createCollaborationCommandContextFromPersistence({
     ...input,
@@ -97,14 +118,11 @@ export function createCollaborationCommandContext(
   })
 }
 
+export function createPostgresqlCollaborationCommandContext<
+  I extends PostgresqlCollaborationCommandContextInput,
+>(input: I): CollaborationCommandContext<ProvidedCollaborationCapabilities<I>>
 export function createPostgresqlCollaborationCommandContext(
-  input: Omit<
-    CollaborationCommandDependencies,
-    'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
-  > & {
-    readonly db: PostgresqlDatabaseClient
-    readonly appHome?: string
-  },
+  input: PostgresqlCollaborationCommandContextInput,
 ): CollaborationCommandContext {
   return createCollaborationCommandContextFromPersistence({
     ...input,
@@ -132,6 +150,9 @@ export function createPostgresqlCollaborationCommandContext(
   })
 }
 
+export function createCollaborationCommandContextFromPersistence<
+  I extends CollaborationCommandDependencies,
+>(input: I): CollaborationCommandContext<ProvidedCollaborationCapabilities<I>>
 export function createCollaborationCommandContextFromPersistence(
   input: CollaborationCommandDependencies,
 ): CollaborationCommandContext {
@@ -168,7 +189,7 @@ export function requireCommittedReviewArtifactReader(
 }
 
 export function requireReviewDecisionCommand(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'reviewDecisions'>,
 ): ReviewDecisionCommandPort {
   const command = resolveCollaborationCommandContext(context).reviewDecisions
   if (command === undefined)
@@ -177,7 +198,7 @@ export function requireReviewDecisionCommand(
 }
 
 export function requireQuestionDispatchCommand(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'questionDispatches'>,
 ): QuestionDispatchCommandPort {
   const command = resolveCollaborationCommandContext(context).questionDispatches
   if (command === undefined)
@@ -186,7 +207,7 @@ export function requireQuestionDispatchCommand(
 }
 
 export function requireClarifyDecisionCommand(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'clarifyDecisions'>,
 ): ClarifyDecisionCommandPort {
   const command = resolveCollaborationCommandContext(context).clarifyDecisions
   if (command === undefined)
@@ -195,7 +216,7 @@ export function requireClarifyDecisionCommand(
 }
 
 export function requireCollaborationTaskExecutionReadModels(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'taskExecutionReadModels'>,
 ): TaskExecutionReadModels {
   const readModels = resolveCollaborationCommandContext(context).taskExecutionReadModels
   if (readModels === undefined) {

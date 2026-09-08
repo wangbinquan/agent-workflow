@@ -45,12 +45,12 @@ import type {
 import { reviewNodeReviewerDependencies } from '../composition/reviewNodeReviewerDependencies'
 import { TaskFeedbackService } from '../application/taskFeedback'
 
-function reviewerDependencies(context: CollaborationCommandContext) {
+function reviewerDependencies(context: CollaborationCommandContext<'taskExecutionReadModels'>) {
   return reviewNodeReviewerDependencies(context)
 }
 
 export function getReviewNodeReviewerConfig(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'taskExecutionReadModels'>,
   input: { readonly actor: ReviewActor; readonly taskId: string },
 ): Promise<ReviewNodeReviewerConfig> {
   return getReviewNodeReviewerConfigInternal(
@@ -61,14 +61,14 @@ export function getReviewNodeReviewerConfig(
 }
 
 export function resolveReviewAccess(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'taskExecutionReadModels'>,
   input: { readonly actor: ReviewActor; readonly nodeRunId: string },
 ): Promise<ReviewAccessDecision | null> {
   return resolveReviewAccessInternal(reviewerDependencies(context), input.actor, input.nodeRunId)
 }
 
 export function filterReviewSummariesForActor<T extends ReviewSummary>(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'taskExecutionReadModels'>,
   input: { readonly actor: ReviewActor; readonly rows: readonly T[] },
 ): Promise<Array<T & { accessScope: 'task' | 'review-node' }>> {
   return filterReviewSummariesForActorInternal(

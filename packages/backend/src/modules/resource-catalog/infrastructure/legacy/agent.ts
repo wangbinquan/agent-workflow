@@ -12,11 +12,7 @@ import type {
   ResourceAccess,
   UpdateAgent,
 } from '@agent-workflow/shared'
-import {
-  AgentInputPortSchema,
-  AgentInputPortsSchema,
-  AgentSkillRefSchema,
-} from '@agent-workflow/shared'
+import { AgentInputPortsSchema } from '@agent-workflow/shared'
 import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -84,6 +80,8 @@ import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
 } from '@/modules/execution-contract/public/commands'
+
+import { agentFromStoredJsonRow } from '../agentPersistence'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -1096,16 +1094,6 @@ function workflowsUsingAgentIn(
 }
 
 /**
- * RFC-022: tolerate legacy rows whose depends_on column is missing or holds a
- * non-array JSON value (e.g. from manual SQL edits). Parse failure or
- * non-array → []. Filter to strings so downstream code never panics on `null`
- * entries.
- */
-function parseDependsOnColumn(value: string | null | undefined): string[] {
-  return parseStringArrayColumn(value)
-}
-
-/**
  * RFC-028: assert every MCP name in the agent's `mcp[]` array maps to an
  * existing mcps row. Empty input is a no-op. Throws `mcp-not-found` (422)
  * with the list of missing names so the UI can surface them inline.
@@ -1225,59 +1213,9 @@ async function validatePluginReferences(db: DbClient, ids: readonly string[]): P
   }
 }
 
-/**
- * RFC-223 (PR-1): parse the `agents.skills` typed-ref column into
- * `AgentSkillRef[]`, dropping any entry that does not match the discriminated
- * union (same lenient stance as the other columns — a hand-edited / legacy row
- * never crashes downstream). Post-migration every entry is a managed{skillId} or
- * project{name} object; pre-migration rows are migrated by 0111.
- */
-function parseSkillRefsColumn(value: string | null | undefined): AgentSkillRef[] {
-  if (value === null || value === undefined || value === '') return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (!Array.isArray(parsed)) return []
-    const out: AgentSkillRef[] = []
-    for (const entry of parsed) {
-      const ref = AgentSkillRefSchema.safeParse(entry)
-      if (ref.success) out.push(ref.data)
-    }
-    return out
-  } catch {
-    return []
-  }
-}
-
 /** RFC-223 (PR-1): canonical JSON for the `agents.skills` typed-ref column. */
 function serializeSkillRefs(refs: readonly AgentSkillRef[]): string {
   return JSON.stringify(refs)
-}
-
-/**
- * RFC-028: same lenient parser pattern as dependsOn — used for the `mcp`
- * column. Any non-string entries or parse errors collapse to `[]` so a row
- * with a hand-edited corrupt column never crashes downstream code.
- */
-function parseStringArrayColumn(value: string | null | undefined): string[] {
-  if (value === null || value === undefined || value === '') return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((x): x is string => typeof x === 'string')
-  } catch {
-    return []
-  }
-}
-
-/** RFC-166 — parse the agents.inputs JSON column, dropping malformed rows. */
-function parseInputsColumn(value: string | null | undefined): AgentInputPort[] {
-  if (value === null || value === undefined || value === '') return []
-  try {
-    const parsed = AgentInputPortSchema.array().safeParse(JSON.parse(value))
-    return parsed.success ? parsed.data : []
-  } catch {
-    return []
-  }
 }
 
 /** RFC-166 — canonicalize declared input ports for the agents.inputs column:
@@ -1291,114 +1229,7 @@ function serializeInputs(inputs: AgentInputPort[] | undefined): string {
 }
 
 export function rowToAgent(row: AgentRow): Agent {
-  const fmExtra = JSON.parse(row.frontmatterExtra) as Record<string, unknown>
-  // RFC-005: lift outputKinds back out of frontmatter_extra into a top-level
-  // property on the Agent DTO so consumers (review validator, scheduler,
-  // frontend AgentForm) see it without poking into nested JSON.
-  //
-  // RFC-060 PR-B: outputKinds value can now be any string that passes the
-  // shared kind grammar (path<md>, list<string>, signal, …). The PR-A
-  // grammar accepts the legacy 'string' / 'markdown' / 'markdown_file'
-  // literals so round-trip is byte-identical for pre-RFC-060 agents.
-  // PR-D will swap downstream consumers over to parseKind; this filter
-  // is intentionally permissive — anything passing the grammar lands
-  // back on the Agent DTO and the downstream validator surfaces any
-  // unregistered base names.
-  let outputKinds: Agent['outputKinds'] | undefined
-  if (
-    fmExtra.outputKinds !== undefined &&
-    fmExtra.outputKinds !== null &&
-    typeof fmExtra.outputKinds === 'object'
-  ) {
-    const parsedOutputKinds = {} as NonNullable<Agent['outputKinds']>
-    for (const [port, kind] of Object.entries(fmExtra.outputKinds as Record<string, unknown>)) {
-      if (typeof kind === 'string' && kind.length > 0) {
-        ;(parsedOutputKinds as Record<string, string>)[port] = kind
-      }
-    }
-    if (Object.keys(parsedOutputKinds).length > 0) outputKinds = parsedOutputKinds
-  }
-
-  // RFC-060 PR-B: lift role + outputWrapperPortNames out of frontmatter_extra
-  // following the same pattern. `role` is optional on the Agent DTO; we only
-  // set it when it's not the default 'normal' so callers that don't care
-  // about RFC-060 see byte-identical Agent objects pre-vs-post-RFC-060.
-  let role: Agent['role'] | undefined
-  if (fmExtra.role === 'aggregator') {
-    role = 'aggregator'
-  }
-  let outputWrapperPortNames: Agent['outputWrapperPortNames'] | undefined
-  if (
-    fmExtra.outputWrapperPortNames !== undefined &&
-    fmExtra.outputWrapperPortNames !== null &&
-    typeof fmExtra.outputWrapperPortNames === 'object'
-  ) {
-    const parsedOutputWrapperPortNames = {} as NonNullable<Agent['outputWrapperPortNames']>
-    for (const [port, wrapperName] of Object.entries(
-      fmExtra.outputWrapperPortNames as Record<string, unknown>,
-    )) {
-      if (typeof wrapperName === 'string' && wrapperName.length > 0) {
-        ;(parsedOutputWrapperPortNames as Record<string, string>)[port] = wrapperName
-      }
-    }
-    if (Object.keys(parsedOutputWrapperPortNames).length > 0) {
-      outputWrapperPortNames = parsedOutputWrapperPortNames
-    }
-  }
-
-  // RFC-306: branch ports lift out the same way. Only well-formed non-empty
-  // string entries survive; an empty / malformed list leaves the field absent so
-  // downstream reads (`agent.branchPorts ?? []`) see "no branch ports" rather
-  // than a half-parsed one — a bogus entry must never widen what may be closed.
-  let branchPorts: Agent['branchPorts'] | undefined
-  if (Array.isArray(fmExtra.branchPorts)) {
-    const names = (fmExtra.branchPorts as unknown[]).filter(
-      (p): p is string => typeof p === 'string' && p.length > 0,
-    )
-    if (names.length > 0) branchPorts = names
-  }
-
-  const exposedFm = { ...fmExtra }
-  delete (exposedFm as Record<string, unknown>).outputKinds
-  delete (exposedFm as Record<string, unknown>).role
-  delete (exposedFm as Record<string, unknown>).outputWrapperPortNames
-  delete (exposedFm as Record<string, unknown>).branchPorts
-
-  const agent: Agent = {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    outputs: JSON.parse(row.outputs) as string[],
-    inputs: parseInputsColumn(row.inputs), // RFC-166
-    syncOutputsOnIterate: row.syncOutputsOnIterate,
-    permission: JSON.parse(row.permission) as Record<string, unknown>,
-    skills: parseSkillRefsColumn(row.skills), // RFC-223 (PR-1): typed refs
-    dependsOn: parseDependsOnColumn(row.dependsOn),
-    mcp: parseStringArrayColumn(row.mcp),
-    plugins: parseStringArrayColumn(row.plugins),
-    frontmatterExtra: exposedFm,
-    bodyMd: row.bodyMd,
-    // RFC-099 ACL projection — routes filter on these.
-    ownerUserId: row.ownerUserId,
-    visibility: row.visibility,
-    aclRevision: row.aclRevision,
-    // RFC-104 built-in marker (read-only response field).
-    builtin: row.builtin,
-    schemaVersion: row.schemaVersion,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }
-  if (outputKinds !== undefined) agent.outputKinds = outputKinds
-  if (role !== undefined) agent.role = role
-  if (outputWrapperPortNames !== undefined) {
-    agent.outputWrapperPortNames = outputWrapperPortNames
-  }
-  if (branchPorts !== undefined) agent.branchPorts = branchPorts
-  // RFC-111 / RFC-112: map the runtime column — now any registered runtime NAME
-  // (built-ins 'opencode'/'claude-code' + custom). Empty/NULL stays absent (→
-  // inherit config.defaultRuntime). An unknown name fail-safes at dispatch.
-  if (typeof row.runtime === 'string' && row.runtime.length > 0) agent.runtime = row.runtime
-  return agent
+  return agentFromStoredJsonRow(row)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

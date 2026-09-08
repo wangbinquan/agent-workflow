@@ -1,3 +1,4 @@
+import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
@@ -130,7 +131,7 @@ interface SelectedTaskExecutionProviderRuntimeBase {
 export interface SelectedSqliteTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
   readonly provider: 'sqlite'
   /** The route context constructed in this same provider graph. */
-  readonly collaboration: SqliteTaskRouteOperationsDependencies['collaboration']
+  readonly collaboration: CollaborationRouteContext
 }
 
 export interface SelectedPostgresqlTaskExecutionProviderRuntime extends SelectedTaskExecutionProviderRuntimeBase {
@@ -186,9 +187,12 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies {
       >
     >
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
-  readonly routes: (
-    context: TaskExecutionProviderRouteContext,
-  ) => Omit<SqliteTaskRouteOperationsDependencies, 'db' | 'recovery'>
+  readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
+    SqliteTaskRouteOperationsDependencies,
+    'db' | 'recovery' | 'collaboration'
+  > & {
+    readonly collaboration: CollaborationRouteContext
+  }
   readonly lifecycleRepair: Omit<Parameters<typeof bindTaskLifecycleRepair>[0], 'db' | 'operations'>
   readonly fusion: Omit<
     Parameters<typeof createSqliteFusionEngineTaskOperations>[0],

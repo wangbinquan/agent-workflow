@@ -26,6 +26,8 @@
 //      these go red the cci-aware short-circuit drifted; investigate before
 //      relaxing.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,7 +35,6 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents as agentsTable,
   docVersions,
@@ -45,7 +46,6 @@ import {
 import { dispatchReviewNode, pickFreshestReviewRun } from '../src/services/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const REVIEW_SOURCE_PATH = resolve(
   import.meta.dir,
   '..',
@@ -163,311 +163,314 @@ describe('RFC-056 patch-2026-05-26 — pickFreshestReviewRun', () => {
 // reparks the pending row as awaiting_review.
 // ---------------------------------------------------------------------------
 
-describe('RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circuit', () => {
-  let db: DbClient
-  let appHome: string
-  let worktree: string
+describeEachProvider(
+  'RFC-056 patch-2026-05-26 — dispatchReviewNode cci-aware short-circuit',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    let appHome: string
+    let worktree: string
 
-  beforeEach(() => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rev-cci-'))
-    appHome = join(tmp, 'appHome')
-    worktree = join(tmp, 'worktree')
-    mkdirSync(appHome, { recursive: true })
-    mkdirSync(worktree, { recursive: true })
-    db = createInMemoryDb(MIGRATIONS)
-  })
-
-  afterEach(() => {
-    rmSync(appHome, { recursive: true, force: true })
-    rmSync(worktree, { recursive: true, force: true })
-  })
-
-  async function seed(): Promise<{
-    taskId: string
-    task: typeof tasks.$inferSelect
-    definition: WorkflowDefinition
-    reviewNode: WorkflowNode
-  }> {
-    const agentId = ulid()
-    await db.insert(agentsTable).values({
-      id: agentId,
-      name: 'designer',
-      description: '',
-      outputs: JSON.stringify(['docpath']),
-      permission: '{}',
-      skills: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
+    beforeEach(() => {
+      const tmp = mkdtempSync(join(tmpdir(), 'aw-rev-cci-'))
+      appHome = join(tmp, 'appHome')
+      worktree = join(tmp, 'worktree')
+      mkdirSync(appHome, { recursive: true })
+      mkdirSync(worktree, { recursive: true })
+      db = harness.db
     })
-    const definition: WorkflowDefinition = {
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'designer',
-          kind: 'agent-single',
-          agentName: 'designer',
-          promptTemplate: '',
-        } as WorkflowNode,
-        {
-          id: 'rev',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'docpath' },
-        } as unknown as WorkflowNode,
-      ],
-      edges: [],
+
+    afterEach(() => {
+      rmSync(appHome, { recursive: true, force: true })
+      rmSync(worktree, { recursive: true, force: true })
+    })
+
+    async function seed(): Promise<{
+      taskId: string
+      task: typeof tasks.$inferSelect
+      definition: WorkflowDefinition
+      reviewNode: WorkflowNode
+    }> {
+      const agentId = ulid()
+      await db.insert(agentsTable).values({
+        id: agentId,
+        name: 'designer',
+        description: '',
+        outputs: JSON.stringify(['docpath']),
+        permission: '{}',
+        skills: '[]',
+        frontmatterExtra: '{}',
+        bodyMd: '',
+      })
+      const definition: WorkflowDefinition = {
+        $schema_version: 2,
+        inputs: [],
+        nodes: [
+          {
+            id: 'designer',
+            kind: 'agent-single',
+            agentName: 'designer',
+            promptTemplate: '',
+          } as WorkflowNode,
+          {
+            id: 'rev',
+            kind: 'review',
+            inputSource: { nodeId: 'designer', portName: 'docpath' },
+          } as unknown as WorkflowNode,
+        ],
+        edges: [],
+      }
+      const workflowId = ulid()
+      await db.insert(workflows).values({
+        id: workflowId,
+        name: 'w',
+        description: '',
+        definition: JSON.stringify(definition),
+        version: 1,
+      })
+      const taskId = ulid()
+      await db.insert(tasks).values({
+        name: 'cci-fixture',
+        id: taskId,
+        workflowId,
+        workflowSnapshot: JSON.stringify(definition),
+        repoPath: worktree,
+        worktreePath: worktree,
+        baseBranch: 'main',
+        branch: 'agent-workflow/' + taskId,
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      })
+      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const reviewNode = definition.nodes.find((n) => n.id === 'rev')!
+      return { taskId, task, definition, reviewNode }
     }
-    const workflowId = ulid()
-    await db.insert(workflows).values({
-      id: workflowId,
-      name: 'w',
-      description: '',
-      definition: JSON.stringify(definition),
-      version: 1,
-    })
-    const taskId = ulid()
-    await db.insert(tasks).values({
-      name: 'cci-fixture',
-      id: taskId,
-      workflowId,
-      workflowSnapshot: JSON.stringify(definition),
-      repoPath: worktree,
-      worktreePath: worktree,
-      baseBranch: 'main',
-      branch: 'agent-workflow/' + taskId,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
-    const reviewNode = definition.nodes.find((n) => n.id === 'rev')!
-    return { taskId, task, definition, reviewNode }
-  }
 
-  test('alignment TRUE (latestDone.cci >= upstream.cci) → kind: ok, no side-effect', async () => {
-    const { taskId, task, definition, reviewNode } = await seed()
-    // Upstream designer done at cci=0.
-    const designerRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: designerRunId,
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: designerRunId,
-      portName: 'docpath',
-      content: '# inline body',
-    })
-    // Review done at cci=0 — RFC-052 baseline.
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: 'rev',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
+    test('alignment TRUE (latestDone.cci >= upstream.cci) → kind: ok, no side-effect', async () => {
+      const { taskId, task, definition, reviewNode } = await seed()
+      // Upstream designer done at cci=0.
+      const designerRunId = ulid()
+      await db.insert(nodeRuns).values({
+        id: designerRunId,
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: designerRunId,
+        portName: 'docpath',
+        content: '# inline body',
+      })
+      // Review done at cci=0 — RFC-052 baseline.
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: 'rev',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+
+      const result = await dispatchReviewNode({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      })
+      expect(result.kind).toBe('ok')
+      const reviewRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
+      expect(reviewRows.length).toBe(1)
+      expect(reviewRows[0]?.status).toBe('done')
     })
 
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
-    expect(result.kind).toBe('ok')
-    const reviewRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
-    expect(reviewRows.length).toBe(1)
-    expect(reviewRows[0]?.status).toBe('done')
-  })
+    // RFC-074: superseded the cci-alignment + cascade-repark mechanism this test
+    // originally locked (a cascade pre-minted a pending review row; dispatch
+    // reparked it). Cascades are gone — re-review on a genuinely-advanced upstream
+    // is now driven by PROVENANCE: a done review that consumed an OLDER source
+    // run is stale when the source produces a fresher run, so dispatch mints a
+    // fresh awaiting_review (RFC-005 US-2). This rewrite asserts that behavior.
+    test('stale provenance: review consumed an older source → US-2 re-review (fresh awaiting_review)', async () => {
+      const { taskId, task, definition, reviewNode } = await seed()
+      // Old designer done — the version the prior review approved. RFC-074 PR-C:
+      // freshness is pure id-order, so ids are CAUSAL (new minted after old).
+      const oldDesignerId = '01A_OLD_DESIGNER'
+      await db.insert(nodeRuns).values({
+        id: oldDesignerId,
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 5000,
+        finishedAt: Date.now() - 4000,
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: oldDesignerId,
+        portName: 'docpath',
+        content: '# original body',
+      })
+      // Fresher designer done (e.g. a later rerun) — this is the current source.
+      const newDesignerId = '01B_NEW_DESIGNER'
+      await db.insert(nodeRuns).values({
+        id: newDesignerId,
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: newDesignerId,
+        portName: 'docpath',
+        content: '# updated body',
+      })
+      // Prior review done that CONSUMED the old designer run (stale provenance).
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: 'rev',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        consumedUpstreamRunsJson: JSON.stringify({ designer: oldDesignerId }),
+        startedAt: Date.now() - 5000,
+        finishedAt: Date.now() - 4000,
+      })
 
-  // RFC-074: superseded the cci-alignment + cascade-repark mechanism this test
-  // originally locked (a cascade pre-minted a pending review row; dispatch
-  // reparked it). Cascades are gone — re-review on a genuinely-advanced upstream
-  // is now driven by PROVENANCE: a done review that consumed an OLDER source
-  // run is stale when the source produces a fresher run, so dispatch mints a
-  // fresh awaiting_review (RFC-005 US-2). This rewrite asserts that behavior.
-  test('stale provenance: review consumed an older source → US-2 re-review (fresh awaiting_review)', async () => {
-    const { taskId, task, definition, reviewNode } = await seed()
-    // Old designer done — the version the prior review approved. RFC-074 PR-C:
-    // freshness is pure id-order, so ids are CAUSAL (new minted after old).
-    const oldDesignerId = '01A_OLD_DESIGNER'
-    await db.insert(nodeRuns).values({
-      id: oldDesignerId,
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 5000,
-      finishedAt: Date.now() - 4000,
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: oldDesignerId,
-      portName: 'docpath',
-      content: '# original body',
-    })
-    // Fresher designer done (e.g. a later rerun) — this is the current source.
-    const newDesignerId = '01B_NEW_DESIGNER'
-    await db.insert(nodeRuns).values({
-      id: newDesignerId,
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: newDesignerId,
-      portName: 'docpath',
-      content: '# updated body',
-    })
-    // Prior review done that CONSUMED the old designer run (stale provenance).
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: 'rev',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      consumedUpstreamRunsJson: JSON.stringify({ designer: oldDesignerId }),
-      startedAt: Date.now() - 5000,
-      finishedAt: Date.now() - 4000,
-    })
-
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
-    // Upstream advanced past what the review consumed → fresh re-review opens.
-    expect(result.kind).toBe('awaiting_review')
-    const reviewRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
-    const fresh = reviewRows.find((r) => r.status === 'awaiting_review')
-    expect(fresh).toBeDefined()
-    // The fresh review row records consuming the NEW designer run.
-    expect(JSON.parse(fresh!.consumedUpstreamRunsJson ?? '{}').designer).toBe(newDesignerId)
-    // A v1 doc_version on the new review row was created against the updated body.
-    const versions = await db
-      .select()
-      .from(docVersions)
-      .where(eq(docVersions.reviewNodeRunId, fresh!.id))
-    expect(versions.length).toBe(1)
-    expect(versions[0]?.decision).toBe('pending')
-  })
-
-  test('RFC-052 regression guard: cci=0 single done + placeholder pending still short-circuits', async () => {
-    // Workflow that never sees cross-clarify must not regress.
-    const { taskId, task, definition, reviewNode } = await seed()
-    const designerRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: designerRunId,
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: designerRunId,
-      portName: 'docpath',
-      content: '# body',
-    })
-    await db.insert(nodeRuns).values({
-      id: ulid(),
-      taskId,
-      nodeId: 'rev',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now() - 1000,
-      finishedAt: Date.now() - 500,
-    })
-    const stuckId = ulid()
-    await db.insert(nodeRuns).values({
-      id: stuckId,
-      taskId,
-      nodeId: 'rev',
-      status: 'pending',
-      retryIndex: 1,
-      iteration: 0,
+      const result = await dispatchReviewNode({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      })
+      // Upstream advanced past what the review consumed → fresh re-review opens.
+      expect(result.kind).toBe('awaiting_review')
+      const reviewRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
+      const fresh = reviewRows.find((r) => r.status === 'awaiting_review')
+      expect(fresh).toBeDefined()
+      // The fresh review row records consuming the NEW designer run.
+      expect(JSON.parse(fresh!.consumedUpstreamRunsJson ?? '{}').designer).toBe(newDesignerId)
+      // A v1 doc_version on the new review row was created against the updated body.
+      const versions = await db
+        .select()
+        .from(docVersions)
+        .where(eq(docVersions.reviewNodeRunId, fresh!.id))
+      expect(versions.length).toBe(1)
+      expect(versions[0]?.decision).toBe('pending')
     })
 
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
-    expect(result.kind).toBe('ok')
-    const stuck = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, stuckId)).limit(1))[0]
-    expect(stuck?.status).toBe('pending')
-  })
+    test('RFC-052 regression guard: cci=0 single done + placeholder pending still short-circuits', async () => {
+      // Workflow that never sees cross-clarify must not regress.
+      const { taskId, task, definition, reviewNode } = await seed()
+      const designerRunId = ulid()
+      await db.insert(nodeRuns).values({
+        id: designerRunId,
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: designerRunId,
+        portName: 'docpath',
+        content: '# body',
+      })
+      await db.insert(nodeRuns).values({
+        id: ulid(),
+        taskId,
+        nodeId: 'rev',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now() - 1000,
+        finishedAt: Date.now() - 500,
+      })
+      const stuckId = ulid()
+      await db.insert(nodeRuns).values({
+        id: stuckId,
+        taskId,
+        nodeId: 'rev',
+        status: 'pending',
+        retryIndex: 1,
+        iteration: 0,
+      })
 
-  test('No done review row at all → not short-circuited (must dispatch fresh)', async () => {
-    const { taskId, task, definition, reviewNode } = await seed()
-    const designerRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: designerRunId,
-      taskId,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
+      const result = await dispatchReviewNode({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      })
+      expect(result.kind).toBe('ok')
+      const stuck = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, stuckId)).limit(1))[0]
+      expect(stuck?.status).toBe('pending')
     })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: designerRunId,
-      portName: 'docpath',
-      content: '# body',
-    })
-    // No prior review rows.
 
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
+    test('No done review row at all → not short-circuited (must dispatch fresh)', async () => {
+      const { taskId, task, definition, reviewNode } = await seed()
+      const designerRunId = ulid()
+      await db.insert(nodeRuns).values({
+        id: designerRunId,
+        taskId,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: designerRunId,
+        portName: 'docpath',
+        content: '# body',
+      })
+      // No prior review rows.
+
+      const result = await dispatchReviewNode({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      })
+      expect(result.kind).toBe('awaiting_review')
+      const reviewRows = await db
+        .select()
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
+      expect(reviewRows.length).toBe(1)
+      expect(reviewRows[0]?.status).toBe('awaiting_review')
     })
-    expect(result.kind).toBe('awaiting_review')
-    const reviewRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
-    expect(reviewRows.length).toBe(1)
-    expect(reviewRows[0]?.status).toBe('awaiting_review')
-  })
-})
+  },
+)
 
 // ---------------------------------------------------------------------------
 // Source-text guards — the helper-only short-circuit must survive future

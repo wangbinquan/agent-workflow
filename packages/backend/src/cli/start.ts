@@ -5,6 +5,7 @@ import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/pa
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
@@ -1833,14 +1834,15 @@ async function composeSqliteProviderSession(
         executionFor: (actor) => Object.freeze({ ...taskStartDepsFor(actor.user.id) }),
       },
       routes: ({ readModels }) => {
-        const routeCollaborationContext = createCollaborationCommandContext({
-          db,
-          appHome: Paths.root,
-          taskExecutionReadModels: readModels,
-          reviewDecisions: createReviewDecisionCommand({ db, appHome: Paths.root }),
-          questionDispatches: createQuestionDispatchCommand(db),
-          clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
-        })
+        const routeCollaborationContext: CollaborationRouteContext =
+          createCollaborationCommandContext({
+            db,
+            appHome: Paths.root,
+            taskExecutionReadModels: readModels,
+            reviewDecisions: createReviewDecisionCommand({ db, appHome: Paths.root }),
+            questionDispatches: createQuestionDispatchCommand(db),
+            clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
+          })
         return {
           collaboration: routeCollaborationContext,
           startDepsFor: (actor) => taskStartDepsFor(actor.user.id),

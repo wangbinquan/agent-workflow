@@ -6610,7 +6610,7 @@ function parseSnapshot(v: unknown): Record<string, unknown> | null {
   return null
 }
 
-export async function getTask(db: LegacySqliteTaskDatabase, id: string): Promise<Task | null> {
+export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Promise<Task | null> {
   const rows = await db
     .select({
       task: tasks,
@@ -6707,7 +6707,9 @@ export interface ListTasksFilters {
 
 const taskListFlights = new WeakMap<object, InFlightCoalescer<string, TaskSummary[]>>()
 
-function taskListFlight(db: LegacySqliteTaskDatabase): InFlightCoalescer<string, TaskSummary[]> {
+function taskListFlight(
+  db: LegacyProviderNeutralDatabase,
+): InFlightCoalescer<string, TaskSummary[]> {
   const owner = db as unknown as object
   const existing = taskListFlights.get(owner)
   if (existing !== undefined) return existing
@@ -6738,7 +6740,7 @@ function taskListFlightKey(filters: ListTasksFilters): string {
  * never drift.
  */
 export function taskVisibilityCondition(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   visibility: { actorUserId: string; scope: 'mine' | 'shared' },
 ): SQL<unknown> {
   return taskOwnershipScopeCondition(
@@ -6755,7 +6757,7 @@ interface TaskSummaryRow {
 }
 
 async function listTaskSummaryRows(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   filters: ListTasksFilters = {},
 ): Promise<TaskSummaryRow[]> {
   const conditions = []
@@ -6853,7 +6855,7 @@ async function listTaskSummaryRows(
 }
 
 export async function listTasks(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   filters: ListTasksFilters = {},
 ): Promise<TaskSummary[]> {
   return taskListFlight(db)(taskListFlightKey(filters), async () =>

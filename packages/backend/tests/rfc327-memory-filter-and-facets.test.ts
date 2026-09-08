@@ -23,6 +23,14 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents } from '../src/db/schema'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import {
+  createReviewDecisionCommand,
+  createQuestionDispatchCommand,
+  createClarifyDecisionCommand,
+} from '@/modules/collaboration/composition/decisionCommands'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { composeMemoryOperationsFor } from '@/modules/memory/composition'
+import { Paths } from '@/util/paths'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createApp } from '../src/server'
 import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
@@ -287,6 +295,11 @@ describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
     value: unknown
   }> {
     const taskExecutionRuntime = composeTaskExecutionTestRuntime(h.db)
+    const appHome = Paths.root
+    const memoryOperations = composeMemoryOperationsFor({
+      db: h.db,
+      reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(h.db, appHome),
+    })
     const dispatch = createDispatcher({
       token: DAEMON_TOKEN,
       configPath: h.configPath,
@@ -299,6 +312,9 @@ describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
       collaborationContext: createCollaborationCommandContext({
         db: h.db,
         taskExecutionReadModels: taskExecutionRuntime.readModels,
+        reviewDecisions: createReviewDecisionCommand({ db: h.db, appHome }),
+        questionDispatches: createQuestionDispatchCommand(h.db),
+        clarifyDecisions: createClarifyDecisionCommand(h.db, memoryOperations.distillCommands),
       }),
     })
     const actor = mcpDispatchActor(patActor(h, []))

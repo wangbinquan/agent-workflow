@@ -9,6 +9,14 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
+import {
+  createReviewDecisionCommand,
+  createQuestionDispatchCommand,
+  createClarifyDecisionCommand,
+} from '@/modules/collaboration/composition/decisionCommands'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { composeMemoryOperationsFor } from '@/modules/memory/composition'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, docVersions, nodeRuns, tasks, taskQuestions, workflows } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -57,7 +65,18 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 
 function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
-  const context = createCollaborationCommandContext({ db, appHome: APP_HOME })
+  const memoryOperations = composeMemoryOperationsFor({
+    db: db,
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, APP_HOME),
+  })
+  const context = createCollaborationCommandContext({
+    db,
+    appHome: APP_HOME,
+    taskExecutionReadModels: createTaskExecutionReadModels(db),
+    reviewDecisions: createReviewDecisionCommand({ db, appHome: APP_HOME }),
+    questionDispatches: createQuestionDispatchCommand(db),
+    clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
+  })
   return harness.capabilities.isolation === 'exclusive'
     ? composeSqliteCollaborationRouteOperations({ db, context })
     : composePostgresqlCollaborationRouteOperations({ db, context })

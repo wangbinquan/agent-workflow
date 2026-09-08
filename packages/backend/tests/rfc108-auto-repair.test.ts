@@ -6,21 +6,19 @@
 // 不调 apply；③ 两个 eligible → 跳（no-single-eligible）；④ 已隔离任务 → 跳；⑤ apply 抛错
 // → 跳、不计 repaired。
 
-import { resolve } from 'node:path'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
 import { lifecycleAlerts, tasks, workflows } from '../src/db/schema'
 import { runAutoRepairOnce } from '../src/services/autoRepair'
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
 import type { RepairOption } from '@agent-workflow/shared'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
 afterEach(() => {
@@ -42,7 +40,7 @@ function mkOption(id: string, autoApplyEligible: boolean, available: boolean): R
   }
 }
 
-async function seedTaskWithAlert(db: DbClient, rule = 'S4'): Promise<string> {
+async function seedTaskWithAlert(db: ProviderNeutralDatabase, rule = 'S4'): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
@@ -73,11 +71,11 @@ async function seedTaskWithAlert(db: DbClient, rule = 'S4'): Promise<string> {
 
 const enableAll = () => true
 
-describe('RFC-108 T19 — auto-repair loop', () => {
+describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
   test('enabled rule + exactly one eligible+available → applies + records event', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTaskWithAlert(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const applied: string[] = []
     const res = await runAutoRepairOnce({
       operations,
@@ -101,9 +99,9 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   })
 
   test('disabled rule → skipped, applyOption never called', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedTaskWithAlert(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     let applyCalled = false
     const res = await runAutoRepairOnce({
       operations,
@@ -121,9 +119,9 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   })
 
   test('two eligible+available options → no-single-eligible, not applied', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedTaskWithAlert(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const res = await runAutoRepairOnce({
       operations,
       breaker: BREAKER,
@@ -136,9 +134,9 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   })
 
   test('quarantined task → skipped', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTaskWithAlert(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     for (let i = 0; i < 4; i++) {
       await recordAutoRecoveryAttempt(operations, taskId, BREAKER, 1000)
     }
@@ -154,9 +152,9 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   })
 
   test('applyOption throws → skipped, not counted as repaired', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedTaskWithAlert(db)
-    const operations = taskRecoveryOperations(db)
+    const operations = createTaskExecutionPersistence(db).recoveryAdministration
     const res = await runAutoRepairOnce({
       operations,
       breaker: BREAKER,

@@ -63,7 +63,7 @@ export function createReviewDecisionCommandContext(input: {
   readonly appHome: string
   readonly actor: Actor
   readonly authorRole: TaskActorRole
-}): CollaborationCommandContext {
+}): CollaborationCommandContext<'reviewDecisions'> {
   return createCollaborationCommandContext({
     db: input.db,
     appHome: input.appHome,

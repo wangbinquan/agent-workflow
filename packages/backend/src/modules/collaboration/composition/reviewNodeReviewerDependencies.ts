@@ -6,7 +6,7 @@ import {
 import type { CollaborationCommandContext } from '../public/types'
 
 export function reviewNodeReviewerDependencies(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'taskExecutionReadModels'>,
 ): ReviewNodeReviewerDependencies {
   // RFC-359 W5-T19b：`reviewTaskAccess` 是组合根的必填字段，这里直接读。
   // 此前这个文件私藏了一份 `createReviewTaskAccessPort(context)`——与 `commandContext.ts` 的

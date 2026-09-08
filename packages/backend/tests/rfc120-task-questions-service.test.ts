@@ -9,10 +9,10 @@
 //   * reconcile is idempotent (listing twice does not duplicate rows).
 //   * sourceNodeId + phase filters.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
   nodeRunOutputs,
@@ -44,8 +44,6 @@ const AGENT_SNAPSHOT = JSON.stringify({
 
 const ACTOR = { userId: 'u1', role: 'owner' }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 const Q = (id: string) => ({
   id,
   title: `title-${id}`,
@@ -57,7 +55,7 @@ const Q = (id: string) => ({
   ],
 })
 
-async function seedTask(db: DbClient, taskId = 'task-1') {
+async function seedTask(db: ProviderNeutralDatabase, taskId = 'task-1') {
   await db.insert(workflows).values({
     id: 'wf-1',
     name: 'wf',
@@ -83,7 +81,7 @@ async function seedTask(db: DbClient, taskId = 'task-1') {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   id: string,
   nodeId: string,
@@ -109,7 +107,7 @@ async function seedRun(
 }
 
 async function seedRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   over: Partial<typeof clarifyRounds.$inferSelect> & {
     id: string
@@ -132,9 +130,9 @@ async function seedRound(
   })
 }
 
-describe('RFC-120 T3 listTaskQuestions', () => {
+describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
   test('self answered round → 1 self entry, done handler → awaiting_confirm', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRun(db, taskId, 'r-handler', 'designer', {
       rerunCause: 'clarify-answer',
@@ -177,7 +175,7 @@ describe('RFC-120 T3 listTaskQuestions', () => {
   // RFC-162: a cross answered round is a SINGLE questioner card by default — NO designer entry
   // (scope / designer-by-default deleted). "Let the upstream revise" is a reassign (see below).
   test('RFC-162: cross answered → questioner single card, NO designer entry', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 'x1',
@@ -205,7 +203,7 @@ describe('RFC-120 T3 listTaskQuestions', () => {
   })
 
   test('cross UNanswered → questioner only, pending (no designer entry)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 'x3',
@@ -229,7 +227,7 @@ describe('RFC-120 T3 listTaskQuestions', () => {
   // already filtered the same task. Filtering is read-only so failed/interrupted rows
   // can reappear after resume, and the ledger remains intact for audit.
   test('terminal tasks hide question cards without deleting them; resume makes them visible again', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 'terminal-question',
@@ -262,7 +260,7 @@ describe('RFC-120 T3 listTaskQuestions', () => {
   })
 
   test('reconcile idempotent — listing twice does not duplicate', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 'c2',
@@ -281,7 +279,7 @@ describe('RFC-120 T3 listTaskQuestions', () => {
   })
 
   test('sourceNodeId + phase filters', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 'a1',
@@ -308,8 +306,8 @@ describe('RFC-120 T3 listTaskQuestions', () => {
   })
 })
 
-describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
-  async function seedSelfAwaitingConfirm(db: DbClient) {
+describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harness) => {
+  async function seedSelfAwaitingConfirm(db: ProviderNeutralDatabase) {
     const taskId = await seedTask(db)
     await seedRun(db, taskId, 'r-handler', 'designer', {
       rerunCause: 'clarify-answer',
@@ -334,7 +332,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   }
 
   test('confirm: awaiting_confirm → done with confirmedBy', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedSelfAwaitingConfirm(db)
     const [entry] = await listTaskQuestions(db, taskId)
     expect(entry!.phase).toBe('awaiting_confirm')
@@ -346,7 +344,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   })
 
   test('confirm: rejects when not awaiting_confirm', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 'p1',
@@ -362,7 +360,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   })
 
   /** Seed an answered cross round (single questioner card) and return its taskId. */
-  async function seedAnsweredCross(db: DbClient, id = 'x1') {
+  async function seedAnsweredCross(db: ProviderNeutralDatabase, id = 'x1') {
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id,
@@ -382,7 +380,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   // RFC-162 AC-2 — reassign a cross question to an UPSTREAM node ADDS a designer handler row
   // targeting it, and KEEPS the asker's questioner entry (no strand → no echo needed).
   test('RFC-162: reassign-to-upstream adds a designer handler and keeps the asker', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const before = await listTaskQuestions(db, taskId)
     expect(before.map((e) => e.roleKind)).toEqual(['questioner'])
@@ -409,7 +407,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   // keying the new designer's sealedAt only on round.status==='answered' would leave it NULL and
   // unstageable forever (no later seal re-includes an already-sealed question) → stranded handler.
   test('RFC-162: reassign after a PARTIAL seal — designer inherits the asker sealedAt (not stranded)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     // UNANSWERED cross round — status stays 'awaiting_human' (the partial-seal state).
     await seedRound(db, taskId, {
@@ -445,7 +443,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   // 看板成为自己的待指派单卡——groupBoardEntries case-4，分组只合并未下发兄弟），asker 条目
   // 原样不动。初版曾加 409 守卫禁掉此流、打红 19 个存量 cross-designer 场景——此测锁定不再回退。
   test('RFC-163: reassign on a DISPATCHED asker still ADDS an undispatched designer (revision flow)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     const dispatchedAt = Date.now()
@@ -469,7 +467,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   // RFC-163 — the REMOVE direction likewise works on a dispatched asker: reassigning back to
   // the asking node withdraws the pending revision (deletes the undispatched designer row).
   test('RFC-163: dispatched asker + undispatched designer → reassign back to asker still removes the designer', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     // Add the designer first (asker still undispatched), then dispatch the asker.
@@ -490,7 +488,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   // 成员随组进待下发），否则组内混 staged+pending → 分组卡被防御逻辑落回待指派、按钮却显
   // 「移出待下发」。此测先红后绿。
   test('RFC-163: reassign on a STAGED asker → designer inherits stagedAt/stagedBy (group stays 待下发)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     const stagedAt = Date.now() - 5_000
@@ -509,7 +507,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
 
   // 对照：pending（未 staged）asker 改派 → designer 不带 staged（行为不变）。
   test('RFC-163: reassign on a PENDING asker → designer has NO stagedAt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
@@ -519,7 +517,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
 
   // RFC-162 — reassign creates NO echo row (echo deleted; the asker keeps its own entry).
   test('RFC-162: reassign never materializes an echo row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
@@ -529,7 +527,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
 
   // RFC-162 — re-targeting the added designer to another agent updates its handler node in place.
   test('RFC-162: re-targeting an added designer moves the designer handler', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
@@ -545,7 +543,7 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
 
   // RFC-162 — reassigning back to the ASKING node removes the designer (back to single card).
   test('RFC-162: reassign to the asking node removes the designer (single card)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await reassignTaskQuestion(db, questioner!.id, 'coder', ACTOR)
@@ -559,14 +557,14 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
 
   // A non-agent target (a clarify node) is still rejected for any reassign.
   test('reassign: non-agent target rejected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedAnsweredCross(db)
     const [questioner] = await listTaskQuestions(db, taskId)
     await expect(reassignTaskQuestion(db, questioner!.id, 'c1', ACTOR)).rejects.toThrow()
   })
 
   test('stage / unstage toggles the 待下发 phase', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRound(db, taskId, {
       id: 's1',
@@ -593,9 +591,9 @@ describe('RFC-120 PR-B writes (confirm / reassign / stage)', () => {
   })
 })
 
-describe('RFC-120 Codex impl-gate regressions (F1/F2/F3)', () => {
+describeEachProvider('RFC-120 Codex impl-gate regressions (F1/F2/F3)', (harness) => {
   test('F1 (RFC-132): answered round, entry never dispatched → pending (板上待补 dispatch,不猜 run)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     // a LATER unrelated clarify-answer rerun on the same node must NOT be bound/guessed.
     await seedRun(db, taskId, 'r-later', 'designer', {
@@ -622,7 +620,7 @@ describe('RFC-120 Codex impl-gate regressions (F1/F2/F3)', () => {
   // parentNodeRunId===null),fanout 的 awaiting_confirm 靠 parent 聚合输出(T3 已覆盖)。
 
   test('F3: reassign rejects a terminal (done) entry', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const taskId = await seedTask(db)
     await seedRun(db, taskId, 'h', 'coder', {
       rerunCause: 'cross-clarify-answer',

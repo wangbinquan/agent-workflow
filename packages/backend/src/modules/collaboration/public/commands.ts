@@ -49,7 +49,7 @@ import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants
 import type { ClarifyDirective } from '@agent-workflow/shared'
 
 export function replaceReviewNodeReviewers(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'taskExecutionReadModels'>,
   input: {
     readonly actor: ReviewActor
     readonly taskId: string
@@ -193,7 +193,7 @@ export function finalizeCommittedHumanGate(
 
 /** RFC-333 T8: the sole REST/MCP-facing review decision command. */
 export async function submitReviewDecision(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'reviewDecisions'>,
   input: SubmitReviewDecisionCommandInput,
 ): Promise<SubmitReviewDecisionCommandResult> {
   return requireReviewDecisionCommand(context).submit(input)
@@ -201,7 +201,7 @@ export async function submitReviewDecision(
 
 /** RFC-333 T9: the sole REST/MCP-facing task-question dispatch command. */
 export async function dispatchTaskQuestions(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'questionDispatches'>,
   input: DispatchTaskQuestionsCommandInput,
 ): Promise<DispatchTaskQuestionsCommandResult> {
   return requireQuestionDispatchCommand(context).dispatch(input)
@@ -209,7 +209,7 @@ export async function dispatchTaskQuestions(
 
 /** RFC-333 T9: the sole REST/MCP-facing quick clarify decision command. */
 export async function submitClarifyDecision(
-  context: CollaborationCommandContext,
+  context: CollaborationCommandContext<'clarifyDecisions'>,
   input: SubmitClarifyDecisionCommandInput,
 ): Promise<SubmitClarifyDecisionCommandResult> {
   return requireClarifyDecisionCommand(context).submit(input)

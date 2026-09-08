@@ -22,6 +22,14 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import {
+  createReviewDecisionCommand,
+  createQuestionDispatchCommand,
+  createClarifyDecisionCommand,
+} from '@/modules/collaboration/composition/decisionCommands'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { composeMemoryOperationsFor } from '@/modules/memory/composition'
+import { Paths } from '@/util/paths'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
@@ -87,6 +95,11 @@ async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
     password: 'pw12345678',
   })
   const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+  const appHome = Paths.root
+  const memoryOperations = composeMemoryOperationsFor({
+    db: db,
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome),
+  })
   return {
     db,
     userId: user.id,
@@ -102,6 +115,9 @@ async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
       collaborationContext: createCollaborationCommandContext({
         db,
         taskExecutionReadModels: taskExecutionRuntime.readModels,
+        reviewDecisions: createReviewDecisionCommand({ db, appHome }),
+        questionDispatches: createQuestionDispatchCommand(db),
+        clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
       }),
     },
   }

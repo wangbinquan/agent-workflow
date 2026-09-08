@@ -61,6 +61,11 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     })
 
     const taskId = ulid()
+    // RFC-359: the old SQLite fixture received these root fields from migration 0210's
+    // task INSERT trigger. Keep its JSON key order: continuationSlotKey hashes the raw string.
+    const lineageSlotPathJson = JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ])
     await db.insert(tasks).values({
       name: 'rfc-052-approve',
       id: taskId,
@@ -73,7 +78,20 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
       status: 'awaiting_review',
       inputs: '{}',
       startedAt: Date.now(),
+      executionLineageId: taskId,
+      lineageSlotPathJson,
     })
+    // Both providers must start from the original SQLite-materialized row.
+    expect(
+      await db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .get(),
+    ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
 
     // Review run currently awaiting a decision.
     const reviewRunId = ulid()

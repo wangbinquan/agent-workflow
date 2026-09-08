@@ -9,6 +9,8 @@ import { eq } from 'drizzle-orm'
 
 import { collaborationGateOperations, nodeRuns } from '@/db/schema'
 import { createQuestionDispatchCommand } from '@/modules/collaboration/infrastructure/questionDispatchCommand'
+import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -43,7 +45,8 @@ describeEachProvider('RFC-359 T2a —— 问题派发命令端口', (harness) =>
       stagedAt: Date.now(),
     })
     const command = createQuestionDispatchCommand(db)
-    const first = await command.dispatch({
+    const context = createCollaborationCommandContext({ db, questionDispatches: command })
+    const first = await dispatchTaskQuestions(context, {
       actor,
       actorRole: 'owner',
       taskId,
@@ -65,7 +68,7 @@ describeEachProvider('RFC-359 T2a —— 问题派发命令端口', (harness) =>
       .where(eq(collaborationGateOperations.taskId, taskId))
     expect(operations.map((op) => op.state)).toContain('completed')
 
-    const replay = await command.dispatch({
+    const replay = await dispatchTaskQuestions(context, {
       actor,
       actorRole: 'owner',
       taskId,

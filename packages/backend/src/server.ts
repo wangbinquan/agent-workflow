@@ -340,7 +340,7 @@ import {
 } from '@/modules/collaboration/composition/decisionCommands'
 import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
+import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/taskCatalogSources'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
@@ -776,7 +776,7 @@ export interface AppDeps {
     readonly taskExecutionResources?: TaskExecutionResourceBinding
   }
   /** RFC-340 bootstrap-owned review access/config context shared by REST and MCP dispatch. */
-  collaborationContext?: CollaborationCommandContext
+  collaborationContext?: CollaborationRouteContext
   /** RFC-338: indexed/live projection from the off-thread maintenance owner. */
   maintenanceStatus?: () => MaintenanceStatus
   /** RFC-349: selected-provider mechanism telemetry, kept separate from request latency. */
@@ -871,7 +871,7 @@ type RuntimeComposedAppDeps = SqliteAppDeps & {
   readonly identityAccess: IntegrationTriggerIdentityAccess
   readonly schedulerDriver: SchedulerDriverPort
   readonly taskExecutionReadModels: TaskExecutionReadModels
-  readonly collaborationContext: CollaborationCommandContext
+  readonly collaborationContext: CollaborationRouteContext
   readonly executionContracts: ReturnType<typeof composeExecutionContract>
   readonly codeHistoryQueries: CodeHistoryRouteQueries
   readonly developmentAdmissionLookup: DevelopmentAdmissionLookup
@@ -1877,7 +1877,7 @@ export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
     })
   // 显式标注是这个环的**约束点**：`memoryOperations` 的闭包引用它、它又吃
   // `memoryOperations.distillCommands`，推断转不出来（TS7022），标注把契约写死在类型层。
-  const collaborationContext: CollaborationCommandContext =
+  const collaborationContext: CollaborationRouteContext =
     deps.collaborationContext ??
     createCollaborationCommandContext({
       db: deps.db,

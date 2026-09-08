@@ -17,6 +17,14 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import {
+  createReviewDecisionCommand,
+  createQuestionDispatchCommand,
+  createClarifyDecisionCommand,
+} from '@/modules/collaboration/composition/decisionCommands'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { composeMemoryOperationsFor } from '@/modules/memory/composition'
+import { Paths } from '@/util/paths'
 import { replaceReviewNodeReviewers } from '../src/modules/collaboration/public/commands'
 import {
   getReviewNodeReviewerConfig,
@@ -130,10 +138,18 @@ async function fixture(appHome?: string) {
     },
   ])
   const taskExecutionReadModels = createTaskExecutionReadModels(db)
+  const commandAppHome = appHome ?? Paths.root
+  const memoryOperations = composeMemoryOperationsFor({
+    db: db,
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, commandAppHome),
+  })
   const context = createCollaborationCommandContext({
     db,
     ...(appHome === undefined ? {} : { appHome }),
     taskExecutionReadModels,
+    reviewDecisions: createReviewDecisionCommand({ db, appHome: commandAppHome }),
+    questionDispatches: createQuestionDispatchCommand(db),
+    clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
   })
   return { db, context, taskExecutionReadModels }
 }

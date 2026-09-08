@@ -18,6 +18,8 @@ import {
   tasks,
 } from '@/db/schema'
 import { createClarifyDecisionCommand } from '@/modules/collaboration/infrastructure/clarifyDecisionCommand'
+import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/public/types'
@@ -100,7 +102,11 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
     const enqueuer = recordingEnqueuer()
-    const result = await createClarifyDecisionCommand(db, enqueuer).submit({
+    const context = createCollaborationCommandContext({
+      db,
+      clarifyDecisions: createClarifyDecisionCommand(db, enqueuer),
+    })
+    const result = await submitClarifyDecision(context, {
       actor,
       actorRole: 'owner',
       nodeRunId: round.origin,

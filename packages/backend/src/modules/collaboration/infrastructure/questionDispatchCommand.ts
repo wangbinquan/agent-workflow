@@ -56,7 +56,7 @@ export function createQuestionDispatchCommandContext(input: {
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
-}): CollaborationCommandContext {
+}): CollaborationCommandContext<'questionDispatches'> {
   return createCollaborationCommandContext({
     db: input.db,
     questionDispatches: createQuestionDispatchCommand(input.db),

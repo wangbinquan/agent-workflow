@@ -17,11 +17,11 @@
 // "live-name" divergence assertions below fail if anyone reintroduces it.
 // Frontend wiring is locked by tasks-workgroup-badge.test.ts.
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows, workgroups } from '../src/db/schema'
 import { getTask, listTasks } from '../src/services/task'
 import {
@@ -29,11 +29,10 @@ import {
   WORKGROUP_HOST_WORKFLOW_NAME,
 } from '../src/services/workgroup/launch'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedWorkflow(db: ReturnType<typeof createInMemoryDb>, id: string, name: string): void {
+async function seedWorkflow(db: ProviderNeutralDatabase, id: string, name: string): Promise<void> {
   const now = Date.now()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id,
       name,
@@ -47,8 +46,8 @@ function seedWorkflow(db: ReturnType<typeof createInMemoryDb>, id: string, name:
     .run()
 }
 
-function seedTask(
-  db: ReturnType<typeof createInMemoryDb>,
+async function seedTask(
+  db: ProviderNeutralDatabase,
   opts: {
     name: string
     workflowId: string
@@ -57,10 +56,11 @@ function seedTask(
     sourceAgentName?: string
     sourceAgentId?: string
   },
-): string {
+): Promise<string> {
   const tId = ulid()
   const now = Date.now()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: tId,
       name: opts.name,
@@ -84,138 +84,154 @@ function seedTask(
   return tId
 }
 
-describe('RFC-164 follow-up — listTasks projects the frozen workgroup name', () => {
-  test('workgroupName comes from the frozen config, NOT the live workgroups resource', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
-    const groupId = ulid()
-    // Live resource name deliberately DIVERGES from the frozen config name — the
-    // summary must read the frozen one (a live join would surface 'live-name').
-    db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
-    const tId = seedTask(db, {
-      name: 'ship it',
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      workgroupId: groupId,
-      workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew', mode: 'leader_worker' }),
+describeEachProvider(
+  'RFC-164 follow-up — listTasks projects the frozen workgroup name',
+  (harness) => {
+    test('workgroupName comes from the frozen config, NOT the live workgroups resource', async () => {
+      const db = harness.db
+      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+      const groupId = ulid()
+      // Live resource name deliberately DIVERGES from the frozen config name — the
+      // summary must read the frozen one (a live join would surface 'live-name').
+      await db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
+      const tId = await seedTask(db, {
+        name: 'ship it',
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workgroupId: groupId,
+        workgroupConfigJson: JSON.stringify({
+          workgroupName: 'design-crew',
+          mode: 'leader_worker',
+        }),
+      })
+
+      const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+      expect(row.workgroupId).toBe(groupId)
+      expect(row.workgroupName).toBe('design-crew') // frozen config, not 'live-name'
+      // The workflow join still resolves the builtin host — proving the UI reads
+      // the GROUP name (not this anchor) for the label + link.
+      expect(row.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
     })
 
-    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupId).toBe(groupId)
-    expect(row.workgroupName).toBe('design-crew') // frozen config, not 'live-name'
-    // The workflow join still resolves the builtin host — proving the UI reads
-    // the GROUP name (not this anchor) for the label + link.
-    expect(row.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
-  })
+    test('renaming the live workgroup does NOT change the frozen name (freeze-at-launch)', async () => {
+      const db = harness.db
+      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+      const groupId = ulid()
+      await db.insert(workgroups).values({ id: groupId, name: 'design-crew' }).run()
+      const tId = await seedTask(db, {
+        name: 't',
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workgroupId: groupId,
+        workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew' }),
+      })
+      await db
+        .update(workgroups)
+        .set({ name: 'renamed-live' })
+        .where(eq(workgroups.id, groupId))
+        .run()
 
-  test('renaming the live workgroup does NOT change the frozen name (freeze-at-launch)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
-    const groupId = ulid()
-    db.insert(workgroups).values({ id: groupId, name: 'design-crew' }).run()
-    const tId = seedTask(db, {
-      name: 't',
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      workgroupId: groupId,
-      workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew' }),
-    })
-    db.update(workgroups).set({ name: 'renamed-live' }).where(eq(workgroups.id, groupId)).run()
-
-    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupName).toBe('design-crew') // still frozen, not 'renamed-live'
-  })
-
-  test('workgroupName is null for a non-workgroup task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const wfId = ulid()
-    seedWorkflow(db, wfId, 'plain-wf')
-    const tId = seedTask(db, { name: 'solo', workflowId: wfId })
-
-    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupId).toBeNull()
-    expect(row.workgroupName).toBeNull()
-  })
-
-  test('a corrupt frozen config degrades workgroupName to null (never 5xx the list)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
-    const groupId = ulid()
-    const tId = seedTask(db, {
-      name: 't',
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      workgroupId: groupId,
-      workgroupConfigJson: '{ not valid json',
+      const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+      expect(row.workgroupName).toBe('design-crew') // still frozen, not 'renamed-live'
     })
 
-    const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
-    expect(row.workgroupId).toBe(groupId) // soft link still surfaces (badge)
-    expect(row.workgroupName).toBeNull() // but the name degrades safely
-  })
-})
+    test('workgroupName is null for a non-workgroup task', async () => {
+      const db = harness.db
+      const wfId = ulid()
+      await seedWorkflow(db, wfId, 'plain-wf')
+      const tId = await seedTask(db, { name: 'solo', workflowId: wfId })
+
+      const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+      expect(row.workgroupId).toBeNull()
+      expect(row.workgroupName).toBeNull()
+    })
+
+    test('a corrupt frozen config degrades workgroupName to null (never 5xx the list)', async () => {
+      const db = harness.db
+      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+      const groupId = ulid()
+      const tId = await seedTask(db, {
+        name: 't',
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workgroupId: groupId,
+        workgroupConfigJson: '{ not valid json',
+      })
+
+      const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
+      expect(row.workgroupId).toBe(groupId) // soft link still surfaces (badge)
+      expect(row.workgroupName).toBeNull() // but the name degrades safely
+    })
+  },
+)
 
 // Detail parity: GET /api/tasks/:id (getTask → rowToTask) must project the SAME
 // frozen workgroup name as the list, so the task-detail page can link to
 // /workgroups/$name instead of leaking the `__workgroup_host__` anchor in its
 // header + meta row. Frontend wiring is locked by task-subject-link.test.tsx +
 // task-detail-header-workflow-link.test.ts.
-describe('RFC-164 follow-up — getTask projects the frozen workgroup name (detail parity)', () => {
-  test('the detail payload carries workgroupName from the frozen config, not the host anchor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
-    const groupId = ulid()
-    // Live resource name diverges — the detail must read the frozen one (ACL
-    // parity with the list; a live join would leak a post-launch rename).
-    db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
-    const tId = seedTask(db, {
-      name: 'ship it',
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      workgroupId: groupId,
-      workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew', mode: 'leader_worker' }),
+describeEachProvider(
+  'RFC-164 follow-up — getTask projects the frozen workgroup name (detail parity)',
+  (harness) => {
+    test('the detail payload carries workgroupName from the frozen config, not the host anchor', async () => {
+      const db = harness.db
+      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+      const groupId = ulid()
+      // Live resource name diverges — the detail must read the frozen one (ACL
+      // parity with the list; a live join would leak a post-launch rename).
+      await db.insert(workgroups).values({ id: groupId, name: 'live-name' }).run()
+      const tId = await seedTask(db, {
+        name: 'ship it',
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workgroupId: groupId,
+        workgroupConfigJson: JSON.stringify({
+          workgroupName: 'design-crew',
+          mode: 'leader_worker',
+        }),
+      })
+
+      const task = (await getTask(db, tId))!
+      expect(task.workgroupId).toBe(groupId)
+      expect(task.workgroupName).toBe('design-crew') // frozen, not 'live-name'
+      // The FK anchor still resolves — proving the UI reads the GROUP, not this.
+      expect(task.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
     })
 
-    const task = (await getTask(db, tId))!
-    expect(task.workgroupId).toBe(groupId)
-    expect(task.workgroupName).toBe('design-crew') // frozen, not 'live-name'
-    // The FK anchor still resolves — proving the UI reads the GROUP, not this.
-    expect(task.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
-  })
+    test('workgroupName is null in the detail payload for a non-workgroup task', async () => {
+      const db = harness.db
+      const wfId = ulid()
+      await seedWorkflow(db, wfId, 'plain-wf')
+      const tId = await seedTask(db, { name: 'solo', workflowId: wfId })
 
-  test('workgroupName is null in the detail payload for a non-workgroup task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const wfId = ulid()
-    seedWorkflow(db, wfId, 'plain-wf')
-    const tId = seedTask(db, { name: 'solo', workflowId: wfId })
-
-    const task = (await getTask(db, tId))!
-    expect(task.workgroupId).toBeNull()
-    expect(task.workgroupName).toBeNull()
-  })
-
-  test('a corrupt frozen config degrades detail workgroupName to null (never 5xx)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
-    const groupId = ulid()
-    const tId = seedTask(db, {
-      name: 't',
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-      workgroupId: groupId,
-      workgroupConfigJson: '{ not valid json',
+      const task = (await getTask(db, tId))!
+      expect(task.workgroupId).toBeNull()
+      expect(task.workgroupName).toBeNull()
     })
 
-    const task = (await getTask(db, tId))!
-    expect(task.workgroupId).toBe(groupId)
-    expect(task.workgroupName).toBeNull()
-  })
-})
+    test('a corrupt frozen config degrades detail workgroupName to null (never 5xx)', async () => {
+      const db = harness.db
+      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
+      const groupId = ulid()
+      const tId = await seedTask(db, {
+        name: 't',
+        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workgroupId: groupId,
+        workgroupConfigJson: '{ not valid json',
+      })
+
+      const task = (await getTask(db, tId))!
+      expect(task.workgroupId).toBe(groupId)
+      expect(task.workgroupName).toBeNull()
+    })
+  },
+)
 
 // RFC-177: the list subject link resolves an agent task by its frozen stable id,
 // so `TaskSummary` must carry `sourceAgentId` (the detail `Task` already did via
 // RFC-175). Locks the rowToSummary projection.
-describe('RFC-177 — sourceAgentId projected into the list summary', () => {
+describeEachProvider('RFC-177 — sourceAgentId projected into the list summary', (harness) => {
   test('listTasks + getTask carry the frozen sourceAgentId for an agent task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const wfId = ulid()
-    seedWorkflow(db, wfId, 'agent-host')
-    const tId = seedTask(db, {
+    await seedWorkflow(db, wfId, 'agent-host')
+    const tId = await seedTask(db, {
       name: 'agent-task',
       workflowId: wfId,
       sourceAgentName: 'coder',
@@ -229,10 +245,10 @@ describe('RFC-177 — sourceAgentId projected into the list summary', () => {
   })
 
   test('sourceAgentId is null for a non-agent task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const wfId = ulid()
-    seedWorkflow(db, wfId, 'plain')
-    const tId = seedTask(db, { name: 'wf', workflowId: wfId })
+    await seedWorkflow(db, wfId, 'plain')
+    const tId = await seedTask(db, { name: 'wf', workflowId: wfId })
     const row = (await listTasks(db, { limit: 100 })).find((r) => r.id === tId)!
     expect(row.sourceAgentId ?? null).toBeNull()
   })

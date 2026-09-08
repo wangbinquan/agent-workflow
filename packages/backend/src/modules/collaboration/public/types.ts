@@ -77,9 +77,21 @@ export interface ReviewActor {
   readonly authorityRevision?: number
 }
 
+export type CollaborationContextCapability =
+  | 'reviewDecisions'
+  | 'questionDispatches'
+  | 'clarifyDecisions'
+  | 'taskExecutionReadModels'
+
 declare const collaborationCommandContextBrand: unique symbol
+declare const collaborationCommandCapabilitiesBrand: unique symbol
 
 /** Opaque composition reference; DB and filesystem dependencies stay private. */
-export type CollaborationCommandContext = Readonly<{
-  [collaborationCommandContextBrand]: 'collaboration-command-context'
-}>
+export type CollaborationCommandContext<C extends CollaborationContextCapability = never> =
+  Readonly<{
+    [collaborationCommandContextBrand]: 'collaboration-command-context'
+    [collaborationCommandCapabilitiesBrand]: Readonly<Record<C, true>>
+  }>
+
+/** Every capability invoked by the complete collaboration route operations. */
+export type CollaborationRouteContext = CollaborationCommandContext<CollaborationContextCapability>

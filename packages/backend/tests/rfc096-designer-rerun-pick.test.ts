@@ -29,18 +29,17 @@
 // The picker's own predicate matrix stays behaviorally locked by
 // rfc096-pick-freshest.test.ts; this file locks the dispatch-layer WIRING.
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const Q = 'questioner'
 const D = 'designer'
@@ -90,7 +89,7 @@ function mkQuestion(id: string): ClarifyQuestion {
   }
 }
 
-async function seedTask(db: DbClient): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const taskId = `t_${ulid()}`
   const def = fixtureDef()
   await db.insert(workflows).values({
@@ -121,7 +120,7 @@ async function seedTask(db: DbClient): Promise<string> {
 // production ULIDs provide). The dispatch anchor must follow THIS order, never
 // startedAt.
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   fields: Partial<typeof nodeRuns.$inferInsert>,
@@ -145,7 +144,7 @@ async function seedRun(
  *  `answered` lets the reassign-added designer pass the dispatch seal gate
  *  (assertRequestedEntriesSealed treats an answered round as sealed). */
 async function seedAnsweredCrossRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   questionerRunId: string,
 ): Promise<string> {
@@ -175,74 +174,77 @@ async function seedAnsweredCrossRound(
   return crossNodeRunId
 }
 
-async function loadRun(db: DbClient, id: string) {
+async function loadRun(db: ProviderNeutralDatabase, id: string) {
   return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]
 }
 
-describe('RFC-096 designer-rerun anchor — freshest-row pick via the unified dispatch (pure id order)', () => {
-  test('core lock: the id-freshest NULL-startedAt CHILD row beats a stale top-level row with a huge startedAt; the minted designer rerun inherits shardKey + parentNodeRunId from it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedTask(db)
+describeEachProvider(
+  'RFC-096 designer-rerun anchor — freshest-row pick via the unified dispatch (pure id order)',
+  (harness) => {
+    test('core lock: the id-freshest NULL-startedAt CHILD row beats a stale top-level row with a huge startedAt; the minted designer rerun inherits shardKey + parentNodeRunId from it', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
 
-    // Designer history, seeded oldest → newest (id order):
-    //   1. fanout parent row (top-level container the child hangs off).
-    //   2. STALE top-level row with a HUGE startedAt (pathology 2: a
-    //      mark-running rewrite / any startedAt ordering would pick THIS).
-    //   3. id-freshest CHILD row: startedAt NULL (pathology 1), carrying the
-    //      shardKey + parentNodeRunId the rerun must inherit
-    //      (topLevelOnly:false keeps it in the candidate set).
-    const dParentId = await seedRun(db, taskId, D, {
-      status: 'done',
-      startedAt: 1_000,
-      finishedAt: 2_000,
+      // Designer history, seeded oldest → newest (id order):
+      //   1. fanout parent row (top-level container the child hangs off).
+      //   2. STALE top-level row with a HUGE startedAt (pathology 2: a
+      //      mark-running rewrite / any startedAt ordering would pick THIS).
+      //   3. id-freshest CHILD row: startedAt NULL (pathology 1), carrying the
+      //      shardKey + parentNodeRunId the rerun must inherit
+      //      (topLevelOnly:false keeps it in the candidate set).
+      const dParentId = await seedRun(db, taskId, D, {
+        status: 'done',
+        startedAt: 1_000,
+        finishedAt: 2_000,
+      })
+      const staleId = await seedRun(db, taskId, D, {
+        status: 'done',
+        startedAt: 9_000_000_000_000_000,
+        finishedAt: 9_000_000_000_000_001,
+      })
+      const freshChildId = await seedRun(db, taskId, D, {
+        status: 'done',
+        startedAt: null,
+        parentNodeRunId: dParentId,
+        shardKey: 'shard-a',
+      })
+
+      const questionerRunId = await seedRun(db, taskId, Q, { status: 'awaiting_human' })
+      await seedAnsweredCrossRound(db, taskId, questionerRunId)
+
+      // RFC-162 live driver: a cross round reconciles to ONE questioner entry (designer-by-default
+      // deleted). Reassign it UPSTREAM to D to ADD a `designer` handler (default target D), then
+      // dispatch that handler through the SAME dispatchTaskQuestions the board's 批量下发 uses —
+      // buildFrontierMintPlan anchors the designer mint on pickFreshestRun(designer rows).
+      const actor = { userId: 'u1', role: 'owner' as const }
+      const questioner = (await listTaskQuestions(db, taskId)).find(
+        (e) => e.roleKind === 'questioner',
+      )!
+      await reassignTaskQuestion(db, questioner.id, D, actor)
+      const designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
+
+      const res = await dispatchTaskQuestions(db, taskId, [designer.id], actor)
+
+      const designerRerunId = res.reruns.find((r) => r.targetNodeId === D)?.nodeRunId
+      expect(designerRerunId).toBeDefined()
+      const rerun = await loadRun(db, designerRerunId!)
+      expect(rerun?.nodeId).toBe(D)
+      expect(rerun?.status).toBe('pending')
+      expect(rerun?.rerunCause).toBe('cross-clarify-answer')
+      // Anchored on the id-freshest CHILD row — NOT the huge-startedAt stale row
+      // (which carries no shardKey/parent): inheritance proves the pick.
+      expect(rerun?.shardKey).toBe('shard-a')
+      expect(rerun?.parentNodeRunId).toBe(dParentId)
+      expect(rerun?.iteration).toBe(0)
+      // retry allocation is max(TOP-LEVEL rows at the anchor iteration)+1 — the
+      // parent + stale top-level rows are both retryIndex 0 → the rerun gets 1.
+      expect(rerun?.retryIndex).toBe(1)
+      // Fresh mints never write startedAt (that is exactly why a startedAt
+      // ordering mis-anchors) — the minted row itself keeps the invariant.
+      expect(rerun?.startedAt).toBeNull()
+      // The anchor row is untouched history.
+      expect((await loadRun(db, freshChildId))?.status).toBe('done')
+      expect((await loadRun(db, staleId))?.status).toBe('done')
     })
-    const staleId = await seedRun(db, taskId, D, {
-      status: 'done',
-      startedAt: 9_000_000_000_000_000,
-      finishedAt: 9_000_000_000_000_001,
-    })
-    const freshChildId = await seedRun(db, taskId, D, {
-      status: 'done',
-      startedAt: null,
-      parentNodeRunId: dParentId,
-      shardKey: 'shard-a',
-    })
-
-    const questionerRunId = await seedRun(db, taskId, Q, { status: 'awaiting_human' })
-    await seedAnsweredCrossRound(db, taskId, questionerRunId)
-
-    // RFC-162 live driver: a cross round reconciles to ONE questioner entry (designer-by-default
-    // deleted). Reassign it UPSTREAM to D to ADD a `designer` handler (default target D), then
-    // dispatch that handler through the SAME dispatchTaskQuestions the board's 批量下发 uses —
-    // buildFrontierMintPlan anchors the designer mint on pickFreshestRun(designer rows).
-    const actor = { userId: 'u1', role: 'owner' as const }
-    const questioner = (await listTaskQuestions(db, taskId)).find(
-      (e) => e.roleKind === 'questioner',
-    )!
-    await reassignTaskQuestion(db, questioner.id, D, actor)
-    const designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
-
-    const res = await dispatchTaskQuestions(db, taskId, [designer.id], actor)
-
-    const designerRerunId = res.reruns.find((r) => r.targetNodeId === D)?.nodeRunId
-    expect(designerRerunId).toBeDefined()
-    const rerun = await loadRun(db, designerRerunId!)
-    expect(rerun?.nodeId).toBe(D)
-    expect(rerun?.status).toBe('pending')
-    expect(rerun?.rerunCause).toBe('cross-clarify-answer')
-    // Anchored on the id-freshest CHILD row — NOT the huge-startedAt stale row
-    // (which carries no shardKey/parent): inheritance proves the pick.
-    expect(rerun?.shardKey).toBe('shard-a')
-    expect(rerun?.parentNodeRunId).toBe(dParentId)
-    expect(rerun?.iteration).toBe(0)
-    // retry allocation is max(TOP-LEVEL rows at the anchor iteration)+1 — the
-    // parent + stale top-level rows are both retryIndex 0 → the rerun gets 1.
-    expect(rerun?.retryIndex).toBe(1)
-    // Fresh mints never write startedAt (that is exactly why a startedAt
-    // ordering mis-anchors) — the minted row itself keeps the invariant.
-    expect(rerun?.startedAt).toBeNull()
-    // The anchor row is untouched history.
-    expect((await loadRun(db, freshChildId))?.status).toBe('done')
-    expect((await loadRun(db, staleId))?.status).toBe('done')
-  })
-})
+  },
+)

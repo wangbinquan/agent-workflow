@@ -109,6 +109,11 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       version: 1,
     })
     const taskId = ulid()
+    // RFC-359: the old SQLite fixture received these root fields from migration 0210's
+    // task INSERT trigger. Keep its JSON key order: continuationSlotKey hashes the raw string.
+    const lineageSlotPathJson = JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ])
     await db.insert(tasks).values({
       id: taskId,
       name: 'multidoc',
@@ -121,7 +126,20 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       status: 'running',
       inputs: '{}',
       startedAt: Date.now(),
+      executionLineageId: taskId,
+      lineageSlotPathJson,
     })
+    // Both providers must start from the original SQLite-materialized row.
+    expect(
+      await db
+        .select({
+          executionLineageId: tasks.executionLineageId,
+          lineageSlotPathJson: tasks.lineageSlotPathJson,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .get(),
+    ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
     return { taskId, task, definition, reviewNode }

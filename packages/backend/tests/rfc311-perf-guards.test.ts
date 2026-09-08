@@ -43,18 +43,16 @@
 // 另：计划审计**不只看 SELECT**。历史上最恶劣的一次是归档器的 DELETE（无界 IN 撞
 // 32766 上限死循环），写语句的计划同样要审。
 //
-// # AC-11：PostgreSQL 不劣于 SQLite（RFC-359 W6-T27）
+// # AC-11 的诊断支撑；不替代原 P95 验收
 //
-// 判据**不是墙钟毫秒**。`docs/audit-backlog.md` §「O(k²) 守卫用墙钟毫秒当判据，在共享
-// runner 上会假红」记着一次实撞：同一份代码本机 0.6ms、CI 上量到 182ms 而红——毫秒把
-// 「算法复杂度」和「这台机器此刻有多忙」混成了一个数，而假红会训练所有人「重跑一下就好」，
-// 真的回潮反而被淹掉。
+// 以下跨引擎结构比较锁语句条数、取回行数和单条语句最大绑定参数，防止重复往返、
+// 无界物化等回归。它们不衡量端点时延，不能证明 proposal AC-11 要求的
+// 「PostgreSQL 各端点 P95 不劣于 SQLite」已经成立；原条款仍未闭合。
 //
-// 这里的 AC-11 判据是**跨引擎的结构对比**：同一条路径在 PostgreSQL 上发的语句条数、取回
-// 的行数、单条语句的最大绑定参数，都不得多于 SQLite。三个量全部确定性、与负载无关，
-// 而且正是「PG 上更慢」的**因**（多发语句 = 多一次网络往返；多取行 = 多搬数据）。
-// 两个引擎各自的 P95 墙钟仍然**采集并打印**（RFC-359 AC-11 要的「各取各的基线」），
-// 但只作诊断，不作判据；唯一带毫秒的断言是一条离噪声极远的塌方阈值（见 `CATASTROPHE_RATIO`）。
+// 两引擎在本文件 500 行语料上的 P95 继续采集打印，作为定位线索；九次采样的 P95
+// 实为最大样本，不能冒充完整 RFC-311 基准库上的端点验收。唯一带毫秒的断言只是
+// 离噪声极远的塌方阈值（见 CATASTROPHE_RATIO），通过也不代表原时延条款通过。
+// 各路径实际调用的函数见 GUARDED，生产装配覆盖与结构成本必须分别核验。
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -304,6 +302,8 @@ const GUARDED: GuardedPath[] = [
     run: async (db) => listMissionTerminalOutcomeGroups(db as never),
   },
   {
+    // 这里只量现有 legacy overview 算法在两个引擎上的执行。PG daemon 实际使用
+    // composeSystemOverviewQuery 的 owner ports，不能据此宣称已测真实 PG 端点。
     name: '/api/overview — 计数面板',
     run: (db) => {
       const actor = actorOf('admin')
@@ -369,7 +369,7 @@ const P95_SAMPLES = 9
  * 全表扫描 / 每行再查一次」这种量级的回归才够得着。50 倍这个数怎么来的：500 行语料上
  * PG 的每条语句都要付一次本机网络往返（约 0.3–1ms），而 SQLite 是同进程函数调用，
  * 便宜路径上 PG 天然就慢一个量级；实测比值 1.4–30 倍（`/api/overview` 13 条语句最差）。
- * 真正的「PG 不劣于 SQLite」由下面的结构对比断言承担。
+ * 结构对比只防护查询成本；原 AC-11 的端点 P95 要求仍须单独取得证据。
  */
 const CATASTROPHE_RATIO = 50
 /**
@@ -546,7 +546,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
           `P95 ${measurement.p95Ms.toFixed(2)}ms（${LARGE} 行语料）`,
       )
 
-      // AC-11 的判据。两条 lane 在同一个进程里跑，**后跑到的那一条**做比较——
+      // 结构成本对照。两条 lane 在同一个进程里跑，**后跑到的那一条**做比较——
       // 这样断言与 describe / test 的执行顺序无关（CI 用 `bun test --randomize`）。
       const sqlite = byEngine.get('sqlite')
       const postgresql = byEngine.get('postgresql')

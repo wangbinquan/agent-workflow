@@ -24,6 +24,8 @@ import {
   updateReviewCommentText,
 } from '@/modules/collaboration/infrastructure/review'
 import { createReviewDecisionCommand } from '@/modules/collaboration/infrastructure/reviewDecisionCommand'
+import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { submitReviewDecision } from '@/modules/collaboration/public/commands'
 import type { ReviewDecisionCommandPort } from '@/modules/collaboration/public/types'
 import { ConflictError } from '@/util/errors'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
@@ -84,7 +86,12 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     const db = harness.db
     round = await seedReviewRound(db)
     const command = createReviewDecisionCommand({ db, appHome: round.appHome })
-    const result = await command.submit({
+    const context = createCollaborationCommandContext({
+      db,
+      appHome: round.appHome,
+      reviewDecisions: command,
+    })
+    const result = await submitReviewDecision(context, {
       actor,
       authorRole: 'owner',
       nodeRunId: round.reviewRunId,

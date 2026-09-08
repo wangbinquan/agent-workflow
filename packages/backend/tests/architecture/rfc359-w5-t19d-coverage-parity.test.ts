@@ -99,7 +99,8 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 5/1',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
-  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 7/2, postgresql 9/2',
+  // W12：协作能力合同各增加一条 type import；仅引用 +1，驱动数不变。
+  'modules/task-execution/infrastructure/TaskRouteOperations: sqlite 8/2, postgresql 10/2',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-logical-source-conformance.test.ts`），
   // 倒挂差额不变（下面观察名单里那条随之从 `7 vs 4` 变成 `8 vs 5`）。
   'platform/persistence/LogicalSource: sqlite 8/4, postgresql 5/3',

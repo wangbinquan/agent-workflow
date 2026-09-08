@@ -20,12 +20,13 @@
 //   - rfc127-self-questioner-borrow.test.ts P2-2 按 message 锁了两账本 reject；本网补
 //     error CODE 锁（P5-D 三账本重做会破 code 锁）。
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   clarifyRounds,
   nodeRuns,
@@ -40,7 +41,6 @@ import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-w
 
 // Monotonic ulids so a later-seeded run always sorts freshest (asking run + rerun back-to-back).
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NODE_MECHANICS_SRC = resolve(
   import.meta.dir,
   '..',
@@ -100,7 +100,11 @@ function ans(qid: string) {
   }
 }
 
-async function seedTask(db: DbClient, taskId: string, _deferred = false): Promise<void> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  _deferred = false,
+): Promise<void> {
   const def = liveDef()
   await db.insert(workflows).values({
     id: `wf_${taskId}`,
@@ -126,7 +130,7 @@ async function seedTask(db: DbClient, taskId: string, _deferred = false): Promis
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   over: { status?: string; iteration?: number; hasOutput?: boolean } = {},
@@ -149,7 +153,7 @@ async function seedRun(
 /** Insert an answered clarify round (self or cross) with the given questions/answers + the
  *  consumed stamps. Returns the round + its asking/intermediary run ids. */
 async function seedAnsweredRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     kind: 'self' | 'cross'
@@ -215,71 +219,74 @@ describe('RFC-128 P5-A #1 → RFC-132 PR-C — self/q 注入收敛为统一平�
 // 互不串台」的现状——P5-C 新增 self/q park 源（扩 loadUndispatchedDesignerTargets）会破这条。
 // ===========================================================================
 
-describe('RFC-128 P5-A #4 — deferred 任务: designer 逐题 park vs self/q 整轮 (交界现状)', () => {
-  test('designer 未下发条目进 park 源；self/q 整轮答案不进 park、dispatched_at 恒 NULL', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = `t_${ulid()}`
-    await seedTask(db, taskId, true)
+describeEachProvider(
+  'RFC-128 P5-A #4 — deferred 任务: designer 逐题 park vs self/q 整轮 (交界现状)',
+  (harness) => {
+    test('designer 未下发条目进 park 源；self/q 整轮答案不进 park、dispatched_at 恒 NULL', async () => {
+      const db = harness.db
+      const taskId = `t_${ulid()}`
+      await seedTask(db, taskId, true)
 
-    // Designer ledger: an undispatched designer entry (default home D) → §18 park source.
-    const cross = await seedAnsweredRound(db, taskId, {
-      kind: 'cross',
-      askingNodeId: Q,
-      loopIter: 0,
-      questions: [mkQ('dq', 't')],
-    })
-    await db.insert(taskQuestions).values({
-      id: ulid(),
-      taskId,
-      originNodeRunId: cross.intermediaryNodeRunId,
-      questionId: 'dq',
-      questionTitle: 't',
-      sourceKind: 'cross',
-      roleKind: 'designer',
-      iteration: 0,
-      loopIter: 0,
-      defaultTargetNodeId: D,
-      overrideTargetNodeId: null,
-      // dispatched_at NULL ⇒ undispatched ⇒ in the designer park source.
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
+      // Designer ledger: an undispatched designer entry (default home D) → §18 park source.
+      const cross = await seedAnsweredRound(db, taskId, {
+        kind: 'cross',
+        askingNodeId: Q,
+        loopIter: 0,
+        questions: [mkQ('dq', 't')],
+      })
+      await db.insert(taskQuestions).values({
+        id: ulid(),
+        taskId,
+        originNodeRunId: cross.intermediaryNodeRunId,
+        questionId: 'dq',
+        questionTitle: 't',
+        sourceKind: 'cross',
+        roleKind: 'designer',
+        iteration: 0,
+        loopIter: 0,
+        defaultTargetNodeId: D,
+        overrideTargetNodeId: null,
+        // dispatched_at NULL ⇒ undispatched ⇒ in the designer park source.
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
 
-    // self/q ledger: an answered self round + its self entry — round-based, never dispatched.
-    const self = await seedAnsweredRound(db, taskId, {
-      kind: 'self',
-      askingNodeId: P,
-      questions: [mkQ('q1', 't')],
-    })
-    await db.insert(taskQuestions).values({
-      id: ulid(),
-      taskId,
-      originNodeRunId: self.intermediaryNodeRunId,
-      questionId: 'q1',
-      questionTitle: 't',
-      sourceKind: 'self',
-      roleKind: 'self',
-      iteration: 0,
-      loopIter: 0,
-      defaultTargetNodeId: P,
-      overrideTargetNodeId: null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
+      // self/q ledger: an answered self round + its self entry — round-based, never dispatched.
+      const self = await seedAnsweredRound(db, taskId, {
+        kind: 'self',
+        askingNodeId: P,
+        questions: [mkQ('q1', 't')],
+      })
+      await db.insert(taskQuestions).values({
+        id: ulid(),
+        taskId,
+        originNodeRunId: self.intermediaryNodeRunId,
+        questionId: 'q1',
+        questionTitle: 't',
+        sourceKind: 'self',
+        roleKind: 'self',
+        iteration: 0,
+        loopIter: 0,
+        defaultTargetNodeId: P,
+        overrideTargetNodeId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
 
-    // Designer park source sees ONLY the designer home (D), NOT the self/q home (P) — there is
-    // no self/questioner undispatched-park source yet (the stranding root cause P5-0 guards;
-    // P5-C will ADD a self/q park source here → this lock turns red and must migrate).
-    const parked = await loadUndispatchedDesignerTargets(db, taskId)
-    expect(parked.has(D)).toBe(true)
-    expect(parked.has(P)).toBe(false)
+      // Designer park source sees ONLY the designer home (D), NOT the self/q home (P) — there is
+      // no self/questioner undispatched-park source yet (the stranding root cause P5-0 guards;
+      // P5-C will ADD a self/q park source here → this lock turns red and must migrate).
+      const parked = await loadUndispatchedDesignerTargets(db, taskId)
+      expect(parked.has(D)).toBe(true)
+      expect(parked.has(P)).toBe(false)
 
-    // self/q entries are round-based — never stamped dispatched_at (designer-only column today).
-    const selfEntries = await db
-      .select()
-      .from(taskQuestions)
-      .where(eq(taskQuestions.roleKind, 'self'))
-    expect(selfEntries.length).toBeGreaterThan(0)
-    expect(selfEntries.every((e) => e.dispatchedAt === null)).toBe(true)
-  })
-})
+      // self/q entries are round-based — never stamped dispatched_at (designer-only column today).
+      const selfEntries = await db
+        .select()
+        .from(taskQuestions)
+        .where(eq(taskQuestions.roleKind, 'self'))
+      expect(selfEntries.length).toBeGreaterThan(0)
+      expect(selfEntries.every((e) => e.dispatchedAt === null)).toBe(true)
+    })
+  },
+)

@@ -81,7 +81,7 @@ describe('RFC-349 collaboration route operations', () => {
     )
     expect(composition).toContain('composePostgresqlCollaborationRouteOperations')
     expect(composition).toContain('composeSqliteCollaborationRouteOperations')
-    expect(composition).toContain('context: CollaborationCommandContext')
+    expect(composition).toContain('context: CollaborationRouteContext')
     expect(composition).toContain('bindCollaborationRouteContext')
     expect(composition).toContain('createCollaborationClarifyDraftEventPublisher()')
     expect(publisher).toContain('taskBroadcaster.broadcast(TASK_CHANNEL(input.taskId)')

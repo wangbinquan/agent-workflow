@@ -75,67 +75,74 @@ function inputPorts(value: string): Agent['inputs'] {
   }
 }
 
-function frontmatterSidecars(frontmatterExtra: Record<string, unknown>): {
+type AgentRowDecoding = 'normalized' | 'stored-json'
+
+function sidecarMap(
+  value: unknown,
+  decoding: AgentRowDecoding,
+): Record<string, string> | undefined {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (decoding === 'normalized' && Array.isArray(value))
+  ) {
+    return undefined
+  }
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0,
+  )
+  const mapped = Object.fromEntries(entries)
+  // The stored-JSON entry populated an ordinary object by assigning each entry.
+  const result = decoding === 'stored-json' ? Object.assign({}, mapped) : mapped
+  return Object.keys(result).length === 0 ? undefined : result
+}
+
+function frontmatterSidecars(
+  fmExtra: Record<string, unknown>,
+  decoding: AgentRowDecoding,
+): {
   readonly exposed: Record<string, unknown>
   readonly outputKinds?: Agent['outputKinds']
   readonly role?: Agent['role']
   readonly outputWrapperPortNames?: Agent['outputWrapperPortNames']
   readonly branchPorts?: Agent['branchPorts']
 } {
-  const exposed = { ...frontmatterExtra }
-  const outputKinds =
-    typeof exposed.outputKinds === 'object' &&
-    exposed.outputKinds !== null &&
-    !Array.isArray(exposed.outputKinds)
-      ? Object.fromEntries(
-          Object.entries(exposed.outputKinds).filter(
-            (entry): entry is [string, string] =>
-              typeof entry[1] === 'string' && entry[1].length > 0,
-          ),
-        )
-      : undefined
-  const outputWrapperPortNames =
-    typeof exposed.outputWrapperPortNames === 'object' &&
-    exposed.outputWrapperPortNames !== null &&
-    !Array.isArray(exposed.outputWrapperPortNames)
-      ? Object.fromEntries(
-          Object.entries(exposed.outputWrapperPortNames).filter(
-            (entry): entry is [string, string] =>
-              typeof entry[1] === 'string' && entry[1].length > 0,
-          ),
-        )
-      : undefined
-  const branchPorts = Array.isArray(exposed.branchPorts)
-    ? exposed.branchPorts.filter(
+  // Read before spreading: the stored-JSON entry historically throws on JSON null.
+  const outputKinds = sidecarMap(fmExtra.outputKinds, decoding)
+  const role = fmExtra.role === 'aggregator' ? 'aggregator' : undefined
+  const outputWrapperPortNames = sidecarMap(fmExtra.outputWrapperPortNames, decoding)
+  const branchPorts = Array.isArray(fmExtra.branchPorts)
+    ? fmExtra.branchPorts.filter(
         (entry): entry is string => typeof entry === 'string' && entry.length > 0,
       )
     : undefined
-  const role = exposed.role === 'aggregator' ? 'aggregator' : undefined
+  const exposed = { ...fmExtra }
   delete exposed.outputKinds
   delete exposed.role
   delete exposed.outputWrapperPortNames
   delete exposed.branchPorts
   return {
     exposed,
-    ...(outputKinds === undefined || Object.keys(outputKinds).length === 0 ? {} : { outputKinds }),
+    ...(outputKinds === undefined ? {} : { outputKinds }),
     ...(role === undefined ? {} : { role }),
-    ...(outputWrapperPortNames === undefined || Object.keys(outputWrapperPortNames).length === 0
-      ? {}
-      : { outputWrapperPortNames }),
+    ...(outputWrapperPortNames === undefined ? {} : { outputWrapperPortNames }),
     ...(branchPorts === undefined || branchPorts.length === 0 ? {} : { branchPorts }),
   }
 }
 
-export function agentFromPersistenceRow(row: AgentPersistenceRow): Agent {
-  const sidecars = frontmatterSidecars(jsonRecord(row.frontmatterExtra))
+function decodeAgentPersistenceRow(row: AgentPersistenceRow, decoding: AgentRowDecoding): Agent {
+  const sidecars = frontmatterSidecars(
+    decoding === 'normalized' ? jsonRecord(row.frontmatterExtra) : JSON.parse(row.frontmatterExtra),
+    decoding,
+  )
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    outputs: stringArray(row.outputs),
+    outputs: decoding === 'normalized' ? stringArray(row.outputs) : JSON.parse(row.outputs),
     inputs: inputPorts(row.inputs),
     syncOutputsOnIterate: row.syncOutputsOnIterate,
-    permission: jsonRecord(row.permission),
+    permission: decoding === 'normalized' ? jsonRecord(row.permission) : JSON.parse(row.permission),
     skills: skillRefs(row.skills),
     dependsOn: stringArray(row.dependsOn),
     mcp: stringArray(row.mcp),
@@ -155,8 +162,23 @@ export function agentFromPersistenceRow(row: AgentPersistenceRow): Agent {
       ? {}
       : { outputWrapperPortNames: sidecars.outputWrapperPortNames }),
     ...(sidecars.branchPorts === undefined ? {} : { branchPorts: sidecars.branchPorts }),
-    ...(row.runtime === null || row.runtime.length === 0 ? {} : { runtime: row.runtime }),
+    ...(decoding === 'stored-json'
+      ? typeof row.runtime === 'string' && row.runtime.length > 0
+        ? { runtime: row.runtime }
+        : {}
+      : row.runtime === null || row.runtime.length === 0
+        ? {}
+        : { runtime: row.runtime }),
   }
+}
+
+export function agentFromPersistenceRow(row: AgentPersistenceRow): Agent {
+  return decodeAgentPersistenceRow(row, 'normalized')
+}
+
+/** Keep the established JSON parsing contract of the legacy row loader. */
+export function agentFromStoredJsonRow(row: AgentPersistenceRow): Agent {
+  return decodeAgentPersistenceRow(row, 'stored-json')
 }
 
 function persistedFrontmatter(

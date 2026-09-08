@@ -5,20 +5,19 @@
 // This is a thin contract test against the row mappers (no HTTP). The 422
 // validation flow lives in tasks-create-name.test.ts (T5).
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { getTask, listTasks } from '../src/services/task'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedTask(db: ReturnType<typeof createInMemoryDb>, name: string) {
+async function seedTask(db: ProviderNeutralDatabase, name: string) {
   const wfId = ulid()
   const tId = ulid()
   const now = Date.now()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -30,7 +29,8 @@ function seedTask(db: ReturnType<typeof createInMemoryDb>, name: string) {
       updatedAt: now,
     })
     .run()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: tId,
       name,
@@ -48,18 +48,18 @@ function seedTask(db: ReturnType<typeof createInMemoryDb>, name: string) {
   return tId
 }
 
-describe('RFC-037 — task row mappers include `name`', () => {
+describeEachProvider('RFC-037 — task row mappers include `name`', (harness) => {
   test('getTask returns name', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const id = seedTask(db, 'PR-1234 fix pagination')
+    const db = harness.db
+    const id = await seedTask(db, 'PR-1234 fix pagination')
     const t = await getTask(db, id)
     expect(t?.name).toBe('PR-1234 fix pagination')
   })
 
   test('listTasks returns name per row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    seedTask(db, 'one')
-    seedTask(db, 'two')
+    const db = harness.db
+    await seedTask(db, 'one')
+    await seedTask(db, 'two')
     const rows = await listTasks(db, { limit: 100 })
     const names = rows.map((r) => r.name).sort()
     expect(names).toEqual(['one', 'two'])

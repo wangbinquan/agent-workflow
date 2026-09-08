@@ -655,12 +655,19 @@ describeEachProvider('RFC-359 legacy MCP mutation preservation', (harness) => {
     for (const statement of create) await harness.executeFixtureDdl(statement)
     try {
       await expect(
-        harness.session.transaction((tx) =>
-          commitLegacyMcpUpdateInTx(tx, {
-            id: prepared.id,
-            set: { enabled: false, updatedAt: T0 + 2 },
+        harness.session
+          .transaction((tx) =>
+            commitLegacyMcpUpdateInTx(tx, {
+              id: prepared.id,
+              set: { enabled: false, updatedAt: T0 + 2 },
+            }),
+          )
+          .catch((error: unknown) => {
+            // Drizzle may wrap the injected driver failure in a query error.
+            let cause = error
+            while (cause instanceof Error && cause.cause instanceof Error) cause = cause.cause
+            throw cause
           }),
-        ),
       ).rejects.toThrow('forced MCP transition failure')
       expect(await stored()).toEqual(original)
       expect(await session()).toEqual(beforeSession)

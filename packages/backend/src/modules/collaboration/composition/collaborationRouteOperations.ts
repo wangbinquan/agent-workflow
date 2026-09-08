@@ -19,10 +19,10 @@ import {
   resolveReviewAccess,
   visibleCollaborationTaskIds,
 } from '../public/queries'
-import type { CollaborationCommandContext } from '../public/types'
+import type { CollaborationRouteContext } from '../public/types'
 
 function bindCollaborationRouteContext(
-  context: CollaborationCommandContext,
+  context: CollaborationRouteContext,
   persistence: CollaborationRoutePersistenceOperations,
 ): CollaborationRouteOperations {
   const access: CollaborationRouteOperations['access'] = Object.freeze({
@@ -55,7 +55,7 @@ function bindCollaborationRouteContext(
 // 装配入口只是名字不同的同一条线；名字暂留，等 bootstrap 侧的 provider 命名一并收敛。
 function composeCollaborationRouteOperations(input: {
   readonly db: ProviderNeutralDatabase
-  readonly context: CollaborationCommandContext
+  readonly context: CollaborationRouteContext
 }): CollaborationRouteOperations {
   return bindCollaborationRouteContext(
     input.context,
@@ -68,14 +68,14 @@ function composeCollaborationRouteOperations(input: {
 
 export function composeSqliteCollaborationRouteOperations(input: {
   readonly db: ProviderNeutralDatabase
-  readonly context: CollaborationCommandContext
+  readonly context: CollaborationRouteContext
 }): CollaborationRouteOperations {
   return composeCollaborationRouteOperations(input)
 }
 
 export function composePostgresqlCollaborationRouteOperations(input: {
   readonly db: ProviderNeutralDatabase
-  readonly context: CollaborationCommandContext
+  readonly context: CollaborationRouteContext
 }): CollaborationRouteOperations {
   return composeCollaborationRouteOperations(input)
 }

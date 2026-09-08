@@ -4,6 +4,7 @@
 // are captured while owner modules are built and never cross into HTTP, WS or
 // public route contracts.
 
+import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DigitalEmployeeModuleWithRuntime } from '@/modules/digital-employee/composition'
 import {
   createClarifyDecisionCommand,
@@ -750,17 +751,18 @@ export async function composePostgresqlDaemonApplication(
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
   const collaborationRuntime = createCollaborationRuntimeMechanics(input.db)
-  const boundCollaborationContext = createPostgresqlCollaborationCommandContext({
-    db: input.db,
-    appHome: input.appHome,
-    taskExecutionReadModels: taskExecutionPersistence.reads,
-    // RFC-359 W1-T2a：问题派发命令端口与 SQLite 是同一份实现；此前这里从未注入，路由必 500。
-    questionDispatches: createQuestionDispatchCommand(input.db),
-    // RFC-359 W1-T2b：快速澄清决定同样是一份实现；蒸馏入队走 PG 侧的 memory 命令面。
-    clarifyDecisions: createClarifyDecisionCommand(input.db, memoryOperations.distillCommands),
-    // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
-    reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
-  })
+  const boundCollaborationContext: CollaborationRouteContext =
+    createPostgresqlCollaborationCommandContext({
+      db: input.db,
+      appHome: input.appHome,
+      taskExecutionReadModels: taskExecutionPersistence.reads,
+      // RFC-359 W1-T2a：问题派发命令端口与 SQLite 是同一份实现；此前这里从未注入，路由必 500。
+      questionDispatches: createQuestionDispatchCommand(input.db),
+      // RFC-359 W1-T2b：快速澄清决定同样是一份实现；蒸馏入队走 PG 侧的 memory 命令面。
+      clarifyDecisions: createClarifyDecisionCommand(input.db, memoryOperations.distillCommands),
+      // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
+      reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
+    })
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const workgroupTurns = composeWorkgroupTurnsOperations(
     input.db,
