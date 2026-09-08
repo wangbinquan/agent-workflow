@@ -6,10 +6,10 @@
 // to point at an unknown name MUST return 400 from the service layer, not
 // silently land in the DB.
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createAgent, deleteAgent, renameAgent, updateAgent } from '../src/services/agent'
 import { ConflictError } from '../src/util/errors'
 import type { Agent } from '@agent-workflow/shared'
@@ -21,9 +21,11 @@ const T6_ACTOR = buildActor({
   source: 'session',
 })
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seed(db: DbClient, name: string, dependsOn: string[] = []): Promise<Agent> {
+async function seed(
+  db: ProviderNeutralDatabase,
+  name: string,
+  dependsOn: string[] = [],
+): Promise<Agent> {
   return createAgent(db, {
     name,
     description: '',
@@ -39,10 +41,10 @@ async function seed(db: DbClient, name: string, dependsOn: string[] = []): Promi
   })
 }
 
-describe('RFC-022 reverse-dep guard on delete / rename', () => {
-  let db: DbClient
+describeEachProvider('RFC-022 reverse-dep guard on delete / rename', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('deleteAgent refuses when another agent.dependsOn references it', async () => {

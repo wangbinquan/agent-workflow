@@ -7,12 +7,20 @@
 // 路径只是转发。
 
 import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { wgClarifyAskerKey, type WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
-import { clarifyRounds } from '@/db/schema'
+import {
+  agents,
+  clarifyRounds,
+  nodeRuns,
+  tasks,
+  workgroupAssignments,
+  workgroupTaskState,
+} from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { setNodeClarifyDirective } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
@@ -20,13 +28,112 @@ import {
   renderWgProtocolBlock,
   wgHostRolePorts,
 } from '@/modules/resource-catalog/application/workgroups/workgroupProtocol'
-import { WORKGROUP_TURN_MEMBER_NODE_ID } from '@/modules/task-execution/public/commands'
+import {
+  WORKGROUP_TURN_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID,
+  type WorkgroupTurnHostRequest,
+  type WorkgroupTurnHostResult,
+  type WorkgroupTurnLogger,
+} from '@/modules/task-execution/public/commands'
 import { describeEachProvider } from './helpers/eachProvider'
-import { CL, DESIGNER, freshTaskId, seedRun, seedTask } from './helpers/questionDispatchFixture'
+import {
+  CL,
+  DESIGNER,
+  freshTaskId,
+  mkQ,
+  seedRun,
+  seedTask,
+} from './helpers/questionDispatchFixture'
+import { runWorkgroupTurns } from './helpers/workgroupTurns'
 
 const ulid = monotonicFactory()
 const HUMAN_AND_AGENT = [{ memberType: 'agent' as const }, { memberType: 'human' as const }]
 const AGENTS_ONLY = [{ memberType: 'agent' as const }]
+const turnLog: WorkgroupTurnLogger = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  child: () => turnLog,
+}
+
+async function seedWorkgroupTurnTask(db: ProviderNeutralDatabase): Promise<string> {
+  const taskId = freshTaskId()
+  await seedTask(db, taskId)
+  const leaderId = ulid()
+  const workerId = ulid()
+  const leaderName = `t7e-leader-${leaderId.toLowerCase()}`
+  const workerName = `t7e-worker-${workerId.toLowerCase()}`
+  await db.insert(agents).values([
+    { id: leaderId, name: leaderName, description: '', bodyMd: 'Coordinate the work.' },
+    { id: workerId, name: workerName, description: '', bodyMd: 'Complete the assignment.' },
+  ])
+  const config: WorkgroupRuntimeConfig = {
+    workgroupId: `wg-${taskId}`,
+    workgroupName: 't7e clarify driver',
+    mode: 'leader_worker',
+    leaderMemberId: 'm-leader',
+    switches: { shareOutputs: true, directMessages: false, blackboard: true },
+    maxRounds: 4,
+    completionGate: false,
+    clarifyBudget: 1,
+    goal: 'Complete the assignment with the requested human input.',
+    instructions: 'Report the result.',
+    members: [
+      {
+        id: 'm-leader',
+        memberType: 'agent',
+        agentId: leaderId,
+        agentName: leaderName,
+        userId: null,
+        displayName: 'lead',
+        roleDesc: 'Coordinate',
+      },
+      {
+        id: 'm-worker',
+        memberType: 'agent',
+        agentId: workerId,
+        agentName: workerName,
+        userId: null,
+        displayName: 'worker',
+        roleDesc: 'Implement',
+      },
+      {
+        id: 'm-human',
+        memberType: 'human',
+        agentId: null,
+        agentName: null,
+        userId: 'u1',
+        displayName: 'operator',
+        roleDesc: 'Answer questions',
+      },
+    ],
+  }
+  await db
+    .update(tasks)
+    .set({
+      status: 'running',
+      workgroupId: config.workgroupId,
+      workgroupConfigJson: JSON.stringify(config),
+    })
+    .where(eq(tasks.id, taskId))
+  return taskId
+}
+
+async function expectPersistedHostNonce(
+  db: ProviderNeutralDatabase,
+  request: WorkgroupTurnHostRequest,
+): Promise<typeof nodeRuns.$inferSelect> {
+  const [run] = await db.select().from(nodeRuns).where(eq(nodeRuns.id, request.nodeRunId))
+  expect(run).toBeDefined()
+  if (run === undefined) throw new Error('turn driver did not persist its host run')
+  const nonce = run.envelopeNonce
+  expect(nonce).not.toBeNull()
+  if (nonce === null) throw new Error('turn driver did not persist its envelope nonce')
+  expect(nonce.length).toBeGreaterThan(0)
+  expect(request.workgroupProtocolBlock).toContain(`nonce="${nonce}"`)
+  return run
+}
 
 async function seedSelfAsk(
   db: ProviderNeutralDatabase,
@@ -108,6 +215,160 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
         clarifyBudget: 9,
       }),
     ).toBe(false)
+  })
+
+  // AC-7 / P0-12: the database gate and the protocol renderer must meet in the
+  // production turn driver. Only the external host result is controlled here;
+  // this does not claim a real child process asked or created a clarify round.
+  test('P0-12 实际回合：worker 收到反问协议与持久化 nonce，awaiting 结果把 assignment 停在 awaiting_human', async () => {
+    const db = harness.db
+    const taskId = await seedWorkgroupTurnTask(db)
+    const requests: WorkgroupTurnHostRequest[] = []
+    const outcome = await runWorkgroupTurns({
+      db,
+      taskId,
+      log: turnLog,
+      hooks: {
+        async runHostNode(request): Promise<WorkgroupTurnHostResult> {
+          requests.push(request)
+          if (request.nodeId === WORKGROUP_TURN_LEADER_NODE_ID) {
+            return {
+              status: 'done',
+              outputs: {
+                wg_assignments: JSON.stringify([
+                  {
+                    member: 'worker',
+                    title: 'Choose the target',
+                    brief: 'Ask which target to use.',
+                  },
+                ]),
+                wg_decision: JSON.stringify({ action: 'continue' }),
+              },
+            }
+          }
+          return { status: 'awaiting', outputs: {}, clarifyQuestionCount: 1 }
+        },
+      },
+    })
+    expect(outcome.kind).toBe('awaiting_human')
+    expect(requests.map((request) => request.nodeId)).toEqual([
+      WORKGROUP_TURN_LEADER_NODE_ID,
+      WORKGROUP_TURN_MEMBER_NODE_ID,
+    ])
+    const worker = requests[1]!
+    expect(worker.clarifyEnabled).toBe(true)
+    expect(worker.workgroupProtocolBlock).toContain('<workflow-clarify>')
+    expect(worker.workgroupProtocolBlock).toContain('"questions"')
+    const run = await expectPersistedHostNonce(db, worker)
+    const assignments = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    expect(assignments).toHaveLength(1)
+    expect(assignments[0]).toMatchObject({
+      assigneeMemberId: 'm-worker',
+      title: 'Choose the target',
+      status: 'awaiting_human',
+      nodeRunId: worker.nodeRunId,
+    })
+    expect(run.shardKey).toBe(assignments[0]!.id)
+    expect(run.rerunCause).toBe('wg-assignment')
+    const [state] = await db
+      .select()
+      .from(workgroupTaskState)
+      .where(eq(workgroupTaskState.taskId, taskId))
+    expect(state?.pauseReason).toBe('clarify-or-delivery')
+    // The driver persists the waiting assignment, not the host's question.
+    expect(await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))).toEqual(
+      [],
+    )
+  })
+
+  test('P0-12 实际回合：同 assignment 已问满预算，worker 不再收到反问邀请且仍能交付', async () => {
+    const db = harness.db
+    const taskId = await seedWorkgroupTurnTask(db)
+    const assignmentId = ulid()
+    await db.insert(workgroupAssignments).values({
+      id: assignmentId,
+      taskId,
+      round: 1,
+      source: 'leader',
+      assigneeMemberId: 'm-worker',
+      title: 'Use the answered target',
+      briefMd: 'Complete the work using the previous answer.',
+      status: 'dispatched',
+    })
+    const askingRunId = await seedRun(db, taskId, WORKGROUP_TURN_MEMBER_NODE_ID)
+    const originRunId = await seedRun(db, taskId, CL)
+    await db.update(nodeRuns).set({ shardKey: assignmentId }).where(eq(nodeRuns.id, askingRunId))
+    const roundId = ulid()
+    const questionsJson = JSON.stringify([mkQ('previous-target')])
+    const answersJson = JSON.stringify([
+      {
+        questionId: 'previous-target',
+        selectedOptionIndices: [0],
+        selectedOptionLabels: ['A'],
+        customText: '',
+      },
+    ])
+    await db.insert(clarifyRounds).values({
+      id: roundId,
+      taskId,
+      kind: 'self',
+      askingNodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
+      askingNodeRunId: askingRunId,
+      askingShardKey: assignmentId,
+      intermediaryNodeId: CL,
+      intermediaryNodeRunId: originRunId,
+      targetConsumerNodeId: null,
+      iteration: 0,
+      questionsJson,
+      answersJson,
+      directive: 'continue',
+      status: 'answered',
+      answeredAt: Date.now(),
+    })
+    const requests: WorkgroupTurnHostRequest[] = []
+    const outcome = await runWorkgroupTurns({
+      db,
+      taskId,
+      log: turnLog,
+      hooks: {
+        async runHostNode(request): Promise<WorkgroupTurnHostResult> {
+          requests.push(request)
+          return request.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID
+            ? {
+                status: 'done',
+                outputs: { wg_result: JSON.stringify({ summary: 'Target A used.' }) },
+              }
+            : {
+                status: 'done',
+                outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'Completed.' }) },
+              }
+        },
+      },
+    })
+    expect(outcome.kind).toBe('ok')
+    expect(requests.map((request) => request.nodeId)).toEqual([
+      WORKGROUP_TURN_MEMBER_NODE_ID,
+      WORKGROUP_TURN_LEADER_NODE_ID,
+    ])
+    const worker = requests[0]!
+    expect(worker.clarifyEnabled).toBe(false)
+    expect(worker.workgroupProtocolBlock).not.toContain('<workflow-clarify>')
+    expect(worker.workgroupProtocolBlock).toContain('wg_result')
+    const run = await expectPersistedHostNonce(db, worker)
+    expect(run.shardKey).toBe(assignmentId)
+    const [assignment] = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.id, assignmentId))
+    expect(assignment?.status).toBe('done')
+    expect(assignment?.resultMessageId).not.toBeNull()
+    expect(assignment?.nodeRunId).toBe(worker.nodeRunId)
+    const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    expect(rounds).toHaveLength(1)
+    expect(rounds[0]).toMatchObject({ id: roundId, status: 'answered', questionsJson, answersJson })
   })
 })
 

@@ -13,21 +13,18 @@
 // C5 regression lock (RFC-014 §4): if anyone removes the column or downgrades
 // the default to false, the "syncOutputsOnIterate default true" case breaks.
 
-import { describe, expect, test, beforeEach } from 'bun:test'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import { expect, test, beforeEach } from 'bun:test'
 import { agents } from '../src/db/schema'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import type { DbClient } from '../src/db/client'
-import { resolve } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { ulid } from 'ulid'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('agent.syncOutputsOnIterate (RFC-014 T0)', () => {
-  let db: DbClient
+describeEachProvider('agent.syncOutputsOnIterate (RFC-014 T0)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('createAgent persists syncOutputsOnIterate=true', async () => {

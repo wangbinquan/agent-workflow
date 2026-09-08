@@ -402,13 +402,17 @@ test('all three full content writers delegate while legacy sparse preparation st
     if (result === undefined) throw new Error(`missing writer function: ${name}`)
     return result
   }
-  function callArguments(source: ts.SourceFile, name: string) {
+  function callArguments(
+    source: ts.SourceFile,
+    name: string,
+    called = 'agentContentPersistenceValues',
+  ) {
     const result: string[][] = []
     function visit(node: ts.Node) {
       if (
         ts.isCallExpression(node) &&
         ts.isIdentifier(node.expression) &&
-        node.expression.text === 'agentContentPersistenceValues'
+        node.expression.text === called
       ) {
         result.push(node.arguments.map((arg) => arg.getText(source).replace(/\s/g, '')))
       }
@@ -419,9 +423,17 @@ test('all three full content writers delegate while legacy sparse preparation st
   }
   expect(callArguments(common, 'createAgentPersistenceValues')).toEqual([['candidate']])
   expect(callArguments(common, 'updateAgentPersistenceValues')).toEqual([['next']])
-  expect(callArguments(legacy, 'commitAgentCreateInTx')).toEqual([
+  expect(callArguments(legacy, 'commitAgentCreate')).toEqual([
     ['input', 'fmExtra', '{skills:skillRefs,dependsOn:dependsOnIds,mcp:mcpIds,plugins:pluginIds,}'],
   ])
+  expect(callArguments(legacy, 'commitAgentCreateInTx', 'commitAgentCreate')).toEqual([
+    ['tx', 'p', '(actor,groups)=>assertRefsUsableInTx(tx,actor,groups)'],
+  ])
+  expect(callArguments(legacy, 'createAgent', 'commitAgentCreate')).toEqual([
+    ['tx', 'prepared', '(actor,groups)=>assertRefsUsableForTx(tx,actor,groups)'],
+  ])
+  expect(callArguments(legacy, 'commitAgentCreateInTx')).toEqual([])
+  expect(callArguments(legacy, 'createAgent')).toEqual([])
   expect(callArguments(legacy, 'prepareAgentUpdate')).toEqual([])
   for (const name of ['serializeInputs', 'serializeSkillRefs']) {
     expect(

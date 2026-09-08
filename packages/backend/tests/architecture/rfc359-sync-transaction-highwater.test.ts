@@ -82,7 +82,8 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // （`assertSelectedIdsVisibleInTx` / `buildCandidateSnapshotsInTx`）与导出的
   // `assertImportRefsStableInTx` 共用，而后者正是通过 `workflow.yaml.ts` 的 `inTxGuard`
   // 被塞进上面那批钉死的 `dbTxSync` 体里的。
-  'modules/resource-catalog/infrastructure/legacy/agent.ts: 2',
+  // W14：create/update 两个外壳现 await 中立事务，原同步参与者仍委托同一提交体；
+  // legacy/agent.ts 的实际 dbTxSync 调用 2 → 0，不把保留的同步参与者合同伪记为退役。
   'modules/resource-catalog/infrastructure/legacy/importRefs.ts: 1',
   'modules/resource-catalog/infrastructure/legacy/workflow.ts: 3',
   'modules/resource-catalog/infrastructure/legacy/workgroups.ts: 3',

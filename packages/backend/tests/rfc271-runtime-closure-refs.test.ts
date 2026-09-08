@@ -12,6 +12,7 @@
 //   · **`onMissing` 是调用级的**：同一条 dependsOn 引用，保存期硬失败、tolerant
 //     UI preview 静默跳过 —— 这个差异必须留在调用点，不能塌成域的固有语义。
 
+import { describeEachProvider } from './helpers/eachProvider'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -22,14 +23,11 @@ import {
   VALIDATE_CALL_POLICY,
   type Agent,
 } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
 import { createAgent, getAgentById } from '../src/services/agent'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { collectMcpIdsFromClosure } from '../src/services/mcpClosure'
 import { collectPluginIdsFromClosure } from '../src/services/pluginClosure'
 import { agentSkillRef, runtimeIdRef, runtimeRefKey } from '../src/services/ref/runtimeRef'
-
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 
 const agentRow = (over: Partial<Agent>): Agent =>
   ({
@@ -114,12 +112,12 @@ describe('闭包 collector —— 顺序契约不变（first-seen，root 在前�
   })
 })
 
-describe('resolveDependsClosure —— onMissing 留在调用级', () => {
+describeEachProvider('resolveDependsClosure —— onMissing 留在调用级', (harness) => {
   // root 用**合成对象**而不是落库的行：`createAgent` 自己就会拒绝指向幽灵 id 的
   // dependsOn，所以「闭包里有一条解析不到的引用」这个形态只能这样构造——
   // `validateDependsOn` 走的也正是同一条合成 root 路径。
   const seed = async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const leaf = await createAgent(db, {
       name: 'leaf',
       description: '',
@@ -158,13 +156,13 @@ describe('resolveDependsClosure —— onMissing 留在调用级', () => {
       ).rejects.toMatchObject({ code: 'agent-dependency-not-found' })
     }
   })
+})
 
-  test('两种归属**必须**由调用点给出：策略是必填参数，没有「默认硬失败」这一档', () => {
-    // 源码级断言：可选参数 + 默认值会让「这是调用点的选择」这件事从签名里消失，
-    // 下一个人就会以为硬失败是 dependsOn 域的固有语义（它不是）。
-    const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'agentDeps.ts'), 'utf8')
-    expect(src).toContain('opts: ResolveClosureOpts,')
-    expect(src).not.toContain('opts: ResolveClosureOpts = {}')
-    expect(src).not.toContain('allowMissing?:')
-  })
+test('两种归属**必须**由调用点给出：策略是必填参数，没有「默认硬失败」这一档', () => {
+  // 源码级断言：可选参数 + 默认值会让「这是调用点的选择」这件事从签名里消失，
+  // 下一个人就会以为硬失败是 dependsOn 域的固有语义（它不是）。
+  const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'agentDeps.ts'), 'utf8')
+  expect(src).toContain('opts: ResolveClosureOpts,')
+  expect(src).not.toContain('opts: ResolveClosureOpts = {}')
+  expect(src).not.toContain('allowMissing?:')
 })

@@ -12,7 +12,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 88
+      "lines": 90
     },
     {
       "id": "agent-multi-grep-guard",
@@ -1741,7 +1741,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 270
+      "lines": 271
     },
     {
       "id": "rfc359-w5-adapter-production-consumer",
@@ -1885,7 +1885,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 898
+      "lines": 890
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -2393,14 +2393,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3",
+    "sourceDigest": "sha256:62da9b6c2993c2a751d9e17cfccc567829ef0952338880f8985ab8b4a0648656",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "608d1b01205de5c2085c425f2c61f2355146a009",
-    "contentDigest": "sha256:8807894601033fa48f79bd2589064840d8506666e84cd02b178449d750bbb3f5",
+    "currentSnapshotSha": "ee82a4988e5ed11777ff277c945252c4f73305a3",
+    "contentDigest": "sha256:0a37f373d11a48394231a01ed54964dab460643202e510865b5e50fe2a9b8dbc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

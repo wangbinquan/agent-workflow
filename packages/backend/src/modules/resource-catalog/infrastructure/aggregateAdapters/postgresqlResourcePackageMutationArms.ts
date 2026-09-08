@@ -1,4 +1,8 @@
 import {
+  workgroupMemberPersistenceValues,
+  resolveWorkgroupLeaderMemberId as workgroupLeaderMemberId,
+} from '../workgroupPersistence'
+import {
   CreateAgentSchema,
   CreateManagedSkillSchema,
   CreateMcpSchema,
@@ -1319,34 +1323,9 @@ async function workgroupMemberValues(input: {
           .all()
     ).map((row) => [row.id, row.name]),
   )
-  return input.members.map((member, index) => ({
-    id: input.id(),
-    workgroupId: input.workgroupId,
-    memberType: member.memberType,
-    agentName:
-      member.memberType === 'agent' && member.agentId ? (names.get(member.agentId) ?? null) : null,
-    agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
-    userId: member.memberType === 'human' ? (member.userId ?? null) : null,
-    displayName: member.displayName,
-    roleDesc: member.roleDesc,
-    sortOrder: index,
-    createdAt: input.now,
-  }))
-}
-
-function workgroupLeaderMemberId(
-  snapshot: WorkgroupDraftSnapshot,
-  members: ReadonlyArray<typeof workgroupMembers.$inferInsert>,
-): string | null {
-  if (snapshot.mode !== 'leader_worker' || snapshot.leaderDisplayName === undefined) return null
-  const leader = members.find((member) => member.displayName === snapshot.leaderDisplayName)
-  if (leader === undefined || leader.memberType !== 'agent') {
-    throw new ValidationError(
-      'workgroup-leader-invalid',
-      'leaderDisplayName must match an agent member',
-    )
-  }
-  return leader.id
+  return workgroupMemberPersistenceValues(input.workgroupId, input.members, input.now, names, () =>
+    input.id(),
+  )
 }
 
 async function insertWorkgroupMembers(

@@ -1,5 +1,5 @@
 import type { Agent, Mcp, Skill } from '@agent-workflow/shared'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { listAgents } from '../../src/services/agent'
 import { listSkills } from '../../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { composeMcpServiceBindingForTest, listMcpsForTest as listMcps } from './mcpServiceBinding'
@@ -12,16 +12,16 @@ import { composeMcpServiceBindingForTest, listMcpsForTest as listMcps } from './
  * keep legacy service tests readable without exporting ambiguous global-name
  * resolvers from production modules.
  */
-export async function getAgent(db: DbClient, name: string): Promise<Agent | null> {
+export async function getAgent(db: ProviderNeutralDatabase, name: string): Promise<Agent | null> {
   return (await listAgents(db)).find((agent) => agent.name === name) ?? null
 }
 
-export async function getMcp(db: DbClient, name: string): Promise<Mcp | null> {
+export async function getMcp(db: ProviderNeutralDatabase, name: string): Promise<Mcp | null> {
   return (
     (await listMcps(composeMcpServiceBindingForTest(db))).find((mcp) => mcp.name === name) ?? null
   )
 }
 
-export async function getSkill(db: DbClient, name: string): Promise<Skill | null> {
+export async function getSkill(db: ProviderNeutralDatabase, name: string): Promise<Skill | null> {
   return (await listSkills(db)).find((skill) => skill.name === name) ?? null
 }

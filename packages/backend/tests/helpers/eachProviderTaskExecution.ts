@@ -27,9 +27,21 @@ import {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
 } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
-import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
+import {
+  resolveTaskDriveConfig,
+  type TaskDriveCompletionMode,
+} from '@/modules/task-execution/application/drive/taskDriveTypes'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
+import type { ActionExecutionEnvironment } from '@/modules/task-execution/composition/actionExecutionRunners'
+import {
+  composeAgentActionExecution,
+  composePostgresqlAgentActionExecution,
+} from '@/modules/task-execution/composition/agentActionExecution'
+import {
+  composeScriptActionExecution,
+  composePostgresqlScriptActionExecution,
+} from '@/modules/task-execution/composition/scriptActionExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
@@ -96,7 +108,9 @@ export async function createEachProviderTaskExecution(
   harness: ProviderHarness,
   runConfig: TaskDriveRuntimeOptions,
   userId: string,
+  options: { readonly completionMode?: TaskDriveCompletionMode } = {},
 ) {
+  const completionMode = options.completionMode ?? 'await-settle'
   const { db } = harness
   const identityAccess = createIdentityAccessRuntime({ db })
   const admitted = await admitTestDirectAuthority(identityAccess.directAuthority, {
@@ -184,6 +198,33 @@ export async function createEachProviderTaskExecution(
       identityAccess,
       launchResources,
       persistence: provider.persistence,
+      composeLegacyMissionLaunchers(options: LegacyMissionActionLauncherOptions) {
+        const deps = {
+          db: sqlite,
+          startDeps: {
+            db: sqlite,
+            ...runConfig,
+            schedulerDriver: provider.runtime.schedulerDriver,
+            taskRecoveryOperations: provider.recovery,
+            identityAccess,
+            launchResources,
+            actorUserId: actor.user.id,
+            awaitScheduler: completionMode === 'await-settle',
+          },
+          agents: options.agents,
+          terminalPollMs: options.terminalPollMs,
+        }
+        return {
+          agentLauncher: composeAgentActionExecution({
+            ...deps,
+            onTerminal: options.onAgentTerminal,
+          }),
+          scriptLauncher: composeScriptActionExecution({
+            ...deps,
+            onTerminal: options.onScriptTerminal,
+          }),
+        }
+      },
       async launch(
         task: StartTask,
         workspace: { readonly workspacePath: string; readonly baselineSha: string },
@@ -197,7 +238,7 @@ export async function createEachProviderTaskExecution(
           launchResources,
           actorUserId: actor.user.id,
           launchProvenance: { kind: 'direct-json', initiator: 'api' },
-          awaitScheduler: true,
+          awaitScheduler: completionMode === 'await-settle',
           internalSource: {
             kind: 'local-path',
             repoPath: workspace.workspacePath,
@@ -241,7 +282,7 @@ export async function createEachProviderTaskExecution(
         gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
         resourceAuthorityFor: () => launchResources,
         coordinator: {
-          submit: (request) => coordinator.submit({ ...request, completionMode: 'await-settle' }),
+          submit: (request) => coordinator.submit({ ...request, completionMode }),
         },
         agent: {
           resources: unusedCapability('agent route resources'),
@@ -308,6 +349,29 @@ export async function createEachProviderTaskExecution(
     identityAccess,
     launchResources,
     persistence: provider.persistence,
+    composeLegacyMissionLaunchers(options: LegacyMissionActionLauncherOptions) {
+      const deps = {
+        db: postgresql,
+        actor,
+        resourceAuthorityFor: () => launchResources,
+        launch: provider.routeLaunch.workflow,
+        cancelTask: (taskId: string) =>
+          provider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+        readModels: provider.readModels,
+        agents: options.agents,
+        terminalPollMs: options.terminalPollMs,
+      }
+      return {
+        agentLauncher: composePostgresqlAgentActionExecution({
+          ...deps,
+          onTerminal: options.onAgentTerminal,
+        }),
+        scriptLauncher: composePostgresqlScriptActionExecution({
+          ...deps,
+          onTerminal: options.onScriptTerminal,
+        }),
+      }
+    },
     async launch(
       task: StartTask,
       workspace: { readonly workspacePath: string; readonly baselineSha: string },
@@ -336,4 +400,11 @@ export async function createEachProviderTaskExecution(
     overview: () => provider.overview.load({ actor, since: 0 }),
     shutdown: () => identityAccess.shutdown(),
   }
+}
+
+export interface LegacyMissionActionLauncherOptions {
+  readonly agents: ActionExecutionEnvironment['agents']
+  readonly onAgentTerminal: (executionRef: string) => void | Promise<void>
+  readonly onScriptTerminal: (executionRef: string) => void | Promise<void>
+  readonly terminalPollMs?: number
 }

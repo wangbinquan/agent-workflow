@@ -5,9 +5,9 @@
 // drift. The F6 agent.md import widened the exposure (authors can pin arbitrary
 // names), which is why this guard landed alongside it.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { createAgent, updateAgent } from '../src/services/agent'
 import {
@@ -16,8 +16,6 @@ import {
   setRuntimeEnabled,
 } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const base: Omit<CreateAgent, 'name' | 'runtime'> = {
   description: 'x',
@@ -32,10 +30,10 @@ const base: Omit<CreateAgent, 'name' | 'runtime'> = {
   bodyMd: 'b',
 }
 
-describe('RFC-111/F6: agent runtime reference validation', () => {
-  let db: DbClient
+describeEachProvider('RFC-111/F6: agent runtime reference validation', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db)) // built-in opencode + claude-code rows
   })
 

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1729,
+    "entries": 1731,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17515,15 +17515,61 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentCreateInTx",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentCreate",
       "missingControls": [
         "audit",
         "authority",
         "authorization",
         "event"
       ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentCreate",
+      "symbol": "commitAgentCreate",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentCreateInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentCreateInTx",
       "symbol": "commitAgentCreateInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentUpdate",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#commitAgentUpdate",
+      "symbol": "commitAgentUpdate",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -17620,7 +17666,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": true
@@ -17631,7 +17677,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#updateAgent",
@@ -41305,7 +41350,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3",
+  "sourceDigest": "sha256:62da9b6c2993c2a751d9e17cfccc567829ef0952338880f8985ab8b4a0648656",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

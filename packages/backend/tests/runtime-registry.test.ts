@@ -6,12 +6,13 @@
 // config.defaultRuntime reference a row by name; node_runs freeze (protocol,
 // binary) so the registry stays mutable (tested in PR-C).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import { beforeEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, runtimes } from '../src/db/schema'
 import { DrizzleRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/runtimeRegistryPersistence'
 import {
@@ -27,15 +28,9 @@ import {
   updateRuntime,
 } from '../src/services/runtimeRegistry'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const registryByDb = new WeakMap<ProviderNeutralDatabase, DrizzleRuntimeRegistryPersistence>()
 
-function freshDb(): DbClient {
-  return createInMemoryDb(MIGRATIONS)
-}
-
-const registryByDb = new WeakMap<DbClient, DrizzleRuntimeRegistryPersistence>()
-
-function registryFor(db: DbClient): DrizzleRuntimeRegistryPersistence {
+function registryFor(db: ProviderNeutralDatabase): DrizzleRuntimeRegistryPersistence {
   const existing = registryByDb.get(db)
   if (existing !== undefined) return existing
   const registry = new DrizzleRuntimeRegistryPersistence(db)
@@ -43,14 +38,18 @@ function registryFor(db: DbClient): DrizzleRuntimeRegistryPersistence {
   return registry
 }
 
-async function insertAgent(db: DbClient, name: string, runtime?: string): Promise<void> {
+async function insertAgent(
+  db: ProviderNeutralDatabase,
+  name: string,
+  runtime?: string,
+): Promise<void> {
   await db.insert(agents).values({ id: ulid(), name, ...(runtime ? { runtime } : {}) })
 }
 
-describe('seedBuiltinRuntimes (RFC-112 PR-A)', () => {
-  let db: DbClient
+describeEachProvider('seedBuiltinRuntimes (RFC-112 PR-A)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = freshDb()
+    db = harness.db
   })
 
   test('seeds opencode + claude-code as ordinary rows with NULL binary/model', async () => {
@@ -92,10 +91,10 @@ describe('seedBuiltinRuntimes (RFC-112 PR-A)', () => {
   })
 })
 
-describe('createRuntime (RFC-112 PR-A)', () => {
-  let db: DbClient
+describeEachProvider('createRuntime (RFC-112 PR-A)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(async () => {
-    db = freshDb()
+    db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
   })
 
@@ -209,10 +208,10 @@ describe('createRuntime (RFC-112 PR-A)', () => {
   })
 })
 
-describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
-  let db: DbClient
+describeEachProvider('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(async () => {
-    db = freshDb()
+    db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
     await createRuntime(registryFor(db), {
       name: 'my-oc',
@@ -365,36 +364,6 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
     expect(await getRuntime(registryFor(db), 'claude-code')).toBeNull()
   })
 
-  test('RFC-153 impl-gate 2nd pass: 删除序列仍在一笔事务里，且实现只剩一份', () => {
-    // last-row + reference 两道判据只有在「计数 / 检查 / MCP 试跑失效 / 删除」同处一笔事务时才是
-    // 无竞态的。RFC-359 W4-D28b 把两份 provider 实现合成一份，这条锁因此从「两份各自原子」改成
-    // 「只剩一份 + 它仍然原子」——**不是放宽**：再长出任何一份 provider 专属实现都会红。
-    const dir = resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'platform',
-      'runtime-registry',
-      'infrastructure',
-    )
-    const providerSpecific = readdirSync(dir).filter((name) => /^(sqlite|postgresql)/i.test(name))
-    expect(
-      providerSpecific,
-      'runtime 注册表又长出了 provider 专属实现；RFC-359 之后它只应有一份中立实现',
-    ).toEqual([])
-
-    const source = readFileSync(resolve(dir, 'runtimeRegistryPersistence.ts'), 'utf-8')
-    const start = source.indexOf('  async deleteRuntime(')
-    const deleteBody = source.slice(start, source.indexOf('\n  async seedBuiltinRuntimes(', start))
-    // 序列化边界：PG 抬到 SERIALIZABLE 并按 40001 重放整笔，SQLite 的 BEGIN IMMEDIATE 本就全库独占。
-    expect(deleteBody).toContain(
-      'await databaseSessionFor(this.db).serializable(async (transaction) => {',
-    )
-    // 计数 / 引用检查 / 试跑失效 / 删除四件事都必须落在那一笔事务体内。
-    expect(deleteBody).toContain('await transitionRuntimeTests(transaction, {')
-    expect(deleteBody).toContain('await transaction.delete(runtimes)')
-  })
-
   test('RFC-153 impl-gate 3rd pass: missing built-in default resolves to itself, not opencode', async () => {
     // config.defaultRuntime='claude-code' but the claude-code ROW is gone. Exactly
     // like resolveRuntimeByName, a MISSING built-in name resolves to its OWN protocol
@@ -406,10 +375,10 @@ describe('updateRuntime / deleteRuntime guards (RFC-112 PR-A)', () => {
   })
 })
 
-describe('resolution: name → (protocol, binary) (RFC-112 PR-A)', () => {
-  let db: DbClient
+describeEachProvider('resolution: name → (protocol, binary) (RFC-112 PR-A)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(async () => {
-    db = freshDb()
+    db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
     await createRuntime(registryFor(db), {
       name: 'my-claude',
@@ -456,10 +425,10 @@ describe('resolution: name → (protocol, binary) (RFC-112 PR-A)', () => {
   })
 })
 
-describe('setRuntimeEnabled (RFC-118)', () => {
-  let db: DbClient
+describeEachProvider('setRuntimeEnabled (RFC-118)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(async () => {
-    db = freshDb()
+    db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
   })
 
@@ -508,45 +477,48 @@ describe('setRuntimeEnabled (RFC-118)', () => {
   })
 })
 
-describe('migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = freshDb()
-  })
-
-  test('backfills binary onto the canonical rows (protocol matches)', async () => {
-    await seedBuiltinRuntimes(registryFor(db))
-    await migrateConfigIntoBuiltins(registryFor(db), {
-      opencodePath: canonicalBinaryPath('oc'),
-      claudeCodePath: canonicalBinaryPath('cc'),
+describeEachProvider(
+  'migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
     })
-    expect((await getRuntime(registryFor(db), 'opencode'))!.binaryPath).toBe(
-      canonicalBinaryPath('oc'),
-    )
-    expect((await getRuntime(registryFor(db), 'claude-code'))!.binaryPath).toBe(
-      canonicalBinaryPath('cc'),
-    )
-  })
 
-  test('does NOT write the opencode binary into a user row reusing the name under claude-code protocol', async () => {
-    await db.insert(runtimes).values({
-      id: ulid(),
-      name: 'opencode',
-      protocol: 'claude-code',
-      binaryPath: null,
+    test('backfills binary onto the canonical rows (protocol matches)', async () => {
+      await seedBuiltinRuntimes(registryFor(db))
+      await migrateConfigIntoBuiltins(registryFor(db), {
+        opencodePath: canonicalBinaryPath('oc'),
+        claudeCodePath: canonicalBinaryPath('cc'),
+      })
+      expect((await getRuntime(registryFor(db), 'opencode'))!.binaryPath).toBe(
+        canonicalBinaryPath('oc'),
+      )
+      expect((await getRuntime(registryFor(db), 'claude-code'))!.binaryPath).toBe(
+        canonicalBinaryPath('cc'),
+      )
     })
-    await migrateConfigIntoBuiltins(registryFor(db), { opencodePath: canonicalBinaryPath('oc') })
-    // protocol mismatch (claude-code !== opencode) → binary stays NULL.
-    expect((await getRuntime(registryFor(db), 'opencode'))!.binaryPath).toBeNull()
-  })
-})
+
+    test('does NOT write the opencode binary into a user row reusing the name under claude-code protocol', async () => {
+      await db.insert(runtimes).values({
+        id: ulid(),
+        name: 'opencode',
+        protocol: 'claude-code',
+        binaryPath: null,
+      })
+      await migrateConfigIntoBuiltins(registryFor(db), { opencodePath: canonicalBinaryPath('oc') })
+      // protocol mismatch (claude-code !== opencode) → binary stays NULL.
+      expect((await getRuntime(registryFor(db), 'opencode'))!.binaryPath).toBeNull()
+    })
+  },
+)
 
 // Save-time binaryPath validation accepts one absolute canonical path or one
 // bare PATH token. Relative fragments and argument strings fail near the admin
 // input instead of much later at process spawn.
-describe('binaryPath save-time validation', () => {
+describeEachProvider('binaryPath save-time validation', (harness) => {
   test('accepts an absolute canonical path and a bare PATH token', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
     const abs = await createRuntime(registryFor(db), {
       name: 'abs-fork',
@@ -563,7 +535,7 @@ describe('binaryPath save-time validation', () => {
   })
 
   test('rejects the shapes the seal would reject at exec time', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBuiltinRuntimes(registryFor(db))
     const cases: Array<[string, RegExp]> = [
       ['./bin/opencode', /relative paths are cwd-dependent/],
@@ -590,4 +562,34 @@ describe('binaryPath save-time validation', () => {
       }),
     ).rejects.toThrow(/single path/)
   })
+})
+
+test('RFC-153 impl-gate 2nd pass: 删除序列仍在一笔事务里，且实现只剩一份', () => {
+  // last-row + reference 两道判据只有在「计数 / 检查 / MCP 试跑失效 / 删除」同处一笔事务时才是
+  // 无竞态的。RFC-359 W4-D28b 把两份 provider 实现合成一份，这条锁因此从「两份各自原子」改成
+  // 「只剩一份 + 它仍然原子」——**不是放宽**：再长出任何一份 provider 专属实现都会红。
+  const dir = resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'platform',
+    'runtime-registry',
+    'infrastructure',
+  )
+  const providerSpecific = readdirSync(dir).filter((name) => /^(sqlite|postgresql)/i.test(name))
+  expect(
+    providerSpecific,
+    'runtime 注册表又长出了 provider 专属实现；RFC-359 之后它只应有一份中立实现',
+  ).toEqual([])
+
+  const source = readFileSync(resolve(dir, 'runtimeRegistryPersistence.ts'), 'utf-8')
+  const start = source.indexOf('  async deleteRuntime(')
+  const deleteBody = source.slice(start, source.indexOf('\n  async seedBuiltinRuntimes(', start))
+  // 序列化边界：PG 抬到 SERIALIZABLE 并按 40001 重放整笔，SQLite 的 BEGIN IMMEDIATE 本就全库独占。
+  expect(deleteBody).toContain(
+    'await databaseSessionFor(this.db).serializable(async (transaction) => {',
+  )
+  // 计数 / 引用检查 / 试跑失效 / 删除四件事都必须落在那一笔事务体内。
+  expect(deleteBody).toContain('await transitionRuntimeTests(transaction, {')
+  expect(deleteBody).toContain('await transaction.delete(runtimes)')
 })

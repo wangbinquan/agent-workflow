@@ -35,12 +35,18 @@ import {
   listAclResourceIdentityRowsByIdsInTx,
   listAclResourceIdentityRowsByNames,
   listAclResourceIdentityRowsByNamesInTx,
+  type AclResourceIdentitySnapshot,
 } from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 import {
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
 } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import type { RefCheckGroup, ResolvedRefsById } from '../../application/agents/referenceTypes'
+import {
+  continueResourceCommit,
+  finishSynchronousResourceCommit,
+  forEachResourceCommit,
+} from '../resourceCommitSequence'
 export type { RefCheckGroup, ResolvedRefsById } from '../../application/agents/referenceTypes'
 
 /**
@@ -157,7 +163,7 @@ function groupRowsByName(
 
 /** id + name maps for the tokens that matched a row of `type`. */
 async function loadAclRefRows(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   type: AclResourceType,
   tokens: readonly string[],
 ): Promise<{
@@ -248,52 +254,106 @@ export async function assertNewRefsUsable(
  * instead of rejecting the save. Only "every matching row is invisible to the
  * enforcing actor" rejects — the matched-then-made-private race.
  */
+interface RefCheckReaders {
+  rowsByIds(
+    type: AclResourceType,
+    refs: readonly string[],
+  ): AclResourceIdentitySnapshot[] | Promise<AclResourceIdentitySnapshot[]>
+  rowsByNames(
+    type: AclResourceType,
+    refs: readonly string[],
+  ): AclResourceIdentitySnapshot[] | Promise<AclResourceIdentitySnapshot[]>
+  grantedIds(actor: Actor, type: AclResourceType): Set<string> | Promise<Set<string>>
+}
+
+function assertRefsUsableWithReaders(
+  readers: RefCheckReaders,
+  actor: Actor | null,
+  groups: readonly RefCheckGroup[],
+): void | Promise<void> {
+  const missing: Array<{ type: AclResourceType; name: string }> = []
+  return continueResourceCommit(
+    forEachResourceCommit(groups, (group) => {
+      const refs = [...new Set(group.names)].filter((ref) => ref.length > 0)
+      if (refs.length === 0) return
+      const nameDomain = group.domain === 'name'
+      // Narrowed enforcement identity: null ⇒ framework caller or ACL-bypass actor.
+      const enforcingActor = actor !== null && !hasResourceAclBypass(actor) ? actor : null
+      if (nameDomain && enforcingActor === null) return // dangle-tolerant + no ACL to enforce
+      return continueResourceCommit(
+        nameDomain ? readers.rowsByNames(group.type, refs) : readers.rowsByIds(group.type, refs),
+        (rows) => {
+          const byId = new Map(rows.map((row) => [row.id, row]))
+          // RFC-282 D2 — the grant-set SQL lives in resourceAcl only.
+          return continueResourceCommit(
+            enforcingActor !== null
+              ? readers.grantedIds(enforcingActor, group.type)
+              : new Set<string>(),
+            (granted) => {
+              if (nameDomain && enforcingActor !== null) {
+                const byName = groupRowsByName(rows)
+                for (const ref of refs) {
+                  const matched = byName.get(ref)
+                  if (matched === undefined) continue // dangling until launch
+                  if (!matched.some((row) => isVisibleRow(enforcingActor, row, granted))) {
+                    missing.push({ type: group.type, name: ref })
+                  }
+                }
+                return
+              }
+
+              for (const ref of refs) {
+                const row = byId.get(ref)
+                if (
+                  row === undefined ||
+                  (enforcingActor !== null && !isVisibleRow(enforcingActor, row, granted))
+                ) {
+                  missing.push({ type: group.type, name: ref })
+                }
+              }
+            },
+          )
+        },
+      )
+    }),
+    () => {
+      if (missing.length > 0) throw missingRefsError(missing)
+    },
+  )
+}
+
 export function assertRefsUsableInTx(
   tx: DbTxSync,
   actor: Actor | null,
   groups: readonly RefCheckGroup[],
 ): void {
-  const missing: Array<{ type: AclResourceType; name: string }> = []
-  for (const group of groups) {
-    const refs = [...new Set(group.names)].filter((ref) => ref.length > 0)
-    if (refs.length === 0) continue
-    const nameDomain = group.domain === 'name'
-    // Narrowed enforcement identity: null ⇒ framework caller or ACL-bypass actor.
-    const enforcingActor = actor !== null && !hasResourceAclBypass(actor) ? actor : null
-    if (nameDomain && enforcingActor === null) continue // dangle-tolerant + no ACL to enforce
-    const rows = nameDomain
-      ? listAclResourceIdentityRowsByNamesInTx(tx, group.type, refs)
-      : listAclResourceIdentityRowsByIdsInTx(tx, group.type, refs)
-    const byId = new Map(rows.map((row) => [row.id, row]))
-    // RFC-282 D2 — the grant-set SQL lives in resourceAcl only.
-    const granted =
-      enforcingActor !== null
-        ? listGrantedResourceIdsInTx(tx, enforcingActor, group.type)
-        : new Set<string>()
+  finishSynchronousResourceCommit(
+    assertRefsUsableWithReaders(
+      {
+        rowsByIds: (type, refs) => listAclResourceIdentityRowsByIdsInTx(tx, type, refs),
+        rowsByNames: (type, refs) => listAclResourceIdentityRowsByNamesInTx(tx, type, refs),
+        grantedIds: (actor, type) => listGrantedResourceIdsInTx(tx, actor, type),
+      },
+      actor,
+      groups,
+    ),
+  )
+}
 
-    if (nameDomain && enforcingActor !== null) {
-      const byName = groupRowsByName(rows)
-      for (const ref of refs) {
-        const matched = byName.get(ref)
-        if (matched === undefined) continue // dangling until launch
-        if (!matched.some((row) => isVisibleRow(enforcingActor, row, granted))) {
-          missing.push({ type: group.type, name: ref })
-        }
-      }
-      continue
-    }
-
-    for (const ref of refs) {
-      const row = byId.get(ref)
-      if (
-        row === undefined ||
-        (enforcingActor !== null && !isVisibleRow(enforcingActor, row, granted))
-      ) {
-        missing.push({ type: group.type, name: ref })
-      }
-    }
-  }
-  if (missing.length > 0) throw missingRefsError(missing)
+export async function assertRefsUsableForTx(
+  tx: DatabaseTransaction,
+  actor: Actor | null,
+  groups: readonly RefCheckGroup[],
+): Promise<void> {
+  await assertRefsUsableWithReaders(
+    {
+      rowsByIds: (type, refs) => listAclResourceIdentityRowsByIds(tx, type, refs),
+      rowsByNames: (type, refs) => listAclResourceIdentityRowsByNames(tx, type, refs),
+      grantedIds: (actor, type) => listGrantedResourceIds(tx, actor, type),
+    },
+    actor,
+    groups,
+  )
 }
 
 function missingRefsError(
@@ -329,7 +389,7 @@ function missingRefsError(
  * single `acl-missing-refs`.
  */
 export async function resolveRefsUsableById(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor | null,
   type: AclResourceType,
   tokens: readonly string[],

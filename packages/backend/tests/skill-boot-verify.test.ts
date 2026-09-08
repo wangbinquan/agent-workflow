@@ -3,13 +3,14 @@
 // NOT enough (G6-4): a snapshot corrupted offline must be caught THIS boot and
 // quarantined, never signed/injected.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { skills, skillVersions } from '../src/db/schema'
 import {
   commitSkillVersion,
@@ -40,28 +41,25 @@ import {
   skillVersionRelPath,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function versionStateOf(db: DbClient, id: string): string {
+async function versionStateOf(db: ProviderNeutralDatabase, id: string): Promise<string> {
   return (
-    db.select({ v: skills.versionState }).from(skills).where(eq(skills.id, id)).all() as Array<{
-      v: string
-    }>
+    await db.select({ v: skills.versionState }).from(skills).where(eq(skills.id, id)).all()
   )[0]!.v
 }
+
 function snapshotSkillMd(appHome: string, skillId: string, v: number): string {
   return join(appHome, 'skills', skillId, 'versions', `v${v}`, 'files', 'SKILL.md')
 }
 
-describe('RFC-170 T-BOOT — skillBootVerify', () => {
-  let db: DbClient
+describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let fsOpts: SkillFsOptions
 
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-boot-verify-'))
     fsOpts = { appHome }
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     resetSkillBootVerifyForTest()
     await createManagedSkill(db, fsOpts, {
       name: 'foo',
@@ -77,7 +75,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
 
   test('a freshly-created managed skill is snapshot-authoritative + boot-verified', async () => {
     const skill = await getSkill(db, 'foo')
-    expect(versionStateOf(db, skill!.id)).toBe('snapshot-authoritative') // set by commitSkillVersion
+    expect(await versionStateOf(db, skill!.id)).toBe('snapshot-authoritative') // set by commitSkillVersion
     expect(isSkillBootVerified(skill!.id)).toBe(true) // marked after publish
   })
 
@@ -110,7 +108,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     expect(
       await verifyManagedSnapshot(db, fsOpts, { id: skill!.id, name: 'foo', contentVersion: 1 }),
     ).toBe('quarantined')
-    expect(versionStateOf(db, skill!.id)).toBe('quarantined')
+    expect(await versionStateOf(db, skill!.id)).toBe('quarantined')
     expect(isSkillBootVerified(skill!.id)).toBe(false)
   })
 
@@ -182,7 +180,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     activateBootReverify()
 
     expect(await runBootSnapshotReverify(db, fsOpts)).toEqual({ verified: 0, quarantined: 1 })
-    expect(versionStateOf(db, skill!.id)).toBe('quarantined')
+    expect(await versionStateOf(db, skill!.id)).toBe('quarantined')
   })
 
   test('live files must match the current committed snapshot', async () => {
@@ -205,7 +203,7 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     activateBootReverify()
 
     expect(await runBootSnapshotReverify(db, fsOpts)).toEqual({ verified: 0, quarantined: 1 })
-    expect(versionStateOf(db, skill!.id)).toBe('quarantined')
+    expect(await versionStateOf(db, skill!.id)).toBe('quarantined')
   })
 
   test('one skill I/O failure is quarantined without preventing later healthy rows', async () => {
@@ -252,13 +250,13 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
       ),
     ).toBe('verified')
     expect(
-      db
+      await db
         .select({ version: skills.contentVersion })
         .from(skills)
         .where(eq(skills.id, skill!.id))
         .get(),
     ).toEqual({ version: 2 })
-    expect(versionStateOf(db, skill!.id)).toBe('snapshot-authoritative')
+    expect(await versionStateOf(db, skill!.id)).toBe('snapshot-authoritative')
     expect(isSkillBootVerified(skill!.id)).toBe(true)
   })
 
@@ -273,19 +271,21 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
           (staging) => writeFileSync(join(staging, 'SKILL.md'), 'v2'),
           { source: 'editor', authorUserId: '__system__' },
         )
-        db.delete(skillVersions)
+        await db
+          .delete(skillVersions)
           .where(
             eq(
               skillVersions.id,
-              db
-                .select({
-                  id: skillVersions.id,
-                  versionIndex: skillVersions.versionIndex,
-                })
-                .from(skillVersions)
-                .where(eq(skillVersions.skillId, skill!.id))
-                .all()
-                .find((row) => row.versionIndex === 1)!.id,
+              (
+                await db
+                  .select({
+                    id: skillVersions.id,
+                    versionIndex: skillVersions.versionIndex,
+                  })
+                  .from(skillVersions)
+                  .where(eq(skillVersions.skillId, skill!.id))
+                  .all()
+              ).find((row) => row.versionIndex === 1)!.id,
             ),
           )
           .run()
@@ -293,7 +293,8 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
         const v1 = skillVersionAbs(appHome, skill!.id, 1)
         const v2 = skillVersionAbs(appHome, skill!.id, 2)
         cpSync(v1, v2, { recursive: true })
-        db.insert(skillVersions)
+        await db
+          .insert(skillVersions)
           .values({
             id: ulid(),
             skillId: skill!.id,
@@ -322,31 +323,6 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     expect(isSkillInjectableThisBoot({ id: skill!.id, sourceKind: 'managed' })).toBe(true) // verified
     // Project (repo-local self-discovered) skills are not snapshot-gated here.
     expect(isSkillInjectableThisBoot({ id: 'p', sourceKind: 'project' })).toBe(true)
-  })
-
-  test('resolveInjection fails closed on a non-injectable managed skill (source lock)', async () => {
-    // RFC-282 B2 — the resolver moved to services/execution/resolveInjection.ts
-    // and the gate flipped from a THROW (task-level attribution via runScope)
-    // to a typed failure (node-level, like every sibling fence) — registered
-    // §7-7 change; behavior lock in rfc282-b2-resolve-injection.test.ts.
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'legacyTaskExecutionInjectionResolver.ts',
-      ),
-      'utf8',
-    )
-    // The pre-spawn resolver still gates managed skills on the injection
-    // predicate (fail-closed) …
-    expect(src).toMatch(/isSkillInjectableThisBoot\(\{ id: row\.id, sourceKind: 'managed' \}\)/)
-    // … and refuses with the quarantine code carrying the row's name.
-    expect(src).toMatch(/kind: 'failed'/)
-    expect(src).toMatch(/SkillQuarantinedError\(row\.name\)/)
   })
 
   // RFC-170 T4a — a legacy managed skill (pre-version-tracking, no snapshot,
@@ -380,15 +356,40 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     expect(await getSkill(db, 'legacy')).not.toBeNull()
     expect(isSkillBootVerified(id)).toBe(true)
   })
+})
 
-  test('boot pass backfills legacy skills BEFORE the reverify (source lock)', async () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
-    // The legacy v1 backfill (+ husk sweep — backfillLegacySkillVersions) must
-    // precede runBootSnapshotReverify (so a backfilled skill is
-    // authoritative+verified when the gate activates).
-    const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
-    const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
-    expect(backfillIdx).toBeGreaterThan(0)
-    expect(backfillIdx).toBeLessThan(reverifyIdx)
-  })
+test('resolveInjection fails closed on a non-injectable managed skill (source lock)', async () => {
+  // RFC-282 B2 — the resolver moved to services/execution/resolveInjection.ts
+  // and the gate flipped from a THROW (task-level attribution via runScope)
+  // to a typed failure (node-level, like every sibling fence) — registered
+  // §7-7 change; behavior lock in rfc282-b2-resolve-injection.test.ts.
+  const src = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'infrastructure',
+      'legacyTaskExecutionInjectionResolver.ts',
+    ),
+    'utf8',
+  )
+  // The pre-spawn resolver still gates managed skills on the injection
+  // predicate (fail-closed) …
+  expect(src).toMatch(/isSkillInjectableThisBoot\(\{ id: row\.id, sourceKind: 'managed' \}\)/)
+  // … and refuses with the quarantine code carrying the row's name.
+  expect(src).toMatch(/kind: 'failed'/)
+  expect(src).toMatch(/SkillQuarantinedError\(row\.name\)/)
+})
+
+test('boot pass backfills legacy skills BEFORE the reverify (source lock)', async () => {
+  const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+  // The legacy v1 backfill (+ husk sweep — backfillLegacySkillVersions) must
+  // precede runBootSnapshotReverify (so a backfilled skill is
+  // authoritative+verified when the gate activates).
+  const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
+  const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
+  expect(backfillIdx).toBeGreaterThan(0)
+  expect(backfillIdx).toBeLessThan(reverifyIdx)
 })

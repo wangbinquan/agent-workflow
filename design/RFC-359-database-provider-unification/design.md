@@ -2,6 +2,12 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- Workgroup 的规范化、快照、hash、行/修订/详情解码共用纯函数；legacy 的数组 slice 与中立
+  数组展开仍各在原边界执行，保留稀疏数组、自定义迭代器及异常语义。共享 codec 不改变 SQL、
+  CAS、ID/时钟采样或事务；跨目录残余构造另计，不能据此退役整个 provider adapter。
+- AC7 历史变异在独立子进程中替换实际导出，不写回生产源码；原始控制先绿，指定旧行为再红，
+  恢复控制再绿。必须同时核对 provider、用例名、具体断言/错误、完成数及源码摘要，setup/import
+  失败、跳过、任意 exit 1 或其他断言失败均不算证明。真双库由独立 PG CI job 执行并保存原始日志。
 - 完整 TaskDrive 的 dynamicWorkflow 与两 provider runtime participants 构造输入必填；原 legacy
   RunTaskOptions 的可选合同保留。测试的完整工厂通过实际同库四类目录读取构造 validationContext。
 - 原始性能基准复用生产请求外壳与真实六域 owner，在计时外构造一次；生产全路由闭合检查仍在原根。

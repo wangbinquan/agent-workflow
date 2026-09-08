@@ -13,9 +13,9 @@
 // "happy path with closure ordering" case that's not visible from the save
 // guard alone.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
@@ -29,9 +29,9 @@ import { getAgentById } from '../src/modules/resource-catalog/infrastructure/leg
 import type { DomainError } from '../src/util/errors'
 import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-const dependencyLookup = (db: DbClient) => ({ get: (id: string) => getAgentById(db, id) })
+const dependencyLookup = (db: ProviderNeutralDatabase) => ({
+  get: (id: string) => getAgentById(db, id),
+})
 
 interface AgentSeed {
   name: string
@@ -39,13 +39,15 @@ interface AgentSeed {
   mcp?: string[]
 }
 
-function reverseDependencies(db: DbClient) {
+function reverseDependencies(db: ProviderNeutralDatabase) {
   return {
     async findDependents(agentId: string) {
-      return agentsDependingOnIn(db.select().from(agents).all(), agentId).map(({ id, name }) => ({
-        id,
-        name,
-      }))
+      return agentsDependingOnIn(await db.select().from(agents).all(), agentId).map(
+        ({ id, name }) => ({
+          id,
+          name,
+        }),
+      )
     },
   }
 }
@@ -54,7 +56,10 @@ function reverseDependencies(db: DbClient) {
 // the seed's dependsOn NAMES → ids, and this returns a name→id map so the
 // tests can pass the resolved ids to validateDependsOn / resolveDependsClosure
 // exactly as the production callers do.
-async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<Map<string, string>> {
+async function seed(
+  db: ProviderNeutralDatabase,
+  ...rows: AgentSeed[]
+): Promise<Map<string, string>> {
   const ids = new Map<string, string>()
   for (const r of rows) {
     const dependsOn: string[] = []
@@ -79,11 +84,11 @@ async function seed(db: DbClient, ...rows: AgentSeed[]): Promise<Map<string, str
   return ids
 }
 
-describe('RFC-022 validateDependsOn (save-time guard)', () => {
-  let db: DbClient
+describeEachProvider('RFC-022 validateDependsOn (save-time guard)', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('rejects unknown dependsOn id', async () => {
@@ -196,11 +201,11 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
   })
 })
 
-describe('RFC-223 findAgentsDependingOn (id match + JSON exactness)', () => {
-  let db: DbClient
+describeEachProvider('RFC-223 findAgentsDependingOn (id match + JSON exactness)', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('matches by agent id (JSON.parse + includes exactness, not a coincidental substring)', async () => {

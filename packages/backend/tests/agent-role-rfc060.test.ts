@@ -14,14 +14,12 @@
 //     outputWrapperPortNames) coexist without trampling each other.
 //  8. RFC-194: explicit empty sidecar maps survive update as `{}` tombstones.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import { beforeEach, expect, test } from 'bun:test'
 import { agents as agentsTable } from '../src/db/schema'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function basePayload(name: string) {
   return {
@@ -39,17 +37,20 @@ function basePayload(name: string) {
   }
 }
 
-async function readFmExtraRaw(db: DbClient, name: string): Promise<Record<string, unknown>> {
+async function readFmExtraRaw(
+  db: ProviderNeutralDatabase,
+  name: string,
+): Promise<Record<string, unknown>> {
   const rows = await db.select().from(agentsTable)
   const row = rows.find((r) => r.name === name)
   if (row === undefined) throw new Error(`no agent row '${name}'`)
   return JSON.parse(row.frontmatterExtra) as Record<string, unknown>
 }
 
-describe('RFC-060 PR-B — role round-trip', () => {
-  let db: DbClient
+describeEachProvider('RFC-060 PR-B — role round-trip', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('createAgent without role → fmExtra has no role key; Agent.role undefined', async () => {
@@ -98,10 +99,10 @@ describe('RFC-060 PR-B — role round-trip', () => {
   })
 })
 
-describe('RFC-060 PR-B — outputWrapperPortNames round-trip', () => {
-  let db: DbClient
+describeEachProvider('RFC-060 PR-B — outputWrapperPortNames round-trip', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('createAgent with outputWrapperPortNames persists + round-trips', async () => {
@@ -133,10 +134,10 @@ describe('RFC-060 PR-B — outputWrapperPortNames round-trip', () => {
   })
 })
 
-describe('RFC-060 PR-B — coexistence with RFC-005 outputKinds', () => {
-  let db: DbClient
+describeEachProvider('RFC-060 PR-B — coexistence with RFC-005 outputKinds', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('outputKinds + role + outputWrapperPortNames + frontmatterExtra all round-trip', async () => {

@@ -312,6 +312,21 @@ jobs:
             exit 1
           fi
 
+      - name: Verify RFC-359 original P0 mutations on both databases
+        run: >-
+          bun scripts/rfc359-p0-mutations.ts
+          --providers sqlite,postgresql
+          --output-dir test-results/rfc359-p0-mutations
+
+      - name: Upload RFC-359 P0 positive and mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc359-p0-mutations-${{ github.run_id }}
+          path: test-results/rfc359-p0-mutations/
+          if-no-files-found: error
+          retention-days: 30
+
   test-frontend:
     # The vitest suite (~590 files) is the second-biggest cost center (~298s on
     # macOS). vitest already parallelizes across cores within a runner; sharding

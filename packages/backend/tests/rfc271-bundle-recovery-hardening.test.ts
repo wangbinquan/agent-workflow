@@ -216,16 +216,34 @@ describe('committed skill-update tail is replay-safe', () => {
   })
 
   test('a committed but unfinished exact op still rolls forward, then later passes are no-ops', async () => {
+    // ee82 / macOS job 101948393199 reached the intended pre-tail fault only
+    // after 4.957s, then timed out and removed the fixture directory. Record the
+    // actual phases and CPU next time; keep the original 5s budget and oracle.
+    const startedAt = performance.now()
+    const startedCpu = process.cpuUsage()
+    const phase = (name: string) => {
+      const cpu = process.cpuUsage(startedCpu)
+      console.warn('[rfc359-recovery-phase]', {
+        phase: name,
+        wallMs: performance.now() - startedAt,
+        cpuMicros: cpu.user + cpu.system,
+      })
+    }
+    phase('start')
     const deps = makeDeps()
+    phase('database-ready')
     const created = await seedSkill(deps)
+    phase('skill-seeded')
     const row = deps.db.select().from(skills).where(eq(skills.id, created.id)).get()!
 
+    phase('before-apply')
     await expect(
       applyResourceBundle(
         {
           ...deps,
           faults: {
             afterTxBeforeRollForward: () => {
+              phase('committed-before-tail')
               throw new Error('crash before tail')
             },
           },
@@ -233,9 +251,11 @@ describe('committed skill-update tail is replay-safe', () => {
         { bundle: skillUpdateBundle(row), provider: provider(ulid()) },
       ),
     ).rejects.toThrow('crash before tail')
+    phase('expected-crash-observed')
     expect(deps.db.select().from(resourceBundleApplies).get()?.state).toBe('committed')
 
     expect((await convergeResourceBundleApplies(deps.db, deps.appHome)).rolledForward).toBe(1)
+    phase('first-convergence-complete')
     expect(isSkillBootVerified(created.id)).toBe(true)
     expect(
       readFileSync(join(deps.appHome, 'skills', created.id, 'files', 'SKILL.md'), 'utf8'),
@@ -243,5 +263,6 @@ describe('committed skill-update tail is replay-safe', () => {
 
     expect((await convergeResourceBundleApplies(deps.db, deps.appHome)).rolledForward).toBe(1)
     expect(isSkillBootVerified(created.id)).toBe(true)
+    phase('replay-complete')
   })
 })

@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { cpus, totalmem } from 'node:os'
+import type { SQLQueryBindings } from 'bun:sqlite'
 import { openDb } from '../packages/backend/src/db/client'
 import { databaseSessionFor } from '../packages/backend/src/platform/persistence/databaseTransaction'
 import { exportLogicalDatabaseArtifact } from '../packages/backend/src/platform/persistence/logicalDatabaseExport'
@@ -19,6 +20,11 @@ import { openSqliteLogicalSource } from '../packages/backend/src/platform/persis
 import { createProductionPerformanceApplication } from '../packages/backend/tests/helpers/productionPerformanceApplication'
 import { measurePerformanceArchive, measurePerformanceHttp } from './perf-bench'
 import { comparePerformanceReports, PERF_SOURCE_PATHS, type PerfHttpReport } from './perf-compare'
+import {
+  profilePerformanceQueries,
+  profilePostgresqlQueries,
+  profileSqliteQueries,
+} from './perf-query-profile'
 import {
   PERF_CORPUS_ENTRY,
   PERF_CORPUS_FULL_DIMENSIONS,
@@ -255,7 +261,7 @@ async function seedPostgresql(input: RunInput): Promise<void> {
 async function withDatabase(
   input: RunInput,
   provider: PerfHttpReport['provider'],
-  phase: 'http' | 'archive',
+  phase: 'http' | 'profile' | 'archive',
 ): Promise<void> {
   const template = templateReceipt(input)
   const runtime = provider === 'postgresql' ? postgresqlRuntime(template) : null
@@ -263,9 +269,89 @@ async function withDatabase(
     runtime === null
       ? openDb({ path: join(input.directory, 'sqlite.db'), migrationsFolder: MIGRATIONS })
       : null
-  const db = runtime === null ? sqlite! : createPostgresqlDatabaseClient(runtime)
+  const pgProfile =
+    phase === 'profile' && runtime !== null ? profilePostgresqlQueries(runtime) : null
+  const sqliteProfile =
+    phase === 'profile' && sqlite !== null ? profileSqliteQueries(sqlite.$client) : null
+  const db =
+    runtime === null ? sqlite! : createPostgresqlDatabaseClient(pgProfile?.runtime ?? runtime)
   await withPerformanceCleanup(
     async () => {
+      if (phase === 'profile') {
+        // Reading the comparison is an ordering precondition: these extra
+        // requests and EXPLAINs cannot run before either original measurement.
+        const comparison = JSON.parse(
+          readFileSync(join(input.output, 'comparison.json'), 'utf8'),
+        ) as { comparable: boolean }
+        if (!comparison.comparable) throw new Error('cannot profile incomparable HTTP reports')
+        const report = JSON.parse(
+          readFileSync(join(input.output, `${provider}-http.json`), 'utf8'),
+        ) as PerfHttpReport
+        if (report.sourceSha !== input.sourceSha || report.executionId !== template.operationId)
+          throw new Error('profile does not match measured source and execution')
+        const appHome = join(input.directory, `${provider}-profile-home`)
+        mkdirSync(appHome, { recursive: true })
+        process.env.AGENT_WORKFLOW_HOME = appHome
+        const app = await createProductionPerformanceApplication({
+          db,
+          appHome,
+          configPath: join(appHome, 'config.json'),
+          daemonToken: PERF_CORPUS_ENTRY.bearerToken,
+        })
+        const profile = await profilePerformanceQueries({
+          app,
+          token: PERF_CORPUS_ENTRY.bearerToken,
+          report,
+          capture: (pgProfile ?? sqliteProfile)!.capture,
+          explain: async (statement) => {
+            if (sqlite !== null)
+              return sqlite.$client
+                .query(`EXPLAIN QUERY PLAN ${statement.sql}`)
+                .all(...(statement.parameters as SQLQueryBindings[]))
+            const connection = await runtime!.providerPool().reserve()
+            return await withPerformanceCleanup(
+              async () => {
+                await connection.unsafe('BEGIN READ ONLY')
+                return await connection.unsafe(
+                  `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.sql}`,
+                  statement.parameters,
+                )
+              },
+              async () => {
+                try {
+                  await connection.unsafe('ROLLBACK')
+                } finally {
+                  connection.release()
+                }
+              },
+            )
+          },
+        })
+        const corpusAfter = await readPerformanceCorpusReceipt(
+          db,
+          performanceDimensions(input.tier),
+        )
+        const unchangedFromHttp = JSON.stringify(corpusAfter) === JSON.stringify(report.seedAfter)
+        writeFileSync(
+          join(input.output, `${provider}-query-profile.json`),
+          `${JSON.stringify(
+            {
+              ...profile,
+              profileSourceDigest: createHash('sha256')
+                .update(readFileSync(join(REPO, 'scripts/perf-query-profile.ts')))
+                .digest('hex'),
+              corpusAfter,
+              unchangedFromHttp,
+            },
+            (_key, value: unknown) =>
+              typeof value === 'bigint' ? { bigint: String(value) } : value,
+            2,
+          )}\n`,
+        )
+        if (!profile.complete || !unchangedFromHttp)
+          throw new Error(`${provider} query profile incomplete or changed the measured corpus`)
+        return
+      }
       if (phase === 'archive') {
         const result = await measurePerformanceArchive(
           db,
@@ -343,6 +429,7 @@ async function withDatabase(
       json(reportPath, report)
     },
     async () => {
+      sqliteProfile?.stop()
       if (runtime !== null) await runtime.close()
       sqlite?.$client.close()
     },
@@ -355,6 +442,8 @@ async function run(input: RunInput, stage: string | undefined): Promise<void> {
   if (stage === 'seed-postgresql') return await seedPostgresql(input)
   if (stage === 'http-sqlite') return await withDatabase(input, 'sqlite', 'http')
   if (stage === 'http-postgresql') return await withDatabase(input, 'postgresql', 'http')
+  if (stage === 'profile-sqlite') return await withDatabase(input, 'sqlite', 'profile')
+  if (stage === 'profile-postgresql') return await withDatabase(input, 'postgresql', 'profile')
   if (stage === 'archive-sqlite') return await withDatabase(input, 'sqlite', 'archive')
   if (stage === 'archive-postgresql') return await withDatabase(input, 'postgresql', 'archive')
   if (stage !== undefined) throw new Error(`unknown performance worker stage: ${stage}`)
@@ -387,9 +476,23 @@ async function run(input: RunInput, stage: string | undefined): Promise<void> {
   )
   json(join(input.output, 'comparison.json'), comparison)
   console.log('[perf-run] comparison', comparison)
+  let profileFailed = false
+  if (comparison.comparable) {
+    for (const workerStage of ['profile-sqlite', 'profile-postgresql']) {
+      try {
+        await child(workerStage)
+      } catch (error) {
+        profileFailed = true
+        console.error(`[perf-run] ${workerStage} failed`, error)
+      }
+    }
+  }
   // Preserve both complete HTTP receipts before either database is archived.
   for (const workerStage of ['archive-sqlite', 'archive-postgresql']) await child(workerStage)
-  if (!(input.tier === 'full' ? comparison.acceptancePassed : comparison.comparable))
+  if (
+    profileFailed ||
+    !(input.tier === 'full' ? comparison.acceptancePassed : comparison.comparable)
+  )
     process.exitCode = 1
 }
 

@@ -4,9 +4,9 @@
 // silently drops it), turning "agent X needs mcp Y" into a non-actionable
 // runtime mystery.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { ValidationError } from '../src/util/errors'
 import {
@@ -14,8 +14,6 @@ import {
   createMcpForTest,
   type McpCatalogTestBinding,
 } from './helpers/mcpServiceBinding'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function agentInput(name: string, mcp: string[] = []): Parameters<typeof createAgent>[1] {
   return {
@@ -33,11 +31,11 @@ function agentInput(name: string, mcp: string[] = []): Parameters<typeof createA
   }
 }
 
-describe('agent.mcp save-time guard', () => {
-  let db: DbClient
+describeEachProvider('agent.mcp save-time guard', (harness) => {
+  let db: ProviderNeutralDatabase
   let mcpCatalog: McpCatalogTestBinding
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     mcpCatalog = composeMcpServiceBindingForTest(db)
   })
 

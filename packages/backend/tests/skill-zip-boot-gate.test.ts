@@ -17,14 +17,15 @@
 //   - 'quarantined' was a one-way state (boot rescan skipped it) → a restored
 //     snapshot that re-matches content_hash now exits quarantine at boot.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { zipSync, type Zippable } from 'fflate'
 import { existsSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { skills, skillVersions } from '../src/db/schema'
 import {
   commitSkillZipBuffer,
@@ -46,8 +47,6 @@ import {
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecisionMap } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
     user: { id, username: id, displayName: id, role, status: 'active' },
@@ -57,15 +56,15 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 const ALICE = actor('alice')
 
 interface H {
-  db: DbClient
+  db: ProviderNeutralDatabase
   fsOpts: SkillZipFsOptions
   cleanup: () => void
 }
 
-function build(): H {
+function build(db: ProviderNeutralDatabase): H {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-zip-gate-'))
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db,
     fsOpts: { appHome },
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
   }
@@ -83,28 +82,27 @@ const skillMd = (name: string, desc = 'd') =>
   `---\nname: ${name}\ndescription: ${desc}\n---\nbody for ${name}\n`
 
 /** Raw row lookup — deliberately bypasses the gated getSkill. */
-function rawRow(db: DbClient, name: string) {
-  return (
-    db.select().from(skills).where(eq(skills.name, name)).all() as Array<typeof skills.$inferSelect>
-  )[0]
+async function rawRow(db: ProviderNeutralDatabase, name: string) {
+  return (await db.select().from(skills).where(eq(skills.name, name)).all())[0]
 }
 
 /** rawRow that must exist (throws instead of returning undefined). */
-function mustRow(db: DbClient, name: string) {
-  const row = rawRow(db, name)
+async function mustRow(db: ProviderNeutralDatabase, name: string) {
+  const row = await rawRow(db, name)
   if (row === undefined) throw new Error(`expected a skills row for '${name}'`)
   return row
 }
 
 /** Insert a bare skills row the way the pre-fix zip importer did. */
-function insertBareRow(
-  db: DbClient,
+async function insertBareRow(
+  db: ProviderNeutralDatabase,
   name: string,
   over: Partial<typeof skills.$inferInsert> = {},
-): string {
+): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(skills)
+  await db
+    .insert(skills)
     .values({
       id,
       name,
@@ -119,10 +117,10 @@ function insertBareRow(
   return id
 }
 
-describe('zip import create under the ACTIVE boot availability gate', () => {
+describeEachProvider('zip import create under the ACTIVE boot availability gate', (harness) => {
   let h: H
   beforeEach(() => {
-    h = build()
+    h = build(harness.db)
     resetSkillBootVerifyForTest()
     activateBootReverifyForTest()
   })
@@ -149,11 +147,11 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     expect((await listSkills(h.db)).map((s) => s.name)).toContain('pack-a')
 
     // Full RFC-170 create shape: authoritative + boot-verified + v1 snapshot.
-    const row = mustRow(h.db, 'pack-a')
+    const row = await mustRow(h.db, 'pack-a')
     expect(row.versionState).toBe('snapshot-authoritative')
     expect(row.reservationState).toBe('ready')
     expect(isSkillBootVerified(row.id)).toBe(true)
-    const versions = h.db
+    const versions = await h.db
       .select()
       .from(skillVersions)
       .where(eq(skillVersions.skillId, row.id))
@@ -179,7 +177,7 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
         },
       ),
     ).rejects.toThrow('producer exploded')
-    expect(rawRow(h.db, 'boom')).toBeUndefined()
+    expect(await rawRow(h.db, 'boom')).toBeUndefined()
     expect(existsSync(join(h.fsOpts.appHome, 'skills', 'boom'))).toBe(false)
   })
 
@@ -216,39 +214,19 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
     expect(r.failed[0]!.code).toBe('skill-rename-conflict')
     expect(r.failed[0]!.message).toContain('unavailable')
     // Occupier intact: row still there, live files never deleted.
-    expect(rawRow(h.db, 'occupied')).toBeDefined()
+    expect(await rawRow(h.db, 'occupied')).toBeDefined()
     expect(
       existsSync(
-        join(h.fsOpts.appHome, 'skills', mustRow(h.db, 'occupied').id, 'files', 'SKILL.md'),
+        join(h.fsOpts.appHome, 'skills', (await mustRow(h.db, 'occupied')).id, 'files', 'SKILL.md'),
       ),
     ).toBe(true)
   })
-
-  test('the pre-fix bare-insert path is gone from the importer source', async () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'skill-zip.ts',
-      ),
-      'utf-8',
-    )
-    // Code-shape locks (comments may still MENTION the incident): no direct
-    // skills-table insert and no post-insert "disappeared" throw in the importer.
-    expect(src).not.toMatch(/\.insert\(skills\)/)
-    expect(src).not.toMatch(/new Error\('skill disappeared/)
-  })
 })
 
-describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
+describeEachProvider('backfillLegacySkillVersions — legacy promote + husk sweep', (harness) => {
   let h: H
   beforeEach(() => {
-    h = build()
+    h = build(harness.db)
     resetSkillBootVerifyForTest()
   })
   afterEach(() => {
@@ -258,21 +236,21 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
 
   test('husk (no files, no versions) is deleted; healthy legacy is promoted; reserving is untouched', async () => {
     // ① husk: what the pre-fix zip failure path left behind — row without files.
-    insertBareRow(h.db, 'husk')
+    await insertBareRow(h.db, 'husk')
     // ② healthy legacy: pre-RFC-101 skill — row + live files, no version rows.
-    const legacyId = insertBareRow(h.db, 'legacy-ok')
+    const legacyId = await insertBareRow(h.db, 'legacy-ok')
     const legacyFiles = join(h.fsOpts.appHome, 'skills', legacyId, 'files')
     mkdirSync(legacyFiles, { recursive: true })
     writeFileSync(join(legacyFiles, 'SKILL.md'), skillMd('legacy-ok'), 'utf-8')
     // ③ reserving: an in-flight create's row — the sweep must never touch it.
-    insertBareRow(h.db, 'mid-create', { reservationState: 'reserving' })
+    await insertBareRow(h.db, 'mid-create', { reservationState: 'reserving' })
 
     const r = await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
     expect(r.husksRemoved).toBe(1)
     expect(r.backfilled).toBe(1)
 
-    expect(rawRow(h.db, 'husk')).toBeUndefined() // name freed
-    const legacy = mustRow(h.db, 'legacy-ok')
+    expect(await rawRow(h.db, 'husk')).toBeUndefined() // name freed
+    const legacy = await mustRow(h.db, 'legacy-ok')
     expect(legacy.versionState).toBe('snapshot-authoritative')
     expect(isSkillBootVerified(legacy.id)).toBe(true)
     expect(
@@ -280,7 +258,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
         join(h.fsOpts.appHome, 'skills', legacy.id, 'versions', 'v1', 'files', 'SKILL.md'),
       ),
     ).toBe(true)
-    const reserving = mustRow(h.db, 'mid-create')
+    const reserving = await mustRow(h.db, 'mid-create')
     expect(reserving.versionState).toBe('legacy-unbackfilled')
   })
 
@@ -289,7 +267,7 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     // e.g. a pre-RFC-101 skill whose main file was lost. Deleting it would
     // destroy the support files + the resource identity; the sweep must leave
     // it for a human to repair.
-    const woundedId = insertBareRow(h.db, 'wounded')
+    const woundedId = await insertBareRow(h.db, 'wounded')
     const woundedFiles = join(h.fsOpts.appHome, 'skills', woundedId, 'files')
     mkdirSync(woundedFiles, { recursive: true })
     writeFileSync(join(woundedFiles, 'reference.md'), '# still valuable', 'utf-8')
@@ -297,12 +275,12 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
     const r = await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
     expect(r.husksRemoved).toBe(0)
     expect(r.backfilled).toBe(0)
-    expect(mustRow(h.db, 'wounded').versionState).toBe('legacy-unbackfilled')
+    expect((await mustRow(h.db, 'wounded')).versionState).toBe('legacy-unbackfilled')
     expect(readFileSync(join(woundedFiles, 'reference.md'), 'utf-8')).toBe('# still valuable')
   })
 
   test('after the sweep the freed name can be re-imported via zip (end-to-end heal)', async () => {
-    insertBareRow(h.db, 'reclaim')
+    await insertBareRow(h.db, 'reclaim')
     await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
     activateBootReverifyForTest()
 
@@ -320,10 +298,10 @@ describe('backfillLegacySkillVersions — legacy promote + husk sweep', () => {
   })
 })
 
-describe('quarantine recovery via boot rescan', () => {
+describeEachProvider('quarantine recovery via boot rescan', (harness) => {
   let h: H
   beforeEach(() => {
-    h = build()
+    h = build(harness.db)
     resetSkillBootVerifyForTest()
   })
   afterEach(() => {
@@ -338,13 +316,13 @@ describe('quarantine recovery via boot rescan', () => {
       bodyMd: 'b',
       frontmatterExtra: {},
     })
-    const id = mustRow(h.db, 'quar').id
+    const id = (await mustRow(h.db, 'quar')).id
     // Simulate an earlier boot having quarantined it (snapshot intact on disk).
-    h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
+    await h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
     resetSkillBootVerifyForTest()
 
     await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
-    expect(mustRow(h.db, 'quar').versionState).toBe('snapshot-authoritative')
+    expect((await mustRow(h.db, 'quar')).versionState).toBe('snapshot-authoritative')
     expect(await getSkill(h.db, 'quar')).not.toBeNull()
   })
 
@@ -360,8 +338,8 @@ describe('quarantine recovery via boot rescan', () => {
       bodyMd: 'b',
       frontmatterExtra: {},
     })
-    const id = mustRow(h.db, 'frozen').id
-    h.db
+    const id = (await mustRow(h.db, 'frozen')).id
+    await h.db
       .update(skills)
       .set({ versionState: 'quarantined', reservationState: 'reserving' })
       .where(eq(skills.id, id))
@@ -369,7 +347,7 @@ describe('quarantine recovery via boot rescan', () => {
     resetSkillBootVerifyForTest()
 
     await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
-    const row = mustRow(h.db, 'frozen')
+    const row = await mustRow(h.db, 'frozen')
     expect(row.versionState).toBe('quarantined')
     expect(isSkillBootVerified(id)).toBe(false) // never enters the injectable set
     expect(await getSkill(h.db, 'frozen')).toBeNull()
@@ -382,8 +360,8 @@ describe('quarantine recovery via boot rescan', () => {
       bodyMd: 'b',
       frontmatterExtra: {},
     })
-    const id = mustRow(h.db, 'rot').id
-    h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
+    const id = (await mustRow(h.db, 'rot')).id
+    await h.db.update(skills).set({ versionState: 'quarantined' }).where(eq(skills.id, id)).run()
     writeFileSync(
       join(h.fsOpts.appHome, 'skills', id, 'versions', 'v1', 'files', 'SKILL.md'),
       'tampered',
@@ -392,7 +370,27 @@ describe('quarantine recovery via boot rescan', () => {
     resetSkillBootVerifyForTest()
 
     await runBootSnapshotReverify(h.db, { appHome: h.fsOpts.appHome })
-    expect(mustRow(h.db, 'rot').versionState).toBe('quarantined')
+    expect((await mustRow(h.db, 'rot')).versionState).toBe('quarantined')
     expect(await getSkill(h.db, 'rot')).toBeNull()
   })
+})
+
+test('the pre-fix bare-insert path is gone from the importer source', async () => {
+  const src = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'skill-zip.ts',
+    ),
+    'utf-8',
+  )
+  // Code-shape locks (comments may still MENTION the incident): no direct
+  // skills-table insert and no post-insert "disappeared" throw in the importer.
+  expect(src).not.toMatch(/\.insert\(skills\)/)
+  expect(src).not.toMatch(/new Error\('skill disappeared/)
 })

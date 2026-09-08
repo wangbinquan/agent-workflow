@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第十四批（2026-09-08）**：Workgroup 六组编解码共用一份实现，原查询与写入边界保持；
+> 再迁移 10 个旧行为套件，W12 累计 161 个；补原同步提交机制回归后，T19f 764 → 755，实际构库净减 14 次。
+> Agent 原同步与异步 API 共用提交步骤；legacy mission 的 Agent/Script 真执行链与 Workgroup 行构造合一补齐。
+> 工作组真实回合补协议/预算行为；P0-5/6/7/12 的五个历史变异接入独立双引擎 CI 步骤，
+> 当前控制、指定故障与恢复控制分别验证，不能用任意失败充作变异成功。真 PG 证据待本批 CI。
+> 依赖修复 `ee82a4988` 的 HTTP small `34190879364` 与 full maintenance `34191021514` 成功：
+> small 九端点的 360 个原始样本与整表见证可比，八项 PG P95 更慢；不能关闭严格 full AC11。
+> maintenance control/maintenance P95 63.5/73.9ms、错误均 0。原 full HTTP `34191588506` 已完成，
+> 完整语料与 360 样本可比但 7/9 端点 PG 更慢，AC11 未通过；下一轮补计时后的真实 SQL/执行计划。
+> 同 SHA Main CI `34190806248` 为 33 success / 2 failure / 1 cancelled；macOS shard4 报账本摘要
+> 失配与资源包恢复超时，汇总失败。当前候选已刷新摘要，超时加原阶段 wall/CPU 诊断；
+> 完整 backend tsc 与 154 项定向架构检查通过，原样本计时后的查询/执行计划诊断已接入；RFC 仍 In Progress。
+
 > **RFC-359 第十三批发布修正**：`06f1b82a3` 已发布；maintenance `34190051222` 与首个 HTTP small
 > `34190166690` 都在装载前报 `scripts/perf-seed.ts` 无法解析 `drizzle-orm`。根 package/lock 补齐
 > 与 backend 同版本的直接开发依赖；没有更改任何语料、SQL 或性能判据。冻结锁 dry-run 与 517 行
