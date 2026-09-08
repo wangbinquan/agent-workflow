@@ -4,8 +4,8 @@
 // `AW_TEST_POSTGRESQL_URL`（回退 `RFC357_DATABASE_URL`）指向的真库。PostgreSQL 缺 URL
 // **不是 skip 而是 fail**——「无库则跳过」正是 `design/dual-provider-parity-audit-2026-09-04.md`
 // 里 12 条 P0 穿过全部验收的机制。本地只想跑 SQLite 时显式 `AW_TEST_PROVIDERS=sqlite`；
-// CI 永远不设它（ubuntu 分片带 postgres 服务容器；macOS runner 起不了服务容器，是唯一的
-// 显式 sqlite-only lane）。
+// Ubuntu CI 分片带 postgres 服务容器并保持双引擎；macOS 与 Windows 原生平台 lane
+// 没有 PostgreSQL 服务，显式选择 sqlite。
 //
 // body 拿到的是 `DatabaseSession` + `EngineCapabilities` + provider-中立客户端，**拿不到
 // provider 名**。测试要按引擎分叉时只能走 capabilities（例如 `isolation === 'exclusive'`）。
@@ -15,6 +15,7 @@
 // 对齐，含 auth_login_policy 的 bootstrap 标记）。
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
+import { randomUUID } from 'node:crypto'
 import { getTableName, isTable } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/sqlite-core'
 
@@ -49,6 +50,10 @@ const DEFAULT_PROVIDERS: readonly TestProvider[] = ['sqlite', 'postgresql']
 const POSTGRESQL_URL_ENVS = ['AW_TEST_POSTGRESQL_URL', 'RFC357_DATABASE_URL'] as const
 const GENERATION_ID = 'dbg_each_provider_harness'
 const OPERATION_ID = 'lcop_each_provider_harness'
+// 仅新增多库 setup/cleanup 使用独立预算；默认单库 hook 与业务 test 的原超时不变。
+const POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS = 60_000
+// 为 30s 连接池关闭配置与一次 60s 语句窗口预留顺序清理预算。
+const POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS = 90_000
 
 /** 纯函数：从环境解析要跑的引擎集合。缺省两个都跑；只接受 sqlite / postgresql。 */
 export function resolveTestProviders(
@@ -78,11 +83,13 @@ export function resolvePostgresqlTestUrlEnv(
   return POSTGRESQL_URL_ENVS.find((name) => (env[name] ?? '').length > 0)
 }
 
-export interface ProviderHarness {
+export interface ProviderDatabaseHarness {
   /** provider-中立客户端：两个引擎上是同一套 drizzle query builder。 */
   readonly db: ProviderNeutralDatabase
   readonly session: DatabaseSession
   readonly capabilities: EngineCapabilities
+  /** 仅测试夹具的 DDL：经本库 native/runtime 执行，不走业务客户端的 SQL 编译器。 */
+  executeFixtureDdl(statement: string): Promise<void>
   /**
    * RFC-359 W6-T27 —— 录制其后**实际执行**的每条语句（含绑定参数与取回行数），两个引擎
    * 同一形状。SQLite 包 bun:sqlite 连接，PostgreSQL 包连接池，因此 drizzle 与裸 SQL
@@ -101,9 +108,16 @@ export interface ProviderHarness {
   explain(statement: RecordedStatement): Promise<string>
 }
 
+export interface ProviderHarness extends ProviderDatabaseHarness {
+  /** 同一个所选 provider 的独立真库；原有端口始终指向第 0 库。 */
+  database(index: number): ProviderDatabaseHarness
+}
+
 export interface DescribeEachProviderOptions {
   /** 同 `createInMemoryDb` 的 `bootstrap`：'required' 时不把 auth_login_policy 标成已 bootstrap。 */
   readonly bootstrap?: 'required'
+  /** 在 setup 中创建的独立数据库数量；每个用例分别重置，默认 1。 */
+  readonly databaseCount?: number
 }
 
 interface HarnessState {
@@ -111,9 +125,10 @@ interface HarnessState {
   session?: DatabaseSession
   record?: () => StatementRecording
   explain?: (statement: RecordedStatement) => Promise<string>
+  fixtureDdl?: (statement: string) => Promise<void>
 }
 
-function harnessView(state: HarnessState): ProviderHarness {
+function databaseView(state: HarnessState): ProviderDatabaseHarness {
   const current = <K extends keyof HarnessState>(key: K): NonNullable<HarnessState[K]> => {
     const value = state[key]
     if (value === undefined) {
@@ -133,21 +148,61 @@ function harnessView(state: HarnessState): ProviderHarness {
     },
     recordStatements: () => current('record')(),
     explain: async (statement: RecordedStatement) => await current('explain')(statement),
+    executeFixtureDdl: async (statement: string) => await current('fixtureDdl')(statement),
   })
+}
+
+function harnessView(states: readonly HarnessState[]): ProviderHarness {
+  const databases = states.map(databaseView)
+  const primary = databases[0]!
+  return Object.freeze({
+    get db() {
+      return primary.db
+    },
+    get session() {
+      return primary.session
+    },
+    get capabilities() {
+      return primary.capabilities
+    },
+    recordStatements: () => primary.recordStatements(),
+    explain: async (statement: RecordedStatement) => await primary.explain(statement),
+    executeFixtureDdl: async (statement: string) => await primary.executeFixtureDdl(statement),
+    database(index: number) {
+      if (!Number.isSafeInteger(index) || index < 0 || index >= databases.length) {
+        throw new RangeError(`ProviderHarness database index 必须在 0..${databases.length - 1}`)
+      }
+      return databases[index]!
+    },
+  })
+}
+
+function clearState(state: HarnessState): void {
+  state.db = undefined
+  state.session = undefined
+  state.record = undefined
+  state.explain = undefined
+  state.fixtureDdl = undefined
 }
 
 /** SQLite 的计划文本：`EXPLAIN QUERY PLAN` 的 detail 列逐行拼起来。 */
 function sqliteExplain(db: ProviderNeutralDatabase, statement: RecordedStatement): string {
   const raw = (
     db as unknown as {
-      $client: { prepare(query: string): { all(...args: unknown[]): unknown[] } }
+      $client: {
+        prepare(query: string): { all(...args: unknown[]): unknown[]; finalize(): void }
+      }
     }
   ).$client
   try {
-    const rows = raw.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`).all(...statement.values) as {
-      detail: string
-    }[]
-    return rows.map((row) => row.detail).join('\n')
+    const prepared = raw.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`)
+    try {
+      const rows = prepared.all(...statement.values) as { detail: string }[]
+      return rows.map((row) => row.detail).join('\n')
+    } finally {
+      // EXPLAIN 的句柄也必须释放，否则后续 DROP TABLE 会遇到 SQLITE_LOCKED。
+      prepared.finalize()
+    }
   } catch {
     // CTE 里的临时构造等 EXPLAIN 解释不了的语句：返回空串，调用方跳过。
     return ''
@@ -163,10 +218,14 @@ export function describeEachProvider(
   body: (harness: ProviderHarness) => void,
   options: DescribeEachProviderOptions = {},
 ): void {
+  const databaseCount = options.databaseCount === undefined ? 1 : options.databaseCount
+  if (!Number.isSafeInteger(databaseCount) || databaseCount < 1) {
+    throw new RangeError('DescribeEachProviderOptions.databaseCount 必须是正安全整数')
+  }
   for (const provider of resolveTestProviders(process.env)) {
     describe(`${name} [${provider}]`, () => {
-      if (provider === 'sqlite') registerSqlite(body, options)
-      else registerPostgresql(body, options)
+      if (provider === 'sqlite') registerSqlite(body, options, databaseCount)
+      else registerPostgresql(body, options, databaseCount)
     })
   }
 }
@@ -174,30 +233,40 @@ export function describeEachProvider(
 function registerSqlite(
   body: (harness: ProviderHarness) => void,
   options: DescribeEachProviderOptions,
+  databaseCount: number,
 ): void {
-  const state: HarnessState = {}
+  const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
   let restoreProvider: (() => void) | undefined
   beforeEach(() => {
     // 进程级 schema 投影是全局的：显式选 sqlite，用完还原，不依赖 describe 的先后顺序。
     restoreProvider = selectDatabaseSchemaProvider('sqlite')
-    const db = createInMemoryDb(
-      MIGRATIONS,
-      options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
-    )
-    state.db = db
-    state.session = databaseSessionFor(db)
-    state.record = () => recordSqliteStatements((db as unknown as { $client: never }).$client)
-    state.explain = async (statement) => sqliteExplain(db, statement)
+    try {
+      for (const state of states) {
+        const db = createInMemoryDb(
+          MIGRATIONS,
+          options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
+        )
+        state.db = db
+        state.session = databaseSessionFor(db)
+        state.record = () => recordSqliteStatements((db as unknown as { $client: never }).$client)
+        state.explain = async (statement) => sqliteExplain(db, statement)
+        state.fixtureDdl = async (statement) => {
+          ;(db as unknown as { $client: { exec(statement: string): void } }).$client.exec(statement)
+        }
+      }
+    } catch (error) {
+      restoreProvider?.()
+      restoreProvider = undefined
+      states.forEach(clearState)
+      throw error
+    }
   })
   afterEach(() => {
     restoreProvider?.()
     restoreProvider = undefined
-    state.db = undefined
-    state.session = undefined
-    state.record = undefined
-    state.explain = undefined
+    states.forEach(clearState)
   })
-  body(harnessView(state))
+  body(harnessView(states))
 }
 
 interface PostgresqlSeed {
@@ -396,58 +465,46 @@ function recordingRuntime(
   return { ...runtime, providerPool: () => recordingPool } as PostgresqlDatabaseRuntime
 }
 
-function registerPostgresql(
-  body: (harness: ProviderHarness) => void,
-  options: DescribeEachProviderOptions,
-): void {
-  const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
-  if (urlEnv === undefined) {
-    // 设计上的硬判据：缺库即红，不是 skip。
-    test('PostgreSQL 未配置——双引擎是缺省，缺库即红', () => {
-      throw new Error(
-        '把 AW_TEST_POSTGRESQL_URL（或 RFC357_DATABASE_URL）指向一个可以被整个清空的 PostgreSQL 库；' +
-          '只想跑 SQLite 时显式 AW_TEST_PROVIDERS=sqlite（CI 从不这么设）',
-      )
-    })
-    return
-  }
-  const state: HarnessState = {}
-  let runtime: PostgresqlDatabaseRuntime | undefined
-  let client: PostgresqlDatabaseClient | undefined
-  let raw: RawQuery | undefined
-  let snapshot: PostgresqlSchemaSnapshot | undefined
-  let providerBefore: ReturnType<typeof currentDatabaseSchemaProvider> | undefined
-  let restoreProvider: (() => void) | undefined
-  /** 活跃的录制器；空集时连接池按原样直通，不付任何包装代价。 */
-  const sinks = new Set<RecordedStatement[]>()
+interface PostgresqlHarnessDatabase {
+  readonly runtime: PostgresqlDatabaseRuntime
+  readonly client: PostgresqlDatabaseClient
+  readonly raw: RawQuery
+  readonly snapshot: PostgresqlSchemaSnapshot
+  readonly sinks: Set<RecordedStatement[]>
+}
 
-  beforeAll(async () => {
-    providerBefore = currentDatabaseSchemaProvider()
-    runtime = createPostgresqlDatabaseRuntime({
-      config: {
-        provider: 'postgresql',
-        urlEnv,
-        // RFC-359 W6-T27 实撞：**并发扇出宽于 poolMax 时，排队的那条查询会挂死**。
-        // 现场（本文件此前用 poolMax: 4）：`/api/overview` 的 `Promise.all` 一次发 13 条
-        // count（9 条资源计数 + 内层 4 条任务状态计数），其中一条永远拿不到连接，一直挂到
-        // 连接池的 idle timeout 才以 `ERR_POSTGRES_IDLE_TIMEOUT` 抛出——把 idleTimeoutMs
-        // 从 30s 调到 10min，挂死时间就跟着变成 10min（错误文案里的时长是**设置值**，不是
-        // 真实空闲时长）。同一段代码在 poolMax=16 下 12 轮全绿、每轮 4ms。
-        // 这里取 16 —— 与生产默认（`shared/src/schemas/config.ts` 的 `poolMax.default(16)`）
-        // 一致，harness 因此也更像生产。**注意这只是把 harness 挪出雷区，不是修复**：
-        // 平台侧没有任何「取连接超时」上界，poolMax 被配小（schema 允许到 1）或将来出现更宽的
-        // 扇出，生产上就会复现同一个挂死。
-        poolMax: 16,
-        connectTimeoutMs: 10_000,
-        statementTimeoutMs: 60_000,
-        idleTimeoutMs: 30_000,
-      },
-      generationId: GENERATION_ID,
-    })
+/** 每个真库都走原有的一次初始化：迁移、生成代、迁移种子与录制客户端。 */
+async function createPostgresqlHarnessDatabase(
+  urlEnv: (typeof POSTGRESQL_URL_ENVS)[number],
+  env?: Readonly<Record<string, string | undefined>>,
+): Promise<PostgresqlHarnessDatabase> {
+  const sinks = new Set<RecordedStatement[]>()
+  const runtime = createPostgresqlDatabaseRuntime({
+    config: {
+      provider: 'postgresql',
+      urlEnv,
+      // RFC-359 W6-T27 实撞：**并发扇出宽于 poolMax 时，排队的那条查询会挂死**。
+      // 现场（本文件此前用 poolMax: 4）：`/api/overview` 的 `Promise.all` 一次发 13 条
+      // count（9 条资源计数 + 内层 4 条任务状态计数），其中一条永远拿不到连接，一直挂到
+      // 连接池的 idle timeout 才以 `ERR_POSTGRES_IDLE_TIMEOUT` 抛出——把 idleTimeoutMs
+      // 从 30s 调到 10min，挂死时间就跟着变成 10min（错误文案里的时长是**设置值**，不是
+      // 真实空闲时长）。同一段代码在 poolMax=16 下 12 轮全绿、每轮 4ms。
+      // 这里取 16 —— 与生产默认（`shared/src/schemas/config.ts` 的 `poolMax.default(16)`）
+      // 一致，harness 因此也更像生产。**注意这只是把 harness 挪出雷区，不是修复**：
+      // 平台侧没有任何「取连接超时」上界，poolMax 被配小（schema 允许到 1）或将来出现更宽的
+      // 扇出，生产上就会复现同一个挂死。
+      poolMax: 16,
+      connectTimeoutMs: 10_000,
+      statementTimeoutMs: 60_000,
+      idleTimeoutMs: 30_000,
+    },
+    generationId: GENERATION_ID,
+    ...(env === undefined ? {} : { env }),
+  })
+  try {
     const pool = runtime.providerPool()
     const query: RawQuery = async (text, parameters) =>
       parameters === undefined ? await pool.unsafe(text) : await pool.unsafe(text, [...parameters])
-    raw = query
     // 与 rfc357 / rfc359 的真库用例同一套姿势：清干净、按基线迁移、自己登记一个活跃生成代
     // （客户端的业务写围栏按 runtime.generationId 核对 database_generations）。
     await query('drop schema if exists agent_workflow cascade')
@@ -466,52 +523,164 @@ function registerPostgresql(
     // createPostgresqlDatabaseClient 会把进程级投影切到 postgresql 且不还原；afterAll 统一还原。
     // 客户端拿到的是**带录制的**连接池：连接池对象是冻结的（Proxy 无法为不可写属性返回
     // 别的值），所以走对象字面量重建，而不是 Proxy。
-    client = createPostgresqlDatabaseClient(recordingRuntime(runtime, sinks))
+    const client = createPostgresqlDatabaseClient(recordingRuntime(runtime, sinks))
     // PostgreSQL 的迁移器只投影 DDL；迁移脚本里 INSERT 的种子行（committed_event_family_cutovers、
     // auth_login_policy、框架内置资源……）在生产上是随 RFC-349 逻辑复制从 SQLite 带过来的。
     // 这里做同一件事：把一个刚迁移完的 SQLite 内存库整表复制进来，两个引擎的「起点」才是同一个。
     await seedFromSqliteSnapshot(client)
-    snapshot = await snapshotSchema(query)
-  })
+    const snapshot = await snapshotSchema(query)
+    return { runtime, client, raw: query, snapshot, sinks }
+  } catch (error) {
+    try {
+      await runtime.close()
+    } catch (closeError) {
+      throw new AggregateError([error, closeError], 'PostgreSQL harness setup and close failed')
+    }
+    throw error
+  }
+}
+
+async function closePostgresqlHarnessDatabases(
+  databases: readonly PostgresqlHarnessDatabase[],
+  createdDatabaseNames: readonly string[],
+): Promise<void> {
+  const errors: unknown[] = []
+  for (const database of databases.slice(1).reverse()) {
+    try {
+      await database.runtime.close()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  const primary = databases[0]
+  if (primary !== undefined) {
+    // 这里只清理本次成功 CREATE 的附加库；主 URL 指向的库从不被 DROP。
+    for (const name of [...createdDatabaseNames].reverse()) {
+      try {
+        await primary.raw(`drop database if exists "${name}"`)
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    try {
+      await primary.runtime.close()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1) throw new AggregateError(errors, 'PostgreSQL harness cleanup failed')
+}
+
+function registerPostgresql(
+  body: (harness: ProviderHarness) => void,
+  options: DescribeEachProviderOptions,
+  databaseCount: number,
+): void {
+  const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
+  if (urlEnv === undefined) {
+    // 设计上的硬判据：缺库即红，不是 skip。
+    test('PostgreSQL 未配置——双引擎是缺省，缺库即红', () => {
+      throw new Error(
+        '把 AW_TEST_POSTGRESQL_URL（或 RFC357_DATABASE_URL）指向一个可以被整个清空的 PostgreSQL 库；' +
+          '只想跑 SQLite 时显式 AW_TEST_PROVIDERS=sqlite（Ubuntu CI 保持双引擎）',
+      )
+    })
+    return
+  }
+  const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
+  const databases: PostgresqlHarnessDatabase[] = []
+  const createdDatabaseNames: string[] = []
+  let providerBefore: ReturnType<typeof currentDatabaseSchemaProvider> | undefined
+  let restoreProvider: (() => void) | undefined
+  let initialization: Promise<void> | undefined
+  let cleanup: Promise<void> | undefined
+  const closeAll = () =>
+    (cleanup ??= closePostgresqlHarnessDatabases(databases, createdDatabaseNames))
+
+  const initializeDatabases = async (): Promise<void> => {
+    providerBefore = currentDatabaseSchemaProvider()
+    try {
+      const sourceUrl = process.env[urlEnv]
+      const primary = await createPostgresqlHarnessDatabase(urlEnv)
+      databases.push(primary)
+      for (let index = 1; index < databaseCount; index += 1) {
+        const name = `aw_each_provider_${randomUUID().replaceAll('-', '')}`
+        await primary.raw(`create database "${name}"`)
+        createdDatabaseNames.push(name)
+        const url = new URL(sourceUrl!)
+        url.pathname = `/${name}`
+        databases.push(await createPostgresqlHarnessDatabase(urlEnv, { [urlEnv]: url.toString() }))
+      }
+    } catch (error) {
+      try {
+        await closeAll()
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'PostgreSQL harness setup cleanup failed')
+      } finally {
+        if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
+      }
+      throw error
+    }
+  }
+  const setupDatabases = () => (initialization ??= initializeDatabases())
+  if (databaseCount === 1) beforeAll(setupDatabases)
+  else beforeAll(setupDatabases, databaseCount * POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS)
 
   beforeEach(async () => {
-    if (client === undefined || raw === undefined || snapshot === undefined) {
+    if (databases.length !== databaseCount) {
       throw new Error('PostgreSQL harness 未完成装配（beforeAll 失败）')
     }
     restoreProvider = selectDatabaseSchemaProvider('postgresql')
-    await resetToSnapshot(raw, snapshot, options)
-    const query = raw
-    state.db = client
-    state.session = databaseSessionFor(client)
-    state.record = () => {
-      const statements: RecordedStatement[] = []
-      sinks.add(statements)
-      return {
-        statements,
-        selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
-        stop: () => sinks.delete(statements),
+    try {
+      for (const [index, database] of databases.entries()) {
+        const { client, raw, snapshot, sinks } = database
+        await resetToSnapshot(raw, snapshot, options)
+        const state = states[index]!
+        const query = raw
+        state.db = client
+        state.session = databaseSessionFor(client)
+        state.record = () => {
+          const statements: RecordedStatement[] = []
+          sinks.add(statements)
+          return {
+            statements,
+            selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
+            stop: () => sinks.delete(statements),
+          }
+        }
+        state.explain = async (statement) => await postgresqlExplain(query, statement)
+        state.fixtureDdl = async (statement) => {
+          await query(statement)
+        }
       }
+    } catch (error) {
+      restoreProvider?.()
+      restoreProvider = undefined
+      databases.forEach(({ sinks }) => sinks.clear())
+      states.forEach(clearState)
+      throw error
     }
-    state.explain = async (statement) => await postgresqlExplain(query, statement)
   })
 
   afterEach(() => {
     restoreProvider?.()
     restoreProvider = undefined
-    sinks.clear()
-    state.db = undefined
-    state.session = undefined
-    state.record = undefined
-    state.explain = undefined
+    databases.forEach(({ sinks }) => sinks.clear())
+    states.forEach(clearState)
   })
 
-  afterAll(async () => {
+  const cleanupDatabases = async (): Promise<void> => {
     try {
-      await runtime?.close()
+      // Hook 超时不取消初始化 Promise；等它收束，避免关闭主库后仍产生未登记的子 runtime。
+      await initialization?.catch(() => undefined)
+      await closeAll()
     } finally {
       if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
     }
-  })
+  }
+  if (databaseCount === 1) afterAll(cleanupDatabases)
+  else afterAll(cleanupDatabases, databaseCount * POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS)
 
-  body(harnessView(state))
+  body(harnessView(states))
 }

@@ -6,7 +6,7 @@
     "moduleFiles": 1185,
     "productionFiles": 2563,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24926
+    "symbolsIncludingFileRoots": 24921
   },
   "entries": [
     {
@@ -88711,18 +88711,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#fullPluginRowWhere",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "fullPluginRowWhere",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#humanMappingSlug",
       "removeAfterWave": null,
       "status": "current-module",
@@ -94241,18 +94229,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#normalizeWorkflowSnapshot",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "normalizeWorkflowSnapshot",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#PreparedWorkflowSave",
@@ -94271,18 +94247,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "prepareWorkflowSave",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#rowToWorkflow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "rowToWorkflow",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -94349,36 +94313,12 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#workflowDraftSnapshotOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "workflowDraftSnapshotOf",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#workflowReadOnlyError",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "workflowReadOnlyError",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#workflowRevisionOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "workflowRevisionOf",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -94403,18 +94343,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "workflowSnapshotHashOf",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#workflowToDetail",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "workflowToDetail",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -97265,18 +97193,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#changedRows",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "changedRows",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#collectPluginAgentReferences",
@@ -97313,12 +97229,24 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#fullPluginRowWhere",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "fullPluginRowWhere",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#insertPluginRowInTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "insertPluginRowInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -97421,6 +97349,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#PluginInsertRecord",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PluginInsertRecord",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#PluginPersistenceRow",
@@ -97445,12 +97385,12 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#selectPluginRowInTx",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#publishPluginRowInTx",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "selectPluginRowInTx",
+      "symbol": "publishPluginRowInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -97511,18 +97451,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "findAgentReferencesInTransaction",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts#fullPluginRowWhere",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "fullPluginRowWhere",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -99299,6 +99227,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createWorkflowPersistenceValues",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#normalizeWorkflowSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "normalizeWorkflowSnapshot",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -299813,5 +299753,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a"
+  "sourceDigest": "sha256:782b859359f25ceed4bcad99ea30d4f08168cf4f6c0ba17696a322d2a1d3b595"
 }

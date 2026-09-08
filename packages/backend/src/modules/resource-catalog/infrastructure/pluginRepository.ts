@@ -11,6 +11,9 @@ import type {
 } from '../application/plugins/ports'
 import {
   collectPluginAgentReferences,
+  fullPluginRowWhere,
+  insertPluginRowInTx,
+  publishPluginRowInTx,
   pluginConfigHash,
   pluginFromPersistenceRow,
   pluginProjection,
@@ -60,31 +63,6 @@ function assertExpectedHash(row: PluginPersistenceRow, expectedConfigHash: strin
     })
   }
   return plugin
-}
-
-function fullPluginRowWhere(row: PluginPersistenceRow) {
-  return and(
-    eq(plugins.id, row.id),
-    eq(plugins.name, row.name),
-    eq(plugins.spec, row.spec),
-    eq(plugins.optionsJson, row.optionsJson),
-    eq(plugins.description, row.description),
-    eq(plugins.enabled, row.enabled),
-    eq(plugins.sourceKind, row.sourceKind),
-    eq(plugins.cachedPath, row.cachedPath),
-    row.resolvedVersion === null
-      ? isNull(plugins.resolvedVersion)
-      : eq(plugins.resolvedVersion, row.resolvedVersion),
-    eq(plugins.installedAt, row.installedAt),
-    row.ownerUserId === null
-      ? isNull(plugins.ownerUserId)
-      : eq(plugins.ownerUserId, row.ownerUserId),
-    eq(plugins.visibility, row.visibility),
-    eq(plugins.aclRevision, row.aclRevision),
-    eq(plugins.schemaVersion, row.schemaVersion),
-    eq(plugins.createdAt, row.createdAt),
-    eq(plugins.updatedAt, row.updatedAt),
-  )
 }
 
 async function selectPluginRowById(
@@ -153,26 +131,7 @@ export function createPluginRepository(deps: {
     async create(record): Promise<Plugin> {
       try {
         return await runResourceCatalogTransaction(db, async (transaction) => {
-          const created = await transaction
-            .insert(plugins)
-            .values({
-              id: record.id,
-              name: record.name,
-              spec: record.spec,
-              optionsJson: JSON.stringify(record.options),
-              description: record.description,
-              enabled: record.enabled,
-              sourceKind: record.sourceKind,
-              cachedPath: record.cachedPath,
-              resolvedVersion: record.resolvedVersion,
-              installedAt: record.now,
-              ownerUserId: record.ownerUserId,
-              visibility: record.visibility,
-              aclRevision: record.aclRevision,
-              createdAt: record.now,
-              updatedAt: record.now,
-            })
-            .returning()
+          const created = await insertPluginRowInTx(transaction, record)
           if (created.length !== 1) throw new Error('plugin insert did not return one row')
           return pluginFromPersistenceRow(created[0]!)
         })
@@ -188,21 +147,17 @@ export function createPluginRepository(deps: {
           throw new NotFoundError('plugin-not-found', `plugin '${publication.id}' not found`)
         }
         assertExpectedHash(row, publication.expectedConfigHash, 'generation publication')
-        const updated = await transaction
-          .update(plugins)
-          .set({
-            spec: publication.set.spec,
-            optionsJson: JSON.stringify(publication.set.options),
-            description: publication.set.description,
-            enabled: publication.set.enabled,
-            sourceKind: publication.set.sourceKind,
-            cachedPath: publication.set.cachedPath,
-            resolvedVersion: publication.set.resolvedVersion,
-            installedAt: publication.set.installedAt,
-            updatedAt: publication.set.updatedAt,
-          })
-          .where(fullPluginRowWhere(row))
-          .returning()
+        const updated = await publishPluginRowInTx(transaction, row, {
+          spec: publication.set.spec,
+          optionsJson: JSON.stringify(publication.set.options),
+          description: publication.set.description,
+          enabled: publication.set.enabled,
+          sourceKind: publication.set.sourceKind,
+          cachedPath: publication.set.cachedPath,
+          resolvedVersion: publication.set.resolvedVersion,
+          installedAt: publication.set.installedAt,
+          updatedAt: publication.set.updatedAt,
+        })
         requireChangedRow(updated, publication.id, 'generation publication')
         return pluginFromPersistenceRow(updated[0]!)
       })

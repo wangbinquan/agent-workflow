@@ -16,35 +16,35 @@ import type { AgentActionLauncherPort } from '../src/modules/development-automat
 import { bindChangeCandidateParticipant } from '../src/modules/source-control/composition'
 import { createDeferredMissionDrive } from '../src/modules/development-automation/application/missionDriver'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 function git(cwd: string, ...args: string[]): void {
   const proc = Bun.spawnSync({ cmd: ['git', ...args], cwd })
   if (proc.exitCode !== 0) throw new Error(proc.stderr.toString())
 }
 
-test('mission driver crosses every settled setup step and stops at the Agent boundary', async () => {
-  const fx = await buildPr3Fixture()
-  const home = mkdtempSync(join(tmpdir(), 'rfc310-driver-'))
-  const repo = join(home, 'repo')
-  mkdirSync(repo, { recursive: true })
-  git(repo, 'init', '-q', '-b', 'main')
-  writeFileSync(repo + '/pom.xml', '<project/>\n')
-  writeFileSync(repo + '/App.java', 'class App {}\n')
-  git(repo, 'add', '-A')
-  git(
-    repo,
-    '-c',
-    'user.name=driver-test',
-    '-c',
-    'user.email=driver@test.invalid',
-    'commit',
-    '-q',
-    '-m',
-    'base',
-  )
-  fx.db
-    .insert(cachedRepos)
-    .values({
+describeEachProvider('rfc310 mission driver', (harness) => {
+  test('mission driver crosses every settled setup step and stops at the Agent boundary', async () => {
+    const fx = await buildPr3Fixture({ db: harness.db })
+    const home = mkdtempSync(join(tmpdir(), 'rfc310-driver-'))
+    const repo = join(home, 'repo')
+    mkdirSync(repo, { recursive: true })
+    git(repo, 'init', '-q', '-b', 'main')
+    writeFileSync(repo + '/pom.xml', '<project/>\n')
+    writeFileSync(repo + '/App.java', 'class App {}\n')
+    git(repo, 'add', '-A')
+    git(
+      repo,
+      '-c',
+      'user.name=driver-test',
+      '-c',
+      'user.email=driver@test.invalid',
+      'commit',
+      '-q',
+      '-m',
+      'base',
+    )
+    await fx.db.insert(cachedRepos).values({
       id: 'repo-1',
       urlHash: 'driver-test',
       localPath: repo,
@@ -52,43 +52,43 @@ test('mission driver crosses every settled setup step and stops at the Agent bou
       lastFetchedAt: Date.now(),
       createdAt: Date.now(),
     })
-    .run()
 
-  const launches: string[] = []
-  const launcher: AgentActionLauncherPort = {
-    async launch(input) {
-      launches.push(input.actionRunId)
-      return { ok: true, executionRef: `driver-exec-${launches.length}` }
-    },
-    async fetchOutcome(executionRef) {
-      return { kind: 'pending', executionRef, taskStatus: 'running' }
-    },
-    async cancel() {
-      return { settled: 'already-terminal' }
-    },
-  }
-  const automation = composeDevelopmentAutomation({
-    db: fx.db,
-    appHome: home,
-    agentLauncher: launcher,
-    changeCandidate: bindChangeCandidateParticipant(),
-  })
-  const missionId = await fx.launchDirect('driver-direct')
-  const stashed = await automation.materializer.stashDirectSubmission({
-    missionId,
-    submission: { title: 'Add feature', body: 'do the thing', uploads: [] },
-  })
-  expect(stashed.ok).toBe(true)
+    const launches: string[] = []
+    const launcher: AgentActionLauncherPort = {
+      async launch(input) {
+        launches.push(input.actionRunId)
+        return { ok: true, executionRef: `driver-exec-${launches.length}` }
+      },
+      async fetchOutcome(executionRef) {
+        return { kind: 'pending', executionRef, taskStatus: 'running' }
+      },
+      async cancel() {
+        return { settled: 'already-terminal' }
+      },
+    }
+    const automation = composeDevelopmentAutomation({
+      db: fx.db,
+      appHome: home,
+      agentLauncher: launcher,
+      changeCandidate: bindChangeCandidateParticipant(),
+    })
+    const missionId = await fx.launchDirect('driver-direct')
+    const stashed = await automation.materializer.stashDirectSubmission({
+      missionId,
+      submission: { title: 'Add feature', body: 'do the thing', uploads: [] },
+    })
+    expect(stashed.ok).toBe(true)
 
-  const outcome = await automation.drive(missionId)
+    const outcome = await automation.drive(missionId)
 
-  expect(outcome).toMatchObject({
-    steps: 3,
-    stop: 'async-boundary',
-    last: { kind: 'decided', handled: 'action-launched' },
+    expect(outcome).toMatchObject({
+      steps: 3,
+      stop: 'async-boundary',
+      last: { kind: 'decided', handled: 'action-launched' },
+    })
+    expect(launches).toHaveLength(1)
+    expect((await fx.store.getMission(missionId))?.currentActionRunId).toBe(launches[0])
   })
-  expect(launches).toHaveLength(1)
-  expect((await fx.store.getMission(missionId))?.currentActionRunId).toBe(launches[0])
 })
 
 // 这条锁的是「child Mission 的 drive 与 ReconcileDeps 互相引用」那处延迟绑定：守卫

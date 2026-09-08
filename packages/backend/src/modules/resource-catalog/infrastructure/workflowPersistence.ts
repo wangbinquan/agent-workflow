@@ -62,11 +62,20 @@ export function workflowFromPersistenceRow(row: WorkflowPersistenceRow): Workflo
   }
 }
 
-export function workflowDraftSnapshotOf(workflow: Workflow): WorkflowDraftSnapshot {
+/** Normalize the editable projection without rewriting a stored display name. */
+export function normalizeWorkflowSnapshot(snapshot: WorkflowDraftSnapshot): WorkflowDraftSnapshot {
   return WorkflowDraftSnapshotSchema.parse({
+    name: snapshot.name,
+    description: snapshot.description,
+    definition: migrateWorkflowDefinitionToLatest(snapshot.definition),
+  })
+}
+
+export function workflowDraftSnapshotOf(workflow: Workflow): WorkflowDraftSnapshot {
+  return normalizeWorkflowSnapshot({
     name: workflow.name,
     description: workflow.description,
-    definition: migrateWorkflowDefinitionToLatest(workflow.definition),
+    definition: workflow.definition,
   })
 }
 

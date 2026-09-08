@@ -367,7 +367,7 @@ export interface LegacyResourcePackageMutationDependencies {
   readonly commitMcpCreateInTx: (tx: DbTxSync, prepared: unknown) => void
   readonly commitMcpUpdateInTx: (tx: DbTxSync, prepared: unknown) => void
   readonly commitPluginCreateInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     input: {
       readonly id: string
       readonly parsed: unknown
@@ -375,12 +375,12 @@ export interface LegacyResourcePackageMutationDependencies {
       readonly install: LegacyPluginInstallResult
       readonly now: number
     },
-  ) => void
+  ) => Promise<void>
   readonly commitPluginPublishInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     captured: unknown,
     input: Readonly<Record<string, unknown>>,
-  ) => void
+  ) => Promise<void>
   readonly plannedGenerationDir: (
     pluginId: string,
     spec: string,
@@ -904,7 +904,7 @@ export function createLegacyResourcePackageMutationAdapter(
       }
     },
     bindApplyTx(tx, input) {
-      // RFC-359 W4-D23b：技能的两个提交面已经是中立异步的，其余 `*InTx` 成员还是同步 SQLite 面。
+      // RFC-359 W4-D23b：技能与插件的提交面已经是中立异步的，其余 `*InTx` 成员还是同步 SQLite 面。
       // 中立句柄在 SQLite 上**就是** `DbClient`（见 `createSqliteDatabaseSession`），窄化只是把这条
       // 已有身份说一遍；等其余成员迁完、两套 apply 引擎合一时随之消失。
       const syncTx = tx as unknown as DbTxSync
@@ -925,7 +925,7 @@ export function createLegacyResourcePackageMutationAdapter(
           case 'plugin-create': {
             const install = pluginInstalls.get(prepared.op.opId)
             if (install === undefined) throw new Error('plugin install result missing')
-            dependencies.commitPluginCreateInTx(syncTx, {
+            await dependencies.commitPluginCreateInTx(tx, {
               id: prepared.op.resourceId,
               parsed: prepared.parsed as never,
               initialAcl: dependencies.initialPrivateResourceAcl(actor.user.id),
@@ -944,7 +944,7 @@ export function createLegacyResourcePackageMutationAdapter(
               description?: string
               enabled?: boolean
             }
-            dependencies.commitPluginPublishInTx(syncTx, captured, {
+            await dependencies.commitPluginPublishInTx(tx, captured, {
               spec: payload.spec,
               optionsJson: JSON.stringify(payload.options ?? {}),
               description: payload.description ?? captured.description,

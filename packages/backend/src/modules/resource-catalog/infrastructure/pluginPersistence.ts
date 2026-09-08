@@ -7,11 +7,15 @@ import {
 import { and, eq, isNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { plugins } from '@/db/schema'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { ConflictError } from '@/util/errors'
 import { ValidationError, staleConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import type { PluginAgentReference, PluginProjection } from '../application/plugins/ports'
+import type {
+  PluginAgentReference,
+  PluginCreateRecord,
+  PluginProjection,
+} from '../application/plugins/ports'
 import type { PluginCatalogResource } from '../public/types'
 
 export interface PluginPersistenceRow {
@@ -124,11 +128,7 @@ export async function loadLegacyPluginRow(
   return (await db.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0] ?? null
 }
 
-function selectPluginRowInTx(tx: DbTxSync, id: string): PluginPersistenceRow | null {
-  return tx.select().from(plugins).where(eq(plugins.id, id)).get() ?? null
-}
-
-function fullPluginRowWhere(row: PluginPersistenceRow) {
+export function fullPluginRowWhere(row: PluginPersistenceRow) {
   return and(
     eq(plugins.id, row.id),
     eq(plugins.name, row.name),
@@ -153,10 +153,6 @@ function fullPluginRowWhere(row: PluginPersistenceRow) {
   )
 }
 
-function changedRows(result: unknown): number {
-  return (result as { readonly changes?: number }).changes ?? 0
-}
-
 function stalePluginError(id: string): ConflictError {
   return staleConflictError(
     'plugin',
@@ -164,43 +160,77 @@ function stalePluginError(id: string): ConflictError {
   )
 }
 
-export function commitLegacyPluginCreateInTx(
-  tx: DbTxSync,
-  prepared: LegacyPreparedPluginCreate,
-): Plugin {
-  tx.insert(plugins)
+type PluginInsertRecord = Omit<PluginCreateRecord, 'ownerUserId'> & {
+  readonly ownerUserId: string | null
+}
+
+/** Join the caller's transaction; timestamps and installed artifacts are already captured. */
+export async function insertPluginRowInTx(
+  tx: DatabaseTransaction,
+  record: PluginInsertRecord,
+): Promise<PluginPersistenceRow[]> {
+  return await tx
+    .insert(plugins)
     .values({
-      id: prepared.id,
-      name: prepared.parsed.name,
-      spec: prepared.parsed.spec,
-      optionsJson: JSON.stringify(prepared.parsed.options),
-      description: prepared.parsed.description,
-      enabled: prepared.parsed.enabled,
-      sourceKind: prepared.install.sourceKind,
-      cachedPath: prepared.install.cachedPath,
-      resolvedVersion: prepared.install.resolvedVersion,
-      installedAt: prepared.now,
-      ...prepared.initialAcl,
-      createdAt: prepared.now,
-      updatedAt: prepared.now,
+      id: record.id,
+      name: record.name,
+      spec: record.spec,
+      optionsJson: JSON.stringify(record.options),
+      description: record.description,
+      enabled: record.enabled,
+      sourceKind: record.sourceKind,
+      cachedPath: record.cachedPath,
+      resolvedVersion: record.resolvedVersion,
+      installedAt: record.now,
+      ownerUserId: record.ownerUserId,
+      visibility: record.visibility,
+      aclRevision: record.aclRevision,
+      schemaVersion: 1,
+      createdAt: record.now,
+      updatedAt: record.now,
     })
-    .run()
-  const created = selectPluginRowInTx(tx, prepared.id)
-  if (created === null) throw new Error('plugin disappeared during create publication')
+    .returning()
+}
+
+/** The complete captured row remains the publication CAS, including nullable columns. */
+export async function publishPluginRowInTx(
+  tx: DatabaseTransaction,
+  captured: PluginPersistenceRow,
+  set: LegacyPluginPublishSet,
+): Promise<PluginPersistenceRow[]> {
+  return await tx.update(plugins).set(set).where(fullPluginRowWhere(captured)).returning()
+}
+
+export async function commitLegacyPluginCreateInTx(
+  tx: DatabaseTransaction,
+  prepared: LegacyPreparedPluginCreate,
+): Promise<Plugin> {
+  const [created] = await insertPluginRowInTx(tx, {
+    id: prepared.id,
+    name: prepared.parsed.name,
+    spec: prepared.parsed.spec,
+    options: prepared.parsed.options,
+    description: prepared.parsed.description,
+    enabled: prepared.parsed.enabled,
+    ownerUserId: prepared.initialAcl.ownerUserId,
+    visibility: prepared.initialAcl.visibility,
+    aclRevision: prepared.initialAcl.aclRevision,
+    sourceKind: prepared.install.sourceKind,
+    cachedPath: prepared.install.cachedPath,
+    resolvedVersion: prepared.install.resolvedVersion,
+    now: prepared.now,
+  })
+  if (created === undefined) throw new Error('plugin disappeared during create publication')
   return pluginFromPersistenceRow(created)
 }
 
-export function commitLegacyPluginPublishInTx(
-  tx: DbTxSync,
+export async function commitLegacyPluginPublishInTx(
+  tx: DatabaseTransaction,
   captured: PluginPersistenceRow,
   set: LegacyPluginPublishSet,
-): Plugin {
-  const current = selectPluginRowInTx(tx, captured.id)
-  if (current === null) throw stalePluginError(captured.id)
-  const result = tx.update(plugins).set(set).where(fullPluginRowWhere(captured)).run()
-  if (changedRows(result) !== 1) throw stalePluginError(captured.id)
-  const published = selectPluginRowInTx(tx, captured.id)
-  if (published === null) throw new Error('plugin disappeared during generation publication')
+): Promise<Plugin> {
+  const [published] = await publishPluginRowInTx(tx, captured, set)
+  if (published === undefined) throw stalePluginError(captured.id)
   return pluginFromPersistenceRow(published)
 }
 

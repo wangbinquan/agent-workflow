@@ -93,15 +93,16 @@ const intentResourceDependencies = {
     commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
   getPluginById: loadLegacyPluginRow,
   pluginOperationConfigHashOf: (row) => pluginConfigHash(pluginFromPersistenceRow(row)),
-  commitPluginCreateInTx: (tx, input): void => {
-    void commitLegacyPluginCreateInTx(tx, input as LegacyPreparedPluginCreate)
+  commitPluginCreateInTx: async (tx, input): Promise<void> => {
+    await commitLegacyPluginCreateInTx(tx, input as LegacyPreparedPluginCreate)
   },
-  commitPluginPublishInTx: (tx, captured, input) =>
-    commitLegacyPluginPublishInTx(
+  commitPluginPublishInTx: async (tx, captured, input): Promise<void> => {
+    await commitLegacyPluginPublishInTx(
       tx,
       captured as PluginPersistenceRow,
       input as LegacyPluginPublishSet,
-    ),
+    )
+  },
   plannedGenerationDir,
   installPlugin,
   stageManagedSkill,

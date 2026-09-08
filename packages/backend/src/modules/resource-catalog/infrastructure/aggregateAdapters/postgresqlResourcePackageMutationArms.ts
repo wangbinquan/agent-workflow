@@ -53,7 +53,11 @@ import {
   updateAgentPersistenceValues,
 } from '../agentPersistence'
 import { mcpFromPersistenceRow } from '../mcpPersistence'
-import { pluginFromPersistenceRow } from '../pluginPersistence'
+import {
+  insertPluginRowInTx,
+  pluginFromPersistenceRow,
+  publishPluginRowInTx,
+} from '../pluginPersistence'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { isPostgresqlUniqueViolation } from '../postgresql/repositorySupport'
 import {
@@ -892,31 +896,6 @@ export async function commitPostgresqlMcpPackageMutation(
   return receipt('mcp', input.mutation, input.resourceId)
 }
 
-function fullPluginRowWhere(row: typeof plugins.$inferSelect) {
-  return and(
-    eq(plugins.id, row.id),
-    eq(plugins.name, row.name),
-    eq(plugins.spec, row.spec),
-    eq(plugins.optionsJson, row.optionsJson),
-    eq(plugins.description, row.description),
-    eq(plugins.enabled, row.enabled),
-    eq(plugins.sourceKind, row.sourceKind),
-    eq(plugins.cachedPath, row.cachedPath),
-    row.resolvedVersion === null
-      ? isNull(plugins.resolvedVersion)
-      : eq(plugins.resolvedVersion, row.resolvedVersion),
-    eq(plugins.installedAt, row.installedAt),
-    row.ownerUserId === null
-      ? isNull(plugins.ownerUserId)
-      : eq(plugins.ownerUserId, row.ownerUserId),
-    eq(plugins.visibility, row.visibility),
-    eq(plugins.aclRevision, row.aclRevision),
-    eq(plugins.schemaVersion, row.schemaVersion),
-    eq(plugins.createdAt, row.createdAt),
-    eq(plugins.updatedAt, row.updatedAt),
-  )
-}
-
 export async function commitPostgresqlPluginPackageMutation(
   input: PluginMutationArmInput,
 ): Promise<ResourcePackageMutationReceipt<'plugin'>> {
@@ -932,27 +911,21 @@ export async function commitPostgresqlPluginPackageMutation(
     }
     const now = input.now()
     try {
-      await input.transaction
-        .insert(plugins)
-        .values({
-          id: input.resourceId,
-          name: parsed.name,
-          spec: parsed.spec,
-          optionsJson: JSON.stringify(parsed.options),
-          description: parsed.description,
-          enabled: parsed.enabled,
-          sourceKind: input.publication.sourceKind,
-          cachedPath: input.publication.cachedPath,
-          resolvedVersion: input.publication.resolvedVersion,
-          installedAt: now,
-          ownerUserId: input.context.actor.user.id,
-          visibility: 'private',
-          aclRevision: 0,
-          schemaVersion: 1,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
+      await insertPluginRowInTx(input.transaction, {
+        id: input.resourceId,
+        name: parsed.name,
+        spec: parsed.spec,
+        options: parsed.options,
+        description: parsed.description,
+        enabled: parsed.enabled,
+        sourceKind: input.publication.sourceKind,
+        cachedPath: input.publication.cachedPath,
+        resolvedVersion: input.publication.resolvedVersion,
+        ownerUserId: input.context.actor.user.id,
+        visibility: 'private',
+        aclRevision: 0,
+        now,
+      })
     } catch (error) {
       if (isPostgresqlUniqueViolation(error, ['plugins_owner_name_unique'])) {
         throw new ConflictError('plugin-name-in-use', `plugin '${parsed.name}' already exists`)
@@ -981,22 +954,17 @@ export async function commitPostgresqlPluginPackageMutation(
   const { name: _name, sourceKind: _sourceKind, ...updateBody } = input.mutation.payload
   const patch = UpdatePluginSchema.parse(updateBody)
   const now = input.now()
-  const changed = await input.transaction
-    .update(plugins)
-    .set({
-      spec: patch.spec ?? current.spec,
-      optionsJson: JSON.stringify(patch.options ?? current.options),
-      description: patch.description ?? current.description,
-      enabled: patch.enabled ?? current.enabled,
-      sourceKind: input.publication.sourceKind,
-      cachedPath: input.publication.cachedPath,
-      resolvedVersion: input.publication.resolvedVersion,
-      installedAt: now,
-      updatedAt: monotonicNow(row.updatedAt),
-    })
-    .where(fullPluginRowWhere(row))
-    .returning({ id: plugins.id })
-    .get()
+  const [changed] = await publishPluginRowInTx(input.transaction, row, {
+    spec: patch.spec ?? current.spec,
+    optionsJson: JSON.stringify(patch.options ?? current.options),
+    description: patch.description ?? current.description,
+    enabled: patch.enabled ?? current.enabled,
+    sourceKind: input.publication.sourceKind,
+    cachedPath: input.publication.cachedPath,
+    resolvedVersion: input.publication.resolvedVersion,
+    installedAt: now,
+    updatedAt: monotonicNow(row.updatedAt),
+  })
   if (changed === undefined) {
     throw staleConflictError(
       'plugin',

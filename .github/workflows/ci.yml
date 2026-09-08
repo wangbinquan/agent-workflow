@@ -88,8 +88,8 @@ jobs:
     # six-hour default while retaining ample slow-runner headroom.
     timeout-minutes: 15
     # RFC-359 §11.1 —— 双引擎是缺省：`describeEachProvider` 写的用例在 ubuntu 分片上对着真
-    # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS runner 起不了服务容器，是唯一一条显式
-    # `AW_TEST_PROVIDERS=sqlite` 的 lane；image 为空字符串时 Actions 跳过该服务容器。
+    # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS runner 没有服务容器，显式选择
+    # `AW_TEST_PROVIDERS=sqlite`；独立 Windows 平台 lane 同理。image 为空字符串时 Actions 跳过服务容器。
     services:
       postgres:
         image: ${{ matrix.os == 'ubuntu-latest' && 'postgres:17' || '' }}
@@ -206,7 +206,7 @@ jobs:
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
         env:
           RUN_GIT_NETWORK: '1'
-          # RFC-359 §11.1：macOS runner 没有服务容器，显式声明只跑 SQLite——这是全 CI 唯一一处。
+          # RFC-359 §11.1：macOS runner 没有服务容器，显式声明只跑 SQLite；Ubuntu 仍跑双引擎。
           AW_TEST_PROVIDERS: sqlite
 
       - name: Upload backend coverage to Codecov (ubuntu shards)

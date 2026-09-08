@@ -12,9 +12,10 @@
 // 三种序必须收敛到同一个终态，且第②种绝不能对着陈旧评论派发 reply——那正是
 // 「信 payload」会犯的错。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import type {
   MergeRequestFactsCollectorPort,
@@ -27,8 +28,9 @@ import {
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { JAVA_CELLS } from './helpers/rfc310Pr2Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MR_HEAD = 'ab'.repeat(20)
 
@@ -145,6 +147,7 @@ async function deliverAndDrain(
 }
 
 async function runOrder(
+  db: ProviderNeutralDatabase,
   order: readonly { readonly key: string; readonly mergeBefore?: boolean }[],
 ): Promise<{
   status: string
@@ -152,7 +155,7 @@ async function runOrder(
   replies: unknown[]
   collectCount: number
 }> {
-  const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
+  const fx = await buildPr3Fixture({ db, rules: NEVER_MATCH_RULES })
   const missionId = `m-${Math.random().toString(36).slice(2, 10)}`
   const now = 20_000_000
   await seedWatchingMission(fx, missionId, now)
@@ -222,54 +225,63 @@ async function runOrder(
   return { status: m.status, blockCode: m.blockCode, replies, collectCount }
 }
 
-describe('RFC-310 T82 — webhook replay / out-of-order / late delivery matrix', () => {
-  test('in-order and out-of-order deliveries converge on the same collected truth', async () => {
-    // ①按序：先来评论（外部仍 active），随后外部合并、合并事件到达。
-    const inOrder = await runOrder([{ key: 'wh:comment' }, { key: 'wh:merged', mergeBefore: true }])
-    expect({ status: inOrder.status, blockCode: inOrder.blockCode }).toEqual({
-      status: 'merged',
-      blockCode: null,
-    })
-    expect(inOrder.collectCount).toBeGreaterThan(0)
+describeEachProvider(
+  'RFC-310 T82 — webhook replay / out-of-order / late delivery matrix',
+  (harness) => {
+    test('in-order and out-of-order deliveries converge on the same collected truth', async () => {
+      // ①按序：先来评论（外部仍 active），随后外部合并、合并事件到达。
+      const inOrder = await runOrder(harness.database(0).db, [
+        { key: 'wh:comment' },
+        { key: 'wh:merged', mergeBefore: true },
+      ])
+      expect({ status: inOrder.status, blockCode: inOrder.blockCode }).toEqual({
+        status: 'merged',
+        blockCode: null,
+      })
+      expect(inOrder.collectCount).toBeGreaterThan(0)
 
-    // ②乱序 / 迟到：外部**先**合并，那条早于合并的评论投递才姗姗来迟。
-    //    平台重新采集 ⇒ 看到 merged ⇒ 直接收终态；绝不能对着陈旧评论派 reply。
-    const outOfOrder = await runOrder([{ key: 'wh:comment-late', mergeBefore: true }])
-    expect({ status: outOfOrder.status, blockCode: outOfOrder.blockCode }).toEqual({
-      status: 'merged',
-      blockCode: null,
-    })
-    expect(outOfOrder.replies).toEqual([])
-    expect(outOfOrder.collectCount).toBeGreaterThan(0)
+      // ②乱序 / 迟到：外部**先**合并，那条早于合并的评论投递才姗姗来迟。
+      //    平台重新采集 ⇒ 看到 merged ⇒ 直接收终态；绝不能对着陈旧评论派 reply。
+      const outOfOrder = await runOrder(harness.database(1).db, [
+        { key: 'wh:comment-late', mergeBefore: true },
+      ])
+      expect({ status: outOfOrder.status, blockCode: outOfOrder.blockCode }).toEqual({
+        status: 'merged',
+        blockCode: null,
+      })
+      expect(outOfOrder.replies).toEqual([])
+      expect(outOfOrder.collectCount).toBeGreaterThan(0)
 
-    // 两条序列的终态一致 —— 这正是「webhook 只唤醒」的可执行判据。
-    expect(outOfOrder.status).toBe(inOrder.status)
-  })
-
-  test('a replayed delivery key is accepted once and changes nothing the second time', async () => {
-    const fx = await buildPr3Fixture()
-    const missionId = 'm-replay-matrix'
-    const now = 20_000_000
-    await seedWatchingMission(fx, missionId, now)
-
-    const first = await fx.store.recordWakeHint({
-      id: ulid(),
-      missionId,
-      source: 'code-host',
-      deliveryKey: 'wh:same-delivery',
-      now,
+      // 两条序列的终态一致 —— 这正是「webhook 只唤醒」的可执行判据。
+      expect(outOfOrder.status).toBe(inOrder.status)
     })
-    const second = await fx.store.recordWakeHint({
-      id: ulid(),
-      missionId,
-      source: 'code-host',
-      deliveryKey: 'wh:same-delivery',
-      now: now + 1,
+
+    test('a replayed delivery key is accepted once and changes nothing the second time', async () => {
+      const fx = await buildPr3Fixture({ db: harness.database(0).db })
+      const missionId = 'm-replay-matrix'
+      const now = 20_000_000
+      await seedWatchingMission(fx, missionId, now)
+
+      const first = await fx.store.recordWakeHint({
+        id: ulid(),
+        missionId,
+        source: 'code-host',
+        deliveryKey: 'wh:same-delivery',
+        now,
+      })
+      const second = await fx.store.recordWakeHint({
+        id: ulid(),
+        missionId,
+        source: 'code-host',
+        deliveryKey: 'wh:same-delivery',
+        now: now + 1,
+      })
+      expect(first.accepted).toBe(true)
+      // 重放不是"再唤醒一次"，是同一次投递 —— 幂等键挡住，消费面只见一条。
+      expect(second.accepted).toBe(false)
+      expect(await fx.store.consumeWakeHints(missionId, now + 2)).toBe(1)
+      expect(await fx.store.consumeWakeHints(missionId, now + 3)).toBe(0)
     })
-    expect(first.accepted).toBe(true)
-    // 重放不是"再唤醒一次"，是同一次投递 —— 幂等键挡住，消费面只见一条。
-    expect(second.accepted).toBe(false)
-    expect(await fx.store.consumeWakeHints(missionId, now + 2)).toBe(1)
-    expect(await fx.store.consumeWakeHints(missionId, now + 3)).toBe(0)
-  })
-})
+  },
+  { databaseCount: 2 },
+)

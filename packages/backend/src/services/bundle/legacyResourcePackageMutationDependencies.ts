@@ -105,10 +105,12 @@ export const legacyResourcePackageMutationDependencies = Object.freeze({
     commitLegacyMcpCreateInTx(tx, prepared as LegacyPreparedMcpCreate),
   commitMcpUpdateInTx: (tx, prepared) =>
     commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
-  commitPluginCreateInTx: (tx, input) =>
-    commitLegacyPluginCreateInTx(tx, input as LegacyPreparedPluginCreate),
-  commitPluginPublishInTx: (tx, captured, input) =>
-    commitLegacyPluginPublishInTx(tx, captured as PluginPersistenceRow, input as never),
+  commitPluginCreateInTx: async (tx, input): Promise<void> => {
+    await commitLegacyPluginCreateInTx(tx, input as LegacyPreparedPluginCreate)
+  },
+  commitPluginPublishInTx: async (tx, captured, input): Promise<void> => {
+    await commitLegacyPluginPublishInTx(tx, captured as PluginPersistenceRow, input as never)
+  },
   plannedGenerationDir,
   installPlugin: (pluginId, spec, options) => installPlugin(pluginId, spec, options),
   getAclResourceOwnerInTx,

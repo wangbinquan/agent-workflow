@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1727,
+    "entries": 1728,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17277,7 +17277,7 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
+        "event": true,
         "fenceOrOcc": true,
         "transaction": true
       },
@@ -17287,8 +17287,7 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
-        "event"
+        "authorization"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#commitPostgresqlPluginPackageMutation",
       "symbol": "commitPostgresqlPluginPackageMutation",
@@ -19129,7 +19128,7 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
@@ -19139,8 +19138,7 @@
         "audit",
         "authority",
         "authorization",
-        "event",
-        "fenceOrOcc"
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#commitLegacyPluginCreateInTx",
       "symbol": "commitLegacyPluginCreateInTx",
@@ -19166,6 +19164,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#commitLegacyPluginPublishInTx",
       "symbol": "commitLegacyPluginPublishInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#publishPluginRowInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#publishPluginRowInTx",
+      "symbol": "publishPluginRowInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -41259,7 +41280,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a",
+  "sourceDigest": "sha256:782b859359f25ceed4bcad99ea30d4f08168cf4f6c0ba17696a322d2a1d3b595",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -32,8 +32,6 @@ import {
   rehydratePrivilegedNodes,
   RESOURCE_DISPLAY_NAME_MSG,
   UpdateWorkflowSchema,
-  WorkflowDefinitionSchema,
-  WorkflowDraftSnapshotSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
 import { and, eq, notInArray } from 'drizzle-orm'
@@ -92,7 +90,16 @@ import {
 } from '@/platform/persistence/databaseTransaction'
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { sha256Hex } from '@/util/hash'
+import {
+  normalizeWorkflowSnapshot,
+  workflowDetailOf as workflowToDetail,
+  workflowDraftSnapshotOf,
+  workflowFromPersistenceRow as rowToWorkflow,
+  workflowRevisionOf,
+  workflowSnapshotHashOf as hashWorkflowSnapshot,
+} from '../workflowPersistence'
+
+export { workflowDraftSnapshotOf, workflowRevisionOf, workflowToDetail }
 
 type WorkflowRow = typeof workflows.$inferSelect
 
@@ -926,93 +933,14 @@ async function countNonTerminalReferencingTasksForTx(
   return rows.length
 }
 
-function rowToWorkflow(row: WorkflowRow): Workflow {
-  let definition: WorkflowDefinition
-  try {
-    const raw: unknown = JSON.parse(row.definition)
-    const parsed = WorkflowDefinitionSchema.safeParse(raw)
-    if (!parsed.success) {
-      // Definition was stored but no longer parses — likely a schema drift.
-      // Surface as a domain error so the API returns a structured 422.
-      throw new ValidationError('workflow-definition-corrupt', 'stored definition is invalid', {
-        workflowId: row.id,
-        issues: parsed.error.issues,
-      })
-    }
-    definition = migrateDefinitionToLatest(parsed.data)
-  } catch (err) {
-    if (err instanceof ValidationError) throw err
-    throw new ValidationError('workflow-definition-corrupt', 'stored definition is not JSON', {
-      workflowId: row.id,
-      error: (err as Error).message,
-    })
-  }
-  // RFC-060 PR-E: agent-multi removed, so the RFC-055 sharding-backfill
-  // call is no longer needed. wrapper-fanout carries its inputs[]/nodeIds
-  // shape directly in the schema with no backfill.
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    definition,
-    version: row.version,
-    // RFC-099 ACL projection — routes filter on these.
-    ownerUserId: row.ownerUserId,
-    visibility: row.visibility,
-    // RFC-104 built-in marker (read-only response field).
-    builtin: row.builtin,
-    schemaVersion: row.schemaVersion,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }
-}
-
 export function rowToWorkflowDetail(row: WorkflowRow): WorkflowDetail {
   return workflowToDetail(rowToWorkflow(row))
 }
 
-/** Complete editable snapshot, normalized to the latest definition schema. */
-export function workflowDraftSnapshotOf(workflow: Workflow): WorkflowDraftSnapshot {
-  return normalizeWorkflowSnapshot({
-    name: workflow.name,
-    description: workflow.description,
-    definition: workflow.definition,
-  })
-}
-
-/** Lowercase SHA-256 over the shared domain-separated canonical serialization. */
+/** This compatibility entry hashes a migrated snapshot; the shared raw hash does not migrate. */
 export function workflowSnapshotHashOf(snapshot: WorkflowDraftSnapshot): WorkflowSnapshotHash {
   const normalized = normalizeWorkflowSnapshot(snapshot)
-  return sha256Hex(serializeWorkflowEditableSnapshotV1(normalized))
-}
-
-/** Pure detail projection reused by GET/create/YAML collision responses. */
-export function workflowToDetail(workflow: Workflow): WorkflowDetail {
-  const snapshot = workflowDraftSnapshotOf(workflow)
-  return {
-    ...workflow,
-    definition: snapshot.definition,
-    snapshotHash: workflowSnapshotHashOf(snapshot),
-  }
-}
-
-/** Pure exact-revision projection reused by save, delete and YAML. */
-export function workflowRevisionOf(workflow: Workflow): WorkflowRevision {
-  const snapshot = workflowDraftSnapshotOf(workflow)
-  return {
-    workflowId: workflow.id,
-    version: workflow.version,
-    snapshotHash: workflowSnapshotHashOf(snapshot),
-    updatedAt: workflow.updatedAt,
-  }
-}
-
-function normalizeWorkflowSnapshot(snapshot: WorkflowDraftSnapshot): WorkflowDraftSnapshot {
-  return WorkflowDraftSnapshotSchema.parse({
-    name: snapshot.name,
-    description: snapshot.description,
-    definition: migrateDefinitionToLatest(snapshot.definition),
-  })
+  return hashWorkflowSnapshot(normalized)
 }
 
 async function loadRawWorkflow(db: DbClient, id: string): Promise<WorkflowRow | null> {

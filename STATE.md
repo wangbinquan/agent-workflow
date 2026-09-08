@@ -3,14 +3,16 @@
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
 > **RFC-359 W12 接续（2026-09-08）**：裸驱动事务守卫按 TypeScript 接收者类型识别，账本归零。
-> 第二至七批拆除 realtime / scheduler / collaboration / MCP / development / maintenance / WorkStart
+> 第二至八批拆除 realtime / scheduler / collaboration / MCP / development / maintenance / WorkStart
 > 的可漏绑槽，provider 命名文件 88 → 62，原始装配占位命中 32 → 11；代码矩阵/度量、自动修复与资源包 journal 合一。
-> 真实任务跑到 done 的双引擎用例已接入，修复工作组成员瞬态重试 CAS 卡住；58 个技能/MCP/memory/开发自动化行为套件改为双引擎，初始迁移装配已去除外部 bind。
+> 真实任务跑到 done 的双引擎用例已接入，修复工作组成员瞬态重试 CAS 卡住；64 个技能/MCP/memory/开发自动化行为套件改为双引擎，初始迁移装配已去除外部 bind。
 > 来源终止公共流程与每目标事务 atom 均已合一，生产净减 394 行；旧提交后停止机制保留。
 > 协作、实时回放及数字员工 workflow/agent 到 done 均经真实根，未构造根 19 → 0；不等于全量行为覆盖。
 > 目录 bundle 共用完整装配；资源包提交回执与需求引用竞争已修复，维护慢片增加实际 SQL/CPU 诊断。
-> 第六批 `203c1da42` 的维护大样本通过；Main CI 因三条旧装配锁与一次扫描超时失败，第七批已逐项修复，最终 CI 待新提交取证。
-> **仍为 In Progress**：774 个测试文件还有实际 SQLite 内存库构造（含机制专属测试，待逐项分类）；
+> 插件写入与 workflow 投影共删 107 行重复生产代码；多库 harness 保留独立夹具并补记录器/计划归属回归。
+> 第七批 `082e1ea27` Main CI 32/36 job success，旧写入快照与 PG SQL 匹配遗漏在第八批修复；Windows 独立 lane 缺库配置同步修正。
+> 11 个原始装配文本已逐项追踪，未发现漏装生产功能；完整能力类型仍需收口，最终 CI 待新提交取证。
+> **仍为 In Progress**：771 个测试文件还有实际 SQLite 内存库构造（含机制专属测试，待逐项分类）；
 > 真实孪生、剩余装配与原始 P95 判据尚未闭合。当前验收事实与逐批 CI 见 `plan.md` §0b/§0c。
 
 > 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**

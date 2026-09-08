@@ -14,7 +14,7 @@
 //    真实竞争写锁住已复现的 requirementBundleRef 丢失机制及 epoch 边界。
 //    该次 CI 未输出事实引用，不能据其最后一行独占归因于本机制。
 
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 
@@ -29,14 +29,15 @@ import { directSubmissionDigest } from '../src/modules/development-automation/in
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
+import { describeEachProvider } from './helpers/eachProvider'
 
 setDefaultTimeout(60_000)
 
 const SUBMISSION = { title: 'Add feature', body: 'do the thing', uploads: [] as const }
 
-describe('rfc310 pr3 — direct requirement materialization', () => {
+describeEachProvider('rfc310 pr3 — direct requirement materialization', (harness) => {
   test('stash digest must match the digest frozen at launch (structural pairing lock)', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const missionId = await fx.launchDirect('rfc310-pr3-pair-1')
     const mission = (await fx.store.getMission(missionId))!
     expect(mission.sourceContentDigest).toBe(directSubmissionDigest(SUBMISSION))
@@ -63,16 +64,14 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     })
     expect(replay).toEqual(stashed)
     expect(
-      fx.db
-        .select()
-        .from(developmentBundleRefs)
-        .all()
-        .filter((row) => row.missionId === missionId && row.purpose === 'direct-submission'),
+      (await fx.db.select().from(developmentBundleRefs)).filter(
+        (row) => row.missionId === missionId && row.purpose === 'direct-submission',
+      ),
     ).toHaveLength(1)
   })
 
   test('full direct chain: materialize → platform manifest → repo facts → action launch', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const missionId = await fx.launchDirect('rfc310-pr3-chain-1')
     await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
 
@@ -139,7 +138,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   test.each([1, 8])(
     'materialized requirement facts survive %i competing reconciles',
     async (peerWrites) => {
-      const fx = await buildPr3Fixture()
+      const fx = await buildPr3Fixture({ db: harness.db })
       const missionId = await fx.launchDirect(`rfc310-pr3-materialize-occ-${peerWrites}`)
       await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
       const base = fx.deps()
@@ -200,7 +199,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   )
 
   test('requirement write merges the cells committed by the competing writer', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const missionId = await fx.launchDirect('rfc310-pr3-materialize-merge-1')
     await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
     const base = fx.deps()
@@ -243,7 +242,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   test.each(['before-write', 'after-peer-write'] as const)(
     'requirement write stops when the mission epoch changes %s',
     async (changeEpoch) => {
-      const fx = await buildPr3Fixture()
+      const fx = await buildPr3Fixture({ db: harness.db })
       const missionId = await fx.launchDirect(`rfc310-pr3-materialize-epoch-${changeEpoch}`)
       await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
       const base = fx.deps()
@@ -277,7 +276,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   )
 
   test('port absent ⇒ typed block requirement-port-not-wired (never silent)', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const missionId = await fx.launchDirect('rfc310-pr3-nowire-1')
     const outcome = await runMissionReconcile(
       {
@@ -299,7 +298,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   })
 
   test('materialize failure blocks with attempt cells; retry-blocked genuinely re-runs the arm', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     const missionId = await fx.launchDirect('rfc310-pr3-retry-1')
     const deps = fx.deps()
 
@@ -328,7 +327,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   })
 
   test('empty-body direct submission materializes to an empty (but valid) bundle', async () => {
-    const fx = await buildPr3Fixture()
+    const fx = await buildPr3Fixture({ db: harness.db })
     // body 为空在 launch 层被 superRefine 拒（需 body 或 upload），所以这里
     // 用「空白正文 + 单空格 title 修剪」以外的路径不可达；退一步锁 manifest
     // 生成器对 0 文件也产合法 manifest（uploads-only 形态的将来路径）。

@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 854,
+      "baseline": 851,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -671,7 +671,7 @@
       "id": "s14-non-status-tasks-update-snapshot",
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "NON_STATUS_UPDATE_TASKS_SNAPSHOT",
-      "baseline": 16,
+      "baseline": 15,
       "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。 RFC-359 W8：PG 侧 `postgresqlTaskRouteOperations.ts` 新增一处非 status 写点，15→16。它是 delete 路径沿父链重算 `branch_started_at` 的那笔 UPDATE——SQLite 侧 `services/taskDelete.ts` 一直有、PG 侧一直没有，导致父任务的物化排序列永久停在已删子树的时间戳上。补齐它就必然多一个非 status 写点；这是抬齐两个引擎的代价，不是新债。"
     },
     {
@@ -776,8 +776,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1727,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1728,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W12 第八批：插件三处 generation publication SQL 合成 publishPluginRowInTx，原调用方入口保留委托，入口扫描新增这一条具名公共原子（1727→1728）；没有新增业务写入路径。实际插件 insert 3→1、update 4→2，七个生产文件净减44行。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -811,7 +814,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5280,
+      "baseline": 5279,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +835,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4748,
+      "baseline": 4747,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -867,15 +870,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24926,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W12 第七批：来源终止每目标事务与普通 lifecycle writer 合一，两个 applyOne 共641行退役、4个生产文件净减394行；为命名共有事务步骤新增符号，生产具名符号24925→24926，实际写入口与事务回调分别减少4和3。"
-      }
+      "baseline": 24921,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:51a090c8050d6c7587e5e4ca05a5e080e692d8cd68f367144ca743a43bf1553a",
+    "sourceDigest": "sha256:782b859359f25ceed4bcad99ea30d4f08168cf4f6c0ba17696a322d2a1d3b595",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -888,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "203c1da42d3e9f8bddbda2ae7256e41df9cf42a0",
-    "contentDigest": "sha256:0015af6fd9aa1028ffd82ea0ca34ff33ea5482e0ac85792c20a45804768f7afe",
+    "currentSnapshotSha": "082e1ea27788b3617d9fbc236a7a27912e755812",
+    "contentDigest": "sha256:f4297da7529f913665d6ab9346ecf0965e8ce3fdebd26bfb53feb4b0d84fc705",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

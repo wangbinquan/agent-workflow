@@ -65,14 +65,16 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 2,
   // RFC-359 W8：+1 —— 删除时沿父链重算 `branch_started_at`（RFC-311 P1-6，与 SQLite 的
   // `services/taskDelete.ts` 那一处逐字同形）。只写这一列、不翻状态：被删子树的时间戳
   // 不重算的话，父行的物化排序列会永久停在那儿，默认视图与过滤视图从此行序不同。
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
   'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
-  'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts': 4,
+  // RFC-359 W12：来源终止的伴随列写从两个宿主收敛到同一任务执行 atom（SQLite 4 + PG 2 → 1）。
+  // writeFence 只写 sourceTerminationFence / sourceTerminationEffectRev，并按任务 id 与
+  // lifecycleEventRevision 做 CAS；翻状态仍委托已有的 writeTaskRuntimeLifecycleInTx。
+  'modules/task-execution/infrastructure/sourceTerminationTarget.ts': 1,
   // RFC-359 W8：effect 账本端口合一（sqlite/postgresqlTaskExecutionEffectPersistence.ts 各 1 →
   // 中立的 taskExecutionEffectPersistence.ts 1）。工作区准备结算的任务列投影，不翻状态。
   'modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts': 1,

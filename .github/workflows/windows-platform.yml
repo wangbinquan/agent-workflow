@@ -98,6 +98,10 @@ jobs:
     name: Windows platform surface
     runs-on: windows-latest
     timeout-minutes: 25
+    env:
+      # This native Windows lane has no PostgreSQL service. Ubuntu backend
+      # shards exercise both providers; platform suites here use SQLite.
+      AW_TEST_PROVIDERS: sqlite
     steps:
       - uses: actions/checkout@v5
 

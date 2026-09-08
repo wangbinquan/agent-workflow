@@ -3,7 +3,7 @@
 // **为什么单引擎测试是本 RFC 的核心风险。** `describeEachProvider`（`tests/helpers/eachProvider.ts`）
 // 是 RFC-359 的双引擎 harness，而且**双引擎是缺省**：不设 `AW_TEST_PROVIDERS` 就两个引擎各跑一遍，
 // PostgreSQL 侧没有 URL 是 **fail 而不是 skip**（`AW_TEST_PROVIDERS=sqlite` 只是本地的显式降级，
-// CI 从不这么设）。绕开它、直接在测试里建一个 SQLite 内存库，写出来的判据就**只验证 SQLite 一个引擎**——
+// Ubuntu CI 保持双引擎）。绕开它、直接在测试里建一个 SQLite 内存库，写出来的判据就**只验证 SQLite 一个引擎**——
 // PostgreSQL 侧的同一段实现拿不到任何行为覆盖。这不是风格问题，是让 parity 缺陷一路穿过全部验收的
 // **机制本身**：`design/dual-provider-parity-audit-2026-09-04.md` 里 12 条 P0 全是这么漏过去的，
 // PG 侧实现长期零行为覆盖，直到两侧合一时才发现它比 SQLite 侧更弱（漏引用完整性复核、漏幂等回放）。
@@ -620,7 +620,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc310-employee-outcome-summary.test.ts: 1',
   'rfc310-employee-workspace-delivery.test.ts: 1',
   'rfc310-employee-workspace-repository-freshness.test.ts: 1',
-  'rfc310-event-center.test.ts: 11',
   'rfc310-pr1b-config-routes-errors.test.ts: 1',
   'rfc310-pr1b-employee-journey.test.ts: 1',
   'rfc310-pr3-journey.test.ts: 1',
@@ -701,7 +700,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc333-task-participants.test.ts: 14',
   'rfc335-oidc-git-name-migration.test.ts: 1',
   'rfc336-employee-case-advanced-migration.test.ts: 1',
-  'rfc338-maintenance-run-store.test.ts: 6',
   'rfc338-maintenance-slices.test.ts: 7',
   'rfc338-maintenance-status.test.ts: 2',
   'rfc338-websocket-heartbeat.test.ts: 1',
@@ -756,7 +754,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc349-websocket-provider.test.ts: 1',
   'rfc349-workspace-maintenance-provider.test.ts: 5',
   'rfc350-idle-timeout-integration.test.ts: 1',
-  'rfc350-idle-timeout-persistence.test.ts: 13',
   'rfc350-interrupted-archive.test.ts: 4',
   'rfc351-sqlite-write-transaction-immediate.test.ts: 1',
   'rfc352-memory-list-page-query.test.ts: 6',

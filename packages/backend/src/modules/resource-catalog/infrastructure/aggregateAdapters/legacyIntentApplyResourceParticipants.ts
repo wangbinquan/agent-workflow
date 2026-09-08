@@ -195,7 +195,7 @@ export interface LegacyIntentApplyResourceDependencies {
   readonly getPluginById: (db: DbClient, id: string) => Promise<LegacyIntentPluginRow | null>
   readonly pluginOperationConfigHashOf: (row: LegacyIntentPluginRow) => string
   readonly commitPluginCreateInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     input: {
       readonly id: string
       readonly parsed: {
@@ -213,9 +213,9 @@ export interface LegacyIntentApplyResourceDependencies {
       readonly install: LegacyIntentPluginInstallResult
       readonly now: number
     },
-  ) => void
+  ) => Promise<void>
   readonly commitPluginPublishInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     captured: LegacyIntentPluginRow,
     input: {
       readonly spec: string
@@ -228,7 +228,7 @@ export interface LegacyIntentApplyResourceDependencies {
       readonly installedAt: number
       readonly updatedAt: number
     },
-  ) => void
+  ) => Promise<void>
   readonly plannedGenerationDir: (
     pluginId: string,
     spec: string,
@@ -697,7 +697,7 @@ export function createLegacyIntentApplyResourceSession(
       case 'plugin-create': {
         const install = pluginInstalls.get(plan.operationId)
         if (install === undefined) throw new Error('plugin install result missing')
-        dependencies.commitPluginCreateInTx(tx, {
+        await dependencies.commitPluginCreateInTx(tx, {
           id: plan.resourceId,
           parsed: prepared.parsed,
           initialAcl: {
@@ -712,7 +712,7 @@ export function createLegacyIntentApplyResourceSession(
       }
       case 'plugin-update': {
         const install = pluginInstalls.get(plan.operationId)
-        dependencies.commitPluginPublishInTx(tx, prepared.captured, {
+        await dependencies.commitPluginPublishInTx(tx, prepared.captured, {
           spec: prepared.spec,
           optionsJson: JSON.stringify(prepared.payload.options),
           description: prepared.payload.description,

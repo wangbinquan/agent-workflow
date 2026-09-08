@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
+import type { DbClient } from '@/db/client'
 import { eventTypeCatalog } from '@/db/schema'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/public/types'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import {
+  composeEventCenter,
+  composePostgresqlEventCenter,
+  type ComposeEventCenterOptions,
+} from '@/modules/event-center/composition'
 import {
   advanceDevelopmentCodeHostObserverCursor,
   buildDevelopmentCodeHostFacts,
@@ -19,15 +22,28 @@ import {
   codeHostEventObservation,
 } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_PRINCIPAL = {
   userId: 'owner-1',
   canOverrideOwner: false,
   hasPermission: () => true,
 } as const
 
-describe('RFC-310 shared Event Center', () => {
+function composeForProvider(
+  harness: ProviderHarness,
+  options: Omit<ComposeEventCenterOptions, 'db'>,
+) {
+  return harness.capabilities.isolation === 'exclusive'
+    ? composeEventCenter({ ...options, db: harness.db as DbClient })
+    : composePostgresqlEventCenter({
+        ...options,
+        db: harness.db as PostgresqlDatabaseClient,
+      })
+}
+
+describeEachProvider('RFC-310 shared Event Center', (harness) => {
   test('publishes one business catalog, hides Webhook compatibility facts, and lets every contracted event start work', async () => {
     let ordinal = 0
     const launches: Array<{
@@ -35,8 +51,7 @@ describe('RFC-310 shared Event Center', () => {
       targetRefId: string
       triggerContext: unknown
     }> = []
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [
         codeHostEventCatalogJson,
         developmentEmployeeTypePackage.descriptorJson,
@@ -266,8 +281,7 @@ describe('RFC-310 shared Event Center', () => {
     const now = 41_000
     let ordinal = 0
     const launches: string[] = []
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [
         codeHostEventCatalogJson,
         developmentEmployeeTypePackage.descriptorJson,
@@ -344,7 +358,7 @@ describe('RFC-310 shared Event Center', () => {
   })
 
   test('an upgrade preserves immutable employee-private revisions while publishing new business facts', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const employeePackage = JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
       typeRef: { typeId: string }
       eventTypes: Array<{
@@ -375,23 +389,20 @@ describe('RFC-310 shared Event Center', () => {
         deliveryClass: eventType.deliveryClass,
         priority: eventType.priority,
       }
-      db.insert(eventTypeCatalog)
-        .values({
-          eventTypeId: eventType.eventTypeId,
-          revision: eventType.version,
-          sourceId: eventType.sourceRef.id,
-          sourceRevision: eventType.sourceRef.revision,
-          descriptorJson: JSON.stringify(legacyDescriptor),
-          descriptorDigest: 'persisted-before-trigger-contracts',
-          catalogVisibility: 'internal',
-          state: 'published',
-          registeredAt: 1,
-        })
-        .run()
+      await db.insert(eventTypeCatalog).values({
+        eventTypeId: eventType.eventTypeId,
+        revision: eventType.version,
+        sourceId: eventType.sourceRef.id,
+        sourceRevision: eventType.sourceRef.revision,
+        descriptorJson: JSON.stringify(legacyDescriptor),
+        descriptorDigest: 'persisted-before-trigger-contracts',
+        catalogVisibility: 'internal',
+        state: 'published',
+        registeredAt: 1,
+      })
     }
 
-    const eventCenter = await composeEventCenter({
-      db,
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
         digitalEmployeeLifecycleEventCatalogJson,
@@ -416,7 +427,10 @@ describe('RFC-310 shared Event Center', () => {
       ),
     ).toBe(false)
   })
+})
 
+// Pure observer projections run once without constructing a database.
+describe('RFC-310 shared Event Center', () => {
   test('approval observer emits revision changes only and uses the typed approval subject', async () => {
     let observations = 0
     const observer = composeDevelopmentApprovalEventObserver({
@@ -742,13 +756,14 @@ describe('RFC-310 shared Event Center', () => {
     ])
     expect(changed.changes[0]!.dedupeKey).not.toBe(first.changes[0]!.dedupeKey)
   })
+})
 
+describeEachProvider('RFC-310 shared Event Center', (harness) => {
   test('subscriptions activate a short observer, baseline scan dedupes with webhook, and zero subscribers stop it', async () => {
     const now = 10_000
     let ordinal = 0
     const calls: Array<{ cursorJson: string | null; subjects: readonly string[] }> = []
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => now,
       id: () => `event-resource-${++ordinal}`,
@@ -842,8 +857,7 @@ describe('RFC-310 shared Event Center', () => {
     const firstRelease = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => now,
       id: () => `nudge-resource-${++ordinal}`,
@@ -893,8 +907,7 @@ describe('RFC-310 shared Event Center', () => {
     let now = 20_000
     let ordinal = 0
     const batches: string[][] = []
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => now,
       id: () => `rotation-resource-${++ordinal}`,
@@ -927,8 +940,7 @@ describe('RFC-310 shared Event Center', () => {
 
   test('a late subscriber receives the latest durable event by default and may start fresh', async () => {
     let ordinal = 0
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 30_000,
       id: () => `replay-resource-${++ordinal}`,
@@ -971,8 +983,7 @@ describe('RFC-310 shared Event Center', () => {
 
   test('Event Center preserves neutral event order and leaves business priority to subscribers', async () => {
     let ordinal = 0
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 20_000,
       id: () => `event-resource-${++ordinal}`,
@@ -1017,8 +1028,7 @@ describe('RFC-310 shared Event Center', () => {
 
   test('one immutable event fans out to independent deliveries for every subscriber', async () => {
     let ordinal = 0
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 25_000,
       id: () => `fanout-resource-${++ordinal}`,
@@ -1091,8 +1101,7 @@ describe('RFC-310 shared Event Center', () => {
       updatedAt: 1,
     })
     const definitions = [definition('automation-fails'), definition('automation-succeeds')]
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 27_000,
       id: () => `automation-fanout-${++ordinal}`,
@@ -1154,8 +1163,7 @@ describe('RFC-310 shared Event Center', () => {
   test('a global custom source validates its real script, publishes exact events, polls on subscription, and dedupes storage', async () => {
     let now = Date.parse('2026-08-21T08:00:00.000Z')
     let ordinal = 0
-    const eventCenter = await composeEventCenter({
-      db: createInMemoryDb(MIGRATIONS),
+    const eventCenter = await composeForProvider(harness, {
       // The source is global: no digital-employee type package is required.
       typePackageDescriptorJsons: [],
       now: () => now,

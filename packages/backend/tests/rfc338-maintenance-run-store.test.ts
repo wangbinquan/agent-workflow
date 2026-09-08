@@ -1,19 +1,18 @@
-// RFC-338 的耐久准入 / 租约状态机回归锁（SQLite 形态）。
+// RFC-338 的耐久准入 / 租约状态机回归锁（RFC-359 AC6：两个真实数据库同跑）。
 //
 // RFC-359 W8 起端口是异步的、实现两个 provider 共用（`platform/persistence/maintenanceRunStore.ts`），
-// 所以这里的调用都加了 await。**双引擎的行为判据在
-// `rfc359-w8-maintenance-run-store-conformance.test.ts`**，本文件保留 RFC-338 当初立下的那几条
+// 所以这里的调用都加了 await。完整双引擎矩阵在
+// `rfc359-w8-maintenance-run-store-conformance.test.ts`，本文件保留 RFC-338 当初立下的那几条
 // 具名回归（同槽去重 / 认领优先级 / 一次只排一个后继槽 / 崩溃恢复吸收补课 / deferred 重排期）。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb } from '@/db/client'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import { MIGRATIONS } from './migration-freeze'
+import { describeEachProvider } from './helpers/eachProvider'
 
-describe('RFC-338 durable maintenance run store', () => {
+describeEachProvider('RFC-338 durable maintenance run store', (harness) => {
   test('deduplicates an exact slot and coalesces a later slot while one run is outstanding', async () => {
-    const store = createMaintenanceRunStore(createInMemoryDb(MIGRATIONS))
+    const store = createMaintenanceRunStore(harness.db)
     const first = await store.enqueue({
       id: 'run-1',
       jobKey: 'tokenAuditGc',
@@ -49,7 +48,7 @@ describe('RFC-338 durable maintenance run store', () => {
   })
 
   test('claims recovery ahead of cleanup and fences late lease receipts', async () => {
-    const store = createMaintenanceRunStore(createInMemoryDb(MIGRATIONS))
+    const store = createMaintenanceRunStore(harness.db)
     await store.enqueue({
       id: 'cleanup',
       jobKey: 'eventsArchive',
@@ -98,7 +97,7 @@ describe('RFC-338 durable maintenance run store', () => {
   })
 
   test('keeps one durable next slot while the same job is running and coalesces later slots', async () => {
-    const store = createMaintenanceRunStore(createInMemoryDb(MIGRATIONS))
+    const store = createMaintenanceRunStore(harness.db)
     await store.enqueue({
       id: 'current',
       jobKey: 'eventsArchive',
@@ -151,7 +150,7 @@ describe('RFC-338 durable maintenance run store', () => {
     // RFC-359 W8：此前这条用的是 `recoverExpired`（只恢复 leaseExpiresAt 已过的行）。
     // 那个方法**生产从来没有调用过**，随合一删除；租约过期仍由 Worker 启动时的
     // `recoverRunning` 兜住，判据因此改打在同一条恢复路径上。
-    const store = createMaintenanceRunStore(createInMemoryDb(MIGRATIONS))
+    const store = createMaintenanceRunStore(harness.db)
     await store.enqueue({
       id: 'run-expired',
       jobKey: 'walCheckpoint',
@@ -171,7 +170,7 @@ describe('RFC-338 durable maintenance run store', () => {
   })
 
   test('crash recovery atomically absorbs a queued future slot before resuming the cursor', async () => {
-    const store = createMaintenanceRunStore(createInMemoryDb(MIGRATIONS))
+    const store = createMaintenanceRunStore(harness.db)
     await store.enqueue({
       id: 'restart-current',
       jobKey: 'tokenAuditGc',
@@ -201,7 +200,7 @@ describe('RFC-338 durable maintenance run store', () => {
   })
 
   test('a busy running slice absorbs its queued catch-up before becoming deferred', async () => {
-    const store = createMaintenanceRunStore(createInMemoryDb(MIGRATIONS))
+    const store = createMaintenanceRunStore(harness.db)
     await store.enqueue({
       id: 'busy-current',
       jobKey: 'eventsArchive',

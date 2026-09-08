@@ -1,4 +1,4 @@
-// RFC-350 —— 活动口径与候选面的持久化锁（真库，in-memory SQLite）。
+// RFC-350 —— 活动口径与候选面的持久化锁（RFC-359 AC6：两个真实数据库同跑）。
 //
 // 为什么这些测试存在：「最后一次动作」是本功能唯一的输入。少算一个数据源，正在被
 // 人推进的任务就会被当成僵尸取消掉；多算一个（比如评论），一个没人管的任务就能被
@@ -10,11 +10,10 @@
 //
 // 对应 design.md §2.1 / §4 与 proposal.md 的 AC-3 / AC-4 / AC-7 / AC-8 / AC-14。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   collaborationGateOperations,
   nodeRunEvents,
@@ -25,13 +24,13 @@ import {
   users,
   workflows,
 } from '../src/db/schema'
-import { createSqliteTaskIdleTimeoutPersistence } from '../src/modules/task-execution/composition/taskIdleTimeout'
+import { createTaskIdleTimeoutPersistence } from '../src/modules/task-execution/composition/taskIdleTimeout'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HOUR = 3_600_000
 const NOW = 1_788_278_400_000
 
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 async function seedBase(db: Db): Promise<void> {
   await db.insert(users).values({
@@ -154,17 +153,17 @@ function activityOf(
   return member?.activityAt ?? -1
 }
 
-describe('RFC-350 活动口径（四类数据源）', () => {
+describeEachProvider('RFC-350 活动口径（四类数据源）', (harness) => {
   test('无任何 run / 决策时，活动时刻就是 started_at（新建任务不会被立刻收）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 'solo', status: 'pending', startedAt: NOW - 3 * HOUR })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(activityOf(await p.loadTreeActivity('solo'), 'solo')).toBe(NOW - 3 * HOUR)
   })
 
   test('agent 事件推进活动时刻', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 't', status: 'running', startedAt: NOW - 50 * HOUR })
     await addRun(db, {
@@ -174,40 +173,40 @@ describe('RFC-350 活动口径（四类数据源）', () => {
       startedAt: NOW - 50 * HOUR,
       eventTs: [NOW - 49 * HOUR, NOW - 5 * HOUR],
     })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(activityOf(await p.loadTreeActivity('t'), 't')).toBe(NOW - 5 * HOUR)
   })
 
   test('新铸的 node_run 即使一个事件都没产出也算动作（手动 resume / retry）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 't', status: 'running', startedAt: NOW - 50 * HOUR })
     await addRun(db, { id: 'r1', taskId: 't', status: 'running', startedAt: NOW - 2 * HOUR })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(activityOf(await p.loadTreeActivity('t'), 't')).toBe(NOW - 2 * HOUR)
   })
 
   test('人类推进动作（已提交的 gate decide）算动作', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 't', status: 'awaiting_review', startedAt: NOW - 50 * HOUR })
     await addGateDecision(db, { taskId: 't', committedAt: NOW - 4 * HOUR })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(activityOf(await p.loadTreeActivity('t'), 't')).toBe(NOW - 4 * HOUR)
   })
 
   test('未提交的决策尝试与 open 不算「推进」', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 't', status: 'awaiting_review', startedAt: NOW - 50 * HOUR })
     await addGateDecision(db, { taskId: 't', committedAt: null })
     await addGateDecision(db, { taskId: 't', committedAt: NOW - 1 * HOUR, operationKind: 'open' })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(activityOf(await p.loadTreeActivity('t'), 't')).toBe(NOW - 50 * HOUR)
   })
 
   test('已终态成员用 finished_at（不再逐 run 查事件）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 'root', status: 'running', startedAt: NOW - 90 * HOUR })
     await addTask(db, {
@@ -217,14 +216,14 @@ describe('RFC-350 活动口径（四类数据源）', () => {
       finishedAt: NOW - 30 * HOUR,
       parentTaskId: 'root',
     })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     const snapshot = await p.loadTreeActivity('root')
     expect(activityOf(snapshot, 'child')).toBe(NOW - 30 * HOUR)
     expect(snapshot?.members).toHaveLength(2)
   })
 
   test('liveRuns 只含非终态 run，并带齐进程身份四元组', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 't', status: 'running', startedAt: NOW - 50 * HOUR })
     await addRun(db, {
@@ -235,7 +234,7 @@ describe('RFC-350 活动口径（四类数据源）', () => {
       pid: 99,
     })
     await addRun(db, { id: 'settled', taskId: 't', status: 'done', startedAt: NOW - 50 * HOUR })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     const snapshot = await p.loadTreeActivity('t')
     expect(snapshot?.liveRuns.map((r) => r.nodeRunId)).toEqual(['live'])
     expect(snapshot?.liveRuns[0]).toMatchObject({
@@ -247,9 +246,9 @@ describe('RFC-350 活动口径（四类数据源）', () => {
   })
 })
 
-describe('RFC-350 候选面', () => {
+describeEachProvider('RFC-350 候选面', (harness) => {
   test('只返回仍有非终态成员的树根，且整棵树只算一次', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 'live-root', status: 'running', startedAt: NOW - 50 * HOUR })
     await addTask(db, {
@@ -265,12 +264,12 @@ describe('RFC-350 候选面', () => {
       startedAt: NOW - 60 * HOUR,
       finishedAt: NOW - 59 * HOUR,
     })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(await p.listIdleCandidateRoots(10)).toEqual(['live-root'])
   })
 
   test('软删除任务不进候选，其整棵树也不出快照（AC-14）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, {
       id: 'gone',
@@ -278,24 +277,24 @@ describe('RFC-350 候选面', () => {
       startedAt: NOW - 50 * HOUR,
       deletedAt: NOW - 1 * HOUR,
     })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(await p.listIdleCandidateRoots(10)).toEqual([])
     expect(await p.loadTreeActivity('gone')).toBeNull()
   })
 
   test('最老的活任务优先，并遵守单拍上限', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 'newest', status: 'running', startedAt: NOW - 10 * HOUR })
     await addTask(db, { id: 'oldest', status: 'running', startedAt: NOW - 90 * HOUR })
     await addTask(db, { id: 'middle', status: 'running', startedAt: NOW - 50 * HOUR })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(await p.listIdleCandidateRoots(2)).toEqual(['oldest', 'middle'])
     expect(await p.listIdleCandidateRoots(0)).toEqual([])
   })
 
   test('legacy 行（root_task_id 为 NULL）沿父链上溯到真正的根', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, {
       id: 'legacy-root',
@@ -311,16 +310,16 @@ describe('RFC-350 候选面', () => {
       parentTaskId: 'legacy-root',
       rootTaskId: null,
     })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     expect(await p.listIdleCandidateRoots(10)).toEqual(['legacy-root'])
     const snapshot = await p.loadTreeActivity('legacy-root')
     expect(snapshot?.members.map((m) => m.taskId).sort()).toEqual(['legacy-child', 'legacy-root'])
   })
 })
 
-describe('RFC-350 收割写入', () => {
+describeEachProvider('RFC-350 收割写入', (harness) => {
   test('原因文案只覆盖「我们取消的那一行」', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     // 本次收割取消的行：cancelTask 写的默认 summary。
     await addTask(db, {
@@ -341,7 +340,7 @@ describe('RFC-350 收割写入', () => {
     // 根本没被取消的行。
     await addTask(db, { id: 'running', status: 'running', startedAt: NOW - 90 * HOUR })
 
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     const claimed: Record<string, boolean> = {}
     for (const taskId of ['ours', 'theirs', 'running']) {
       claimed[taskId] = await p.writeIdleTimeoutReason({
@@ -360,10 +359,10 @@ describe('RFC-350 收割写入', () => {
   })
 
   test('审计落 recovery_events，kind = idle-timeout-reap（详情页「恢复」区读的就是它）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await addTask(db, { id: 't', status: 'canceled', startedAt: NOW - 90 * HOUR, finishedAt: NOW })
-    const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const p = createTaskIdleTimeoutPersistence(db)
     await p.recordReapAudit({
       taskId: 't',
       reason: 'no activity for 108000000ms',

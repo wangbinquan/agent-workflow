@@ -39,6 +39,90 @@ const BINDING = 'gitlab:rfc359/atom!7'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const restores: Array<() => void> = []
 
+function expectSourceTerminationStatementOrder(statements: readonly { readonly sql: string }[]) {
+  const isTasks = (schema: string | undefined, table: string | undefined) =>
+    (schema === undefined || schema === 'agent_workflow') && table === 'tasks'
+  const firstUpdatedColumn = (sql: string) => {
+    const match = /^\s*update\s+(?:"([^"]+)"\s*\.\s*)?"([^"]+)"\s+set\s+"([^"]+)"\s*=/i.exec(sql)
+    return match !== null && isTasks(match[1], match[2]) ? match[3] : undefined
+  }
+  const snapshotIndex = statements.findIndex((statement) => {
+    const match = /^\s*select\s+([\s\S]*?)\s+from\s+(?:"([^"]+)"\s*\.\s*)?"([^"]+)"(?=\s|$)/i.exec(
+      statement.sql,
+    )
+    return (
+      match !== null &&
+      isTasks(match[2], match[3]) &&
+      /"source_termination_launch_rev"/.test(match[1]!)
+    )
+  })
+  const winnerIndex = statements.findIndex(
+    (statement) => firstUpdatedColumn(statement.sql) === 'status',
+  )
+  const fenceIndex = statements.findIndex(
+    (statement) => firstUpdatedColumn(statement.sql) === 'source_termination_fence',
+  )
+  expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+  expect(winnerIndex).toBeGreaterThan(snapshotIndex)
+  expect(fenceIndex).toBeGreaterThan(winnerIndex)
+}
+
+// These prefixes come from the real schema projection and SQL dialect:
+// SQLite emits "tasks"; PostgreSQL emits "agent_workflow"."tasks" and $N binds.
+for (const { provider, table, bind } of [
+  { provider: 'sqlite', table: '"tasks"', bind: '?' },
+  { provider: 'postgresql', table: '"agent_workflow"."tasks"', bind: '$1' },
+]) {
+  const snapshot = {
+    sql: `select "status", "source_termination_launch_rev" from ${table} where ${table}."id" = ${bind}`,
+  }
+  const winner = {
+    sql: `update ${table} set "status" = ${bind}, "lifecycle_event_revision" = 2 returning "lifecycle_event_revision"`,
+  }
+  const fence = {
+    sql: `update ${table} set "source_termination_fence" = ${bind}, "source_termination_effect_rev" = 5 returning "id"`,
+  }
+  test(`SQL order scanner accepts the ${provider} snapshot, winner and fence sequence`, () => {
+    expectSourceTerminationStatementOrder([snapshot, winner, fence])
+  })
+  for (const [name, statements] of [
+    ['snapshot table', [{ sql: snapshot.sql.replace(table, '"node_runs"') }, winner, fence]],
+    ['winner table', [snapshot, { sql: winner.sql.replace(table, '"node_runs"') }, fence]],
+    ['fence table', [snapshot, winner, { sql: fence.sql.replace(table, '"node_runs"') }]],
+    [
+      'snapshot column',
+      [
+        {
+          sql: snapshot.sql.replace(
+            '"source_termination_launch_rev"',
+            '"other_source_termination_launch_rev"',
+          ),
+        },
+        winner,
+        fence,
+      ],
+    ],
+    ['winner column', [snapshot, { sql: winner.sql.replace('"status"', '"other_status"') }, fence]],
+    [
+      'fence column',
+      [
+        snapshot,
+        winner,
+        {
+          sql: fence.sql.replace('"source_termination_fence"', '"source_termination_effect_rev"'),
+        },
+      ],
+    ],
+    ['schema', [snapshot, { sql: winner.sql.replace(table, '"other_schema"."tasks"') }, fence]],
+    ['winner before snapshot', [winner, snapshot, fence]],
+    ['fence before winner', [snapshot, fence, winner]],
+  ] as const) {
+    test(`SQL order scanner rejects ${provider} ${name} mismatch`, () => {
+      expect(() => expectSourceTerminationStatementOrder(statements)).toThrow()
+    })
+  }
+}
+
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore()
   registerAfterCommitEventPump(null)
@@ -470,19 +554,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     await expect(operation).rejects.toMatchObject({ code: 'concurrent-task-transition' })
     expect(winner?.lifecycleEventRevision).toBe(2)
     expect(winner?.eventRef?.eventId).toBe(`task-lifecycle:${taskId}:2`)
-    const snapshotIndex = recording.statements.findIndex(
-      (statement) =>
-        /^select\b/i.test(statement.sql) && statement.sql.includes('source_termination_launch_rev'),
-    )
-    const winnerIndex = recording.statements.findIndex((statement) =>
-      /update "tasks" set "status"/i.test(statement.sql),
-    )
-    const fenceIndex = recording.statements.findIndex((statement) =>
-      /update "tasks" set "source_termination_fence"/i.test(statement.sql),
-    )
-    expect(snapshotIndex).toBeGreaterThanOrEqual(0)
-    expect(winnerIndex).toBeGreaterThan(snapshotIndex)
-    expect(fenceIndex).toBeGreaterThan(winnerIndex)
+    expectSourceTerminationStatementOrder(recording.statements)
     expect(await rows(harness.db, taskId)).toEqual(before)
   })
 
