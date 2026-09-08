@@ -500,7 +500,7 @@ export function fastFilteredRootQuery(
 
   return sql`
     WITH RECURSIVE
-    non_view_matches AS MATERIALIZED (
+    non_view_matches AS NOT MATERIALIZED (
       SELECT
         t.id,
         t.root_task_id AS rid,

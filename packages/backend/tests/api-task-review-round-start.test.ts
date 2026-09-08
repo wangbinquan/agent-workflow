@@ -7,19 +7,18 @@
 // current pending doc_version's created_at, keep its raw startedAt untouched,
 // and sort AFTER the reviewed agent run — not at the misleading early position.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -30,8 +29,14 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
+      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
       id: taskId,
       name: 't',
       workflowId: wfId,
@@ -51,13 +56,14 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
 
 type RunStatus = 'done' | 'awaiting_review' | 'running' | 'failed'
 
-function seedRun(
-  db: DbClient,
+async function seedRun(
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: { id?: string; nodeId: string; status?: RunStatus; startedAt: number; finishedAt?: number },
-): string {
+): Promise<string> {
   const id = opts.id ?? ulid()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id,
       taskId,
@@ -73,8 +79,8 @@ function seedRun(
   return id
 }
 
-function seedDocVersion(
-  db: DbClient,
+async function seedDocVersion(
+  db: ProviderNeutralDatabase,
   taskId: string,
   reviewNodeRunId: string,
   opts: {
@@ -83,8 +89,9 @@ function seedDocVersion(
     decision: 'pending' | 'approved' | 'rejected' | 'iterated' | 'superseded'
     decidedAt?: number | null
   },
-): void {
-  db.insert(docVersions)
+): Promise<void> {
+  await db
+    .insert(docVersions)
     .values({
       id: ulid(),
       taskId,
@@ -102,25 +109,38 @@ function seedDocVersion(
     .run()
 }
 
-describe('RFC-078 — getTaskNodeRuns surfaces review round timing', () => {
-  let db: DbClient
+describeEachProvider('RFC-078 — getTaskNodeRuns surfaces review round timing', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     resetBroadcastersForTests()
   })
 
   test('awaiting review: reviewRoundStartedAt = latest pending version created_at; startedAt untouched; sorts after the agent run', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     // Agent run produced its doc at t=5000.
-    seedRun(db, taskId, { id: 'AGENT0', nodeId: 'agent', startedAt: 5000, finishedAt: 5200 })
+    await seedRun(db, taskId, { id: 'AGENT0', nodeId: 'agent', startedAt: 5000, finishedAt: 5200 })
     // Review slot first opened at t=100 (far before), then refreshed: v1 superseded, v2 pending @9000.
     const revId = 'REVIEW0'
-    seedRun(db, taskId, { id: revId, nodeId: 'rev', status: 'awaiting_review', startedAt: 100 })
-    seedDocVersion(db, taskId, revId, { versionIndex: 1, createdAt: 5300, decision: 'superseded' })
-    seedDocVersion(db, taskId, revId, { versionIndex: 2, createdAt: 9000, decision: 'pending' })
+    await seedRun(db, taskId, {
+      id: revId,
+      nodeId: 'rev',
+      status: 'awaiting_review',
+      startedAt: 100,
+    })
+    await seedDocVersion(db, taskId, revId, {
+      versionIndex: 1,
+      createdAt: 5300,
+      decision: 'superseded',
+    })
+    await seedDocVersion(db, taskId, revId, {
+      versionIndex: 2,
+      createdAt: 9000,
+      decision: 'pending',
+    })
 
     const res = await getTaskNodeRuns(db, taskId)
     const rev = res.runs.find((r) => r.id === revId)!
@@ -138,18 +158,22 @@ describe('RFC-078 — getTaskNodeRuns surfaces review round timing', () => {
   })
 
   test('approved review: anchor = approved version created_at, decidedAt = its decided_at', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     const revId = 'REVIEW1'
     // approve stamps node_run finished_at = decided time; started_at stays pinned early.
-    seedRun(db, taskId, {
+    await seedRun(db, taskId, {
       id: revId,
       nodeId: 'rev',
       status: 'done',
       startedAt: 100,
       finishedAt: 9600,
     })
-    seedDocVersion(db, taskId, revId, { versionIndex: 1, createdAt: 5300, decision: 'superseded' })
-    seedDocVersion(db, taskId, revId, {
+    await seedDocVersion(db, taskId, revId, {
+      versionIndex: 1,
+      createdAt: 5300,
+      decision: 'superseded',
+    })
+    await seedDocVersion(db, taskId, revId, {
       versionIndex: 2,
       createdAt: 9000,
       decision: 'approved',
@@ -164,9 +188,9 @@ describe('RFC-078 — getTaskNodeRuns surfaces review round timing', () => {
   })
 
   test('non-review-only task: every row has null reviewRoundStartedAt and original order is preserved', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    seedRun(db, taskId, { id: 'A', nodeId: 'a', startedAt: 1000 })
-    seedRun(db, taskId, { id: 'B', nodeId: 'b', startedAt: 2000 })
+    const { taskId } = await seedTaskAndWorkflow(db)
+    await seedRun(db, taskId, { id: 'A', nodeId: 'a', startedAt: 1000 })
+    await seedRun(db, taskId, { id: 'B', nodeId: 'b', startedAt: 2000 })
     const res = await getTaskNodeRuns(db, taskId)
     expect(res.runs.every((r) => (r.reviewRoundStartedAt ?? null) === null)).toBe(true)
     expect(res.runs.map((r) => r.id)).toEqual(['A', 'B'])

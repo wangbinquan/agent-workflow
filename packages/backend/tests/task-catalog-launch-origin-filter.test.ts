@@ -27,10 +27,10 @@ import {
   type TaskListOrigin,
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 import type { Actor } from '@/auth/actor'
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users, workflows } from '@/db/schema'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
@@ -58,9 +58,7 @@ describe('launch-origin filter maps to the stored column, once', () => {
   })
 })
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 /**
  * 五个根各占一种 `launch_origin`，外加一个**定时任务的子执行**——它继承父的
@@ -119,6 +117,24 @@ async function seed(db: Db): Promise<void> {
       invocationDepth: row.parent === undefined ? 0 : 1,
       branchStartedAt: startedAt,
       rootTaskId: row.parent ?? row.id,
+      // Match the original SQLite root/child frames, including null workflow revisions.
+      executionLineageId: row.parent ?? row.id,
+      lineageSlotPathJson: JSON.stringify([
+        {
+          stableNodeKey: 'task-root',
+          frozenOccurrenceKey: row.parent ?? row.id,
+          workflowRevision: null,
+        },
+        ...(row.parent === undefined
+          ? []
+          : [
+              {
+                stableNodeKey: 'child-task',
+                frozenOccurrenceKey: row.id,
+                workflowRevision: null,
+              },
+            ]),
+      ]),
     })
   }
 }
@@ -128,49 +144,52 @@ async function idsFor(db: Db, origin: TaskListOrigin | undefined): Promise<strin
   return items.map((item) => item.id).sort()
 }
 
-describe('list queries select rows by launch_origin, not by scheduled_task_id', () => {
-  test('each choice returns exactly its own rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
+describeEachProvider(
+  'list queries select rows by launch_origin, not by scheduled_task_id',
+  (harness) => {
+    test('each choice returns exactly its own rows', async () => {
+      const db = harness.db
+      await seed(db)
 
-    expect(await idsFor(db, undefined)).toEqual(
-      [
-        'child-of-scheduled',
-        'root-api',
-        'root-event',
-        'root-manual',
-        'root-scheduled',
-        'root-webhook',
-      ].sort(),
-    )
-    expect(await idsFor(db, 'all')).toEqual(await idsFor(db, undefined))
+      expect(await idsFor(db, undefined)).toEqual(
+        [
+          'child-of-scheduled',
+          'root-api',
+          'root-event',
+          'root-manual',
+          'root-scheduled',
+          'root-webhook',
+        ].sort(),
+      )
+      expect(await idsFor(db, 'all')).toEqual(await idsFor(db, undefined))
 
-    // (2) 手动只回手动那一行。旧猜法在这里会把 event / webhook / api 一起交出来。
-    expect(await idsFor(db, 'manual')).toEqual(['root-manual'])
+      // (2) 手动只回手动那一行。旧猜法在这里会把 event / webhook / api 一起交出来。
+      expect(await idsFor(db, 'manual')).toEqual(['root-manual'])
 
-    // (3) 定时含继承来源的子执行。旧猜法看 scheduled_task_id，会漏掉它。
-    expect(await idsFor(db, 'scheduled')).toEqual(['child-of-scheduled', 'root-scheduled'].sort())
+      // (3) 定时含继承来源的子执行。旧猜法看 scheduled_task_id，会漏掉它。
+      expect(await idsFor(db, 'scheduled')).toEqual(['child-of-scheduled', 'root-scheduled'].sort())
 
-    // (1) 界面上的「事件」收编了存量 webhook 行，且这两个选项本来就要能用。
-    expect(await idsFor(db, 'event')).toEqual(['root-event', 'root-webhook'].sort())
-    expect(await idsFor(db, 'api')).toEqual(['root-api'])
+      // (1) 界面上的「事件」收编了存量 webhook 行，且这两个选项本来就要能用。
+      expect(await idsFor(db, 'event')).toEqual(['root-event', 'root-webhook'].sort())
+      expect(await idsFor(db, 'api')).toEqual(['root-api'])
 
-    // 存量 `webhook` 仍可被单独点名（`TaskListOrigin` 里它还在，只是界面不提供）。
-    expect(await idsFor(db, 'webhook')).toEqual(['root-webhook'])
-  })
+      // 存量 `webhook` 仍可被单独点名（`TaskListOrigin` 里它还在，只是界面不提供）。
+      expect(await idsFor(db, 'webhook')).toEqual(['root-webhook'])
+    })
 
-  test('the buckets partition the whole set — nothing is double counted or lost', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const partition = [
-      ...(await idsFor(db, 'manual')),
-      ...(await idsFor(db, 'scheduled')),
-      ...(await idsFor(db, 'event')),
-      ...(await idsFor(db, 'api')),
-    ].sort()
-    expect(partition).toEqual(await idsFor(db, 'all'))
-  })
-})
+    test('the buckets partition the whole set — nothing is double counted or lost', async () => {
+      const db = harness.db
+      await seed(db)
+      const partition = [
+        ...(await idsFor(db, 'manual')),
+        ...(await idsFor(db, 'scheduled')),
+        ...(await idsFor(db, 'event')),
+        ...(await idsFor(db, 'api')),
+      ].sort()
+      expect(partition).toEqual(await idsFor(db, 'all'))
+    })
+  },
+)
 
 function actor(): Actor {
   return {
@@ -194,59 +213,62 @@ async function catalogSource(db: Db) {
   ).create('workflow')
 }
 
-describe('the catalog source pushes origin into the query instead of filtering rows', () => {
-  // 单独一条：`event` / `api` 曾经是「不在分支里」⇒ 直接 400。这条要能在
-  // 只有它们坏掉时独立变红，所以不与下面的选中集断言混在一个 test 里。
-  test('none of the offered choices is rejected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const source = await catalogSource(db)
-    const rejected: string[] = []
-    for (const origin of TASK_LIST_VISIBLE_ORIGINS) {
-      try {
-        await source.list({ actor: actor(), origin })
-      } catch {
-        rejected.push(origin)
+describeEachProvider(
+  'the catalog source pushes origin into the query instead of filtering rows',
+  (harness) => {
+    // 单独一条：`event` / `api` 曾经是「不在分支里」⇒ 直接 400。这条要能在
+    // 只有它们坏掉时独立变红，所以不与下面的选中集断言混在一个 test 里。
+    test('none of the offered choices is rejected', async () => {
+      const db = harness.db
+      await seed(db)
+      const source = await catalogSource(db)
+      const rejected: string[] = []
+      for (const origin of TASK_LIST_VISIBLE_ORIGINS) {
+        try {
+          await source.list({ actor: actor(), origin })
+        } catch {
+          rejected.push(origin)
+        }
       }
-    }
-    expect(rejected).toEqual([])
-  })
+      expect(rejected).toEqual([])
+    })
 
-  test('every choice the UI offers selects exactly its own rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const source = await catalogSource(db)
-    const ids = async (origin: string): Promise<string[]> =>
-      (await source.list({ actor: actor(), origin })).items.map((item) => item.id).sort()
+    test('every choice the UI offers selects exactly its own rows', async () => {
+      const db = harness.db
+      await seed(db)
+      const source = await catalogSource(db)
+      const ids = async (origin: string): Promise<string[]> =>
+        (await source.list({ actor: actor(), origin })).items.map((item) => item.id).sort()
 
-    // 目录页只列根行，所以定时那一档在这里是 root-scheduled；继承来源的子执行由上面
-    // 直接打查询层的用例覆盖（它才看得到子行）。
-    expect(await ids('all')).toEqual(
-      ['root-api', 'root-event', 'root-manual', 'root-scheduled', 'root-webhook'].sort(),
-    )
-    expect(await ids('manual')).toEqual(['root-manual'])
-    expect(await ids('scheduled')).toEqual(['root-scheduled'])
-    expect(await ids('event')).toEqual(['root-event', 'root-webhook'].sort())
-    expect(await ids('api')).toEqual(['root-api'])
-  })
+      // 目录页只列根行，所以定时那一档在这里是 root-scheduled；继承来源的子执行由上面
+      // 直接打查询层的用例覆盖（它才看得到子行）。
+      expect(await ids('all')).toEqual(
+        ['root-api', 'root-event', 'root-manual', 'root-scheduled', 'root-webhook'].sort(),
+      )
+      expect(await ids('manual')).toEqual(['root-manual'])
+      expect(await ids('scheduled')).toEqual(['root-scheduled'])
+      expect(await ids('event')).toEqual(['root-event', 'root-webhook'].sort())
+      expect(await ids('api')).toEqual(['root-api'])
+    })
 
-  test('an absent origin is the same as all', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const source = await catalogSource(db)
-    const absent = (await source.list({ actor: actor() })).items.map((item) => item.id).sort()
-    const all = (await source.list({ actor: actor(), origin: 'all' })).items
-      .map((item) => item.id)
-      .sort()
-    expect(absent).toEqual(all)
-  })
+    test('an absent origin is the same as all', async () => {
+      const db = harness.db
+      await seed(db)
+      const source = await catalogSource(db)
+      const absent = (await source.list({ actor: actor() })).items.map((item) => item.id).sort()
+      const all = (await source.list({ actor: actor(), origin: 'all' })).items
+        .map((item) => item.id)
+        .sort()
+      expect(absent).toEqual(all)
+    })
 
-  test('an unknown origin is still rejected rather than silently ignored', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const source = await catalogSource(db)
-    await expect(source.list({ actor: actor(), origin: 'from-mars' })).rejects.toThrow(
-      ValidationError,
-    )
-  })
-})
+    test('an unknown origin is still rejected rather than silently ignored', async () => {
+      const db = harness.db
+      await seed(db)
+      const source = await catalogSource(db)
+      await expect(source.list({ actor: actor(), origin: 'from-mars' })).rejects.toThrow(
+        ValidationError,
+      )
+    })
+  },
+)

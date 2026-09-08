@@ -2,6 +2,20 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十一批（2026-09-08）**：任务页只调整实际filtered CTE hint，Overview只复用不可变QueryBuilder。
+> 原语句、完整行/JSON、绑定及独立快照保持；新录参测试经类型检查修正实际values字段后6 pass/1240 expect。
+> 再迁7旧套件，原后45 pass/153 expect，40原DB case默认双库、5纯/原生例单跑，累计207。
+> 当前1929测试文件，637构库文件/1355次调用，627构库文件无harness，384文件harness；T19f726→720。
+> Workgroup三个已异步参数类型中立化，完整生产转译JS不变；旧SQLite0106迁移保持原字节。
+> W20 exactc468 Main34229654417终态31success/2failure/3cancelled；四mac后端、独立PG及全部E2E成功。
+> Windows取消例首轮通过，相关两分片0flaky；Ubuntu三分片超过原15分钟，另有取消前独立60秒DROP超时。
+> W21 Ubuntu扩为8片、mac保持4片，原预算/完整发现范围不变；不能据此宣称独立清库超时已解决。
+> 原full34229859100官方artifact10058685114的8源码/五表全行投影/360 raw与floor P95已核；
+> 正确PG owner下仍5/9项PG更慢、双库首/次任务页和SQLite工作组/PG overview共6项原绝对预算失败。
+> 完整backend tsc、定向lint/format、203项功能metadata与13项canonical功能检查通过。
+> 原生PG与新矩阵完整覆盖、CTE/构造复用的性能效果待新SHA托管；AC1/6/8/9/11/12与完整RFC仍开放。
+> 本批无本地PG/服务/性能/E2E/完整门禁。历史W20误命令的终止与验证限制保留，原始证据见RFC359 plan §0b/§0c。
+
 > **RFC-359 W12 第二十批（2026-09-08）**：Agent依赖DFS共享、仓库搜索能力归一与引用计数查询修正。
 > 再迁4旧套件，8 pass/131 expect，6原DB case默认双库，累计200；真正同步生命周期例保留原入口。
 > 当前1927测试文件，644文件/1371次实际构库，634构库文件无harness，375文件harness；T19f730→726。

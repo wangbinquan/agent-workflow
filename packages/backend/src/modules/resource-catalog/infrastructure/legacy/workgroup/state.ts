@@ -27,6 +27,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
 import {
   clarifyRounds,
@@ -150,7 +151,7 @@ function rowToState(row: typeof workgroupTaskState.$inferSelect | undefined): Wo
 }
 
 export async function loadWorkgroupTaskState(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<WorkgroupTaskState> {
   const row = (
@@ -175,7 +176,10 @@ export function loadWorkgroupTaskStateTx(tx: DbTxSync, taskId: string): Workgrou
  * engine can never CAS against a missing row (and so DB-level tests that
  * bypass startTask keep exercising the real gate machine).
  */
-export async function ensureWorkgroupTaskStateRow(db: DbClient, taskId: string): Promise<void> {
+export async function ensureWorkgroupTaskStateRow(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<void> {
   await db
     .insert(workgroupTaskState)
     .values({ taskId, gateStatus: 'idle', updatedAt: Date.now() })
@@ -230,7 +234,7 @@ function gatePatch(args: GateCasArgs): Partial<typeof workgroupTaskState.$inferI
  * 测试只用异步的 `casGateStatus`），留着等于留一条没人走的 SQLite-only 岔路。
  */
 export async function casGateStatus(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   args: GateCasArgs,
 ): Promise<boolean> {

@@ -354,7 +354,7 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
       recording.stop()
     }
     const statements = recording.statements.filter((statement) =>
-      statement.sql.includes('non_view_matches AS MATERIALIZED'),
+      statement.sql.includes('non_view_matches AS'),
     )
     expect(statements).toHaveLength(1)
     const statement = statements[0]!

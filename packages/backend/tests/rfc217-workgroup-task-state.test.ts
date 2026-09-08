@@ -32,7 +32,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import {
   WORKGROUP_GATE_TRANSITIONS,
@@ -50,7 +51,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 1. gate state machine (HEAD schema)
 // ---------------------------------------------------------------------------
 
-async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
   await db.insert(workflows).values({ id: wfId, name: `wf-${wfId}`, definition: '{}' })
   const taskId = ulid()
@@ -66,82 +67,89 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
+    // Preserve the task-root values previously supplied by SQLite migration 0210.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   await ensureWorkgroupTaskStateRow(db, taskId)
   return taskId
 }
 
 describe('rfc217 T2 — gate state machine', () => {
-  test('legal walk: idle→declared→awaiting→rejected→declared→awaiting→approved', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedTask(db)
-    expect(
-      await casGateStatus(db, id, { from: ['idle', 'rejected'], to: 'declared', summary: 's1' }),
-    ).toBe(true)
-    expect((await loadWorkgroupTaskState(db, id)).gateSummary).toBe('s1')
-    expect(await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })).toBe(
-      true,
-    )
-    expect(
+  describeEachProvider('durable provider behavior', (harness) => {
+    test('legal walk: idle→declared→awaiting→rejected→declared→awaiting→approved', async () => {
+      const db = harness.db
+      const id = await seedTask(db)
+      expect(
+        await casGateStatus(db, id, { from: ['idle', 'rejected'], to: 'declared', summary: 's1' }),
+      ).toBe(true)
+      expect((await loadWorkgroupTaskState(db, id)).gateSummary).toBe('s1')
+      expect(await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })).toBe(
+        true,
+      )
+      expect(
+        await casGateStatus(db, id, {
+          from: ['awaiting_confirmation'],
+          to: 'rejected',
+          rejectedComment: 'nope',
+        }),
+      ).toBe(true)
+      const rejected = await loadWorkgroupTaskState(db, id)
+      expect(rejected.gateRejectedComment).toBe('nope')
+      expect(rejected.gateSummary).toBe('s1') // summary kept for the re-declare prompt
+      // re-declare clears the surfaced comment and stores the new summary
+      expect(
+        await casGateStatus(db, id, { from: ['idle', 'rejected'], to: 'declared', summary: 's2' }),
+      ).toBe(true)
+      const redeclared = await loadWorkgroupTaskState(db, id)
+      expect(redeclared.gateSummary).toBe('s2')
+      expect(redeclared.gateRejectedComment).toBeNull()
+      expect(await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })).toBe(
+        true,
+      )
+      expect(await casGateStatus(db, id, { from: ['awaiting_confirmation'], to: 'approved' })).toBe(
+        true,
+      )
+      expect(gateViewOf(await loadWorkgroupTaskState(db, id)).approved).toBe(true)
+    })
+
+    test('rejected→idle consumption edge clears summary AND comment', async () => {
+      const db = harness.db
+      const id = await seedTask(db)
+      await casGateStatus(db, id, { from: ['idle'], to: 'declared', summary: 's' })
+      await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })
       await casGateStatus(db, id, {
         from: ['awaiting_confirmation'],
         to: 'rejected',
-        rejectedComment: 'nope',
-      }),
-    ).toBe(true)
-    const rejected = await loadWorkgroupTaskState(db, id)
-    expect(rejected.gateRejectedComment).toBe('nope')
-    expect(rejected.gateSummary).toBe('s1') // summary kept for the re-declare prompt
-    // re-declare clears the surfaced comment and stores the new summary
-    expect(
-      await casGateStatus(db, id, { from: ['idle', 'rejected'], to: 'declared', summary: 's2' }),
-    ).toBe(true)
-    const redeclared = await loadWorkgroupTaskState(db, id)
-    expect(redeclared.gateSummary).toBe('s2')
-    expect(redeclared.gateRejectedComment).toBeNull()
-    expect(await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })).toBe(
-      true,
-    )
-    expect(await casGateStatus(db, id, { from: ['awaiting_confirmation'], to: 'approved' })).toBe(
-      true,
-    )
-    expect(gateViewOf(await loadWorkgroupTaskState(db, id)).approved).toBe(true)
-  })
-
-  test('rejected→idle consumption edge clears summary AND comment', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedTask(db)
-    await casGateStatus(db, id, { from: ['idle'], to: 'declared', summary: 's' })
-    await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })
-    await casGateStatus(db, id, {
-      from: ['awaiting_confirmation'],
-      to: 'rejected',
-      rejectedComment: 'c',
+        rejectedComment: 'c',
+      })
+      expect(await casGateStatus(db, id, { from: ['rejected'], to: 'idle' })).toBe(true)
+      const st = await loadWorkgroupTaskState(db, id)
+      expect(st.gateStatus).toBe('idle')
+      expect(st.gateSummary).toBeNull()
+      expect(st.gateRejectedComment).toBeNull()
     })
-    expect(await casGateStatus(db, id, { from: ['rejected'], to: 'idle' })).toBe(true)
-    const st = await loadWorkgroupTaskState(db, id)
-    expect(st.gateStatus).toBe('idle')
-    expect(st.gateSummary).toBeNull()
-    expect(st.gateRejectedComment).toBeNull()
-  })
 
-  test('CAS: wrong from-state returns false and writes nothing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedTask(db)
-    expect(await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })).toBe(
-      false,
-    )
-    expect((await loadWorkgroupTaskState(db, id)).gateStatus).toBe('idle')
-  })
+    test('CAS: wrong from-state returns false and writes nothing', async () => {
+      const db = harness.db
+      const id = await seedTask(db)
+      expect(await casGateStatus(db, id, { from: ['declared'], to: 'awaiting_confirmation' })).toBe(
+        false,
+      )
+      expect((await loadWorkgroupTaskState(db, id)).gateStatus).toBe('idle')
+    })
 
-  test('illegal transition throws (table is the single legality source)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedTask(db)
-    await expect(casGateStatus(db, id, { from: ['idle'], to: 'approved' })).rejects.toBeInstanceOf(
-      WorkgroupGateTransitionError,
-    )
-    // approved is terminal — every outgoing edge is illegal
-    expect(WORKGROUP_GATE_TRANSITIONS.approved).toHaveLength(0)
+    test('illegal transition throws (table is the single legality source)', async () => {
+      const db = harness.db
+      const id = await seedTask(db)
+      await expect(
+        casGateStatus(db, id, { from: ['idle'], to: 'approved' }),
+      ).rejects.toBeInstanceOf(WorkgroupGateTransitionError)
+      // approved is terminal — every outgoing edge is illegal
+      expect(WORKGROUP_GATE_TRANSITIONS.approved).toHaveLength(0)
+    })
   })
 
   test('gateViewOf derivation matrix (wire-frozen booleans)', () => {

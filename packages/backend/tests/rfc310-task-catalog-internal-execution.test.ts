@@ -8,13 +8,11 @@ import { resolve } from 'node:path'
 import type { TaskCatalogVisibility } from '@agent-workflow/shared'
 
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users, workflows } from '../src/db/schema'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/taskCatalogSources'
 import { listTaskItems, listTasks } from '../src/services/task'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function task(
   id: string,
@@ -46,12 +44,30 @@ function task(
     invocationDepth: options.parentTaskId === undefined ? 0 : 1,
     branchStartedAt: startedAt,
     rootTaskId: options.rootTaskId ?? id,
+    // Match the original SQLite root/child frames, including null workflow revisions.
+    executionLineageId: options.rootTaskId ?? id,
+    lineageSlotPathJson: JSON.stringify([
+      {
+        stableNodeKey: 'task-root',
+        frozenOccurrenceKey: options.rootTaskId ?? id,
+        workflowRevision: null,
+      },
+      ...(options.parentTaskId === undefined
+        ? []
+        : [
+            {
+              stableNodeKey: 'child-task',
+              frozenOccurrenceKey: id,
+              workflowRevision: null,
+            },
+          ]),
+    ]),
   }
 }
 
-describe('task catalog internal execution boundary', () => {
+describeEachProvider('task catalog internal execution boundary', (harness) => {
   test('public workflow pages, cursors and facets exclude generic internal trees', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const now = 1_788_278_400_000
     await db.insert(users).values({
       id: 'catalog-owner',
@@ -140,7 +156,9 @@ describe('task catalog internal execution boundary', () => {
       'internal-under-public',
     ])
   })
+})
 
+describe('task catalog internal execution boundary', () => {
   test('public task components contain no digital-employee source branch', () => {
     // RFC-357：这份查询平移进 `taskListPage/`，判据跟着覆盖整个目录——按单个文件名
     // 钉死会在下一次拆分时静默漏掉新文件。

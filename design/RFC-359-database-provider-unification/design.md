@@ -20,6 +20,16 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W21 filtered任务页只将实际 fastFilteredRootQuery 的 non_view_matches 改为 NOT MATERIALIZED；
+  exhaustive查询、其他CTE、绑定、语句/快照、完整页/游标/facet合同保持。让规划器消除中间物化只是候选，
+  两处消费者可能重复扫描，不能以微型对拍或后置EXPLAIN代替原规模HTTP收益证明。
+- Overview只复用三个不可变QueryBuilder；每次仍准备并执行四条独立语句，使用当前status/since值，
+  原并发、快照、返回和时钟采样保持。不能缓存结果、绑定值、native statement或绕过后来安装的录参器。
+- Workgroup状态的三个既有异步入口只改用实际中立查询合同，完整转译JS不变；原同步helper和
+  SQLite0106迁移测试保留，不能为了增加双库计数而改写旧同步事务API。
+- push CI后端为Ubuntu八分片、macOS四分片；原15分钟预算、Bun原生文件分片、isolate/randomize、
+  coverage及完整文件发现范围不变。分片调整不能充当独立PG清库语句超时已修复的证明。
+
 - W20 Agent 依赖 DFS 共用一个异步遍历：保留先检测候选环再查 visited、顺序加载、首个 missing
   错误与原 Error 身份；两个实际消费者保留各自根列表规范化、查询、解析和外层事务。
 - 仓库搜索通过构造时必需的 EngineCapabilities 渲染三列不区分大小写的匹配；SQLite 原 SQL/参数

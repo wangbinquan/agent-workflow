@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1739,
+    "entries": 1740,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -28398,7 +28398,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createCountTemplates",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createCountTemplates",
+      "symbol": "createCountTemplates",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -28409,7 +28433,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -41544,7 +41567,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:800e3de7b2b4caa4cf03f8f0f054a0081cd83cd3e6a176e4291639d12b9c8fde",
+  "sourceDigest": "sha256:9f48bc5b1eba3a92439f8a0cbefe36c89d8d29e24ff96ef2596b5414783dfdfe",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

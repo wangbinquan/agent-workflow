@@ -66,26 +66,40 @@ jobs:
         run: bun run test:system-mocks
 
   test-backend:
-    # The backend suite (~740 files) is the single biggest CI cost center, and
-    # macOS process-spawn makes `--isolate` (one fresh process per file, run
-    # serially) especially slow there (~408s in the old job). Bun `--parallel`
-    # would be ~3x faster but DEADLOCKS this suite — several files spawn a real
+    # W20 run 34229654417 exhausted the 15-minute budget on three Ubuntu
+    # shards; the fourth finished in 14m34s. Ubuntu now runs both providers,
+    # so split it eight ways while retaining the four native macOS shards.
+    # Bun `--parallel` DEADLOCKS this suite — several files spawn a real
     # daemon that takes a single-instance flock, so running them concurrently in
     # one VM contends forever. Sharding across runners keeps each shard serial
     # and isolated (a separate VM = a separate flock/home/port namespace, so no
-    # parallel-safety change at all) while cutting wall-clock ~4x. Bun assigns
+    # parallel-safety change at all). Bun assigns
     # files to shards deterministically by path, so every env-gated test still
     # runs in exactly one shard.
-    name: Backend tests (${{ matrix.os }} shard ${{ matrix.shard }}/4)
+    name: Backend tests (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        shard: [1, 2, 3, 4]
+        os: [ubuntu-latest]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shards: [8]
+        include:
+          - os: macos-latest
+            shard: 1
+            shards: 4
+          - os: macos-latest
+            shard: 2
+            shards: 4
+          - os: macos-latest
+            shard: 3
+            shards: 4
+          - os: macos-latest
+            shard: 4
+            shards: 4
     runs-on: ${{ matrix.os }}
     # A sync child-process stall once left macOS shard 4 silent for 17+ minutes.
-    # Healthy shards finish in a few minutes; fail closed well before Actions'
-    # six-hour default while retaining ample slow-runner headroom.
+    # Keep that same job budget as the provider workload grows; add runners
+    # instead of extending it or changing individual test timeouts.
     timeout-minutes: 15
     # RFC-359 §11.1 —— 双引擎是缺省：`describeEachProvider` 写的用例在 ubuntu 分片上对着真
     # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS runner 没有服务容器，显式选择
@@ -157,8 +171,8 @@ jobs:
 
       # --isolate prevents coverage-mode module singletons from leaking across
       # files; --randomize exposes any remaining within-file order dependency and
-      # prints a seed that reproduces the failure; --shard=N/4 selects this
-      # runner's quarter of the files. Coverage is instrumented only on ubuntu.
+      # prints a seed that reproduces the failure; --shard=N/M selects this
+      # runner's portion of the files. Coverage is instrumented only on ubuntu.
       # 先证分片真的连上了库：URL 拼错会让 harness 的 PostgreSQL 半边整体红，但红得要可归因。
       - name: Assert the PostgreSQL service is reachable (ubuntu shards)
         if: matrix.os == 'ubuntu-latest'
@@ -186,7 +200,7 @@ jobs:
         # make Bun's stdout writer fail with WriteFailed on otherwise-green
         # shards, so keep the machine-readable report only.
         shell: bash
-        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }} --coverage --coverage-reporter=lcov
         env:
           # RFC-359 §11.1：双引擎用例的 PostgreSQL 半边。每个测试文件自己 drop + 迁移 schema，
           # 分片内文件串行（--isolate），一个库够用。
@@ -203,15 +217,15 @@ jobs:
       - name: Test backend (macOS shard — no coverage)
         if: matrix.os != 'ubuntu-latest'
         shell: bash
-        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }}
         env:
           RUN_GIT_NETWORK: '1'
           # RFC-359 §11.1：macOS runner 没有服务容器，显式声明只跑 SQLite；Ubuntu 仍跑双引擎。
           AW_TEST_PROVIDERS: sqlite
 
       - name: Upload backend coverage to Codecov (ubuntu shards)
-        # Each ubuntu shard emits an lcov covering its quarter of the files;
-        # Codecov merges the four per-commit uploads into one report, so total
+        # Each ubuntu shard emits an lcov covering its portion of the files;
+        # Codecov merges all per-commit shard uploads into one report, so total
         # coverage is identical to the old single-runner run. Tokenless upload
         # works for public repos; a per-shard flag keeps the uploads distinct.
         if: matrix.os == 'ubuntu-latest'

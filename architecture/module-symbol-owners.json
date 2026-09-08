@@ -6,7 +6,7 @@
     "moduleFiles": 1191,
     "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25043
+    "symbolsIncludingFileRoots": 25044
   },
   "entries": [
     {
@@ -135737,12 +135737,12 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createTaskOverviewQuery",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#CountTemplates",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createTaskOverviewQuery",
+      "symbol": "CountTemplates",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -135751,10 +135751,22 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#loadOverview",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createCountTemplates",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "loadOverview",
+      "symbol": "createCountTemplates",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createTaskOverviewQuery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createTaskOverviewQuery",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -301218,5 +301230,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:800e3de7b2b4caa4cf03f8f0f054a0081cd83cd3e6a176e4291639d12b9c8fde"
+  "sourceDigest": "sha256:9f48bc5b1eba3a92439f8a0cbefe36c89d8d29e24ff96ef2596b5414783dfdfe"
 }

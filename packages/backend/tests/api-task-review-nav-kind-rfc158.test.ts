@@ -12,20 +12,19 @@
 //   - sibling cascade: current round decided by SYSTEM_DECIDER → null (R2a)
 //   - reject/iterate reuse (pre re-park): pending run, current = human iterate → 'decided' (R1)
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { SYSTEM_DECIDER } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -36,8 +35,14 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
+      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
       id: taskId,
       name: 't',
       workflowId: wfId,
@@ -64,8 +69,8 @@ type RunStatus =
   | 'pending'
   | 'interrupted'
 
-function seedRun(
-  db: DbClient,
+async function seedRun(
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     id?: string
@@ -74,9 +79,10 @@ function seedRun(
     startedAt: number
     reviewIteration?: number
   },
-): string {
+): Promise<string> {
   const id = opts.id ?? ulid()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id,
       taskId,
@@ -92,8 +98,8 @@ function seedRun(
   return id
 }
 
-function seedDocVersion(
-  db: DbClient,
+async function seedDocVersion(
+  db: ProviderNeutralDatabase,
   taskId: string,
   reviewNodeRunId: string,
   opts: {
@@ -105,8 +111,9 @@ function seedDocVersion(
     reviewIteration?: number
     createdAt?: number
   },
-): void {
-  db.insert(docVersions)
+): Promise<void> {
+  await db
+    .insert(docVersions)
     .values({
       id: ulid(),
       taskId,
@@ -127,48 +134,60 @@ function seedDocVersion(
     .run()
 }
 
-async function navKind(db: DbClient, taskId: string, runId: string): Promise<unknown> {
+async function navKind(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  runId: string,
+): Promise<unknown> {
   const res = await getTaskNodeRuns(db, taskId)
   return res.runs.find((r) => r.id === runId)!.reviewNavKind ?? null
 }
 
-describe('RFC-158 — getTaskNodeRuns stamps reviewNavKind', () => {
-  let db: DbClient
+describeEachProvider('RFC-158 — getTaskNodeRuns stamps reviewNavKind', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     resetBroadcastersForTests()
   })
 
   test("awaiting_review with a pending version → 'awaiting'", async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const rev = seedRun(db, taskId, { nodeId: 'rev', status: 'awaiting_review', startedAt: 100 })
-    seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'pending' })
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const rev = await seedRun(db, taskId, {
+      nodeId: 'rev',
+      status: 'awaiting_review',
+      startedAt: 100,
+    })
+    await seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'pending' })
     expect(await navKind(db, taskId, rev)).toBe('awaiting')
   })
 
   test('R5: empty list<md> review — awaiting_review but ZERO doc_version → null (never route to 404)', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const rev = seedRun(db, taskId, { nodeId: 'rev', status: 'awaiting_review', startedAt: 100 })
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const rev = await seedRun(db, taskId, {
+      nodeId: 'rev',
+      status: 'awaiting_review',
+      startedAt: 100,
+    })
     // no doc_versions at all
     expect(await navKind(db, taskId, rev)).toBeNull()
   })
 
   test('impl-gate: REOPENED empty list review — awaiting_review whose current representative is an OLD decided round (no new pending) → null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     // A multi-doc review decided round 0 (human approved), then reopened; the new
     // upstream round is an empty list, so dispatch parks awaiting_review WITHOUT
     // minting a new pending doc_version. The current representative is the old
     // approved row (not pending) → clicking would open the stale round → must be null.
-    const rev = seedRun(db, taskId, {
+    const rev = await seedRun(db, taskId, {
       nodeId: 'rev',
       status: 'awaiting_review',
       startedAt: 100,
       reviewIteration: 1,
     })
-    seedDocVersion(db, taskId, rev, {
+    await seedDocVersion(db, taskId, rev, {
       versionIndex: 1,
       itemIndex: 0,
       decision: 'approved',
@@ -179,53 +198,65 @@ describe('RFC-158 — getTaskNodeRuns stamps reviewNavKind', () => {
   })
 
   test("approved review (done) → 'decided'", async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const rev = seedRun(db, taskId, { nodeId: 'rev', status: 'done', startedAt: 100 })
-    seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'approved', decidedBy: 'u1' })
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const rev = await seedRun(db, taskId, { nodeId: 'rev', status: 'done', startedAt: 100 })
+    await seedDocVersion(db, taskId, rev, {
+      versionIndex: 1,
+      decision: 'approved',
+      decidedBy: 'u1',
+    })
     expect(await navKind(db, taskId, rev)).toBe('decided')
   })
 
   test("R1: reject/iterate reuse pre re-park — pending run, current version = human iterate → 'decided'", async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     // Same row reused: awaiting_review → pending, reviewIteration bumped; the v1
     // is the human iterate decision and is still the latest version (no v2 yet).
-    const rev = seedRun(db, taskId, {
+    const rev = await seedRun(db, taskId, {
       nodeId: 'rev',
       status: 'pending',
       startedAt: 100,
       reviewIteration: 1,
     })
-    seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'iterated', decidedBy: 'u1' })
+    await seedDocVersion(db, taskId, rev, {
+      versionIndex: 1,
+      decision: 'iterated',
+      decidedBy: 'u1',
+    })
     expect(await navKind(db, taskId, rev)).toBe('decided')
   })
 
   test('R3: re-park-then-supersede — canceled run whose current version is a NEW pending → null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     // v1 human iterate, then re-parked v2 pending, then the run got canceled by
     // supersede. "Ever human" is true but the current (max versionIndex) version
     // is pending → not a decided view; must be null (not empty decided view).
-    const rev = seedRun(db, taskId, {
+    const rev = await seedRun(db, taskId, {
       nodeId: 'rev',
       status: 'canceled',
       startedAt: 100,
       reviewIteration: 1,
     })
-    seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'iterated', decidedBy: 'u1' })
-    seedDocVersion(db, taskId, rev, { versionIndex: 2, decision: 'pending' })
+    await seedDocVersion(db, taskId, rev, {
+      versionIndex: 1,
+      decision: 'iterated',
+      decidedBy: 'u1',
+    })
+    await seedDocVersion(db, taskId, rev, { versionIndex: 2, decision: 'pending' })
     expect(await navKind(db, taskId, rev)).toBeNull()
   })
 
   test('R2a: sibling cascade — current round decided by SYSTEM_DECIDER → null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     // A sibling reject stamped this never-human-reviewed run's version rejected
     // by the system and bumped reviewIteration.
-    const rev = seedRun(db, taskId, {
+    const rev = await seedRun(db, taskId, {
       nodeId: 'rev',
       status: 'pending',
       startedAt: 100,
       reviewIteration: 1,
     })
-    seedDocVersion(db, taskId, rev, {
+    await seedDocVersion(db, taskId, rev, {
       versionIndex: 1,
       decision: 'rejected',
       decidedBy: SYSTEM_DECIDER,
@@ -234,28 +265,28 @@ describe('RFC-158 — getTaskNodeRuns stamps reviewNavKind', () => {
   })
 
   test('non-review run (no doc_versions) → null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const agent = seedRun(db, taskId, { nodeId: 'agent', status: 'done', startedAt: 100 })
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const agent = await seedRun(db, taskId, { nodeId: 'agent', status: 'done', startedAt: 100 })
     expect(await navKind(db, taskId, agent)).toBeNull()
   })
 
   test('pending run with no human conclusion and no awaiting → null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const rev = seedRun(db, taskId, { nodeId: 'rev', status: 'pending', startedAt: 100 })
-    seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'pending' })
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const rev = await seedRun(db, taskId, { nodeId: 'rev', status: 'pending', startedAt: 100 })
+    await seedDocVersion(db, taskId, rev, { versionIndex: 1, decision: 'pending' })
     expect(await navKind(db, taskId, rev)).toBeNull()
   })
 
   test("multi-doc approved round decided by a human → 'decided'", async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    const rev = seedRun(db, taskId, { nodeId: 'rev', status: 'done', startedAt: 100 })
-    seedDocVersion(db, taskId, rev, {
+    const { taskId } = await seedTaskAndWorkflow(db)
+    const rev = await seedRun(db, taskId, { nodeId: 'rev', status: 'done', startedAt: 100 })
+    await seedDocVersion(db, taskId, rev, {
       versionIndex: 1,
       itemIndex: 0,
       decision: 'approved',
       decidedBy: 'u1',
     })
-    seedDocVersion(db, taskId, rev, {
+    await seedDocVersion(db, taskId, rev, {
       versionIndex: 1,
       itemIndex: 1,
       decision: 'approved',

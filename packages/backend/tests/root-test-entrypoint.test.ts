@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parse } from 'yaml'
 
 interface RootPackageJson {
   packageManager?: string
@@ -227,10 +228,10 @@ describe('repository test entrypoint', () => {
     // distinct home/temp namespaces; backendPkg.scripts.test remains the
     // single-process diagnostic entrypoint asserted above.
     expect(ciWorkflow).toContain(
-      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov`,
+      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }} --coverage --coverage-reporter=lcov`,
     )
     expect(ciWorkflow).toContain(
-      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/4\n`,
+      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }}\n`,
     )
     expect(ciWorkflow).toContain('name: Derive reproducible backend test seed')
     expect(ciWorkflow).toContain('echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"')
@@ -288,9 +289,51 @@ describe('repository test entrypoint', () => {
     // matrix (for example, [1, 2, 3] with /4) makes CI green while one quarter
     // of the suite is never selected.
     expect(backendJob).toContain('fail-fast: false')
-    expect(backendJob).toContain('os: [ubuntu-latest, macos-latest]')
-    expect(backendJob).toContain('shard: [1, 2, 3, 4]')
-    expect(occurrenceCount(backendJob, `--shard=\${{ matrix.shard }}/4`)).toBe(2)
+    const matrix: {
+      os: string[]
+      shard: number[]
+      shards: number[]
+      include: { os: string; shard: number; shards: number }[]
+    } = parse(backendJob)['test-backend'].strategy.matrix
+    const backendLegs = [
+      ...matrix.os.flatMap((os) =>
+        matrix.shard.flatMap((shard) => matrix.shards.map((shards) => ({ os, shard, shards }))),
+      ),
+      ...matrix.include,
+    ]
+    expect([...new Set(backendLegs.map((leg) => leg.os))].sort()).toEqual([
+      'macos-latest',
+      'ubuntu-latest',
+    ])
+    for (const [os, total] of [
+      ['ubuntu-latest', 8],
+      ['macos-latest', 4],
+    ] as const) {
+      // Every N/M occurs once, so native Bun sharding partitions the complete
+      // unfiltered discovery set. No extra include can duplicate a shard.
+      expect(
+        backendLegs.filter((leg) => leg.os === os).sort((left, right) => left.shard - right.shard),
+      ).toEqual(
+        Array.from({ length: total }, (_, index) => ({ os, shard: index + 1, shards: total })),
+      )
+    }
+    expect(backendJob).toContain(
+      'name: Backend tests (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})',
+    )
+    expect(occurrenceCount(backendJob, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`)).toBe(
+      2,
+    )
+    const coverageStep = workflowStep(
+      backendJob,
+      'Upload backend coverage to Codecov (ubuntu shards)',
+    )
+    expect(coverageStep).toContain("if: matrix.os == 'ubuntu-latest'")
+    expect(coverageStep).toContain('files: ./coverage/lcov.info')
+    expect(coverageStep).toContain('flags: backend-shard-${{ matrix.shard }}')
+    expect(coverageStep).toContain('name: backend-coverage-shard-${{ matrix.shard }}')
+    const required = workflowJob(ciWorkflow, 'ci-required')
+    expect(required).toContain('      - test-backend\n')
+    expect(required).toContain("TEST_BACKEND_RESULT: ${{ needs['test-backend'].result }}")
 
     expect(frontendJob).toContain('fail-fast: false')
     // RFC-254 T31: the frontend leg is the first test matrix to gain Windows.

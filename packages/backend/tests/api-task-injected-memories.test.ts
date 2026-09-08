@@ -5,19 +5,18 @@
 //   - Corrupted JSON in the column → field surfaces as null (no 5xx).
 //   - Empty-array payload distinct from NULL.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -28,8 +27,14 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
+      // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
       id: taskId,
       name: 't',
       workflowId: wfId,
@@ -47,9 +52,15 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
   return { taskId }
 }
 
-function seedRun(db: DbClient, taskId: string, json: string | null, nodeId = 'n'): string {
+async function seedRun(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  json: string | null,
+  nodeId = 'n',
+): Promise<string> {
   const id = ulid()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id,
       taskId,
@@ -65,18 +76,18 @@ function seedRun(db: DbClient, taskId: string, json: string | null, nodeId = 'n'
   return id
 }
 
-describe('RFC-046 — getTaskNodeRuns surfaces injectedMemories', () => {
-  let db: DbClient
+describeEachProvider('RFC-046 — getTaskNodeRuns surfaces injectedMemories', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
   afterEach(() => {
     resetBroadcastersForTests()
   })
 
   test('A1: persisted snapshot JSON parses into an array on the wire', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
+    const { taskId } = await seedTaskAndWorkflow(db)
     const payload = JSON.stringify([
       {
         id: 'm1',
@@ -90,7 +101,7 @@ describe('RFC-046 — getTaskNodeRuns surfaces injectedMemories', () => {
         approvedAt: 1_700_000_000_000,
       },
     ])
-    seedRun(db, taskId, payload)
+    await seedRun(db, taskId, payload)
     const res = await getTaskNodeRuns(db, taskId)
     expect(res.runs.length).toBe(1)
     const im = res.runs[0]!.injectedMemories
@@ -103,22 +114,22 @@ describe('RFC-046 — getTaskNodeRuns surfaces injectedMemories', () => {
   })
 
   test('A2: legacy row with NULL column surfaces as injectedMemories=null', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    seedRun(db, taskId, null)
+    const { taskId } = await seedTaskAndWorkflow(db)
+    await seedRun(db, taskId, null)
     const res = await getTaskNodeRuns(db, taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A3: corrupted JSON in column degrades to null (no 5xx)', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    seedRun(db, taskId, '{not-an-array')
+    const { taskId } = await seedTaskAndWorkflow(db)
+    await seedRun(db, taskId, '{not-an-array')
     const res = await getTaskNodeRuns(db, taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A4: empty-array payload surfaces as [] (distinct from null)', async () => {
-    const { taskId } = seedTaskAndWorkflow(db)
-    seedRun(db, taskId, '[]')
+    const { taskId } = await seedTaskAndWorkflow(db)
+    await seedRun(db, taskId, '[]')
     const res = await getTaskNodeRuns(db, taskId)
     expect(res.runs[0]!.injectedMemories).toEqual([])
   })
