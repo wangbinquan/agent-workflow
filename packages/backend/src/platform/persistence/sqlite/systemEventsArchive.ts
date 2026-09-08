@@ -13,7 +13,6 @@
 // System Operations SQLite event-archive adapter. Transport and maintenance orchestration consume
 // its closed receipts through the compatibility surface.
 
-import { and, asc, count, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 import {
   closeSync,
   existsSync,
@@ -31,134 +30,22 @@ import {
 import { dirname, join } from 'node:path'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRuns } from '@/db/schema'
-import type {
-  EventsArchiveRow,
-  EventsArchiveStore,
-} from '@/platform/background/eventsArchiveStorePort'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
+import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
 export { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
-import { readMaintenanceValue, writeMaintenanceValue } from './systemMaintenanceState'
 
 const log = createLogger('events-archive')
 
 const HOUR_MS = 60 * 60 * 1000
 
-/** Concrete SQLite query adapter. The archive mechanism below never receives
- * a DbClient and is shared by the PostgreSQL owner adapter. */
+/** Compatibility constructor; both owners use the same database queries. */
 export function createSqliteEventsArchiveStore(db: DbClient): EventsArchiveStore {
-  const store: EventsArchiveStore = {
-    readState: (key) => readMaintenanceValue(db, key),
-    writeState: (key, value, now) => writeMaintenanceValue(db, key, value, now),
-    async averageRecentPayloadBytes(limit) {
-      const sampled = (await db.all(
-        sql`SELECT AVG(LENGTH(payload)) AS avg FROM (
-          SELECT ${nodeRunEvents.payload} AS payload
-          FROM ${nodeRunEvents}
-          ORDER BY ${nodeRunEvents.id} DESC
-          LIMIT ${limit}
-        ) sampled`,
-      )) as Array<{ avg: number | null }>
-      return sampled[0]?.avg ?? null
-    },
-    async maxEventId() {
-      const rows = await db
-        .select({ value: sql<number | null>`max(${nodeRunEvents.id})` })
-        .from(nodeRunEvents)
-      return rows[0]?.value ?? 0
-    },
-    async countEventIds(input) {
-      const conditions = [
-        gt(nodeRunEvents.id, input.afterId),
-        lte(nodeRunEvents.id, input.throughId),
-      ]
-      if (input.nodeRunId !== undefined) {
-        conditions.push(eq(nodeRunEvents.nodeRunId, input.nodeRunId))
-      }
-      const rows = await db
-        .select({ value: count(nodeRunEvents.id) })
-        .from(nodeRunEvents)
-        .where(and(...conditions))
-      return rows[0]?.value ?? 0
-    },
-    async listDistinctNodeRunIds(input) {
-      const rows = await db
-        .selectDistinct({ nodeRunId: nodeRunEvents.nodeRunId })
-        .from(nodeRunEvents)
-        .where(and(gt(nodeRunEvents.id, input.afterId), lte(nodeRunEvents.id, input.throughId)))
-      return rows.map((row) => row.nodeRunId)
-    },
-    async countEventsByNodeRunIds(nodeRunIds) {
-      const rows = await db
-        .select({ nodeRunId: nodeRunEvents.nodeRunId, value: count(nodeRunEvents.id) })
-        .from(nodeRunEvents)
-        .where(inArray(nodeRunEvents.nodeRunId, nodeRunIds))
-        .groupBy(nodeRunEvents.nodeRunId)
-      return rows.map((row) => ({ nodeRunId: row.nodeRunId, count: row.value }))
-    },
-    async countAllEvents() {
-      const rows = await db.select({ value: count(nodeRunEvents.id) }).from(nodeRunEvents)
-      return rows[0]?.value ?? 0
-    },
-    async oldestEvent() {
-      const rows = await db
-        .select({ id: nodeRunEvents.id, nodeRunId: nodeRunEvents.nodeRunId })
-        .from(nodeRunEvents)
-        .orderBy(asc(nodeRunEvents.id))
-        .limit(1)
-      return rows[0] ?? null
-    },
-    async countEventsForNodeRun(nodeRunId) {
-      const rows = await db
-        .select({ value: count(nodeRunEvents.id) })
-        .from(nodeRunEvents)
-        .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      return rows[0]?.value ?? 0
-    },
-    async findTaskIdForNodeRun(nodeRunId) {
-      const rows = await db
-        .select({ taskId: nodeRuns.taskId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, nodeRunId))
-        .limit(1)
-      return rows[0]?.taskId ?? null
-    },
-    async listOldestEvents(nodeRunId, limit) {
-      return (await db
-        .select({
-          id: nodeRunEvents.id,
-          ts: nodeRunEvents.ts,
-          kind: nodeRunEvents.kind,
-          payload: nodeRunEvents.payload,
-          sessionId: nodeRunEvents.sessionId,
-          parentSessionId: nodeRunEvents.parentSessionId,
-        })
-        .from(nodeRunEvents)
-        .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-        .orderBy(asc(nodeRunEvents.id))
-        .limit(limit)) as readonly EventsArchiveRow[]
-    },
-    async deleteNodeRunEventsThrough(nodeRunId, lastId) {
-      await db
-        .delete(nodeRunEvents)
-        .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), lte(nodeRunEvents.id, lastId)))
-    },
-    async deleteNodeRunEventsRange(input) {
-      await db
-        .delete(nodeRunEvents)
-        .where(
-          and(
-            eq(nodeRunEvents.nodeRunId, input.nodeRunId),
-            gt(nodeRunEvents.id, input.afterId),
-            lte(nodeRunEvents.id, input.throughId),
-          ),
-        )
-    },
-  }
-  return Object.freeze(store)
+  return createEventsArchiveStore(db)
 }
 
 export interface ArchiveRunResult {
@@ -412,12 +299,12 @@ export async function archiveEventsWithStore(
 
 /** SQLite compatibility adapter retained for existing callers and tests. */
 export async function archiveEvents(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   config: { eventsArchiveThresholds: ArchiveThresholds },
   logsDir: string,
   opts: EventsArchiveOptions = {},
 ): Promise<ArchiveRunResult> {
-  return await archiveEventsWithStore(createSqliteEventsArchiveStore(db), config, logsDir, opts)
+  return await archiveEventsWithStore(createEventsArchiveStore(db), config, logsDir, opts)
 }
 
 /**

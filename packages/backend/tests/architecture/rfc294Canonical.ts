@@ -2650,7 +2650,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /platform\/persistence\/(?:postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|systemWorkspaceGc|taskLifecycleRepair\/))/.test(
+    /platform\/persistence\/(?:eventsArchiveStore|postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|systemWorkspaceGc|taskLifecycleRepair\/))/.test(
       value,
     )
   ) {

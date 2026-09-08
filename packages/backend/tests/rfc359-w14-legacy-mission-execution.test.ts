@@ -1,7 +1,11 @@
 // RFC-359 P0-9: legacy mission -> action launcher -> real TaskEngine child ->
 // persisted output -> original terminal observer -> attempt settlement.
 // A no-change action settles here; this is not a completed mission delivery.
-import { WORKFLOW_SCHEMA_VERSION, WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import {
+  WORKFLOW_SCHEMA_VERSION,
+  WorkflowDefinitionSchema,
+  requirementBundlePath,
+} from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import {
@@ -374,7 +378,10 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         })
         // This is the only test-initiated drive. All subsequent business work
         // must enter through the original execution terminal observer above.
-        expect(await automation.drive(launched.missionId)).toMatchObject({
+        expect(
+          await automation.drive(launched.missionId),
+          JSON.stringify({ blockCode: (await store.getMission(launched.missionId))?.blockCode }),
+        ).toMatchObject({
           stop: 'async-boundary',
           last: { kind: 'decided', handled: 'action-launched' },
         })
@@ -402,6 +409,26 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         // Release only after the real reverse-join key has committed. The child
         // may already be waiting or may start later; both observe this same file.
         writeFileSync(releasePath, 'attempt.executionRef committed\n')
+        // The actual launcher watcher has called the observer and that call
+        // returned. A missing observer forwarding must fail on durable state,
+        // before waiting for the drive signal it would never produce.
+        await within(terminalCompleted.promise, 'legacy mission terminal callback')
+        expect((await db.select().from(tasks).where(eq(tasks.id, executionRef)))[0]?.status).toBe(
+          'done',
+        )
+        const settlement = {
+          attemptStatus: (await store.listAttempts(actionRunId))[0]?.status,
+          wakeDeliveryKeys: (
+            await db
+              .select({ deliveryKey: developmentWakeHints.deliveryKey })
+              .from(developmentWakeHints)
+              .where(eq(developmentWakeHints.missionId, launched.missionId))
+          ).map((hint) => hint.deliveryKey),
+        }
+        expect(settlement).toEqual({
+          attemptStatus: 'validated',
+          wakeDeliveryKeys: [`${kind}-exec:${executionRef}`],
+        })
         const terminal = await within(observed.promise, 'legacy mission terminal observer')
         await terminalCallback
         await waitUntilReleased(execution, executionRef)
@@ -424,6 +451,19 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
           digitalEmployeeRoundId: actionRunId,
           baseCommit: baselineSha,
+        })
+        const sources = (await store.listMissionSources(launched.missionId)).filter(
+          (source) => source.state === 'materialized' && source.bundleRef !== null,
+        )
+        expect(sources).toHaveLength(1)
+        const source = sources[0]
+        if (source?.bundleRef == null) throw new Error('materialized mission requirement missing')
+        expect({
+          spaceKind: task?.spaceKind,
+          platformInputPathsJson: task?.platformInputPathsJson,
+        }).toEqual({
+          spaceKind: 'internal',
+          platformInputPathsJson: JSON.stringify([requirementBundlePath(source.bundleRef)]),
         })
         expect(task?.finishedAt).toBeGreaterThanOrEqual(now)
         const capture = JSON.parse(readFileSync(capturePath, 'utf8'))

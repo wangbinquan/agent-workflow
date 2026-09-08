@@ -11,14 +11,12 @@
 // predicate (kindParser), which accepts markdown / path<md> / path<markdown> /
 // markdown_file uniformly — the same predicate the validator uses.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import { isReviewableBodyKindString, type WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createAgent } from '../src/services/agent'
 import { loadUpstreamPortKind } from '../src/services/review'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function agentPayload(name: string, outputKinds: Record<string, string>) {
   return {
@@ -44,51 +42,54 @@ function defWith(nodeId: string, agentId: string, agentName: string): WorkflowDe
   } as unknown as WorkflowDefinition
 }
 
-describe('loadUpstreamPortKind — path<md> recognition (review file-read fix)', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
+describeEachProvider(
+  'loadUpstreamPortKind — path<md> recognition (review file-read fix)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
 
-  test('path<md> port → returned (so resolvePortContentDetailed reads the .md file)', async () => {
-    const agent = await createAgent(db, agentPayload('a-pathmd', { doc: 'path<md>' }))
-    const k = await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-pathmd'), 'n1', 'doc')
-    expect(k).toBe('path<md>')
-    expect(isReviewableBodyKindString(k!)).toBe(true)
-  })
+    test('path<md> port → returned (so resolvePortContentDetailed reads the .md file)', async () => {
+      const agent = await createAgent(db, agentPayload('a-pathmd', { doc: 'path<md>' }))
+      const k = await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-pathmd'), 'n1', 'doc')
+      expect(k).toBe('path<md>')
+      expect(isReviewableBodyKindString(k!)).toBe(true)
+    })
 
-  test('legacy markdown_file → returned as a file-read (reviewable) kind', async () => {
-    const agent = await createAgent(db, agentPayload('a-mf', { doc: 'markdown_file' }))
-    const k = await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-mf'), 'n1', 'doc')
-    expect(k).toBeDefined()
-    expect(isReviewableBodyKindString(k!)).toBe(true)
-  })
+    test('legacy markdown_file → returned as a file-read (reviewable) kind', async () => {
+      const agent = await createAgent(db, agentPayload('a-mf', { doc: 'markdown_file' }))
+      const k = await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-mf'), 'n1', 'doc')
+      expect(k).toBeDefined()
+      expect(isReviewableBodyKindString(k!)).toBe(true)
+    })
 
-  test('inline markdown → returned unchanged', async () => {
-    const agent = await createAgent(db, agentPayload('a-md', { doc: 'markdown' }))
-    expect(await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-md'), 'n1', 'doc')).toBe(
-      'markdown',
-    )
-  })
+    test('inline markdown → returned unchanged', async () => {
+      const agent = await createAgent(db, agentPayload('a-md', { doc: 'markdown' }))
+      expect(await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-md'), 'n1', 'doc')).toBe(
+        'markdown',
+      )
+    })
 
-  test('list<path<md>> → returned (multi-document review)', async () => {
-    const agent = await createAgent(db, agentPayload('a-list', { doc: 'list<path<md>>' }))
-    expect(await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-list'), 'n1', 'doc')).toBe(
-      'list<path<md>>',
-    )
-  })
+    test('list<path<md>> → returned (multi-document review)', async () => {
+      const agent = await createAgent(db, agentPayload('a-list', { doc: 'list<path<md>>' }))
+      expect(await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-list'), 'n1', 'doc')).toBe(
+        'list<path<md>>',
+      )
+    })
 
-  test('non-markdownish kind (signal) → undefined', async () => {
-    const agent = await createAgent(db, agentPayload('a-sig', { doc: 'signal' }))
-    expect(
-      await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-sig'), 'n1', 'doc'),
-    ).toBeUndefined()
-  })
+    test('non-markdownish kind (signal) → undefined', async () => {
+      const agent = await createAgent(db, agentPayload('a-sig', { doc: 'signal' }))
+      expect(
+        await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-sig'), 'n1', 'doc'),
+      ).toBeUndefined()
+    })
 
-  test('port not declared in outputKinds → undefined', async () => {
-    const agent = await createAgent(db, agentPayload('a-none', { other: 'path<md>' }))
-    expect(
-      await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-none'), 'n1', 'doc'),
-    ).toBeUndefined()
-  })
-})
+    test('port not declared in outputKinds → undefined', async () => {
+      const agent = await createAgent(db, agentPayload('a-none', { other: 'path<md>' }))
+      expect(
+        await loadUpstreamPortKind(db, defWith('n1', agent.id, 'a-none'), 'n1', 'doc'),
+      ).toBeUndefined()
+    })
+  },
+)

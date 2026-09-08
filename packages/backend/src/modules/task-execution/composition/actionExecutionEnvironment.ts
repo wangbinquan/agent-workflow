@@ -34,7 +34,7 @@ export function borrowedPostgresqlWorkspace(input: {
       return Object.freeze({
         taskId: request.taskId,
         kind: 'single',
-        spaceKind: 'local',
+        spaceKind: 'internal',
         repoPath: input.workspacePath,
         repoUrl: null,
         cachedRepoId: null,

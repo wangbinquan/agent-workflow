@@ -7,16 +7,20 @@
 // 这里用一个可观测的假环境把执行器在两个引擎上各跑一遍（宿主工作流播种、脚本定义读取走真库），
 // 再用源码锁钉住 PG daemon 的接线与两个 composer 的「薄」形态。
 
+import { requirementBundlePath } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { tasks, workflows } from '@/db/schema'
+import { tasks, users, workflows } from '@/db/schema'
+import { actorOfDirectAuthority } from '@/auth/session'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import {
   createAgentActionExecutionRunner,
   createScriptActionExecutionRunner,
@@ -29,7 +33,9 @@ import {
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { sha256Hex } from '@/util/hash'
+import { DrizzleTaskArtifactPathQueries } from '@/modules/task-execution/infrastructure/taskArtifactPathQueries'
 import { describeEachProvider } from './helpers/eachProvider'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 const BASELINE = 'a'.repeat(40)
 
@@ -107,6 +113,93 @@ function workspaceDir(): string {
   mkdirSync(join(dir, '.git'), { recursive: true })
   return dir
 }
+
+describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harness) => {
+  test('真实借用租约的任务分类可供原 artifact query 读取非空清单，提交和回滚保留调用方目录', async () => {
+    const db = harness.db
+    const workspace = workspaceDir()
+    const identityAccess = createIdentityAccessRuntime({ db })
+    try {
+      const userId = ulid()
+      await db.insert(users).values({
+        id: userId,
+        username: `borrowed-${userId}`,
+        displayName: 'Borrowed Workspace Fixture',
+        email: 'borrowed-workspace@example.test',
+        role: 'admin',
+        status: 'active',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      const admitted = await admitTestDirectAuthority(identityAccess.directAuthority, {
+        source: 'session',
+        userId,
+      })
+      if (admitted === null) throw new Error('borrowed workspace fixture identity unavailable')
+      const { workflowId } = await seedScriptWorkflow(db, 1)
+      const mountPath = requirementBundlePath('borrowed-requirement')
+      mkdirSync(join(workspace, mountPath), { recursive: true })
+      const inputFile = join(workspace, mountPath, 'requirement.md')
+      writeFileSync(inputFile, 'Caller-owned requirement input.\n')
+      const participant = borrowedPostgresqlWorkspace({
+        workspacePath: workspace,
+        baselineSha: BASELINE,
+      })
+      const request = {
+        taskId: ulid(),
+        actor: actorOfDirectAuthority(admitted),
+        task: { workflowId, name: 'borrowed action host', inputs: {} },
+        gitCommitIdentity: {
+          name: 'Borrowed Workspace Fixture',
+          email: 'borrowed-workspace@example.test',
+        },
+      }
+      const prepared = await participant.prepare(request)
+      // Persist the real lease metadata consumed by the PG root insert. This
+      // local diagnostic does not replace the hosted real-root execution cases.
+      await db.insert(tasks).values({
+        id: prepared.taskId,
+        name: request.task.name,
+        workflowId,
+        workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+        repoPath: prepared.repoPath,
+        worktreePath: prepared.worktreePath,
+        baseBranch: prepared.baseBranch,
+        branch: prepared.branch,
+        baseCommit: prepared.baseCommit,
+        spaceKind: prepared.spaceKind,
+        platformInputPathsJson: JSON.stringify([mountPath]),
+        status: 'pending',
+        inputs: '{}',
+        startedAt: 1,
+      })
+      // The old 'local' lease fails here with the scheduler's exact error:
+      // "non-internal task carries a platform input path roster".
+      expect(await new DrizzleTaskArtifactPathQueries(db).forcedPaths(prepared.taskId)).toEqual([
+        mountPath,
+      ])
+      expect(prepared).toMatchObject({
+        spaceKind: 'internal',
+        repoPath: workspace,
+        worktreePath: workspace,
+        baseCommit: BASELINE,
+      })
+      prepared.commit()
+      expect(readFileSync(inputFile, 'utf8')).toBe('Caller-owned requirement input.\n')
+      const rollbackLease = await participant.prepare({ ...request, taskId: ulid() })
+      expect(await rollbackLease.rollback()).toEqual({
+        taskId: rollbackLease.taskId,
+        complete: true,
+        failures: [],
+      })
+      expect(existsSync(workspace)).toBe(true)
+      expect(readFileSync(inputFile, 'utf8')).toBe('Caller-owned requirement input.\n')
+    } finally {
+      await identityAccess.shutdown()
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
 
 const RESULT_AGENT = { id: 'agent-de', name: 'de-impl', outputs: [DIGITAL_EMPLOYEE_RESULT_PORT] }
 

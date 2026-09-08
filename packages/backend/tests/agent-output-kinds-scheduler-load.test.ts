@@ -25,36 +25,37 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { createInMemoryDb } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent, getAgentById } from '../src/services/agent'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCHEDULER_SRC = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
 
 describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045BYZ9H52K3H2D10DBV6D)', () => {
-  test('createAgent({ outputKinds }) → getAgentById surfaces outputKinds at top level', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const created = await createAgent(db, {
-      name: 'doc',
-      description: '',
-      outputs: ['docpath'],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      outputKinds: { docpath: 'markdown_file' },
-      bodyMd: '',
-    })
+  describeEachProvider('durable provider behavior', (harness) => {
+    test('createAgent({ outputKinds }) → getAgentById surfaces outputKinds at top level', async () => {
+      const db = harness.db
+      const created = await createAgent(db, {
+        name: 'doc',
+        description: '',
+        outputs: ['docpath'],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        outputKinds: { docpath: 'markdown_file' },
+        bodyMd: '',
+      })
 
-    const loaded = await getAgentById(db, created.id)
-    expect(loaded).not.toBeNull()
-    expect(loaded?.outputKinds).toEqual({ docpath: 'markdown_file' })
-    // outputKinds must NOT also leak back into frontmatterExtra — the runner /
-    // editor read it from the lifted top-level only.
-    expect((loaded?.frontmatterExtra as Record<string, unknown>).outputKinds).toBeUndefined()
+      const loaded = await getAgentById(db, created.id)
+      expect(loaded).not.toBeNull()
+      expect(loaded?.outputKinds).toEqual({ docpath: 'markdown_file' })
+      // outputKinds must NOT also leak back into frontmatterExtra — the runner /
+      // editor read it from the lifted top-level only.
+      expect((loaded?.frontmatterExtra as Record<string, unknown>).outputKinds).toBeUndefined()
+    })
   })
 
   // ── RFC-271 T6d 显式改判（2026-08-08）────────────────────────────────────

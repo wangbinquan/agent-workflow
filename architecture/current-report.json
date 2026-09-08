@@ -7,8 +7,8 @@
     "crossContextImports": 5283,
     "facades": 323,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24941,
-    "mutationEntrypoints": 1731,
+    "moduleSymbolOwners": 24944,
+    "mutationEntrypoints": 1732,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 983,
     "transactionExternalEffects": 272
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1788,
+    "backendProductionFiles": 1790,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:62da9b6c2993c2a751d9e17cfccc567829ef0952338880f8985ab8b4a0648656"
+  "sourceDigest": "sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2"
 }

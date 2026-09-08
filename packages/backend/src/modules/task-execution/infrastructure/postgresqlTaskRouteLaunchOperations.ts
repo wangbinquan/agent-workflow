@@ -236,7 +236,7 @@ export interface PostgresqlTaskRoutePreparedWorkspace {
   /** Exact id from the prepare request; prevents cross-request lease reuse. */
   readonly taskId: string
   readonly kind: 'scratch' | 'single' | 'multi' | 'group'
-  readonly spaceKind: 'local' | 'remote' | 'scratch'
+  readonly spaceKind: 'local' | 'remote' | 'scratch' | 'internal'
   readonly repoPath: string
   /** Credential-free display URL. */
   readonly repoUrl: string | null

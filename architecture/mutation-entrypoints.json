@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1731,
+    "entries": 1732,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30484,6 +30484,30 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/eventsArchiveStore.ts#createEventsArchiveStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#createEventsArchiveStore",
+      "symbol": "createEventsArchiveStore",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -30822,7 +30846,7 @@
         "authority": "none-observed",
         "authorization": false,
         "event": true,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/platform/persistence/postgresqlEventsArchive.ts",
@@ -30832,6 +30856,7 @@
         "audit",
         "authority",
         "authorization",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#createPostgresqlEventsArchiveStore",
@@ -41350,7 +41375,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:62da9b6c2993c2a751d9e17cfccc567829ef0952338880f8985ab8b4a0648656",
+  "sourceDigest": "sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41460,7 +41485,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 192,
+      "durableWriterSites": 190,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -44081,13 +44106,13 @@
         "consumer": "deleteNodeRunEventsThrough",
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/platform/persistence/postgresqlEventsArchive.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#183:nodeRunEvents",
-        "line": 183,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#createPostgresqlEventsArchiveStore",
+        "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+        "id": "task-authority:packages/backend/src/platform/persistence/eventsArchiveStore.ts#133:nodeRunEvents",
+        "line": 133,
+        "ownerEntryId": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#createEventsArchiveStore",
         "requiredBrandedProof": "TerminalMaintenanceClaim+MaintenanceExecutionFence",
         "revisionPredicate": "exact-maintenance-fence-claim-and-durable-cutoff",
-        "symbol": "createPostgresqlEventsArchiveStore"
+        "symbol": "createEventsArchiveStore"
       },
       {
         "allowedTables": [
@@ -44097,45 +44122,13 @@
         "consumer": "deleteNodeRunEventsRange",
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/platform/persistence/postgresqlEventsArchive.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#188:nodeRunEvents",
-        "line": 188,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#createPostgresqlEventsArchiveStore",
+        "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+        "id": "task-authority:packages/backend/src/platform/persistence/eventsArchiveStore.ts#138:nodeRunEvents",
+        "line": 138,
+        "ownerEntryId": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#createEventsArchiveStore",
         "requiredBrandedProof": "TerminalMaintenanceClaim+MaintenanceExecutionFence",
         "revisionPredicate": "exact-maintenance-fence-claim-and-durable-cutoff",
-        "symbol": "createPostgresqlEventsArchiveStore"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "deleteNodeRunEventsThrough",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#145:nodeRunEvents",
-        "line": 145,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#createSqliteEventsArchiveStore",
-        "requiredBrandedProof": "TerminalMaintenanceClaim+MaintenanceExecutionFence",
-        "revisionPredicate": "exact-maintenance-fence-claim-and-durable-cutoff",
-        "symbol": "createSqliteEventsArchiveStore"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "deleteNodeRunEventsRange",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#150:nodeRunEvents",
-        "line": 150,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#createSqliteEventsArchiveStore",
-        "requiredBrandedProof": "TerminalMaintenanceClaim+MaintenanceExecutionFence",
-        "revisionPredicate": "exact-maintenance-fence-claim-and-durable-cutoff",
-        "symbol": "createSqliteEventsArchiveStore"
+        "symbol": "createEventsArchiveStore"
       },
       {
         "allowedTables": [

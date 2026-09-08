@@ -1,12 +1,15 @@
 import {
+  RESOURCE_DISPLAY_NAME_MSG,
   WorkflowDefinitionSchema,
   WorkflowDraftSnapshotSchema,
+  WorkflowNameSchema,
   migrateWorkflowDefinitionToLatest,
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
   type CreateWorkflow,
   type Workflow,
   type WorkflowDetail,
+  type WorkflowDefinition,
   type WorkflowDraftSnapshot,
   type WorkflowRevision,
 } from '@agent-workflow/shared'
@@ -26,6 +29,52 @@ export interface WorkflowPersistenceRow {
   readonly schemaVersion: number
   readonly createdAt: number
   readonly updatedAt: number
+}
+
+/** Advisory reference loading skips unreadable rows; ordinary detail reads still report 422. */
+export function workflowReferenceFromPersistenceRow(
+  row: Pick<WorkflowPersistenceRow, 'id' | 'name' | 'definition'>,
+): Pick<Workflow, 'id' | 'name' | 'definition'> | null {
+  try {
+    const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
+    if (!parsed.success) return null
+    return {
+      id: row.id,
+      name: row.name,
+      definition: migrateWorkflowDefinitionToLatest(parsed.data),
+    }
+  } catch {
+    return null
+  }
+}
+
+/** The editor and YAML resolver stamp canonical ids before the write boundary. */
+export function assertCanonicalWorkflowAgentIds(definition: WorkflowDefinition): void {
+  const nodeIds = (definition.nodes ?? [])
+    .filter((node) => node.kind === 'agent-single')
+    .filter((node) => typeof node.agentId !== 'string' || node.agentId.length === 0)
+    .map((node) => node.id)
+    .sort()
+  if (nodeIds.length === 0) return
+  throw new ValidationError(
+    'workflow-agent-id-required',
+    'agent-single nodes require a canonical agentId',
+    { nodeIds },
+  )
+}
+
+/** Shared wording for the changed-name check and YAML import. */
+export const WORKFLOW_NAME_INVALID_MESSAGE = `workflow ${RESOURCE_DISPLAY_NAME_MSG}`
+
+/** Historical names may be saved unchanged; only a changed name is parsed. */
+export function assertChangedWorkflowName(currentName: string, submittedName: string): void {
+  if (currentName === submittedName) return
+  const parsed = WorkflowNameSchema.safeParse(submittedName)
+  if (!parsed.success) {
+    throw new ValidationError('workflow-name-invalid', WORKFLOW_NAME_INVALID_MESSAGE, {
+      issues: parsed.error.issues,
+    })
+  }
 }
 
 export function workflowFromPersistenceRow(row: WorkflowPersistenceRow): Workflow {

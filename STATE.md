@@ -2,6 +2,16 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第十五批（2026-09-08）**：再迁移 11 个运行时与2个归档旧套件，累计174个；
+> AST 实际构库1440→1416，文件675→663，T19f755→743。归档与维护共享体净删108行，Workflow净删34行。
+> 上批 `7a19e5744` Main CI `34196252484` 为31 success /4 failure /1 cancelled：真PG legacy任务
+> 因借用内部目录误记local而在原artifact查询失败；本批最小改回internal，原路径/roster/清理保持。
+> 同批补Workgroup hash委托源码断言与Windows分页请求观察等待，原行为断言及timeout保持，等后继CI。
+> 原五个P0历史变异在Bun1.4 SQLite/PG两侧全部获得指定失败及前后控制成功；新增P0-9/11四变异
+> 本地11阶段37 pass+13指定故障/591expect，冻结源码无变化，完整九变异真PG仍待hosted。
+> 同SHA full HTTP `34196371681` 已完成：原语料/360样本可比，6/9 PG P95更慢，严格AC11未通过；
+> 计时后SQL/CPU诊断已落，PG部分计划缺失，继续定位。RFC仍In Progress，完整结果见plan.md §0b/§0c。
+
 > **RFC-359 W12 第十四批（2026-09-08）**：Workgroup 六组编解码共用一份实现，原查询与写入边界保持；
 > 再迁移 10 个旧行为套件，W12 累计 161 个；补原同步提交机制回归后，T19f 764 → 755，实际构库净减 14 次。
 > Agent 原同步与异步 API 共用提交步骤；legacy mission 的 Agent/Script 真执行链与 Workgroup 行构造合一补齐。

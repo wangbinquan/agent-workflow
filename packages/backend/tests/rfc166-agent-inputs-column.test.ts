@@ -12,18 +12,16 @@
 //  4. inputs never leaks into frontmatter_extra (it is NOT a sidecar).
 //  5. A malformed inputs column degrades to [] (parseInputsColumn guard).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import { eq } from 'drizzle-orm'
 import type { CreateAgent } from '@agent-workflow/shared'
 import { agents as agentsTable } from '../src/db/schema'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createAgent, updateAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 
 type CreateAgentInputs = CreateAgent['inputs']
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function basePayload(name: string) {
   return {
@@ -41,17 +39,17 @@ function basePayload(name: string) {
   }
 }
 
-async function readRawRow(db: DbClient, name: string) {
+async function readRawRow(db: ProviderNeutralDatabase, name: string) {
   const rows = await db.select().from(agentsTable).where(eq(agentsTable.name, name))
   const row = rows[0]
   if (row === undefined) throw new Error(`no agent row '${name}'`)
   return row
 }
 
-describe('RFC-166 — agents.inputs column round-trip', () => {
-  let db: DbClient
+describeEachProvider('RFC-166 — agents.inputs column round-trip', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('createAgent without inputs → column [] and Agent.inputs === []', async () => {

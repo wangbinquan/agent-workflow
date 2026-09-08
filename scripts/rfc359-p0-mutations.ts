@@ -72,6 +72,24 @@ const workflowRepositoryControl: TestCase = {
   suite: 'RFC-359 W12 —— workflow codec',
   name: '真实仓库 create/get/save/replay/stale 的回执与持久化投影一致',
 }
+const legacyAgent: TestCase = {
+  file: 'packages/backend/tests/rfc359-w14-legacy-mission-execution.test.ts',
+  suite: 'RFC-359 P0-9 legacy mission real execution',
+  name: 'agent action reaches done and its terminal observer settles the legacy attempt',
+}
+const legacyScript: TestCase = {
+  ...legacyAgent,
+  name: 'script action reaches done and its terminal observer settles the legacy attempt',
+}
+const skillBootRecovery: TestCase = {
+  file: 'packages/backend/tests/rfc359-t7d-postgresql-skill-catalog-boot.test.ts',
+  suite: 'RFC-359 T7d —— 技能启动屏障在两个引擎上各跑一遍',
+  name: 'P0-11 非空启动：原 boot 屏障回收崩溃 reservation 和锁，真实同名创建恢复',
+}
+const skillBootReverify: TestCase = {
+  ...skillBootRecovery,
+  name: 'P0-11 非空启动：原 boot 重验健康快照并恢复本次启动的目录可用状态',
+}
 const currentCases = [
   clarifyTurn,
   spentBudget,
@@ -83,6 +101,10 @@ const currentCases = [
   corruptWorkflowDelete,
   staleCorruptWorkflowDelete,
   workflowRepositoryControl,
+  legacyAgent,
+  legacyScript,
+  skillBootRecovery,
+  skillBootReverify,
 ]
 
 export const PHASES: readonly Phase[] = [
@@ -186,6 +208,73 @@ export const PHASES: readonly Phase[] = [
       },
     ],
   },
+  {
+    id: 'p0-9-launchers',
+    mutation: 'p0-9-launchers',
+    passes: [rootExecution],
+    failures: [legacyAgent, legacyScript].map((test, index) => ({
+      test,
+      diagnostics: [
+        new RegExp(
+          `error: \\{"blockCode":"${index === 0 ? 'agent' : 'script'}-launcher-not-wired"\\}`,
+        ),
+        /^-\s+"handled": "action-launched",?$/m,
+        /^\+\s+"handled": "action-launch-failed",?$/m,
+        /^-\s+"stop": "async-boundary",?$/m,
+        /^\+\s+"stop": "failed-or-blocked",?$/m,
+        /rfc359-w14-legacy-mission-execution\.test\.ts:\d+:\d+/,
+      ],
+    })),
+  },
+  {
+    id: 'p0-9-terminal-observer',
+    mutation: 'p0-9-terminal-observer',
+    passes: [rootExecution],
+    failures: [legacyAgent, legacyScript].map((test) => ({
+      test,
+      diagnostics: [
+        /expect\(settlement\)\.toEqual\(/,
+        /error: expect\(received\)\.toEqual\(expected\)/,
+        /^-\s+"attemptStatus": "validated",?$/m,
+        /^\+\s+"attemptStatus": "claimed",?$/m,
+        /^\+\s+"wakeDeliveryKeys": \[\],?$/m,
+        /rfc359-w14-legacy-mission-execution\.test\.ts:\d+:\d+/,
+      ],
+    })),
+  },
+  {
+    id: 'p0-11-barrier',
+    mutation: 'p0-11-barrier',
+    passes: [skillBootReverify],
+    failures: [
+      {
+        test: skillBootRecovery,
+        diagnostics: [
+          /expect\(\(await listActiveOps\(db\)\)\.map\(\(op\) => op\.phase\)\)\.toEqual\(\[\]\)/,
+          /error: expect\(received\)\.toEqual\(expected\)/,
+          /^- \[\]$/m,
+          /^\+\s+"intent",?$/m,
+          /rfc359-t7d-postgresql-skill-catalog-boot\.test\.ts:\d+:\d+/,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'p0-11-reverify',
+    mutation: 'p0-11-reverify',
+    passes: [skillBootRecovery],
+    failures: [
+      {
+        test: skillBootReverify,
+        diagnostics: [
+          /expect\(isSkillBootVerified\(skill\.id\)\)\.toBe\(true\)/,
+          /error: expect\(received\)\.toBe\(expected\)/,
+          /Expected: true\s+Received: false/,
+          /rfc359-t7d-postgresql-skill-catalog-boot\.test\.ts:\d+:\d+/,
+        ],
+      },
+    ],
+  },
   { id: 'current-after', passes: currentCases, failures: [] },
 ]
 
@@ -227,6 +316,8 @@ export function validatePhaseLog(raw: string, exitCode: number, phase: Phase, pr
   if (exitCode !== expectedExitCode) reasons.push(`exit ${exitCode}, expected ${expectedExitCode}`)
   if (/# Unhandled error between tests|^\s+[1-9]\d* errors?$/m.test(log))
     reasons.push('setup/import/unhandled error')
+  if (/^error:[^\n]*\btimed out\b|^TimeoutError:/im.test(log))
+    reasons.push('unexpected timeout failure')
   const summaryCount = (label: string): number | undefined => {
     const matches = [...log.matchAll(new RegExp(`^\\s+(\\d+) ${label}$`, 'gm'))]
     return matches.length === 1 ? Number(matches[0]![1]) : undefined
@@ -297,6 +388,13 @@ const sourceFiles = [
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/workflowRepository.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts',
+  'packages/backend/src/modules/development-automation/composition.ts',
+  'packages/backend/src/modules/development-automation/composition/executionTerminalObserver.ts',
+  'packages/backend/src/modules/development-automation/application/agentActionOrchestrator.ts',
+  'packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts',
+  'packages/backend/src/modules/resource-catalog/infrastructure/skillCatalogBootAdapter.ts',
+  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
+  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
   'packages/backend/tests/helpers/eachProviderTaskExecution.ts',
   ...new Set(currentCases.map((test) => test.file)),
   fixture,

@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第十四批：Workgroup 编解码合一、累计 161 个旧套件参数化、真实回合与历史 P0 变异接 CI；small HTTP 和 full maintenance 已取得真实证据，严格 full HTTP 判据仍待通过
+- W12 第十五批：累计 174 个旧套件参数化，归档/Workflow 继续合一；五个历史变异已获双库 CI 证明，补 PG 实链修复与 P0-9/11 变异；最新严格 full HTTP 六项 PG 更慢，仍未通过
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）
@@ -11,6 +11,7 @@
 ## 1. 摘要
 
 用户要求（2026-09-04，两条硬要求）：
+
 1. **「数据库统一抽象，以后不允许再出现两种数据库一个好一个不好的分支。」**
 2. **「PostgreSQL 要做到最高性能表现。」**
 
@@ -61,11 +62,11 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
 
 2026-09-04 实测（`bun:sqlite`，三组对照）：
 
-| 形态 | 体内抛错后残留 |
-| --- | --- |
-| ① `db.transaction(async () => {…})`（现状机制） | `["A1","A2"]` — **零原子性** |
-| ② 显式 `BEGIN IMMEDIATE` + async 体 + 显式 `COMMIT`/`ROLLBACK` | `[]` — **真回滚** |
-| ③ 同 ②，体内跨真实事件循环 tick（`setTimeout`） | 正常提交 |
+| 形态                                                           | 体内抛错后残留               |
+| -------------------------------------------------------------- | ---------------------------- |
+| ① `db.transaction(async () => {…})`（现状机制）                | `["A1","A2"]` — **零原子性** |
+| ② 显式 `BEGIN IMMEDIATE` + async 体 + 显式 `COMMIT`/`ROLLBACK` | `[]` — **真回滚**            |
+| ③ 同 ②，体内跨真实事件循环 tick（`setTimeout`）                | 正常提交                     |
 
 自己用显式语句划事务边界，async 体在 SQLite 上就是安全的。仓内已有先例在这么做
 （`platform/persistence/sqliteLogicalTarget.ts:222,287` 的 `exec('BEGIN IMMEDIATE')`）。
@@ -123,6 +124,7 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
 
   **历史实测（as of `fa92150c7`）**：成对文件数 **153 → 11**，其中判定为机制分叉、以对拍替代合一的
   **7 对**；仍缺双引擎对拍见证的 **5 对**。距达成还差：把那 5 对补上对拍，把其余可合的合掉。
+
 - **AC-2**（G2）`cli/start.ts` 不再有 `provider === 'sqlite'` 的执行分支；boot 序列只有一份，
   两个 provider 走同一条；`servePostgresqlDaemon` 那个永不返回的函数删除。
 - **AC-3**（G3）`await db.transaction(async tx => …)` 在两个 provider 上通过同一份原子性对拍：

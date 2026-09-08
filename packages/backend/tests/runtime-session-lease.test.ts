@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import { and, eq, sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   mcps,
   mcpRuntimeTestSessionLeases,
@@ -38,13 +40,18 @@ import {
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HASH = 'a'.repeat(64)
 
-function seedTaskRuns() {
-  const db = createInMemoryDb(MIGRATIONS)
-  db.insert(workflows)
+async function seedTaskRuns(db: ProviderNeutralDatabase) {
+  await db
+    .insert(workflows)
     .values({ id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
     .run()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
+      executionLineageId: 'task-lease',
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task-lease', workflowRevision: null },
+      ]),
       id: 'task-lease',
       name: 'task-lease',
       workflowId: 'workflow-lease',
@@ -58,7 +65,8 @@ function seedTaskRuns() {
       startedAt: 1,
     })
     .run()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values(
       ['run-1', 'run-2', 'run-3'].map((id) => ({
         id,
@@ -71,9 +79,12 @@ function seedTaskRuns() {
   return db
 }
 
-function seedMcpTurn(protocol: 'opencode' | 'claude-code' = 'opencode') {
-  const db = createInMemoryDb(MIGRATIONS)
-  db.insert(users)
+async function seedMcpTurn(
+  db: ProviderNeutralDatabase,
+  protocol: 'opencode' | 'claude-code' = 'opencode',
+) {
+  await db
+    .insert(users)
     .values({
       id: 'user-lease',
       username: 'user-lease',
@@ -82,7 +93,8 @@ function seedMcpTurn(protocol: 'opencode' | 'claude-code' = 'opencode') {
       updatedAt: 1,
     })
     .run()
-  db.insert(mcps)
+  await db
+    .insert(mcps)
     .values({
       id: 'mcp-lease',
       name: 'mcp-lease',
@@ -92,7 +104,8 @@ function seedMcpTurn(protocol: 'opencode' | 'claude-code' = 'opencode') {
       visibility: 'private',
     })
     .run()
-  db.insert(mcpRuntimeTestSessions)
+  await db
+    .insert(mcpRuntimeTestSessions)
     .values({
       id: 'test-session-lease',
       mcpId: 'mcp-lease',
@@ -117,7 +130,8 @@ function seedMcpTurn(protocol: 'opencode' | 'claude-code' = 'opencode') {
       updatedAt: 1,
     })
     .run()
-  db.insert(mcpRuntimeTestTurns)
+  await db
+    .insert(mcpRuntimeTestTurns)
     .values({
       id: 'turn-1',
       sessionId: 'test-session-lease',
@@ -134,9 +148,9 @@ function seedMcpTurn(protocol: 'opencode' | 'claude-code' = 'opencode') {
   return db
 }
 
-describe('natural runtime session leases', () => {
+describeEachProvider('natural runtime session leases', (harness) => {
   test('business conversation reset atomically rotates the holder and run pointer', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -154,7 +168,7 @@ describe('natural runtime session leases', () => {
 
     expect(await markRuntimeSessionResetPending(operations, first)).toBe(true)
     expect(
-      db
+      await db
         .select({ sessionId: nodeRuns.opencodeSessionId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, 'run-1'))
@@ -174,7 +188,7 @@ describe('natural runtime session leases', () => {
       leaseNonceDigest: 'nonce-reset',
     })
     expect(
-      db
+      await db
         .select({ sessionId: nodeRuns.opencodeSessionId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, 'run-1'))
@@ -185,7 +199,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('resumed reset preserves creator provenance and retags prior logical rounds', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -196,7 +210,8 @@ describe('natural runtime session leases', () => {
       leaseNonceDigest: 'nonce-lineage-1',
       leasedAt: 10,
     })
-    db.insert(nodeRunEvents)
+    await db
+      .insert(nodeRunEvents)
       .values({
         nodeRunId: 'run-1',
         ts: 1,
@@ -217,7 +232,8 @@ describe('natural runtime session leases', () => {
       leasedAt: 20,
     })
     expect(await confirmRuntimeSessionResume(operations, resumed)).toBe(true)
-    db.insert(nodeRunEvents)
+    await db
+      .insert(nodeRunEvents)
       .values({
         nodeRunId: 'run-2',
         ts: 2,
@@ -237,28 +253,28 @@ describe('natural runtime session leases', () => {
       leaseNodeRunId: 'run-2',
     })
     expect(
-      db
-        .select({ id: nodeRuns.id, sessionId: nodeRuns.opencodeSessionId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.nodeId, 'node-a'))
-        .all()
-        .filter((row) => row.id === 'run-1' || row.id === 'run-2'),
+      (
+        await db
+          .select({ id: nodeRuns.id, sessionId: nodeRuns.opencodeSessionId })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.nodeId, 'node-a'))
+          .orderBy(nodeRuns.id)
+          .all()
+      ).filter((row) => row.id === 'run-1' || row.id === 'run-2'),
     ).toEqual([
       { id: 'run-1', sessionId: 'native-lineage-b' },
       { id: 'run-2', sessionId: 'native-lineage-b' },
     ])
     expect(
-      db
-        .select({ sessionId: nodeRunEvents.sessionId })
-        .from(nodeRunEvents)
-        .all()
-        .map((row) => row.sessionId),
+      (await db.select({ sessionId: nodeRunEvents.sessionId }).from(nodeRunEvents).all()).map(
+        (row) => row.sessionId,
+      ),
     ).toEqual(['native-lineage-b', 'native-lineage-b'])
     expect(await releaseRuntimeSessionLease(operations, rotated)).toBe(true)
   })
 
   test('business conversation reset collision rolls back the outgoing lease', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -290,7 +306,7 @@ describe('natural runtime session leases', () => {
       leaseNonceDigest: 'nonce-reset',
     })
     expect(
-      db
+      await db
         .select({ sessionId: nodeRuns.opencodeSessionId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, 'run-1'))
@@ -303,7 +319,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('pending business reset keeps the outgoing lease held while clearing stale resume', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -322,7 +338,7 @@ describe('natural runtime session leases', () => {
       resetPending: true,
     })
     expect(
-      db
+      await db
         .select({ sessionId: nodeRuns.opencodeSessionId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, 'run-1'))
@@ -333,36 +349,8 @@ describe('natural runtime session leases', () => {
     expect(await getRuntimeSessionLease(operations, 'claude-code', first.sessionId)).toBeUndefined()
   })
 
-  test('migration fence rejects neutral or non-boolean reset_pending states', async () => {
-    const db = seedTaskRuns()
-    const operations = createRuntimeSessionLeaseOperations(db)
-    const first = await claimNewRuntimeSession(operations, {
-      protocol: 'claude-code',
-      sessionId: 'native-reset-trigger',
-      taskId: 'task-lease',
-      nodeId: 'node-a',
-      currentNodeRunId: 'run-1',
-      leaseNonceDigest: 'nonce-reset-trigger',
-    })
-    expect(await releaseRuntimeSessionLease(operations, first)).toBe(true)
-    expect(() =>
-      db.run(sql`UPDATE runtime_session_leases SET reset_pending = 1
-        WHERE protocol = 'claude-code' AND session_id = 'native-reset-trigger'`),
-    ).toThrow()
-    expect(() =>
-      db.run(sql`UPDATE runtime_session_leases SET reset_pending = 2
-        WHERE protocol = 'claude-code' AND session_id = 'native-reset-trigger'`),
-    ).toThrow()
-    db.delete(runtimeSessionLeases)
-      .where(eq(runtimeSessionLeases.sessionId, 'native-reset-trigger'))
-      .run()
-    expect(
-      await getRuntimeSessionLease(operations, 'claude-code', 'native-reset-trigger'),
-    ).toBeUndefined()
-  })
-
   test('boot repair deletes a reset-pending outgoing id instead of making it resumable', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -375,7 +363,7 @@ describe('natural runtime session leases', () => {
     })
 
     expect(await markRuntimeSessionResetPending(operations, first)).toBe(true)
-    db.update(nodeRuns).set({ status: 'interrupted' }).where(eq(nodeRuns.id, 'run-1')).run()
+    await db.update(nodeRuns).set({ status: 'interrupted' }).where(eq(nodeRuns.id, 'run-1')).run()
     expect(await repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).toBe(1)
     expect(await getRuntimeSessionLease(operations, 'claude-code', first.sessionId)).toBeUndefined()
     await expect(
@@ -391,7 +379,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('boot repair discards an identity-invalid lease even if the early fence write was lost', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'claude-code',
@@ -401,7 +389,8 @@ describe('natural runtime session leases', () => {
       currentNodeRunId: 'run-1',
       leaseNonceDigest: 'nonce-invalid-unfenced',
     })
-    db.update(nodeRuns)
+    await db
+      .update(nodeRuns)
       .set({ status: 'failed', failureCode: 'runtime-session-identity-invalid' })
       .where(eq(nodeRuns.id, 'run-1'))
       .run()
@@ -409,7 +398,7 @@ describe('natural runtime session leases', () => {
     expect(await repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).toBe(1)
     expect(await getRuntimeSessionLease(operations, 'claude-code', first.sessionId)).toBeUndefined()
     expect(
-      db
+      await db
         .select({ sessionId: nodeRuns.opencodeSessionId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, 'run-1'))
@@ -418,7 +407,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('business sessions allow one writer, resume after release, and repair terminal holders', async () => {
-    const db = seedTaskRuns()
+    const db = await seedTaskRuns(harness.db)
     const operations = createRuntimeSessionLeaseOperations(db)
     const first = await claimNewRuntimeSession(operations, {
       protocol: 'opencode',
@@ -436,7 +425,7 @@ describe('natural runtime session leases', () => {
       },
     )
     expect(
-      db
+      await db
         .select({ sessionId: nodeRuns.opencodeSessionId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, 'run-1'))
@@ -485,11 +474,11 @@ describe('natural runtime session leases', () => {
       leaseNonceDigest: 'nonce-terminal',
       leasedAt: 30,
     })
-    db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-3')).run()
+    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-3')).run()
     expect(await repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).toBe(1)
     expect(await releaseRuntimeSessionLease(operations, stranded)).toBe(false)
     expect(
-      db
+      await db
         .select({ holder: runtimeSessionLeases.leaseNodeRunId })
         .from(runtimeSessionLeases)
         .where(
@@ -503,7 +492,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('MCP turns resume under the same single-writer lease and release after proven reap', async () => {
-    const db = seedMcpTurn()
+    const db = await seedMcpTurn(harness.db)
     const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'opencode',
@@ -515,11 +504,13 @@ describe('natural runtime session leases', () => {
     })
     expect(await releaseMcpRuntimeTestSessionLease(leases, first)).toBe(true)
 
-    db.update(mcpRuntimeTestTurns)
+    await db
+      .update(mcpRuntimeTestTurns)
       .set({ status: 'succeeded', captureState: 'complete', finishedAt: 2, durationMs: 1 })
       .where(eq(mcpRuntimeTestTurns.id, 'turn-1'))
       .run()
-    db.insert(mcpRuntimeTestTurns)
+    await db
+      .insert(mcpRuntimeTestTurns)
       .values({
         id: 'turn-2',
         sessionId: 'test-session-lease',
@@ -533,7 +524,8 @@ describe('natural runtime session leases', () => {
         createdAt: 3,
       })
       .run()
-    db.update(mcpRuntimeTestSessions)
+    await db
+      .update(mcpRuntimeTestSessions)
       .set({ inFlightTurnId: 'turn-2', turnSeq: 2, sessionVersion: 2, updatedAt: 3 })
       .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
       .run()
@@ -560,7 +552,7 @@ describe('natural runtime session leases', () => {
     ).toBe(true)
     expect(await releaseMcpRuntimeTestSessionLease(leases, second)).toBe(false)
     expect(
-      db
+      await db
         .select({
           currentTurnId: mcpRuntimeTestSessionLeases.currentTurnId,
           holder: mcpRuntimeTestSessionLeases.leaseTurnId,
@@ -571,7 +563,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('MCP conversation reset atomically rotates its unique native lease', async () => {
-    const db = seedMcpTurn('claude-code')
+    const db = await seedMcpTurn(harness.db, 'claude-code')
     const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'claude-code',
@@ -581,7 +573,8 @@ describe('natural runtime session leases', () => {
       leaseNonceDigest: HASH,
       leasedAt: 10,
     })
-    db.update(mcpRuntimeTestSessions)
+    await db
+      .update(mcpRuntimeTestSessions)
       .set({ nativeSessionState: 'unusable' })
       .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
       .run()
@@ -590,14 +583,14 @@ describe('natural runtime session leases', () => {
 
     expect(rotated.runtimeSessionId).toBe('native-mcp-after-reset')
     expect(
-      db
+      await db
         .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
         .from(mcpRuntimeTestSessions)
         .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
         .get(),
     ).toEqual({ runtimeSessionId: 'native-mcp-after-reset' })
     expect(
-      db
+      await db
         .select({ runtimeSessionId: mcpRuntimeTestSessionLeases.runtimeSessionId })
         .from(mcpRuntimeTestSessionLeases)
         .where(eq(mcpRuntimeTestSessionLeases.testSessionId, 'test-session-lease'))
@@ -608,7 +601,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('MCP lease claims must match the logical session runtime protocol', async () => {
-    const db = seedMcpTurn('opencode')
+    const db = await seedMcpTurn(harness.db, 'opencode')
     const leases = createMcpRuntimeTestLeaseOperations(db)
     await expect(
       claimNewMcpRuntimeTestSessionLease(leases, {
@@ -622,7 +615,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('MCP conversation reset requires a durable unusable fence before rotation', async () => {
-    const db = seedMcpTurn('claude-code')
+    const db = await seedMcpTurn(harness.db, 'claude-code')
     const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'claude-code',
@@ -635,7 +628,7 @@ describe('natural runtime session leases', () => {
       rotateMcpRuntimeTestSessionLease(leases, first, 'unannounced-native-id'),
     ).rejects.toThrow('mcp-test-session-conflict')
     expect(
-      db
+      await db
         .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
         .from(mcpRuntimeTestSessions)
         .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
@@ -644,7 +637,7 @@ describe('natural runtime session leases', () => {
   })
 
   test('MCP conversation reset collision rolls back pointer, lease, and fence state', async () => {
-    const db = seedMcpTurn('claude-code')
+    const db = await seedMcpTurn(harness.db, 'claude-code')
     const leases = createMcpRuntimeTestLeaseOperations(db)
     const first = await claimNewMcpRuntimeTestSessionLease(leases, {
       protocol: 'claude-code',
@@ -653,12 +646,14 @@ describe('natural runtime session leases', () => {
       turnId: 'turn-1',
       leaseNonceDigest: HASH,
     })
-    db.update(mcpRuntimeTestSessions)
+    await db
+      .update(mcpRuntimeTestSessions)
       .set({ nativeSessionState: 'unusable' })
       .where(eq(mcpRuntimeTestSessions.id, 'test-session-lease'))
       .run()
 
-    db.insert(users)
+    await db
+      .insert(users)
       .values({
         id: 'user-other',
         username: 'user-other',
@@ -667,7 +662,8 @@ describe('natural runtime session leases', () => {
         updatedAt: 1,
       })
       .run()
-    db.insert(mcpRuntimeTestSessions)
+    await db
+      .insert(mcpRuntimeTestSessions)
       .values({
         id: 'test-session-other',
         mcpId: 'mcp-lease',
@@ -692,7 +688,8 @@ describe('natural runtime session leases', () => {
         updatedAt: 1,
       })
       .run()
-    db.insert(mcpRuntimeTestTurns)
+    await db
+      .insert(mcpRuntimeTestTurns)
       .values({
         id: 'turn-other',
         sessionId: 'test-session-other',
@@ -718,7 +715,7 @@ describe('natural runtime session leases', () => {
       rotateMcpRuntimeTestSessionLease(leases, first, 'native-mcp-taken'),
     ).rejects.toThrow()
     expect(
-      db
+      await db
         .select({
           runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId,
           nativeSessionState: mcpRuntimeTestSessions.nativeSessionState,
@@ -728,7 +725,7 @@ describe('natural runtime session leases', () => {
         .get(),
     ).toEqual({ runtimeSessionId: 'native-mcp-lease', nativeSessionState: 'unusable' })
     expect(
-      db
+      await db
         .select({
           runtimeSessionId: mcpRuntimeTestSessionLeases.runtimeSessionId,
           holder: mcpRuntimeTestSessionLeases.leaseTurnId,
@@ -737,5 +734,36 @@ describe('natural runtime session leases', () => {
         .where(eq(mcpRuntimeTestSessionLeases.testSessionId, 'test-session-lease'))
         .get(),
     ).toEqual({ runtimeSessionId: 'native-mcp-lease', holder: 'turn-1' })
+  })
+})
+
+describe('native runtime session lease migration constraint', () => {
+  test('migration fence rejects neutral or non-boolean reset_pending states', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seedTaskRuns(db)
+    const operations = createRuntimeSessionLeaseOperations(db)
+    const first = await claimNewRuntimeSession(operations, {
+      protocol: 'claude-code',
+      sessionId: 'native-reset-trigger',
+      taskId: 'task-lease',
+      nodeId: 'node-a',
+      currentNodeRunId: 'run-1',
+      leaseNonceDigest: 'nonce-reset-trigger',
+    })
+    expect(await releaseRuntimeSessionLease(operations, first)).toBe(true)
+    expect(() =>
+      db.run(sql`UPDATE runtime_session_leases SET reset_pending = 1
+        WHERE protocol = 'claude-code' AND session_id = 'native-reset-trigger'`),
+    ).toThrow()
+    expect(() =>
+      db.run(sql`UPDATE runtime_session_leases SET reset_pending = 2
+        WHERE protocol = 'claude-code' AND session_id = 'native-reset-trigger'`),
+    ).toThrow()
+    db.delete(runtimeSessionLeases)
+      .where(eq(runtimeSessionLeases.sessionId, 'native-reset-trigger'))
+      .run()
+    expect(
+      await getRuntimeSessionLease(operations, 'claude-code', 'native-reset-trigger'),
+    ).toBeUndefined()
   })
 })

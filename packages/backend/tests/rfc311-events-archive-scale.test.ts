@@ -12,15 +12,14 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import { readMaintenanceNumber } from '../src/services/maintenanceState'
 import { count, max } from 'drizzle-orm'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
   const now = 1_788_278_400_000
@@ -92,13 +91,36 @@ async function eventCount(db: Db): Promise<number> {
   return rows[0]?.n ?? 0
 }
 
+function readArchiveImplementation(): string {
+  return ['sqlite/systemEventsArchive.ts', 'eventsArchiveStore.ts']
+    .map((path) =>
+      readFileSync(resolve(import.meta.dir, '../src/platform/persistence', path), 'utf8'),
+    )
+    .join('\n')
+}
+
 describe('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', () => {
+  // 上面那条只验证了「分窗之后仍然正确」——把分窗整个删掉它照样绿(无上界扫描
+  // 也能找全所有行)。真正要锁的是**扫描语句有上界**这件事本身,而语句时长在
+  // 单元测试里测不出来,所以退到源码层断言(仓规:运行时难覆盖时至少留一条文本
+  // 断言兜底)。
+  test('the incremental scan keeps an upper bound on its id range', () => {
+    const source = readArchiveImplementation()
+    expect(source).toContain('throughId: scanTo')
+    expect(source).toContain('listDistinctNodeRunIds({')
+    expect(source).toContain('lte(nodeRunEvents.id, input.throughId)')
+    // 无上界的旧形态:直接对 `id > highWater` 做 GROUP BY。
+    expect(source).not.toMatch(/where\(gt\(nodeRunEvents\.id, highWater\)\)/)
+  })
+})
+
+describeEachProvider('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', (provider) => {
   // 分窗之前，增量扫描的上界是开的:首轮(水位=0)等于把整张事件表 GROUP BY 一遍,
   // 10M 行库实测**单条语句 1.19 秒**——daemon 只有一条同步连接,这段时间整站无
   // 响应。分窗把「一条语句的时长」与「一轮的总工作量」解耦。这里用极小的窗口
   // (10 个 id)逼出多轮窗口，锁两件事:窗口边界不丢行、被预算截断时水位不前跳。
   test('rows spanning many windows are all found, and the watermark never skips unprocessed ids', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const logsDir = mkdtempSync(join(tmpdir(), 'aw-rfc311-g3-'))
     try {
       await seedRun(db, 'task-a', 'run-a')
@@ -127,40 +149,16 @@ describe('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', () 
       rmSync(logsDir, { recursive: true, force: true })
     }
   })
-
-  // 上面那条只验证了「分窗之后仍然正确」——把分窗整个删掉它照样绿(无上界扫描
-  // 也能找全所有行)。真正要锁的是**扫描语句有上界**这件事本身,而语句时长在
-  // 单元测试里测不出来,所以退到源码层断言(仓规:运行时难覆盖时至少留一条文本
-  // 断言兜底)。
-  test('the incremental scan keeps an upper bound on its id range', () => {
-    const source = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'platform',
-        'persistence',
-        'sqlite',
-        'systemEventsArchive.ts',
-      ),
-      'utf8',
-    )
-    expect(source).toContain('throughId: scanTo')
-    expect(source).toContain('listDistinctNodeRunIds({')
-    expect(source).toContain('lte(nodeRunEvents.id, input.throughId)')
-    // 无上界的旧形态:直接对 `id > highWater` 做 GROUP BY。
-    expect(source).not.toMatch(/where\(gt\(nodeRunEvents\.id, highWater\)\)/)
-  })
 })
 
-describe('RFC-311 — events archiver at backlog scale', () => {
+describeEachProvider('RFC-311 — events archiver at backlog scale', (provider) => {
   // 实现门 P0-1(变异 #7:把区间删改回一次性 35000 参数的巨型 IN,4 条仍全绿)——
   // 本机 bun 1.3.13 打包的 SQLite 3.51 实测在 5 万参数下**不报错**(10 万才抛),
   // 所以「40k 行 > 32766」这个前提在本环境根本不成立,测试名与注释都是未验证假设。
   // 真正要锁的是**语句形状**:每条 DELETE 的绑定参数是常数(区间删),批次数随
   // toDrop 线性——这与引擎的参数上限解耦,换个更保守的 SQLite 构建也照样成立。
   test('a 40k-row backlog archives in bounded batches with constant-size DELETEs', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-'))
     try {
       await seedRun(db, 't1', 'run1')
@@ -176,18 +174,7 @@ describe('RFC-311 — events archiver at backlog scale', () => {
 
       // 形状锁:删除走「node_run_id = ? AND id <= ?」的区间形式(两个绑定参数),
       // 不得回到 `IN (<toDrop 个 id>)`。
-      const src = readFileSync(
-        resolve(
-          import.meta.dir,
-          '..',
-          'src',
-          'platform',
-          'persistence',
-          'sqlite',
-          'systemEventsArchive.ts',
-        ),
-        'utf8',
-      )
+      const src = readArchiveImplementation()
       expect(src).toMatch(/lte\(nodeRunEvents\.id, lastId\)/)
       expect(src).not.toMatch(/inArray\(\s*nodeRunEvents\.id/)
       // 且每批不超过 ARCHIVE_BATCH_ROWS——批大小是常数,与 backlog 无关。
@@ -211,7 +198,7 @@ describe('RFC-311 — events archiver at backlog scale', () => {
   })
 
   test('high-water advances after a clean pass and skips unchanged runs', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-hw-'))
     try {
       await seedRun(db, 't1', 'run1')
@@ -241,7 +228,7 @@ describe('RFC-311 — events archiver at backlog scale', () => {
   })
 
   test('byte watermark fires while the ROW watermark is still far away (proposal C3)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-bytes-'))
     try {
       await seedRun(db, 't1', 'run1')
@@ -271,7 +258,7 @@ describe('RFC-311 — events archiver at backlog scale', () => {
   })
 
   test('global cap also archives via range deletes without parameter blowups', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = provider.db
     const logsDir = mkdtempSync(join(tmpdir(), 'rfc311-arch-glob-'))
     try {
       await seedRun(db, 't1', 'run1')

@@ -30,7 +30,6 @@ import {
   planCanonicalWorkflowLayout,
   PRIVILEGED_LENS_TRANSPARENT,
   rehydratePrivilegedNodes,
-  RESOURCE_DISPLAY_NAME_MSG,
   UpdateWorkflowSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
@@ -91,6 +90,9 @@ import {
 import { nextResourceCopyName } from '@/services/resourceCopyName'
 import { assertNotBuiltin } from '@/services/systemResources'
 import {
+  WORKFLOW_NAME_INVALID_MESSAGE,
+  assertCanonicalWorkflowAgentIds,
+  assertChangedWorkflowName,
   normalizeWorkflowSnapshot,
   workflowDetailOf as workflowToDetail,
   workflowDraftSnapshotOf,
@@ -99,16 +101,15 @@ import {
   workflowSnapshotHashOf as hashWorkflowSnapshot,
 } from '../workflowPersistence'
 
-export { workflowDraftSnapshotOf, workflowRevisionOf, workflowToDetail }
+export {
+  WORKFLOW_NAME_INVALID_MESSAGE,
+  assertCanonicalWorkflowAgentIds,
+  workflowDraftSnapshotOf,
+  workflowRevisionOf,
+  workflowToDetail,
+}
 
 type WorkflowRow = typeof workflows.$inferSelect
-
-/**
- * RFC-264 — one wording behind the `workflow-name-invalid` code, shared by the
- * save-path rename gate and YAML import so the two can never describe
- * different rules.
- */
-export const WORKFLOW_NAME_INVALID_MESSAGE = `workflow ${RESOURCE_DISPLAY_NAME_MSG}`
 
 export interface WorkflowWriteInTxGuard {
   /**
@@ -670,25 +671,6 @@ export async function updateWorkflow(
   return txResult.receipt
 }
 
-/**
- * RFC-223: portable workflow YAML is the only name-based selector boundary.
- * Every definition crossing the persisted-workflow write boundary must already
- * carry the canonical agent id stamped by the editor or YAML import resolver.
- */
-export function assertCanonicalWorkflowAgentIds(definition: WorkflowDefinition): void {
-  const nodeIds = (definition.nodes ?? [])
-    .filter((node) => node.kind === 'agent-single')
-    .filter((node) => typeof node.agentId !== 'string' || node.agentId.length === 0)
-    .map((node) => node.id)
-    .sort()
-  if (nodeIds.length === 0) return
-  throw new ValidationError(
-    'workflow-agent-id-required',
-    'agent-single nodes require a canonical agentId',
-    { nodeIds },
-  )
-}
-
 export async function deleteWorkflow(
   db: DbClient,
   id: string,
@@ -1018,16 +1000,6 @@ function workflowReadOnlyError(): ForbiddenError {
     'resource-read-only',
     'you have read-only access to this workflow; ask its owner for an edit grant or save your own copy',
   )
-}
-
-function assertChangedWorkflowName(currentName: string, submittedName: string): void {
-  if (currentName === submittedName) return
-  const parsed = WorkflowNameSchema.safeParse(submittedName)
-  if (!parsed.success) {
-    throw new ValidationError('workflow-name-invalid', WORKFLOW_NAME_INVALID_MESSAGE, {
-      issues: parsed.error.issues,
-    })
-  }
 }
 
 function throwWorkflowNotFound(id: string): never {

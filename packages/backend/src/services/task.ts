@@ -7235,7 +7235,7 @@ export async function getTaskNodeRuns(
  * just verify the node_run belongs to the task to avoid cross-task leakage.
  */
 export async function getNodeRunEvents(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
   nodeRunId: string,
   opts: { since?: number; limit?: number; logsDir?: string } = {},
@@ -7322,7 +7322,7 @@ export const STDOUT_OMITTED_MARKER =
   '[… earlier output omitted: this view shows the most recent 1 MiB …]'
 
 export async function getNodeRunStdout(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
   nodeRunId: string,
   opts: { logsDir?: string } = {},

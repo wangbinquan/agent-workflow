@@ -32,7 +32,7 @@ import {
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
 } from './legacy/resourceRefs'
-import { WORKFLOW_NAME_INVALID_MESSAGE } from './legacy/workflow'
+import { assertCanonicalWorkflowAgentIds, assertChangedWorkflowName } from './workflowPersistence'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 import type { WorkflowDeletedAudience, WorkflowPersistenceSemantics } from './workflowRepository'
 
@@ -79,34 +79,9 @@ function copyName(sourceName: string, occupiedNames: Iterable<string>): string {
   }
 }
 
-/**
- * RFC-264 —— 只有**改名**才受统一命名规则约束：存量的历史名字（slug 规则之前写入的）原样回存必须继续能存。
- * 旧 SQLite 路径一直有这道门，PG 版此前漏了——现在两个 provider 同一条门、同一段措辞。
- */
-function assertChangedWorkflowName(currentName: string, submittedName: string): void {
-  if (currentName === submittedName) return
-  const parsed = WorkflowNameSchema.safeParse(submittedName)
-  if (!parsed.success) {
-    throw new ValidationError('workflow-name-invalid', WORKFLOW_NAME_INVALID_MESSAGE, {
-      issues: parsed.error.issues,
-    })
-  }
-}
-
 function canonicalDefinition(definition: WorkflowDefinition): WorkflowDefinition {
   const migrated = migrateWorkflowDefinitionToLatest(definition)
-  const missingAgentNodeIds = (migrated.nodes ?? [])
-    .filter((node) => node.kind === 'agent-single')
-    .filter((node) => typeof node.agentId !== 'string' || node.agentId.length === 0)
-    .map((node) => node.id)
-    .sort()
-  if (missingAgentNodeIds.length > 0) {
-    throw new ValidationError(
-      'workflow-agent-id-required',
-      'agent-single nodes require a canonical agentId',
-      { nodeIds: missingAgentNodeIds },
-    )
-  }
+  assertCanonicalWorkflowAgentIds(migrated)
   return migrated
 }
 

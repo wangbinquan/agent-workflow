@@ -1,27 +1,25 @@
 // P-5-01: events archival background task + endpoint fallback.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import { getNodeRunEvents, getNodeRunStdout } from '../src/services/task'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   logsDir: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(db: ProviderNeutralDatabase): Harness {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-events-archive-'))
-  const db = createInMemoryDb(MIGRATIONS)
   return {
     db,
     logsDir: join(tmp, 'logs'),
@@ -81,10 +79,10 @@ async function seedTaskWithNodeRun(
   return { taskId, nodeRunId, eventIds }
 }
 
-describe('archiveEvents', () => {
+describeEachProvider('archiveEvents', (provider) => {
   let h: Harness
   beforeEach(() => {
-    h = buildHarness()
+    h = buildHarness(provider.db)
   })
   afterEach(() => h.cleanup())
 

@@ -1,4 +1,4 @@
-// Compact Bun reporter transcripts from the five observed historical mutations.
+// Compact Bun reporter transcripts from the observed historical mutations.
 // IDs, stack prefixes and timings are normalized; no database/process runs here.
 import { describe, expect, test } from 'bun:test'
 import { PHASES, validatePhaseLog, type Phase } from '../../../scripts/rfc359-p0-mutations'
@@ -45,6 +45,41 @@ error: deferred-question-dispatcher-not-bound
 +   "status": "failed",
 +   "errorMessage": "deferred-question-dispatcher-not-bound",
       at <anonymous> (/repo/packages/backend/tests/rfc359-w5-t21b-execution-chain.test.ts:134:55)`,
+  ],
+  'p0-9-launchers': ['agent', 'script'].map(
+    (kind) => `error: {"blockCode":"${kind}-launcher-not-wired"}
+-     "handled": "action-launched",
++     "handled": "action-launch-failed",
+-   "stop": "async-boundary",
++   "stop": "failed-or-blocked",
+      at <anonymous> (/repo/packages/backend/tests/rfc359-w14-legacy-mission-execution.test.ts:380:11)`,
+  ),
+  'p0-9-terminal-observer': ['agent', 'script'].map(
+    (kind) => `422 |         expect(settlement).toEqual({
+error: expect(received).toEqual(expected)
+-   "attemptStatus": "validated",
+-   "wakeDeliveryKeys": [
+-     "${kind}-exec:task-1",
+-   ],
++   "attemptStatus": "claimed",
++   "wakeDeliveryKeys": [],
+      at <anonymous> (/repo/packages/backend/tests/rfc359-w14-legacy-mission-execution.test.ts:422:28)`,
+  ),
+  'p0-11-barrier': [
+    `108 |       expect((await listActiveOps(db)).map((op) => op.phase)).toEqual([])
+error: expect(received).toEqual(expected)
+- []
++ [
++   "intent",
++ ]
+      at <anonymous> (/repo/packages/backend/tests/rfc359-t7d-postgresql-skill-catalog-boot.test.ts:108:63)`,
+  ],
+  'p0-11-reverify': [
+    `169 |       expect(isSkillBootVerified(skill.id)).toBe(true)
+error: expect(received).toBe(expected)
+Expected: true
+Received: false
+      at <anonymous> (/repo/packages/backend/tests/rfc359-t7d-postgresql-skill-catalog-boot.test.ts:169:45)`,
   ],
 }
 
@@ -139,9 +174,45 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
         '+   "errorMessage": "deferred-question-dispatcher-not-bound",',
         '+   "errorMessage": "unrelated",',
       ],
+      ['p0-9-launchers', 'agent-launcher-not-wired', 'unrelated-launch-failure'],
+      ['p0-9-launchers', '+     "handled": "action-launch-failed",', '+     "handled": "blocked",'],
+      [
+        'p0-9-terminal-observer',
+        '+   "attemptStatus": "claimed",',
+        '+   "attemptStatus": "rejected",',
+      ],
+      [
+        'p0-9-terminal-observer',
+        '+   "wakeDeliveryKeys": [],',
+        '+   "wakeDeliveryKeys": ["agent-exec:task-1"],',
+      ],
+      ['p0-11-barrier', '+   "intent",', '+   "fs-staged",'],
+      ['p0-11-reverify', 'Received: false', 'Received: true'],
     ] as const
     for (const [id, from, to] of changes) {
       expect(verdict(id, transcript(id).replace(from, to)).valid).toBe(false)
+    }
+  })
+
+  test('rejects timeout or unrelated exception in place of each observed omission failure', () => {
+    for (const id of [
+      'p0-9-launchers',
+      'p0-9-terminal-observer',
+      'p0-11-barrier',
+      'p0-11-reverify',
+    ]) {
+      for (const replacement of [
+        'error: Test timed out after 60000ms',
+        'TypeError: Cannot read properties of undefined',
+      ]) {
+        expect(verdict(id, transcript(id).replace(diagnostics[id]![0]!, replacement)).valid).toBe(
+          false,
+        )
+      }
+      expect(verdict(id, `${transcript(id)}\nerror: Test timed out after 60000ms\n`).valid).toBe(
+        false,
+      )
+      expect(verdict(id, `${transcript(id)}\nTimeoutError: fixture deadline\n`).valid).toBe(false)
     }
   })
 

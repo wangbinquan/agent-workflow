@@ -88,13 +88,13 @@ import {
   serializeWorkflowDefinitionCandidateV1,
   tryParseKind,
   UPLOAD_ON_CONFLICT,
-  WorkflowDefinitionSchema,
   type WorkflowByRef,
   type WorkflowRefSelector,
   describeWrapperKind,
   reviewInputSource,
 } from '@agent-workflow/shared'
 import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
+import { workflowReferenceFromPersistenceRow } from '../workflowPersistence'
 // RFC-358: 覆盖层合同住在本模块 public 面——application port 与 intent 都要引用它，
 // 而它们都不该 import 这个 legacy 文件。
 import type {
@@ -345,23 +345,6 @@ async function loadCallWorkflowClosure(
   db: DbClient,
   definition: WorkflowDefinition,
 ): Promise<ReadonlyMap<string, ValidatorWorkflowRef>> {
-  const parseRow = (row: {
-    id: string
-    name: string
-    definition: string
-  }): ValidatorWorkflowRef | null => {
-    try {
-      const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
-      if (!parsed.success) return null // unreadable ⇒ treated as unresolvable
-      return {
-        id: row.id,
-        name: row.name,
-        definition: migrateWorkflowDefinitionToLatest(parsed.data),
-      }
-    } catch {
-      return null
-    }
-  }
   const columns = {
     id: workflowsTable.id,
     name: workflowsTable.name,
@@ -405,7 +388,7 @@ async function loadCallWorkflowClosure(
       // wins, first-wins per name — the fallback rule freezeCallClosure applies
       // when a node carries no usable id hint.
       for (const row of rows) {
-        const ref = parseRow(row)
+        const ref = workflowReferenceFromPersistenceRow(row)
         if (ref === null) continue
         if (!nameWinner.has(ref.name)) nameWinner.set(ref.name, ref)
       }
@@ -413,7 +396,7 @@ async function loadCallWorkflowClosure(
     if (wantIds.length > 0) {
       const rows = await db.select(columns).from(workflowsTable).where(inArray(columns.id, wantIds))
       for (const row of rows) {
-        const ref = parseRow(row)
+        const ref = workflowReferenceFromPersistenceRow(row)
         if (ref !== null) byId.set(ref.id, ref)
       }
     }

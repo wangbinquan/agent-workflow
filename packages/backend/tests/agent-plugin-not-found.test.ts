@@ -6,11 +6,12 @@
 // missing plugin at runtime (or worse, silently drops it), turning "agent X
 // needs plugin Y" into a non-actionable mystery.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { createAgent, updateAgent } from '../src/services/agent'
 import {
   composePluginServiceBindingForTest,
@@ -20,7 +21,6 @@ import {
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { ValidationError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let pluginsDir = ''
@@ -54,11 +54,11 @@ function agentInput(name: string, plugins: string[] = []): Parameters<typeof cre
   }
 }
 
-describe('agent.plugins save-time guard', () => {
-  let db: DbClient
+describeEachProvider('agent.plugins save-time guard', (harness) => {
+  let db: ProviderNeutralDatabase
   let binding: PluginServiceBinding
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     binding = composePluginServiceBindingForTest(db, opts())
   })
 

@@ -1,8 +1,6 @@
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
-  migrateWorkflowDefinitionToLatest,
-  WorkflowDefinitionSchema,
   type Skill,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
@@ -20,6 +18,7 @@ import { mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginFromPersistenceRow } from './pluginPersistence'
 import type { SkillContentAvailability } from './skillContentAvailability'
 import { skillFromPersistenceRow } from './skillPersistence'
+import { workflowReferenceFromPersistenceRow } from './workflowPersistence'
 import {
   validateWorkflowDefinition,
   withValidationOverlays,
@@ -103,20 +102,8 @@ export function createWorkflowValidationPort(input: {
         if (await input.skillContent.isAvailable(skill)) availableSkills.push(skill)
       }
       const workflowInventory: ValidatorWorkflowRef[] = workflowRows.flatMap((row) => {
-        try {
-          const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(row.definition))
-          return parsed.success
-            ? [
-                {
-                  id: row.id,
-                  name: row.name,
-                  definition: migrateWorkflowDefinitionToLatest(parsed.data),
-                },
-              ]
-            : []
-        } catch {
-          return []
-        }
+        const reference = workflowReferenceFromPersistenceRow(row)
+        return reference === null ? [] : [reference]
       })
       const referencedWorkgroups = new Set(
         collectWorkgroupCallRefs(candidate.definition).map((reference) => reference.workgroupName),

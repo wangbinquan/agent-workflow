@@ -22,6 +22,8 @@ import type {
 } from '../../src/modules/collaboration/infrastructure/workgroupClarifyAskGate'
 import type { renderWgProtocolBlock as RenderWgProtocolBlock } from '../../src/modules/resource-catalog/application/workgroups/workgroupProtocol'
 import type * as WorkflowRepository from '../../src/modules/resource-catalog/infrastructure/workflowRepository'
+import type * as DevelopmentAutomation from '../../src/modules/development-automation/composition'
+import type * as SkillCatalogBoot from '../../src/modules/resource-catalog/composition/skillCatalogBoot'
 
 function sourcePath(relative: string): string {
   return fileURLToPath(new URL(`../../src/${relative}`, import.meta.url))
@@ -207,6 +209,66 @@ async function restoreUnboundDeferredDispatcher(): Promise<void> {
   }))
 }
 
+async function restoreMissingLegacyMissionLaunchers(): Promise<void> {
+  const target = sourcePath('modules/development-automation/composition.ts')
+  const original: typeof DevelopmentAutomation = await import(target)
+  const composeOriginal = original.composeDevelopmentAutomation
+  // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:1385–1400 constructed
+  // composePostgresqlDevelopmentAutomation without either launcher. Restore
+  // that exact input omission at today's shared factory; its actual admission,
+  // materializer and orchestrator persist the original *-launcher-not-wired
+  // block. No failure or database row is supplied by this preload.
+  mock.module(target, () => ({
+    ...original,
+    composeDevelopmentAutomation: (
+      input: Parameters<typeof original.composeDevelopmentAutomation>[0],
+    ) => {
+      const { agentLauncher: _agent, scriptLauncher: _script, ...withoutLaunchers } = input
+      return composeOriginal(withoutLaunchers)
+    },
+  }))
+}
+
+async function restoreMissingLegacyTerminalForwarding(): Promise<void> {
+  const target = sourcePath(
+    'modules/development-automation/composition/executionTerminalObserver.ts',
+  )
+  const original = await import(target)
+  // 01e4b1b7b: cli/postgresqlDaemonApplication.ts has no execution terminal
+  // observer construction/call. Factor that omitted forwarding out from the
+  // missing launchers above: the real host can finish, but no wake/collection
+  // occurs. These empty callbacks model the absent CALL, not historical function
+  // bytes. They provide no task/attempt result and manufacture no exception.
+  mock.module(target, () => ({
+    ...original,
+    createDevelopmentMissionExecutionTerminalObserver: () =>
+      Object.freeze({
+        agent: async () => {},
+        script: async () => {},
+      }),
+  }))
+}
+
+async function restoreMissingSkillBootCall(call: 'barrier' | 'reverify'): Promise<void> {
+  const target = sourcePath('modules/resource-catalog/composition/skillCatalogBoot.ts')
+  const original: typeof SkillCatalogBoot = await import(target)
+  const composeOriginal = original.composeSkillCatalogBoot
+  // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:436 proceeds from restore
+  // without constructing/calling skill boot; there is no skillCatalogBoot token
+  // anywhere in that root. Restore the two omitted calls independently at the
+  // real composer boundary. No empty receipt is invented: skipped calls return
+  // void, and the nonempty tests inspect actual operations/locks/snapshot state.
+  mock.module(target, () => ({
+    ...original,
+    composeSkillCatalogBoot: (input: Parameters<typeof composeOriginal>[0]) => ({
+      ...composeOriginal(input),
+      ...(call === 'barrier'
+        ? { runIdentityMigrationBarrier: async () => {} }
+        : { reverifySnapshots: async () => {} }),
+    }),
+  }))
+}
+
 const mutation = process.env['RFC359_P0_MUTATION']
 switch (mutation) {
   case 'p0-12-protocol':
@@ -223,6 +285,18 @@ switch (mutation) {
     break
   case 'p0-7':
     await restoreUnboundDeferredDispatcher()
+    break
+  case 'p0-9-launchers':
+    await restoreMissingLegacyMissionLaunchers()
+    break
+  case 'p0-9-terminal-observer':
+    await restoreMissingLegacyTerminalForwarding()
+    break
+  case 'p0-11-barrier':
+    await restoreMissingSkillBootCall('barrier')
+    break
+  case 'p0-11-reverify':
+    await restoreMissingSkillBootCall('reverify')
     break
   default:
     throw new Error(`Unknown RFC359_P0_MUTATION: ${mutation ?? '(missing)'}`)

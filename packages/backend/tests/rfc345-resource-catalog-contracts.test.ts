@@ -1196,6 +1196,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/infrastructure/workgroupRepository.ts'),
       'utf8',
     )
+    const persistence = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/workgroupPersistence.ts'),
+      'utf8',
+    )
     const composition = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/composition/workgroupOperations.ts'),
       'utf8',
@@ -1245,7 +1249,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).toContain('assertAgentIdsUsableInTransaction')
     expect(repository).toContain('scheduledReferences')
-    expect(repository).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(repository).toContain("from './workgroupPersistence'")
+    expect(repository).toContain('workgroupRevisionOf as revisionOf')
+    expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createWorkgroupRepository')
     expect(composition).toContain('createWorkgroupApplication')

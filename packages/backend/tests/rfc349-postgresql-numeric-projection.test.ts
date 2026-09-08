@@ -40,7 +40,7 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       'listRepoPaths 的递归 CTE 里 min(repo_path) 是 text 列的字典序最小值，不是数值聚合——' +
       '产出的 p 就是 repo_path 字符串，两个 provider 同形，无需解码',
   },
-  'platform/persistence/postgresqlEventsArchive.ts': {
+  'platform/persistence/eventsArchiveStore.ts': {
     value: '调用点用 numberValue() 解码；投影类型也刻意写成 sql<unknown> 提醒这一点',
     avg:
       'averageRecentPayloadBytes 的 AVG(LENGTH(payload))：行类型写成 `{ avg: unknown }`，' +

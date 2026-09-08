@@ -2,6 +2,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- 归档查询 store 与维护键值读写各只有一份中立实现；原 provider 工厂退为类型兼容壳，
+  保留数值、NULL、游标/文件追加和 archive 事务顺序。测试移到双库但原大语料仍由 hosted 执行。
+- Workflow 共享校验只合并实际相同的算法，原入口的 canonicalization 时点、缺失引用排序、
+  no-op 分支和事件回调位置保持；不能用共享名义静默改变旧合同。
+- PG 借用内部工作区的宿主任务必须沿用 internal 分类，与已有 platform input roster 一致。
+  真执行证明从实际租约写入一路经过原 artifact path 查询，再到子进程、task done 与终态观察。
+- P0 历史变异保留原七阶段并追加四个 boot/legacy omission 场景，使用真实任务或非空恢复状态。
+  原调用遗漏的重建与字面历史函数替换分别记证据，全部以指定失败和前后真实控制判定。
 - Workgroup 的规范化、快照、hash、行/修订/详情解码共用纯函数；legacy 的数组 slice 与中立
   数组展开仍各在原边界执行，保留稀疏数组、自定义迭代器及异常语义。共享 codec 不改变 SQL、
   CAS、ID/时钟采样或事务；跨目录残余构造另计，不能据此退役整个 provider adapter。
@@ -146,12 +154,13 @@ CI 撞到的正是这个：driver 释放序列在 `registry.release` 唤醒取�
 RFC-092 successor 认领撞 `claimed`）。修法是把事务安排在**新的事件循环任务**里开始（`setImmediate`）：被本轮
 唤醒的同步写者先跑完，事务体只 await 数据库操作时（bun:sqlite 是同步驱动，drizzle 的 thenable 当场执行），
 BEGIN 到 COMMIT 之间没有任何别的上下文能运行。三条守卫：
+
 - 事务体 await 了非数据库操作（跨宏任务）时，旁观者的**任何**语句（不只 `dbTxSync`）由 `db/client.ts`
   `guardForeignStatements` 拦成 `CrossContextTransactionError`（drizzle 包成 `DrizzleError`，守卫错误在 `cause`）；
 - 事务自身在 COMMIT 时记一条带 BEGIN 处调用栈的 error 日志（`watchEventLoopYield`）——只记不抛：跨任务的检出
   只能在下一轮事件循环观测，抛会变成时序相关的假红；
 - `rfc359-database-transaction.test.ts` 的「旁观者隔离」组把「唤醒 + 立刻开事务」与「微任务链探针不交错」锁住。
-成本：每笔 SQLite 统一事务多一次事件循环让渡（微秒级；持锁时间从 BEGIN 起算，不含等待）。PostgreSQL 会话不变。
+  成本：每笔 SQLite 统一事务多一次事件循环让渡（微秒级；持锁时间从 BEGIN 起算，不含等待）。PostgreSQL 会话不变。
 
 **读连接分离**：事务外的读走既有的只读连接（`platform/persistence/sqlite/readonlySqliteDatabase.ts`），
 WAL 下不被写事务阻塞，也不会误入他人事务。
@@ -175,12 +184,12 @@ WAL 下不被写事务阻塞，也不会误入他人事务。
 
 ### 3.4 失败模式与护栏
 
-| 失败模式 | 后果 | 护栏 |
-| --- | --- | --- |
+| 失败模式                                                      | 后果                                                                            | 护栏                                                                                                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 事务体内 await 了**非数据库**的慢操作（网络 / 子进程 / 文件） | SQLite 上独占写者，其余写请求排队；长到超时即雪崩；**且旁观者隔离失效**（§3.2） | **守卫**：旁观者语句拦成 `CrossContextTransactionError`（`guardForeignStatements`）+ 事务 COMMIT 时记带调用栈的 error 日志（`watchEventLoopYield`，已落）；事务体内禁止 import 进程 / 网络 / fs 模块的 lint 与软超时诊断仍是 T12 |
-| 事务内嵌套调用 `transaction()` | 单写者租约自死锁 | 用 `AsyncLocalStorage` 检出重入，内层复用外层 `tx`（PG 侧同样复用，不开 savepoint——本仓无 savepoint 语义需求） |
-| body 抛错后 `ROLLBACK` 本身失败 | 连接残留在事务中 | `ROLLBACK` 失败即视为连接不可用，标记并重建；不吞错 |
-| 有人绕过原语裸调 `db.transaction(async …)` | 回到零原子性 | lint 规则 + 架构守卫禁止裸 `db.transaction(`（AC-5） |
+| 事务内嵌套调用 `transaction()`                                | 单写者租约自死锁                                                                | 用 `AsyncLocalStorage` 检出重入，内层复用外层 `tx`（PG 侧同样复用，不开 savepoint——本仓无 savepoint 语义需求）                                                                                                                   |
+| body 抛错后 `ROLLBACK` 本身失败                               | 连接残留在事务中                                                                | `ROLLBACK` 失败即视为连接不可用，标记并重建；不吞错                                                                                                                                                                              |
+| 有人绕过原语裸调 `db.transaction(async …)`                    | 回到零原子性                                                                    | lint 规则 + 架构守卫禁止裸 `db.transaction(`（AC-5）                                                                                                                                                                             |
 
 ### 3.5 迁移路径（**修订**：`dbTxSync` 做不成兼容层）
 
@@ -220,21 +229,21 @@ WAL 下不被写事务阻塞，也不会误入他人事务。
 // platform/persistence/capabilities.ts —— 每个 provider 一份实现，是本 RFC 允许 provider 分叉的唯一地方之一
 export interface EngineCapabilities {
   // 并发与锁
-  lockAggregateRoot(tx, table, id): SQL        // PG: FOR UPDATE            SQLite: no-op（已独占）
-  claimRows(tx, table, where, limit): SQL      // PG: FOR UPDATE SKIP LOCKED  SQLite: 普通 SELECT
-  advisoryLock(tx, key): Promise<void>         // PG: pg_advisory_xact_lock  SQLite: no-op
+  lockAggregateRoot(tx, table, id): SQL // PG: FOR UPDATE            SQLite: no-op（已独占）
+  claimRows(tx, table, where, limit): SQL // PG: FOR UPDATE SKIP LOCKED  SQLite: 普通 SELECT
+  advisoryLock(tx, key): Promise<void> // PG: pg_advisory_xact_lock  SQLite: no-op
   readonly isolation: 'read-committed' | 'exclusive'
   // JSON
-  jsonExtract(col, path): SQL                  // PG: JSONB ->> / #>>        SQLite: json_extract
-  jsonContains(col, value): SQL                // PG: @>（走 GIN）           SQLite: json_each 展开
+  jsonExtract(col, path): SQL // PG: JSONB ->> / #>>        SQLite: json_extract
+  jsonContains(col, value): SQL // PG: @>（走 GIN）           SQLite: json_each 展开
   // 批量
-  readonly batchInsertMax: number              // PG 大批；SQLite 受 SQLITE_MAX_VARIABLE_NUMBER 约束
+  readonly batchInsertMax: number // PG 大批；SQLite 受 SQLITE_MAX_VARIABLE_NUMBER 约束
   // 方言语义（既有三条 parity 守卫 + 本轮新增两条）
-  orderNullsLast(col): SQL                     // PG: NULLS LAST             SQLite: 默认即最后（DESC）
-  likeCaseInsensitive(col, pattern): SQL       // PG: ILIKE                  SQLite: LIKE（ASCII 不敏感）
-  likeEscape(pattern): { pattern; escape }     // 两侧都显式带 ESCAPE，消灭默认转义符差异
-  numericFromRawRow(v): number                 // PG: int8 回字符串须归一   SQLite: 原样
-  classifyError(e): 'unique-violation' | 'serialization' | 'other'  // PG 看 errno 的 SQLSTATE
+  orderNullsLast(col): SQL // PG: NULLS LAST             SQLite: 默认即最后（DESC）
+  likeCaseInsensitive(col, pattern): SQL // PG: ILIKE                  SQLite: LIKE（ASCII 不敏感）
+  likeEscape(pattern): { pattern; escape } // 两侧都显式带 ESCAPE，消灭默认转义符差异
+  numericFromRawRow(v): number // PG: int8 回字符串须归一   SQLite: 原样
+  classifyError(e): 'unique-violation' | 'serialization' | 'other' // PG 看 errno 的 SQLSTATE
 }
 ```
 
@@ -262,15 +271,15 @@ export interface EngineCapabilities {
 **一个新工程师加一个功能，能不能不小心让它只在一个 provider 上工作？** 今天太容易了——写个适配器、
 忘了在 PG 组合根传一个参数，就是一条 P0。下面七条守卫的目标是把这件事变成编译错误或 CI 红。
 
-| # | 守卫 | 挡的是哪类失效（对账里的 A/B/C） |
-| --- | --- | --- |
-| 1 | **provider 命名的文件只允许存在于 `platform/persistence/`**（`sqlite*` / `postgresql*` 在其他任何目录出现即红；迁移期按波次下调棘轮到 0） | A 语义重推 |
-| 2 | **`provider === '<literal>'` 只允许出现在 `platform/persistence/`**，其余全仓 exact 账本为空 | A |
-| 3 | **组合根必须是全量的**：`cli/` 与 `*/composition*` 下禁止任何 `throw new Error('*-not-bound')` / 晚绑定 holder；依赖在构造时全量传入 | B 装配缺口（`DeferredTaskQuestionDispatcherBinding` 这个形状正是穿过既有完整性守卫的口子） |
-| 4 | **启动序列只有一个调用方**：boot 序列是一个吃 provider-中立端口的函数，守卫断言它恰有一个调用点且 `cli/start.ts` 无 provider 执行分支 | B |
-| 5 | **能力矩阵每项双引擎实测**：矩阵条目 exact，每条在两个真引擎上各执行一次 | C 方言陷阱 |
-| 6 | **覆盖率对等棘轮（过渡期）**：同一 port 两侧行覆盖率差超过阈值即红。今天是 SQLite 100% vs PG 2.38%，这一条能钉住全部 12 条 P0——它们无一例外落在 PG 覆盖率个位数的 port 上。合一后自然消失（一份实现只有一个数） | A + B |
-| 7 | **全量 backend 行为套件在真 PostgreSQL 上跑，在 push 上跑**（不是窄 lane、不是每周 cron）。这是最终 oracle：脚本化 runtime 只能证明「适配器发出了作者预期的 SQL」，证明不了 int8 回字符串，更证明不了整个子系统缺失 | A + B + C |
+| #   | 守卫                                                                                                                                                                                                                | 挡的是哪类失效（对账里的 A/B/C）                                                           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1   | **provider 命名的文件只允许存在于 `platform/persistence/`**（`sqlite*` / `postgresql*` 在其他任何目录出现即红；迁移期按波次下调棘轮到 0）                                                                           | A 语义重推                                                                                 |
+| 2   | **`provider === '<literal>'` 只允许出现在 `platform/persistence/`**，其余全仓 exact 账本为空                                                                                                                        | A                                                                                          |
+| 3   | **组合根必须是全量的**：`cli/` 与 `*/composition*` 下禁止任何 `throw new Error('*-not-bound')` / 晚绑定 holder；依赖在构造时全量传入                                                                                | B 装配缺口（`DeferredTaskQuestionDispatcherBinding` 这个形状正是穿过既有完整性守卫的口子） |
+| 4   | **启动序列只有一个调用方**：boot 序列是一个吃 provider-中立端口的函数，守卫断言它恰有一个调用点且 `cli/start.ts` 无 provider 执行分支                                                                               | B                                                                                          |
+| 5   | **能力矩阵每项双引擎实测**：矩阵条目 exact，每条在两个真引擎上各执行一次                                                                                                                                            | C 方言陷阱                                                                                 |
+| 6   | **覆盖率对等棘轮（过渡期）**：同一 port 两侧行覆盖率差超过阈值即红。今天是 SQLite 100% vs PG 2.38%，这一条能钉住全部 12 条 P0——它们无一例外落在 PG 覆盖率个位数的 port 上。合一后自然消失（一份实现只有一个数）     | A + B                                                                                      |
+| 7   | **全量 backend 行为套件在真 PostgreSQL 上跑，在 push 上跑**（不是窄 lane、不是每周 cron）。这是最终 oracle：脚本化 runtime 只能证明「适配器发出了作者预期的 SQL」，证明不了 int8 回字符串，更证明不了整个子系统缺失 | A + B + C                                                                                  |
 
 第 7 条有代价：backend CI 时间约翻倍。**这是「以后不再出现」的价格**，不打折。前提是测试 harness
 按 provider 参数化（今天 `createInMemoryDb(MIGRATIONS)` 把 SQLite 写死在每个测试里），见 §8。
@@ -336,13 +345,13 @@ SQLite 上前置检查恒命中、返回域内 4xx；PG 上两个用户并发时
 每处都用确定性并发（`Promise.allSettled` 打同一聚合，不靠墙钟）在两个引擎上跑够轮数，
 并用变异反证「真正兜住它的是什么」：
 
-| 站点 | 兜住它的机制 |
-| --- | --- |
-| `repositoryWorkspaceStore.ts` 建组 | 读**之前**就有 `engineOf(tx).advisoryLock(tx, 'source-control:repository-groups')`。opener 是 `.transaction()` = READ COMMITTED，**每条语句取新快照**，输家等到锁后那条 SELECT 就看得见赢家 |
-| 同文件改名 | 根本不是本类形状——走 `update` 不是 `insert`，普查判据不覆盖；何况同一把 advisory lock + 全图 `expectedGraphVersions` CAS 双重挡着 |
-| `taskContinuationAdmission.ts` | opener 是 `.serializable()`；PG 的 SSI 先给输家 **40001**，而 `serializable()` 的重试单位是**整笔事务**，重跑取新快照才读得到活跃 intent。**救它的是重放，不是锁**（与 §10.1 勘误同一条机制） |
-| `humanGateOpenParticipant.ts` | 第二笔 open 在上游 `humanGateOperationJournal.beginTx` 就被挡下（先 `lockAggregateRoot(tasks)` 再查活跃操作） |
-| `legacy/skillVersion.ts` | 上游 `stageSkillVersion → beginOperation → acquireOpLocks` 先抢 `skill_operation_locks` 的排他行，PK 冲突**已经**归一成 409——初稿写的「归一在另一条路径上」是错的，它就在同一条路径的**上游** |
+| 站点                               | 兜住它的机制                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repositoryWorkspaceStore.ts` 建组 | 读**之前**就有 `engineOf(tx).advisoryLock(tx, 'source-control:repository-groups')`。opener 是 `.transaction()` = READ COMMITTED，**每条语句取新快照**，输家等到锁后那条 SELECT 就看得见赢家   |
+| 同文件改名                         | 根本不是本类形状——走 `update` 不是 `insert`，普查判据不覆盖；何况同一把 advisory lock + 全图 `expectedGraphVersions` CAS 双重挡着                                                             |
+| `taskContinuationAdmission.ts`     | opener 是 `.serializable()`；PG 的 SSI 先给输家 **40001**，而 `serializable()` 的重试单位是**整笔事务**，重跑取新快照才读得到活跃 intent。**救它的是重放，不是锁**（与 §10.1 勘误同一条机制） |
+| `humanGateOpenParticipant.ts`      | 第二笔 open 在上游 `humanGateOperationJournal.beginTx` 就被挡下（先 `lockAggregateRoot(tasks)` 再查活跃操作）                                                                                 |
+| `legacy/skillVersion.ts`           | 上游 `stageSkillVersion → beginOperation → acquireOpLocks` 先抢 `skill_operation_locks` 的排他行，PK 冲突**已经**归一成 409——初稿写的「归一在另一条路径上」是错的，它就在同一条路径的**上游** |
 
 **由此得到一条比原判据锋利得多的规律（实测，20/20 反证）**：
 
@@ -375,18 +384,19 @@ per-aggregate advisory lock（`producer:family:kind:id`）；全新聚合上两�
 
 ### 10.2 引擎优势必须真的用上
 
-| 优势 | 今天 | 目标 |
-| --- | --- | --- |
-| 多写并发 | PG 侧部分路径用 SERIALIZABLE，小表上冲突率 81.2% | READ COMMITTED + 行锁，默认 |
-| JSONB + GIN | JSON 列按 SQLite 的 `text` 投影到 PG，查询走 `json_extract` shim（函数调用，走不了索引） | DDL 投影把 JSON 列渲染成 JSONB，热查询列建 GIN；矩阵的 `jsonExtract`/`jsonContains` 渲染成 `->>` / `@>` |
-| 批量写 | 多处逐行 INSERT | 矩阵给出 `batchInsertMax`，实现按批 |
-| 索引与执行计划 | 索引从 SQLite 投影，未按 PG 计划器审过 | RFC-311 基准库在 PG 上跑 `EXPLAIN (ANALYZE, BUFFERS)`，逐热查询审计划；PG 独有的索引（partial + expression + GIN）经能力矩阵声明 |
-| 连接池 | `poolMax` 可配 | 读请求走池并行、写事务不串行——已由 §3.3 保证，性能守卫锁住 |
+| 优势           | 今天                                                                                     | 目标                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 多写并发       | PG 侧部分路径用 SERIALIZABLE，小表上冲突率 81.2%                                         | READ COMMITTED + 行锁，默认                                                                                                      |
+| JSONB + GIN    | JSON 列按 SQLite 的 `text` 投影到 PG，查询走 `json_extract` shim（函数调用，走不了索引） | DDL 投影把 JSON 列渲染成 JSONB，热查询列建 GIN；矩阵的 `jsonExtract`/`jsonContains` 渲染成 `->>` / `@>`                          |
+| 批量写         | 多处逐行 INSERT                                                                          | 矩阵给出 `batchInsertMax`，实现按批                                                                                              |
+| 索引与执行计划 | 索引从 SQLite 投影，未按 PG 计划器审过                                                   | RFC-311 基准库在 PG 上跑 `EXPLAIN (ANALYZE, BUFFERS)`，逐热查询审计划；PG 独有的索引（partial + expression + GIN）经能力矩阵声明 |
+| 连接池         | `poolMax` 可配                                                                           | 读请求走池并行、写事务不串行——已由 §3.3 保证，性能守卫锁住                                                                       |
 
 ### 10.3 证明：性能守卫双引擎
 
 今天 5 个性能守卫**全部只构造 SQLite**，RFC-311 的验收（P95 < 150ms 等）也只在 SQLite 上取过。
 目标：
+
 - 同一套 RFC-311 基准库（10 万任务 / 300 万 node_runs / 千万级事件）在**两个引擎**上各跑一遍，
   各端点 P95 分别有基线；**PG 的基线不得劣于 SQLite**（AC-11）。
 - `rfc311-perf-guards` 等 5 个守卫改为 `describeEachProvider`。
@@ -409,7 +419,9 @@ per-aggregate advisory lock（`producer:family:kind:id`）；全新聚合上两�
 ```ts
 // tests/helpers/eachProvider.ts
 describeEachProvider('memory catalog', ({ session, capabilities, db }) => {
-  test('…', async () => { /* 同一段断言，跑两遍 */ })
+  test('…', async () => {
+    /* 同一段断言，跑两遍 */
+  })
 })
 ```
 
@@ -425,6 +437,7 @@ describeEachProvider('memory catalog', ({ session, capabilities, db }) => {
 ### 11.2 CI：真 PostgreSQL 是 backend 测试的默认环境，不是一条 lane
 
 今天 `test-backend-postgresql` 是独立窄 lane（`services: postgres:17`，只跑 `rfc357-*`）。目标：
+
 - **四个 backend 分片各自带 `services: postgres:17`**，`AW_TEST_PG_URL` 对每个分片可用；
   `describeEachProvider` 的 PG 半边在每个分片里跑。窄 lane 退役。
 - 分片时长上涨由两件事对冲：per-file schema 隔离让 PG 半边可并行；W4 合一后适配器测试数减半。
@@ -435,45 +448,45 @@ describeEachProvider('memory catalog', ({ session, capabilities, db }) => {
 
 ### 11.3 守卫全表（架构 + 质量，按失效类对位）
 
-| # | 守卫 | 挡什么 | 落在哪 |
-| --- | --- | --- | --- |
-| 1 | provider 命名文件只许在 `platform/persistence/`（棘轮 → 0） | A 语义重推 | W5-T17 |
-| 2 | `provider === '<literal>'` 只许在 `platform/persistence/` | A | W5-T19 |
-| 3 | 组合根全量：禁 `*-not-bound` / 晚绑定 holder | B 装配缺口 | W5-T19b |
-| 4 | 启动序列恰一个调用方；`cli/start.ts` 无 provider 执行分支 | B | W5-T19c |
-| 5 | 能力矩阵每项双引擎真实执行断言（本提交已落第一版） | C 方言陷阱 | W2-T11b ✅ |
-| 6 | **测试不得写死引擎**：`createInMemoryDb(` 在 harness 之外的出现次数棘轮 1,882 → 0；测试内按 provider 分叉必须经 `capabilities` 且计数入账 | A+B+C 的验证盲区 | W5-T19f |
-| 7 | 覆盖率对等棘轮：同一 port 两侧行覆盖率差超阈值即红（过渡期；今天能钉住全部 12 条 P0） | A+B | W5-T19d |
-| 8 | 执行链取证：两个引擎上各起一个任务跑到 done，进 push CI 的 e2e | B（RFC-349 验收漏掉的那一环） | W5-T21b |
-| 9 | 性能守卫双引擎，PG 基线不劣于 SQLite，一侧变慢即红 | 优化只落一侧 | W6-T27 |
-| 10 | ~~schema 投影补触发器维度~~ → **改判**：`insert(tasks)` 三列完整性守卫 | 结构漂移 | W7（见下「第 10 条的改判」） |
-| 11 | 全量 backend 套件在真 PG 上、在 push 上跑（§11.2） | 最终 oracle | W5-T21 ✅ |
+| #   | 守卫                                                                                                                                      | 挡什么                        | 落在哪                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------- |
+| 1   | provider 命名文件只许在 `platform/persistence/`（棘轮 → 0）                                                                               | A 语义重推                    | W5-T17                       |
+| 2   | `provider === '<literal>'` 只许在 `platform/persistence/`                                                                                 | A                             | W5-T19                       |
+| 3   | 组合根全量：禁 `*-not-bound` / 晚绑定 holder                                                                                              | B 装配缺口                    | W5-T19b                      |
+| 4   | 启动序列恰一个调用方；`cli/start.ts` 无 provider 执行分支                                                                                 | B                             | W5-T19c                      |
+| 5   | 能力矩阵每项双引擎真实执行断言（本提交已落第一版）                                                                                        | C 方言陷阱                    | W2-T11b ✅                   |
+| 6   | **测试不得写死引擎**：`createInMemoryDb(` 在 harness 之外的出现次数棘轮 1,882 → 0；测试内按 provider 分叉必须经 `capabilities` 且计数入账 | A+B+C 的验证盲区              | W5-T19f                      |
+| 7   | 覆盖率对等棘轮：同一 port 两侧行覆盖率差超阈值即红（过渡期；今天能钉住全部 12 条 P0）                                                     | A+B                           | W5-T19d                      |
+| 8   | 执行链取证：两个引擎上各起一个任务跑到 done，进 push CI 的 e2e                                                                            | B（RFC-349 验收漏掉的那一环） | W5-T21b                      |
+| 9   | 性能守卫双引擎，PG 基线不劣于 SQLite，一侧变慢即红                                                                                        | 优化只落一侧                  | W6-T27                       |
+| 10  | ~~schema 投影补触发器维度~~ → **改判**：`insert(tasks)` 三列完整性守卫                                                                    | 结构漂移                      | W7（见下「第 10 条的改判」） |
+| 11  | 全量 backend 套件在真 PG 上、在 push 上跑（§11.2）                                                                                        | 最终 oracle                   | W5-T21 ✅                    |
 
 #### 实际建成的守卫（W5–W7 落地后，超出原计划 11 条）
 
 原表是**计划**；下面是 `packages/backend/tests/architecture/rfc359-*.test.ts` 的**实际清单**（18 条），
 按失效类归位。计划里没有、实测后补上的用 ➕ 标出——它们都是「对账时才发现这一类会漏」的产物。
 
-| 守卫文件 | 挡什么 |
-| --- | --- |
-| `rfc359-w5-t17-provider-file-location` | provider 命名文件外溢（棘轮 → 0） |
-| `rfc359-w5-t19-provider-branch` | `provider === '<literal>'` 执行分叉 |
-| `rfc359-w5-t19b-composition-root-complete` | 装配缺口（`*-not-bound` / `not-composed`） |
-| `rfc359-w5-t19c-startup-sequence` | 启动序列再分叉 |
-| `rfc359-w5-t19d-coverage-parity` | 同一端口两侧覆盖倒挂 |
-| `rfc359-w5-t19f-test-engine-hardcoding` | 测试写死引擎（➕ W7 补上 `new Database(` 这个后门：此前只数 `createInMemoryDb(`，绕过它的 95 处完全在网外） |
-| `rfc359-w5-t19f-toplevel-column-capture` | ➕ 模块顶层常量捕获列、绕过 provider 投影 |
-| `rfc359-w5-t19g-schema-contract-reconciliation` | ➕ 迁移 DDL 与 drizzle 声明的逐项对账（**PG 缺哪些保护**） |
-| `rfc359-w5-t20-dialect-completeness` | 方言点未声明（函数词汇闭集，判据是闭集不是黑名单） |
-| `rfc359-w5-t18-bare-transaction` | ➕ 裸 `db.transaction(`（**不可重入**，外层回滚带不走） |
-| `rfc359-w5-provider-pair-conformance` | ➕ 成对适配器的合一进度 + 对拍覆盖状态位 |
-| `rfc359-w5-adapter-production-consumer` | ➕ 零生产消费者的适配器（摆设） |
-| `rfc359-w5-provider-runtime-exercised` | ➕ 组合根「只装配、从没被构造过」 |
-| `rfc359-w5-dual-engine-predicate-gaps` | ➕ 「一侧有校验、另一侧没有」的具名缺口（**补上了也红**，强制销账） |
-| `rfc359-w5-artifact-format-portability` | ➕ 落盘工件格式两侧不互通 |
-| `rfc359-sync-transaction-highwater` | ➕ 同步事务面（`dbTxSync`）棘轮 |
-| `rfc359-w6-t28-read-modify-write` | ➕ 读—改—写中间不锁的形状清单 |
-| `rfc359-w7-task-insert-lineage-completeness` | ➕ `insert(tasks)` 的血缘 / 启动来源三列完整性 |
+| 守卫文件                                        | 挡什么                                                                                                      |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `rfc359-w5-t17-provider-file-location`          | provider 命名文件外溢（棘轮 → 0）                                                                           |
+| `rfc359-w5-t19-provider-branch`                 | `provider === '<literal>'` 执行分叉                                                                         |
+| `rfc359-w5-t19b-composition-root-complete`      | 装配缺口（`*-not-bound` / `not-composed`）                                                                  |
+| `rfc359-w5-t19c-startup-sequence`               | 启动序列再分叉                                                                                              |
+| `rfc359-w5-t19d-coverage-parity`                | 同一端口两侧覆盖倒挂                                                                                        |
+| `rfc359-w5-t19f-test-engine-hardcoding`         | 测试写死引擎（➕ W7 补上 `new Database(` 这个后门：此前只数 `createInMemoryDb(`，绕过它的 95 处完全在网外） |
+| `rfc359-w5-t19f-toplevel-column-capture`        | ➕ 模块顶层常量捕获列、绕过 provider 投影                                                                   |
+| `rfc359-w5-t19g-schema-contract-reconciliation` | ➕ 迁移 DDL 与 drizzle 声明的逐项对账（**PG 缺哪些保护**）                                                  |
+| `rfc359-w5-t20-dialect-completeness`            | 方言点未声明（函数词汇闭集，判据是闭集不是黑名单）                                                          |
+| `rfc359-w5-t18-bare-transaction`                | ➕ 裸 `db.transaction(`（**不可重入**，外层回滚带不走）                                                     |
+| `rfc359-w5-provider-pair-conformance`           | ➕ 成对适配器的合一进度 + 对拍覆盖状态位                                                                    |
+| `rfc359-w5-adapter-production-consumer`         | ➕ 零生产消费者的适配器（摆设）                                                                             |
+| `rfc359-w5-provider-runtime-exercised`          | ➕ 组合根「只装配、从没被构造过」                                                                           |
+| `rfc359-w5-dual-engine-predicate-gaps`          | ➕ 「一侧有校验、另一侧没有」的具名缺口（**补上了也红**，强制销账）                                         |
+| `rfc359-w5-artifact-format-portability`         | ➕ 落盘工件格式两侧不互通                                                                                   |
+| `rfc359-sync-transaction-highwater`             | ➕ 同步事务面（`dbTxSync`）棘轮                                                                             |
+| `rfc359-w6-t28-read-modify-write`               | ➕ 读—改—写中间不锁的形状清单                                                                               |
+| `rfc359-w7-task-insert-lineage-completeness`    | ➕ `insert(tasks)` 的血缘 / 启动来源三列完整性                                                              |
 
 另有 RFC-349 遗留的 provider 守卫家族 155 条（`tests/rfc349-*.test.ts`）与本表互补：
 本表管**结构**（谁允许存在），那一族管**行为**（同一段 SQL 两侧跑出同一个结果）。

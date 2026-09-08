@@ -272,6 +272,12 @@ test('Event Center and API origin filters keep complete trees and reset cursor i
 }) => {
   const controller = await openOperations(page)
   await page.getByRole('button', { name: 'Load more tasks' }).click()
+  // CI 34196252484: click finished before the asynchronous page request was recorded.
+  // Wait for the loaded collection, as the pagination case above does.
+  await expect(page.locator('.task-operations__item[data-depth="0"]').first()).toHaveAttribute(
+    'aria-setsize',
+    '34',
+  )
   expect(controller.requests.some((request) => request.includes('cursor=root-page-2'))).toBe(true)
 
   await page.getByTestId('tasks-filter-button').click()

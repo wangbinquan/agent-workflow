@@ -6,6 +6,7 @@
 // 「排队的人有没有被放行」才看得见。
 
 import { describe, expect, test, beforeEach } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -13,79 +14,81 @@ import {
   setChildTaskBudgetCapacity,
   resetChildTaskBudgetForTests,
 } from '@/services/execution/childBudget'
-import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
 
-describe('RFC-287 T14 — 调大子任务配额必须立刻唤醒已排队者', () => {
-  beforeEach(() => {
-    resetChildTaskBudgetForTests()
-  })
-
-  // 修复前：`setChildTaskBudgetCapacity` 只改变量、不重扫等待队列。于是把上限从 1
-  // 调到 2 对**已经在排队**的调用毫无作用——它得等某个子任务恰好发生生命周期变化
-  // 才被顺带放行；而这期间**新来**的调用反而能直接拿到空出来的名额。等待者饿死、
-  // 插队者得利，公平性正好反了。
-  test('容量 1→2：排队中的 acquire 立刻被放行，不必等生命周期事件', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const budget = await ensureChildTaskBudget(db, () => 1)
-
-    // 占满唯一名额。
-    const first = await budget.acquire([])
-    expect(first).not.toBeNull()
-
-    // 第二个请求进入等待队列——此刻绝不能完成。
-    let settled = false
-    const queued = budget.acquire([]).then((h) => {
-      settled = true
-      return h
+describeEachProvider(
+  'RFC-287 T14 — 调大子任务配额必须立刻唤醒已排队者',
+  (harness) => {
+    beforeEach(() => {
+      resetChildTaskBudgetForTests()
     })
-    await Promise.resolve()
-    await new Promise((r) => setTimeout(r, 30))
-    expect(settled).toBe(false)
 
-    // 管理员在设置页把上限调到 2。
-    setChildTaskBudgetCapacity(2)
+    // 修复前：`setChildTaskBudgetCapacity` 只改变量、不重扫等待队列。于是把上限从 1
+    // 调到 2 对**已经在排队**的调用毫无作用——它得等某个子任务恰好发生生命周期变化
+    // 才被顺带放行；而这期间**新来**的调用反而能直接拿到空出来的名额。等待者饿死、
+    // 插队者得利，公平性正好反了。
+    test('容量 1→2：排队中的 acquire 立刻被放行，不必等生命周期事件', async () => {
+      const db = harness.db
+      const budget = await ensureChildTaskBudget(db, () => 1)
 
-    // **不**制造任何子任务生命周期事件——单靠这次配置变更就该放行。
-    const handle = await Promise.race([
-      queued,
-      new Promise((r) => setTimeout(() => r('TIMEOUT'), 2_000)),
-    ])
-    expect(handle).not.toBe('TIMEOUT')
-    expect(settled).toBe(true)
-  })
+      // 占满唯一名额。
+      const first = await budget.acquire([])
+      expect(first).not.toBeNull()
 
-  test('调小容量不放行任何人（scan 无副作用，方向不必区分）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const budget = await ensureChildTaskBudget(db, () => 1)
-    const first = await budget.acquire([])
-    expect(first).not.toBeNull()
+      // 第二个请求进入等待队列——此刻绝不能完成。
+      let settled = false
+      const queued = budget.acquire([]).then((h) => {
+        settled = true
+        return h
+      })
+      await Promise.resolve()
+      await new Promise((r) => setTimeout(r, 30))
+      expect(settled).toBe(false)
 
-    let settled = false
-    void budget.acquire([]).then(() => {
-      settled = true
+      // 管理员在设置页把上限调到 2。
+      setChildTaskBudgetCapacity(2)
+
+      // **不**制造任何子任务生命周期事件——单靠这次配置变更就该放行。
+      const handle = await Promise.race([
+        queued,
+        new Promise((r) => setTimeout(() => r('TIMEOUT'), 2_000)),
+      ])
+      expect(handle).not.toBe('TIMEOUT')
+      expect(settled).toBe(true)
     })
-    await new Promise((r) => setTimeout(r, 30))
 
-    setChildTaskBudgetCapacity(1) // 同值
-    await new Promise((r) => setTimeout(r, 50))
-    expect(settled).toBe(false)
-  })
+    test('调小容量不放行任何人（scan 无副作用，方向不必区分）', async () => {
+      const db = harness.db
+      const budget = await ensureChildTaskBudget(db, () => 1)
+      const first = await budget.acquire([])
+      expect(first).not.toBeNull()
 
-  // 单例的 `counted` 集合是从**某一个库**重建出来的；拿它去服务另一个库，等于用甲
-  // 的在跑数去限乙的并发。生产里 daemon 只有一个库，但并行用不同库的测试会静默
-  // 串扰——那种串扰表现为「另一个用例的配额莫名其妙变了」，极难定位。
-  test('换 DbClient 时单例必须重建，不得继续绑在旧库上', async () => {
-    const dbA = createInMemoryDb(MIGRATIONS)
-    const dbB = createInMemoryDb(MIGRATIONS)
-    const a = await ensureChildTaskBudget(dbA, () => 1)
-    const b = await ensureChildTaskBudget(dbB, () => 1)
-    expect(b).not.toBe(a)
-    // 同一个库再取则复用（单例语义本身没被破坏）。
-    const b2 = await ensureChildTaskBudget(dbB, () => 1)
-    expect(b2).toBe(b)
-  })
-})
+      let settled = false
+      void budget.acquire([]).then(() => {
+        settled = true
+      })
+      await new Promise((r) => setTimeout(r, 30))
+
+      setChildTaskBudgetCapacity(1) // 同值
+      await new Promise((r) => setTimeout(r, 50))
+      expect(settled).toBe(false)
+    })
+
+    // 单例的 `counted` 集合是从**某一个库**重建出来的；拿它去服务另一个库，等于用甲
+    // 的在跑数去限乙的并发。生产里 daemon 只有一个库，但并行用不同库的测试会静默
+    // 串扰——那种串扰表现为「另一个用例的配额莫名其妙变了」，极难定位。
+    test('换 DbClient 时单例必须重建，不得继续绑在旧库上', async () => {
+      const dbA = harness.db
+      const dbB = harness.database(1).db
+      const a = await ensureChildTaskBudget(dbA, () => 1)
+      const b = await ensureChildTaskBudget(dbB, () => 1)
+      expect(b).not.toBe(a)
+      // 同一个库再取则复用（单例语义本身没被破坏）。
+      const b2 = await ensureChildTaskBudget(dbB, () => 1)
+      expect(b2).toBe(b)
+    })
+  },
+  { databaseCount: 2 },
+)
 
 describe('RFC-287 T14 — 配置漏斗的导出类型必须声明新字段', () => {
   // RFC-284 T30 的教训：`scriptInterpreters` / `scriptDepsInstallTimeoutMs` 因为

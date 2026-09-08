@@ -12,7 +12,7 @@ import {
 } from '@agent-workflow/shared'
 import type { z } from 'zod'
 import { buildActor, type Actor } from '../../src/auth/actor'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'
 import type {
   PluginAccessPort,
@@ -78,7 +78,7 @@ function defaultActor(): Actor {
  * receives its already-composed module and authority from the real bootstrap.
  */
 export function composePluginServiceBindingForTest(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   options: PluginServiceTestCompositionOptions = {},
 ): PluginServiceBinding {
   const actor = options.actor ?? defaultActor()

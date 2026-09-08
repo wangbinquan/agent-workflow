@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1788,
+    "backendFiles": 1790,
     "frontendFiles": 622,
-    "legacyFiles": 601,
+    "legacyFiles": 603,
     "moduleFiles": 1187,
-    "productionFiles": 2565,
+    "productionFiles": 2567,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24941
+    "symbolsIncludingFileRoots": 24944
   },
   "entries": [
     {
@@ -94026,30 +94026,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#assertCanonicalWorkflowAgentIds",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertCanonicalWorkflowAgentIds",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#assertChangedWorkflowName",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertChangedWorkflowName",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#assertPrincipalCanEditInTx",
@@ -94308,18 +94284,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "updateWorkflow",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#WORKFLOW_NAME_INVALID_MESSAGE",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "WORKFLOW_NAME_INVALID_MESSAGE",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -99260,6 +99224,30 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#assertCanonicalWorkflowAgentIds",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertCanonicalWorkflowAgentIds",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#assertChangedWorkflowName",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertChangedWorkflowName",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#createWorkflowPersistenceValues",
       "removeAfterWave": null,
       "status": "current-module",
@@ -99276,6 +99264,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "normalizeWorkflowSnapshot",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#WORKFLOW_NAME_INVALID_MESSAGE",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WORKFLOW_NAME_INVALID_MESSAGE",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -99332,6 +99332,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#workflowReferenceFromPersistenceRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "workflowReferenceFromPersistenceRow",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts#workflowRevisionOf",
       "removeAfterWave": null,
       "status": "current-module",
@@ -99360,18 +99372,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts#assertChangedWorkflowName",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertChangedWorkflowName",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -144174,6 +144174,54 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#createEventsArchiveStore",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createEventsArchiveStore",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#eventRow",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "eventRow",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "id": "owner:packages/backend/src/platform/persistence/eventsArchiveStore.ts#numberValue",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "numberValue",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/generationStore.ts",
       "id": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "removeAfterWave": "W9",
@@ -145590,6 +145638,54 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/maintenanceState.ts",
+      "id": "owner:packages/backend/src/platform/persistence/maintenanceState.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/maintenanceState.ts",
+      "id": "owner:packages/backend/src/platform/persistence/maintenanceState.ts#readMaintenanceNumber",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "readMaintenanceNumber",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/maintenanceState.ts",
+      "id": "owner:packages/backend/src/platform/persistence/maintenanceState.ts#readMaintenanceValue",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "readMaintenanceValue",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/maintenanceState.ts",
+      "id": "owner:packages/backend/src/platform/persistence/maintenanceState.ts#writeMaintenanceValue",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "writeMaintenanceValue",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/nodeRunLifecycleCore.ts",
       "id": "owner:packages/backend/src/platform/persistence/nodeRunLifecycleCore.ts#$file",
       "removeAfterWave": "W9",
@@ -146039,30 +146135,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "EventArchiveRunCursorV1",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlEventsArchive.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#eventRow",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "eventRow",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlEventsArchive.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlEventsArchive.ts#numberValue",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "numberValue",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -150851,42 +150923,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceState.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemMaintenanceState.ts#readMaintenanceNumber",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "readMaintenanceNumber",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceState.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemMaintenanceState.ts#readMaintenanceValue",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "readMaintenanceValue",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceState.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemMaintenanceState.ts#writeMaintenanceValue",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "writeMaintenanceValue",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -299994,5 +300030,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:62da9b6c2993c2a751d9e17cfccc567829ef0952338880f8985ab8b4a0648656"
+  "sourceDigest": "sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2"
 }

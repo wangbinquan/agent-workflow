@@ -13,10 +13,10 @@
 //   4. Cross-output-node port collisions are deterministic (node-id order,
 //      later wins) and surfaced as warnings.
 import { describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
 import {
   nodeRunOutputs,
   nodeRuns,
@@ -31,8 +31,6 @@ import {
   type OutcomeRunRow,
   type OutcomeTaskRow,
 } from '../src/services/execution/outcome'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function baseTask(overrides: Partial<OutcomeTaskRow> = {}): OutcomeTaskRow {
   return {
@@ -231,59 +229,65 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
 })
 
 describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
-  test('result_message_id anchors the projection; noise decision rows cannot win', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const wfId = ulid()
-    await db.insert(workflows).values({ id: wfId, name: 'wf-wg', definition: '{}' })
-    const taskId = ulid()
-    await db.insert(tasks).values({
-      id: taskId,
-      name: 'wg-anchor',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/x',
-      worktreePath: '/x',
-      baseBranch: 'main',
-      branch: `b-${taskId.slice(-4)}`,
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-      workgroupId: ulid(),
-      workgroupConfigJson: JSON.stringify({ mode: 'free_collab' }),
+  describeEachProvider('durable provider behavior', (harness) => {
+    test('result_message_id anchors the projection; noise decision rows cannot win', async () => {
+      const db = harness.db
+      const wfId = ulid()
+      await db.insert(workflows).values({ id: wfId, name: 'wf-wg', definition: '{}' })
+      const taskId = ulid()
+      await db.insert(tasks).values({
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
+        id: taskId,
+        name: 'wg-anchor',
+        workflowId: wfId,
+        workflowSnapshot: '{}',
+        repoPath: '/x',
+        worktreePath: '/x',
+        baseBranch: 'main',
+        branch: `b-${taskId.slice(-4)}`,
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        workgroupId: ulid(),
+        workgroupConfigJson: JSON.stringify({ mode: 'free_collab' }),
+      })
+      const anchorId = ulid()
+      // 先插一条同 kind 同 author 的噪声行（zero-delta 告警形态），再插真结果 ——
+      // 锚必须精确指到真结果，任何 kind/author 启发式都会取错。
+      await db.insert(workgroupMessages).values({
+        id: ulid(),
+        taskId,
+        round: 1,
+        authorKind: 'system',
+        kind: 'decision',
+        bodyMd: '⚠️ zero-delta warning noise',
+        createdAt: Date.now(),
+      })
+      await db.insert(workgroupMessages).values({
+        id: anchorId,
+        taskId,
+        round: 1,
+        authorKind: 'system',
+        kind: 'decision',
+        bodyMd: 'free-collab converged — 2 task(s) done',
+        createdAt: Date.now() + 1,
+      })
+      await db.insert(workgroupTaskState).values({
+        taskId,
+        gateStatus: 'idle',
+        resultMessageId: anchorId,
+        updatedAt: Date.now(),
+      })
+      const outcome = await getExecutionOutcome(db, taskId)
+      expect(outcome.outputs).toEqual({
+        result: { content: 'free-collab converged — 2 task(s) done', kind: 'text' },
+      })
+      expect(outcome.warnings).toEqual([])
     })
-    const anchorId = ulid()
-    // 先插一条同 kind 同 author 的噪声行（zero-delta 告警形态），再插真结果 ——
-    // 锚必须精确指到真结果，任何 kind/author 启发式都会取错。
-    await db.insert(workgroupMessages).values({
-      id: ulid(),
-      taskId,
-      round: 1,
-      authorKind: 'system',
-      kind: 'decision',
-      bodyMd: '⚠️ zero-delta warning noise',
-      createdAt: Date.now(),
-    })
-    await db.insert(workgroupMessages).values({
-      id: anchorId,
-      taskId,
-      round: 1,
-      authorKind: 'system',
-      kind: 'decision',
-      bodyMd: 'free-collab converged — 2 task(s) done',
-      createdAt: Date.now() + 1,
-    })
-    await db.insert(workgroupTaskState).values({
-      taskId,
-      gateStatus: 'idle',
-      resultMessageId: anchorId,
-      updatedAt: Date.now(),
-    })
-    const outcome = await getExecutionOutcome(db, taskId)
-    expect(outcome.outputs).toEqual({
-      result: { content: 'free-collab converged — 2 task(s) done', kind: 'text' },
-    })
-    expect(outcome.warnings).toEqual([])
   })
 })
 
@@ -334,58 +338,64 @@ describe('RFC-243 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', 
 })
 
 describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
-  test('done workflow task round-trips output rows; missing task 404s', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const definition = {
-      $schema_version: 4,
-      inputs: [],
-      nodes: [{ id: 'out-a', kind: 'output', ports: [] }],
-      edges: [],
-    }
-    const workflowId = ulid()
-    const taskId = ulid()
-    await db.insert(workflows).values({
-      id: workflowId,
-      name: `wf-${workflowId.slice(-6).toLowerCase()}`,
-      definition: JSON.stringify(definition),
-    })
-    await db.insert(tasks).values({
-      id: taskId,
-      name: 'rfc243-outcome',
-      workflowId,
-      workflowSnapshot: JSON.stringify(definition),
-      repoPath: '/tmp/rfc243-nowhere',
-      worktreePath: '/tmp/rfc243-nowhere',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    const runId = ulid()
-    await db.insert(nodeRuns).values({
-      id: runId,
-      taskId,
-      nodeId: 'out-a',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-      startedAt: Date.now(),
-      finishedAt: Date.now(),
-    })
-    await db.insert(nodeRunOutputs).values({
-      nodeRunId: runId,
-      portName: 'report',
-      content: 'hello',
-      kind: 'text',
-    })
-    const outcome = await getExecutionOutcome(db, taskId)
-    expect(outcome.status).toBe('done')
-    expect(outcome.outputs).toEqual({ report: { content: 'hello', kind: 'text' } })
+  describeEachProvider('durable provider behavior', (harness) => {
+    test('done workflow task round-trips output rows; missing task 404s', async () => {
+      const db = harness.db
+      const definition = {
+        $schema_version: 4,
+        inputs: [],
+        nodes: [{ id: 'out-a', kind: 'output', ports: [] }],
+        edges: [],
+      }
+      const workflowId = ulid()
+      const taskId = ulid()
+      await db.insert(workflows).values({
+        id: workflowId,
+        name: `wf-${workflowId.slice(-6).toLowerCase()}`,
+        definition: JSON.stringify(definition),
+      })
+      await db.insert(tasks).values({
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
+        id: taskId,
+        name: 'rfc243-outcome',
+        workflowId,
+        workflowSnapshot: JSON.stringify(definition),
+        repoPath: '/tmp/rfc243-nowhere',
+        worktreePath: '/tmp/rfc243-nowhere',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      const runId = ulid()
+      await db.insert(nodeRuns).values({
+        id: runId,
+        taskId,
+        nodeId: 'out-a',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+      })
+      await db.insert(nodeRunOutputs).values({
+        nodeRunId: runId,
+        portName: 'report',
+        content: 'hello',
+        kind: 'text',
+      })
+      const outcome = await getExecutionOutcome(db, taskId)
+      expect(outcome.status).toBe('done')
+      expect(outcome.outputs).toEqual({ report: { content: 'hello', kind: 'text' } })
 
-    await expect(getExecutionOutcome(db, ulid())).rejects.toMatchObject({
-      code: 'task-not-found',
+      await expect(getExecutionOutcome(db, ulid())).rejects.toMatchObject({
+        code: 'task-not-found',
+      })
     })
   })
 })
