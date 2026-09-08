@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 711,
+      "baseline": 707,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -867,12 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25049,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25050,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W24 extracts workgroupDraftMemberOf in the existing resource-catalog workgroupPersistence owner from two original member projection callbacks. This is one measured shared production helper, not a new parallel implementation."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:24d268d72628636d8d018eb00cddb9209a2d2493a3e675115d04620d71ff7e70",
+    "sourceDigest": "sha256:3d91e40252c14943268fdb994e0477bc1907c19147f1af434644921c9136a175",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d2c27f5ec4f8f84841862c6bb6211f3f201e4d04",
-    "contentDigest": "sha256:e05ed2fb31a0e54ce6d546be7d60d86cac82bd5e49e57171fe52e3808edd414c",
+    "currentSnapshotSha": "dfb8427f38c50f146dac96e67172cc4ebb8a2a78",
+    "contentDigest": "sha256:d4a6740eff85c709249a3c4dfc0e201ae60cf2b7f00ee5131772e83de044f58c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

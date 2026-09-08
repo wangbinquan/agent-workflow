@@ -15,16 +15,14 @@
 // 写死 name 优先想防的那件事，决策 28 用守卫保住它、同时修掉它的代价）。
 
 import { describe, expect, test } from 'bun:test'
-import { join } from 'node:path'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { workflows } from '../src/db/schema'
 import {
   loadWorkflowValidationContext,
   validateWorkflowDef,
 } from '../src/services/workflow.validator'
-
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 
 type Node = WorkflowDefinition['nodes'][number]
 type Edge = WorkflowDefinition['edges'][number]
@@ -43,7 +41,7 @@ const def = (partial: Partial<WorkflowDefinition>): WorkflowDefinition => ({
 })
 
 const seed = async (
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   name: string,
   definition: WorkflowDefinition,
@@ -99,122 +97,124 @@ const parentWithTwoCalls = () =>
     ],
   })
 
-describe('① 同名双 id · 端口不同', () => {
-  test('两个节点各按自己的 id hint 推端口，两条边都合法', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W1, 'audit', childWith('topic', 'old'))
-    await seed(db, W2, 'audit', childWith('subject', 'new'))
+describeEachProvider('RFC-271 call-selector resolution providers', (harness) => {
+  describe('① 同名双 id · 端口不同', () => {
+    test('两个节点各按自己的 id hint 推端口，两条边都合法', async () => {
+      const db = harness.db
+      await seed(db, W1, 'audit', childWith('topic', 'old'))
+      await seed(db, W2, 'audit', childWith('subject', 'new'))
 
-    const definition = parentWithTwoCalls()
-    const r = validateWorkflowDef(
-      definition,
-      await loadWorkflowValidationContext(db, { definition }),
-    )
-    const codes = r.issues.map((i) => i.code)
-    // 按裸名字解析时，c2 的 `new` 端口不存在于 W1 ⇒ 这里会冒出边 / 绑定类错误。
-    expect(codes).not.toContain('call-workflow-ref-missing')
-    expect(codes).not.toContain('call-workflow-input-unwired')
-    expect(r.issues.filter((i) => (i.severity ?? 'error') === 'error').map((i) => i.code)).toEqual(
-      [],
-    )
-    expect(r.ok).toBe(true)
+      const definition = parentWithTwoCalls()
+      const r = validateWorkflowDef(
+        definition,
+        await loadWorkflowValidationContext(db, { definition }),
+      )
+      const codes = r.issues.map((i) => i.code)
+      // 按裸名字解析时，c2 的 `new` 端口不存在于 W1 ⇒ 这里会冒出边 / 绑定类错误。
+      expect(codes).not.toContain('call-workflow-ref-missing')
+      expect(codes).not.toContain('call-workflow-input-unwired')
+      expect(
+        r.issues.filter((i) => (i.severity ?? 'error') === 'error').map((i) => i.code),
+      ).toEqual([])
+      expect(r.ok).toBe(true)
+    })
+
+    test('去掉 c2 的 id hint 后回退名字规则（最老 ULID = W1），`new` 就真的解析不到了', async () => {
+      const db = harness.db
+      await seed(db, W1, 'audit', childWith('topic', 'old'))
+      await seed(db, W2, 'audit', childWith('subject', 'new'))
+
+      const definition = parentWithTwoCalls()
+      const c2 = definition.nodes.find((n) => (n as unknown as { id: string }).id === 'c2')
+      delete (c2 as unknown as Record<string, unknown>).workflowId
+
+      const r = validateWorkflowDef(
+        definition,
+        await loadWorkflowValidationContext(db, { definition }),
+      )
+      // 这条不是「期望的行为」，是**对照组**：它证明上一条的绿不是因为校验太松。
+      // c2 退回 W1（入端口叫 `topic`），而边喂的是 `subject` ⇒ 硬错误。
+      expect(r.issues.map((i) => i.code)).toContain('call-workflow-input-unwired')
+      expect(r.ok).toBe(false)
+    })
   })
 
-  test('去掉 c2 的 id hint 后回退名字规则（最老 ULID = W1），`new` 就真的解析不到了', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W1, 'audit', childWith('topic', 'old'))
-    await seed(db, W2, 'audit', childWith('subject', 'new'))
+  describe('② 同名双 id · 其中一支成环', () => {
+    const ROOT = '01ROOT00000000000000000000'
 
-    const definition = parentWithTwoCalls()
-    const c2 = definition.nodes.find((n) => (n as unknown as { id: string }).id === 'c2')
-    delete (c2 as unknown as Record<string, unknown>).workflowId
+    test('只有 W2 回调根 —— 按边解析看得见这个环', async () => {
+      const db = harness.db
+      await seed(db, W1, 'audit', childWith('topic', 'old'))
+      // W2 与 W1 同名，但它自己 call 回根。
+      await seed(
+        db,
+        W2,
+        'audit',
+        childWith('subject', 'new', [
+          node({ id: 'c_back', kind: 'call-workflow', workflowName: 'root-wf', workflowId: ROOT }),
+        ]),
+      )
+      const rootDef = parentWithTwoCalls()
+      await seed(db, ROOT, 'root-wf', rootDef)
 
-    const r = validateWorkflowDef(
-      definition,
-      await loadWorkflowValidationContext(db, { definition }),
-    )
-    // 这条不是「期望的行为」，是**对照组**：它证明上一条的绿不是因为校验太松。
-    // c2 退回 W1（入端口叫 `topic`），而边喂的是 `subject` ⇒ 硬错误。
-    expect(r.issues.map((i) => i.code)).toContain('call-workflow-input-unwired')
-    expect(r.ok).toBe(false)
+      const r = validateWorkflowDef(
+        rootDef,
+        await loadWorkflowValidationContext(db, {
+          definition: rootDef,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+        }),
+      )
+      const cycles = r.issues.filter((i) => i.code === 'workflow-call-cycle')
+      expect(cycles.length).toBeGreaterThan(0)
+      // RFC-099 回显纪律：环里只出现资源 id，绝不出现名字。
+      expect(cycles[0]?.message).toContain(ROOT)
+      expect(cycles[0]?.message).toContain(W2)
+      expect(cycles[0]?.message).not.toContain('audit')
+    })
+
+    test('对照组：把 c2 的 hint 也指向 W1（不回调）⇒ 无环', async () => {
+      const db = harness.db
+      await seed(db, W1, 'audit', childWith('topic', 'old'))
+      await seed(
+        db,
+        W2,
+        'audit',
+        childWith('subject', 'new', [
+          node({ id: 'c_back', kind: 'call-workflow', workflowName: 'root-wf', workflowId: ROOT }),
+        ]),
+      )
+      const rootDef = parentWithTwoCalls()
+      const c2 = rootDef.nodes.find((n) => (n as unknown as { id: string }).id === 'c2')
+      ;(c2 as unknown as Record<string, unknown>).workflowId = W1
+      await seed(db, ROOT, 'root-wf', rootDef)
+
+      const r = validateWorkflowDef(
+        rootDef,
+        await loadWorkflowValidationContext(db, {
+          definition: rootDef,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+        }),
+      )
+      expect(r.issues.filter((i) => i.code === 'workflow-call-cycle')).toEqual([])
+    })
   })
-})
 
-describe('② 同名双 id · 其中一支成环', () => {
-  const ROOT = '01ROOT00000000000000000000'
+  describe('③ 名字守卫：hint 指向的行改了名 ⇒ hint 作废', () => {
+    test('c2 hint 的 W2 已被改名 renamed-audit ⇒ 回退名字规则绑到 W1', async () => {
+      const db = harness.db
+      await seed(db, W1, 'audit', childWith('topic', 'old'))
+      // W2 还在，但它现在叫别的名字 —— 节点里的 id 是 stale cache。
+      await seed(db, W2, 'renamed-audit', childWith('subject', 'new'))
 
-  test('只有 W2 回调根 —— 按边解析看得见这个环', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W1, 'audit', childWith('topic', 'old'))
-    // W2 与 W1 同名，但它自己 call 回根。
-    await seed(
-      db,
-      W2,
-      'audit',
-      childWith('subject', 'new', [
-        node({ id: 'c_back', kind: 'call-workflow', workflowName: 'root-wf', workflowId: ROOT }),
-      ]),
-    )
-    const rootDef = parentWithTwoCalls()
-    await seed(db, ROOT, 'root-wf', rootDef)
-
-    const r = validateWorkflowDef(
-      rootDef,
-      await loadWorkflowValidationContext(db, {
-        definition: rootDef,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-      }),
-    )
-    const cycles = r.issues.filter((i) => i.code === 'workflow-call-cycle')
-    expect(cycles.length).toBeGreaterThan(0)
-    // RFC-099 回显纪律：环里只出现资源 id，绝不出现名字。
-    expect(cycles[0]?.message).toContain(ROOT)
-    expect(cycles[0]?.message).toContain(W2)
-    expect(cycles[0]?.message).not.toContain('audit')
-  })
-
-  test('对照组：把 c2 的 hint 也指向 W1（不回调）⇒ 无环', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W1, 'audit', childWith('topic', 'old'))
-    await seed(
-      db,
-      W2,
-      'audit',
-      childWith('subject', 'new', [
-        node({ id: 'c_back', kind: 'call-workflow', workflowName: 'root-wf', workflowId: ROOT }),
-      ]),
-    )
-    const rootDef = parentWithTwoCalls()
-    const c2 = rootDef.nodes.find((n) => (n as unknown as { id: string }).id === 'c2')
-    ;(c2 as unknown as Record<string, unknown>).workflowId = W1
-    await seed(db, ROOT, 'root-wf', rootDef)
-
-    const r = validateWorkflowDef(
-      rootDef,
-      await loadWorkflowValidationContext(db, {
-        definition: rootDef,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-      }),
-    )
-    expect(r.issues.filter((i) => i.code === 'workflow-call-cycle')).toEqual([])
-  })
-})
-
-describe('③ 名字守卫：hint 指向的行改了名 ⇒ hint 作废', () => {
-  test('c2 hint 的 W2 已被改名 renamed-audit ⇒ 回退名字规则绑到 W1', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W1, 'audit', childWith('topic', 'old'))
-    // W2 还在，但它现在叫别的名字 —— 节点里的 id 是 stale cache。
-    await seed(db, W2, 'renamed-audit', childWith('subject', 'new'))
-
-    const definition = parentWithTwoCalls()
-    const r = validateWorkflowDef(
-      definition,
-      await loadWorkflowValidationContext(db, { definition }),
-    )
-    // c2 退回 W1（入端口 `topic`），而边喂的是 `subject` ⇒ 硬错误。
-    // 这正是「rename + recreate 不得被 stale id 静默重绑」——守卫在起作用。
-    expect(r.issues.map((i) => i.code)).toContain('call-workflow-input-unwired')
-    expect(r.ok).toBe(false)
+      const definition = parentWithTwoCalls()
+      const r = validateWorkflowDef(
+        definition,
+        await loadWorkflowValidationContext(db, { definition }),
+      )
+      // c2 退回 W1（入端口 `topic`），而边喂的是 `subject` ⇒ 硬错误。
+      // 这正是「rename + recreate 不得被 stale id 静默重绑」——守卫在起作用。
+      expect(r.issues.map((i) => i.code)).toContain('call-workflow-input-unwired')
+      expect(r.ok).toBe(false)
+    })
   })
 })

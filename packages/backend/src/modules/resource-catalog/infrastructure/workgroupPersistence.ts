@@ -61,6 +61,25 @@ export function normalizeWorkgroupSnapshot(
   })
 }
 
+export function workgroupDraftMemberOf(
+  member: WorkgroupMember,
+  missingAgentId: typeof QUARANTINED_SNAPSHOT_AGENT_ID | '',
+): WorkgroupDraftMember {
+  return member.memberType === 'agent'
+    ? {
+        memberType: 'agent',
+        agentId: member.agentId ?? missingAgentId,
+        displayName: member.displayName,
+        roleDesc: member.roleDesc,
+      }
+    : {
+        memberType: 'human',
+        userId: member.userId ?? '',
+        displayName: member.displayName,
+        roleDesc: member.roleDesc,
+      }
+}
+
 export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapshot {
   const ordered = [...group.members].sort(
     (left, right) =>
@@ -81,21 +100,7 @@ export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapsh
     completionGate: group.completionGate,
     clarifyBudget: group.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
     fanOut: group.fanOut ?? false,
-    members: ordered.map((member) =>
-      member.memberType === 'agent'
-        ? {
-            memberType: 'agent' as const,
-            agentId: member.agentId ?? QUARANTINED_SNAPSHOT_AGENT_ID,
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          }
-        : {
-            memberType: 'human' as const,
-            userId: member.userId ?? '',
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          },
-    ),
+    members: ordered.map((member) => workgroupDraftMemberOf(member, QUARANTINED_SNAPSHOT_AGENT_ID)),
   })
 }
 

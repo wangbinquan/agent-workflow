@@ -6,7 +6,7 @@
     "moduleFiles": 1191,
     "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25049
+    "symbolsIncludingFileRoots": 25050
   },
   "entries": [
     {
@@ -99852,6 +99852,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "workgroupContentPersistenceValues",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts#workgroupDraftMemberOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "workgroupDraftMemberOf",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301290,5 +301302,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:24d268d72628636d8d018eb00cddb9209a2d2493a3e675115d04620d71ff7e70"
+  "sourceDigest": "sha256:3d91e40252c14943268fdb994e0477bc1907c19147f1af434644921c9136a175"
 }

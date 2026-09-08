@@ -34,7 +34,8 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { listTaskQuestions } from '../src/services/taskQuestions'
@@ -45,8 +46,6 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 beforeEach(() => {
   resetBroadcastersForTests()
@@ -99,7 +98,10 @@ function crossDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<{ taskId: string }> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  def: WorkflowDefinition,
+): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
   await db.insert(workflows).values({
@@ -113,6 +115,10 @@ async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<{ taskId
   await db.insert(tasks).values({
     id: taskId,
     name: 'fixture',
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     workflowId,
     workflowSnapshot: JSON.stringify(def),
     repoPath: '/tmp/aw-rfc128-p5-0',
@@ -127,7 +133,7 @@ async function seedTask(db: DbClient, def: WorkflowDefinition): Promise<{ taskId
 }
 
 async function seedSelfRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
@@ -156,7 +162,7 @@ async function seedSelfRound(
 }
 
 async function seedCrossRound(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   questions: ClarifyQuestion[],
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
@@ -186,11 +192,11 @@ async function seedCrossRound(
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 
-function roundOf(db: DbClient, taskId: string) {
+function roundOf(db: ProviderNeutralDatabase, taskId: string) {
   return db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
 }
 
-function nodeRunStatusOf(db: DbClient, id: string) {
+function nodeRunStatusOf(db: ProviderNeutralDatabase, id: string) {
   return db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, id))
 }
 
@@ -199,7 +205,7 @@ function nodeRunStatusOf(db: DbClient, id: string) {
  *  flag audit W0, design/flag-audit-2026-07-07.md §3 — so this is now the plain primitive.
  *  RFC-162: the per-question `scopes` arg is gone too — scope deleted, cross unified with self.) */
 async function sealGuarded(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   originNodeRunId: string,
   answers: ClarifyAnswer[],
 ): Promise<{ error?: unknown; result?: Awaited<ReturnType<typeof sealRoundQuestions>> }> {
@@ -219,168 +225,181 @@ async function sealGuarded(
 // continuation. These tests (formerly asserting a 409 guard) now assert the full seal SUCCEEDS.
 // ---------------------------------------------------------------------------
 
-describe('RFC-132 PR-B — self/questioner full seal now ALLOWED (P5-0 guard removed)', () => {
-  test('SELF 轮全题 seal → 成功（roundFullySealed=true、轮 answered、中介 node_run 关）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
+describeEachProvider('RFC-128 full-seal behavior providers', (harness) => {
+  describe('RFC-132 PR-B — self/questioner full seal now ALLOWED (P5-0 guard removed)', () => {
+    test('SELF 轮全题 seal → 成功（roundFullySealed=true、轮 answered、中介 node_run 关）', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')])
-    expect(error).toBeUndefined()
-    expect(result?.roundFullySealed).toBe(true)
-    // full seal commits: round answered + intermediary node closed. The entries are sealed-
-    // undispatched → the park source holds the asking node until dispatch mints the continuation.
-    const [round] = await roundOf(db, taskId)
-    expect(round?.status).toBe('answered')
-    expect(round?.answersJson ?? null).not.toBeNull()
-    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
-  })
-
-  test('CROSS 轮全题 seal（2 题一次）→ 成功（park 等 dispatch，不 strand）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')])
-    expect(error).toBeUndefined()
-    expect(result?.roundFullySealed).toBe(true)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
-  })
-
-  test('CROSS 轮全题 seal — 跨多次 seal 累计成全题（partial 后补最后一题）→ 末次成功（轮 answered）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
-
-    // First seal q1 — PARTIAL, allowed (round stays awaiting_human).
-    const first = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
-    expect(first.error).toBeUndefined()
-    expect(first.result?.roundFullySealed).toBe(false)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
-
-    // Sealing the LAST question completes the round → full seal now SUCCEEDS (guard removed).
-    const second = await sealGuarded(db, originNodeRunId, [makeAns('q2')])
-    expect(second.error).toBeUndefined()
-    expect(second.result?.roundFullySealed).toBe(true)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// PARTIAL seal 仍允许（轮停 awaiting_human，OPEN session 兜 park，不 strand）
-// ---------------------------------------------------------------------------
-
-describe('RFC-128 P5-0 — partial seal 仍允许（self/questioner）', () => {
-  test('SELF 轮 partial seal（2 题答 1）→ 允许：roundFullySealed=false、轮 awaiting_human', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
-    expect(error).toBeUndefined()
-    expect(result?.roundFullySealed).toBe(false)
-    expect(result?.sealedQuestionIds).toEqual(['q1'])
-    // OPEN session still parks the asking run (loadOpenClarify) → no strand.
-    expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
-    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('awaiting_human')
-  })
-
-  test('CROSS 轮 partial seal（2 题答 1）→ 允许', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
-    expect(error).toBeUndefined()
-    expect(result?.roundFullySealed).toBe(false)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// CROSS full seal（continue / stop）照常翻 answered + 关中介 node_run。RFC-162: scope 删除后
-// 一切 cross 轮统一——reconcile 只产 questioner（asker）条目，从不产 designer 条目（designer
-// handler 只来自人工改派）。directive=stop 依旧持久化 + reconcile 不产 designer（本就不产）。
-// ---------------------------------------------------------------------------
-
-describe('RFC-128 P5-0 — CROSS full seal 照常 (continue / stop)', () => {
-  test('CROSS 轮全题 seal（2 题）→ roundFullySealed=true、轮 answered、node_run 关', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1'), makeAns('q2')])
-    expect(error).toBeUndefined()
-    expect(result?.roundFullySealed).toBe(true)
-    // full seal 翻 answered + 关中介 node_run（park 把持任务，等看板 dispatch）。
-    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
-    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
-  })
-
-  test('CROSS 轮单题 full seal → 照常允许（roundFullySealed=true、answered）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
-
-    const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
-    expect(error).toBeUndefined()
-    expect(result?.roundFullySealed).toBe(true)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
-  })
-
-  test('RFC-132 PR-B：CROSS full seal + directive=stop → 现成功（guard 移除）', async () => {
-    // Formerly (P5-0) a cross-stop full seal was rejected — the stop branch needed a questioner stop
-    // rerun the control channel could not provide → strand. Under the universal deferred model the
-    // questioner park + dispatch release path exists, so a full seal now COMMITS: round answered,
-    // directive=stop persisted, intermediary node closed; the questioner stop rerun mints at dispatch.
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
-
-    const result = await sealRoundQuestions({
-      db,
-      originNodeRunId,
-      answers: [makeAns('q1')],
-      directive: 'stop',
+      const { error, result } = await sealGuarded(db, originNodeRunId, [
+        makeAns('q1'),
+        makeAns('q2'),
+      ])
+      expect(error).toBeUndefined()
+      expect(result?.roundFullySealed).toBe(true)
+      // full seal commits: round answered + intermediary node closed. The entries are sealed-
+      // undispatched → the park source holds the asking node until dispatch mints the continuation.
+      const [round] = await roundOf(db, taskId)
+      expect(round?.status).toBe('answered')
+      expect(round?.answersJson ?? null).not.toBeNull()
+      expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
     })
-    expect(result.roundFullySealed).toBe(true)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
-    expect((await roundOf(db, taskId))[0]?.directive).toBe('stop')
-    expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
+
+    test('CROSS 轮全题 seal（2 题一次）→ 成功（park 等 dispatch，不 strand）', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
+
+      const { error, result } = await sealGuarded(db, originNodeRunId, [
+        makeAns('q1'),
+        makeAns('q2'),
+      ])
+      expect(error).toBeUndefined()
+      expect(result?.roundFullySealed).toBe(true)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+    })
+
+    test('CROSS 轮全题 seal — 跨多次 seal 累计成全题（partial 后补最后一题）→ 末次成功（轮 answered）', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
+
+      // First seal q1 — PARTIAL, allowed (round stays awaiting_human).
+      const first = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
+      expect(first.error).toBeUndefined()
+      expect(first.result?.roundFullySealed).toBe(false)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
+
+      // Sealing the LAST question completes the round → full seal now SUCCEEDS (guard removed).
+      const second = await sealGuarded(db, originNodeRunId, [makeAns('q2')])
+      expect(second.error).toBeUndefined()
+      expect(second.result?.roundFullySealed).toBe(true)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+    })
   })
 
-  test('raw 原语 CROSS full seal + stop → 照旧成功 + directive=stop 持久化 + 无 designer 条目（Codex P2-2 现状, 不破)', async () => {
-    // The raw primitive still threads directive on full seal (RFC-128 P2 Codex P2-2).
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
+  // ---------------------------------------------------------------------------
+  // PARTIAL seal 仍允许（轮停 awaiting_human，OPEN session 兜 park，不 strand）
+  // ---------------------------------------------------------------------------
 
-    const result = await sealRoundQuestions({
-      db,
-      originNodeRunId,
-      answers: [makeAns('q1')],
-      directive: 'stop',
+  describe('RFC-128 P5-0 — partial seal 仍允许（self/questioner）', () => {
+    test('SELF 轮 partial seal（2 题答 1）→ 允许：roundFullySealed=false、轮 awaiting_human', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
+
+      const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
+      expect(error).toBeUndefined()
+      expect(result?.roundFullySealed).toBe(false)
+      expect(result?.sealedQuestionIds).toEqual(['q1'])
+      // OPEN session still parks the asking run (loadOpenClarify) → no strand.
+      expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
+      expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('awaiting_human')
     })
-    expect(result.roundFullySealed).toBe(true)
-    expect((await roundOf(db, taskId))[0]?.directive).toBe('stop')
-    // RFC-162: reconcile ALWAYS produces just the questioner (asker) entry — NO designer entry
-    // (designer handlers come only from a human reassign). The "no designer entry" lock holds for
-    // every cross round now, stop or continue.
-    const dtos = await listTaskQuestions(db, taskId)
-    expect(dtos.some((d) => d.roleKind === 'designer')).toBe(false)
-    expect(dtos.some((d) => d.roleKind === 'questioner')).toBe(true)
+
+    test('CROSS 轮 partial seal（2 题答 1）→ 允许', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
+
+      const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
+      expect(error).toBeUndefined()
+      expect(result?.roundFullySealed).toBe(false)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // CROSS full seal（continue / stop）照常翻 answered + 关中介 node_run。RFC-162: scope 删除后
+  // 一切 cross 轮统一——reconcile 只产 questioner（asker）条目，从不产 designer 条目（designer
+  // handler 只来自人工改派）。directive=stop 依旧持久化 + reconcile 不产 designer（本就不产）。
+  // ---------------------------------------------------------------------------
+
+  describe('RFC-128 P5-0 — CROSS full seal 照常 (continue / stop)', () => {
+    test('CROSS 轮全题 seal（2 题）→ roundFullySealed=true、轮 answered、node_run 关', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
+
+      const { error, result } = await sealGuarded(db, originNodeRunId, [
+        makeAns('q1'),
+        makeAns('q2'),
+      ])
+      expect(error).toBeUndefined()
+      expect(result?.roundFullySealed).toBe(true)
+      // full seal 翻 answered + 关中介 node_run（park 把持任务，等看板 dispatch）。
+      expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+      expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
+    })
+
+    test('CROSS 轮单题 full seal → 照常允许（roundFullySealed=true、answered）', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
+
+      const { error, result } = await sealGuarded(db, originNodeRunId, [makeAns('q1')])
+      expect(error).toBeUndefined()
+      expect(result?.roundFullySealed).toBe(true)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+    })
+
+    test('RFC-132 PR-B：CROSS full seal + directive=stop → 现成功（guard 移除）', async () => {
+      // Formerly (P5-0) a cross-stop full seal was rejected — the stop branch needed a questioner stop
+      // rerun the control channel could not provide → strand. Under the universal deferred model the
+      // questioner park + dispatch release path exists, so a full seal now COMMITS: round answered,
+      // directive=stop persisted, intermediary node closed; the questioner stop rerun mints at dispatch.
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
+
+      const result = await sealRoundQuestions({
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+        directive: 'stop',
+      })
+      expect(result.roundFullySealed).toBe(true)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+      expect((await roundOf(db, taskId))[0]?.directive).toBe('stop')
+      expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
+    })
+
+    test('raw 原语 CROSS full seal + stop → 照旧成功 + directive=stop 持久化 + 无 designer 条目（Codex P2-2 现状, 不破)', async () => {
+      // The raw primitive still threads directive on full seal (RFC-128 P2 Codex P2-2).
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
+
+      const result = await sealRoundQuestions({
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+        directive: 'stop',
+      })
+      expect(result.roundFullySealed).toBe(true)
+      expect((await roundOf(db, taskId))[0]?.directive).toBe('stop')
+      // RFC-162: reconcile ALWAYS produces just the questioner (asker) entry — NO designer entry
+      // (designer handlers come only from a human reassign). The "no designer entry" lock holds for
+      // every cross round now, stop or continue.
+      const dtos = await listTaskQuestions(db, taskId)
+      expect(dtos.some((d) => d.roleKind === 'designer')).toBe(false)
+      expect(dtos.some((d) => d.roleKind === 'questioner')).toBe(true)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 原始存储原语行为不变（P1 黄金锁）+ 死旗标不得复活（flag audit W0）
+  // ---------------------------------------------------------------------------
+
+  describe('RFC-128 P5-0 尾声 — 原始原语黄金锁 + 死旗标删除锁', () => {
+    test('SELF 轮全题 seal（原始原语）→ 照旧成功（roundFullySealed=true、answered）——P1 黄金锁不破', async () => {
+      const db = harness.db
+      const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
+
+      const result = await sealRoundQuestions({
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1'), makeAns('q2')],
+      })
+      expect(result.roundFullySealed).toBe(true)
+      expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
+    })
   })
 })
-
-// ---------------------------------------------------------------------------
-// 原始存储原语行为不变（P1 黄金锁）+ 死旗标不得复活（flag audit W0）
-// ---------------------------------------------------------------------------
 
 describe('RFC-128 P5-0 尾声 — 原始原语黄金锁 + 死旗标删除锁', () => {
-  test('SELF 轮全题 seal（原始原语）→ 照旧成功（roundFullySealed=true、answered）——P1 黄金锁不破', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
-
-    const result = await sealRoundQuestions({
-      db,
-      originNodeRunId,
-      answers: [makeAns('q1'), makeAns('q2')],
-    })
-    expect(result.roundFullySealed).toBe(true)
-    expect((await roundOf(db, taskId))[0]?.status).toBe('answered')
-  })
-
   test('W0（flag-audit §3-2）：rejectSelfQuestionerFullSeal 死旗标已删除，不得复活', () => {
     // RFC-132 拆除守卫后该 arg 是纯 no-op（0 读取、2 调用点传 true、docstring 描述已不存在的行为）。
     // 本断言锁定源码层删除——若有人重新引入同名旗标，必须带真实读取逻辑并更新本测试。

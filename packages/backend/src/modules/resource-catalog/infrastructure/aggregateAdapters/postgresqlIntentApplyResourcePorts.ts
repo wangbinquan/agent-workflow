@@ -71,6 +71,7 @@ import {
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
+import { workgroupDraftMemberOf } from '../workgroupPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import type {
   PostgresqlIntentApplyArtifact,
@@ -1319,21 +1320,7 @@ function workgroupSnapshotFromRows(
     completionGate: group.completionGate,
     clarifyBudget: group.clarifyBudget ?? 3,
     fanOut: group.fanOut ?? false,
-    members: ordered.map((member) =>
-      member.memberType === 'agent'
-        ? {
-            memberType: 'agent',
-            agentId: member.agentId ?? '',
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          }
-        : {
-            memberType: 'human',
-            userId: member.userId ?? '',
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          },
-    ),
+    members: ordered.map((member) => workgroupDraftMemberOf(member, '')),
   })
 }
 

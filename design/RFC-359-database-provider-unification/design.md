@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W24把Workgroup成员的memberType/id/displayName/roleDesc投影收敛到既有owner内的
+  workgroupDraftMemberOf，两调用点显式传入各自原missing-agent回退；读取次序、成员顺序、
+  外层快照及Schema错误保持。只合一这两个callback，第三映射与完整PG owner不计作已收口。
+- W24的任务页anti-max实验虽通过原/新完整结果与三项真实SQL负控，仍保留全局ORDER BY，
+  并新增相关匹配集扫描，没有可证明的提前限页；精确撤回独占SQL片段及对应oracle补丁，
+  任务页生产与W23既有测试保持原已发布字节。实验不能作为AC11改善证据。
+
 - W23只把fast filtered任务页的根自身命中与后代命中数移到既有页内fam汇总；全局roots仍保留
   原MAX(started_at)、分组、分页边界和排序，facets与全部动态SQL表达式保持。不是全局聚合消除，
   小型真实旧/新查询和完整结果对拍通过不等于原规模P95已达标。
