@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第十七批（2026-09-08）**：再迁移10个旧套件，累计184个；原后86 pass/417 expect，
+> 75个原case默认双库，真实种子整行/JSON与纯case保持。终态化算法共享，生产净删19行，原同步/异步合同保留。
+> S4历史证明补齐SQLite；65源码最终14阶段50 pass+17指定历史红/686 expect，真PG待hosted。
+> 上批8e55的12个历史变异已获Bun1.4真双库证明；Main34205567197为28 success/7 failure/1 cancelled。
+> 补两条依赖账目、纠正冲突夹具的真实SQL交错；DROP确认active checkpoint等待被Bun idle误杀，
+> 已改短命DDL连接并保留原SQL预算。macOS skill-update 5s超时仍在细化定位，未声称修复。
+> 当前1915测试文件、657文件/1398次实际构库，353文件harness，T19f739；原full性能继续运行，RFC仍In Progress。
+
 > **RFC-359 W12 第十六批（2026-09-08）**：物理task生命周期和committed append各共享一份算法，
 > 原同步/异步事务及发布位置保留；上述两组生产合计净删114行。公共任务查询去重告警并限定页内family，
 > 原完整页/游标/计数对拍通过，微型SQLite计划已用root索引；原规模HTTP性能待hosted，AC11仍开。

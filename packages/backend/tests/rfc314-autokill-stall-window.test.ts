@@ -18,11 +18,13 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { findStalledRunningChildren } from '../src/services/autoKill'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_000_000_000
@@ -31,7 +33,7 @@ const STALL_MS = 60_000
 const WINDOW = 200
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { startedAt: number; events: Array<{ ts: number }> },
 ): Promise<string> {
   const workflowId = ulid()
@@ -43,6 +45,11 @@ async function seedRun(
     name: 'rfc314-fixture',
     workflowId,
     workflowSnapshot: '{}',
+    // Match the original SQLite task INSERT trigger, including JSON key order.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     repoPath: '/tmp/r',
     worktreePath: '/tmp/wt',
     baseBranch: 'main',
@@ -71,9 +78,9 @@ function staleEvents(n: number, ts: number): Array<{ ts: number }> {
   return Array.from({ length: n }, () => ({ ts }))
 }
 
-describe('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', () => {
+describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', (harness) => {
   test('窗口里存在一条新 ts（最后一行是回灌的旧 ts）⇒ 不判僵死', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const startedAt = NOW - 10 * STALL_MS
     // 先一条「刚刚才有动静」的事件，随后 50 条子代理回灌的旧 ts —— 最后一行很旧，
     // 但窗口内有活着的证据。
@@ -82,79 +89,114 @@ describe('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', () => {
       events: [{ ts: NOW - 1_000 }, ...staleEvents(50, startedAt)],
     })
 
-    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
+    const found = await findStalledRunningChildren(
+      createTaskExecutionPersistence(db).recoveryAdministration,
+      STALL_MS,
+      NOW,
+    )
     expect(found).toHaveLength(0)
   })
 
   test('整个窗口都很旧 ⇒ 判僵死，并带回窗口内的 max(ts)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const startedAt = NOW - 10 * STALL_MS
     const quietTs = NOW - 5 * STALL_MS
     const id = await seedRun(db, { startedAt, events: staleEvents(10, quietTs) })
 
-    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
+    const found = await findStalledRunningChildren(
+      createTaskExecutionPersistence(db).recoveryAdministration,
+      STALL_MS,
+      NOW,
+    )
     expect(found.map((r) => r.id)).toEqual([id])
     expect(found[0]!.lastTs).toBe(quietTs)
   })
 
   test('一条事件都没有 ⇒ lastTs 为 null，回落 startedAt', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const id = await seedRun(db, { startedAt: NOW - 10 * STALL_MS, events: [] })
 
-    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
+    const found = await findStalledRunningChildren(
+      createTaskExecutionPersistence(db).recoveryAdministration,
+      STALL_MS,
+      NOW,
+    )
     expect(found.map((r) => r.id)).toEqual([id])
     expect(found[0]!.lastTs).toBeNull()
   })
 })
 
-describe('RFC-314 D1 —— 窗口外的乱序会被低估（proposal §4 B1 明确接受的取舍）', () => {
-  test('最大 ts 落在窗口之外 ⇒ 判僵死；这是取舍不是 bug', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const startedAt = NOW - 10 * STALL_MS
-    // 第一条是「刚才还活着」，其后 WINDOW+50 条回灌旧 ts 把它挤出窗口。
-    await seedRun(db, {
-      startedAt,
-      events: [{ ts: NOW - 1_000 }, ...staleEvents(WINDOW + 50, startedAt)],
-    })
-
-    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
-    // 全表 max(ts) 会返回空数组（那条新 ts 让它不算僵死）；窗口法看不到它。
-    // 判据在这里被钉住：改回全表 max 会让这条转红，改小窗口也会。
-    expect(found).toHaveLength(1)
-    expect(found[0]!.lastTs).toBe(startedAt)
-  })
-})
-
-describe('RFC-314 D1 —— 结构判据', () => {
-  async function capture(eventsPerRun: number): Promise<{
-    statements: RecordedStatement[]
-    db: DbClient
-  }> {
-    const db = createInMemoryDb(MIGRATIONS)
-    for (let i = 0; i < 3; i += 1) {
+describeEachProvider(
+  'RFC-314 D1 —— 窗口外的乱序会被低估（proposal §4 B1 明确接受的取舍）',
+  (harness) => {
+    test('最大 ts 落在窗口之外 ⇒ 判僵死；这是取舍不是 bug', async () => {
+      const db = harness.db
+      const startedAt = NOW - 10 * STALL_MS
+      // 第一条是「刚才还活着」，其后 WINDOW+50 条回灌旧 ts 把它挤出窗口。
       await seedRun(db, {
-        startedAt: NOW - 10 * STALL_MS,
-        events: staleEvents(eventsPerRun, NOW - 5 * STALL_MS),
+        startedAt,
+        events: [{ ts: NOW - 1_000 }, ...staleEvents(WINDOW + 50, startedAt)],
       })
-    }
-    const raw = (db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client
-    const rec = recordStatements(raw)
-    try {
-      await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
-    } finally {
-      rec.stop()
-    }
-    return { statements: rec.statements, db }
+
+      const found = await findStalledRunningChildren(
+        createTaskExecutionPersistence(db).recoveryAdministration,
+        STALL_MS,
+        NOW,
+      )
+      // 全表 max(ts) 会返回空数组（那条新 ts 让它不算僵死）；窗口法看不到它。
+      // 判据在这里被钉住：改回全表 max 会让这条转红，改小窗口也会。
+      expect(found).toHaveLength(1)
+      expect(found[0]!.lastTs).toBe(startedAt)
+    })
+  },
+)
+
+async function capture(
+  eventsPerRun: number,
+  database?: ProviderDatabaseHarness,
+): Promise<{
+  statements: RecordedStatement[]
+  db: ProviderNeutralDatabase
+}> {
+  const db = database?.db ?? createInMemoryDb(MIGRATIONS)
+  for (let i = 0; i < 3; i += 1) {
+    await seedRun(db, {
+      startedAt: NOW - 10 * STALL_MS,
+      events: staleEvents(eventsPerRun, NOW - 5 * STALL_MS),
+    })
   }
+  const rec =
+    database?.recordStatements() ??
+    recordStatements((db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client)
+  try {
+    await findStalledRunningChildren(
+      createTaskExecutionPersistence(db).recoveryAdministration,
+      STALL_MS,
+      NOW,
+    )
+  } finally {
+    rec.stop()
+  }
+  return { statements: rec.statements, db }
+}
 
-  test('语句条数只随 running run 数增长，不随事件量增长', async () => {
-    const small = await capture(5)
-    const large = await capture(400)
-    expect(large.statements.length).toBe(small.statements.length)
-    // 1 条候选查询 + 每个 run 一条窗口查询。
-    expect(small.statements.length).toBe(4)
-  })
+// Each count sample uses an independent database of the selected provider.
+describeEachProvider(
+  'RFC-314 D1 —— 结构判据',
+  (harness) => {
+    test('语句条数只随 running run 数增长，不随事件量增长', async () => {
+      const small = await capture(5, harness.database(0))
+      const large = await capture(400, harness.database(1))
+      expect(large.statements.length).toBe(small.statements.length)
+      // 1 条候选查询 + 每个 run 一条窗口查询。
+      expect(small.statements.length).toBe(4)
+    })
+  },
+  { databaseCount: 2 },
+)
 
+// The original EXPLAIN assertions describe SQLite's native query-plan vocabulary.
+describe('RFC-314 D1 —— 结构判据', () => {
   test('每条语句都不扫大表、不临时排序', async () => {
     const { statements, db } = await capture(400)
     const raw = (

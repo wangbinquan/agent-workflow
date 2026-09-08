@@ -10,11 +10,11 @@
 
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { codeTriggerDeliveries, repoCapabilityConfig } from '@/db/schema'
 
 export async function seedCapabilityCell(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: {
     readonly repoId: string
     readonly capability: string
@@ -61,7 +61,7 @@ export async function seedCapabilityCell(
 }
 
 export async function seedDelivery(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: {
     readonly correlationId: string
     readonly codeHostEndpointId?: string | null

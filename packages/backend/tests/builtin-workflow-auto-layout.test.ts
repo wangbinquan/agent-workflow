@@ -6,7 +6,6 @@
 // byte-for-byte untouched.
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import {
   DEFAULT_NODE_SIZE_BY_KIND,
@@ -19,18 +18,16 @@ import {
   synthesizeDigitalEmployeeScriptHostSnapshot,
   synthesizeReviewedDigitalEmployeeHostSnapshot,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { workflows } from '@/db/schema'
-import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
+import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
 import { buildAgentHostSnapshot } from '@/services/agentLaunch'
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
 import { layoutBuiltinWorkflowSnapshotJson, projectWorkflowSnapshotForRead } from '@/services/task'
 import { buildWorkgroupHostSnapshot } from '@/services/workgroup/launch'
-import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 function withoutGeometry(definition: WorkflowDefinition): unknown {
   return {
@@ -180,16 +177,18 @@ describe('built-in workflow automatic layout', () => {
       expectNoNodeOverlap(laidOut)
     }
   })
+})
 
+describeEachProvider('built-in workflow automatic layout', (harness) => {
   test('the persisted built-in seeder lays out new rows and repairs legacy geometry once', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const fusion = composeSqliteFusionPersistence({
+    const db = harness.db
+    const fusion = composeFusionPersistenceFor({
       db,
       appHome: '/tmp',
-      ...TEST_SQLITE_FUSION_PARTICIPANTS,
+      ...TEST_FUSION_PARTICIPANTS,
     })
     await seedFusionResources(fusion)
-    const first = db.select().from(workflows).where(eq(workflows.builtin, true)).get()!
+    const first = (await db.select().from(workflows).where(eq(workflows.builtin, true)).get())!
     const firstDefinition = WorkflowDefinitionSchema.parse(JSON.parse(first.definition))
     expectNoNodeOverlap(firstDefinition)
 
@@ -197,19 +196,20 @@ describe('built-in workflow automatic layout', () => {
       ...firstDefinition,
       nodes: firstDefinition.nodes.map((node) => ({ ...node, position: { x: 0, y: 0 } })),
     }
-    db.update(workflows)
+    await db
+      .update(workflows)
       .set({ definition: JSON.stringify(legacyDefinition) })
       .where(eq(workflows.id, first.id))
       .run()
 
     await seedFusionResources(fusion)
-    const repaired = db.select().from(workflows).where(eq(workflows.id, first.id)).get()!
+    const repaired = (await db.select().from(workflows).where(eq(workflows.id, first.id)).get())!
     expect(repaired.version).toBe(first.version + 1)
     expectNoNodeOverlap(WorkflowDefinitionSchema.parse(JSON.parse(repaired.definition)))
 
     await seedFusionResources(fusion)
-    expect(db.select().from(workflows).where(eq(workflows.id, first.id)).get()!.version).toBe(
-      repaired.version,
-    )
+    expect(
+      (await db.select().from(workflows).where(eq(workflows.id, first.id)).get())!.version,
+    ).toBe(repaired.version)
   })
 })

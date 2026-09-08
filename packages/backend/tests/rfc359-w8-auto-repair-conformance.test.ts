@@ -12,7 +12,15 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { lifecycleAlerts, lifecycleRepairAudit, tasks, users } from '@/db/schema'
+import {
+  committedEventFamilyCutovers,
+  committedEvents,
+  lifecycleAlerts,
+  lifecycleRepairAudit,
+  nodeRuns,
+  tasks,
+  users,
+} from '@/db/schema'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { LifecycleAlertRow } from '@/services/lifecycleInvariants'
 import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/taskRoutes'
@@ -21,6 +29,8 @@ import type {
   TaskLifecycleAutoRepairCommand,
   TaskLifecycleAutoRepairResult,
 } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
+import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import { createDaemonLockProof } from '@/modules/task-execution/composition/bootRecovery'
 import {
   createTaskExecutionPersistence,
   createSqliteTaskExecutionPersistence,
@@ -30,6 +40,7 @@ import {
   createTaskLifecycleAutoRepairCommand,
 } from '@/modules/task-execution/composition/taskLifecycleRepair'
 import { createPostgresqlTaskRouteRepairOperations } from '@/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations'
+import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { StartTaskDeps } from '@/services/task'
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
@@ -416,6 +427,168 @@ describeEachProvider('RFC-359 W8 —— 任务生命周期自动修复在两个�
 // Exercise both callers on each real database, alongside the selected-provider
 // baseline above, so a local SQLite run also covers this shared implementation.
 describeEachProvider('RFC-359 manual and automatic repair share the same engine', (harness) => {
+  test('P0-4 S4：前代 owner 已真实撤销时，自动修复仍落库并发出一次 resume', async () => {
+    const db = harness.db
+    const { taskId, alertId } = await seed(db)
+    const nodeRunId = `run-${ulid()}`
+    await db.insert(nodeRuns).values({
+      id: nodeRunId,
+      taskId,
+      nodeId: 'worker',
+      status: 'pending',
+      retryIndex: 0,
+      iteration: 0,
+    })
+    await db
+      .update(committedEventFamilyCutovers)
+      .set({ mode: 'dispatchable', epoch: 1, changedAt: NOW, changeRef: 'rfc359-p04-s4' })
+      .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
+    const before = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+    if (before === undefined) throw new Error(`missing fixture task ${taskId}`)
+    const { persistence, repairs } = repairEngineFor(harness)
+    const previous = createProviderTaskExecutionModule({
+      daemonGeneration: `s4-old-${ulid()}`,
+      persistence,
+    })
+    const intentId = `intent-${ulid()}`
+    await persistence.intents.submit({
+      intentId,
+      now: NOW - 1_000,
+      request: {
+        taskId,
+        kind: 'launch',
+        source: 'internal',
+        actorUserId: null,
+        expectedTaskRevision: before.lifecycleEventRevision,
+        scope: {
+          executionLineageId: taskId,
+          continuationSlotKey: `${taskId}:root`,
+          slotPath: [
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
+          ],
+          operationGeneration: 0,
+        },
+        payload: { v: 1 },
+      },
+    })
+    const claimed = await previous.claimPersisted({ intentId, now: NOW - 1_000 })
+    previous.claimGate.leave(claimed.permit)
+    expect((await persistence.ownership.read(taskId))?.state).toBe('claimed')
+
+    // Stop after the real prepare: finalizing boot would release this owner
+    // and hide the historical S4 refusal of an already-revoked predecessor.
+    expect(
+      await persistence.recovery.prepare({
+        lockProof: createDaemonLockProof({
+          lockPath: '/tmp/aw-s4.lock',
+          lockPid: process.pid,
+          daemonGeneration: `s4-new-${ulid()}`,
+          now: NOW,
+        }),
+        now: NOW,
+      }),
+    ).toEqual({ revokedTaskIds: [taskId] })
+    expect((await persistence.ownership.read(taskId))?.state).toBe('revoked')
+    expect(await statusOf(db, taskId)).toBe('pending')
+
+    const resumed: string[] = []
+    const command = createTaskLifecycleAutoRepairCommand({
+      ...repairs.automaticRepair({
+        resume: {
+          resume: async (id) => {
+            resumed.push(id)
+          },
+        },
+        now: () => NOW,
+      }),
+      operations: persistence.recoveryAdministration,
+      now: () => NOW,
+    })
+    const result = forTask(await command.run(OPEN_POLICY), taskId)
+    const after = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+    const run = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
+    const audit = await auditRows(db, taskId)
+    const events = await db
+      .select()
+      .from(committedEvents)
+      .where(eq(committedEvents.aggregateId, taskId))
+    const state = {
+      taskId,
+      taskStatus: after?.status,
+      lifecycleRevision: after?.lifecycleEventRevision,
+      nodeRunStatus: run?.status,
+      ownerState: (await persistence.ownership.read(taskId))?.state,
+      ...result,
+      resumed,
+      auditOutcome: audit[0]?.outcome,
+      auditOutcomeMessage: audit[0]?.outcomeMessage,
+      resolvedAt: await alertResolvedAt(db, alertId),
+      eventTypes: events.map((event) => event.eventType),
+    }
+    expect(state).toEqual({
+      taskId,
+      taskStatus: 'interrupted',
+      lifecycleRevision: before.lifecycleEventRevision + 1,
+      // S4 only kicks the task. The controlled resume callback proves the
+      // actual production invocation, not a subsequent node/child execution.
+      nodeRunStatus: 'pending',
+      ownerState: 'revoked',
+      repaired: [{ taskId, alertId, optionId: 'S4.kick-task', outcome: 'success' }],
+      skipped: [],
+      resumed: [taskId],
+      auditOutcome: 'success',
+      auditOutcomeMessage: null,
+      resolvedAt: NOW,
+      eventTypes: ['task.lifecycle-transitioned.v1'],
+    })
+    expect(audit).toEqual([
+      {
+        optionId: 'S4.kick-task',
+        actorUserId: null,
+        outcome: 'success',
+        alertRule: 'S4',
+        alertDetailJson: JSON.stringify({ pendingMs: 600_000 }),
+        beforeSnapshotJson: JSON.stringify({ task: { status: 'pending' } }),
+        afterSnapshotJson: JSON.stringify({ task: { status: 'interrupted' } }),
+        outcomeMessage: null,
+      },
+    ])
+    expect(after).toMatchObject({
+      finishedAt: NOW,
+      errorSummary: 'manual-repair-S4',
+      errorMessage: `RFC-057 repair S4.kick-task via alert ${alertId}`,
+      failedNodeId: null,
+    })
+    expect(events[0]?.payloadJson).toBe(
+      canonicalJson({
+        eventId: `task-lifecycle:${taskId}:2`,
+        eventGroupId: `committed-event-group:task-execution:task-lifecycle:${taskId}:2`,
+        eventGroupOrdinal: 0,
+        type: 'task.lifecycle-transitioned.v1',
+        schemaVersion: 1,
+        producer: 'task-execution',
+        family: 'task-lifecycle',
+        aggregate: { kind: 'task', id: taskId, seq: 1 },
+        operationRef: `task-lifecycle:${taskId}:2`,
+        correlationRef: null,
+        causationRef: null,
+        occurredAt: new Date(NOW).toISOString(),
+        payload: {
+          taskId,
+          lifecycleRevision: 2,
+          previousStatus: 'pending',
+          status: 'interrupted',
+          updatedAt: new Date(NOW).toISOString(),
+          errorSummary: 'manual-repair-S4',
+          nodeChanges: [],
+          workspacePruneClaim: null,
+          sourceTerminationEffectRef: null,
+          continuationHandoff: false,
+        },
+      }),
+    )
+  })
+
   test('options and execution are shared; manual audit keeps its actor and automatic audit stays null', async () => {
     const actor = await manualActor(harness.db)
     const manual = await seed(harness.db)

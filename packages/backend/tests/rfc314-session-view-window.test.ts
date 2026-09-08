@@ -19,7 +19,9 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
@@ -35,7 +37,7 @@ interface SeedEvent {
   payload: string
 }
 
-async function seedBase(db: DbClient): Promise<string> {
+async function seedBase(db: ProviderNeutralDatabase): Promise<string> {
   await db.insert(users).values({
     id: 'u1',
     username: 'u1',
@@ -54,6 +56,11 @@ async function seedBase(db: DbClient): Promise<string> {
     name: 't1',
     workflowId: 'wf1',
     workflowSnapshot: snapshot,
+    // Match the original SQLite task INSERT trigger, including JSON key order.
+    executionLineageId: 't1',
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+    ]),
     repoPath: '/r',
     worktreePath: '/w',
     baseBranch: 'main',
@@ -72,7 +79,7 @@ async function seedBase(db: DbClient): Promise<string> {
 }
 
 async function seedRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   runId: string,
   events: SeedEvent[],
   retryIndex = 0,
@@ -131,9 +138,9 @@ function textLines(tree: unknown): string[] {
   return out
 }
 
-describe('RFC-314 D2 —— 窗口成员', () => {
+describeEachProvider('RFC-314 D2 —— 窗口成员', (harness) => {
   test('每个 run 各自的最早 N / 最新 M 都在，中段被舍弃', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     await seedRun(db, 'nr_a', monotonic(100, 20, 'A'))
     await seedRun(db, 'nr_b', monotonic(200, 20, 'B'), 1)
@@ -163,7 +170,7 @@ describe('RFC-314 D2 —— 窗口成员', () => {
   })
 
   test('ts 与 id 乱序时按 id 划线：最后写入的旧 ts 事件仍在尾窗内', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedBase(db)
     // 前 10 条正常，最后一条是子代理回灌：id 最大（最后写入）但 ts 很旧。
     await seedRun(db, 'nr_a', [
@@ -184,40 +191,52 @@ describe('RFC-314 D2 —— 窗口成员', () => {
   })
 })
 
-describe('RFC-314 D2 —— 结构判据', () => {
-  async function capture(eventsPerRun: number): Promise<{
-    statements: RecordedStatement[]
-    db: DbClient
-  }> {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await seedRun(db, 'nr_a', monotonic(1_000, eventsPerRun, 'A'))
-    await seedRun(db, 'nr_b', monotonic(100_000, eventsPerRun, 'B'), 1)
-    const raw = (db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client
-    const rec = recordStatements(raw)
-    try {
-      await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr_a', {
-        rootPrefix: 3,
-        tail: 5,
-      })
-    } finally {
-      rec.stop()
-    }
-    return { statements: rec.statements, db }
+async function capture(
+  eventsPerRun: number,
+  database?: ProviderDatabaseHarness,
+): Promise<{
+  statements: RecordedStatement[]
+  db: ProviderNeutralDatabase
+}> {
+  const db = database?.db ?? createInMemoryDb(MIGRATIONS)
+  await seedBase(db)
+  await seedRun(db, 'nr_a', monotonic(1_000, eventsPerRun, 'A'))
+  await seedRun(db, 'nr_b', monotonic(100_000, eventsPerRun, 'B'), 1)
+  const rec =
+    database?.recordStatements() ??
+    recordStatements((db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client)
+  try {
+    await getSessionTree(createTaskExecutionReadModels(db).sessions, 't1', 'nr_a', {
+      rootPrefix: 3,
+      tail: 5,
+    })
+  } finally {
+    rec.stop()
   }
+  return { statements: rec.statements, db }
+}
 
-  test('语句条数只随 lineage 的 run 数增长，不随事件量增长', async () => {
-    const small = await capture(10)
-    const large = await capture(400)
-    expect(large.statements.length).toBe(small.statements.length)
-    // 2 个 sibling run × (prefix + tail) = 4 条事件查询。数目本身也钉住：旧实现是
-    // 「两条全局查询」，把 lineage 合在一起取窗口——那正是要被换掉的形状。
-    const eventSelects = large.statements.filter(
-      (s) => /^\s*select/i.test(s.sql) && s.sql.includes('node_run_events'),
-    )
-    expect(eventSelects).toHaveLength(4)
-  })
+// Each count sample uses an independent database of the selected provider.
+describeEachProvider(
+  'RFC-314 D2 —— 结构判据',
+  (harness) => {
+    test('语句条数只随 lineage 的 run 数增长，不随事件量增长', async () => {
+      const small = await capture(10, harness.database(0))
+      const large = await capture(400, harness.database(1))
+      expect(large.statements.length).toBe(small.statements.length)
+      // 2 个 sibling run × (prefix + tail) = 4 条事件查询。数目本身也钉住：旧实现是
+      // 「两条全局查询」，把 lineage 合在一起取窗口——那正是要被换掉的形状。
+      const eventSelects = large.statements.filter(
+        (s) => /^\s*select/i.test(s.sql) && s.sql.includes('node_run_events'),
+      )
+      expect(eventSelects).toHaveLength(4)
+    })
+  },
+  { databaseCount: 2 },
+)
 
+// The original EXPLAIN assertions describe SQLite's native query-plan vocabulary.
+describe('RFC-314 D2 —— 结构判据', () => {
   test('事件窗口查询不临时排序、不扫大表', async () => {
     const { statements, db } = await capture(400)
     const raw = (

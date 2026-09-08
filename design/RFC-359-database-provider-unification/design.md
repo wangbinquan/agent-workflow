@@ -2,6 +2,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- task-intent 终态化的两份事务内算法共用一个 sequence；native 保留同步执行且不检查返回行，
+  async 保留原 RETURNING 数量/旧记录 CAS 检查。boot 根原 CAS 前后位置与两种时钟采样不变。
+- 冲突夹具必须明确建立 snapshot → competing write → CAS 的实际数据库顺序，不能把启动两个
+  Promise 的微任务时序当作事务交错合同；真实查询结果、原错误及完整回滚断言必须保留。
+- PostgreSQL 测试清库独占一个短命 DDL 连接，执行结束即关闭，不进入业务连接池的空闲回收。
+  原 SQL/lock 60秒、connect 10秒和close 30秒预算保持；Bun将active checkpoint等待误判为idle
+  的实际日志与源码证据单独记录，修复有效性仍需hosted同链验证。
+
 - 物理 task CAS/companion/event 顺序与 committed append 各由一份共享程序解释执行；调用方仍
   持有原同步或异步事务，原同步返回、异步锁位置、nullable/strict miss及提交后发布保持。
   `transactionProgram` 只复用步进机制；public SQLite生命周期入口和未迁移companion继续显式留债。

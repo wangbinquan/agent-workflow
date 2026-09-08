@@ -3,6 +3,7 @@
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
+import { SQLiteSelectBase } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -524,34 +525,52 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     const recording = harness.recordStatements()
     restores.push(() => recording.stop())
     let winner: Awaited<ReturnType<typeof writeTaskRuntimeLifecycleInTx>> | undefined
+    let capturedSnapshots = 0
     const operation = harness.session.transaction(async (tx) => {
-      // Both operations use one real connection. Starting the atom first
-      // queues its snapshot SELECT before the winner UPDATE, and its fence
-      // CAS after that UPDATE. This is an intra-transaction CAS predicate,
-      // not a claim about inter-connection PostgreSQL serialization.
-      const source = applySourceTerminationTarget(
-        harness.db,
-        taskExecutionModule.runtimeRegistry,
-        taskId,
-        effect('clear-closed'),
+      // Both providers use this real Drizzle SELECT builder. Hold only this
+      // task's completed source snapshot while the named writer and its event
+      // run on the same transaction; return the captured rows unchanged.
+      // Calling two async functions in order does not order their SQL: SQLite
+      // .all() executes eagerly, whereas awaiting a builder starts it later.
+      // This is an intra-transaction CAS predicate, not inter-connection
+      // PostgreSQL serialization or a replacement for either database write.
+      const execute = SQLiteSelectBase.prototype.execute
+      const snapshot = spyOn(SQLiteSelectBase.prototype, 'execute').mockImplementation(
+        async function (this: typeof SQLiteSelectBase.prototype) {
+          const query = this.toSQL()
+          const result = await execute.call(this)
+          if (
+            query.params[0] === taskId &&
+            /^select "status", "parent_task_id", "source_termination_launch_rev",/.test(query.sql)
+          ) {
+            capturedSnapshots += 1
+            winner = await writeTaskRuntimeLifecycleInTx(tx, {
+              taskId,
+              from: 'running',
+              to: 'done',
+              now: 777,
+              expectedLifecycleRevision: 1,
+              workspacePruneDecision: { prune: false },
+              previousErrorSummary: null,
+              extra: { finishedAt: 777, errorSummary: 'must roll back' },
+            })
+          }
+          return result
+        },
       )
-      const transition = writeTaskRuntimeLifecycleInTx(tx, {
-        taskId,
-        from: 'running',
-        to: 'done',
-        now: 777,
-        expectedLifecycleRevision: 1,
-        workspacePruneDecision: { prune: false },
-        previousErrorSummary: null,
-        extra: { finishedAt: 777, errorSummary: 'must roll back' },
-      })
-      const [sourceResult, transitionResult] = await Promise.allSettled([source, transition])
-      if (transitionResult.status === 'rejected') throw transitionResult.reason
-      winner = transitionResult.value
-      if (sourceResult.status === 'rejected') throw sourceResult.reason
-      return sourceResult.value
+      try {
+        return await applySourceTerminationTarget(
+          harness.db,
+          taskExecutionModule.runtimeRegistry,
+          taskId,
+          effect('clear-closed'),
+        )
+      } finally {
+        snapshot.mockRestore()
+      }
     })
     await expect(operation).rejects.toMatchObject({ code: 'concurrent-task-transition' })
+    expect(capturedSnapshots).toBe(1)
     expect(winner?.lifecycleEventRevision).toBe(2)
     expect(winner?.eventRef?.eventId).toBe(`task-lifecycle:${taskId}:2`)
     expectSourceTerminationStatementOrder(recording.statements)

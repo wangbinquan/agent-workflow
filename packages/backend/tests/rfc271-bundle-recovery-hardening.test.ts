@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { Database } from 'bun:sqlite'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -6,7 +7,7 @@ import type { ResourceBundle } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb } from '../src/db/client'
+import { createInMemoryDb, instrumentSlowStatements } from '../src/db/client'
 import { resourceBundleApplies, skills } from '../src/db/schema'
 import { applyResourceBundle, convergeResourceBundleApplies } from '../src/services/bundle/apply'
 import type { BundleApplyProvider } from '../src/services/bundle/provider'
@@ -20,8 +21,12 @@ import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructu
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const dirs: string[] = []
+let reportRecoveryCleanup: (() => void) | undefined
 
 afterEach(() => {
+  const report = reportRecoveryCleanup
+  reportRecoveryCleanup = undefined
+  report?.()
   delete process.env.FAKE_NPM_MODE
   resetSkillBootVerifyForTest()
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
@@ -221,13 +226,39 @@ describe('committed skill-update tail is replay-safe', () => {
     // actual phases and CPU next time; keep the original 5s budget and oracle.
     const startedAt = performance.now()
     const startedCpu = process.cpuUsage()
+    const traceId = `committed-skill-tail:${process.pid}:${startedAt}`
+    const sqlSamples: {
+      sequence: number
+      sql: string | undefined
+      startedAtMs: number
+      wallMs: number
+      cpuMs: number | undefined
+    }[] = []
+    let sqlCount = 0
+    let droppedSqlSamples = 0
+    let lastPhase: string | undefined
+    let cleanupStarted = false
     const phase = (name: string) => {
       const cpu = process.cpuUsage(startedCpu)
-      console.warn('[rfc359-recovery-phase]', {
-        phase: name,
-        wallMs: performance.now() - startedAt,
-        cpuMicros: cpu.user + cpu.system,
-      })
+      console.warn(
+        '[rfc359-recovery-phase]',
+        JSON.stringify({
+          traceId,
+          phase: name,
+          previousPhase: lastPhase,
+          cleanupStarted,
+          wallMs: performance.now() - startedAt,
+          cpuMicros: cpu.user + cpu.system,
+          sqlCount,
+          droppedSqlSamples,
+          sqlSamples: sqlSamples.splice(0),
+        }),
+      )
+      lastPhase = name
+    }
+    reportRecoveryCleanup = () => {
+      cleanupStarted = true
+      phase('cleanup-start')
     }
     phase('start')
     const deps = makeDeps()
@@ -236,12 +267,35 @@ describe('committed skill-update tail is replay-safe', () => {
     phase('skill-seeded')
     const row = deps.db.select().from(skills).where(eq(skills.id, created.id)).get()!
 
+    // Observe this same connection only. Native execution excludes preparation,
+    // filesystem work and lease/event-loop waits; timestamps expose those gaps.
+    // Keep samples until a phase or cleanup, so a timed-out callback still has
+    // the same trace ID and explicitly marks every subsequent phase as cleanup.
+    const sqlite: unknown = Reflect.get(deps.db, '$client')
+    if (!(sqlite instanceof Database)) throw new Error('expected the fixture SQLite connection')
+    instrumentSlowStatements(sqlite, 0, undefined, (wallMs, sql, cpuMs) => {
+      sqlCount += 1
+      if (sqlSamples.length === 128) {
+        sqlSamples.shift()
+        droppedSqlSamples += 1
+      }
+      sqlSamples.push({
+        sequence: sqlCount,
+        sql,
+        startedAtMs: performance.now() - startedAt - wallMs,
+        wallMs,
+        cpuMs,
+      })
+    })
     phase('before-apply')
     await expect(
       applyResourceBundle(
         {
           ...deps,
           faults: {
+            afterSkillStage: () => phase('skill-stage-complete'),
+            beforeTx: () => phase('before-atomic-transaction'),
+            inTxAfterOps: () => phase('atomic-operations-complete'),
             afterTxBeforeRollForward: () => {
               phase('committed-before-tail')
               throw new Error('crash before tail')

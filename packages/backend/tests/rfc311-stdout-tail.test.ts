@@ -12,12 +12,13 @@
 //   4. **读取有界**：尾巴被 DB 填满时根本不读归档（归档严格更旧）。第 4 条是
 //      "只省网络不省内存"与"真有界"的分界，也是这次改动的要点。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import {
   getNodeRunStdout,
@@ -25,9 +26,7 @@ import {
   STDOUT_TAIL_BUDGET_BYTES,
 } from '../src/services/task'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function seed(db: DbClient, payloads: string[]): Promise<void> {
+async function seed(db: ProviderNeutralDatabase, payloads: string[]): Promise<void> {
   await db.insert(users).values({
     id: 'u1',
     username: 'u1',
@@ -42,6 +41,11 @@ async function seed(db: DbClient, payloads: string[]): Promise<void> {
     name: 't1',
     workflowId: 'wf1',
     workflowSnapshot: '{}',
+    // Match the original SQLite task INSERT trigger, including JSON key order.
+    executionLineageId: 't1',
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
+    ]),
     repoPath: '/r',
     worktreePath: '/w',
     baseBranch: 'main',
@@ -76,9 +80,9 @@ async function seed(db: DbClient, payloads: string[]): Promise<void> {
   }
 }
 
-describe('RFC-311 T13 — stdout 保尾且读取有界', () => {
+describeEachProvider('RFC-311 T13 — stdout 保尾且读取有界', (harness) => {
   test('小输出逐字不变，且不带截断标记', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, ['first line', 'second line', 'third line'])
     const logsDir = mkdtempSync(join(tmpdir(), 'aw-stdout-'))
     const out = await getNodeRunStdout(db, 't1', 'nr1', { logsDir })
@@ -87,7 +91,7 @@ describe('RFC-311 T13 — stdout 保尾且读取有界', () => {
   })
 
   test('stderr 仍然被剔除（那条通道在 Events 页）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, ['keep me'])
     await db.insert(nodeRunEvents).values({
       id: 99,
@@ -102,7 +106,7 @@ describe('RFC-311 T13 — stdout 保尾且读取有界', () => {
   })
 
   test('超预算时保尾、丢头，并明说省略了', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     // 每行 ~64 KiB，20 行 ≈ 1.25 MiB > 1 MiB 预算
     const line = (tag: string): string => `${tag}:${'x'.repeat(64 * 1024)}`
     await seed(
@@ -124,7 +128,7 @@ describe('RFC-311 T13 — stdout 保尾且读取有界', () => {
   })
 
   test('尾巴被 DB 填满时**根本不读归档** —— 有界的关键', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const line = (tag: string): string => `${tag}:${'y'.repeat(64 * 1024)}`
     await seed(
       db,

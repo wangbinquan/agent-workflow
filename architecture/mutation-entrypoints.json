@@ -41424,7 +41424,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cb396ccf7d61bc140159d7c916bc2d4e81c948c25cf3377b23949e053b16935e",
+  "sourceDigest": "sha256:ec887f8b27c4b485781ee05f1e1bd1adedd434d8c078166db5f61e95a0d3f625",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41534,7 +41534,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 189,
+      "durableWriterSites": 187,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -43285,38 +43285,6 @@
       },
       {
         "allowedTables": [
-          "taskExecutionIntents"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "terminalizeTaskExecutionIntentsTx",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionIntents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#37:taskExecutionIntents",
-        "line": 37,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#terminalizeTaskExecutionIntentsTx",
-        "requiredBrandedProof": "TerminalControlDecision",
-        "revisionPredicate": "bound-intent-and-decision-revision",
-        "symbol": "terminalizeTaskExecutionIntentsTx"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "terminalizeTaskExecutionIntentsTx",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#62:taskExecutionLineageOperationRecords",
-        "line": 62,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#terminalizeTaskExecutionIntentsTx",
-        "requiredBrandedProof": "TerminalControlDecision",
-        "revisionPredicate": "bound-intent-and-decision-revision",
-        "symbol": "terminalizeTaskExecutionIntentsTx"
-      },
-      {
-        "allowedTables": [
           "tasks"
         ],
         "authorityKind": "terminal-maintenance",
@@ -43672,32 +43640,32 @@
           "taskExecutionIntents"
         ],
         "authorityKind": "control-revision",
-        "consumer": "terminalizeTaskExecutionIntentsInTx",
+        "consumer": "taskExecutionIntentTerminalSequence",
         "controlSubtype": "terminal-control",
         "dataClass": "taskExecutionIntents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#49:taskExecutionIntents",
-        "line": 49,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#terminalizeTaskExecutionIntentsInTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "terminalizeTaskExecutionIntentsInTx"
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts#38:taskExecutionIntents",
+        "line": 38,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts#taskExecutionIntentTerminalSequence",
+        "requiredBrandedProof": "TerminalControlDecision",
+        "revisionPredicate": "bound-intent-and-decision-revision",
+        "symbol": "taskExecutionIntentTerminalSequence"
       },
       {
         "allowedTables": [
           "taskExecutionLineageOperationRecords"
         ],
         "authorityKind": "control-revision",
-        "consumer": "terminalizeTaskExecutionIntentsInTx",
+        "consumer": "taskExecutionIntentTerminalSequence",
         "controlSubtype": "terminal-control",
         "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#79:taskExecutionLineageOperationRecords",
-        "line": 79,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#terminalizeTaskExecutionIntentsInTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "terminalizeTaskExecutionIntentsInTx"
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts#77:taskExecutionLineageOperationRecords",
+        "line": 77,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts#taskExecutionIntentTerminalSequence",
+        "requiredBrandedProof": "TerminalControlDecision",
+        "revisionPredicate": "bound-intent-and-decision-revision",
+        "symbol": "taskExecutionIntentTerminalSequence"
       },
       {
         "allowedTables": [

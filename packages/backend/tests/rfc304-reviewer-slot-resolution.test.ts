@@ -13,32 +13,31 @@
 // Collapsing them into "not configured" sends someone to the wrong place, and
 // the last one especially: a dangling reference is repaired, not filled in.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { capabilityTemplates, agents } from '../src/db/schema'
 import { resolveReviewerAgent } from '../src/services/codeReviewAgentCaller'
 import { DrizzleReviewerResolutionRead } from '../src/modules/code-capability/infrastructure/reviewerResolutionRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const REPO = 'repo-1'
 
-const ask = (db: DbClient) =>
+const ask = (db: ProviderNeutralDatabase) =>
   resolveReviewerAgent(new DrizzleReviewerResolutionRead(db), {
     repoId: REPO,
     capability: 'mr-review',
     slot: 'reviewer',
   })
 
-describe('RFC-304 — resolving the reviewer slot', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 — resolving the reviewer slot', (harness) => {
+  let db: ProviderNeutralDatabase
   let agentId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     agentId = ulid()
     await db.insert(agents).values({
       id: agentId,
@@ -48,7 +47,6 @@ describe('RFC-304 — resolving the reviewer slot', () => {
       updatedAt: NOW,
     })
   })
-  afterEach(() => db.$client.close())
 
   const bindWith = async (agentBySlotJson: string) => {
     await db.insert(capabilityTemplates).values({

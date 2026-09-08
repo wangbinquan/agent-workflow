@@ -28,8 +28,8 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                             | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                      | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 664 个测试文件、1417 次实际 `createInMemoryDb` 调用，其中 657 文件没有 `describeEachProvider`；尚未达到全量行为对拍                   | 进行中 |
-| AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；P0-5/6/7/9/11/12 九个历史变异及 legacy mission 已获真双库证明；新增 P0-3/4 periodic/10 变异待 hosted，P0-1/2/8 与 S4 证明仍待补齐                                 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 657 个测试文件、1398 次实际 `createInMemoryDb` 调用，其中 647 文件没有 `describeEachProvider`；尚未达到全量行为对拍                   | 进行中 |
+| AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；P0-3/4 periodic/5/6/7/9/10/11/12 共12个历史变异及 legacy mission 已获真双库证明；新增 S4 已获指定 SQLite 历史红，真 PG 待 hosted；P0-1/2/8 证明仍待补齐                                 | 进行中 |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                      | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                                     | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                      | ✅     |
@@ -757,6 +757,65 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
   不能将漏扫当归零。两guard原判据全留，18 pass/45 expect。
   完整 backend tsc、154项定向架构/参数化检查（339 expect）通过。RFC继续 In Progress；
   AC6/7/8/9/11/12与真实剩余孪生继续推进。
+
+### W12 第十七批：终态化共享、旧套件迁移与四类 CI 故障追踪
+
+- native 与 async task-intent 终态化共用 `taskExecutionIntentTerminalSequence`，只复用已发布的
+  两个 transaction interpreter。两次 select、两次 set、四次 where 的参数 AST 与旧两份实现
+  全同；原 RETURNING 与两条精确错误保持。原 serializable 外壳和两个公开签名保持，
+  boot composition 原 SQLite CAS 后 companion/后采时钟与 PG CAS 前 companion/input.now 均未改。
+  新机制用例在旧两壳与共享后均8 pass/36 expect；原 epoch 例前后1 pass/5 expect。
+  三生产文件189→170行，净删19行；public `setTaskStatus` 与其他原同步 companion 仍待迁移。
+  统一类型检查发现两个测试期望工厂的字面量被推宽，仅补精确行返回类型，编译后JS逐字相同。
+- 10个旧套件接默认双provider：自动布局、session capture/stdout/window及RFC304读面，累计174→184。
+  原后SQLite均86 pass/417 expect，86个原case、177 matcher参数与全部timeout保持；完整回调、
+  22个named helper与9个fixture hook在明确的await/harness改动后AST相同。
+  75个原case双库声明，9个纯例和2个SQLite原生EXPLAIN例仍单跑；两条语句计数例分别使用
+  同provider的两个独立真实数据库。5个OpenCode输入格式SQLite构造保留。
+  四种旧/新seed的真实task70列/node_run61列整行和lineage原始JSON字节全同；共享seed helper
+  只改数据库参数类型，编译后2641字节JS全同。真PG执行结果以本批hosted为准。
+- P0-4新增真实S4修复半链：原已撤销owner条件使旧实现跳过实际修复；当前执行原任务CAS、
+  持久事件和告警处理，保留节点仍pending与原后续resume位置。空boot控制与指定状态/错误
+  同时核验，不能拿任意错误代替指定历史失败。原14阶段及所有已有控制/拒收逻辑保持。
+  terminal共享与清库helper最终冻结后，统一65源码再验23.930秒：每引擎67次执行，SQLite
+  50 pass+17条指定历史红/686 expect，前后控制各19 pass/245 expect；14份日志摘要全核。
+  早期62/65源码候选与初版错误预期的日志各自保留，最终证明不混用。S4真PG等待本批CI。
+- `8e55ebe35d97e0fe861655d4587b15c533629b26` Main CI `34205567197` 终态failure：
+  28 success/7 failure/1 cancelled。六个后端分片失败、汇总失败，Ubuntu shard4被取消；
+  独立真PG、全部10个E2E分片与三平台binary成功，不能代替整仓通过。
+  独立PG job101994122471产物10047659112，在Bun1.4.0两库各14阶段、64次用例执行，
+  48 pass+16条指定历史红/665 expect；51源码与exact SHA一致，28份原始日志摘要全核。
+  已证12个历史变异覆盖9个P0编号的已列路径，不等于12条P0全部完成。
+- CI第一类失败是 W16 物理写入合一后漏登的两条 legacy type/value 入边。
+  `commons-debt`补记真实 taskLifecycle → taskLifecycleWriteSequence，inbound285→287，
+  写明仍保留同步公共入口及RFC359退役波次。R1扫描器、精确逐条相等与正负fixture不改。
+- CI第二类失败是 source-termination 原夹具依赖Promise执行节奏：真实SQLite语句为
+  winner UPDATE → snapshot SELECT → fence UPDATE，因此读取新revision后的成功是合法结果。
+  恢复原f05 writer导出的独立进程对照中原夹具绿，证实是共享`.all()`改变了夹具假定的交错。
+  仅测试在实际快照查询完成后、返回原行之前，await同事务内原named lifecycle writer及其事件，
+  确定snapshot → winner → fence。原错误码、整行回滚、事件与SQL顺序断言全留，只增一次
+  捕获见证；旧/新writer均1 pass/8 expect，整文件35 pass/166 expect。生产没有再修改。
+- CI第三类失败取得直接服务器证据：RFC287追加库DROP backend pid2580，statement精确匹配，
+  state=active、wait_event=CheckpointStart、blocked_by=[]；checkpointer同时在DataFileSync。
+  原checkpoint于08:48:25.692完成，随后DROP要求的新checkpoint于08:48:27.843完成，
+  客户端却已在08:48:23.064按30s idle回收断线。PG17.11和Bun1.4.0精确源码与现场一致。
+  30s不是DROP的显式SQL deadline：原SQL/lock预算均60s，afterAll为databaseCount×90s。
+  仅DROP改用max1/idle0的短命连接，保留connect10s、SQL/lock60s、close30s及业务池原配置；
+  单次执行、清理顺序和原错误保留，不重试或吞错。观察在语句结束即停止，再等待DDL连接关闭。
+  新机制先13 pass/7条预期红，后20 pass/76 expect；原RFC287 SQLite4 pass/13 expect。
+  真PG故障修复是否有效，继续等同链hosted证据。
+- CI第四类为macOS资源包skill-update原5000ms超时。已有阶段证据指向apply内4880.568ms，
+  新增CPU仅559533微秒；afterEach后的false与目录消失是超时后的次生现象。
+  已在原三个hook加入阶段与实际SQL wall/CPU诊断，同traceId标记cleanup后的晚到续体；
+  原timeout、四个case和全部行为断言保持。原后目标例各1 pass/7 expect，实际48条SQL均有记录。
+  目前没有足够证据修改生产事务算法，不能将增加诊断或重跑偶绿称为修复。
+- 当前AST：1915测试文件、657文件/1398次实际createInMemoryDb调用，647个构库文件无harness、
+  353文件使用harness。10旧套件移除20次直接构库，新增2条同步机制case共用1次原生构库，
+  T19f744→739逐文件精确记账；OpenCode外部输入格式的5次原生构造另保留，未隐藏。
+  canonical：入口1734、事务272、导入5295、例外4762、public983、符号24961；
+  imports9进8出、例外8进7出、共享sequence文件/函数新增2符号，旧全扫描判据保持。
+  完整backend tsc通过；14个功能账本/边界/参数化套件173 pass/313 expect，canonical相关13 pass/55 expect。
+  原规模HTTP run34205739420仍独立运行，不因新HEAD取消；严格AC11和RFC完整验收继续开放。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

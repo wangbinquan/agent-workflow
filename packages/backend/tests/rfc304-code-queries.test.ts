@@ -10,9 +10,9 @@
 //   - enabling a capability whose prerequisites are missing SAVES and reports
 //     the resulting readiness, rather than pretending it is now running.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { beforeEach, describe, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   agents,
   capabilityTemplates,
@@ -37,24 +37,22 @@ import { createRoundAttemptsRead } from '../src/modules/code-capability/infrastr
 import { createWorkItemProjectionRead } from '../src/modules/code-capability/infrastructure/workItemProjectionRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
 
-const createCodeMatrixQuery = (db: DbClient) =>
+const createCodeMatrixQuery = (db: ProviderNeutralDatabase) =>
   createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db))
-const createCodeWorkItemProjectionQuery = (db: DbClient) =>
+const createCodeWorkItemProjectionQuery = (db: ProviderNeutralDatabase) =>
   createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(db))
-const createCodeRoundAttemptsQuery = (db: DbClient) =>
+const createCodeRoundAttemptsQuery = (db: ProviderNeutralDatabase) =>
   createCodeRoundAttemptsQueryFromPort(createRoundAttemptsRead(db))
 
-describe('RFC-304 — the capability matrix a page renders', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 — the capability matrix a page renders', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
-  afterEach(() => db.$client.close())
 
   test('a ready cell carries no issues and needs no repairs', async () => {
     // Seeded as ROWS rather than as stored facts. It used to hand
@@ -156,31 +154,30 @@ describe('RFC-304 — the capability matrix a page renders', () => {
     })
     expect(await createCodeMatrixQuery(db).forRepo('someone/else')).toEqual([])
   })
-
-  test('every readiness code has a repair route', async () => {
-    // A code with no route would render an issue nobody can act on. The mapping
-    // is a `Record` of the union so this is enforced at build time too; this
-    // asserts it at runtime for the codes that actually exist.
-    const codes = [
-      'no-binding',
-      'no-trigger',
-      'code-host-unconfigured',
-      'agent-not-visible',
-      'framework-missing',
-      'no-wake-source',
-    ] as const
-    const actions = repairActionsFor(codes.map((code) => ({ code, detail: 'x' })))
-    expect(actions).toHaveLength(codes.length)
-    expect(actions.every((a) => a.route !== '' && a.label !== '')).toBe(true)
-  })
 })
 
-describe('RFC-304 — the work-item projection', () => {
-  let db: DbClient
+test('every readiness code has a repair route', async () => {
+  // A code with no route would render an issue nobody can act on. The mapping
+  // is a `Record` of the union so this is enforced at build time too; this
+  // asserts it at runtime for the codes that actually exist.
+  const codes = [
+    'no-binding',
+    'no-trigger',
+    'code-host-unconfigured',
+    'agent-not-visible',
+    'framework-missing',
+    'no-wake-source',
+  ] as const
+  const actions = repairActionsFor(codes.map((code) => ({ code, detail: 'x' })))
+  expect(actions).toHaveLength(codes.length)
+  expect(actions.every((a) => a.route !== '' && a.label !== '')).toBe(true)
+})
+
+describeEachProvider('RFC-304 — the work-item projection', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
-  afterEach(() => db.$client.close())
 
   // A distinct anchor per item: the table's unique key is
   // (endpoint, project, capability, anchorKind, anchorId) — one work item per MR
@@ -428,14 +425,11 @@ describe('RFC-304 — a round’s status is derived, not stored', () => {
     expect(deriveRoundStatus(null, 1)).toBe('ended-without-outcome')
   })
 })
-describe('RFC-304 T55 — a round’s AI attempts', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => {
-    db.$client.close()
+    db = harness.db
   })
 
   const attempt = async (over: Partial<typeof codeAiAttempts.$inferInsert> = {}) => {

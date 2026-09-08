@@ -473,6 +473,7 @@ interface PostgresqlHarnessDatabase {
   readonly snapshot: PostgresqlSchemaSnapshot
   readonly sinks: Set<RecordedStatement[]>
   readonly dropObservation: PostgresqlDropObservation
+  readonly createDropConnection: () => PostgresqlHarnessDropConnection
 }
 
 /** 每个真库都走原有的一次初始化：迁移、生成代、迁移种子与录制客户端。 */
@@ -539,6 +540,7 @@ async function createPostgresqlHarnessDatabase(
       snapshot,
       sinks,
       dropObservation: createPostgresqlDropObservation(sourceUrl),
+      createDropConnection: () => createPostgresqlHarnessDropConnection(sourceUrl),
     }
   } catch (error) {
     try {
@@ -548,6 +550,36 @@ async function createPostgresqlHarnessDatabase(
     }
     throw error
   }
+}
+
+interface PostgresqlHarnessDropConnection {
+  unsafe(statement: string): PromiseLike<unknown>
+  close(options: { readonly timeout: number }): Promise<void>
+}
+
+/** Bun 1.4's pool idle timer also kills active DDL without socket activity.
+ * DROP can wait for PostgreSQL's checkpointer, so it owns a connection that is
+ * closed immediately after this statement instead of entering an idle pool.
+ * Keep the existing connect/SQL/close budgets; business runtimes are unchanged. */
+export function createPostgresqlHarnessDropConnection(
+  sourceUrl: string | undefined,
+  createConnection: (options: {
+    readonly url: string
+    readonly max: number
+    readonly idleTimeout: number
+    readonly connectionTimeout: number
+  }) => PostgresqlHarnessDropConnection = (options) => new SQL(options),
+): PostgresqlHarnessDropConnection {
+  if (sourceUrl === undefined) throw new Error('PostgreSQL DROP connection URL is unavailable')
+  const url = new URL(sourceUrl)
+  url.searchParams.set('application_name', 'aw-each-provider-cleanup')
+  url.searchParams.set('options', '-c statement_timeout=60000 -c lock_timeout=60000')
+  return createConnection({
+    url: url.toString(),
+    max: 1,
+    idleTimeout: 0,
+    connectionTimeout: 10,
+  })
 }
 
 interface PostgresqlDropObservationEvent {
@@ -570,7 +602,7 @@ interface PostgresqlDropObservation {
 
 // A single read on an independent connection distinguishes a server-side
 // CheckpointStart/CheckpointDone wait from a DROP absent from pg_stat_activity.
-// These limits belong only to the observer; the actual DROP keeps its runtime.
+// These limits belong only to the observer; DROP has its own statement and close budgets.
 function createPostgresqlDropObservation(sourceUrl: string | undefined): PostgresqlDropObservation {
   return {
     schedule(onSlow) {
@@ -639,11 +671,16 @@ function createPostgresqlDropObservation(sourceUrl: string | undefined): Postgre
 }
 
 async function dropPostgresqlHarnessDatabase(
-  database: { readonly raw: RawQuery },
+  database: {
+    readonly raw: RawQuery
+    readonly createDropConnection?: () => PostgresqlHarnessDropConnection
+  },
   databaseName: string,
   observation: PostgresqlDropObservation | undefined,
 ): Promise<void> {
   const statement = `drop database if exists "${databaseName}"`
+  const connection = database.createDropConnection?.()
+  const errors: unknown[] = []
   const startedAt = performance.now()
   let stopped = false
   let observed: ReturnType<PostgresqlDropObservation['start']> | undefined
@@ -697,7 +734,10 @@ async function dropPostgresqlHarnessDatabase(
     report({ phase: 'failed', error })
   }
   try {
-    await database.raw(statement)
+    if (connection === undefined) await database.raw(statement)
+    else await connection.unsafe(statement)
+  } catch (error) {
+    errors.push(error)
   } finally {
     stopped = true
     try {
@@ -706,13 +746,24 @@ async function dropPostgresqlHarnessDatabase(
       // The original operation has already settled.
     }
     closeObserver()
+    if (connection !== undefined) {
+      try {
+        await connection.close({ timeout: 30 })
+      } catch (error) {
+        errors.push(error)
+      }
+    }
   }
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1)
+    throw new AggregateError(errors, 'PostgreSQL harness DROP and close failed')
 }
 
 export async function closePostgresqlHarnessDatabases(
   databases: readonly {
     readonly runtime: Pick<PostgresqlDatabaseRuntime, 'close'>
     readonly raw: RawQuery
+    readonly createDropConnection?: () => PostgresqlHarnessDropConnection
   }[],
   createdDatabaseNames: readonly string[],
   observation?: PostgresqlDropObservation,

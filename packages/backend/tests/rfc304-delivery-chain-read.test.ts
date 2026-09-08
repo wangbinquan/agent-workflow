@@ -19,26 +19,21 @@
 // refuses: "show me everything" is not a troubleshooting view, and answering it
 // would bury the incident the operator came for.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { createCodeDeliveryChainQuery as createCodeDeliveryChainQueryFromPort } from '../src/modules/code-capability/application/codeMatrixQuery'
 import { createDeliveryChainRead } from '../src/modules/code-capability/infrastructure/deliveryChainRead'
 import { seedDelivery } from './helpers/legacyCapabilitySeed'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-const createCodeDeliveryChainQuery = (db: DbClient) =>
+const createCodeDeliveryChainQuery = (db: ProviderNeutralDatabase) =>
   createCodeDeliveryChainQueryFromPort(createDeliveryChainRead(db))
 
-describe('RFC-304 T61 — reading the delivery chain', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => {
-    db.$client.close()
+    db = harness.db
   })
 
   /** One delivery that got as far as `step`, with the given outcome. */

@@ -14,11 +14,11 @@
 // and then fails on the MR, in front of the author — which is worse than
 // reporting misconfigured, because it wastes somebody's review cycle to say so.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, capabilityTemplates, webhookEndpoints } from '../src/db/schema'
 import {
   gatherReadinessFacts as gatherReadinessFactsFromPort,
@@ -28,12 +28,13 @@ import { deriveReadiness } from '../src/modules/code-capability/domain/templateL
 import { createReadinessFactsRead } from '../src/modules/code-capability/infrastructure/readinessFactsRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
 
-type SqliteGatherFactsInput = Omit<GatherFactsInput, 'reader'> & { readonly db: DbClient }
+type SqliteGatherFactsInput = Omit<GatherFactsInput, 'reader'> & {
+  readonly db: ProviderNeutralDatabase
+}
 
 const gatherReadinessFacts = ({ db, ...input }: SqliteGatherFactsInput) =>
   gatherReadinessFactsFromPort({
@@ -41,12 +42,12 @@ const gatherReadinessFacts = ({ db, ...input }: SqliteGatherFactsInput) =>
     reader: createReadinessFactsRead(db),
   })
 
-describe('RFC-304 — gathering readiness facts from the database', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 — gathering readiness facts from the database', (harness) => {
+  let db: ProviderNeutralDatabase
   let agentId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     agentId = ulid()
     await db.insert(agents).values({
       id: agentId,
@@ -72,7 +73,6 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
       capability: 'mr-review',
     })
   })
-  afterEach(() => db.$client.close())
 
   const ask = (over: { templateId?: string | null } = {}) =>
     gatherReadinessFacts({
@@ -172,12 +172,11 @@ describe('RFC-304 — gathering readiness facts from the database', () => {
   })
 })
 
-describe('RFC-304 — facts feed the verdict', () => {
-  let db: DbClient
+describeEachProvider('RFC-304 — facts feed the verdict', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
-  afterEach(() => db.$client.close())
 
   test('an unconfigured repository derives MISCONFIGURED, naming what is missing', async () => {
     // The end-to-end of this task: nothing seeded, so the facts are all false,

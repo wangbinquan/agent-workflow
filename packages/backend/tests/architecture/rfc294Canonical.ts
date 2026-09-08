@@ -2740,7 +2740,14 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'CanonicalControlTransaction',
     }
   }
-  if (/modules\/task-execution\/infrastructure\/sqliteTerminalizeExecutionIntent/.test(value)) {
+  // RFC-359 W17 retains the original terminal companion classification when
+  // its physical writes move from the two wrappers to this exact shared body.
+  if (
+    /modules\/task-execution\/infrastructure\/sqliteTerminalizeExecutionIntent/.test(value) ||
+    /modules\/task-execution\/infrastructure\/taskExecutionIntentTerminalSequence\.ts#taskExecutionIntentTerminalSequence$/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'control-revision',
       controlSubtype: 'terminal-control',

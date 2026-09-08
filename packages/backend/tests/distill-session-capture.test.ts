@@ -4,22 +4,21 @@
 // keys rows by (distillJobId, attemptIndex) — distiller has no
 // task-scoped sibling dedup.
 
-import { describe, expect, test, beforeEach } from 'bun:test'
+import { expect, test, beforeEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
 import { captureDistillJobSession } from '../src/services/runtime/opencode/distillSessionCapture'
 import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 function capture(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: Omit<Parameters<typeof captureDistillJobSession>[0], 'sink'>,
 ) {
   return captureDistillJobSession({
@@ -46,9 +45,10 @@ function capture(
   })
 }
 
-function seedJob(db: DbClient): string {
+async function seedJob(db: ProviderNeutralDatabase): Promise<string> {
   const id = ulid()
-  db.insert(memoryDistillJobs)
+  await db
+    .insert(memoryDistillJobs)
     .values({
       id,
       debounceKey: 'task-x:clarify',
@@ -133,12 +133,12 @@ function buildOpencodeDb(opts: BuildOpts): string {
  */
 const FIXTURE_IO_TIMEOUT_MS = 30_000
 
-describe('captureDistillJobSession', () => {
-  let db: DbClient
+describeEachProvider('captureDistillJobSession', (harness) => {
+  let db: ProviderNeutralDatabase
   let jobId: string
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    jobId = seedJob(db)
+  beforeEach(async () => {
+    db = harness.db
+    jobId = await seedJob(db)
   })
 
   test('missing opencode DB writes a capture-failed marker and returns failed=true', async () => {
@@ -150,7 +150,7 @@ describe('captureDistillJobSession', () => {
     })
     expect(result.failed).toBe(true)
     expect(result.failureReason).toBe('opencode-db-not-found')
-    const rows = db
+    const rows = await db
       .select()
       .from(memoryDistillEvents)
       .where(eq(memoryDistillEvents.distillJobId, jobId))
@@ -184,7 +184,7 @@ describe('captureDistillJobSession', () => {
       })
       expect(result.failed).toBe(false)
       expect(result.insertedEventRows).toBe(1)
-      const rows = db
+      const rows = await db
         .select()
         .from(memoryDistillEvents)
         .where(eq(memoryDistillEvents.distillJobId, jobId))
@@ -225,7 +225,7 @@ describe('captureDistillJobSession', () => {
         attemptIndex: 1,
         opencodeDbPath: opencodeDb,
       })
-      const rows = db
+      const rows = await db
         .select()
         .from(memoryDistillEvents)
         .where(eq(memoryDistillEvents.distillJobId, jobId))
@@ -273,7 +273,7 @@ describe('captureDistillJobSession', () => {
       })
       expect(result.capturedSessionIds.sort()).toEqual(['child', 'root'])
       expect(result.insertedEventRows).toBe(2)
-      const rows = db
+      const rows = await db
         .select()
         .from(memoryDistillEvents)
         .where(eq(memoryDistillEvents.distillJobId, jobId))

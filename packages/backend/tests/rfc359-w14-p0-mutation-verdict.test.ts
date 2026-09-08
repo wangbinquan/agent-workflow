@@ -114,6 +114,32 @@ error: expect(received).toEqual(expected)
 +   "taskStatus": "running",
   }
       at <anonymous> (/repo/packages/backend/tests/rfc359-w3-t4-boot-recovery.test.ts:193:19)`,
+    `528 |     expect(state).toEqual({
+error: expect(received).toEqual(expected)
+  {
+-   "auditOutcome": "success",
+-   "auditOutcomeMessage": null,
+-   "lifecycleRevision": 2,
++   "auditOutcome": "apply-failed",
++   "auditOutcomeMessage": "ownerless task mutation refused durable owner for 'task-1'",
++   "eventTypes": [],
++   "lifecycleRevision": 1,
+    "nodeRunStatus": "pending",
+    "ownerState": "revoked",
++   "repaired": [],
++   "resolvedAt": null,
++   "resumed": [],
++   "skipped": [
+      {
++       "reason": "apply-failed-or-lease-held",
+        "taskId": "task-1",
+      },
+    ],
+    "taskId": "task-1",
+-   "taskStatus": "interrupted",
++   "taskStatus": "pending",
+  }
+      at <anonymous> (/repo/packages/backend/tests/rfc359-w8-auto-repair-conformance.test.ts:528:19)`,
   ],
 }
 
@@ -278,6 +304,39 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
     expect(
       verdict('current-before', `${transcript('current-before')}\n${witness}\n`, 0).valid,
     ).toBe(false)
+  })
+
+  test('requires the S4 historical refusal, same task, unchanged owner/node and absent durable effects', () => {
+    const id = 'p0-4-revoked-reconcile'
+    const log = transcript(id)
+    const s4 = diagnostics[id]![1]!
+    for (const [from, to] of [
+      ['+   "auditOutcome": "apply-failed",', '+   "auditOutcome": "preflight-stale",'],
+      ['ownerless task mutation refused durable owner', 'unrelated transaction error'],
+      ["for 'task-1'", "for 'unrelated-task'"],
+      ['\n    "taskId": "task-1",\n', '\n    "taskId": "unrelated-task",\n'],
+      ['+   "eventTypes": [],', '+   "eventTypes": ["task.lifecycle-transitioned.v1"],'],
+      ['-   "lifecycleRevision": 2,', '-   "lifecycleRevision": 3,'],
+      ['+   "lifecycleRevision": 1,', '+   "lifecycleRevision": 2,'],
+      ['"nodeRunStatus": "pending"', '"nodeRunStatus": "interrupted"'],
+      ['"ownerState": "revoked"', '"ownerState": "released"'],
+      ['+   "repaired": [],', '+   "repaired": ["unrelated"],'],
+      ['+   "resolvedAt": null,', '+   "resolvedAt": 1788600000000,'],
+      ['+   "resumed": [],', '+   "resumed": ["task-1"],'],
+      ['+   "skipped": [', '+   "skipped": []'],
+      ['apply-failed-or-lease-held', 'no-single-eligible'],
+      ['-   "taskStatus": "interrupted",', '-   "taskStatus": "done",'],
+      ['+   "taskStatus": "pending",', '+   "taskStatus": "running",'],
+      ['rfc359-w8-auto-repair-conformance.test.ts', 'unrelated-fixture.ts'],
+    ] as const)
+      expect(verdict(id, log.replace(s4, s4.replace(from, to))).valid).toBe(false)
+    for (const replacement of [
+      'error: Test timed out after 5000ms',
+      'TypeError: Cannot read properties of undefined',
+      '',
+    ])
+      expect(verdict(id, log.replace(s4, replacement)).valid).toBe(false)
+    expect(verdict(id, `${s4}\n${log.replace(s4, '')}`).valid).toBe(false)
   })
 
   test('requires diagnostics to precede their own failing test, not a different result', () => {

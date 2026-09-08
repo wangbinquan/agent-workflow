@@ -10,25 +10,28 @@
 // the same closure, so any behavior we lock in here matches what the
 // timer produces.
 
-import { describe, expect, test, beforeEach } from 'bun:test'
+import { expect, test, beforeEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startLiveSubagentCapture } from '../src/services/runtime/opencode/subagentLiveCapture'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const capturePersistence = (db: ProviderNeutralDatabase) =>
+  createRuntimeSessionCapturePersistence(db)
 
-const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
-
-function seedTaskWithNodeRun(db: DbClient): { taskId: string; nodeRunId: string } {
+async function seedTaskWithNodeRun(
+  db: ProviderNeutralDatabase,
+): Promise<{ taskId: string; nodeRunId: string }> {
   const wfId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: wfId,
       name: 'wf',
@@ -39,12 +42,18 @@ function seedTaskWithNodeRun(db: DbClient): { taskId: string; nodeRunId: string 
     })
     .run()
   const taskId = ulid()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       name: 'fixture-task',
       id: taskId,
       workflowId: wfId,
       workflowSnapshot: '{}',
+      // Match the original SQLite task INSERT trigger, including JSON key order.
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
       repoPath: '/tmp/wt',
       worktreePath: '/tmp/wt',
       baseBranch: 'main',
@@ -56,7 +65,8 @@ function seedTaskWithNodeRun(db: DbClient): { taskId: string; nodeRunId: string 
     })
     .run()
   const nodeRunId = ulid()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id: nodeRunId,
       taskId,
@@ -121,16 +131,16 @@ function insertPart(
   db.close()
 }
 
-describe('startLiveSubagentCapture', () => {
-  let db: DbClient
+describeEachProvider('startLiveSubagentCapture', (harness) => {
+  let db: ProviderNeutralDatabase
   let taskId: string
   let nodeRunId: string
   let workdir: string
   let opencodeDbPath: string
 
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    const seeded = seedTaskWithNodeRun(db)
+  beforeEach(async () => {
+    db = harness.db
+    const seeded = await seedTaskWithNodeRun(db)
     taskId = seeded.taskId
     nodeRunId = seeded.nodeRunId
     workdir = mkdtempSync(join(tmpdir(), 'rfc048-'))
@@ -187,7 +197,11 @@ describe('startLiveSubagentCapture', () => {
     expect(inserted).toBe(2)
     expect(handle.stats().ticks).toBe(1)
     expect(handle.stats().insertedRows).toBe(2)
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const rows = await db
+      .select()
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .all()
     expect(rows).toHaveLength(2)
     expect(handle.stats().insertedPartIdsBySession.get('A')?.size).toBe(2)
     handle.stop()
@@ -305,7 +319,8 @@ describe('startLiveSubagentCapture', () => {
   test('sibling sessionId already captured by another nodeRun is fully skipped', async () => {
     // Pre-seed a sibling node_run that already wrote rows for session 'A'.
     const siblingId = ulid()
-    db.insert(nodeRuns)
+    await db
+      .insert(nodeRuns)
       .values({
         id: siblingId,
         taskId,
@@ -316,7 +331,8 @@ describe('startLiveSubagentCapture', () => {
         status: 'done',
       })
       .run()
-    db.insert(nodeRunEvents)
+    await db
+      .insert(nodeRunEvents)
       .values({
         nodeRunId: siblingId,
         ts: 1,
@@ -350,7 +366,7 @@ describe('startLiveSubagentCapture', () => {
     })
     expect(await handle.tickOnce()).toBe(0)
     expect(handle.stats().insertedPartIdsBySession.has('A')).toBe(false)
-    const myRows = db
+    const myRows = await db
       .select()
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
@@ -500,7 +516,11 @@ describe('startLiveSubagentCapture', () => {
     })
     ctrl.abort()
     expect(await handle.tickOnce()).toBe(0)
-    const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
+    const rows = await db
+      .select()
+      .from(nodeRunEvents)
+      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      .all()
     expect(rows).toHaveLength(0)
     handle.stop() // idempotent
   })

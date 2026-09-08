@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1793,
+    "backendFiles": 1794,
     "frontendFiles": 622,
     "legacyFiles": 605,
-    "moduleFiles": 1188,
-    "productionFiles": 2570,
+    "moduleFiles": 1189,
+    "productionFiles": 2571,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24959
+    "symbolsIncludingFileRoots": 24961
   },
   "entries": [
     {
@@ -134099,6 +134099,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "terminalizeTaskExecutionIntentsInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalSequence.ts#taskExecutionIntentTerminalSequence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskExecutionIntentTerminalSequence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -300210,5 +300234,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cb396ccf7d61bc140159d7c916bc2d4e81c948c25cf3377b23949e053b16935e"
+  "sourceDigest": "sha256:ec887f8b27c4b485781ee05f1e1bd1adedd434d8c078166db5f61e95a0d3f625"
 }
