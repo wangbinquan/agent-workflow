@@ -111,16 +111,16 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(composition).toContain('composeResourcePackageOperationsFromAdapters')
     expect(composition).toContain('composeSqliteResourcePackageProvider')
     expect(composition).toContain('ResourcePackageExecutionAdapter')
-    // RFC-359 W4-D20：资源包读模型与 owner/name 查找合成一份中立实现，两个装配都接它。
-    expect(composition).toContain('createResourcePackageOwnedResourceLookup')
-    expect(composition).toContain('createResourcePackageReadPort')
-    // RFC-359 W8：技能树读出也合成一份中立实现（`infrastructure/packageSkillTree.ts`），两个装配都接它。
-    expect(composition).toContain('readPackageSkillTree')
+    const sharedReads = source(
+      'src/modules/resource-catalog/composition/resourcePackageProvider.ts',
+    )
+    expect(composition).toContain('return composeResourcePackageProvider(deps)')
+    expect(sharedReads).toContain('createResourcePackageOwnedResourceLookup(input.db)')
+    expect(sharedReads).toContain('createResourcePackageReadPort(input.db)')
+    expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId)')
     expect(postgresqlComposition).toContain('composePostgresqlResourcePackageProvider')
-    expect(postgresqlComposition).toContain('createResourcePackageOwnedResourceLookup')
-    expect(postgresqlComposition).toContain('createResourcePackageReadPort')
+    expect(postgresqlComposition).toContain('...composeResourcePackageProvider(input)')
     expect(postgresqlComposition).toContain('createPostgresqlResourcePackageMutationSessionFactory')
-    expect(postgresqlComposition).toContain('readPackageSkillTree')
     expect(postgresqlComposition).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(postgresqlComposition).toContain('execution: input.execution')
     expect(`${composition}\n${postgresqlComposition}`).not.toMatch(

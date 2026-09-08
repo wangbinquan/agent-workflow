@@ -28,13 +28,13 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                              | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                           | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                    | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 785 个测试文件、1825 次实际 `createInMemoryDb` 调用，其中 782 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | CI 真 PG 服务与 harness 已接入，但 AST 清点仍有 774 个测试文件、1809 次实际 `createInMemoryDb` 调用，其中 770 文件没有 `describeEachProvider`；尚未达到全量行为对拍 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | W1 对应实现与用例已落；W12 增补生产启动内核到 task done 的双引擎完整执行链                                                                                          | 进行中 |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                    | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                   | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                    | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 5 个性能守卫已双引擎化；当前主要锁语句数、行数与参数，墙钟 P95 仍为诊断输出，尚未满足 proposal 原条款                                                               | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 14 项；provider 命名文件 88 → 63（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 11，未构造根账本 4 项；provider 命名文件 88 → 62（含已登记机制差异），真实残余分叉按消费者继续收敛                                                      | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -165,6 +165,41 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
 - 独立功能实现门确认公共来源终止流程和持久化装配无 findings；统一 TypeScript 检查通过。
   全量本地门禁与本地 PG 未运行。全量行为迁移、641 行终止 atom 及其它真实孪生、原 P95 条款
   仍未闭合，RFC 状态保持 In Progress。
+
+### W12 第六批：目录完整装配、提交回执与需求写回原子化
+
+- 三个入口共用 `composeClassicCatalogs`，原 PG 工厂 30 行成员体逐字保留；两个 SQLite
+  入口改用同一完整 bundle，保持原 appHome、runtimeRegistry getter 与 restoreMembership。
+  构造期零 SQL/零目录创建，以及技能文件、agent 引用、workflow 规范化和重建读取接入双引擎；
+  SQLite 相关 21 pass / 123 expect。provider 命名账本 63 → 62，不把残余资源包算法销账。
+- resource-package 读装配共用一个工厂，PG mutation session 的原构造表达式逐字保持。
+  新的真实 multipart preview→commit→DB/FS→重建后 replay 用例照出 PG 已持久化回执字段
+  `operationId` 未映射 HTTP 所需 `opId`，提交已经成功却回 HTTP 500。回执文档统一映射，
+  持久化格式、SQLite wire 及七条资源变更分支保持；旧值回归先红，SQLite 定向 5 pass / 170 expect。
+- 上传需求写回不再分开插入快照、忽略 mission CAS：新增 `commitRequirementCells`，同一
+  DatabaseSession 事务锁定聚合、重读当前快照、合并、插入及更新引用。原 epoch 固定，失败
+  回滚整笔；8 次真实 peer readiness 竞争、并发八路合并与外层回滚回归通过，30 pass / 208 expect。
+  这修复已复现的丢引用链，仍不把它当作第四批上传 journey 现场的唯一原因。
+- 两侧 intent apply、maintenance 命令/查询根被真实 DB/FS 用例调用，锁住 prepared 屏障、
+  幂等回执、活动集合、重建恢复、清理及提交后文件缺失的 roll-forward。SQLite 3 pass / 28 expect。
+  加上 classic/resource-package 真实根，未构造根账本 14 → 4；尚余 collaboration 两根、PG realtime
+  与 digital-employee 执行根。账本归因按实际调用，不把源码引用算成构造。
+- 12 个 RFC310/memory 套件的 63 个数据库行为迁入双引擎，44 个纯函数/源码例仍单跑，
+  一条 SQLite 孤儿外键机制例原样保留。原 108 个展开用例、333 处 matcher/expected AST 保持；
+  SQLite 108 pass / 354 expect。17 个实际 SQLite 构造点降为 1，T19f 文件账本 866 → 855。
+  受版本控制的候选 AST：1888 个测试文件，774 文件 / 1809 次实际 SQLite 构造、189 个 harness
+  文件；仍有 770 个直接造 SQLite 的文件没有 harness，不能据此宣称全量行为对拍完成。
+- 维护 Worker 增补慢片诊断，记录真实 job/run/slice/attempt、最慢 SQL 模板的 wall/process CPU
+  和该片事务最大耗时；只保留一条有界模板，诊断 sink 失败不影响结果。原 250ms 判据、直方图、
+  负载与完成协议保持。两个 SQLite observer 机制回归在旧函数上红，定向 30 pass / 171 expect。
+  单测没有证明第四批 266.57ms 的性能失败已修复，后续 hosted soak 仍须取证。
+- 第五批 `bd697712e` / CI `34170222964` 的全部 backend 分片及真 PG 专项通过，整 run
+  仍为 failure：Windows shard 1 / job `101889467330` 的 inline clarify session resume，
+  预期两次调用的 session 日志实际多出一条空值，两次尝试均失败。正在追踪实际调用来源，
+  不放宽顺序断言，也不靠重跑宣称通过。本批 full CI 与 PG/Windows 结论待精确提交取证。
+- 本批候选统一 TypeScript 检查、定向 SQLite/lint/format 验证；共享树内第七批新增终止测试会
+  使 T19d 读到额外一条双方引用，其内容未进入本批提交，不为其提前改写本批账本。
+  完整本地门禁、本地 PG/soak/E2E 未启动。AC-1/6/9/11/12 仍有未闭合项，RFC 保持 In Progress。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:7640774d0105b7331cf20895bd1003423f04eed2a18d587a5a340176dd4b9d1e`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d356f1c137d72cb76429b16152457a851d953cae896b3b016c6a8e1608384087`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1783 |
+| backend production TS 文件 | 1785 |
 | `services/` 文件 | 323 |
-| `modules/**` 文件 / 非空 context | 1183 / 17 |
+| `modules/**` 文件 / 非空 context | 1184 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 4760 |
+| `architectureExceptions` | 4749 |
 | `backgroundJobs` | 338 |
-| `crossContextImports` | 5296 |
+| `crossContextImports` | 5285 |
 | `facades` | 323 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24913 |
-| `mutationEntrypoints` | 1730 |
+| `moduleSymbolOwners` | 24925 |
+| `mutationEntrypoints` | 1731 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 982 |
-| `transactionExternalEffects` | 274 |
+| `transactionExternalEffects` | 275 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -55,9 +55,9 @@
 | development-automation / application | 51 |
 | collaboration / infrastructure | 46 |
 | collaboration / application | 35 |
+| resource-catalog / composition | 34 |
 | development-automation / domain | 33 |
 | development-automation / infrastructure | 33 |
-| resource-catalog / composition | 33 |
 | task-execution / domain | 30 |
 | intent / application | 25 |
 | identity-access / application | 24 |
@@ -142,7 +142,7 @@
 | targetContext | 数量 |
 | --- | --- |
 | task-execution | 193 |
-| platform | 143 |
+| platform | 144 |
 | identity-access | 44 |
 | runtime-management | 44 |
 | resource-catalog | 43 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3134 |
-| legacy-inbound | 1445 |
+| legacy-outbound | 3135 |
+| legacy-inbound | 1433 |
 | infrastructure-external | 276 |
 | offered-consumption | 157 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3134 |
-| legacy-inbound | 1445 |
+| legacy-outbound | 3135 |
+| legacy-inbound | 1433 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 82 |
 | no-circular | 6 |
@@ -227,9 +227,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2408 |
+| W9 | 2409 |
 | W4-E1 | 813 |
-| W4-C | 410 |
+| W4-C | 398 |
 | W4-E0 | 219 |
 | W4 | 194 |
 | W4-B | 185 |

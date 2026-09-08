@@ -22,97 +22,112 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { docVersions, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  clarifyRounds,
+  docVersions,
+  nodeRunEvents,
+  nodeRuns,
+  tasks,
+  workflows,
+} from '../src/db/schema'
 import {
   buildDistillerUserPrompt,
   loadSourceEvents,
   rowToDistillJob,
 } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
+import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
+import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
+import { appHome } from '../src/util/paths'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function createMemoryDistillTestContext(db: ProviderNeutralDatabase, root = appHome()) {
+  return {
+    store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
+  }
+}
 
 interface Seeded {
   taskId: string
   workflowId: string
 }
 
-function seedTask(db: DbClient): Seeded {
+async function seedTask(db: ProviderNeutralDatabase): Promise<Seeded> {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  await db.insert(workflows).values({
+    id: wfId,
+    name: 'wf',
+    definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
+    version: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
+
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      id: taskId,
-      name: 't',
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/wt',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      baseCommit: null,
-      status: 'pending',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await db.insert(tasks).values({
+    id: taskId,
+    name: 't',
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/wt',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    baseCommit: null,
+    status: 'pending',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
+
   return { taskId, workflowId: wfId }
 }
 
-function seedSourceAgentNodeRun(
-  db: DbClient,
+async function seedSourceAgentNodeRun(
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: { promptText?: string; opencodeSessionId?: string | null; startedAt?: number } = {},
-): string {
+): Promise<string> {
   const id = ulid()
-  db.insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId: 'agent-1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_human',
-      promptText: opts.promptText ?? 'Please make the change',
-      startedAt: opts.startedAt ?? Date.now(),
-      opencodeSessionId: opts.opencodeSessionId ?? 'sess-abc',
-    })
-    .run()
+  await db.insert(nodeRuns).values({
+    id,
+    taskId,
+    nodeId: 'agent-1',
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'awaiting_human',
+    promptText: opts.promptText ?? 'Please make the change',
+    startedAt: opts.startedAt ?? Date.now(),
+    opencodeSessionId: opts.opencodeSessionId ?? 'sess-abc',
+  })
+
   return id
 }
 
 async function seedClarifySession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   sourceRunId: string,
 ): Promise<{ clarifyId: string; clarifyRunId: string }> {
   const clarifyRunId = ulid()
-  db.insert(nodeRuns)
-    .values({
-      id: clarifyRunId,
-      taskId,
-      nodeId: 'clarify-1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_human',
-    })
-    .run()
+  await db.insert(nodeRuns).values({
+    id: clarifyRunId,
+    taskId,
+    nodeId: 'clarify-1',
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'awaiting_human',
+  })
+
   const clarifyId = ulid()
-  await insertClarifyRoundRaw(db, {
+  await db.insert(clarifyRounds).values({
     kind: 'self' as const,
     id: clarifyId,
     taskId,
@@ -129,28 +144,26 @@ async function seedClarifySession(
   return { clarifyId, clarifyRunId }
 }
 
-function insertTextEvent(
-  db: DbClient,
+async function insertTextEvent(
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   ts: number,
   text: string,
   sessionId = 'sess-abc',
-): void {
-  db.insert(nodeRunEvents)
-    .values({
-      nodeRunId,
-      ts,
-      kind: 'text',
-      payload: JSON.stringify({
-        type: 'text',
-        sessionID: sessionId,
-        messageID: `msg-${ts}`,
-        part: { type: 'text', text },
-      }),
-      sessionId,
-      parentSessionId: null,
-    })
-    .run()
+): Promise<void> {
+  await db.insert(nodeRunEvents).values({
+    nodeRunId,
+    ts,
+    kind: 'text',
+    payload: JSON.stringify({
+      type: 'text',
+      sessionID: sessionId,
+      messageID: `msg-${ts}`,
+      part: { type: 'text', text },
+    }),
+    sessionId,
+    parentSessionId: null,
+  })
 }
 
 function mkClarifyJob(taskId: string, clarifyId: string) {
@@ -199,23 +212,23 @@ function mkReviewJob(taskId: string, reviewId: string) {
   })
 }
 
-describe('loadSourceEvents — clarify transcript', () => {
-  let db: DbClient
-  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
+describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
+  let db: ProviderNeutralDatabase
+  let memory: ReturnType<typeof createMemoryDistillTestContext>
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    memory = createSqliteMemoryDistillTestContext(db)
+    db = harness.db
+    memory = createMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
   test('renders source-agent transcript when events exist', async () => {
-    const { taskId } = seedTask(db)
-    const sourceRunId = seedSourceAgentNodeRun(db, taskId, {
+    const { taskId } = await seedTask(db)
+    const sourceRunId = await seedSourceAgentNodeRun(db, taskId, {
       promptText: 'Add a hello endpoint',
     })
     const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
-    insertTextEvent(db, sourceRunId, 1, 'I will start by reading the routes.')
-    insertTextEvent(db, sourceRunId, 2, 'Should the endpoint live in /api/hello?')
+    await insertTextEvent(db, sourceRunId, 1, 'I will start by reading the routes.')
+    await insertTextEvent(db, sourceRunId, 2, 'Should the endpoint live in /api/hello?')
 
     const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
       mkClarifyJob(taskId, clarifyId),
@@ -228,8 +241,191 @@ describe('loadSourceEvents — clarify transcript', () => {
     expect(c.sourceTranscriptMd).toContain('reading the routes')
   })
 
+  test('returns null + reason when source node_run has no events', async () => {
+    const { taskId } = await seedTask(db)
+    const sourceRunId = await seedSourceAgentNodeRun(db, taskId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
+    // intentionally no events
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkClarifyJob(taskId, clarifyId),
+    ])
+    const c = loaded.clarify[0]!
+    expect(c.sourceTranscriptMd).toBeNull()
+    expect(c.sourceTranscriptReason).toContain('no events')
+  })
+
+  test('byte-clips transcript larger than budget with truncated marker', async () => {
+    const { taskId } = await seedTask(db)
+    const sourceRunId = await seedSourceAgentNodeRun(db, taskId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
+    const longChunk = 'x'.repeat(8000)
+    await insertTextEvent(db, sourceRunId, 1, longChunk)
+    await insertTextEvent(db, sourceRunId, 2, longChunk)
+    await insertTextEvent(db, sourceRunId, 3, longChunk)
+
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      {
+        clarifyTranscriptMaxBytes: 2048,
+        reviewBodyMaxBytes: 16384,
+      },
+    )
+    const c = loaded.clarify[0]!
+    expect(c.sourceTranscriptMd).not.toBeNull()
+    expect(c.sourceTranscriptMd).toContain('[truncated ')
+    const byteLen = Buffer.from(c.sourceTranscriptMd!, 'utf8').byteLength
+    expect(byteLen).toBeLessThan(2200) // budget + small marker overhead
+  })
+
+  test('budget.clarifyTranscriptMaxBytes=0 disables clarify transcript', async () => {
+    const { taskId } = await seedTask(db)
+    const sourceRunId = await seedSourceAgentNodeRun(db, taskId)
+    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
+    await insertTextEvent(db, sourceRunId, 1, 'something the model said')
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      {
+        clarifyTranscriptMaxBytes: 0,
+        reviewBodyMaxBytes: 16384,
+      },
+    )
+    const c = loaded.clarify[0]!
+    expect(c.sourceTranscriptMd).toBeNull()
+    expect(c.sourceTranscriptReason).toBe('disabled by config')
+  })
+})
+
+describeEachProvider('loadSourceEvents — review body', (harness) => {
+  let db: ProviderNeutralDatabase
+  let memory: ReturnType<typeof createMemoryDistillTestContext>
+  let prevHome: string | undefined
+  let tmpHome: string
+  beforeEach(() => {
+    db = harness.db
+    resetBroadcastersForTests()
+    tmpHome = mkdtempSync(join(tmpdir(), 'rfc044-'))
+    prevHome = process.env.AGENT_WORKFLOW_HOME
+    process.env.AGENT_WORKFLOW_HOME = tmpHome
+    memory = createMemoryDistillTestContext(db, tmpHome)
+  })
+  afterEach(() => {
+    if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = prevHome
+  })
+
+  async function seedReview(
+    taskId: string,
+    body: string | null,
+    relPath = 'docs/v1.md',
+  ): Promise<string> {
+    const reviewRunId = ulid()
+    await db.insert(nodeRuns).values({
+      id: reviewRunId,
+      taskId,
+      nodeId: 'review-1',
+      iteration: 0,
+      retryIndex: 0,
+      reviewIteration: 0,
+      status: 'done',
+    })
+
+    const dvId = ulid()
+    await db.insert(docVersions).values({
+      id: dvId,
+      taskId,
+      reviewNodeId: 'review-1',
+      reviewNodeRunId: reviewRunId,
+      sourceNodeId: 'agent-1',
+      sourcePortName: 'design',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: relPath,
+      commentsJson: '[]',
+      decision: 'approved',
+      createdAt: Date.now(),
+      decidedAt: Date.now(),
+    })
+
+    if (body !== null) {
+      const absPath = join(tmpHome, relPath)
+      mkdirSync(join(tmpHome, 'docs'), { recursive: true })
+      writeFileSync(absPath, body)
+    }
+    return dvId
+  }
+
+  test('reads body file when present', async () => {
+    const { taskId } = await seedTask(db)
+    const dvId = await seedReview(taskId, '# Hello\n\nworld')
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkReviewJob(taskId, dvId),
+    ])
+    const r = loaded.review[0]!
+    expect(r.reviewedBodyMd).toBe('# Hello\n\nworld')
+    expect(r.reviewedBodyReason).toBeNull()
+  })
+
+  test('falls back to null + reason when body file is missing', async () => {
+    const { taskId } = await seedTask(db)
+    const dvId = await seedReview(taskId, null, 'docs/missing.md')
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkReviewJob(taskId, dvId),
+    ])
+    const r = loaded.review[0]!
+    expect(r.reviewedBodyMd).toBeNull()
+    expect(r.reviewedBodyReason).toContain('unreadable')
+  })
+
+  test('byte-clips oversize body with truncated marker', async () => {
+    const { taskId } = await seedTask(db)
+    const big = 'a'.repeat(32 * 1024)
+    const dvId = await seedReview(taskId, big)
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkReviewJob(taskId, dvId)],
+      {
+        clarifyTranscriptMaxBytes: 16384,
+        reviewBodyMaxBytes: 4096,
+      },
+    )
+    const r = loaded.review[0]!
+    expect(r.reviewedBodyMd).not.toBeNull()
+    expect(r.reviewedBodyMd).toContain('[truncated ')
+    expect(Buffer.from(r.reviewedBodyMd!, 'utf8').byteLength).toBeLessThan(4200)
+  })
+
+  test('budget.reviewBodyMaxBytes=0 disables review body', async () => {
+    const { taskId } = await seedTask(db)
+    const dvId = await seedReview(taskId, 'doc body present')
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkReviewJob(taskId, dvId)],
+      {
+        clarifyTranscriptMaxBytes: 16384,
+        reviewBodyMaxBytes: 0,
+      },
+    )
+    const r = loaded.review[0]!
+    expect(r.reviewedBodyMd).toBeNull()
+    expect(r.reviewedBodyReason).toBe('disabled by config')
+  })
+})
+
+// This fixture deliberately disables SQLite foreign keys to construct an orphan
+// that ordinary persisted rows cannot contain. Keep this engine mechanism case
+// single-run; the valid source-context flows above use both real providers.
+describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () => {
   test('returns null + reason when source node_run does not exist', async () => {
-    const { taskId } = seedTask(db)
+    const db = createInMemoryDb(MIGRATIONS)
+    const memory = createMemoryDistillTestContext(db)
+    resetBroadcastersForTests()
+    const { taskId } = await seedTask(db)
     // Insert a clarify row that points to a node_run id we never seed.
     const orphanRunId = ulid()
     const clarifyRunId = ulid()
@@ -272,179 +468,6 @@ describe('loadSourceEvents — clarify transcript', () => {
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
     expect(c.sourceTranscriptReason).toContain('not found')
-  })
-
-  test('returns null + reason when source node_run has no events', async () => {
-    const { taskId } = seedTask(db)
-    const sourceRunId = seedSourceAgentNodeRun(db, taskId)
-    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
-    // intentionally no events
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkClarifyJob(taskId, clarifyId),
-    ])
-    const c = loaded.clarify[0]!
-    expect(c.sourceTranscriptMd).toBeNull()
-    expect(c.sourceTranscriptReason).toContain('no events')
-  })
-
-  test('byte-clips transcript larger than budget with truncated marker', async () => {
-    const { taskId } = seedTask(db)
-    const sourceRunId = seedSourceAgentNodeRun(db, taskId)
-    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
-    const longChunk = 'x'.repeat(8000)
-    insertTextEvent(db, sourceRunId, 1, longChunk)
-    insertTextEvent(db, sourceRunId, 2, longChunk)
-    insertTextEvent(db, sourceRunId, 3, longChunk)
-
-    const loaded = await loadSourceEvents(
-      memory.store,
-      memory.reviewedArtifacts,
-      [mkClarifyJob(taskId, clarifyId)],
-      {
-        clarifyTranscriptMaxBytes: 2048,
-        reviewBodyMaxBytes: 16384,
-      },
-    )
-    const c = loaded.clarify[0]!
-    expect(c.sourceTranscriptMd).not.toBeNull()
-    expect(c.sourceTranscriptMd).toContain('[truncated ')
-    const byteLen = Buffer.from(c.sourceTranscriptMd!, 'utf8').byteLength
-    expect(byteLen).toBeLessThan(2200) // budget + small marker overhead
-  })
-
-  test('budget.clarifyTranscriptMaxBytes=0 disables clarify transcript', async () => {
-    const { taskId } = seedTask(db)
-    const sourceRunId = seedSourceAgentNodeRun(db, taskId)
-    const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
-    insertTextEvent(db, sourceRunId, 1, 'something the model said')
-    const loaded = await loadSourceEvents(
-      memory.store,
-      memory.reviewedArtifacts,
-      [mkClarifyJob(taskId, clarifyId)],
-      {
-        clarifyTranscriptMaxBytes: 0,
-        reviewBodyMaxBytes: 16384,
-      },
-    )
-    const c = loaded.clarify[0]!
-    expect(c.sourceTranscriptMd).toBeNull()
-    expect(c.sourceTranscriptReason).toBe('disabled by config')
-  })
-})
-
-describe('loadSourceEvents — review body', () => {
-  let db: DbClient
-  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
-  let prevHome: string | undefined
-  let tmpHome: string
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    resetBroadcastersForTests()
-    tmpHome = mkdtempSync(join(tmpdir(), 'rfc044-'))
-    prevHome = process.env.AGENT_WORKFLOW_HOME
-    process.env.AGENT_WORKFLOW_HOME = tmpHome
-    memory = createSqliteMemoryDistillTestContext(db, tmpHome)
-  })
-  afterEach(() => {
-    if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = prevHome
-  })
-
-  function seedReview(taskId: string, body: string | null, relPath = 'docs/v1.md'): string {
-    const reviewRunId = ulid()
-    db.insert(nodeRuns)
-      .values({
-        id: reviewRunId,
-        taskId,
-        nodeId: 'review-1',
-        iteration: 0,
-        retryIndex: 0,
-        reviewIteration: 0,
-        status: 'done',
-      })
-      .run()
-    const dvId = ulid()
-    db.insert(docVersions)
-      .values({
-        id: dvId,
-        taskId,
-        reviewNodeId: 'review-1',
-        reviewNodeRunId: reviewRunId,
-        sourceNodeId: 'agent-1',
-        sourcePortName: 'design',
-        versionIndex: 1,
-        reviewIteration: 0,
-        bodyPath: relPath,
-        commentsJson: '[]',
-        decision: 'approved',
-        createdAt: Date.now(),
-        decidedAt: Date.now(),
-      })
-      .run()
-    if (body !== null) {
-      const absPath = join(tmpHome, relPath)
-      mkdirSync(join(tmpHome, 'docs'), { recursive: true })
-      writeFileSync(absPath, body)
-    }
-    return dvId
-  }
-
-  test('reads body file when present', async () => {
-    const { taskId } = seedTask(db)
-    const dvId = seedReview(taskId, '# Hello\n\nworld')
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkReviewJob(taskId, dvId),
-    ])
-    const r = loaded.review[0]!
-    expect(r.reviewedBodyMd).toBe('# Hello\n\nworld')
-    expect(r.reviewedBodyReason).toBeNull()
-  })
-
-  test('falls back to null + reason when body file is missing', async () => {
-    const { taskId } = seedTask(db)
-    const dvId = seedReview(taskId, null, 'docs/missing.md')
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkReviewJob(taskId, dvId),
-    ])
-    const r = loaded.review[0]!
-    expect(r.reviewedBodyMd).toBeNull()
-    expect(r.reviewedBodyReason).toContain('unreadable')
-  })
-
-  test('byte-clips oversize body with truncated marker', async () => {
-    const { taskId } = seedTask(db)
-    const big = 'a'.repeat(32 * 1024)
-    const dvId = seedReview(taskId, big)
-    const loaded = await loadSourceEvents(
-      memory.store,
-      memory.reviewedArtifacts,
-      [mkReviewJob(taskId, dvId)],
-      {
-        clarifyTranscriptMaxBytes: 16384,
-        reviewBodyMaxBytes: 4096,
-      },
-    )
-    const r = loaded.review[0]!
-    expect(r.reviewedBodyMd).not.toBeNull()
-    expect(r.reviewedBodyMd).toContain('[truncated ')
-    expect(Buffer.from(r.reviewedBodyMd!, 'utf8').byteLength).toBeLessThan(4200)
-  })
-
-  test('budget.reviewBodyMaxBytes=0 disables review body', async () => {
-    const { taskId } = seedTask(db)
-    const dvId = seedReview(taskId, 'doc body present')
-    const loaded = await loadSourceEvents(
-      memory.store,
-      memory.reviewedArtifacts,
-      [mkReviewJob(taskId, dvId)],
-      {
-        clarifyTranscriptMaxBytes: 16384,
-        reviewBodyMaxBytes: 0,
-      },
-    )
-    const r = loaded.review[0]!
-    expect(r.reviewedBodyMd).toBeNull()
-    expect(r.reviewedBodyReason).toBe('disabled by config')
   })
 })
 

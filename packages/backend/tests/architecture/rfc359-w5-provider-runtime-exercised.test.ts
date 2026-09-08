@@ -107,16 +107,6 @@ const PROVIDER_ROOT_PREFIX = /(?:compose|create)(?:Sqlite|Postgresql)/
 export const PROVIDER_RUNTIME_UNEXERCISED: readonly string[] = [
   'modules/collaboration/composition/collaborationRouteOperations.ts#composePostgresqlCollaborationRouteOperations: 只有源码文本锁',
   'modules/collaboration/composition/collaborationRouteOperations.ts#composeSqliteCollaborationRouteOperations: 只有源码文本锁',
-  'modules/intent/composition/apply.ts#composePostgresqlIntentApplyOperations: 零引用',
-  'modules/intent/composition/apply.ts#composeSqliteIntentApplyOperations: 零引用',
-  'modules/intent/composition/maintenance.ts#composePostgresqlIntentMaintenanceCommandsForAppHome: 只有源码文本锁',
-  'modules/intent/composition/maintenance.ts#composePostgresqlIntentMaintenanceSnapshotQueries: 零引用',
-  'modules/intent/composition/maintenance.ts#composeSqliteIntentMaintenanceCommandsForAppHome: 零引用',
-  'modules/intent/composition/maintenance.ts#composeSqliteIntentMaintenanceSnapshotQueries: 零引用',
-  'modules/resource-catalog/composition/intentApply.ts#composePostgresqlIntentApplyResourceBinding: 零引用',
-  'modules/resource-catalog/composition/postgresqlClassicCatalogs.ts#composePostgresqlClassicCatalogs: 只有源码文本锁',
-  'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageCatalog: 只有源码文本锁',
-  'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#composePostgresqlResourcePackageProvider: 只有源码文本锁',
   'modules/runtime-management/composition.ts#composePostgresqlRealtimeRuntime: 只有源码文本锁',
   'modules/task-execution/composition/digitalEmployeeExecution.ts#composePostgresqlDigitalEmployeeExecution: 零引用',
 ]

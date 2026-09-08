@@ -42,14 +42,22 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(composition).not.toMatch(/composePostgresqlSkillCatalog|createSqliteSkillRepository/)
   })
 
-  test('one owner-native bundle supplies all PostgreSQL classic catalog semantics', () => {
-    const bundle = source('src/modules/resource-catalog/composition/postgresqlClassicCatalogs.ts')
+  test('one owner-native bundle supplies both providers with classic catalog semantics', () => {
+    const bundle = source('src/modules/resource-catalog/composition/classicCatalogs.ts')
     const agent = source('src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts')
     const workflow = source(
       'src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts',
     )
 
-    expect(bundle).toContain('export function composePostgresqlClassicCatalogs(')
+    expect(bundle).toContain('export function composeClassicCatalogs(')
+    expect(bundle).toContain('readonly db: ProviderNeutralDatabase')
+    for (const root of [
+      'src/cli/start.ts',
+      'src/cli/postgresqlDaemonApplication.ts',
+      'src/server.ts',
+    ]) {
+      expect(source(root), root).toContain('composeClassicCatalogs({')
+    }
     expect(bundle).toContain('createAgentPersistenceSemantics({')
     // RFC-359 W4-D23c：技能这一格不再有 provider 私有的内容生命周期——bundle 装配的是中立目录，
     // 工作流校验要的「技能内容在不在」由两个数据库共用的文件系统实现回答。

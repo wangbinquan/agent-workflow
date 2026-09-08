@@ -5,10 +5,9 @@
 // assignment 拒绝；④同 scope upsert 是更新不是第二行；⑤resolve 的三级优先
 // 级 exact repository > repository-group > global-default；⑥delete 后回落。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import type { DigitalEmployeeContent } from '../src/modules/development-automation/domain/digitalEmployee'
 import {
@@ -24,7 +23,7 @@ import {
   upsertAssignment,
 } from '../src/modules/development-automation/infrastructure/assignmentStore'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const EMPLOYEE_CONTENT: DigitalEmployeeContent = {
   schemaVersion: 1,
@@ -36,7 +35,9 @@ const EMPLOYEE_CONTENT: DigitalEmployeeContent = {
   defaultPolicyRef: { id: 'pol-1', revision: 1 },
 }
 
-async function seedPublished(db: DbClient): Promise<{ employeeId: string; policyId: string }> {
+async function seedPublished(
+  db: ProviderNeutralDatabase,
+): Promise<{ employeeId: string; policyId: string }> {
   const policy = await createAutomationPolicy(db, {
     name: 'p',
     ownerUserId: null,
@@ -60,9 +61,9 @@ async function seedPublished(db: DbClient): Promise<{ employeeId: string; policy
   return { employeeId: employee.id, policyId: policy.id }
 }
 
-describe('T17 assignment store', () => {
+describeEachProvider('T17 assignment store', (harness) => {
   test('reference validation: unpublished employee/policy revisions are rejected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await expect(
       upsertAssignment(db, {
         scopeKind: 'repository',
@@ -90,7 +91,7 @@ describe('T17 assignment store', () => {
   })
 
   test('scope shape and empty assignment are rejected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await expect(
       upsertAssignment(db, {
         scopeKind: 'global-default',
@@ -127,7 +128,7 @@ describe('T17 assignment store', () => {
   })
 
   test('same-scope upsert updates in place; resolve honours repo > group > global', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { employeeId, policyId } = await seedPublished(db)
     const ref = { id: employeeId, revision: 1 }
 

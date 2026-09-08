@@ -3,11 +3,12 @@
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
 > **RFC-359 W12 接续（2026-09-08）**：裸驱动事务守卫按 TypeScript 接收者类型识别，账本归零。
-> 第二至五批拆除 realtime / scheduler / collaboration / MCP / development / maintenance / WorkStart
-> 的可漏绑槽，provider 命名文件 88 → 63，原始装配占位命中 32 → 11；代码矩阵/度量、自动修复与资源包 journal 合一。
-> 真实任务跑到 done 的双引擎用例已接入，修复工作组成员瞬态重试 CAS 卡住；30 个技能/MCP/memory 等行为套件改为双引擎，初始迁移装配已去除外部 bind。
-> 来源终止公共扫描/收据与持久化聚合已合一，每目标 atom 仍保留两侧实现；未构造根 19 → 14。
-> **仍为 In Progress**：785 个测试文件还有实际 SQLite 内存库构造（含机制专属测试，待逐项分类）；
+> 第二至六批拆除 realtime / scheduler / collaboration / MCP / development / maintenance / WorkStart
+> 的可漏绑槽，provider 命名文件 88 → 62，原始装配占位命中 32 → 11；代码矩阵/度量、自动修复与资源包 journal 合一。
+> 真实任务跑到 done 的双引擎用例已接入，修复工作组成员瞬态重试 CAS 卡住；42 个技能/MCP/memory/开发自动化行为套件改为双引擎，初始迁移装配已去除外部 bind。
+> 来源终止公共扫描/收据与持久化聚合已合一，每目标 atom 仍保留两侧实现；未构造根 19 → 4。
+> 目录 bundle 共用完整装配；资源包提交回执与需求引用竞争已修复，维护慢片增加实际 SQL/CPU 诊断。
+> **仍为 In Progress**：774 个测试文件还有实际 SQLite 内存库构造（含机制专属测试，待逐项分类）；
 > 真实孪生、剩余装配与原始 P95 判据尚未闭合。当前验收事实与逐批 CI 见 `plan.md` §0b/§0c。
 
 > 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**

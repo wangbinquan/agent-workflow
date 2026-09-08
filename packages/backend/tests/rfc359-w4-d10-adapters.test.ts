@@ -7,11 +7,15 @@
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { developmentRepositoryUploadPlans, missionInputUploads } from '@/db/schema'
+import {
+  developmentFactSnapshots,
+  developmentRepositoryUploadPlans,
+  missionInputUploads,
+} from '@/db/schema'
 import type {
   MissionPersistence,
   MissionRow,
@@ -25,6 +29,9 @@ import {
   listMissionSummariesPage,
 } from '@/modules/development-automation/infrastructure/missionReadModels'
 import { createMissionPersistence } from '@/modules/development-automation/infrastructure/missionStore'
+import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
+import { createFactSnapshotReader } from '@/modules/development-automation/infrastructure/reconcilerReaders'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000
@@ -94,6 +101,100 @@ async function codeOf(fn: () => Promise<unknown>): Promise<string> {
 }
 
 describeEachProvider('RFC-359 W4-D10 —— Mission 持久化', (harness) => {
+  test('requirement cell commits merge all eight concurrent writers in the same epoch', async () => {
+    const { store, missionId } = await newStore(harness.db)
+    const writes = Array.from({ length: 8 }, (_, index) => ({
+      missionId,
+      expectedEpoch: 0,
+      snapshotId: ulid(),
+      patch: {
+        [`__requirement.writer${index}`]: {
+          state: 'known' as const,
+          value: index,
+          sourceRevision: `peer-${index}`,
+        },
+      },
+      refsJson: JSON.stringify({ writer: index }),
+      now: NOW + index,
+    }))
+    const receipts = await Promise.all(writes.map((input) => store.commitRequirementCells(input)))
+    expect(receipts.every((receipt) => receipt.ok)).toBe(true)
+    const mission = (await store.getMission(missionId))!
+    expect(mission.revision).toBe(8)
+    const requirementBundleRef = mission.requirementBundleRef
+    expect(requirementBundleRef).not.toBeNull()
+    if (requirementBundleRef === null) throw new Error('requirement snapshot reference missing')
+    const cells = await createFactSnapshotReader(harness.db).getCells(requirementBundleRef)
+    expect(cells).toEqual(Object.assign({}, ...writes.map((input) => input.patch)))
+    const snapshots = await harness.db
+      .select()
+      .from(developmentFactSnapshots)
+      .where(eq(developmentFactSnapshots.missionId, missionId))
+      .orderBy(asc(developmentFactSnapshots.missionRevision))
+    expect(snapshots.map((snapshot) => snapshot.missionRevision)).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+    expect(snapshots.at(-1)?.id).toBe(requirementBundleRef)
+    expect(snapshots.at(-1)?.digest).toBe(canonicalDigest(cells))
+  })
+
+  test('requirement snapshot and its mission reference roll back together with the outer transaction', async () => {
+    const { store, missionId } = await newStore(harness.db)
+    const before = await store.getMission(missionId)
+    const snapshotId = ulid()
+    await expect(
+      databaseSessionFor(harness.db).transaction(async () => {
+        expect(
+          await store.commitRequirementCells({
+            missionId,
+            expectedEpoch: 0,
+            snapshotId,
+            patch: {
+              'requirement.bundleComplete': { state: 'known', value: true, sourceRevision: 'test' },
+            },
+            refsJson: '{}',
+            now: NOW,
+          }),
+        ).toEqual({ ok: true, revision: 1 })
+        throw new Error('roll back the requirement write')
+      }),
+    ).rejects.toThrow('roll back the requirement write')
+    expect(await store.getMission(missionId)).toEqual(before)
+    expect(
+      await harness.db
+        .select()
+        .from(developmentFactSnapshots)
+        .where(eq(developmentFactSnapshots.id, snapshotId)),
+    ).toEqual([])
+  })
+
+  test('requirement commits leave missing missions and advanced epochs without a snapshot', async () => {
+    const { store, missionId } = await newStore(harness.db)
+    expect(await store.bumpEpoch(missionId, 0, {})).toMatchObject({ ok: true })
+    const before = await store.getMission(missionId)
+    for (const [target, code] of [
+      [missionId, 'epoch-conflict'],
+      ['missing-mission', 'not-found'],
+    ] as const) {
+      const snapshotId = ulid()
+      expect(
+        await store.commitRequirementCells({
+          missionId: target,
+          expectedEpoch: 0,
+          snapshotId,
+          patch: {},
+          refsJson: '{}',
+          now: NOW,
+        }),
+      ).toEqual({ ok: false, code })
+      expect(
+        await harness.db
+          .select()
+          .from(developmentFactSnapshots)
+          .where(eq(developmentFactSnapshots.id, snapshotId)),
+      ).toEqual([])
+    }
+    expect(await store.getMission(missionId)).toEqual(before)
+  })
+
   test('launch idempotency：同键第二次返回既有行；commitMissionLaunch 一笔落 mission / source / 上传认领 / plan', async () => {
     const store = createMissionPersistence(harness.db)
     const row = missionRow({ launchIdempotencyKey: `idem-fixed-${ulid()}` })

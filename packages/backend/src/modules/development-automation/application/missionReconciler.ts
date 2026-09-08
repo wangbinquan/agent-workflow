@@ -1141,27 +1141,18 @@ async function persistRequirementCells(
   patch: Record<string, FactCell<FactCellValue>>,
   refs: unknown,
 ): Promise<void> {
-  const mission = await deps.store.getMission(missionId)
-  if (mission === null) return
-  const base =
-    mission.requirementBundleRef === null
-      ? {}
-      : ((await deps.snapshots.getCells(mission.requirementBundleRef)) ?? {})
-  const merged = { ...base, ...patch }
-  const now = deps.now()
-  const snapshotId = ulid()
-  await deps.store.insertFactSnapshot({
-    id: snapshotId,
+  const initial = await deps.store.getMission(missionId)
+  if (initial === null) return
+  // A detached snapshot followed by an OCC pointer update can lose the only
+  // reference after the decision is already deduplicated. Commit both together;
+  // only a missing mission or a newer lifecycle epoch may discard this result.
+  await deps.store.commitRequirementCells({
     missionId,
-    missionRevision: mission.revision,
-    capturedAt: new Date(now).toISOString().replace('Z', '+00:00'),
-    cellsJson: canonicalStringify(merged),
+    expectedEpoch: initial.epoch,
+    snapshotId: ulid(),
+    patch,
     refsJson: canonicalStringify(refs),
-    digest: canonicalDigest(merged),
-    now,
-  })
-  await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
-    requirementBundleRef: snapshotId,
+    now: deps.now(),
   })
 }
 

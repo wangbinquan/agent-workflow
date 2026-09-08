@@ -17,6 +17,14 @@
   保持，不改成跨目标事务或并行处理。公共化不代表两侧 lifecycle atom 已合一。
 - taskExecutionPersistence 只维护一份按原顺序构造的成员聚合；所选恢复生命周期在原字段处
   注入。continuation pre-drive 的三个参与者共用同一中立客户端，运行流程保持不变。
+- classic catalog 由一个完整 bundle 装配，构造期不执行数据库或文件操作；runtimeRegistry
+  getter 仍引用同一启动内核，原 appHome 和 restoreMembership 参数保持。
+- 资源包持久化回执保持原字段；HTTP 文档转换统一补齐 operationId → opId，首次成功与
+  持久化重放使用同一 wire 结果，避免提交成功后响应 schema 失败。
+- 需求快照与 mission 引用在一个中立事务中提交；锁定聚合后重读与合并，固定调用 epoch，
+  插入/CAS 任一失败均回滚，避免 readiness 并发写后只留孤立快照。
+- 维护慢片诊断仅记录当前片最慢 SQL 模板及 process CPU，不推断其属于该片最大事务；
+  不改变采样直方图、负载或验收阈值，诊断输出失败不改变工作结果。
 - provider 文件改名只适用于已经中立的实现；真正重复的实现先合一，必要机制差异保持明确命名与对拍。
 
 ## 1. RFC-294 对齐（CLAUDE.md §RFC workflow 第 8 条）

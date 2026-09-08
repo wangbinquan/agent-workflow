@@ -17,6 +17,8 @@ import type { AtomicDecision } from './atomic'
 import type { PersistUploadPlanInput } from '../uploadPlan'
 import type { TransitionFence, MissionStatus } from '../../domain/mission'
 import type { DeferredWakeRow } from '../../domain/deferredWake'
+import type { FactCell } from '../../domain/factCell'
+import type { FactCellValue } from '../../domain/facts'
 
 export interface MissionRow {
   readonly id: string
@@ -398,4 +400,17 @@ export type MissionPersistence = {
     readonly snapshot: MissionFactSnapshotWrite
     readonly decision: MissionDecisionWrite
   }): Promise<MissionDecisionWriteReceipt>
+  /** Merge current requirement cells, insert their snapshot and advance the
+   * mission reference in one transaction. A later lifecycle epoch is left intact. */
+  commitRequirementCells(input: {
+    readonly missionId: string
+    readonly expectedEpoch: number
+    readonly snapshotId: string
+    readonly patch: Readonly<Record<string, FactCell<FactCellValue>>>
+    readonly refsJson: string
+    readonly now: number
+  }): Promise<
+    | { readonly ok: true; readonly revision: number }
+    | { readonly ok: false; readonly code: 'epoch-conflict' | 'not-found' }
+  >
 }

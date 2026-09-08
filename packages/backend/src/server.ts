@@ -75,13 +75,8 @@ import {
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import { composeDatabaseAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
-import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
-import {
-  composeAgentResourceIntegrity,
-  composeDatabaseAgentResourceInventorySource,
-  type AgentResourceIntegrityComposition,
-} from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
+import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
@@ -91,11 +86,6 @@ import {
 } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
-import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
-import {
-  composeDatabaseWorkflowCatalog,
-  composeSkillContentAvailability,
-} from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import {
   composeWorkgroupTaskRoom,
@@ -2010,20 +2000,17 @@ export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
     db: effectiveDeps.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
-  const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
+  const classicCatalogs = composeClassicCatalogs({
     db: effectiveDeps.db,
-    authorization: providerResourceCatalog.authorization,
-  })
-  const agentResourceIntegrity = composeAgentResourceIntegrity(agentResourceInventory)
-  const agentResourceIntegrityQueries = agentResourceIntegrity.queries
-  const agentCatalog = composeDatabaseAgentCatalog({
-    db: effectiveDeps.db,
-    resourceCatalog: providerResourceCatalog,
-    resourceInventory: agentResourceInventory,
+    appHome: Paths.root,
     runtimeProfiles: { get: (name) => effectiveDeps.runtimeRegistry.getRuntime(name) },
-    importQueries: composeAgentImportQueries(effectiveDeps.db),
-    resourceIntegrityQueries: agentResourceIntegrityQueries,
+    restoreMembership: createAsyncSkillRestoreMembership(
+      composeSkillMemoryFusionParticipantFactory(),
+    ),
+    resourceCatalog: providerResourceCatalog,
   })
+  const agentResourceIntegrity = classicCatalogs.agentResourceIntegrity
+  const agentCatalog = classicCatalogs.agent
   const mcpProbeStore = composeMcpProbeStore(effectiveDeps.db)
   const mcpCatalog = composeMcpCatalog({
     db: effectiveDeps.db,
@@ -2048,21 +2035,8 @@ export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
     resourceCatalog: providerResourceCatalog,
     coordinator: pluginOperationCoordinator,
   })
-  const skillCatalog = composeSkillCatalog({
-    db: effectiveDeps.db,
-    appHome: Paths.root,
-    // RFC-353 T7：同 `cli/start.ts`——回滚的成员关系判据归 knowledge-evolution，bootstrap 装配。
-    // RFC-359 W4-D23b：legacy 回滚路径已改吃中立事务，同步那条协调器随之退役——
-    // 两个 bootstrap 从此接同一个异步协调器（PG 一直用的就是它）。
-    restoreMembership: createAsyncSkillRestoreMembership(
-      composeSkillMemoryFusionParticipantFactory(),
-    ),
-  })
-  const workflowCatalog = composeDatabaseWorkflowCatalog({
-    db: effectiveDeps.db,
-    resourceCatalog: providerResourceCatalog,
-    skillContent: composeSkillContentAvailability({ appHome: Paths.root }),
-  })
+  const skillCatalog = classicCatalogs.skill
+  const workflowCatalog = classicCatalogs.workflow
   const workgroupCatalog = composeWorkgroupCatalog({
     db: effectiveDeps.db,
     resourceCatalog: providerResourceCatalog,

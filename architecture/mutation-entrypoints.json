@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1730,
+    "entries": 1731,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7985,17 +7985,15 @@
       "controls": {
         "audit": true,
         "authority": "internal-family",
-        "authorization": false,
+        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
+      "finalCriterion": "controls-complete",
       "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
-      "missingControls": [
-        "authorization"
-      ],
+      "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#createMissionPersistence",
       "symbol": "createMissionPersistence",
       "targetContext": "development-automation",
@@ -29111,6 +29109,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/platform/background/maintenanceSliceDiagnostics.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceSliceDiagnostics.ts#createMaintenanceSliceDiagnostics",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceSliceDiagnostics.ts#createMaintenanceSliceDiagnostics",
+      "symbol": "createMaintenanceSliceDiagnostics",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/background/maintenanceWorker.ts#addCounters",
@@ -41326,7 +41349,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7640774d0105b7331cf20895bd1003423f04eed2a18d587a5a340176dd4b9d1e",
+  "sourceDigest": "sha256:d356f1c137d72cb76429b16152457a851d953cae896b3b016c6a8e1608384087",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

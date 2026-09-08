@@ -9,15 +9,11 @@ import {
 } from '../infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { McpTransactionLifecycle } from '../infrastructure/mcpRepository'
 import {
-  createResourcePackageOwnedResourceLookup,
-  createResourcePackageReadPort,
-} from '../infrastructure/packageResourceRows'
-import {
   createPostgresqlResourcePackagePluginArtifactOwner,
   createPostgresqlResourcePackageSkillArtifactOwner,
   type PostgresqlResourcePackagePluginInstaller,
 } from '../infrastructure/postgresqlResourcePackageArtifacts'
-import { readPackageSkillTree } from '../infrastructure/packageSkillTree'
+import { composeResourcePackageProvider } from './resourcePackageProvider'
 import {
   composeResourcePackageOperations,
   type ComposedResourcePackageCatalog,
@@ -67,9 +63,7 @@ export function composePostgresqlResourcePackageProvider(
     ...(input.now === undefined ? {} : { now: input.now }),
   })
   return Object.freeze({
-    resources: createResourcePackageOwnedResourceLookup(input.db),
-    reads: createResourcePackageReadPort(input.db),
-    readSkillTree: (skillId: string) => readPackageSkillTree(input.db, input.appHome, skillId),
+    ...composeResourcePackageProvider(input),
     mutationSessionFactory,
   })
 }

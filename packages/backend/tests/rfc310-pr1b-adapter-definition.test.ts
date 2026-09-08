@@ -8,9 +8,7 @@
 // 再 publish 不改旧行）；④owner+name 唯一 → typed 409。
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   archiveDevelopmentAdapter,
   createDevelopmentAdapter,
@@ -26,7 +24,7 @@ import {
 } from '../src/modules/integration/domain/developmentAdapterDefinition'
 import { createDevelopmentAdapterStore } from '../src/modules/integration/infrastructure/developmentAdapterStore'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 function content(overrides: Partial<DevelopmentAdapterContent> = {}): DevelopmentAdapterContent {
   return {
@@ -139,13 +137,11 @@ describe('rfc310 adapter content contract', () => {
   })
 })
 
-describe('rfc310 adapter store + commands', () => {
-  let db: DbClient
+describeEachProvider('rfc310 adapter store + commands', (harness) => {
   let store: DevelopmentAdapterStore
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    store = createDevelopmentAdapterStore(db)
+    store = createDevelopmentAdapterStore(harness.db)
   })
 
   test('create → revise → publish twice: revisions immutable, digest frozen, identity advances', async () => {

@@ -95,10 +95,10 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │     secretInputs/export 全是共用的中立代码。
   // │
   // │  ② **命名债（已经跑在中立句柄上，只是顶着旧名字；零行为风险）—— 4 条**
-  // │     · `composition/postgresqlClassicCatalogs.ts` —— 唯一的 PG token 是入参类型；四个被调方
+  // │     · W12 已将 `composition/postgresqlClassicCatalogs.ts` 合到中立 `classicCatalogs.ts`；四个被调方
   // │       (`composeAgentCatalog` / `composeSkillCatalog` / `composeDatabaseWorkflowCatalog` /
   // │       `createSkillContentAvailability`) 全吃 `ProviderNeutralDatabase` 或纯文件系统。
-  // │       注意它的「孪生」不是文件而是 `cli/start.ts` / `server.ts` 里**手写展开的同一串装配**。
+  // │       `cli/start.ts` / `server.ts` 原来展开的同一串装配也已删除，三个根共用完整 bundle。
   // │     · `composition/postgresqlResourcePackageCatalog.ts` 的 `resources`/`reads`/`readSkillTree`
   // │       三个字段与 `composition/resourcePackageOperations.ts:245` 的
   // │       `composeSqliteResourcePackageProvider` **逐字相同**；`composePostgresqlResourcePackage
@@ -128,7 +128,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │     `listResourceGrantUserIds` / `listResourceGrants` 也是零调用方，但退役会改动
   // │     `rfc349-provider-cutover.test.ts` 的导出账本（并发刀正在改那份），留给下一刀。
   // └─
-  'modules/resource-catalog/composition/postgresqlClassicCatalogs.ts',
   'modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts',

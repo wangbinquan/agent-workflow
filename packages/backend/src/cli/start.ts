@@ -119,16 +119,10 @@ import {
   composeMcpRuntimeTestProvider,
   createMcpTransactionLifecycle,
 } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { composeDatabaseAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
+import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
-import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
-import {
-  composeDatabaseWorkflowCatalog,
-  composeSkillContentAvailability,
-} from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
-import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
 import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
@@ -160,10 +154,6 @@ import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalo
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import {
-  composeAgentResourceIntegrity,
-  composeDatabaseAgentResourceInventorySource,
-} from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
 import {
@@ -1717,11 +1707,18 @@ async function composeSqliteProviderSession(
     db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
-  const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
+  const classicCatalogs = composeClassicCatalogs({
     db,
-    authorization: resourceCatalog.authorization,
+    appHome: Paths.root,
+    runtimeProfiles: { get: (name) => providerCore.runtimeRegistry.getRuntime(name) },
+    // The owner of memory membership supplies the same restore participant to
+    // both providers; constructing this bundle performs no database or file IO.
+    restoreMembership: createAsyncSkillRestoreMembership(
+      composeSkillMemoryFusionParticipantFactory(),
+    ),
+    resourceCatalog,
   })
-  const agentResourceIntegrity = composeAgentResourceIntegrity(agentResourceInventory)
+  const agentResourceIntegrity = classicCatalogs.agentResourceIntegrity
   const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
     taskExecutionResourceDependencies,
   )
@@ -2213,35 +2210,14 @@ async function composeSqliteProviderSession(
       reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
     }),
   })
-  const agentCatalog = composeDatabaseAgentCatalog({
-    db,
-    resourceCatalog,
-    resourceInventory: agentResourceInventory,
-    runtimeProfiles: { get: (name) => runtimeRegistry.getRuntime(name) },
-    importQueries: composeAgentImportQueries(db),
-    resourceIntegrityQueries: agentResourceIntegrity.queries,
-  })
-  const skillCatalog = composeSkillCatalog({
-    db,
-    appHome: Paths.root,
-    // RFC-353 T7：回滚该退回哪些记忆由 knowledge-evolution 裁定；resource-catalog 不能
-    // import knowledge-evolution（RFC-294 目标边表无此反向边），所以在 bootstrap 装配。
-    // RFC-359 W4-D23b：legacy 回滚路径已改吃中立事务，同步那条协调器随之退役——
-    // 两个 bootstrap 从此接同一个异步协调器（PG 一直用的就是它）。
-    restoreMembership: createAsyncSkillRestoreMembership(
-      composeSkillMemoryFusionParticipantFactory(),
-    ),
-  })
+  const agentCatalog = classicCatalogs.agent
+  const skillCatalog = classicCatalogs.skill
   const pluginCatalog = composePluginCatalog({
     db,
     resourceCatalog,
     coordinator: pluginOperationCoordinator,
   })
-  const workflowCatalog = composeDatabaseWorkflowCatalog({
-    db,
-    resourceCatalog,
-    skillContent: composeSkillContentAvailability({ appHome: Paths.root }),
-  })
+  const workflowCatalog = classicCatalogs.workflow
   const workgroupCatalog = composeWorkgroupCatalog({ db, resourceCatalog })
   const capabilityTemplateAccess: Parameters<
     typeof composeSqliteCapabilityTemplateOperations

@@ -8,13 +8,11 @@
 // →重复选幂等、越候选集拒绝；④cancel 无外部 effect 直达 canceled + epoch
 // bump；retry blocked→working；⑤direct 上传目标路径重复/越界在 schema 层拒。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-import type { DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   developmentRepositoryUploadPlanEntries,
   developmentRepositoryUploadPlans,
@@ -56,17 +54,17 @@ import {
   type LaunchDeps,
 } from '../src/modules/development-automation/application/commands/launchMission'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 interface Fixture {
-  db: DbClient
+  db: ProviderNeutralDatabase
   deps: LaunchDeps
   employees: { single: string; multi: string; none: string }
   policyId: string
   uploads: UploadSessionPersistence
 }
 
-function lookupOf(db: DbClient): AdmissionLookup {
+function lookupOf(db: ProviderNeutralDatabase): AdmissionLookup {
   return {
     async resolveAssignment(scope) {
       const row = await resolveAdmissionAssignment(db, {
@@ -96,8 +94,7 @@ function lookupOf(db: DbClient): AdmissionLookup {
   }
 }
 
-async function buildFixture(): Promise<Fixture> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function buildFixture(db: ProviderNeutralDatabase): Promise<Fixture> {
   const now = () => Date.now()
   const templates = createActionTemplatePersistence(db)
   const adapters = createDevelopmentAdapterStore(db)
@@ -266,9 +263,9 @@ function directInput(
   }
 }
 
-describe('rfc310 pr2 admission', () => {
+describeEachProvider('rfc310 pr2 admission', (harness) => {
   test('direct body-only / files-only / body+files all admit to working; idempotent replay', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const bodyOnly = await launchMission(
       f.deps,
       directInput('idem-body-only-1', f.employees.single, 'do it'),
@@ -302,7 +299,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('working launch with uploads claims rows, persists the plan, and backfills uploadPlanRef', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const ref = await mkUpload(f.uploads, 'spec.md')
     const result = await launchMission(
       f.deps,
@@ -316,25 +313,26 @@ describe('rfc310 pr2 admission', () => {
     expect(claimed.claimedByMissionId).toBe(result.missionId)
     const mission = (await f.deps.store.getMission(result.missionId))!
     expect(mission.uploadPlanRef).not.toBeNull()
-    const plan = f.db
+    const [plan] = await f.db
       .select()
       .from(developmentRepositoryUploadPlans)
       .where(eq(developmentRepositoryUploadPlans.id, mission.uploadPlanRef!))
-      .get()!
+      .limit(1)
+    if (plan === undefined) throw new Error('upload plan missing')
     expect(plan.missionId).toBe(result.missionId)
     expect(plan.planDigest).toMatch(/^[0-9a-f]{64}$/)
-    const entries = f.db
+    const entries = await f.db
       .select()
       .from(developmentRepositoryUploadPlanEntries)
       .where(eq(developmentRepositoryUploadPlanEntries.planId, plan.id))
-      .all()
+
     expect(entries).toHaveLength(1)
     expect(entries[0]!.fileId).toBe(ref)
     expect(entries[0]!.expectedTargetKind).toBe('absent')
   })
 
   test('launch transaction is atomic: in-transaction claim failure rolls back the mission row', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const ok = await mkUpload(f.uploads, 'a.md')
     const stolen = await mkUpload(f.uploads, 'b.md')
     await f.uploads.claimUploads({
@@ -371,13 +369,13 @@ describe('rfc310 pr2 admission', () => {
     }
     // 整体回滚：零 mission、零 plan、ok 行零消费、stolen 归属不变。
     expect(await f.deps.store.findByIdempotencyKey('idem-atomic-1')).toBeNull()
-    expect(f.db.select().from(developmentRepositoryUploadPlans).all()).toHaveLength(0)
+    expect(await f.db.select().from(developmentRepositoryUploadPlans)).toHaveLength(0)
     expect((await f.uploads.getUpload(ok))!.state).toBe('pending')
     expect((await f.uploads.getUpload(stolen))!.claimedByMissionId).toBe('m-thief')
   })
 
   test('upload admission not wired blocks honestly instead of pretending', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const bare = { store: f.deps.store, lookup: f.deps.lookup, now: f.deps.now }
     const result = await launchMission(
       bare,
@@ -391,7 +389,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('direct with empty body and no uploads is rejected at the schema layer', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     await expect(
       launchMission(f.deps, directInput('idem-empty-1', f.employees.single, '   ')),
     ).rejects.toThrow()
@@ -407,7 +405,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('no employee anywhere blocks; explicit employee needs no assignment', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const noEmployee = await launchMission(f.deps, {
       ...directInput('idem-no-emp-1', f.employees.single, 'x'),
       requestedEmployee: null,
@@ -419,7 +417,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('assignment employee admits without explicit selection', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     await upsertAssignment(f.db, {
       scopeKind: 'repository',
       scopeRef: 'repo-1',
@@ -439,7 +437,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('external: unique default auto-pins; zero sources blocks; multiple candidates await selection', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const externalInput = (key: string, employeeId: string, sourceKey?: string) => ({
       idempotencyKey: key,
       repositoryId: 'repo-1',
@@ -495,7 +493,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('side-effect-free preview uses the exact launch employee/policy/source chain', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const common = {
       repositoryId: 'repo-1',
       repositoryGroupId: null,
@@ -553,7 +551,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('adopt delivery records the MR ref at admission', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const result = await launchMission(f.deps, {
       ...directInput('idem-adopt-1', f.employees.single, 'x'),
       delivery: { kind: 'adopt-merge-request', mergeRequestRef: 'ep-1/proj-1!42' },
@@ -563,7 +561,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('cancel with no external effects lands terminal canceled and bumps epoch', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const launched = await launchMission(
       f.deps,
       directInput('idem-cancel-1', f.employees.single, 'x'),
@@ -581,7 +579,7 @@ describe('rfc310 pr2 admission', () => {
   })
 
   test('cancel with a dispatched effect stays pending for the reconciler', async () => {
-    const f = await buildFixture()
+    const f = await buildFixture(harness.db)
     const launched = await launchMission(
       f.deps,
       directInput('idem-cancel-2', f.employees.single, 'x'),

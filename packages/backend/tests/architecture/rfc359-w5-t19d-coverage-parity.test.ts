@@ -69,13 +69,13 @@ const PROVIDER_PREFIX = /^(sqlite|postgresql)(?=[A-Z])/
  * 只降不升：任何一格变了都要改这份账本。
  */
 export const COVERAGE_PARITY_LEDGER: readonly string[] = [
-  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite 3/1, postgresql 3/2',
+  'modules/intent/infrastructure/IntentApplyArtifactLifecycle: sqlite 3/1, postgresql 4/3',
   // RFC-359 W11：PostgreSQL 侧 +1 ref / +1 drive
   // （`rfc359-w11-atomic-apply-neutral-transaction-conformance.test.ts` 值 import 了那台编排机，
   // 给它此前没有的**事务边界原子性**补上双引擎判据）。倒挂**收窄**：18 vs 3 → 18 vs 4。
   // W12：真实恢复对拍的 SQLite 臂直接调用 convergeIntentApplyJournal，PG 臂经完整
   // convergence 根调用其实现；仅前者增加本文件的直接引用，两个引擎执行同一套 DB/FS 判据。
-  'modules/intent/infrastructure/IntentApplyOperations: sqlite 19/3, postgresql 4/2',
+  'modules/intent/infrastructure/IntentApplyOperations: sqlite 20/3, postgresql 5/3',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-resource-package-maintenance-conformance.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧的 journal + 恢复端口）。
   // RFC-359 W9：两侧各 +1 ref / +1 drive —— `rfc359-w9-resource-package-skill-recovery-conformance.test.ts`
@@ -112,7 +112,7 @@ export const REFERENCE_GAP_THRESHOLD = 3
  */
 export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 W11：18 vs 3 → 18 vs 4（PG 侧补了事务边界的双引擎判据）。仍在观察名单内。
-  'modules/intent/infrastructure/IntentApplyOperations: 19 vs 4',
+  'modules/intent/infrastructure/IntentApplyOperations: 20 vs 5',
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 9 vs 5',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 8 vs 5',

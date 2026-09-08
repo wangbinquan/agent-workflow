@@ -6,6 +6,11 @@ import type { CommandContext } from '@/modules/identity-access/public/participan
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PackageResourceRef } from '@/modules/resource-catalog/public/types'
 import { legacyResourcePackageMutationRuntimeFactory } from '@/services/bundle/legacyResourcePackageMutationDependencies'
+import type {
+  BundleAppliedOp,
+  BundleReceipt,
+  BundleSkippedSecret,
+} from '@/services/bundle/provider'
 import {
   commitResourcePackage,
   type CommitPackageDeps,
@@ -62,6 +67,27 @@ interface ResourcePackageReadProvider {
   readonly readSkillTree: Parameters<typeof exportResourcePackageFromReadPort>[1]
 }
 
+type ResourcePackagePersistedReceipt = Omit<BundleReceipt, 'applied' | 'skippedSecrets'> & {
+  readonly applied: readonly (
+    | BundleAppliedOp
+    | (Omit<BundleAppliedOp, 'opId'> & { readonly operationId: string })
+  )[]
+  readonly skippedSecrets?: readonly BundleSkippedSecret[]
+}
+
+/** Keep persisted receipt formats private to the mutation owners. Both initial
+ * commits and durable replays expose the same package operation IDs over HTTP. */
+function resourcePackageReceiptDocument(receipt: ResourcePackagePersistedReceipt): string {
+  return JSON.stringify({
+    ...receipt,
+    applied: receipt.applied.map((item) => {
+      if ('opId' in item) return item
+      const { operationId, ...resource } = item
+      return { opId: operationId, ...resource }
+    }),
+  })
+}
+
 interface ResourcePackageExecutionAdapterDependencies {
   readonly box: SecretBox
   readonly provider: ResourcePackageReadProvider
@@ -70,7 +96,7 @@ interface ResourcePackageExecutionAdapterDependencies {
     context: CommandContext,
     input: Parameters<ResourcePackageExecutionAdapter['apply']>[1],
     pkg: ParsedPackage,
-  ): Promise<unknown>
+  ): Promise<ResourcePackagePersistedReceipt>
 }
 
 function createResourcePackageExecutionAdapter(
@@ -99,7 +125,7 @@ function createResourcePackageExecutionAdapter(
       input: Parameters<ResourcePackageExecutionAdapter['apply']>[1],
     ): Promise<string> {
       const pkg = await parseResourcePackage(input.bytes)
-      return JSON.stringify(await dependencies.apply(context, input, pkg))
+      return resourcePackageReceiptDocument(await dependencies.apply(context, input, pkg))
     },
     async export(
       _context: CommandContext,
@@ -177,7 +203,9 @@ interface PostgresqlResourcePackageAtomicApplyInput<TMutationSessionFactory> {
 }
 
 interface PostgresqlResourcePackageAtomicApply<TMutationSessionFactory> {
-  apply(input: PostgresqlResourcePackageAtomicApplyInput<TMutationSessionFactory>): Promise<unknown>
+  apply(
+    input: PostgresqlResourcePackageAtomicApplyInput<TMutationSessionFactory>,
+  ): Promise<ResourcePackagePersistedReceipt>
 }
 
 export interface PostgresqlResourcePackageExecutionAdapterDependencies<TMutationSessionFactory> {

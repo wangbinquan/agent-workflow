@@ -5,9 +5,8 @@
 // （publish 递增 + revision immutable + name 409 + 非法 draft 不产 revision）。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   validateVerificationProfileForPublish,
   verificationProfileContentSchema,
@@ -23,7 +22,7 @@ import {
 import { createVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const VALID_CONTENT = {
   schemaVersion: 1,
@@ -51,8 +50,7 @@ const VALID_CONTENT = {
   maxParallel: 1,
 } as const
 
-function newDeps(): VerificationProfileCommandDeps {
-  const db = createInMemoryDb(MIGRATIONS)
+function newDeps(db: ProviderNeutralDatabase): VerificationProfileCommandDeps {
   let tick = 2_000_000
   return { store: createVerificationProfilePersistence(db), now: () => ++tick }
 }
@@ -87,9 +85,11 @@ describe('rfc310 pr1b verification profile', () => {
       'duplicate-step-id',
     ])
   })
+})
 
+describeEachProvider('rfc310 pr1b verification profile', (harness) => {
   test('store lifecycle: publish increments, revisions immutable, archive blocks publish', async () => {
-    const deps = newDeps()
+    const deps = newDeps(harness.db)
     const created = await createVerificationProfile(deps, {
       actorUserId: 'user-1',
       name: 'maven',
@@ -117,7 +117,7 @@ describe('rfc310 pr1b verification profile', () => {
   })
 
   test('name conflict is typed 409; invalid draft leaves no revision', async () => {
-    const deps = newDeps()
+    const deps = newDeps(harness.db)
     await createVerificationProfile(deps, { actorUserId: 'u', name: 'dup', draft: {} })
     await expect(
       createVerificationProfile(deps, { actorUserId: 'u', name: 'dup', draft: {} }),

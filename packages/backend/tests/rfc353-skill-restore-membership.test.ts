@@ -78,7 +78,7 @@ describe('RFC-353 T7 装配面：resource-catalog 不认识 memory，也不认�
   test.each([
     // RFC-359 W4-D23c：技能仓库只剩中立的一份；PostgreSQL 的 873 行内容生命周期已退役。
     ['skillRepository.ts', ['infrastructure', 'skillRepository.ts']],
-    ['postgresqlClassicCatalogs.ts', ['composition', 'postgresqlClassicCatalogs.ts']],
+    ['classicCatalogs.ts', ['composition', 'classicCatalogs.ts']],
     ['composition/skillOperations.ts', ['composition', 'skillOperations.ts']],
   ] as const)('%s 既不 import memory 也不 import knowledge-evolution', (_name, parts) => {
     const source = read('modules', 'resource-catalog', ...parts)

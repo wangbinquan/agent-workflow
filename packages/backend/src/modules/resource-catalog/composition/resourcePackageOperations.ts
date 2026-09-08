@@ -9,15 +9,12 @@ import type {
   ResourcePackageHumanMemberMapping,
   ResourcePackageImportDecision,
   ResourcePackageOwnedResourceLookupPort,
-  ResourcePackageReadPort,
   ResourcePackageSecretInput,
-  ResourcePackageSkillTree,
 } from '../application/package/ports'
 import {
-  createResourcePackageOwnedResourceLookup,
-  createResourcePackageReadPort,
-} from '../infrastructure/packageResourceRows'
-import { readPackageSkillTree } from '../infrastructure/packageSkillTree'
+  composeResourcePackageProvider,
+  type ResourcePackageProviderComposition,
+} from './resourcePackageProvider'
 import { createResourcePackageOperationDescriptors } from './catalogOperationDescriptors'
 import type { ResourcePackageCatalogModule } from '../public/operations'
 import {
@@ -28,6 +25,8 @@ import {
   type InspectResourcePackage,
 } from '../public/types'
 import { PACKAGE_RESOURCE_KINDS } from '../domain/resourceKinds'
+
+export type { ResourcePackageProviderComposition } from './resourcePackageProvider'
 
 export interface ResourcePackageExportFence {
   readonly expectedVersion?: number
@@ -79,17 +78,6 @@ export interface ResourcePackageExecutionAdapter {
     context: CommandContext,
     input: ResourcePackageExportExecutionInput,
   ): Promise<Readonly<{ zip: Uint8Array; filename: string }>>
-}
-
-/**
- * Closed provider capabilities consumed by the external W6 execution owner.
- * The bundle algorithms stay outside Resource Catalog while provider-specific
- * lookup and managed-skill reads remain owned here.
- */
-export interface ResourcePackageProviderComposition {
-  readonly resources: ResourcePackageOwnedResourceLookupPort
-  readonly reads: ResourcePackageReadPort
-  readonly readSkillTree: (skillId: string) => Promise<ResourcePackageSkillTree>
 }
 
 export interface ResourcePackageTransport {
@@ -245,11 +233,7 @@ export function composeResourcePackageOperationsFromAdapters(
 export function composeSqliteResourcePackageProvider(
   deps: SqliteResourcePackageProviderDependencies,
 ): ResourcePackageProviderComposition {
-  return Object.freeze({
-    resources: createResourcePackageOwnedResourceLookup(deps.db),
-    reads: createResourcePackageReadPort(deps.db),
-    readSkillTree: (skillId: string) => readPackageSkillTree(deps.db, deps.appHome, skillId),
-  })
+  return composeResourcePackageProvider(deps)
 }
 
 export function composeResourcePackageOperations(

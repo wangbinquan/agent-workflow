@@ -57,7 +57,7 @@ import {
 } from '@/modules/memory/composition'
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composePostgresqlClassicCatalogs } from '@/modules/resource-catalog/composition/postgresqlClassicCatalogs'
+import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import { composePostgresqlResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import {
@@ -516,7 +516,7 @@ export async function composePostgresqlDaemonApplication(
     },
   })
   const memoryCatalog = memoryOperations.catalog
-  const classicCatalogs = composePostgresqlClassicCatalogs({
+  const classicCatalogs = composeClassicCatalogs({
     db: input.db,
     appHome: input.appHome,
     runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },

@@ -10,14 +10,21 @@
 //    contract-violation——本文件用真实 launch 的 sourceContentDigest 对拍。
 // 3. 失败不卡死：materialize 失败落 attempt cells（新 digest ⇒ retry 后新
 //    decision），retry-blocked 能真正重跑 arm 而不是被 decision 去重吞掉。
+// 4. 2026-09-08 CI 的 body+file journey 停在 working 且无未结算 effect：
+//    真实竞争写锁住已复现的 requirementBundleRef 丢失机制及 epoch 边界。
+//    该次 CI 未输出事实引用，不能据其最后一行独占归因于本机制。
 
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { ulid } from 'ulid'
 
 import { developmentBundleRefs } from '../src/db/schema'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import { retryBlockedMission } from '../src/modules/development-automation/application/commands/launchMission'
-import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
+import {
+  canonicalDigest,
+  canonicalStringify,
+} from '../src/modules/development-automation/domain/canonicalJson'
 import { directSubmissionDigest } from '../src/modules/development-automation/infrastructure/requirementMaterializer'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
@@ -128,6 +135,146 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(round3.kind === 'decided' && round3.handled).toBe('action-launched')
     expect(launches).toEqual(['change.implement'])
   })
+
+  test.each([1, 8])(
+    'materialized requirement facts survive %i competing reconciles',
+    async (peerWrites) => {
+      const fx = await buildPr3Fixture()
+      const missionId = await fx.launchDirect(`rfc310-pr3-materialize-occ-${peerWrites}`)
+      await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
+      const base = fx.deps()
+      const peerKinds: string[] = []
+      const writeResults: string[] = []
+      const store: typeof base.store = {
+        ...base.store,
+        async commitRequirementCells(input) {
+          // The route driver and explicit journey pump can both write readiness
+          // after this materialization has read its mission. Eight real writes
+          // also cover the exhausted retry path that still lost the reference.
+          for (let peer = 0; peer < peerWrites; peer += 1) {
+            peerKinds.push((await runMissionReconcile(base, missionId)).kind)
+          }
+          const result = await base.store.commitRequirementCells(input)
+          writeResults.push(result.ok ? 'ok' : result.code)
+          return result
+        },
+      }
+      const deps = { ...base, store }
+      const first = await runMissionReconcile(deps, missionId)
+      const materialized = (await fx.store.getMission(missionId))!
+      const next = await runMissionReconcile(deps, missionId)
+      const after = (await fx.store.getMission(missionId))!
+
+      expect({
+        peerKinds,
+        first,
+        requirementBundleRef: materialized.requirementBundleRef,
+        status: after.status,
+        blockCode: after.blockCode,
+        unsettled: await fx.store.listUnsettledEffects(missionId),
+        next,
+      }).toMatchObject({
+        peerKinds: Array.from({ length: peerWrites }, () => 'deduped'),
+        first: {
+          kind: 'decided',
+          selected: { kind: 'materialize-direct-requirement' },
+          handled: 'collected',
+        },
+        requirementBundleRef: expect.any(String),
+        status: 'blocked',
+        blockCode: 'collector-not-wired:repository',
+        unsettled: [],
+        next: {
+          kind: 'decided',
+          selected: { kind: 'collect-repository-facts' },
+          handled: 'blocked',
+        },
+      })
+      expect(writeResults).toEqual(['ok'])
+      const manifest = (await fx.materializer.getRequirementManifest(missionId))!
+      expect(manifest.files.map((file) => file.relativePath)).toEqual(['body.md'])
+      expect(readFileSync(fx.evidence.blobPath(manifest.files[0]!.sha256), 'utf8')).toBe(
+        SUBMISSION.body,
+      )
+    },
+  )
+
+  test('requirement write merges the cells committed by the competing writer', async () => {
+    const fx = await buildPr3Fixture()
+    const missionId = await fx.launchDirect('rfc310-pr3-materialize-merge-1')
+    await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
+    const base = fx.deps()
+    const peerCells = {
+      '__requirement.acquireAttempts': { state: 'known', value: 3, sourceRevision: 'peer' },
+    }
+    const store: typeof base.store = {
+      ...base.store,
+      async commitRequirementCells(input) {
+        const fresh = (await base.store.getMission(missionId))!
+        const snapshotId = ulid()
+        await base.store.insertFactSnapshot({
+          id: snapshotId,
+          missionId,
+          missionRevision: fresh.revision,
+          capturedAt: new Date(input.now).toISOString().replace('Z', '+00:00'),
+          cellsJson: canonicalStringify(peerCells),
+          refsJson: canonicalStringify({ kind: 'requirement-peer' }),
+          digest: canonicalDigest(peerCells),
+          now: input.now,
+        })
+        expect(
+          await base.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+            requirementBundleRef: snapshotId,
+          }),
+        ).toMatchObject({ ok: true })
+        return await base.store.commitRequirementCells(input)
+      },
+    }
+
+    await runMissionReconcile({ ...base, store }, missionId)
+    const materialized = (await fx.store.getMission(missionId))!
+    expect(await fx.snapshots.getCells(materialized.requirementBundleRef!)).toMatchObject({
+      ...peerCells,
+      'requirement.bundleComplete': { state: 'known', value: true },
+      'requirement.clarificationState': { state: 'known', value: 'none' },
+    })
+  })
+
+  test.each(['before-write', 'after-peer-write'] as const)(
+    'requirement write stops when the mission epoch changes %s',
+    async (changeEpoch) => {
+      const fx = await buildPr3Fixture()
+      const missionId = await fx.launchDirect(`rfc310-pr3-materialize-epoch-${changeEpoch}`)
+      await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
+      const base = fx.deps()
+      const initial = (await base.store.getMission(missionId))!
+      const writeResults: string[] = []
+      const store: typeof base.store = {
+        ...base.store,
+        async commitRequirementCells(input) {
+          if (changeEpoch === 'after-peer-write') {
+            const fresh = (await base.store.getMission(missionId))!
+            expect(
+              await base.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {}),
+            ).toMatchObject({ ok: true })
+          }
+          const fresh = (await base.store.getMission(missionId))!
+          expect(await base.store.bumpEpoch(fresh.id, fresh.revision, {})).toMatchObject({
+            ok: true,
+          })
+          const result = await base.store.commitRequirementCells(input)
+          writeResults.push(result.ok ? 'ok' : result.code)
+          return result
+        },
+      }
+
+      await runMissionReconcile({ ...base, store }, missionId)
+      const after = (await fx.store.getMission(missionId))!
+      expect(after.epoch).toBe(initial.epoch + 1)
+      expect(after.requirementBundleRef).toBeNull()
+      expect(writeResults).toEqual(['epoch-conflict'])
+    },
+  )
 
   test('port absent ⇒ typed block requirement-port-not-wired (never silent)', async () => {
     const fx = await buildPr3Fixture()

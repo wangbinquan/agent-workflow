@@ -167,7 +167,7 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
 - 已登记的同目录 provider 对不等于全部可保留机制差异；`SourceTerminationParticipant`
   已提取公共扫描/收据，但每目标 atom 仍是真重复待合；自动修复循环已合一。跨目录、内联实现也必须按实际端口核验。
 - AC-6 仍未达成：CI 的真 PG 服务已经到位，但仍有大量行为用例直接创建 SQLite 内存库。
-  W12 已迁 30 个技能/MCP/memory 等行为套件，真实任务经过完整 provider 工厂执行到 done；
+  W12 已迁 42 个技能/MCP/memory/开发自动化等行为套件，真实任务经过完整 provider 工厂执行到 done；
   尚未迁完的行为用例与机制专属测试必须逐项区分。
 - AC-11 原条款未变：当前结构成本守卫和 P95 诊断不能证明“PG 各端点 P95 不劣于 SQLite”。
   验收不得用前者替代后者，也不得仅凭 CI 绿色把本 RFC 标为 Done。

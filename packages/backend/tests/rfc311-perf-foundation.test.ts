@@ -334,6 +334,65 @@ describe('RFC-311 capacity PRAGMAs (openDb)', () => {
 })
 
 describe('RFC-311 slow-statement telemetry', () => {
+  test('statement observers receive SQL templates and process CPU on success and failure', () => {
+    const sqlite = new Database(':memory:')
+    const observed: Array<{ ms: number; sql?: string; cpuMs?: number }> = []
+    const slow: string[] = []
+    instrumentSlowStatements(
+      sqlite,
+      0,
+      (_ms, sql) => slow.push(sql),
+      (ms, sql, cpuMs) => observed.push({ ms, sql, cpuMs }),
+    )
+    try {
+      sqlite.exec('CREATE TABLE observed (value INTEGER UNIQUE)')
+      sqlite.prepare('INSERT INTO observed VALUES (?)').run(7)
+      expect(sqlite.prepare('SELECT value FROM observed').get()).toEqual({ value: 7 })
+      expect(sqlite.prepare('SELECT value FROM observed').all()).toEqual([{ value: 7 }])
+      expect(sqlite.prepare('SELECT value FROM observed').values()).toEqual([[7]])
+      expect(() => sqlite.prepare('INSERT INTO observed VALUES (?)').run(7)).toThrow()
+      expect(observed.map((entry) => entry.sql)).toEqual([
+        'CREATE TABLE observed (value INTEGER UNIQUE)',
+        'INSERT INTO observed VALUES (?)',
+        'SELECT value FROM observed',
+        'SELECT value FROM observed',
+        'SELECT value FROM observed',
+        'INSERT INTO observed VALUES (?)',
+      ])
+      expect(observed.every((entry) => Number.isFinite(entry.ms) && entry.ms >= 0)).toBe(true)
+      expect(
+        observed.every(
+          (entry) =>
+            typeof entry.cpuMs === 'number' && Number.isFinite(entry.cpuMs) && entry.cpuMs >= -1,
+        ),
+      ).toBe(true)
+      expect(slow).toEqual([])
+    } finally {
+      sqlite.close()
+    }
+  })
+
+  test('statement observers and slow logs share one completed CPU sample', () => {
+    const sqlite = new Database(':memory:')
+    const observed: Array<{ ms: number; sql?: string; cpuMs?: number }> = []
+    const slow: typeof observed = []
+    instrumentSlowStatements(
+      sqlite,
+      Number.MIN_VALUE,
+      (ms, sql, cpuMs) => slow.push({ ms, sql, cpuMs }),
+      (ms, sql, cpuMs) => observed.push({ ms, sql, cpuMs }),
+    )
+    try {
+      expect(sqlite.query('SELECT 1 AS one').get()).toEqual({ one: 1 })
+      // Bun versions may implement query() through prepare(). Preserve that
+      // existing wrapper count; every emitted sample must have matching data.
+      expect(observed.length).toBeGreaterThanOrEqual(1)
+      expect(slow).toEqual(observed.map((entry) => ({ ...entry, ms: Math.round(entry.ms) })))
+    } finally {
+      sqlite.close()
+    }
+  })
+
   test('threshold 0 is a no-op and wrapped statements keep their results', () => {
     const sqlite = new Database(':memory:')
     const seen: string[] = []

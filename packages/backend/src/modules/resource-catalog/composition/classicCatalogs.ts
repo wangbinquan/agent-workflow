@@ -1,4 +1,4 @@
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 
 import type {
   AgentCatalogModule,
@@ -25,7 +25,7 @@ import type { ProviderResourceCatalogComposition } from './providerResourceCatal
 import { composeSkillCatalog } from './skillOperations'
 import { composeDatabaseWorkflowCatalog } from './workflowOperations'
 
-export interface PostgresqlClassicCatalogBundle {
+export interface ClassicCatalogBundle {
   readonly agent: AgentCatalogModule
   readonly skill: SkillCatalogModule
   readonly workflow: WorkflowCatalogModule
@@ -39,18 +39,18 @@ export interface PostgresqlClassicCatalogBundle {
 }
 
 /**
- * The single PostgreSQL classic-six composition entrypoint.
+ * The shared agent, skill and workflow composition for both daemon providers.
  *
  * `appHome` is the managed Resource Catalog artifact root. Callers never bind
  * filesystem/journal mechanics or persistence semantics themselves.
  */
-export function composePostgresqlClassicCatalogs(input: {
-  readonly db: PostgresqlDatabaseClient
+export function composeClassicCatalogs(input: {
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly restoreMembership: SkillRestoreMembershipPort
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
-}): PostgresqlClassicCatalogBundle {
+}): ClassicCatalogBundle {
   const skillContent = createSkillContentAvailability({ appHome: input.appHome })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: input.db,

@@ -30,6 +30,9 @@ import {
 import { ValidationError } from '@/util/errors'
 import type { DeferredWakeRow } from '../domain/deferredWake'
 import { MISSION_STATUSES } from '../domain/mission'
+import { canonicalDigest, canonicalStringify } from '../domain/canonicalJson'
+import type { FactCell } from '../domain/factCell'
+import type { FactCellValue } from '../domain/facts'
 import type {
   ActionRunRow,
   EffectRow,
@@ -821,6 +824,69 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
       return await session.transaction(async (tx) => {
         await insertFactSnapshotRow(tx, input.snapshot)
         return await insertDecisionRow(tx, input.decision)
+      })
+    },
+    async commitRequirementCells(input) {
+      return await session.transaction(async (tx) => {
+        await engine.lockAggregateRoot(
+          tx,
+          developmentMissions,
+          developmentMissions.id,
+          input.missionId,
+        )
+        const mission = (
+          await tx
+            .select()
+            .from(developmentMissions)
+            .where(eq(developmentMissions.id, input.missionId))
+            .limit(1)
+        )[0]
+        if (mission === undefined) return { ok: false, code: 'not-found' }
+        if (mission.epoch !== input.expectedEpoch) return { ok: false, code: 'epoch-conflict' }
+
+        const previous =
+          mission.requirementBundleRef === null
+            ? undefined
+            : (
+                await tx
+                  .select({ cellsJson: developmentFactSnapshots.cellsJson })
+                  .from(developmentFactSnapshots)
+                  .where(eq(developmentFactSnapshots.id, mission.requirementBundleRef))
+                  .limit(1)
+              )[0]
+        const base =
+          previous === undefined
+            ? {}
+            : (JSON.parse(previous.cellsJson) as Record<string, FactCell<FactCellValue>>)
+        const merged = { ...base, ...input.patch }
+        await insertFactSnapshotRow(tx, {
+          id: input.snapshotId,
+          missionId: mission.id,
+          missionRevision: mission.revision,
+          capturedAt: new Date(input.now).toISOString().replace('Z', '+00:00'),
+          cellsJson: canonicalStringify(merged),
+          refsJson: input.refsJson,
+          digest: canonicalDigest(merged),
+          now: input.now,
+        })
+        const nextRevision = mission.revision + 1
+        const updated = await tx
+          .update(developmentMissions)
+          .set({
+            requirementBundleRef: input.snapshotId,
+            revision: nextRevision,
+            updatedAt: Date.now(),
+          })
+          .where(
+            and(
+              eq(developmentMissions.id, mission.id),
+              eq(developmentMissions.revision, mission.revision),
+              eq(developmentMissions.epoch, input.expectedEpoch),
+            ),
+          )
+          .returning({ id: developmentMissions.id })
+        if (updated.length !== 1) throw new Error('mission-requirement-cells-write-conflict')
+        return { ok: true, revision: nextRevision }
       })
     },
   }

@@ -7,7 +7,7 @@
 // 伪造 change；⑤blob 缺失显式抛；⑥reconciler provider 把失败折叠为
 // configuration/PortOutcome，不抛穿。
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import {
   chmodSync,
   mkdtempSync,
@@ -19,9 +19,9 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { developmentMissions, developmentRepositoryUploadReceipts } from '../src/db/schema'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
 import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
@@ -33,16 +33,21 @@ import {
 } from '../src/modules/development-automation/infrastructure/uploadPlacement'
 import type { ResolvedPlanEntry } from '../src/modules/development-automation/application/uploadPlan'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
+
+const roots: string[] = []
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
 const T0 = 1_700_000_000_000
 
 interface Rig {
-  db: DbClient
+  db: ProviderNeutralDatabase
   evidence: EvidenceStore
   seedsRoot: string
   root: string
   putBlob: (content: string) => Promise<string>
-  plant: (planId: string, entries: ResolvedPlanEntry[]) => void
+  plant: (planId: string, entries: ResolvedPlanEntry[]) => Promise<void>
   deps: {
     persistence: ReturnType<typeof createUploadPlacementPersistence>
     evidence: EvidenceStore
@@ -51,24 +56,23 @@ interface Rig {
   }
 }
 
-function rig(): Rig {
+async function rig(db: ProviderNeutralDatabase): Promise<Rig> {
   const root = mkdtempSync(join(tmpdir(), 'aw-place-'))
-  const db = createInMemoryDb(MIGRATIONS)
+  roots.push(root)
   const evidence = new EvidenceStore(join(root, 'evidence'))
   const seedsRoot = join(root, 'seeds')
   mkdirSync(seedsRoot, { recursive: true })
-  db.insert(developmentMissions)
-    .values({
-      id: 'm-1',
-      status: 'working',
-      repositoryId: 'repo-1',
-      sourceKind: 'direct',
-      deliveryKind: 'create-merge-request',
-      launchIdempotencyKey: 'idem-1',
-      createdAt: T0,
-      updatedAt: T0,
-    })
-    .run()
+  await db.insert(developmentMissions).values({
+    id: 'm-1',
+    status: 'working',
+    repositoryId: 'repo-1',
+    sourceKind: 'direct',
+    deliveryKind: 'create-merge-request',
+    launchIdempotencyKey: 'idem-1',
+    createdAt: T0,
+    updatedAt: T0,
+  })
+
   return {
     db,
     evidence,
@@ -122,9 +126,9 @@ function entryOf(
   }
 }
 
-describe('rfc310 pr3 upload placement', () => {
+describeEachProvider('rfc310 pr3 upload placement', (harness) => {
   test('materializes create+replace entries byte-identically; already-present is skipped', async () => {
-    const r = rig()
+    const r = await rig(harness.db)
     const shaNew = await r.putBlob('new file body\n')
     const shaReplace = await r.putBlob('replacement body\n')
     const shaSame = await r.putBlob('unchanged\n')
@@ -155,7 +159,7 @@ describe('rfc310 pr3 upload placement', () => {
     expect(readdirSync(join(seedRoot, 'docs'))).toEqual(['new.md'])
     expect(result.seedTreeDigest).toBe(seedTreeDigestOf(seedRoot))
     // receipt 落库（placement kind、seedChangeRef=planDigest）。
-    const receipts = r.db.select().from(developmentRepositoryUploadReceipts).all()
+    const receipts = await r.db.select().from(developmentRepositoryUploadReceipts)
     expect(receipts).toHaveLength(1)
     expect(receipts[0]!).toMatchObject({
       planId: 'p1',
@@ -166,7 +170,7 @@ describe('rfc310 pr3 upload placement', () => {
   })
 
   test('replay reuses the existing seed; corrupted residue is rebuilt byte-identical', async () => {
-    const r = rig()
+    const r = await rig(harness.db)
     const sha = await r.putBlob('stable content\n')
     await r.plant('p2', [entryOf(0, 'u1', sha, 'a.md', { kind: 'absent' })])
     const first = await placeUploadSeed(r.deps, { planId: 'p2' })
@@ -175,7 +179,7 @@ describe('rfc310 pr3 upload placement', () => {
     // 重放：digest 不变、receipt 不重复。
     const replay = await placeUploadSeed(r.deps, { planId: 'p2' })
     expect(replay.seedTreeDigest).toBe(first.seedTreeDigest)
-    expect(r.db.select().from(developmentRepositoryUploadReceipts).all()).toHaveLength(1)
+    expect(await r.db.select().from(developmentRepositoryUploadReceipts)).toHaveLength(1)
 
     // 篡改残留：重放检测 digest 漂移 → 废弃重建 → byte-identical 恢复。
     writeFileSync(seedFile, 'tampered')
@@ -185,7 +189,7 @@ describe('rfc310 pr3 upload placement', () => {
   })
 
   test('executable mode is materialized and participates in the immutable seed digest', async () => {
-    const r = rig()
+    const r = await rig(harness.db)
     const sha = await r.putBlob('executable body\n')
     await r.plant('p-mode', [
       entryOf(0, 'u-exec', sha, 'verify.sh', { kind: 'absent' }, 'executable'),
@@ -203,7 +207,7 @@ describe('rfc310 pr3 upload placement', () => {
   })
 
   test('all already-present ⇒ null seed + baseline-observed fulfillment at the baseline sha', async () => {
-    const r = rig()
+    const r = await rig(harness.db)
     const sha = await r.putBlob('already there\n')
     await r.plant('p3', [
       entryOf(0, 'u1', sha, 'docs/x.md', {
@@ -214,7 +218,7 @@ describe('rfc310 pr3 upload placement', () => {
     ])
     const result = await placeUploadSeed(r.deps, { planId: 'p3' })
     expect(result.seedChangeRef).toBeNull()
-    const receipts = r.db.select().from(developmentRepositoryUploadReceipts).all()
+    const receipts = await r.db.select().from(developmentRepositoryUploadReceipts)
     expect(receipts[0]!).toMatchObject({
       receiptKind: 'placement',
       seedChangeRef: null,
@@ -225,11 +229,11 @@ describe('rfc310 pr3 upload placement', () => {
     expect(readdirSync(r.seedsRoot)).toEqual([])
     // 重放幂等：不再写第二张 receipt。
     await placeUploadSeed(r.deps, { planId: 'p3' })
-    expect(r.db.select().from(developmentRepositoryUploadReceipts).all()).toHaveLength(1)
+    expect(await r.db.select().from(developmentRepositoryUploadReceipts)).toHaveLength(1)
   })
 
   test('missing blob fails loudly and leaves no seed root behind', async () => {
-    const r = rig()
+    const r = await rig(harness.db)
     await r.plant('p4', [entryOf(0, 'u1', '9'.repeat(64), 'a.md', { kind: 'absent' })])
     try {
       await placeUploadSeed(r.deps, { planId: 'p4' })
@@ -241,7 +245,7 @@ describe('rfc310 pr3 upload placement', () => {
   })
 
   test('placement provider folds failures into a configuration PortOutcome (never throws)', async () => {
-    const r = rig()
+    const r = await rig(harness.db)
     const provider = createUploadPlacementProvider(r.deps)
     const missingPlan = await provider.place({ missionId: 'm-1', uploadPlanRef: 'nope' })
     expect(missingPlan.ok).toBe(false)

@@ -7,9 +7,7 @@
 // 不产生半个 revision；④name 冲突 typed 409。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
 import {
   digitalEmployeeContentSchema,
   validateDigitalEmployeeForPublish,
@@ -29,7 +27,7 @@ import {
 } from './helpers/digitalEmployeeStore'
 import { unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
-const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const VALID_CONTENT: DigitalEmployeeContent = {
   schemaVersion: 1,
@@ -178,9 +176,9 @@ describe('T14 digital employee codec + publish closure', () => {
   })
 })
 
-describe('T14/T15 identity + immutable revisions store', () => {
+describeEachProvider('T14/T15 identity + immutable revisions store', (harness) => {
   test('employee create → publish increments revisions; blocked publish writes nothing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const created = await createDigitalEmployee(db, {
       name: 'java-spring',
       ownerUserId: null,
@@ -230,7 +228,7 @@ describe('T14/T15 identity + immutable revisions store', () => {
   })
 
   test('policy publish uses domain validator; duplicate rule ids are blocked', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const ok = await createAutomationPolicy(db, {
       name: 'default-policy',
       ownerUserId: null,

@@ -10,10 +10,8 @@
 // 老实停，不伪造 known false）；mergeable/terminalState 词表映射照 catalog。
 
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb } from '../src/db/client'
 import type { FeedbackLedgerRow } from '../src/modules/development-automation/application/ports/missionStore'
 import {
   classifyFeedbackAuthor,
@@ -24,9 +22,10 @@ import {
 import { projectMrCells } from '../src/modules/development-automation/domain/mrFacts'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 
+import { describeEachProvider } from './helpers/eachProvider'
+
 setDefaultTimeout(120_000)
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HEAD_A = 'aa'.repeat(20)
 const HEAD_B = 'bb'.repeat(20)
 
@@ -101,9 +100,9 @@ function observation(
   }
 }
 
-describe('rfc310 pr7 T73 — feedback ledger store', () => {
+describeEachProvider('rfc310 pr7 T73 — feedback ledger store', (harness) => {
   test('observation upsert is idempotent; state machine records; obsolete hits only stale-head open rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const store = createMissionPersistence(db)
     const missionId = ulid()
     await store.createMission(missionRow(missionId))

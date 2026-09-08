@@ -4,10 +4,9 @@
 // 同 baseline 重放不产生第二行；不同 baseline（新 head 重跑）各自成行；读侧
 // hasUploadPublicationReceipt 供 arm 幂等判定与事实投影。
 
-import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { expect, test } from 'bun:test'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/uploadPlanStore'
 import {
   hasUploadPublicationReceipt,
@@ -15,28 +14,28 @@ import {
 } from '../src/modules/development-automation/infrastructure/uploadPublicationReceipt'
 import { developmentMissions } from '../src/db/schema'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
-async function seededPlan(): Promise<{ db: ReturnType<typeof createInMemoryDb>; planId: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function seededPlan(
+  db: ProviderNeutralDatabase,
+): Promise<{ db: ProviderNeutralDatabase; planId: string }> {
   const now = Date.now()
-  db.insert(developmentMissions)
-    .values({
-      id: 'm-1',
-      revision: 0,
-      epoch: 0,
-      status: 'working',
-      automationMode: 'active',
-      transitionFence: 'none',
-      repositoryId: 'repo-1',
-      sourceKind: 'direct',
-      deliveryKind: 'create-merge-request',
-      launchIdempotencyKey: 'seed-absorb-1',
-      createdBy: 'u-1',
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  await db.insert(developmentMissions).values({
+    id: 'm-1',
+    revision: 0,
+    epoch: 0,
+    status: 'working',
+    automationMode: 'active',
+    transitionFence: 'none',
+    repositoryId: 'repo-1',
+    sourceKind: 'direct',
+    deliveryKind: 'create-merge-request',
+    launchIdempotencyKey: 'seed-absorb-1',
+    createdBy: 'u-1',
+    createdAt: now,
+    updatedAt: now,
+  })
+
   await insertUploadPlan(db, {
     planId: 'plan-1',
     missionId: 'm-1',
@@ -62,9 +61,9 @@ async function seededPlan(): Promise<{ db: ReturnType<typeof createInMemoryDb>; 
   return { db, planId: 'plan-1' }
 }
 
-describe('rfc310 pr5 — upload publication receipt', () => {
+describeEachProvider('rfc310 pr5 — upload publication receipt', (harness) => {
   test('first publish records once; same-baseline replay is idempotent; new baseline records separately', async () => {
-    const { db, planId } = await seededPlan()
+    const { db, planId } = await seededPlan(harness.db)
     expect(await hasUploadPublicationReceipt(db, planId)).toBe(false)
 
     const first = await recordUploadPublicationReceipt(db, {

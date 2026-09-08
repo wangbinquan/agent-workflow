@@ -8,9 +8,8 @@
 // 被 422 拒且不产生 revision。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   actionTemplateContentSchema,
   validateActionTemplateForPublish,
@@ -29,7 +28,7 @@ import {
 import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { describeEachProvider } from './helpers/eachProvider'
 
 const VALID_CONTENT = {
   schemaVersion: 1,
@@ -50,8 +49,7 @@ const VALID_CONTENT = {
   retryDefaults: { sameSession: 2, freshSession: 1 },
 } as const
 
-function newDeps(): ActionTemplateCommandDeps {
-  const db = createInMemoryDb(MIGRATIONS)
+function newDeps(db: ProviderNeutralDatabase): ActionTemplateCommandDeps {
   let tick = 1_000_000
   return { store: createActionTemplatePersistence(db), now: () => ++tick }
 }
@@ -97,9 +95,11 @@ describe('rfc310 pr1b action template', () => {
       'compatibility-predicate-invalid',
     ])
   })
+})
 
+describeEachProvider('rfc310 pr1b action template', (harness) => {
   test('store lifecycle: create → revise → publish twice (immutable, increasing) → archive', async () => {
-    const deps = newDeps()
+    const deps = newDeps(harness.db)
     const created = await createActionTemplate(deps, {
       actorUserId: 'user-1',
       name: 'java-spring',
@@ -134,7 +134,7 @@ describe('rfc310 pr1b action template', () => {
   })
 
   test('owner+name uniqueness is a typed 409; different owners may share a name', async () => {
-    const deps = newDeps()
+    const deps = newDeps(harness.db)
     await createActionTemplate(deps, {
       actorUserId: 'user-1',
       name: 'dup',
@@ -162,7 +162,7 @@ describe('rfc310 pr1b action template', () => {
   })
 
   test('invalid draft blocks publish with 422 and leaves no revision behind', async () => {
-    const deps = newDeps()
+    const deps = newDeps(harness.db)
     const created = await createActionTemplate(deps, {
       actorUserId: 'user-1',
       name: 'broken',
@@ -177,7 +177,7 @@ describe('rfc310 pr1b action template', () => {
   })
 
   test('visibility filtering: private rows hidden from other actors, admin bypass sees all', async () => {
-    const deps = newDeps()
+    const deps = newDeps(harness.db)
     const mine = await createActionTemplate(deps, {
       actorUserId: 'user-1',
       name: 'mine',

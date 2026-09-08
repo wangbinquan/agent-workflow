@@ -64,8 +64,10 @@ export interface OpenDbOptions {
    *  0 disables). Every statement here runs synchronously on the daemon's
    *  event loop, so a slow one freezes ALL HTTP/WS — surface them. */
   slowQueryMs?: number
-  /** RFC-338: Worker-only timing sink for every synchronous SQLite statement. */
-  observeStatementMs?: (ms: number) => void
+  /** RFC-338: Worker-only timing sink for every synchronous SQLite statement.
+   * Optional trailing fields are the original SQL template and the process CPU
+   * delta in ms (-1 when unavailable); existing one-argument sinks remain valid. */
+  observeStatementMs?: (ms: number, sql?: string, cpuMs?: number) => void
   /** RFC-338: Worker-only timing sink for dbTxSync critical sections. */
   observeTransactionMs?: (ms: number) => void
 }
@@ -140,24 +142,25 @@ export function instrumentSlowStatements(
   // 有 4 处）逐字不受影响。
   logSlow: (ms: number, sql: string, cpuMs: number) => void = (ms, sql, cpuMs) =>
     console.warn(`[db-slow] ${ms}ms (cpu ${cpuMs < 0 ? 'n/a' : `${cpuMs}ms`}): ${sql}`),
-  observe?: (ms: number) => void,
+  observe?: (ms: number, sql?: string, cpuMs?: number) => void,
 ): void {
   if (thresholdMs <= 0 && observe === undefined) return
   const clip = (sql: string): string => (sql.length > 300 ? `${sql.slice(0, 300)}…` : sql)
   const timed = <A extends unknown[], R>(sql: string, fn: (...args: A) => R) => {
     return (...args: A): R => {
       const t0 = performance.now()
-      // 实测 0.40µs/次（`performance.now()` 是 11ns）。第二次只在超阈时才付，
-      // 所以快路径的固定成本是一次调用；相对最便宜的索引查询（~10µs）可以接受。
+      // 实测 0.40µs/次（`performance.now()` 是 11ns）。第二次只在超阈或存在
+      // Worker observer 时才付；两个 sink 共用同一个完成采样，不为每条 SQL 构造对象。
       const c0 = cpuMicros()
       try {
         return fn(...args)
       } finally {
         const ms = performance.now() - t0
-        observe?.(ms)
-        if (thresholdMs > 0 && ms >= thresholdMs) {
-          const c1 = c0 === null ? null : cpuMicros()
-          const cpuMs = c0 === null || c1 === null ? -1 : Math.round((c1 - c0) / 1000)
+        const slow = thresholdMs > 0 && ms >= thresholdMs
+        const c1 = c0 === null || (!slow && observe === undefined) ? null : cpuMicros()
+        const cpuMs = c0 === null || c1 === null ? -1 : Math.round((c1 - c0) / 1000)
+        observe?.(ms, sql, cpuMs)
+        if (slow) {
           logSlow(Math.round(ms), clip(sql), cpuMs)
         }
       }

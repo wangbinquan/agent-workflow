@@ -80,6 +80,10 @@ import {
   type MaintenanceWorkerInitRequest,
 } from './maintenanceWorkerMessageRouter'
 import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
+import {
+  createMaintenanceSliceDiagnostics,
+  type MaintenanceSliceDiagnostics,
+} from './maintenanceSliceDiagnostics'
 
 declare const self: Worker
 
@@ -119,6 +123,8 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let heartbeatInFlight: Promise<void> | null = null
 let statementTimings: TimingHistogram | null = null
 let transactionTimings: TimingHistogram | null = null
+let sliceDiagnostics: MaintenanceSliceDiagnostics | null = null
+const maintenanceLog = createLogger('maintenanceWorker')
 
 interface TimingHistogram {
   count: number
@@ -385,6 +391,14 @@ async function processQueue(): Promise<void> {
         statementTimings = emptyTimingHistogram()
         transactionTimings = emptyTimingHistogram()
         const sliceStartedAt = performance.now()
+        sliceDiagnostics = createMaintenanceSliceDiagnostics({
+          job,
+          runId: claimed.row.id,
+          slice: claimed.row.sliceNo + 1,
+          attempt: claimed.row.attempt,
+          startedAt: sliceStartedAt,
+          log: maintenanceLog,
+        })
         const result = await runMaintenanceJob({
           appHome,
           ownerCommands: {
@@ -420,6 +434,9 @@ async function processQueue(): Promise<void> {
           ...timingCounters('dbStatement', statementTimings),
           ...timingCounters('dbTransaction', transactionTimings),
         }
+        const completedDiagnostics = sliceDiagnostics
+        sliceDiagnostics = null
+        completedDiagnostics.finish(transactionTimings, sliceMs)
         statementTimings = null
         transactionTimings = null
         const finishedAt = Date.now()
@@ -454,6 +471,9 @@ async function processQueue(): Promise<void> {
         if (continuation !== undefined) await delay(continuation.resumeAfterMs)
         else if (claimed.row.jobClass === 'cleanup') await delay(CLEANUP_COOLDOWN_MS)
       } catch (error) {
+        const failedDiagnostics = sliceDiagnostics
+        sliceDiagnostics = null
+        failedDiagnostics?.finish(transactionTimings)
         statementTimings = null
         transactionTimings = null
         const finishedAt = Date.now()
@@ -631,7 +651,10 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         mmapMib: parsed.sqlite.mmapMib,
         busyTimeoutMs: parsed.sqlite.busyTimeoutMs,
         slowQueryMs: 0,
-        observeStatementMs: (ms) => recordTiming(statementTimings, ms),
+        observeStatementMs: (ms, sql, cpuMs) => {
+          recordTiming(statementTimings, ms)
+          sliceDiagnostics?.observeStatement(ms, sql, cpuMs)
+        },
         observeTransactionMs: (ms) => recordTiming(transactionTimings, ms),
       })
       db = sqliteDb
