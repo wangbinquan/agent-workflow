@@ -6,6 +6,8 @@
 //        (the multi-doc path already tolerated it) — so "has doc_version ⟹
 //        getReviewDetail renders" holds, which is what reviewNavKind !== null
 //        promises the canvas.
+// RFC-359: seed the 600 unrelated reviews in bounded batches. The PostgreSQL
+// CI timeout happened during their 1,200 individual writes, before the query.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,6 +16,7 @@ import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { insertInBatches } from '../src/platform/persistence/batchInsert'
 import { getReviewDetail } from '../src/services/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -52,23 +55,46 @@ async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskI
   return { taskId }
 }
 
+function reviewRunValues(taskId: string): typeof nodeRuns.$inferInsert {
+  return {
+    id: ulid(),
+    taskId,
+    nodeId: 'rev',
+    iteration: 0,
+    retryIndex: 0,
+    reviewIteration: 0,
+    status: 'awaiting_review',
+    startedAt: 100,
+    finishedAt: null,
+  }
+}
+
 async function seedReviewRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
-  const id = ulid()
-  await db
-    .insert(nodeRuns)
-    .values({
-      id,
-      taskId,
-      nodeId: 'rev',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_review',
-      startedAt: 100,
-      finishedAt: null,
-    })
-    .run()
-  return id
+  const row = reviewRunValues(taskId)
+  await db.insert(nodeRuns).values(row).run()
+  return row.id
+}
+
+function docVersionValues(
+  taskId: string,
+  reviewNodeRunId: string,
+  opts: { versionIndex: number; createdAt: number; decision?: 'pending' | 'approved' },
+): typeof docVersions.$inferInsert {
+  const bodyPath = `reviews/rev/docpath/${reviewNodeRunId}-v${opts.versionIndex}.md`
+  return {
+    id: ulid(),
+    taskId,
+    reviewNodeId: 'rev',
+    reviewNodeRunId,
+    sourceNodeId: 'agent',
+    sourcePortName: 'docpath',
+    versionIndex: opts.versionIndex,
+    reviewIteration: 0,
+    bodyPath,
+    decision: opts.decision ?? 'pending',
+    createdAt: opts.createdAt,
+    decidedAt: null,
+  }
 }
 
 async function seedDocVersion(
@@ -77,25 +103,9 @@ async function seedDocVersion(
   reviewNodeRunId: string,
   opts: { versionIndex: number; createdAt: number; decision?: 'pending' | 'approved' },
 ): Promise<{ bodyPath: string }> {
-  const bodyPath = `reviews/rev/docpath/${reviewNodeRunId}-v${opts.versionIndex}.md`
-  await db
-    .insert(docVersions)
-    .values({
-      id: ulid(),
-      taskId,
-      reviewNodeId: 'rev',
-      reviewNodeRunId,
-      sourceNodeId: 'agent',
-      sourcePortName: 'docpath',
-      versionIndex: opts.versionIndex,
-      reviewIteration: 0,
-      bodyPath,
-      decision: opts.decision ?? 'pending',
-      createdAt: opts.createdAt,
-      decidedAt: null,
-    })
-    .run()
-  return { bodyPath }
+  const row = docVersionValues(taskId, reviewNodeRunId, opts)
+  await db.insert(docVersions).values(row).run()
+  return { bodyPath: row.bodyPath }
 }
 
 function writeBody(appHome: string, bodyPath: string, text: string): void {
@@ -132,13 +142,34 @@ describeEachProvider(
 
       // 600 NEWER doc_versions on other runs — pushing the target out of the
       // global `ORDER BY created_at DESC LIMIT 500` window listReviewSummaries used.
+      const otherRuns: (typeof nodeRuns.$inferInsert)[] = []
+      const otherVersions: (typeof docVersions.$inferInsert)[] = []
       for (let i = 0; i < 600; i++) {
-        const otherRun = await seedReviewRun(db, taskId)
-        await seedDocVersion(db, taskId, otherRun, {
-          versionIndex: 1,
-          createdAt: 2_000_000 + i, // all newer than the target's 1_000
-        })
+        const otherRun = reviewRunValues(taskId)
+        otherRuns.push(otherRun)
+        otherVersions.push(
+          docVersionValues(taskId, otherRun.id, {
+            versionIndex: 1,
+            createdAt: 2_000_000 + i, // all newer than the target's 1_000
+          }),
+        )
       }
+      // These rows only feed the read below. Keep every referenced run present
+      // before inserting its version, then finish the transaction before reading.
+      await harness.session.transaction(async (tx) => {
+        await insertInBatches(tx, nodeRuns, otherRuns, (batch) =>
+          tx
+            .insert(nodeRuns)
+            .values([...batch])
+            .run(),
+        )
+        await insertInBatches(tx, docVersions, otherVersions, (batch) =>
+          tx
+            .insert(docVersions)
+            .values([...batch])
+            .run(),
+        )
+      })
 
       const detail = await getReviewDetail(db, appHome, targetRun)
       expect(detail.summary.nodeRunId).toBe(targetRun)

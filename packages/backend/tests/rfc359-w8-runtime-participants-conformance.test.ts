@@ -30,16 +30,39 @@
 //   ② 端口面（`drive` / `children` / `activity` 的方法名与形参个数）两侧逐字相同；
 //   ③ 上面那张分叉表以源码文本断言钉住——将来谁把这一对合一，必须先来删掉这些断言，
 //      也就必须先正面处理 `children` 的两台引擎。
-// `drive` / `children` 的行为**没有**双引擎对拍：它们各自只能在自己的引擎上跑（见上），
-// 各自的覆盖由 `rfc349-*` / `rfc339-*` 等既有套件承担。
+// W12 AC-12 补充：完整 provider 的动态工作流恢复必须收到真实持久化与目录端口；
+// 下方用持久化 awaiting_confirm 状态驱动同一内核，保留原确认 run，不启动外部运行时。
+// children 的完整行为仍由 `rfc349-*` / `rfc339-*` 等既有套件承担。
 
+import {
+  initialDwState,
+  WORKFLOW_SCHEMA_VERSION,
+  WorkgroupRuntimeConfigSchema,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import { createWorkerIdentity } from '@/modules/task-execution/domain/ownership'
+import {
+  agents,
+  mcps,
+  nodeRunOutputs,
+  nodeRuns,
+  plugins,
+  skills,
+  tasks,
+  users,
+  workflows,
+  workgroupTaskState,
+} from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionRuntimeParticipants } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
@@ -55,6 +78,11 @@ import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-regis
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
+import {
+  createEachProviderTaskExecution,
+  createTestDynamicWorkflowOperations,
+} from './helpers/eachProviderTaskExecution'
+import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 
 const INFRASTRUCTURE = resolve(
   import.meta.dir,
@@ -93,6 +121,7 @@ function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimePa
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     runtimeRegistry: composeSqliteRuntimeRegistryOperations(client),
     workgroupTurns: passthrough('workgroupTurns'),
+    dynamicWorkflow: createTestDynamicWorkflowOperations(db),
     identityAccess: passthrough('identityAccess'),
     repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
   })
@@ -104,6 +133,7 @@ function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRunti
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db),
     workgroupTurns: passthrough('workgroupTurns'),
+    dynamicWorkflow: createTestDynamicWorkflowOperations(db),
     childLaunchWorkgroup: passthrough('childLaunchWorkgroup'),
     identityAccess: passthrough('identityAccess'),
     repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
@@ -157,6 +187,226 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     // 两个引擎上都不许挂住：没有在跑的 driver 时这条 await 必须立刻回来。
     await participants.activity.awaitReleasedSettled(unknown)
     expect(participants.activity.isActive(unknown)).toBe(false)
+  })
+
+  test('dynamic-workflow construction reads the live catalog from the selected DB', async () => {
+    const db = harness.db
+    const operations = createTestDynamicWorkflowOperations(db)
+    const agentId = ulid()
+    const skillId = ulid()
+    const mcpId = ulid()
+    const pluginId = ulid()
+    await db.insert(agents).values({
+      id: agentId,
+      name: `dynamic-${agentId}`,
+      outputs: '["result"]',
+      bodyMd: 'Read the selected catalog.',
+    })
+    await db.insert(skills).values({ id: skillId, name: `dynamic-${skillId}` })
+    await db.insert(mcps).values({
+      id: mcpId,
+      name: `dynamic-${mcpId.toLowerCase()}`,
+      type: 'local',
+      config: JSON.stringify({ command: ['catalog-fixture', '--read'] }),
+    })
+    await db.insert(plugins).values({
+      id: pluginId,
+      name: `dynamic-${pluginId.toLowerCase()}`,
+      spec: 'file:/catalog-fixture',
+      sourceKind: 'file',
+      cachedPath: '/catalog-fixture/index.js',
+      installedAt: 1,
+      optionsJson: JSON.stringify({ label: 'selected database' }),
+    })
+
+    const inventory = await operations.validationContext.load()
+    expect(inventory.agents.find((row) => row.id === agentId)).toMatchObject({
+      id: agentId,
+      bodyMd: 'Read the selected catalog.',
+    })
+    expect(inventory.skills.map((row) => row.id)).toContain(skillId)
+    expect(inventory.mcps?.find((row) => row.id === mcpId)).toMatchObject({
+      id: mcpId,
+      config: { command: ['catalog-fixture', '--read'] },
+    })
+    expect(inventory.plugins?.find((row) => row.id === pluginId)).toMatchObject({
+      id: pluginId,
+      options: { label: 'selected database' },
+    })
+    expect((await operations.persistence.loadAgent(agentId))?.id).toBe(agentId)
+    await db
+      .update(agents)
+      .set({ bodyMd: 'A later catalog revision.' })
+      .where(eq(agents.id, agentId))
+    expect(
+      (await operations.validationContext.load()).agents.find((row) => row.id === agentId),
+    ).toMatchObject({ bodyMd: 'A later catalog revision.' })
+  })
+
+  test('the complete provider drives dynamic-workflow re-entry without regenerating', async () => {
+    const db = harness.db
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-dynamic-runtime-'))
+    const userId = ulid()
+    const agentId = ulid()
+    const taskId = ulid()
+    const workflowId = ulid()
+    const workgroupId = ulid()
+    let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
+    try {
+      await db.insert(users).values({
+        id: userId,
+        username: `dynamic-${userId}`,
+        displayName: 'Dynamic Runtime Fixture',
+        role: 'admin',
+        status: 'active',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      await db.insert(agents).values({
+        id: agentId,
+        name: `dynamic-${agentId}`,
+        outputs: '["result"]',
+        bodyMd: 'This confirmed proposal does not need another generation.',
+      })
+      const snapshot: WorkflowDefinition = {
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [],
+        nodes: [
+          {
+            id: DW_ORCHESTRATOR_NODE_ID,
+            kind: 'agent-single',
+            agentId,
+            agentName: `dynamic-${agentId}`,
+          },
+        ],
+        edges: [],
+      }
+      const config = WorkgroupRuntimeConfigSchema.parse({
+        workgroupId,
+        workgroupName: `dynamic-${workgroupId}`,
+        mode: 'dynamic_workflow',
+        leaderMemberId: null,
+        switches: { shareOutputs: true, directMessages: false, blackboard: false },
+        maxRounds: 10,
+        completionGate: false,
+        instructions: 'Preserve the proposal awaiting confirmation.',
+        goal: 'Resume the durable dynamic-workflow phase.',
+        members: [
+          {
+            id: ulid(),
+            memberType: 'agent',
+            agentId,
+            agentName: `dynamic-${agentId}`,
+            userId: null,
+            displayName: 'Generator',
+            roleDesc: 'Generate a proposal.',
+          },
+        ],
+      })
+      const dw = { ...initialDwState(), phase: 'awaiting_confirm', generatedDef: snapshot }
+      await db.insert(workflows).values({
+        id: workflowId,
+        name: `dynamic-${workflowId}`,
+        definition: JSON.stringify(snapshot),
+      })
+      await db.insert(tasks).values({
+        id: taskId,
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
+        name: 'Dynamic workflow re-entry',
+        ownerUserId: userId,
+        workflowId,
+        workflowSnapshot: JSON.stringify(snapshot),
+        repoPath: appHome,
+        worktreePath: appHome,
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        status: 'pending',
+        startedAt: Date.now(),
+        inputs: '{}',
+        workgroupId,
+        workgroupConfigJson: JSON.stringify(config),
+      })
+      await db.insert(workgroupTaskState).values({
+        taskId,
+        dwStateJson: JSON.stringify(dw),
+        updatedAt: 1,
+      })
+      execution = await createEachProviderTaskExecution(harness, { appHome }, userId)
+      const intentId = ulid()
+      const now = Date.now()
+      await execution.persistence.intents.submitContinuation({
+        taskId,
+        intentId,
+        kind: 'launch',
+        source: 'rest',
+        actorUserId: userId,
+        payload: { v: 1 },
+        now,
+        advanceOperationGeneration: false,
+      })
+      const token = await execution.persistence.ownership.claimPendingIntent({
+        intentId,
+        identity: createWorkerIdentity({
+          ownerId: ulid(),
+          daemonGeneration: `dynamic-workflow-${ulid()}`,
+        }),
+        now,
+        leaseMs: 30_000,
+      })
+      const executionContext = createTaskExecutionContext({
+        intentId,
+        token,
+        persistence: execution.persistence,
+      })
+      const signal = new AbortController().signal
+      await execution.provider.runtime.schedulerDriver.drive({
+        taskId,
+        appHome,
+        executionContext,
+        signal,
+      })
+
+      const [parked] = await db.select().from(tasks).where(eq(tasks.id, taskId))
+      expect(parked).toMatchObject({ status: 'awaiting_review', errorSummary: null })
+      const firstRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      expect(firstRuns).toHaveLength(1)
+      expect(firstRuns[0]).toMatchObject({
+        nodeId: DW_ORCHESTRATOR_NODE_ID,
+        status: 'awaiting_review',
+        rerunCause: 'dw-gate',
+      })
+      expect(
+        await execution.persistence.runtimeLifecycle.trySet({
+          taskId,
+          to: 'pending',
+          allowedFrom: ['awaiting_review'],
+          now: Date.now(),
+          reason: 'test-dynamic-workflow-re-entry',
+          executionContext,
+        }),
+      ).toBe(true)
+      await execution.provider.runtime.schedulerDriver.drive({
+        taskId,
+        appHome,
+        executionContext,
+        signal,
+      })
+      const resumedRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      expect(resumedRuns.map((run) => run.id)).toEqual(firstRuns.map((run) => run.id))
+      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
+        'awaiting_review',
+      )
+      expect(
+        (await createTestDynamicWorkflowOperations(db).persistence.loadTask(taskId))?.dwStateJson,
+      ).toBe(JSON.stringify(dw))
+      expect(await db.select().from(nodeRunOutputs)).toEqual([])
+    } finally {
+      await execution?.shutdown()
+      rmSync(appHome, { recursive: true, force: true })
+    }
   })
 })
 

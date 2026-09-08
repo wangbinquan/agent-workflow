@@ -2,6 +2,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- 完整 TaskDrive 的 dynamicWorkflow 与两 provider runtime participants 构造输入必填；原 legacy
+  RunTaskOptions 的可选合同保留。测试的完整工厂通过实际同库四类目录读取构造 validationContext。
+- 原始性能基准复用生产请求外壳与真实六域 owner，在计时外构造一次；生产全路由闭合检查仍在原根。
+  同源微型 SQLite 模板经真实逻辑迁移初始化 PG 后分别播原五表语料；独立 worker 顺序测九个 HTTP
+  场景，以原 floor 分位数逐项比较，完整样本与行数/摘要/代码/机器见证随报告保存。
+  归档在两份 HTTP 报告完成后另列；small/weekly 或结构守卫通过不等于 AC11 full 验收通过。
+
 - 同一 bootstrap 作用域内的依赖环用完整端口的词法闭包连接；闭包只在启动完成后的实际调用中求值。
   不再用可空 holder 加第二次 bind 保存 realtime、scheduler、MCP、collaboration 或 development 实例。
 - `catalogBinding` / `runtime` 在输入中必有时，memory / digital-employee 的返回类型分别保证 catalog /

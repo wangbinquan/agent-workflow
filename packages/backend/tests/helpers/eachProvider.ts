@@ -540,16 +540,23 @@ async function createPostgresqlHarnessDatabase(
   }
 }
 
-async function closePostgresqlHarnessDatabases(
-  databases: readonly PostgresqlHarnessDatabase[],
+export async function closePostgresqlHarnessDatabases(
+  databases: readonly {
+    readonly runtime: Pick<PostgresqlDatabaseRuntime, 'close'>
+    readonly raw: RawQuery
+  }[],
   createdDatabaseNames: readonly string[],
 ): Promise<void> {
   const errors: unknown[] = []
-  for (const database of databases.slice(1).reverse()) {
+  for (const [index, database] of [...databases.entries()].slice(1).reverse()) {
     try {
       await database.runtime.close()
     } catch (error) {
-      errors.push(error)
+      errors.push(
+        new Error(`PostgreSQL harness cleanup: close additional runtime at index ${index}`, {
+          cause: error,
+        }),
+      )
     }
   }
   const primary = databases[0]
@@ -559,13 +566,17 @@ async function closePostgresqlHarnessDatabases(
       try {
         await primary.raw(`drop database if exists "${name}"`)
       } catch (error) {
-        errors.push(error)
+        errors.push(
+          new Error(`PostgreSQL harness cleanup: drop additional database ${name}`, {
+            cause: error,
+          }),
+        )
       }
     }
     try {
       await primary.runtime.close()
     } catch (error) {
-      errors.push(error)
+      errors.push(new Error('PostgreSQL harness cleanup: close primary runtime', { cause: error }))
     }
   }
   if (errors.length === 1) throw errors[0]

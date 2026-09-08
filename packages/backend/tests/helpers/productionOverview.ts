@@ -5,7 +5,10 @@ import type { OverviewResponse } from '@agent-workflow/shared'
 import type { Actor } from '../../src/auth/actor'
 import type { DbClient } from '../../src/db/client'
 import type { ProviderNeutralDatabase } from '../../src/db/query'
-import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
+import {
+  composeIdentityAccess,
+  type IdentityAccessRuntime,
+} from '../../src/modules/identity-access/composition'
 import { composePostgresqlScheduledTaskRuntime } from '../../src/modules/integration/composition/scheduledTasks'
 import { composeMemoryCatalogOperations } from '../../src/modules/memory/composition'
 import { composePostgresqlIntegrationTriggerResourceSnapshotFactory } from '../../src/modules/resource-catalog/composition/integrationTrigger'
@@ -16,6 +19,7 @@ import {
   composeSqliteRepositoryWorkspaceStore,
 } from '../../src/modules/source-control/composition'
 import { composeSystemOverviewQuery } from '../../src/modules/system-operations/application/overview'
+import type { SystemOverviewQuery } from '../../src/modules/system-operations/public/queries'
 import { createTaskOverviewQuery } from '../../src/modules/task-execution/composition/taskOverview'
 import type { PostgresqlDatabaseClient } from '../../src/platform/persistence/postgresqlDatabaseClient'
 import { buildOverview } from '../../src/services/overview'
@@ -35,6 +39,83 @@ function unusedCapability(): never {
   throw new Error('overview-query-invoked-unused-write-capability')
 }
 
+function postgresqlOverviewParts(
+  db: PostgresqlDatabaseClient,
+  identityAccess: IdentityAccessRuntime,
+) {
+  const overviewActors = new WeakMap<object, Actor>()
+  const resourceCatalog = composePostgresqlResourceCatalogOverviewQuery(db, {
+    resolve(authority) {
+      const resolved = overviewActors.get(authority)
+      if (resolved === undefined) throw new Error('foreign-overview-authority')
+      return resolved
+    },
+  })
+  const store = composePostgresqlRepositoryWorkspaceStore(db)
+  const scheduledTaskRuntime = composePostgresqlScheduledTaskRuntime({
+    db,
+    resourceSnapshots: composePostgresqlIntegrationTriggerResourceSnapshotFactory({
+      assertNotBuiltin,
+    }),
+    validation: {
+      assertWorkflowLaunchable: unusedCapability,
+      assertAgentIntegrity: unusedCapability,
+    },
+    resourceAclChanged: unusedCapability,
+  })
+  const memories = composeMemoryCatalogOperations({
+    db,
+    contexts: identityAccess.contexts,
+    authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+  })
+  return { overviewActors, resourceCatalog, store, scheduledTaskRuntime, memories }
+}
+
+function postgresqlOverviewDependencies(
+  db: PostgresqlDatabaseClient,
+  {
+    resourceCatalog,
+    store,
+    scheduledTaskRuntime,
+    memories,
+  }: ReturnType<typeof postgresqlOverviewParts>,
+) {
+  return {
+    resourceCatalog,
+    repositories: composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
+    integration: scheduledTaskRuntime.overview,
+    memories,
+    tasks: createTaskOverviewQuery(db),
+  }
+}
+
+/** Construct once before HTTP timing; each request still reads the current database. */
+export function createProductionOverviewQuery(
+  db: ProviderNeutralDatabase,
+  identityAccess: IdentityAccessRuntime,
+): SystemOverviewQuery {
+  if (isPostgresql(db)) {
+    const parts = postgresqlOverviewParts(db, identityAccess)
+    const query = composeSystemOverviewQuery(postgresqlOverviewDependencies(db, parts))
+    return {
+      execute(request) {
+        parts.overviewActors.set(request.authority, request.actor)
+        return query.execute(request)
+      },
+    }
+  }
+
+  assertSqlite(db)
+  const store = composeSqliteRepositoryWorkspaceStore(db)
+  const repositories = composeRepositoryWorkspaceOperations(store, undefined).overviewQueries
+  const memories = composeMemoryCatalogOperations({
+    db,
+    contexts: identityAccess.contexts,
+    authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+  })
+  return { execute: (request) => buildOverview(db, request, repositories, memories) }
+}
+
 export function runProductionOverview(
   db: ProviderNeutralDatabase,
   actor: Actor,
@@ -46,39 +127,9 @@ export function runProductionOverview(
       'http',
     )
     const request = { actor, authority: context.authority }
-    const overviewActors = new WeakMap<object, Actor>()
-    const resourceCatalog = composePostgresqlResourceCatalogOverviewQuery(db, {
-      resolve(authority) {
-        const resolved = overviewActors.get(authority)
-        if (resolved === undefined) throw new Error('foreign-overview-authority')
-        return resolved
-      },
-    })
-    const store = composePostgresqlRepositoryWorkspaceStore(db)
-    const scheduledTaskRuntime = composePostgresqlScheduledTaskRuntime({
-      db,
-      resourceSnapshots: composePostgresqlIntegrationTriggerResourceSnapshotFactory({
-        assertNotBuiltin,
-      }),
-      validation: {
-        assertWorkflowLaunchable: unusedCapability,
-        assertAgentIntegrity: unusedCapability,
-      },
-      resourceAclChanged: unusedCapability,
-    })
-    const memories = composeMemoryCatalogOperations({
-      db,
-      contexts: identityAccess.contexts,
-      authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
-    })
-    overviewActors.set(request.authority, request.actor)
-    return composeSystemOverviewQuery({
-      resourceCatalog,
-      repositories: composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
-      integration: scheduledTaskRuntime.overview,
-      memories,
-      tasks: createTaskOverviewQuery(db),
-    }).execute(request)
+    const parts = postgresqlOverviewParts(db, identityAccess)
+    parts.overviewActors.set(request.authority, request.actor)
+    return composeSystemOverviewQuery(postgresqlOverviewDependencies(db, parts)).execute(request)
   }
 
   assertSqlite(db)

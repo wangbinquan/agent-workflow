@@ -5371,12 +5371,12 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3157",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3164",
       "kind": "register-call",
-      "line": 3157,
-      "ownerEntryId": "owner:packages/backend/src/server.ts#createComposedApp",
+      "line": 3164,
+      "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
-      "symbol": "createComposedApp",
+      "symbol": "createHttpRequestApp",
       "targetContext": "bootstrap"
     },
     {
@@ -12907,5 +12907,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57e8e6e8d7d4f58ca1d40a785a785edcdb94d1f92e86ffbd673d638a590e8684"
+  "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3"
 }

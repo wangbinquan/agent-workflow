@@ -46,7 +46,7 @@ export interface PostgresqlTaskExecutionRuntimeDependencies {
   readonly repositoryPublicationTransport: RepositoryPublicationTransport
   /** Bootstrap-selected credential reader; PostgreSQL execution never opens a SQLite fallback. */
   readonly codeHostConnections: CodeHostConnectionsService
-  readonly dynamicWorkflow?: Readonly<{
+  readonly dynamicWorkflow: Readonly<{
     readonly persistence: DynamicWorkflowPersistence
     readonly validationContext: DynamicWorkflowValidationContextSource
   }>
@@ -122,9 +122,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
           identityAccess: dependencies.identityAccess,
           codeHostConnections: dependencies.codeHostConnections,
           repositoryPublicationTransport: dependencies.repositoryPublicationTransport,
-          ...(dependencies.dynamicWorkflow === undefined
-            ? {}
-            : { dynamicWorkflow: dependencies.dynamicWorkflow }),
+          dynamicWorkflow: dependencies.dynamicWorkflow,
         },
         topology,
         runtimeComponents,

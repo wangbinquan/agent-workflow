@@ -37,7 +37,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
   readonly runtimeRegistry: RuntimeRegistryOperations
   /** RFC-359 W4-D19c：工作组回合操作，由 bootstrap 用 `composeWorkgroupTurnsOperations` 装好交进来。 */
   readonly workgroupTurns: WorkgroupTurnsOperations
-  readonly dynamicWorkflow?: Readonly<{
+  readonly dynamicWorkflow: Readonly<{
     readonly persistence: DynamicWorkflowPersistence
     readonly validationContext: DynamicWorkflowValidationContextSource
   }>
@@ -73,9 +73,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
           // 职责下沉一层（RFC-328 的「装配唯一入口」守卫盯的就是这条）。
           workgroupTurns: input.workgroupTurns,
           childLaunch: createSqliteChildExecutionLaunchOperations(input.db),
-          ...(input.dynamicWorkflow === undefined
-            ? {}
-            : { dynamicWorkflow: input.dynamicWorkflow }),
+          dynamicWorkflow: input.dynamicWorkflow,
           processConcurrencyScope: input.db,
           identityAccess: input.identityAccess,
           ...(input.codeHostConnections === undefined

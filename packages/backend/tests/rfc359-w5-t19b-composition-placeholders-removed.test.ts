@@ -40,6 +40,10 @@
 // | ③ | `packageCommand` 的 `bootstrapFactory` 改回可选 | `tsc --noEmit` 红（第 4 条） |
 // | ④ | 任一处把 throw 加回去（不改类型） | 本文件不红；由**账本**
 //       `tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts` 红（它按 AST 数 marker/prose/holder）。两半分工如此。 |
+//
+// RFC-359 W12 AC-12: the full runtime used to accept a missing dynamicWorkflow
+// bundle even though its closed engine registry can select dw-generate. The
+// construction negatives below lock that contract; the runtime diagnostic stays.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -53,8 +57,12 @@ import {
   TaskExecutionModule,
 } from '@/modules/task-execution/composition'
 import type { driveTaskEngineApplication } from '@/modules/task-execution/composition/taskEngineApplication'
-import type { SqliteTaskExecutionProviderRuntimeDependencies } from '@/modules/task-execution/composition/providerRuntime'
+import type {
+  PostgresqlTaskExecutionProviderRuntimeDependencies,
+  SqliteTaskExecutionProviderRuntimeDependencies,
+} from '@/modules/task-execution/composition/providerRuntime'
 import type { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import type { createPostgresqlTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -93,6 +101,7 @@ type ComposedDependencies = Pick<
   | 'childLaunch'
   | 'processConcurrencyScope'
   | 'identityAccess'
+  | 'dynamicWorkflow'
 >
 
 /**
@@ -116,6 +125,7 @@ const _noneMayBeAbsent: NoneMayBeAbsent = {
   childLaunch: true,
   processConcurrencyScope: true,
   identityAccess: true,
+  dynamicWorkflow: true,
 }
 
 // W12: narrow the production contract without changing the outer legacy vocabulary.
@@ -130,6 +140,125 @@ const _providerIdentityRequired: undefined extends SqliteTaskExecutionProviderRu
 const _legacyIdentityStillOptional: undefined extends RunTaskOptions['identityAccess']
   ? true
   : 'Legacy run options must keep their existing optional input' = true
+
+type SqliteParticipantsInput = Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0]
+type PostgresqlParticipantsInput = Parameters<
+  typeof createPostgresqlTaskExecutionRuntimeParticipants
+>[1]
+type SqliteProviderInput = SqliteTaskExecutionProviderRuntimeDependencies['runtime']
+type PostgresqlProviderInput = PostgresqlTaskExecutionProviderRuntimeDependencies['runtime']
+type CompleteDynamicWorkflowInputs = {
+  drive: DriveOptions
+  sqliteParticipants: SqliteParticipantsInput
+  postgresqlParticipants: PostgresqlParticipantsInput
+  sqliteProvider: SqliteProviderInput
+  postgresqlProvider: PostgresqlProviderInput
+}
+const _dynamicWorkflowRequired: {
+  [K in keyof CompleteDynamicWorkflowInputs]: undefined extends CompleteDynamicWorkflowInputs[K]['dynamicWorkflow']
+    ? 'A complete runtime must receive dynamic-workflow operations at construction'
+    : true
+} = {
+  drive: true,
+  sqliteParticipants: true,
+  postgresqlParticipants: true,
+  sqliteProvider: true,
+  postgresqlProvider: true,
+}
+const _legacyDynamicWorkflowStillOptional: undefined extends RunTaskOptions['dynamicWorkflow']
+  ? true
+  : 'Legacy run options must retain their optional dynamic-workflow input' = true
+
+/** Compile-only: use the real input types without invoking a runtime or domain command. */
+function dynamicWorkflowConstructionTypes(inputs: CompleteDynamicWorkflowInputs, include: boolean) {
+  const { dynamicWorkflow: driveDynamic, ...drive } = inputs.drive
+  const { dynamicWorkflow: sqliteDynamic, ...sqlite } = inputs.sqliteParticipants
+  const { dynamicWorkflow: postgresqlDynamic, ...postgresql } = inputs.postgresqlParticipants
+  const { dynamicWorkflow: sqliteProviderDynamic, ...sqliteProvider } = inputs.sqliteProvider
+  const { dynamicWorkflow: postgresqlProviderDynamic, ...postgresqlProvider } =
+    inputs.postgresqlProvider
+
+  // @ts-expect-error A bound drive cannot omit the dynamic-workflow bundle.
+  const missingDrive: DriveOptions = drive
+  // @ts-expect-error A conditional bundle does not complete the bound drive.
+  const optionalDrive: DriveOptions = {
+    ...drive,
+    ...(include ? { dynamicWorkflow: driveDynamic } : {}),
+  }
+  const undefinedDrive: DriveOptions = {
+    ...inputs.drive,
+    // @ts-expect-error Explicit undefined is not a dynamic-workflow bundle.
+    dynamicWorkflow: undefined,
+  }
+  // @ts-expect-error SQLite participants must receive every engine capability.
+  const missingSqlite: SqliteParticipantsInput = sqlite
+  // @ts-expect-error A conditional bundle does not complete SQLite participants.
+  const optionalSqlite: SqliteParticipantsInput = {
+    ...sqlite,
+    ...(include ? { dynamicWorkflow: sqliteDynamic } : {}),
+  }
+  const undefinedSqlite: SqliteParticipantsInput = {
+    ...inputs.sqliteParticipants,
+    // @ts-expect-error Explicit undefined does not complete SQLite participants.
+    dynamicWorkflow: undefined,
+  }
+  // @ts-expect-error PostgreSQL participants must receive every engine capability.
+  const missingPostgresql: PostgresqlParticipantsInput = postgresql
+  // @ts-expect-error A conditional bundle does not complete PostgreSQL participants.
+  const optionalPostgresql: PostgresqlParticipantsInput = {
+    ...postgresql,
+    ...(include ? { dynamicWorkflow: postgresqlDynamic } : {}),
+  }
+  const undefinedPostgresql: PostgresqlParticipantsInput = {
+    ...inputs.postgresqlParticipants,
+    // @ts-expect-error Explicit undefined does not complete PostgreSQL participants.
+    dynamicWorkflow: undefined,
+  }
+  // @ts-expect-error The complete SQLite provider must require the bundle too.
+  const missingSqliteProvider: SqliteProviderInput = sqliteProvider
+  // @ts-expect-error Conditional input cannot complete the SQLite provider.
+  const optionalSqliteProvider: SqliteProviderInput = {
+    ...sqliteProvider,
+    ...(include ? { dynamicWorkflow: sqliteProviderDynamic } : {}),
+  }
+  const undefinedSqliteProvider: SqliteProviderInput = {
+    ...inputs.sqliteProvider,
+    // @ts-expect-error Explicit undefined cannot complete the SQLite provider.
+    dynamicWorkflow: undefined,
+  }
+  // @ts-expect-error The complete PostgreSQL provider must require the bundle too.
+  const missingPostgresqlProvider: PostgresqlProviderInput = postgresqlProvider
+  // @ts-expect-error Conditional input cannot complete the PostgreSQL provider.
+  const optionalPostgresqlProvider: PostgresqlProviderInput = {
+    ...postgresqlProvider,
+    ...(include ? { dynamicWorkflow: postgresqlProviderDynamic } : {}),
+  }
+  const undefinedPostgresqlProvider: PostgresqlProviderInput = {
+    ...inputs.postgresqlProvider,
+    // @ts-expect-error Explicit undefined cannot complete the PostgreSQL provider.
+    dynamicWorkflow: undefined,
+  }
+  const legacyWithoutDynamic: RunTaskOptions = drive
+  void [
+    missingDrive,
+    optionalDrive,
+    undefinedDrive,
+    missingSqlite,
+    optionalSqlite,
+    undefinedSqlite,
+    missingPostgresql,
+    optionalPostgresql,
+    undefinedPostgresql,
+    missingSqliteProvider,
+    optionalSqliteProvider,
+    undefinedSqliteProvider,
+    missingPostgresqlProvider,
+    optionalPostgresqlProvider,
+    undefinedPostgresqlProvider,
+    legacyWithoutDynamic,
+  ]
+}
+void dynamicWorkflowConstructionTypes
 
 // ---------------------------------------------------------------------------
 // 2. TaskExecution 模块：claimPersisted 只长在持久化交齐的那个类型上

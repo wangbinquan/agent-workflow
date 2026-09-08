@@ -1873,7 +1873,7 @@
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 353
+      "lines": 355
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -2393,14 +2393,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:57e8e6e8d7d4f58ca1d40a785a785edcdb94d1f92e86ffbd673d638a590e8684",
+    "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "0f327a7bc2340fb955d70ac302bcb9b04af064c8",
-    "contentDigest": "sha256:d2ad80af07afeb234a04ee2196ed1c2696527e9227feb82abdf7f04b5415f146",
+    "currentSnapshotSha": "608d1b01205de5c2085c425f2c61f2355146a009",
+    "contentDigest": "sha256:8807894601033fa48f79bd2589064840d8506666e84cd02b178449d750bbb3f5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

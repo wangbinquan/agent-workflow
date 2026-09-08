@@ -25,6 +25,12 @@ on:
         type: choice
         options: [weekly, full, small]
         default: weekly
+      evidence_suite:
+        description: 'Evidence jobs to run (HTTP full tier uses the strict RFC-359 P95 criterion)'
+        required: false
+        type: choice
+        options: [all, compatibility, http-performance]
+        default: all
       clients:
         description: 'Concurrent HTTP/WS/status clients'
         required: false
@@ -47,6 +53,7 @@ concurrency:
 
 jobs:
   crash-large-and-soak:
+    if: github.event_name != 'workflow_dispatch' || inputs.evidence_suite != 'http-performance'
     name: PostgreSQL crash matrix + 100-client full seed
     runs-on: ubuntu-24.04
     # The `weekly` tier lands around 25 minutes; a hang must not sit on a runner for
@@ -157,6 +164,7 @@ jobs:
           retention-days: 30
 
   compiled-external-postgresql:
+    if: github.event_name != 'workflow_dispatch' || inputs.evidence_suite != 'http-performance'
     name: Compiled external PostgreSQL (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -243,5 +251,74 @@ jobs:
           path: |
             test-results/rfc349-postgresql-compiled-${{ runner.os }}.json
             test-results/rfc349-postgresql-compiled-${{ runner.os }}.md
+          if-no-files-found: error
+          retention-days: 30
+
+  rfc359-http-performance:
+    name: RFC-359 original HTTP P95 (same runner, two engines)
+    if: github.event_name != 'workflow_dispatch' || inputs.evidence_suite != 'compatibility'
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.scale == 'full') && 210 || 60 }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Reclaim ephemeral runner disk for both original corpora
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+          df -h /
+          available_kib=$(df --output=avail / | tail -1 | tr -d ' ')
+          if [ "$available_kib" -lt 26214400 ]; then
+            echo 'RFC-359 HTTP evidence requires at least 25 GiB free' >&2
+            exit 1
+          fi
+
+      - name: Start disposable PostgreSQL for the HTTP corpus
+        shell: bash
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres'"
+          sudo -u postgres createdb rfc359_http_performance
+          echo 'RFC359_PERFORMANCE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc359_http_performance' >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Seed both original corpora and compare nine raw HTTP P95 values
+        env:
+          EVIDENCE_TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+          EVIDENCE_SCALE: ${{ github.event_name == 'schedule' && 'weekly' || inputs.scale }}
+        shell: bash
+        run: |
+          mkdir -p test-results/rfc359-http-performance
+          target_sha="${EVIDENCE_TARGET_SHA:-$(git rev-parse HEAD)}"
+          bun run scripts/perf-run.ts \
+            --scale "$EVIDENCE_SCALE" \
+            --sha "$target_sha" \
+            --output test-results/rfc359-http-performance \
+            2>&1 | tee test-results/rfc359-http-performance/run.log
+
+      - name: Upload raw samples, corpus digests, logical restore and comparison
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc359-http-performance-${{ github.run_id }}
+          path: |
+            test-results/rfc359-http-performance/*.json
+            test-results/rfc359-http-performance/*.log
           if-no-files-found: error
           retention-days: 30

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1728,
+    "entries": 1729,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -33655,6 +33655,29 @@
       },
       "file": "packages/backend/src/server.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/server.ts#createHttpRequestApp",
+      "missingControls": [
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
+      "symbol": "createHttpRequestApp",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/server.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/server.ts#RuntimeComposedAppDeps",
       "missingControls": [
         "authority",
@@ -41282,7 +41305,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57e8e6e8d7d4f58ca1d40a785a785edcdb94d1f92e86ffbd673d638a590e8684",
+  "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

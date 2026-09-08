@@ -3113,8 +3113,15 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   routes.docs(app)
 }
 
-/** Build the HTTP/MCP application from already-selected provider ports. */
-export function createComposedApp(deps: ComposedAppDeps): Hono {
+/** Shared request transport; callers supply already-composed route bindings. */
+export interface HttpRequestAppDeps {
+  readonly token: ComposedAppDeps['token']
+  readonly core: ComposedAppDeps['core']
+  readonly publicRoutes: ComposedAppDeps['publicRoutes']
+  readonly mountApi: AppRouteMount
+}
+
+export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
 
@@ -3183,19 +3190,7 @@ export function createComposedApp(deps: ComposedAppDeps): Hono {
     },
   )
 
-  mountApiRoutes(app, deps)
-  mountMcpTransport(app, {
-    tokenCallAudit: deps.core.tokenCallAudit,
-    configPath: deps.configPath,
-    operationInvokerFor: (actor) =>
-      createBoundOperationInvoker(
-        app,
-        directMcpOperationAuthority(deps.core.identityAccess.directAuthority, actor),
-      ),
-  })
-
-  assertRouteMetaCoverage(app.routes.map((route) => ({ method: route.method, path: route.path })))
-  assertOperationCatalogClosed()
+  deps.mountApi(app)
   app.onError(errorHandler)
 
   if (IS_EMBEDDED) {
@@ -3219,6 +3214,32 @@ export function createComposedApp(deps: ComposedAppDeps): Hono {
     c.json({ ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` }, 404),
   )
   return app
+}
+
+/** Build the HTTP/MCP application from already-selected provider ports. */
+export function createComposedApp(deps: ComposedAppDeps): Hono {
+  return createHttpRequestApp({
+    token: deps.token,
+    core: deps.core,
+    publicRoutes: deps.publicRoutes,
+    mountApi(app) {
+      mountApiRoutes(app, deps)
+      mountMcpTransport(app, {
+        tokenCallAudit: deps.core.tokenCallAudit,
+        configPath: deps.configPath,
+        operationInvokerFor: (actor) =>
+          createBoundOperationInvoker(
+            app,
+            directMcpOperationAuthority(deps.core.identityAccess.directAuthority, actor),
+          ),
+      })
+
+      assertRouteMetaCoverage(
+        app.routes.map((route) => ({ method: route.method, path: route.path })),
+      )
+      assertOperationCatalogClosed()
+    },
+  })
 }
 
 export function createApp(deps: AppDeps): Hono

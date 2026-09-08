@@ -776,8 +776,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1728,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1729,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W12 batch13 extracts the existing createComposedApp request shell as createHttpRequestApp for the original HTTP benchmark. The existing complete root delegates to it; original mounted-route order and closure checks remain. The canonical scanner therefore records one additional named function, not a new external route."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -867,12 +870,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24931,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24933,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W12 batch13 adds exactly createHttpRequestApp and HttpRequestAppDeps in the existing server bootstrap owner. The extracted request body and all other existing function ASTs are preserved; no new module or cross-context import is introduced."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:57e8e6e8d7d4f58ca1d40a785a785edcdb94d1f92e86ffbd673d638a590e8684",
+    "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +891,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0f327a7bc2340fb955d70ac302bcb9b04af064c8",
-    "contentDigest": "sha256:f2798909b383a79792211d498ef6be32c5cf19e47ae1609016cfab30eb1d5ce6",
+    "currentSnapshotSha": "608d1b01205de5c2085c425f2c61f2355146a009",
+    "contentDigest": "sha256:8f839d70273ac321b4cf40549e9c2354b67b2ea6cbd10012f7546fddfb318999",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

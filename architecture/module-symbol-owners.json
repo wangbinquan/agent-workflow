@@ -6,7 +6,7 @@
     "moduleFiles": 1185,
     "productionFiles": 2563,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24931
+    "symbolsIncludingFileRoots": 24933
   },
   "entries": [
     {
@@ -158851,6 +158851,18 @@
       "currentLayer": "server.ts",
       "exported": true,
       "file": "packages/backend/src/server.ts",
+      "id": "owner:packages/backend/src/server.ts#createHttpRequestApp",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createHttpRequestApp",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "server.ts",
+      "exported": true,
+      "file": "packages/backend/src/server.ts",
       "id": "owner:packages/backend/src/server.ts#DaemonCredentialRevocationReason",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -158939,6 +158951,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "hasIntegrationTriggerResources",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "server.ts",
+      "exported": true,
+      "file": "packages/backend/src/server.ts",
+      "id": "owner:packages/backend/src/server.ts#HttpRequestAppDeps",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "HttpRequestAppDeps",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -299874,5 +299898,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57e8e6e8d7d4f58ca1d40a785a785edcdb94d1f92e86ffbd673d638a590e8684"
+  "sourceDigest": "sha256:0c249850a5182616696a9269f9ec999822e4fcdb9452ab996c264e96874cbef3"
 }

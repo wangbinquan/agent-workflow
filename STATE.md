@@ -2,20 +2,21 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> **RFC-359 W12 接续（2026-09-08）**：裸驱动事务守卫按 TypeScript 接收者类型识别，账本归零。
-> 第二至十二批拆除多处可漏绑槽，provider 命名文件 88 → 61，原始装配命中 32 → 9。
-> 151 个旧行为套件改为双引擎；本批 20 套件保留 156 个 case 声明、158 个展开用例与 596 个 matcher AST。
-> 真实同用例双库、旧 task 根 lineage、node-run 原 NULL、异步写后查回和案件生命周期原超时保持。
-> Agent 三份完整写入字段合成一份，原 getter 求值顺序、空 sidecar 差异与事务保持；生产净减 8 行。
-> PostgreSQL 重试策略归位 platform/persistence，文件逐字不变，不把这项机制归位记作成对实现合一。
-> 完整 provider 工厂下真实任务到 done、协作、实时回放及数字员工两种执行均有用例，未构造根归零。
-> 第十一批 `0f327a7bc` / Main CI `34183590165` 33/36 job success；同一个类型别名问题在两个分片报红。
-> 本批去掉冗余字符串联合别名，展开后完整 AST/运行 JS 不变，原 38 类型负例与四个诊断保持。
-> 真 PG 专项、其余六个后端分片、全部 10 个 E2E 与三个 binary job 通过；同 SHA 维护 soak 成功。
-> 实际 PG Overview 与并发写屏障已获 hosted 通过；八条 500 行 P95 诊断仍 PG 更慢，原验收条款未达。
-> 完整原始基准已明确九个真实 HTTP 场景与同语料要求，接下来先实现共享语料再接独立 full job。
-> **仍为 In Progress**：684 个测试文件还有 1454 次实际 SQLite 内存库构造（含机制专属测试，待逐项分类）。
-> 全量行为覆盖、真实重复实现、剩余装配与原始 P95 判据尚未闭合，逐项验收及每批 CI 见 `plan.md` §0b/§0c。
+> **RFC-359 W12 接续（2026-09-08）**：第十三批将完整动态工作流 bundle 收为必填，九个原诊断保持；
+> 真实四类目录与完整 provider driver 的动态确认恢复已有双引擎声明，旧全部期望保留。
+> RFC311 五表行算法合一，原 native SQLite SQL/事务/CLI 保持，517 行全物理列与旧库逐字一致；
+> 新 async sink 在实际事务内按引擎参数上限分批，whole-table receipt 流式核对原行数与摘要。
+> 九端点真实 HTTP 基准与独立 full CI job 已落：同一模板、同一 runner、独立 provider worker，
+> 保留原 1+20 次样本与 floor 分位数，逐端点严格 PG P95 ≤ SQLite；small/weekly 只作诊断。
+> 第二页使用实际 cursor，默认完整 task-catalog 保留真实数字员工源；归档单轮在两份 HTTP 报告后。
+> 第十二批 `608d1b012` / Main CI `34186397795` 34/36 job success：Ubuntu shard4 两处失败及汇总红。
+> 20 个旧套件的 136 个 PG case 与 Agent 新 10 个 PG case 通过，但 RFC139 afterAll native close 红；
+> 本批补三阶段清理 cause，尚不能确定 native 根因。R2b 超时仍在600组背景行的逐条写入，已批量化夹具。
+> 独立 PG、其他七个后端分片、全部十个 E2E、三个 binary 和类型/格式通过；同 SHA maintenance soak
+> 成功，control/maintenance API P95 43.9/52.8ms、errors0。不能将这些子任务成功称为 Main 全绿。
+> W12 仍已迁151个旧行为套件；当前1903测试文件、310文件调用harness，684文件/1454次实际SQLite构库。
+> **仍为 In Progress**：全量行为覆盖、真实残余重复实现、原始 full P95 与最终 exact-SHA CI 待完成。
+> 本批未跑本地 PG、服务、完整性能库、soak、E2E 或全量门禁；逐项证据见 plan.md §0b/§0c。
 
 > 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
 > **进度（2026-09-07，W7 成对适配器收尾）**：本波按 W5 的成对账本逐对收 W4 的剩余部分。

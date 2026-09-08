@@ -95,7 +95,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'modules/task-execution/infrastructure/SourceTerminationParticipant: sqlite 4/4, postgresql 3/2',
   // W12：真实执行夹具提升到 providerRuntime 整体装配，底层 PG participants / launch 的
   // 直接 import 各少一条，但 factory 的返回对象驱动同一真实任务；不以直接引用数冒充行为覆盖。
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 10/3, postgresql 5/1',
+  // W12 第十三批：完整 dynamicWorkflow 类型负例新增 PG participants 引用；
+  // ref 5 → 6，drive 仍 1，不能把纯类型证明记成新增直接行为驱动。
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: sqlite 10/3, postgresql 6/1',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: sqlite 2/1, postgresql 5/1',
   // RFC-359 W8：两侧各 +1 ref / +1 drive（`rfc359-w8-task-route-capability-parity.test.ts`
   // 是 `describeEachProvider`，一条 body 同时驱动两侧），倒挂差额不变。
@@ -116,7 +118,7 @@ export const REFERENCE_GAP_THRESHOLD = 3
 export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 W11：18 vs 3 → 18 vs 4（PG 侧补了事务边界的双引擎判据）。仍在观察名单内。
   'modules/intent/infrastructure/IntentApplyOperations: 20 vs 5',
-  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 5',
+  'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 6',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 8 vs 5',
 ]

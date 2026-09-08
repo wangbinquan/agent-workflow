@@ -194,4 +194,5 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly childLaunch: ChildExecutionLaunchOperations
   readonly processConcurrencyScope: object
   readonly identityAccess: NonNullable<RunTaskOptions['identityAccess']>
+  readonly dynamicWorkflow: NonNullable<RunTaskOptions['dynamicWorkflow']>
 }

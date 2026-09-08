@@ -9,7 +9,8 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { workflows } from '@/db/schema'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { agents, mcps, workflows } from '@/db/schema'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
@@ -18,6 +19,10 @@ import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/pa
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { agentFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/agentPersistence'
+import { mcpFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
+import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
+import { listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
@@ -26,6 +31,8 @@ import { resolveTaskDriveConfig } from '@/modules/task-execution/application/dri
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
 import {
   composePostgresqlTaskExecutionProviderRuntime,
   composeSqliteTaskExecutionProviderRuntime,
@@ -46,7 +53,33 @@ import type { ProviderHarness } from './eachProvider'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 
-/** The tested workflow has no code-host, dynamic-workflow or child-launch node.
+/** Real catalog rows and owner decoders supply the validation inventory on either DB. */
+export function createTestDynamicWorkflowOperations(
+  db: ProviderNeutralDatabase,
+): BoundRunTaskOptions['dynamicWorkflow'] {
+  const plugins = createPluginRepository({ db }).repository
+  return Object.freeze({
+    persistence: composeDynamicWorkflowPersistence(db),
+    validationContext: Object.freeze({
+      async load() {
+        const [agentRows, skills, mcpRows, pluginRows] = await Promise.all([
+          db.select().from(agents),
+          listSkills(db),
+          db.select().from(mcps),
+          plugins.list(),
+        ])
+        return {
+          agents: agentRows.map(agentFromPersistenceRow),
+          skills,
+          mcps: mcpRows.map(mcpFromPersistenceRow),
+          plugins: [...pluginRows],
+        }
+      },
+    }),
+  })
+}
+
+/** The tested workflow has no code-host or child-launch node.
  * Unexpected use fails explicitly; database and task execution are never mocked. */
 function unusedCapability<T>(name: string): T {
   return new Proxy(
@@ -82,6 +115,7 @@ export async function createEachProviderTaskExecution(
     resources,
   })
   const persistence = createTaskExecutionPersistence(db)
+  const dynamicWorkflow = createTestDynamicWorkflowOperations(db)
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
   const collaborationRuntime = createCollaborationRuntimeMechanics(db)
@@ -109,6 +143,7 @@ export async function createEachProviderTaskExecution(
           memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
           collaborationRuntime,
           workgroupTurns,
+          dynamicWorkflow,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
           runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
@@ -192,6 +227,7 @@ export async function createEachProviderTaskExecution(
         taskDagCollaboration: createTaskDagCollaborationOperations(db),
         collaborationRuntime,
         workgroupTurns,
+        dynamicWorkflow,
         identityAccess: runtimeIdentity,
         repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
         codeHostConnections: unusedCapability('code-host connection'),

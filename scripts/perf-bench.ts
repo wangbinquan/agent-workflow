@@ -1,111 +1,101 @@
-// RFC-311 T30 — proposal §6 指标实测(对 perf-seed 生成的基准库跑 HTTP 端点)。
-//
-//   bun run scripts/perf-seed.ts --db /tmp/aw-perf/agent-workflow.db
-//   bun run scripts/perf-bench.ts --db /tmp/aw-perf/agent-workflow.db
-//
-// 走 createApp + app.request(与生产同一条中间件/路由/服务链,不绕过鉴权),
-// 每个端点跑 N 轮报 p50/p95/max。§6 编号对照打在每行输出上。归档轮(§6.5)
-// 单独计时 archiveEvents 一轮。不进 CI 门禁——数字记录进
-// design/RFC-311-*/bench-results.md。
-
-/* eslint-disable no-console */
-
-import { mkdtempSync } from 'node:fs'
+// RFC-311 / RFC-359 AC11 — the original in-process HTTP timing boundary.
+// Seed and construct the real application before timing. Archive is a separate,
+// mutating phase after every HTTP sample; it is never a tenth P95 endpoint.
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { openDb } from '../packages/backend/src/db/client'
-import { archiveEvents } from '../packages/backend/src/services/eventsArchive'
-import { createApp } from '../packages/backend/src/server'
+import { openDb, type DbClient } from '../packages/backend/src/db/client'
+import type { PostgresqlDatabaseClient } from '../packages/backend/src/platform/persistence/postgresqlDatabaseClient'
+import { createPostgresqlEventsArchiveStore } from '../packages/backend/src/platform/persistence/postgresqlEventsArchive'
+import {
+  archiveEventsWithStore,
+  createSqliteEventsArchiveStore,
+} from '../packages/backend/src/services/eventsArchive'
+import { createProductionPerformanceApplication } from '../packages/backend/tests/helpers/productionPerformanceApplication'
+import { PERF_CORPUS_ENTRY } from './perf-corpus'
+import { PERF_HTTP_SCENARIOS, performanceStats, type PerfHttpScenarioResult } from './perf-compare'
 
-const argv = process.argv.slice(2)
-const flag = (name: string): string | undefined => {
-  const i = argv.indexOf(`--${name}`)
-  return i >= 0 ? argv[i + 1] : undefined
+export async function measurePerformanceHttp(input: {
+  readonly app: Awaited<ReturnType<typeof createProductionPerformanceApplication>>
+  readonly token: string
+  readonly rounds: number
+  readonly only?: string
+  readonly onScenario?: (result: PerfHttpScenarioResult) => void | Promise<void>
+}): Promise<PerfHttpScenarioResult[]> {
+  if (!Number.isSafeInteger(input.rounds) || input.rounds < 1)
+    throw new Error('rounds must be a positive integer')
+  const headers = { Authorization: `Bearer ${input.token}` }
+  const timed = async (path: string) => {
+    const started = performance.now()
+    const response = await input.app.request(path, { headers })
+    if (response.status !== 200)
+      throw new Error(`${path} -> ${response.status}: ${await response.text()}`)
+    const bytes = await response.arrayBuffer()
+    const milliseconds = performance.now() - started
+    return { bytes, milliseconds, status: response.status }
+  }
+  const results: PerfHttpScenarioResult[] = []
+  let nextCursor: string | null = null
+  for (const scenario of PERF_HTTP_SCENARIOS) {
+    if (input.only !== undefined && !`${scenario.id} ${scenario.label}`.includes(input.only))
+      continue
+    let path: string = scenario.path
+    if (scenario.id === 'tasks-second') {
+      // Even a --only second-page diagnostic uses the actual first HTTP response.
+      if (nextCursor === null) {
+        const first = await timed(PERF_HTTP_SCENARIOS[0].path)
+        nextCursor = (
+          JSON.parse(new TextDecoder().decode(first.bytes)) as { nextCursor: string | null }
+        ).nextCursor
+      }
+      if (typeof nextCursor !== 'string' || nextCursor.length === 0)
+        throw new Error('performance corpus has no second task page')
+      path += encodeURIComponent(nextCursor)
+    }
+    await timed(path) // Exactly one excluded warmup, as in RFC-311.
+    const samples: number[] = []
+    let last: Awaited<ReturnType<typeof timed>> | undefined
+    for (let i = 0; i < input.rounds; i += 1) {
+      last = await timed(path)
+      samples.push(last.milliseconds)
+    }
+    if (last === undefined) throw new Error('missing performance samples')
+    const body = JSON.parse(new TextDecoder().decode(last.bytes)) as {
+      schemaVersion?: string | number
+      items?: { id: string }[]
+      nextCursor?: string | null
+    }
+    if (scenario.id === 'tasks-first') nextCursor = body.nextCursor ?? null
+    const result: PerfHttpScenarioResult = {
+      id: scenario.id,
+      legacyPath: scenario.legacyPath,
+      path,
+      samples,
+      ...performanceStats(samples),
+      witness: {
+        status: last.status,
+        schemaVersion: body.schemaVersion ?? null,
+        itemIds: body.items?.map((item) => item.id) ?? [],
+        nextCursor: body.nextCursor ?? null,
+        responseDigest: createHash('sha256').update(new Uint8Array(last.bytes)).digest('hex'),
+      },
+    }
+    results.push(result)
+    await input.onScenario?.(result)
+  }
+  return results
 }
-const DB_PATH = resolve(flag('db') ?? '/tmp/aw-perf/agent-workflow.db')
-const ROUNDS = Number(flag('rounds') ?? 20)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'packages', 'backend', 'db', 'migrations')
-// perf-seed 落好的确定性只读 PAT(bootstrap 完成后 daemon token 失效)。
-const TOKEN = `aws_pat_${'ab'.repeat(32)}`
 
-const tmp = mkdtempSync(join(tmpdir(), 'aw-perf-bench-'))
-process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
-
-const db = openDb({ path: DB_PATH, migrationsFolder: MIGRATIONS })
-const app = createApp({
-  token: TOKEN,
-  configPath: join(tmp, 'config.json'),
-  opencodeVersion: '1.14.25',
-  dbVersion: 17,
-  db,
-})
-
-async function timed(path: string): Promise<number> {
-  const t0 = performance.now()
-  const res = await app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
-  if (res.status !== 200) throw new Error(`${path} -> ${res.status}: ${await res.text()}`)
-  await res.arrayBuffer()
-  return performance.now() - t0
-}
-
-function stats(samples: number[]): { p50: number; p95: number; max: number } {
-  const s = [...samples].sort((a, b) => a - b)
-  const at = (q: number): number => s[Math.min(s.length - 1, Math.floor(q * s.length))]!
-  return { p50: at(0.5), p95: at(0.95), max: s[s.length - 1]! }
-}
-
-/** `--only <子串>`:只跑标签命中的项(慢项单独复测用)。 */
-const ONLY = flag('only')
-
-async function bench(label: string, path: string, rounds: number = ROUNDS): Promise<void> {
-  if (ONLY !== undefined && !label.includes(ONLY)) return
-  await timed(path) // 预热(首轮含页缓存冷启动,不计入)
-  const samples: number[] = []
-  for (let i = 0; i < rounds; i += 1) samples.push(await timed(path))
-  const { p50, p95, max } = stats(samples)
-  const n = rounds === ROUNDS ? '' : `  (n=${rounds})`
-  console.log(
-    `${label.padEnd(44)} p50=${p50.toFixed(1).padStart(7)}ms  p95=${p95.toFixed(1).padStart(7)}ms  max=${max.toFixed(1).padStart(7)}ms${n}`,
-  )
-}
-
-console.log(`[perf-bench] db=${DB_PATH} rounds=${ROUNDS}\n`)
-
-// §6.1 /api/tasks/page:默认视图首页 + 翻页 + 切视图。
-await bench('§6.1 tasks/page default first page', '/api/tasks/page?limit=50')
-const first = await app.request('/api/tasks/page?limit=50', {
-  headers: { Authorization: `Bearer ${TOKEN}` },
-})
-const firstBody = (await first.json()) as { nextCursor: string | null }
-if (firstBody.nextCursor !== null) {
-  await bench(
-    '§6.1 tasks/page second page',
-    `/api/tasks/page?limit=50&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
-  )
-}
-// 过滤视图。RFC-311 G1 之前它走旧的穷举管线,10 万任务下单次 68 秒(一条不可
-// 打断的 SQL ⇒ 整站冻结),所以当时只跑 1 轮;G1 落地后走 root_task_id 分组的
-// 快路径,可以按正常轮次测 p95 了。
-// **注意**:这条只有在库里所有行都落了根时才走快路径——准入闸门发现任何未落根
-// 的行就整条退回旧管线(宁可慢不可错)。若这里又出现几十秒的数字,先查
-// `SELECT count(*) FROM tasks WHERE root_task_id IS NULL`,而不是先怀疑索引。
-await bench('§6.1 tasks/page running view (filtered)', '/api/tasks/page?limit=50&statuses=running')
-
-// §6.2 /api/cached-repos 分页。
-await bench('§6.2 cached-repos first page', '/api/cached-repos?limit=50')
-await bench('§6.2 cached-repos referenced view', '/api/cached-repos?limit=50&view=referenced')
-
-// §6.3 三徽章 + overview。
-await bench('§6.3 reviews/pending-count', '/api/reviews/pending-count')
-await bench('§6.3 clarify/pending-count', '/api/clarify/pending-count')
-await bench('§6.3 workgroup-tasks/pending-count', '/api/workgroup-tasks/pending-count')
-await bench('§6.3 overview', '/api/overview')
-
-// §6.5 归档器单轮(默认阈值;基准库热点 run 远超 5 万行,必然做功)。
-{
-  const t0 = performance.now()
-  const result = await archiveEvents(
-    db,
+export async function measurePerformanceArchive(
+  db: DbClient | PostgresqlDatabaseClient,
+  logDir: string,
+) {
+  const started = performance.now()
+  const store =
+    '$provider' in db ? createPostgresqlEventsArchiveStore(db) : createSqliteEventsArchiveStore(db)
+  const result = await archiveEventsWithStore(
+    store,
     {
       eventsArchiveThresholds: {
         perNodeRunRows: 50_000,
@@ -114,13 +104,50 @@ await bench('§6.3 overview', '/api/overview')
         globalBytes: 256 * 1024 * 1024,
       },
     },
-    join(tmp, 'logs'),
+    logDir,
   )
-  const ms = performance.now() - t0
-  console.log(
-    `${'§6.5 archiveEvents one round'.padEnd(44)} took=${ms.toFixed(1).padStart(7)}ms  archived=${result.perGroupArchived + result.globalArchived}`,
-  )
+  return { milliseconds: performance.now() - started, ...result }
 }
 
-console.log('\n[perf-bench] done')
-process.exit(0)
+if (import.meta.main) {
+  const args = process.argv.slice(2)
+  const flag = (name: string): string | undefined => {
+    const index = args.indexOf(`--${name}`)
+    return index < 0 ? undefined : args[index + 1]
+  }
+  const path = resolve(flag('db') ?? '/tmp/aw-perf/agent-workflow.db')
+  const rounds = Number(flag('rounds') ?? 20)
+  const temp = mkdtempSync(join(tmpdir(), 'aw-perf-bench-'))
+  const appHome = join(temp, 'home')
+  mkdirSync(appHome, { recursive: true })
+  process.env.AGENT_WORKFLOW_HOME = appHome
+  const db = openDb({
+    path,
+    migrationsFolder: resolve(import.meta.dir, '../packages/backend/db/migrations'),
+  })
+  try {
+    const app = await createProductionPerformanceApplication({
+      db,
+      appHome,
+      configPath: join(temp, 'config.json'),
+      daemonToken: PERF_CORPUS_ENTRY.bearerToken,
+    })
+    await measurePerformanceHttp({
+      app,
+      token: PERF_CORPUS_ENTRY.bearerToken,
+      rounds,
+      only: flag('only'),
+      onScenario: (result) => {
+        console.log(
+          `${result.id.padEnd(24)} p50=${result.p50.toFixed(1)}ms p95=${result.p95.toFixed(1)}ms max=${result.max.toFixed(1)}ms (n=${rounds})`,
+        )
+      },
+    })
+    console.log(
+      '[perf-bench] archive phase',
+      await measurePerformanceArchive(db, join(temp, 'logs')),
+    )
+  } finally {
+    db.$client.close()
+  }
+}
