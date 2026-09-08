@@ -5,9 +5,9 @@ import { taskRepos, tasks } from '@/db/schema'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import { DrizzleTaskExecutionEffectPersistence } from './taskExecutionEffectPersistence'
 
-export type LegacySqliteRollbackDatabase = ProviderNeutralDatabase
+export type NodeRollbackDatabase = ProviderNeutralDatabase
 
-export async function loadLegacySqliteRollbackTarget(db: ProviderNeutralDatabase, taskId: string) {
+export async function loadNodeRollbackTarget(db: ProviderNeutralDatabase, taskId: string) {
   const taskRows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
   const task = taskRows[0]
   if (task === undefined) return null
@@ -32,7 +32,7 @@ export async function loadLegacySqliteRollbackTarget(db: ProviderNeutralDatabase
   }
 }
 
-export function createLegacySqliteRollbackEffectObserver(input: {
+export function createNodeRollbackEffectObserver(input: {
   readonly db: ProviderNeutralDatabase
   readonly taskId: string
   readonly nodeRunId: string

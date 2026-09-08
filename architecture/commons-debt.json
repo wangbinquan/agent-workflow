@@ -3642,54 +3642,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/nodeRollback.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRollback",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5a363d172c4c62473920"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#LegacySqliteRollbackDatabase"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/nodeRollback.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/nodeRollback.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRollback",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:1f3d8e6dcca872f59b38",
-        "import:714602f179c3ce9ed3be"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#createLegacySqliteRollbackEffectObserver",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#loadLegacySqliteRollbackTarget"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/nodeRollback.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/nodeRunMint.ts",
       "to": "packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord",
       "specifier": "@/modules/task-execution/application/buildNodeRunMintRecord",
@@ -7615,6 +7567,54 @@
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/users.ts"
       ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/nodeRollback.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "specifier": "@/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d28779cca316098b7600"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#NodeRollbackDatabase"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/nodeRollback.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/nodeRollback.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "specifier": "@/modules/task-execution/infrastructure/nodeRollbackPersistence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2d2f5d3d9b8adb8c0c95",
+        "import:a11dc495c174c3dd4863"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#createNodeRollbackEffectObserver",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#loadNodeRollbackTarget"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/nodeRollback.ts"
+      ]
     }
   ],
   "registeredFindings": [
@@ -8795,15 +8795,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7adcf6c86f4721972045d174bea5a9bfa17b33c1c9c02b82b0402bfd50fb069c",
+    "sourceDigest": "sha256:2ae1826564e410131b7133d15e77fb7fd6ca1918aa3a275d08fe759ed792f0ae",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "c24935b53f2ad97ee9dbb69ef6ab17a1edb94be3",
-    "contentDigest": "sha256:6c993bc95d9fc01126b0eb8d3ce9260e9bf463719d612e9ac6acaa2b50092dfd",
+    "currentSnapshotSha": "26b43805b873a1f103192918a4b8c00bc041aa2b",
+    "contentDigest": "sha256:5aadef93b440174583ab55b07ad92e46d1896b4af160f21df308a296875c2466",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

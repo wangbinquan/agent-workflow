@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
-
-import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents as agentRows } from '@/db/schema'
 import {
   projectDevelopmentToolInputV2,
@@ -38,7 +36,6 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NONCE = 'a'.repeat(64)
 
 const context = (typeId: string, state: unknown, index: number) => ({
@@ -646,23 +643,26 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
   // reworded template stopped the daemon on every already-seeded database. The
   // retained collision refusal is covered in
   // tests/digital-employee-agent-template-reconcile.test.ts.
-  test('v2 built-in IDs are create-or-converge and repair a drifted definition', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
-      db,
-      composeDigitalEmployeeAgentTemplateCatalogParticipant,
-    )
-    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
-    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
-    expect(await listDigitalEmployeeAgentTemplates(agentTemplates)).toHaveLength(8)
+  describeEachProvider('persisted built-in template convergence', (harness) => {
+    test('v2 built-in IDs are create-or-converge and repair a drifted definition', async () => {
+      const db = harness.db
+      const agentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
+        db,
+        composeDigitalEmployeeAgentTemplateCatalogParticipant,
+      )
+      await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+      await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+      expect(await listDigitalEmployeeAgentTemplates(agentTemplates)).toHaveLength(8)
 
-    db.update(agentRows)
-      .set({ description: 'changed occupied definition' })
-      .where(eq(agentRows.id, DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[0]))
-      .run()
-    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
-    expect((await listDigitalEmployeeAgentTemplates(agentTemplates))[0]?.description).toBe(
-      DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2[0]?.definition.description,
-    )
+      await db
+        .update(agentRows)
+        .set({ description: 'changed occupied definition' })
+        .where(eq(agentRows.id, DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[0]))
+        .run()
+      await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+      expect((await listDigitalEmployeeAgentTemplates(agentTemplates))[0]?.description).toBe(
+        DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2[0]?.definition.description,
+      )
+    })
   })
 })

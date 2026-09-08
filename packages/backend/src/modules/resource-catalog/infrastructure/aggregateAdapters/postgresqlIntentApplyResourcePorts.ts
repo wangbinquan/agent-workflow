@@ -71,7 +71,7 @@ import {
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
-import { workgroupDraftMemberOf } from '../workgroupPersistence'
+import { workgroupDraftMemberOf, workgroupMemberPersistenceValues } from '../workgroupPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import type {
   PostgresqlIntentApplyArtifact,
@@ -1361,21 +1361,7 @@ async function workgroupMemberValues(
   if (inactive.length > 0) {
     throw new ValidationError('workgroup-human-inactive', 'workgroup human members must be active')
   }
-  return members.map((member, sortOrder) => ({
-    id: nextId(),
-    workgroupId,
-    memberType: member.memberType,
-    agentName:
-      member.memberType === 'agent' && member.agentId !== undefined
-        ? (names.get(member.agentId) ?? null)
-        : null,
-    agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
-    userId: member.memberType === 'human' ? (member.userId ?? null) : null,
-    displayName: member.displayName,
-    roleDesc: member.roleDesc,
-    sortOrder,
-    createdAt: now,
-  }))
+  return workgroupMemberPersistenceValues(workgroupId, members, now, names, nextId, 'defined')
 }
 
 function leaderMemberId(

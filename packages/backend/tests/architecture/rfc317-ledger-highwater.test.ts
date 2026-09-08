@@ -272,6 +272,12 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   //    与债务无关；反过来把它们钉住会让「给 matcher 补一条自证」变成要改基线的事。
   'packages/backend/tests/architecture/rfc359-w5-adapter-production-consumer.test.ts|FIXTURE_EXPECTED_DECLARATIONS':
     'matcher 自证的假语料（__fixture__/thing.ts），不来自真实仓库',
+  'packages/backend/tests/rfc359-w26-workgroup-empty-scan.test.ts|observedValues':
+    '固定的工作组字符串输入夹具（含空字符串和 Unicode），用于原查询完整返回值对拍，不是仓库债务或允许名单',
+  'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|directMembers':
+    '固定成员输入夹具，用于原十列映射及读取顺序对拍，不是仓库扫描或豁免清单',
+  'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|fields':
+    '原成员行的十个有序字段，断言完整对象属性顺序，不是仓库债务或高水位',
   'packages/backend/tests/rfc359-w12-clarify-inline-session-log.test.ts|EXPECTED_DESIGNER_SESSIONS':
     '真实子进程夹具的两次 designer session 与日志末尾换行预期，不是仓库扫描结果或债务豁免表',
   'packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts|FIXTURE_SOURCES':
@@ -370,6 +376,9 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       'packages/backend/tests/intent-teaching-registry.test.ts|VALIDATOR_BASELINE',
       'packages/backend/tests/rfc326-mcp-review-tools.test.ts|READ_TOOLS',
       'packages/backend/tests/rfc359-w12-clarify-inline-session-log.test.ts|EXPECTED_DESIGNER_SESSIONS',
+      'packages/backend/tests/rfc359-w26-workgroup-empty-scan.test.ts|observedValues',
+      'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|directMembers',
+      'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|fields',
     ])
   })
 

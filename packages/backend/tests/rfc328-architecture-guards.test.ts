@@ -108,7 +108,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
         actCallees: new Set(['rollbackToSnapshot']),
         observerCallees: new Set([
           'createLocalEffectAttemptObserver',
-          'createLegacySqliteRollbackEffectObserver',
+          'createNodeRollbackEffectObserver',
         ]),
       },
     ],

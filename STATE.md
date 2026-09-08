@@ -2,6 +2,17 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十六批（2026-09-09）**：空工作组同SQL索引存在性输入保留原有序查询，SQLite惰性扫描及完整行/JSON对拍已证。
+> 共用Workgroup十列成员映射净减10生产行；中立node rollback改名净0行，provider命名账目61→60。
+> 修复异步load后取消仍沿旧快照调度的窗口，原RFC215全字节/断言/预算保留，新旧14 pass/89 expect，等待提交负控指定红。
+> 再迁3旧套件至累计229；5原DB+原cross源锁本地6 pass/21 expect，其余60展开单跑例未本地执行。
+> 当前1939测试文件、618构库文件/1277调用、605构库文件无harness、415文件harness，T19f704→701。
+> W25 exact26b43805b Main34269304467终态33success/4failure/3cancelled；八Ubuntu1935文件恰一次，98选定执行全过。
+> W25原full34269414114的12成员/360raw/原五表6receipt/13官方源均已核；5项PG更慢、4项绝对预算失败。
+> 四项为tasks-first两库150ms、workgroup-pending SQLite10ms、overview PG10ms；原稳定投影九项相同，完整body摘要八项相同。
+> 最终backend tsc、207功能metadata/427 expect、13canonical/55 expect及定向lint/format通过；三type-only修正与首次账目失败留证。
+> canonical1740/272/983/5328/4795/25050保持。W26新SHA真实PG与原full待托管，无本地服务/性能/完整门禁，RFC及六项剩余AC继续开放。
+
 > **RFC-359 W12 第二十五批（2026-09-09）**：任务页有限物理前缀有严格完备性证明与原全量回退，保持同SQL快照及原页槽。
 > 原过滤/facets不变；SQLite实际索引计划与惰性回退已证，新/原控制24 pass/1920 expect，三个SQL变异指定红。
 > Overview仅复用SQL AST，固定夹具生成12→3、编译/prepare/all各12保持；原后整行、录制和事务边界相同。

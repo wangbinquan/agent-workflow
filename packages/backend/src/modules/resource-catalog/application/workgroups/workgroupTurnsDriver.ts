@@ -2662,6 +2662,11 @@ export function createWorkgroupTurnsOperations(
           return fatalOutcome
         }
         const snapshot = await persistence.load(input.taskId)
+        // Cancellation can arrive while the snapshot read is in flight.
+        if (input.signal?.aborted) {
+          await Promise.allSettled(inflight.values())
+          return { kind: 'canceled' }
+        }
         if (snapshot === null || snapshot.config.mode === 'dynamic_workflow') {
           return {
             kind: 'failed',

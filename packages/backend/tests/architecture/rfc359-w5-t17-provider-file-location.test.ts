@@ -146,7 +146,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets.ts',
   'modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts',
   'modules/task-execution/composition/sqliteTaskExecutionContext.ts',
-  'modules/task-execution/infrastructure/legacySqliteNodeRollback.ts',
   'modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts',
   'modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts',
   'modules/task-execution/infrastructure/legacySqliteTaskDatabase.ts',

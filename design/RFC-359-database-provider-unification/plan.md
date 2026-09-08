@@ -21,20 +21,20 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 「完整落地」= proposal §7 的 12 条 AC 全部达成。逐条实测状态如下——**数字都是跑出来的，不是估的**；
 本波仍有多刀在跑，未达成项的数字会继续动。
 
-| AC    | 判据                                              | 实测                                                                                                                                                                                                        | 状态   |
-| ----- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录文件对 153 → 9，全部有登记；resource-catalog 仍有跨目录或内联孪生，不能用同目录扫描归零宣称全部合一                                                                                                   | 进行中 |
-| AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                              | ✅     |
-| AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                      | ✅     |
-| AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                   | ✅     |
-| AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                            | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前AST为1935测试文件；621文件/1280次实际 `createInMemoryDb`，608构库文件无harness；408文件使用harness。W25再迁4旧套件，累计226；W24八Ubuntu1933文件恰一次，40原DB例及成员投影两库均过；本批30原DB例待新SHA | 进行中 |
-| AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                             | ✅     |
-| AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                                            | 进行中 |
-| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                                                           | 待办   |
-| AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                            | ✅     |
-| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最近exact `dfb8427f3` 原full的360样本已核，仍5/9项PG更慢、4项原绝对预算失败。W25有限物理前缀及Overview AST复用有功能/机制证据，真实PG计划与原full P95待新SHA                                                | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 9，未构造根账本 0 项；协作四能力与完整动态工作流合同已收紧，九个诊断为四个作用域查询、四个协作检查和一个保留的兼容诊断；provider 命名文件 88 → 61，残余继续核验                       | 进行中 |
+| AC    | 判据                                              | 实测                                                                                                                                                                                                  | 状态   |
+| ----- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录文件对 153 → 9，全部有登记；resource-catalog 仍有跨目录或内联孪生，不能用同目录扫描归零宣称全部合一                                                                                             | 进行中 |
+| AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                        | ✅     |
+| AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                | ✅     |
+| AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                             | ✅     |
+| AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                      | ✅     |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1939测试文件；618文件/1277次实际 `createInMemoryDb`，605构库文件无harness，415文件使用harness。W26再迁3旧套件，累计229；W25八Ubuntu1935文件恰一次、30原DB例及新查询用例两库过；本批5原DB例待新SHA | 进行中 |
+| AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                       | ✅     |
+| AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                                      | 进行中 |
+| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | 尚未获得完整 RFC 的终态证明；每批 CI 单独记证据，不能将取消或重试通过当成全量覆盖                                                                                                                     | 待办   |
+| AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                      | ✅     |
+| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | exact `26b43805b` 原full360样本已核：5/9项PG更慢、4项原绝对预算失败。W26空工作组索引存在性前置保护有同SQL/完整顺序与SQLite惰性扫描证据，真实PG及原full收益待新SHA                                     | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 9，未构造根账本 0 项；协作四能力与完整动态工作流合同已收紧，九个诊断为四个作用域查询、四个协作检查和一个保留的兼容诊断；provider 命名文件 88 → 60，残余继续核验                 | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -1385,6 +1385,74 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
   10万任务/300万run/1000万event/10万delivery、1 warmup+20轮×9×2=360raw与原floor P95、
   每项PG≤SQLite及原绝对预算均保持。最近W23原full仍5/9项PG更慢、4项原绝对预算失败；
   W25真实PG计划、双库行为和原full效果待新SHA。AC1/6/8/9/11/12与RFC继续开放，W20历史限制保留。
+
+### W12 第二十六批：工作组空表路径、取消窗口与剩余迁移
+
+- W25 exact `26b43805b873a1f103192918a4b8c00bc041aa2b` 的Main `34269304467`
+  首次终态33 success/4 failure/3 cancelled。后端matrix为8 success/1 failure/3 cancelled，
+  独立真PG成功；完整Main仍非绿。八Ubuntu为242×7+241，1935文件与官方Git tree及
+  sorted-modulo8逐项相同，缺漏/额外/重复均0；35官方blob与28发布路径及贡献清单已核。
+  四旧套件30SQLite+30PG=60，新任务页27、Overview6、原W23页控制5，共98次全部通过。
+  Ubuntu3在既有RFC215批/消息并发例返回awaiting_human；本批修复其可确定复现的取消窗口。
+  三macOS作业取消，不能作为完整验证；rfc301首个功能调用归属扫描另有6.249s超过原5s的
+  日志，后续仅保原语料/判据/预算优化扫描，未以扩大时限或重试替代结果。
+- 原full `34269414114`、job `102206909486`、artifact `10074425853` 终态失败。
+  官方ZIP 188670字节/12成员、8份报告源+4份诊断源+workflow精确blob、6份五表原投影
+  receipt、360 raw和18组floor分位均已独立复算；相同机器、语料与计时边界保持。
+  下表是本次原P95，单位ms；20样本的floor P95等于max，原绝对预算另行判断：
+
+| 场景              | SQLite P95 | PostgreSQL P95 |
+| ----------------- | ---------: | -------------: |
+| tasks-first       | 201.970369 |     159.312264 |
+| tasks-second      |  74.026891 |     107.673408 |
+| tasks-running     |  80.880399 |      63.894685 |
+| repos-first       |   3.791699 |       7.322796 |
+| repos-referenced  |  10.929143 |       7.161466 |
+| reviews-pending   |   4.057444 |       4.619205 |
+| clarify-pending   |   1.917099 |       6.011827 |
+| workgroup-pending |  22.191984 |       6.670512 |
+| overview          |   3.836523 |      10.739894 |
+
+PG更慢项是tasks-second/repos-first/reviews-pending/clarify-pending/overview；
+原绝对预算失败是tasks-first两库150ms、workgroup-pending SQLite10ms、overview PG10ms。
+原稳定投影九项相同，最后完整body摘要八项相同、overview不同；未上传原body，不推断差异原因。
+诊断profile在全部HTTP样本后，不计入P95；跨run变化不能单独归因于W25优化。
+
+- W26空工作组路径仅在原SELECT左侧增加既有workgroup索引的LIMIT1存在性输入，然后
+  CROSS JOIN原tasks。`workgroup_id >= ''`保持空字符串；左侧空时不消费原右侧扫描，非空时
+  保留全部原投影/谓词/数组顺序。未新增DDL、provider分支或第二语句。新6DB例默认双库、
+  2纯例单跑；本地8 pass/321 expect。9次同事务原后对拍，每phase912次重复行观察、
+  63840全字段及4560 JSON容器值相同；其中12非空返回行与W23原收据完整JSON及顺序相同。
+  SQLite真实covering-index计划与行相关malformedJSON注入证明空输入惰性；旧模块和
+  错误排除空字符串两个负控指定红。无网络PG编译不能代表真实PG计划/顺序或full收益。
+- 共享原Workgroup成员十列mapper，保留默认truthy和Intent明确defined的空字符串区别，
+  原属性/getter/ID求值顺序不变；两生产源净减10行。新原/后14 pass/80 expect，与两个
+  原控制合跑30/347；17真实写入后的36次重复完整行观察、547字段与SQL/绑定/JSON均相同。
+  两默认DB例真正执行SQLite完整Intent create/update/replay和写后rollback，PG待托管。
+- 既有ProviderNeutralDatabase的node rollback模块及三个符号改为中立名称；两生产文件
+  整体逆改名逐字恢复，343行保持，真实DbTxSync邻接实现不变，不算合一两份算法。
+  T17命名账目61→60，provider-specific依赖原扫描1→0，原服务边界及observer source锁同步。
+  五新DB例原/后5 pass/29 expect，9份真实快照中840字段与完整JSON相同；observer只验
+  无context时零SQL，未宣称覆盖实际有context的PG effect执行。
+- 取消修复只在驱动await load后增5行，复用原inflight allSettled再返回canceled。
+  正式两新DB例仅延迟真实persistence.load/commit的continuation，不替换数据或返回值：
+  原生产1指定红/1绿，修后新2+原RFC21512共14 pass/89 expect；删除等待在途提交的
+  定点变异指定红。确定序列的旧running卡快照触发clarify-or-delivery分支；PG历史日志没有
+  轨序，未声称该序列就是历史失败的唯一原因。原RFC215全字节、12case/66matcher及预算保持。
+- 再迁cross-clarify-designer-rerun-no-rollback、rfc164-workgroup-core、
+  rfc318-minimal-digital-employee-tool-contracts三旧套件，累计226→229。5原DB例默认双库，
+  58静态声明/200完整matcher/7seed/53非provider回调AST保持；运行展开为5×2+61单跑。
+  本地只执行5DB+原cross source guard，原/后均6 pass/21 expect；其余60展开例未本地执行。
+  53次真实INSERT/UPDATE快照、221次重复行观察、5568字段/1374 JSON容器值一致。
+  当前1939测试文件、618构库文件/1277调用、605构库文件无harness、415文件harness；
+  T19f704→701，无新增构库豁免。入口1740/事务272/public983/imports5328/
+  exceptions4795/symbols25050保持；两原commons-debt边按新路径登记，opaque解释未改。
+  T19d只更新实际引用三条；T72具名登记三个固定输入/字段夹具，并保原matcher及exact key锁。
+- 首次统一tsc三处新测试类型错误已用索引非空断言及Promise显式泛型修正，完整emitted JS
+  均保持；首次metadata五处账目差异已按真实扫描修正。原失败日志留证，最终完整backend
+  tsc、207项功能metadata/427 expect、13项canonical/55 expect及定向lint/format通过。
+  本批未运行本地PG、服务、E2E、性能或完整门禁；新SHA真PG与原full待托管，原语料、
+  1 warmup+20轮、9端点、原分位和所有比较/绝对预算不变。AC1/6/8/9/11/12继续开放，W20历史限制保留。
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 

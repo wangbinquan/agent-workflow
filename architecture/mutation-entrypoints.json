@@ -26056,30 +26056,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#createLegacySqliteRollbackEffectObserver",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#createLegacySqliteRollbackEffectObserver",
-      "symbol": "createLegacySqliteRollbackEffectObserver",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -26098,6 +26074,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
       "symbol": "createLegacySqliteNodeRunOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#createNodeRollbackEffectObserver",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#createNodeRollbackEffectObserver",
+      "symbol": "createNodeRollbackEffectObserver",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -41567,7 +41567,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7adcf6c86f4721972045d174bea5a9bfa17b33c1c9c02b82b0402bfd50fb069c",
+  "sourceDigest": "sha256:2ae1826564e410131b7133d15e77fb7fd6ca1918aa3a275d08fe759ed792f0ae",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -44171,8 +44171,8 @@
         "controlSubtype": "membership-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#161:tasks",
-        "line": 161,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#164:tasks",
+        "line": 164,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44187,8 +44187,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#234:tasks",
-        "line": 234,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#237:tasks",
+        "line": 237,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44203,8 +44203,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#312:tasks",
-        "line": 312,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#315:tasks",
+        "line": 315,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

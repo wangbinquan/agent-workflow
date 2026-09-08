@@ -26,15 +26,15 @@ import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
 import {
-  createLegacySqliteRollbackEffectObserver,
-  loadLegacySqliteRollbackTarget,
-  type LegacySqliteRollbackDatabase,
-} from '@/modules/task-execution/infrastructure/legacySqliteNodeRollback'
+  createNodeRollbackEffectObserver,
+  loadNodeRollbackTarget,
+  type NodeRollbackDatabase,
+} from '@/modules/task-execution/infrastructure/nodeRollbackPersistence'
 import type { TaskRollbackQueries } from '@/modules/task-execution/application/ports/taskRollbackQueries'
 
 export interface RollbackTarget {
   taskId?: string
-  db?: LegacySqliteRollbackDatabase
+  db?: NodeRollbackDatabase
   repoCount: number
   /** Single-repo worktree; for multi-repo this is the container dir (never rolled back in retry mode). */
   worktreePath: string
@@ -105,10 +105,10 @@ export function planNodeRunRollbackTargets(
  * the scheduler uses for rows predating the multi-repo migration.
  */
 export async function loadRollbackTarget(
-  db: LegacySqliteRollbackDatabase,
+  db: NodeRollbackDatabase,
   taskId: string,
 ): Promise<RollbackTarget | null> {
-  return await loadLegacySqliteRollbackTarget(db, taskId)
+  return await loadNodeRollbackTarget(db, taskId)
 }
 
 /** Provider-selected target loader used by PostgreSQL and new SQLite callers. */
@@ -199,7 +199,7 @@ export async function rollbackNodeRunWorktrees(
     const effect =
       target.taskId === undefined || target.db === undefined
         ? undefined
-        : createLegacySqliteRollbackEffectObserver({
+        : createNodeRollbackEffectObserver({
             db: target.db,
             taskId: target.taskId,
             nodeRunId: run.id,
@@ -259,7 +259,7 @@ export async function rollbackNodeRunWorktrees(
   const effect =
     target.taskId === undefined || target.db === undefined
       ? undefined
-      : createLegacySqliteRollbackEffectObserver({
+      : createNodeRollbackEffectObserver({
           db: target.db,
           taskId: target.taskId,
           nodeRunId: run.id,

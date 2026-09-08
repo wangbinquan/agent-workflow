@@ -6,7 +6,7 @@ import {
   type NodeRunStatus,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { nodeRuns, taskCollaborators, tasks } from '@/db/schema'
@@ -94,7 +94,10 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
   async function listActive(): Promise<readonly WorkgroupTaskRoomTaskSnapshot[]> {
     const rows = await tx
       .select(taskProjection)
-      .from(tasks)
+      .from(
+        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1) AS nonempty_workgroup_scan`,
+      )
+      .crossJoin(tasks)
       .where(
         and(isNotNull(tasks.workgroupId), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])),
       )

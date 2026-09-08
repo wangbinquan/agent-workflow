@@ -23,12 +23,13 @@
 // scheduler-audit-s11-stash-gc-prune-rollback.test.ts; NOT RUN_GIT_NETWORK-gated.
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
+import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -37,8 +38,6 @@ import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 const actor = { userId: 'u1', role: 'owner' as const }
 
 // RFC-162: designer-by-default is DELETED — answering a cross round no longer auto-creates a
@@ -46,7 +45,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // minted by reassigning the answered round's questioner card to the graph designer node +
 // dispatching that designer entry (dispatchTaskQuestions frontier mint) — the SAME live path.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   crossClarifyNodeRunId: string,
 ) {
@@ -131,7 +130,7 @@ function triadDef(): WorkflowDefinition {
  *  `loadRollbackTarget(db, taskId)` → tasks.worktreePath) would actually fire
  *  and flip this test red. */
 async function seedTaskAndDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   worktreePath: string,
   preSnapshot: string,
@@ -148,6 +147,10 @@ async function seedTaskAndDesigner(
   await db.insert(tasks).values({
     id: taskId,
     name: 'fixture-task',
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     workflowId: `wf_${taskId}`,
     workflowSnapshot: JSON.stringify(def),
     repoPath: worktreePath,
@@ -184,59 +187,61 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
   })
   afterEach(() => repo.cleanup())
 
-  test('designer rerun preserves the worktree — designer + downstream output survive', async () => {
-    // Dirty TRACKED change at snapshot time → non-empty stash sha (the value
-    // the designer's pre_snapshot would hold in production).
-    writeFileSync(join(repo.path, 'a.txt'), 'snapshot-state\n')
-    const sha = await gitStashSnapshot(repo.path)
-    expect(sha).toMatch(/^[a-f0-9]{40}$/)
+  describeEachProvider('persisted designer rerun', (harness) => {
+    test('designer rerun preserves the worktree — designer + downstream output survive', async () => {
+      // Dirty TRACKED change at snapshot time → non-empty stash sha (the value
+      // the designer's pre_snapshot would hold in production).
+      writeFileSync(join(repo.path, 'a.txt'), 'snapshot-state\n')
+      const sha = await gitStashSnapshot(repo.path)
+      expect(sha).toMatch(/^[a-f0-9]{40}$/)
 
-    // The designer's output + a downstream node's output, written ON TOP as
-    // untracked files. `git clean -fd` (the old rollback's second step) is
-    // exactly what would delete these.
-    writeFileSync(join(repo.path, 'design.md'), 'designer v1\n')
-    writeFileSync(join(repo.path, 'downstream.txt'), 'coder output\n')
+      // The designer's output + a downstream node's output, written ON TOP as
+      // untracked files. `git clean -fd` (the old rollback's second step) is
+      // exactly what would delete these.
+      writeFileSync(join(repo.path, 'design.md'), 'designer v1\n')
+      writeFileSync(join(repo.path, 'downstream.txt'), 'coder output\n')
 
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = 'task_norollback'
-    await seedTaskAndDesigner(db, taskId, repo.path, sha)
+      const db = harness.db
+      const taskId = 'task_norollback'
+      await seedTaskAndDesigner(db, taskId, repo.path, sha)
 
-    // Seed an awaiting cross round, answer it, then reassign to the designer + dispatch — the
-    // designer rerun comes out of the unified dispatch (RFC-162: via reassign, not scope).
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_questioner_done',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
+      // Seed an awaiting cross round, answer it, then reassign to the designer + dispatch — the
+      // designer rerun comes out of the unified dispatch (RFC-162: via reassign, not scope).
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_questioner_done',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      })
+      await autoDispatchClarifyRound({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossClarifyNodeRunId,
+        answers: [makeAns('q1')],
+        actor,
+      })
+      const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
+
+      // The answer ran to completion: a fresh pending designer row was minted.
+      const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
+      expect(designerRerun).toBeDefined()
+      const fresh = (
+        await db.select().from(nodeRuns).where(eq(nodeRuns.id, designerRerun!.nodeRunId))
+      )[0]
+      expect(fresh?.status).toBe('pending')
+
+      // CORE LOCK: the worktree is untouched. The pre-patch rollback would have
+      // `git clean -fd`'d both untracked files (RED). No rollback → both survive
+      // with their post-snapshot content intact.
+      expect(existsSync(join(repo.path, 'design.md'))).toBe(true)
+      expect(existsSync(join(repo.path, 'downstream.txt'))).toBe(true)
+      expect(readFileSync(join(repo.path, 'design.md'), 'utf8')).toBe('designer v1\n')
     })
-    await autoDispatchClarifyRound({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossClarifyNodeRunId,
-      answers: [makeAns('q1')],
-      actor,
-    })
-    const disp = await reassignThenDispatchDesigner(db, taskId, crossClarifyNodeRunId)
-
-    // The answer ran to completion: a fresh pending designer row was minted.
-    const designerRerun = disp.reruns.find((r) => r.targetNodeId === 'designer')
-    expect(designerRerun).toBeDefined()
-    const fresh = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, designerRerun!.nodeRunId))
-    )[0]
-    expect(fresh?.status).toBe('pending')
-
-    // CORE LOCK: the worktree is untouched. The pre-patch rollback would have
-    // `git clean -fd`'d both untracked files (RED). No rollback → both survive
-    // with their post-snapshot content intact.
-    expect(existsSync(join(repo.path, 'design.md'))).toBe(true)
-    expect(existsSync(join(repo.path, 'downstream.txt'))).toBe(true)
-    expect(readFileSync(join(repo.path, 'design.md'), 'utf8')).toBe('designer v1\n')
   })
 
   test('source guard: the cross-clarify service + the unified dispatch mint do not reference the rollback helpers', () => {

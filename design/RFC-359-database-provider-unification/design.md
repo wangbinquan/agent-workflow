@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W26工作组为空时，单条SQL左侧先沿既有workgroup索引取一个非NULL TEXT值，空字符串
+  仍有效；右侧CROSS JOIN保留原任务投影、过滤及非空数组顺序，未新增索引或改变快照边界。
+  SQLite小库证明空左侧不消费右侧原扫描；真实PG顺序、计划与原full收益待托管。
+- Workgroup成员十列映射保留原默认truthy与Intent显式defined两种presence语义、属性/ID
+  求值顺序，外层写入与回滚不变。node rollback仅对既有中立实现改名，真实同步邻接实现保留。
+- 工作组驱动在await load返回后再次检查取消，沿原inflight drain等待已有提交再返回canceled；
+  原RFC215用例/断言不改。确定性回归证明可发生的旧快照窗口，不反推已失败PG作业的历史轨序。
+
 - W25任务页先按既有started_at/id索引取4×(limit+1)物理行，仅在全表已尽或候选页
   最旧匹配时间严格大于前缀尾时间时采用页内root聚合；否则执行原全量MAX/GROUP BY。
   两分支、过滤、facets与family读取保持同一SQL快照，NULL/缺失root仍占原页槽，深cursor

@@ -128502,54 +128502,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#createLegacySqliteRollbackEffectObserver",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createLegacySqliteRollbackEffectObserver",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#LegacySqliteRollbackDatabase",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LegacySqliteRollbackDatabase",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#loadLegacySqliteRollbackTarget",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "loadLegacySqliteRollbackTarget",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#$file",
       "removeAfterWave": null,
@@ -128963,6 +128915,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "whereQuery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#createNodeRollbackEffectObserver",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createNodeRollbackEffectObserver",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#loadNodeRollbackTarget",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "loadNodeRollbackTarget",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#NodeRollbackDatabase",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NodeRollbackDatabase",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -301302,5 +301302,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7adcf6c86f4721972045d174bea5a9bfa17b33c1c9c02b82b0402bfd50fb069c"
+  "sourceDigest": "sha256:2ae1826564e410131b7133d15e77fb7fd6ca1918aa3a275d08fe759ed792f0ae"
 }

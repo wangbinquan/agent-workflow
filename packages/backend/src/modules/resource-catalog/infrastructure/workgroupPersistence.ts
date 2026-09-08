@@ -174,13 +174,17 @@ export function workgroupMemberPersistenceValues(
   now: number,
   names: ReadonlyMap<string, string>,
   nextId: () => string,
+  agentNamePresence: 'truthy' | 'defined' = 'truthy',
 ): Array<typeof workgroupMembers.$inferInsert> {
   return members.map((member, index) => ({
     id: nextId(),
     workgroupId,
     memberType: member.memberType,
     agentName:
-      member.memberType === 'agent' && member.agentId ? (names.get(member.agentId) ?? null) : null,
+      member.memberType === 'agent' &&
+      (agentNamePresence === 'defined' ? member.agentId !== undefined : member.agentId)
+        ? (names.get(member.agentId!) ?? null)
+        : null,
     agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
     userId: member.memberType === 'human' ? (member.userId ?? null) : null,
     displayName: member.displayName,

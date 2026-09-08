@@ -5,10 +5,10 @@
 // (design §1.4/§4.2/§4.4/§5/§6).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows, workgroupAssignments, workgroupMemberCursors } from '../src/db/schema'
 // RFC-359 W4-D19c-tail：写面判据改指**生产**的账本（`createWorkgroupTurnsPersistence` 的
 // commit）。合一前只有 legacy 的 `casAssignmentStatus` / `advanceMemberCursor` 有具名形态，
@@ -53,22 +53,22 @@ import {
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 生产账本的持久化面（与两个 bootstrap 装的是同一条）。 */
-function turnsLedger(client: DbClient) {
+function turnsLedger(client: ProviderNeutralDatabase) {
   return createWorkgroupTurnsPersistence({
-    db: client as never,
+    db: client,
     hostLedgerFactory: {
       inTransaction: (transaction) =>
         composeWorkgroupHostLedgerParticipantFactory({
           collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
         }).inTransaction(transaction),
     },
-    clarifyAskGate: createWorkgroupClarifyAskGate(client as never),
+    clarifyAskGate: createWorkgroupClarifyAskGate(client),
   })
 }
 
 /** 旧调用面 → 账本操作：CAS 的 from 匹配即提交，冲突回 false。 */
 async function casAssignmentStatus(
-  client: DbClient,
+  client: ProviderNeutralDatabase,
   assignmentId: string,
   from: WorkgroupAssignmentStatus,
   to: WorkgroupAssignmentStatus,
@@ -97,7 +97,7 @@ async function casAssignmentStatus(
 }
 
 async function advanceMemberCursor(
-  client: DbClient,
+  client: ProviderNeutralDatabase,
   taskIdValue: string,
   memberId: string,
   messageId: string,
@@ -822,13 +822,12 @@ describe('RFC-164 core — decideWorkgroupOutcome', () => {
 // DB layer: CAS status writes + monotonic cursors (migration 0083 round-trip)
 // ---------------------------------------------------------------------------
 
-describe('RFC-164 core — casAssignmentStatus + advanceMemberCursor (DB)', () => {
-  const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-  let db: DbClient
+describeEachProvider('RFC-164 core — casAssignmentStatus + advanceMemberCursor (DB)', (harness) => {
+  let db: ProviderNeutralDatabase
   let taskId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     const workflowId = ulid()
     taskId = ulid()
     const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
@@ -840,6 +839,10 @@ describe('RFC-164 core — casAssignmentStatus + advanceMemberCursor (DB)', () =
     await db.insert(tasks).values({
       id: taskId,
       name: 'wg-core-task',
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
       workflowId,
       workflowSnapshot: JSON.stringify(def),
       repoPath: '/tmp/never-read',
@@ -888,7 +891,7 @@ describe('RFC-164 core — casAssignmentStatus + advanceMemberCursor (DB)', () =
 
   test('illegal transitions throw before touching the DB', async () => {
     const id = await seedAssignment('done')
-    expect(casAssignmentStatus(db, id, 'done', 'open')).rejects.toThrow(
+    await expect(casAssignmentStatus(db, id, 'done', 'open')).rejects.toThrow(
       'illegal workgroup assignment transition done -> open',
     )
   })
