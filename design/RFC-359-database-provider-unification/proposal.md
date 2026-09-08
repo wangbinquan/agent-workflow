@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第二十六批：再迁3旧套件至累计229，共用Workgroup成员十列映射；既有中立node rollback改名，provider命名账目61→60。空工作组同SQL索引存在性前置保护保留原有序查询；修复异步load后取消仍沿旧快照继续调度的窗口，保原RFC215断言。W25八Ubuntu1935文件无缺漏、98选定执行全过，Main终态33success/4failure/3cancelled；原full360样本仍5项PG更慢/4项绝对预算失败。W26真实PG与原full待新SHA，RFC继续In Progress
+- W12 第二十七批：再迁3旧套件至累计232，任务页把有限前缀回接改为精确ID标量查找，共用两处原错误文本算法；功能扫描保守跳过无候选词且无转义的文件。W26八Ubuntu1939文件恰一次，78选定执行75过/3红，Main终态35success/5failure；本批修正真实PG schema SQL锁与取消夹具的过早快照，原断言和预算保持。最新072c8f575原full360样本已核，7项PG更慢、2项原绝对预算失败。W27最终backend tsc及功能metadata/canonical通过，新SHA真PG和原full待托管；RFC继续In Progress
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

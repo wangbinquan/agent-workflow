@@ -525,9 +525,15 @@ export function fastFilteredRootQuery(
       ORDER BY t.started_at DESC, t.id DESC
       LIMIT 4 * (SELECT page_rows FROM root_prefix_budget)
     ),
+    root_prefix_lookup AS MATERIALIZED (
+      SELECT p.id, p.started_at,
+        (SELECT m.id FROM matches m WHERE m.id = p.id) AS matched_id,
+        (SELECT m.rid FROM matches m WHERE m.id = p.id) AS rid
+      FROM physical_prefix p
+    ),
     root_prefix AS MATERIALIZED (
-      SELECT m.id, m.rid, m.started_at
-      FROM physical_prefix p CROSS JOIN matches m WHERE m.id = p.id
+      SELECT p.id, p.rid, p.started_at FROM root_prefix_lookup p
+      WHERE p.matched_id IS NOT NULL
     ),
     prefix_roots AS (
       SELECT p.rid, MAX(p.started_at) AS bsa

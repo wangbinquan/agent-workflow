@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W27有限physical prefix经两个精确ID标量子查询取得matched_id/rid；独立matched_id
+  保留匹配但rid为NULL的行。未增加参数或LIMIT掩盖重复，原快照、18插值、完整性判据、
+  strict gap、游标、fallback、facets与全行投影保持；真实PG计划和原full收益待新SHA。
+- 仓库重试与原任务服务共用既有util/errors中的原诊断文本体；原五处调用、属性读取顺序、
+  继承属性及抛错identity保持。此处为纯文本算法合一，不宣称执行实际Git或DB路径。
+- W26新取消夹具在PG取得过早open快照；W27只改测试，以真实running状态提交完成作为
+  消息轮屏障，再持有真实running快照。保留原取消结果、等待在途提交和原5秒预算。
+
 - W26工作组为空时，单条SQL左侧先沿既有workgroup索引取一个非NULL TEXT值，空字符串
   仍有效；右侧CROSS JOIN保留原任务投影、过滤及非空数组顺序，未新增索引或改变快照边界。
   SQLite小库证明空左侧不消费右侧原扫描；真实PG顺序、计划与原full收益待托管。

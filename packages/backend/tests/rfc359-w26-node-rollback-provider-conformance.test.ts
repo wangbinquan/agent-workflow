@@ -10,6 +10,8 @@ import {
 } from '@/modules/task-execution/infrastructure/nodeRollbackPersistence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
+const repositoryIndexOrder = /order by (?:"agent_workflow"\.)?"task_repos"\."repo_index" asc$/i
+
 const taskId = 'w26-rollback-task'
 const startedAt = 1_700_000_000_000
 const originalInputs = '{ "value": "保留原字节", "items": [2, 1] }'
@@ -122,7 +124,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
         { values: [taskId, 1], rows: 1 },
         { values: [taskId], rows: 3 },
       ])
-      expect(recording.selects()[1]?.sql).toMatch(/order by "task_repos"\."repo_index" asc/i)
+      expect(recording.selects()[1]?.sql).toMatch(repositoryIndexOrder)
     } finally {
       recording.stop()
     }
@@ -207,4 +209,35 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
     }
     expect(await readStored(harness.db)).toEqual(before)
   })
+})
+
+// Original SQLite recorder output and the PostgreSQL SQL received by the W26
+// hosted test (run 34275439627). These pure checks do not execute PostgreSQL.
+const recordedRepositoryQueries = [
+  'select "task_id", "repo_index", "repo_path", "repo_url", "cached_repo_id", "base_branch", "branch", "working_branch", "base_commit", "worktree_path", "worktree_dir_name", "mount_path", "subdir", "readonly", "readonly_dirty_count", "workspace_profile_version", "workspace_profile_digest", "has_submodules", "submodule_init_ok", "submodule_init_error", "schema_version" from "task_repos" where "task_repos"."task_id" = ? order by "task_repos"."repo_index" asc',
+  'select "task_id", "repo_index", "repo_path", "repo_url", "cached_repo_id", "base_branch", "branch", "working_branch", "base_commit", "worktree_path", "worktree_dir_name", "mount_path", "subdir", "readonly", "readonly_dirty_count", "workspace_profile_version", "workspace_profile_digest", "has_submodules", "submodule_init_ok", "submodule_init_error", "schema_version" from "agent_workflow"."task_repos" where "agent_workflow"."task_repos"."task_id" = $1 order by "agent_workflow"."task_repos"."repo_index" asc',
+]
+
+test('repository index SQL lock accepts both recorded provider qualification forms', () => {
+  for (const statement of recordedRepositoryQueries) {
+    expect(statement).toMatch(repositoryIndexOrder)
+  }
+})
+
+test('repository index SQL lock rejects another schema, table, column, or direction', () => {
+  const otherOrders = [
+    '"other_schema"."task_repos"."repo_index" asc',
+    '"task_runs"."repo_index" asc',
+    '"agent_workflow"."task_runs"."repo_index" asc',
+    '"task_repos"."task_id" asc',
+    '"agent_workflow"."task_repos"."task_id" asc',
+    '"task_repos"."repo_index" desc',
+    '"agent_workflow"."task_repos"."repo_index" desc',
+  ]
+  for (const statement of recordedRepositoryQueries) {
+    const query = statement.slice(0, statement.lastIndexOf(' order by '))
+    for (const order of otherOrders) {
+      expect(`${query} order by ${order}`).not.toMatch(repositoryIndexOrder)
+    }
+  }
 })

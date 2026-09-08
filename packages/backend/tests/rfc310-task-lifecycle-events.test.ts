@@ -1,7 +1,9 @@
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { DrizzleTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   committedEventDeliveries,
   committedEvents,
@@ -21,12 +23,20 @@ import {
 } from '@/modules/task-execution/public/events'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
-import { setTaskStatus } from '@/services/lifecycle'
-import { MIGRATIONS } from './migration-freeze'
+async function setTaskStatus({
+  db,
+  ...input
+}: Parameters<DrizzleTaskRuntimeLifecyclePersistence['trySet']>[0] & {
+  readonly db: ProviderNeutralDatabase
+}): Promise<void> {
+  if (!(await new DrizzleTaskRuntimeLifecyclePersistence(db).trySet(input))) {
+    throw new Error('task-lifecycle-fixture-transition-lost-cas')
+  }
+}
 
-describe('RFC-310 task lifecycle publication through RFC-341', () => {
+describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (providerHarness) => {
   test('commits the canonical event with the status CAS and multicasts independent deliveries', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = providerHarness.db
     let now = 10_000
     let ordinal = 0
     const eventCenter = await composeEventCenter({
@@ -35,7 +45,8 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
       now: () => now,
       id: () => `task-event-resource-${++ordinal}`,
     })
-    db.insert(workflows)
+    await db
+      .insert(workflows)
       .values({
         id: 'workflow-1',
         name: 'Lifecycle fixture',
@@ -44,7 +55,8 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
         updatedAt: now,
       })
       .run()
-    db.insert(tasks)
+    await db
+      .insert(tasks)
       .values({
         id: 'task-1',
         name: 'Lifecycle fixture',
@@ -57,6 +69,10 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
         status: 'running',
         inputs: '{}',
         startedAt: now,
+        executionLineageId: 'task-1',
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task-1', workflowRevision: null },
+        ]),
       })
       .run()
 
@@ -81,11 +97,11 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
       now,
       reason: 'lifecycle event fixture',
     })
-    expect(db.select().from(tasks).where(eq(tasks.id, 'task-1')).get()).toMatchObject({
+    expect(await db.select().from(tasks).where(eq(tasks.id, 'task-1')).get()).toMatchObject({
       status: 'failed',
       lifecycleEventRevision: 2,
     })
-    const committed = db
+    const committed = await db
       .select()
       .from(committedEvents)
       .where(eq(committedEvents.id, 'task-lifecycle:task-1:2'))
@@ -97,7 +113,7 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
       producerEpoch: 2,
     })
     expect(
-      db
+      await db
         .select()
         .from(committedEventDeliveries)
         .where(eq(committedEventDeliveries.eventId, committed!.id))
@@ -137,11 +153,11 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
       subject: { typeId: 'platform.task', subjectRef: 'task-1' },
     })
     const eventDocument = JSON.parse(
-      db
+      (await db
         .select({ summaryJson: eventRecords.summaryJson })
         .from(eventRecords)
         .where(eq(eventRecords.id, parentDelivery[0]!.eventId))
-        .get()!.summaryJson,
+        .get())!.summaryJson,
     ) as { triggerContext: unknown }
     expect(eventDocument.triggerContext).toMatchObject({
       contract: { namespace: 'task' },

@@ -136,6 +136,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
   })
 
   const controller = new AbortController()
+  const batchStarted = deferred()
   const loadWindow = deferred()
   const settlementEntered = deferred()
   const settlementReleased = deferred()
@@ -145,7 +146,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
   const pauseWrites: Array<string | null> = []
   const windows: Array<{ before: boolean; after: boolean; assignmentStatus: string | undefined }> =
     []
-  let loadCalls = 0
+  let heldRunningSnapshot = false
   const actual = createWorkgroupTurnsPersistence({
     db,
     hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
@@ -156,11 +157,16 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
   const persistence: WorkgroupTurnsPersistencePort = {
     ...actual,
     async load(id) {
-      const ordinal = ++loadCalls
       const before = controller.signal.aborted
       const snapshot = await actual.load(id)
-      if (ordinal === 3) {
-        // The message turn has finished; the batch is still awaiting its host.
+      if (
+        !heldRunningSnapshot &&
+        snapshot?.assignments.find((card) => card.id === cardId)?.status === 'running'
+      ) {
+        heldRunningSnapshot = true
+        // The message turn finished after the real batch-start commit, while
+        // the batch is still awaiting its host. Read count alone cannot prove
+        // that commit has completed on an asynchronous provider.
         // Keep this exact real snapshot while that original request completes.
         loadWindow.resolve()
         await settlementEntered.promise
@@ -189,6 +195,17 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
         if (holdSettlement) await settlementReleased.promise
       }
       const receipt = await actual.commit(input)
+      if (
+        receipt.committed &&
+        input.operations.some(
+          (operation) =>
+            operation.kind === 'transition-assignment' &&
+            operation.assignmentId === cardId &&
+            operation.to === 'running',
+        )
+      ) {
+        batchStarted.resolve()
+      }
       for (const operation of input.operations) {
         if (operation.kind === 'set-pause-reason') pauseWrites.push(operation.reason)
       }
@@ -215,6 +232,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
     host: {
       async runHost(request) {
         if ((request.hostOutputPorts ?? []).includes('wg_task_results')) await loadWindow.promise
+        else await batchStarted.promise
         return await originalHost(request)
       },
     },
@@ -225,6 +243,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
     pastRunId,
     drive,
     controller,
+    batchStarted,
     requests,
     pauseWrites,
     windows,
@@ -266,6 +285,7 @@ describeEachProvider('RFC-359 W26 workgroup cancellation after load', (harness) 
         .where(eq(workgroupTaskState.taskId, run.taskId))
       expect(state[0]?.pauseReason).toBeNull()
     } finally {
+      run.batchStarted.resolve()
       run.loadWindow.resolve()
       run.settlementReleased.resolve()
       run.controller.abort()
@@ -301,6 +321,7 @@ describeEachProvider('RFC-359 W26 workgroup cancellation after load', (harness) 
       expect(after[0]?.status).toBe('done')
       expect(run.pauseWrites).toEqual([])
     } finally {
+      run.batchStarted.resolve()
       run.loadWindow.resolve()
       run.settlementReleased.resolve()
       run.controller.abort()

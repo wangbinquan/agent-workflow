@@ -15,19 +15,19 @@
 //   T3  tasks.status='done'            ⟹ all output node_runs.status='done'
 //   U1  per (task, nodeId, iteration), ≤ 1 row in {awaiting_review, awaiting_human}
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+let fixtureDb: ProviderNeutralDatabase
 
 // ---------------------------------------------------------------------------
 // Invariant checker (PR-A inline; PR-D will extract to services/).
@@ -39,7 +39,7 @@ interface Violation {
   detail: string
 }
 
-async function checkInvariants(db: DbClient, taskId: string): Promise<Violation[]> {
+async function checkInvariants(db: ProviderNeutralDatabase, taskId: string): Promise<Violation[]> {
   const v: Violation[] = []
   const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (taskRow === undefined) return v
@@ -162,7 +162,7 @@ async function checkInvariants(db: DbClient, taskId: string): Promise<Violation[
 // ---------------------------------------------------------------------------
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   cleanup: () => void
 }
@@ -180,7 +180,7 @@ async function buildHarness(
 ): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-t1c-'))
   mkdirSync(tmp, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = fixtureDb
 
   const definition: WorkflowDefinition = {
     $schema_version: 2,
@@ -221,6 +221,10 @@ async function buildHarness(
     status: taskStatus,
     inputs: '{}',
     startedAt: Date.now(),
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   return {
     db,
@@ -230,7 +234,7 @@ async function buildHarness(
 }
 
 async function insertNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     nodeId: string
@@ -268,7 +272,7 @@ async function insertNodeRun(
 }
 
 async function insertDocVersion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   opts: {
     reviewNodeId: string
@@ -295,7 +299,10 @@ async function insertDocVersion(
   return id
 }
 
-describe('RFC-053 PR-A T1c — double-layer invariants', () => {
+describeEachProvider('RFC-053 PR-A T1c — double-layer invariants', (providerHarness) => {
+  beforeEach(() => {
+    fixtureDb = providerHarness.db
+  })
   let h: Harness
   afterEach(() => h?.cleanup())
 

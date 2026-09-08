@@ -41,11 +41,16 @@ let identifierCallInventory: Map<string, Map<string, number>> | undefined
  * 「matcher 自证」共用它，两边各留一份拷贝就等于 fixture 只在证明拷贝还活着。
  */
 function reviewedCallCounts(text: string): Map<string, number> {
+  // Reviewed names are ASCII. A backslash can encode one, so escaped text still
+  // reaches the original AST matcher; every source file is still read.
+  if (!text.includes('\\') && ![...REVIEWED_CALL_NAMES].some((name) => text.includes(name))) {
+    return new Map()
+  }
   const source = ts.createSourceFile(
     'probe.ts',
     text,
     ts.ScriptTarget.Latest,
-    true,
+    false,
     ts.ScriptKind.TS,
   )
   const counts = new Map<string, number>()
@@ -253,5 +258,41 @@ describe('RFC-317 T14 —— matcher 自证：受审调用的清点判据', () =
 describe('RFC-317 T13 —— 语料非空', () => {
   test('扫描确实覆盖到后端源码语料（扫空即假绿）', () => {
     expect(sourceFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(600)
+  })
+})
+
+describe('RFC-359 W27 reviewed call scanner admission', () => {
+  test('escaped reviewed identifiers retain the original AST call matcher', () => {
+    const code = String.raw`
+      st\u0061rtTask()
+      st\u{61}rtTask()
+      createF\u0075sion()
+      rejectF\u0075sion()
+      directTaskInitiatorFromActorSour\u0063e()
+      holder.st\u0061rtTask()
+      const saved = st\u0061rtTask
+    `
+    expect([...REVIEWED_CALL_NAMES].some((name) => code.includes(name))).toBe(false)
+    expect(Object.fromEntries(reviewedCallCounts(code))).toEqual({
+      startTask: 2,
+      createFusion: 1,
+      rejectFusion: 1,
+      directTaskInitiatorFromActorSource: 1,
+    })
+  })
+
+  test('ASCII admission retains the original AST call-expression boundary', () => {
+    expect(
+      Object.fromEntries(
+        reviewedCallCounts(`
+          // startTask() createFusion() rejectFusion() directTaskInitiatorFromActorSource()
+          const text = 'startTask()'
+          holder.startTask()
+          const saved = createFusion
+          unrelated()
+        `),
+      ),
+    ).toEqual({})
+    expect(Object.fromEntries(reviewedCallCounts('const value = unrelated()'))).toEqual({})
   })
 })

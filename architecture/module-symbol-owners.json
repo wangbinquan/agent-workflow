@@ -6,7 +6,7 @@
     "moduleFiles": 1191,
     "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25050
+    "symbolsIncludingFileRoots": 25049
   },
   "entries": [
     {
@@ -129907,18 +129907,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#diagnosticText",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "diagnosticText",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts#loadRetrySnapshot",
       "removeAfterWave": null,
       "status": "current-module",
@@ -190099,18 +190087,6 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#diagnosticTextOf",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "diagnosticTextOf",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#ensureExplicitDirectoryNodes",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -195743,6 +195719,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ConflictError",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/errors.ts",
+      "id": "owner:packages/backend/src/util/errors.ts#diagnosticTextOf",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "diagnosticTextOf",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -301302,5 +301290,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2ae1826564e410131b7133d15e77fb7fd6ca1918aa3a275d08fe759ed792f0ae"
+  "sourceDigest": "sha256:9d395efbb49037c0e39dda0125b07eb1c4c3b65549ff1df9b8c0669fc778d815"
 }

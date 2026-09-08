@@ -14,7 +14,12 @@ import { composePostgresqlRepositoryWorkspaceStore } from '@/modules/source-cont
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  diagnosticTextOf as diagnosticText,
+} from '@/util/errors'
 import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import { nextRetryIndex } from '../application/nextRetryIndex'
@@ -73,18 +78,6 @@ export interface PostgresqlRepositoryPreparationRetryDependencies {
   readonly log: TaskExecutionTopologyLogger
   readonly id?: () => string
   readonly now?: () => number
-}
-
-function diagnosticText(error: unknown): string {
-  if (!(error instanceof Error)) return String(error)
-  const details = (error as { readonly details?: unknown }).details
-  const stderr =
-    details !== null && typeof details === 'object' && 'stderr' in details
-      ? (details as { readonly stderr?: unknown }).stderr
-      : undefined
-  return typeof stderr === 'string' && stderr.length > 0
-    ? `${error.message}\n${stderr}`
-    : error.message
 }
 
 function parseInputs(raw: string): Record<string, string> {

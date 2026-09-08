@@ -405,8 +405,11 @@
       "id": "rfc359-w5-inverted-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
-      "baseline": 4,
-      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
+      "baseline": 5,
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。",
+      "allowGrowth": {
+        "why": "RFC-359 W27 the newly explicit PostgreSQL Intent composition in the migrated rfc355 test adds one real named reference and constructor to each existing adapter. ArtifactLifecycle now has 3 versus 6 references, crossing the original unchanged threshold 3; operations narrows from 21 versus 6 to 21 versus 7. This records one new observed imbalance, not a new provider exemption."
+      }
     },
     {
       "id": "rfc359-w5-name-collision-definition-drift",
@@ -510,7 +513,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 701,
+      "baseline": 698,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -811,8 +814,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5328,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5329,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W27 reuses diagnosticTextOf from the already-imported util/errors module in PostgreSQL repository retry; this is one actual added named-symbol edge while two duplicate private bodies become one shared body."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +838,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4795,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4796,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W27 records the exact added diagnosticTextOf named-symbol edge to the existing util/errors dependency; no new provider-specific implementation or exception category is introduced."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -867,12 +876,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25050,
+      "baseline": 25049,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2ae1826564e410131b7133d15e77fb7fd6ca1918aa3a275d08fe759ed792f0ae",
+    "sourceDigest": "sha256:9d395efbb49037c0e39dda0125b07eb1c4c3b65549ff1df9b8c0669fc778d815",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "26b43805b873a1f103192918a4b8c00bc041aa2b",
-    "contentDigest": "sha256:d0b4d31ca4cab092f1522d59938f4b35b8a4bdcc1d247d9166826254d51cd731",
+    "currentSnapshotSha": "072c8f575125ae1d6818008339c74527c3fe8d3a",
+    "contentDigest": "sha256:c63b55aa25ce88012ab72c58b0a1c0573e72592964ddc43ec1fbdfc66e599bdc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

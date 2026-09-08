@@ -452,17 +452,41 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
       )
       const physical = plan.find((row) => row.detail === 'MATERIALIZE physical_prefix')
       const matching = plan.find((row) => row.detail === 'MATERIALIZE root_prefix')
-      if (!physical || !matching) throw new Error('missing bounded prefix plan')
+      const lookup = plan.find((row) => row.detail === 'MATERIALIZE root_prefix_lookup')
+      if (!physical || !matching || !lookup) throw new Error('missing bounded prefix plan')
       expect(plan.filter((row) => row.parent === physical.id).map((row) => row.detail)).toContain(
         'SCAN t USING COVERING INDEX idx_tasks_list_started_id',
       )
-      const matchingTasks = plan
-        .filter(
-          (row) => row.parent === matching.id && /^(?:SCAN|SEARCH) [pt](?: |$)/.test(row.detail),
-        )
-        .map((row) => row.detail)
-      expect(matchingTasks).toEqual([
-        'SCAN p',
+      expect(
+        plan
+          .filter(
+            (row) => row.parent === matching.id && /^(?:SCAN|SEARCH) [pt](?: |$)/.test(row.detail),
+          )
+          .map((row) => row.detail),
+      ).toEqual(['SCAN p'])
+      const probes = plan.filter(
+        (row) => row.parent === lookup.id && row.detail.startsWith('CORRELATED SCALAR SUBQUERY '),
+      )
+      expect(probes).toHaveLength(2)
+      for (const probe of probes)
+        expect(
+          plan
+            .filter(
+              (row) => row.parent === probe.id && /^(?:SCAN|SEARCH) t(?: |$)/.test(row.detail),
+            )
+            .map((row) => row.detail),
+        ).toEqual(['SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)'])
+      const lookupDescendants = new Set([lookup.id])
+      for (const row of plan) if (lookupDescendants.has(row.parent)) lookupDescendants.add(row.id)
+      expect(
+        plan
+          .filter(
+            (row) => lookupDescendants.has(row.id) && /^(?:SCAN|SEARCH) t(?: |$)/.test(row.detail),
+          )
+          .map((row) => row.detail),
+      ).toEqual([
+        'SCAN t USING COVERING INDEX idx_tasks_list_started_id',
+        'SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)',
         'SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)',
       ])
       const deep = withCursor(RAW, 890, 'root-11')

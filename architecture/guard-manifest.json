@@ -192,7 +192,7 @@
       "assertsAbsence": true,
       "negativeFixture": false,
       "classified": true,
-      "lines": 496
+      "lines": 503
     },
     {
       "id": "lifecycle-invariants-review",
@@ -1008,7 +1008,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 213
+      "lines": 298
     },
     {
       "id": "rfc303-architecture-lock",
@@ -1885,7 +1885,7 @@
       "assertsAbsence": false,
       "negativeFixture": true,
       "classified": true,
-      "lines": 361
+      "lines": 362
     },
     {
       "id": "rfc359-w5-t19f-test-engine-hardcoding",
@@ -1897,7 +1897,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 840
+      "lines": 837
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -2405,14 +2405,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2ae1826564e410131b7133d15e77fb7fd6ca1918aa3a275d08fe759ed792f0ae",
+    "sourceDigest": "sha256:9d395efbb49037c0e39dda0125b07eb1c4c3b65549ff1df9b8c0669fc778d815",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "26b43805b873a1f103192918a4b8c00bc041aa2b",
-    "contentDigest": "sha256:75845ff0eb2541ab1a5dfdfa0a6da41d16777968021c23a8d94c356a3ee07f0b",
+    "currentSnapshotSha": "072c8f575125ae1d6818008339c74527c3fe8d3a",
+    "contentDigest": "sha256:9ab982da879baa53cab676c89464cb17ff24efdb31388e2683c86ba00f7dc67c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

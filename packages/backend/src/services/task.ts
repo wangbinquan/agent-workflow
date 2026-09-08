@@ -188,6 +188,7 @@ import {
   ForbiddenError,
   NotFoundError,
   ValidationError,
+  diagnosticTextOf,
 } from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
@@ -5624,30 +5625,6 @@ export async function retryRepositoryPreparation(
     )
   }
   return await retryNode(db, taskId, latest.id, { cascade: false, deps })
-}
-
-/**
- * 把一个失败折成**可供分类器判读**的诊断串。
- *
- * 三轮实现门 AC 对账挖出的真缺口：G6 的窗口重试判据只看 `err.message`，而**warm
- * 路径**（镜像已存在、fetch 更新失败）抛的是
- * `DomainError('repo-fetch-failed', '…refusing to launch from a stale cache', 502,
- * { url, stderr })` —— git 的原话在 `details.stderr` 里，**message 里一个字都没有**。
- * 于是分类器只能判 `unknown` ⇒ 不可重试 ⇒ 窗口一秒不用直接失败。
- *
- * 这恰恰打掉了 G6 的**主场景**：design §9.2 原文写的位置就是「gitRepoCache.ts warm
- * path 的 fetch 失败分支」。cold clone 那条反而是好的（它的 message 自带 stderr），
- * 而现有 G6 用例全用**全新 URL**、全走 cold 路径，所以一直全绿——稳态生产路径
- * （镜像热着、网络抖一下）才是没被覆盖的那条。
- */
-function diagnosticTextOf(err: unknown): string {
-  if (!(err instanceof Error)) return String(err)
-  const details = (err as { details?: unknown }).details
-  const stderr =
-    typeof details === 'object' && details !== null && 'stderr' in details
-      ? (details as { stderr?: unknown }).stderr
-      : undefined
-  return typeof stderr === 'string' && stderr.length > 0 ? `${err.message}\n${stderr}` : err.message
 }
 
 /**
