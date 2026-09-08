@@ -81229,6 +81229,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ff4c5c3d68f731236f8a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/providerSchema.ts#currentDatabaseSchemaProvider",
+      "toPath": "packages/backend/src/db/providerSchema.ts",
+      "toSymbol": "currentDatabaseSchemaProvider",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "fromSymbol": "$file",
@@ -81500,9 +81517,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4794,
+    "architectureExceptions": 4795,
     "implementationSccs": 0,
-    "observedEdges": 5327,
+    "observedEdges": 5328,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -166457,6 +166474,22 @@
     {
       "edgeKind": "value",
       "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#$file",
+      "id": "import:ff4c5c3d68f731236f8a",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/providerSchema",
+      "syntax": "static-import",
+      "targetSymbol": "currentDatabaseSchemaProvider",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/providerSchema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/providerSchema.ts#currentDatabaseSchemaProvider"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#$file",
       "id": "import:ff56f9e54a912b7990de",
@@ -167280,7 +167313,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3d91e40252c14943268fdb994e0477bc1907c19147f1af434644921c9136a175",
+  "sourceDigest": "sha256:7adcf6c86f4721972045d174bea5a9bfa17b33c1c9c02b82b0402bfd50fb069c",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -517,11 +517,47 @@ export function fastFilteredRootQuery(
       SELECT nvm.id, nvm.rid, nvm.started_at FROM non_view_matches nvm
       WHERE ${viewCondition(parsed.filters.view, 'nvm', sql`nvm.has_open_alert`)}
     ),
+    root_prefix_budget AS MATERIALIZED (
+      SELECT CAST(${parsed.limit + 1} AS INTEGER) AS page_rows
+    ),
+    physical_prefix AS MATERIALIZED (
+      SELECT t.id, t.started_at FROM tasks t
+      ORDER BY t.started_at DESC, t.id DESC
+      LIMIT 4 * (SELECT page_rows FROM root_prefix_budget)
+    ),
+    root_prefix AS MATERIALIZED (
+      SELECT m.id, m.rid, m.started_at
+      FROM physical_prefix p CROSS JOIN matches m WHERE m.id = p.id
+    ),
+    prefix_roots AS (
+      SELECT p.rid, MAX(p.started_at) AS bsa
+      FROM root_prefix p GROUP BY p.rid
+    ),
+    prefix_page AS MATERIALIZED (
+      SELECT r.rid, r.bsa FROM prefix_roots r
+      WHERE ${boundary}
+      ORDER BY r.bsa DESC, r.rid DESC
+      LIMIT (SELECT page_rows FROM root_prefix_budget)
+    ),
+    prefix_complete AS MATERIALIZED (
+      SELECT CASE
+        WHEN (SELECT COUNT(*) FROM physical_prefix) <
+          4 * (SELECT page_rows FROM root_prefix_budget) THEN 1
+        WHEN (SELECT COUNT(*) FROM prefix_page) =
+          (SELECT page_rows FROM root_prefix_budget)
+          AND (SELECT MIN(bsa) FROM prefix_page) >
+            (SELECT MIN(started_at) FROM physical_prefix) THEN 1
+        ELSE 0 END AS complete
+    ),
     roots AS NOT MATERIALIZED (
+      SELECT p.rid, p.bsa FROM prefix_roots p
+      WHERE (SELECT complete FROM prefix_complete) = 1
+      UNION ALL
       SELECT
         m.rid AS rid,
         MAX(m.started_at) AS bsa
       FROM matches m
+      WHERE (SELECT complete FROM prefix_complete) = 0
       GROUP BY m.rid
     ),
     page_roots AS MATERIALIZED (

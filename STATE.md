@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十五批（2026-09-09）**：任务页有限物理前缀有严格完备性证明与原全量回退，保持同SQL快照及原页槽。
+> 原过滤/facets不变；SQLite实际索引计划与惰性回退已证，新/原控制24 pass/1920 expect，三个SQL变异指定红。
+> Overview仅复用SQL AST，固定夹具生成12→3、编译/prepare/all各12保持；原后整行、录制和事务边界相同。
+> 新overview原后4/173，加原控制17/656；首次tsc的未知seed字段已精确修正，整行摘要不变，最终backend tsc通过。
+> 再迁4旧套件，30原case/166完整matcher/176原expect保持，补24个真实并发见证后30 pass/200 expect，累计226。
+> 当前1935测试文件，621构库文件/1280调用、608构库文件无harness、408文件harness；T19f707→704含1个新增原生机制构造。
+> W24 exactc24935b53 Main34263898340首次终态38success/2failure，12后端matrix及独立PG全过，八Ubuntu1933文件恰一次。
+> W24四旧套件40SQLite+40PG+1纯=81通过，成员新例8次与原W14控制16次通过；完整Main仍非绿。
+> canonical入口1740/事务272/public983/symbols25050保持；imports5328/exceptions4795如实记入overview现有schema上下文读取。
+> 最终203项功能metadata/419 expect、13项canonical/55 expect、定向lint/format及独立复核通过。
+> 本批无本地PG/服务/性能/E2E/完整门禁；新SHA真PG计划、完整双库行为及原full P95待托管。
+> 最近原full仍5/9项PG更慢、4项原绝对预算失败，原语料/360样本/分位/绝对预算保持，RFC与六项剩余AC继续开放。
+
 > **RFC-359 W12 第二十四批（2026-09-09）**：Workgroup两入口成员投影合一，原回退差异/顺序保持，生产净减8行。
 > 再迁4旧套件，原后41 pass/148 expect，40原DB例默认双库、1纯例单跑，累计222。
 > 当前1933测试文件，624构库文件/1284调用、612构库文件无harness、402文件harness；T19f711→707。

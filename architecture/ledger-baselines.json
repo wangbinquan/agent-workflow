@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 707,
+      "baseline": 704,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5327,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5328,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W25 adds the existing currentDatabaseSchemaProvider reader to the shared overview owner solely to invalidate its private SQL AST when the schema projection changes. The actual import is counted; compiler and exemption rules are unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4794,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4795,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W25 records the one actual overview-to-schema-context import emitted by the unchanged canonical classifier. This measured edge is retained in the ledger; no exemption or classifier is added or widened."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -868,14 +874,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25050,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W24 extracts workgroupDraftMemberOf in the existing resource-catalog workgroupPersistence owner from two original member projection callbacks. This is one measured shared production helper, not a new parallel implementation."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3d91e40252c14943268fdb994e0477bc1907c19147f1af434644921c9136a175",
+    "sourceDigest": "sha256:7adcf6c86f4721972045d174bea5a9bfa17b33c1c9c02b82b0402bfd50fb069c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -888,8 +891,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "dfb8427f38c50f146dac96e67172cc4ebb8a2a78",
-    "contentDigest": "sha256:d4a6740eff85c709249a3c4dfc0e201ae60cf2b7f00ee5131772e83de044f58c",
+    "currentSnapshotSha": "c24935b53f2ad97ee9dbb69ef6ab17a1edb94be3",
+    "contentDigest": "sha256:2268584415b670627820acdbbbeb101dfb384c76b6b2da912d02c69b398de40b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

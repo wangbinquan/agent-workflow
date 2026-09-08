@@ -3,6 +3,7 @@
 import { and, count, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
 
 import type { OverviewTasks } from '@agent-workflow/shared'
+import { currentDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks } from '@/db/schema'
 import type { TaskOverviewQuery } from '../public/queries'
@@ -18,13 +19,26 @@ function createCountTemplates(db: ProviderNeutralDatabase, canReadAll: boolean) 
         eq(tasks.ownerUserId, sql.placeholder('overviewUserId')),
         inArray(tasks.id, collaboratorTaskIds),
       )
-  const countWhere = (status: SQL<unknown>) =>
-    db
+  const countWhere = (status: SQL<unknown>) => {
+    const query = db
       .select({ value: count() })
       .from(tasks)
       .where(
         and(visibility, isNull(tasks.parentTaskId), eq(tasks.catalogVisibility, 'public'), status),
       )
+    const generate = query.getSQL.bind(query)
+    let cached: { context: ReturnType<typeof currentDatabaseSchemaProvider>; sql: SQL } | undefined
+    // These private builders never change after construction. Keep only their
+    // SQL AST; all() still compiles, binds, prepares and executes every time.
+    query.getSQL = () => {
+      const context = currentDatabaseSchemaProvider()
+      if (cached !== undefined && cached.context === context) return cached.sql
+      const generated = generate()
+      cached = { context, sql: generated }
+      return generated
+    }
+    return query
+  }
 
   // Retain builders, not native prepared statements: each all() still prepares
   // and executes through the current client instrumentation. Bindings belong to

@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W25任务页先按既有started_at/id索引取4×(limit+1)物理行，仅在全表已尽或候选页
+  最旧匹配时间严格大于前缀尾时间时采用页内root聚合；否则执行原全量MAX/GROUP BY。
+  两分支、过滤、facets与family读取保持同一SQL快照，NULL/缺失root仍占原页槽，深cursor
+  与同时间切边保留原回退。SQLite小库已证明未选回退不求值，PG实际计划与原full效果待托管。
+- W25Overview只在私有不可变builder上缓存成功生成的SQL AST，并按原schema上下文失效；
+  每次all仍经原编译、参数绑定、prepare及执行。四次独立count、解码、事务与录制边界保持，
+  不保留native statement或结果；12→3仅是固定夹具的AST生成次数，不能充当HTTP收益。
+
 - W24把Workgroup成员的memberType/id/displayName/roleDesc投影收敛到既有owner内的
   workgroupDraftMemberOf，两调用点显式传入各自原missing-agent回退；读取次序、成员顺序、
   外层快照及Schema错误保持。只合一这两个callback，第三映射与完整PG owner不计作已收口。

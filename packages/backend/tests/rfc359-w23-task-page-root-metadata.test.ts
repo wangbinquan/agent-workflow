@@ -56,18 +56,85 @@ const ORIGINAL_SQL_REWRITES: readonly (readonly [string, string])[] = [
   ],
 ]
 
+const PREFIX_START = '    root_prefix_budget AS MATERIALIZED ('
+const PREFIX_END = '    page_roots AS MATERIALIZED ('
+const ORIGINAL_ROOTS = `    roots AS NOT MATERIALIZED (
+      SELECT
+        m.rid AS rid,
+        MAX(m.started_at) AS bsa
+      FROM matches m
+      GROUP BY m.rid
+    ),
+`
+
+// W25 adds only this bounded-root span, including a budget and a second cursor
+// interpolation. Restore the complete W23 query before the original seven pairs.
+function withoutBoundedPrefix(query: SQL): SQL {
+  const chunks: SQL['queryChunks'] = []
+  let dropping = false
+  for (const chunk of query.queryChunks) {
+    if (!(chunk instanceof StringChunk)) {
+      if (!dropping) chunks.push(chunk)
+      continue
+    }
+    for (let text of chunk.value) {
+      if (!dropping) {
+        const start = text.indexOf(PREFIX_START)
+        if (start < 0) {
+          chunks.push(new StringChunk(text))
+          continue
+        }
+        chunks.push(new StringChunk(text.slice(0, start)))
+        text = text.slice(start)
+        dropping = true
+      }
+      const end = text.indexOf(PREFIX_END)
+      if (end >= 0) {
+        chunks.push(new StringChunk(ORIGINAL_ROOTS + text.slice(end)))
+        dropping = false
+      }
+    }
+  }
+  if (dropping) throw new Error('unterminated bounded prefix SQL')
+  return new SQL(chunks)
+}
+
+function originalRootBindings(
+  text: string,
+  values: readonly unknown[],
+  parsed: ReturnType<typeof parseTaskOperationsQuery>,
+): readonly unknown[] {
+  const start = text.indexOf(PREFIX_START)
+  if (start < 0) return values
+  const before = text.slice(0, start).replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, '')
+  const offset = [...before.matchAll(/\?|\$\d+/g)].length
+  const added = [
+    parsed.limit + 1,
+    ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
+  ]
+  expect(values.slice(offset, offset + added.length)).toEqual(added)
+  return [...values.slice(0, offset), ...values.slice(offset + added.length)]
+}
+
 function restoreGlobalRootStatsText(text: string): string {
+  const start = text.indexOf(PREFIX_START)
+  if (start >= 0) {
+    const end = text.indexOf(PREFIX_END, start)
+    if (end < 0) throw new Error('missing original page boundary')
+    text = text.slice(0, start) + ORIGINAL_ROOTS + text.slice(end)
+  }
   for (const [current, original] of ORIGINAL_SQL_REWRITES) {
     text = text.replaceAll(current, original)
   }
-  return text
+  let ordinal = 0
+  return text.replace(/\$\d+/g, () => `$${++ordinal}`)
 }
 
 // StringChunk holds only emitted SQL text. Other chunks, including every
 // parameter object, remain the same objects supplied by the real emitter.
 function globalRootStatsOracle(query: SQL): SQL {
   return new SQL(
-    query.queryChunks.map((chunk) =>
+    withoutBoundedPrefix(query).queryChunks.map((chunk) =>
       chunk instanceof StringChunk
         ? new StringChunk(chunk.value.map(restoreGlobalRootStatsText))
         : chunk,
@@ -195,8 +262,17 @@ async function compareSql(
     expect(actual).toEqual(expected)
     expect(JSON.stringify(actual)).toBe(JSON.stringify(expected))
     expect(recording.statements).toHaveLength(2)
-    const [before, after] = recording.statements
-    if (before === undefined || after === undefined) throw new Error('missing query pair')
+    const [before, candidate] = recording.statements
+    if (before === undefined || candidate === undefined) throw new Error('missing query pair')
+    // Keep the actual new vector observable, then remove exactly the explained
+    // prefix bindings for the original unchanged binding assertions below.
+    expect(candidate.values).toHaveLength(candidate.params)
+    const values = originalRootBindings(
+      candidate.sql,
+      candidate.values,
+      parseTaskOperationsQuery(VIEWER, raw, OPTIONS),
+    )
+    const after = { ...candidate, values, params: values.length }
     expect(before.sql).toContain(GLOBAL_ROOT_STATS)
     expect(restoreGlobalRootStatsText(after.sql)).toBe(before.sql)
     expect(before.params).toBeGreaterThan(0)
@@ -335,8 +411,17 @@ test('the actual PG client compiles the old/new page and EXPLAIN forms with iden
         }
         expect(statements).toHaveLength(start + 2)
         const before = statements[start]
-        const after = statements[start + 1]
-        if (before === undefined || after === undefined) throw new Error('missing PG compilation')
+        const candidate = statements[start + 1]
+        if (before === undefined || candidate === undefined)
+          throw new Error('missing PG compilation')
+        expect(candidate.parameters.length).toBeGreaterThan(0)
+        const after = {
+          ...candidate,
+          parameters: originalRootBindings(candidate.sql, candidate.parameters, {
+            ...parsed,
+            cursor,
+          }),
+        }
         expect(before.sql).toContain(GLOBAL_ROOT_STATS)
         expect(restoreGlobalRootStatsText(after.sql)).toBe(before.sql)
         expect(after.parameters).toEqual(before.parameters)

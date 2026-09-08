@@ -91,7 +91,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'cross-clarify-designer-rerun-no-rollback.test.ts: 1',
   'daemon-info-route.test.ts: 1',
   'digital-employee-agent-template-reconcile.test.ts: 5',
-  'dispatch-multi-row-consistency.test.ts: 1',
   'distill-session-capture.test.ts: 1',
   'e2e-sqlite-fixture-lock-contention.test.ts: 3',
   'execution-contract-platform.test.ts: 5',
@@ -223,11 +222,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'retry-node-no-review-cascade.test.ts: 1',
   'review-cancel-concurrency.test.ts: 1',
   'review-clarify-question-phase-stranded.test.ts: 1',
-  'review-decision-full-asserts.test.ts: 1',
   'review-iterate-comments-in-prompt.test.ts: 1',
   'review-iterate-drops-prior-clarify-history.test.ts: 1',
   'review-iterate-file-path-in-prompt.test.ts: 1',
-  'review-iterate-inherits-clarify-iteration.test.ts: 1',
   'review-iterate-sibling-cascade.test.ts: 1',
   'review-multidoc-inherit.test.ts: 1',
   'review-state-machine.test.ts: 1',
@@ -652,6 +649,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // 四条原生同步 companion/CAS/回滚判据共用一处构库；十条公共写入行为仍跑双引擎。
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
   'rfc359-w17-boot-orphan-terminalization.test.ts: 1',
+  'rfc359-w25-task-page-bounded-prefix.test.ts: 1', // Native SQLite fallback non-consumption witness; behavior cases use both providers.
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   // RFC-359 W8：这一格**不是**本守卫要防的那种债，但照样入账，因为判据是纯文本、不该为它开洞。
@@ -750,7 +748,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'start-task-multi-repo-gates.test.ts: 1',
   'start-task-url.test.ts: 1',
   'structural-diff-callchain-multi-repo.test.ts: 1',
-  'structural-diff-empty-hint.test.ts: 2',
   'structural-diff-node-multi-repo.test.ts: 1',
   'subagent-live-capture-source.test.ts: 1',
   'subagent-live-capture.test.ts: 4',

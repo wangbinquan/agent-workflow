@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第二十四批：Workgroup 两入口成员投影合一并保留原回退差异，再迁4旧套件至累计222。W23八Ubuntu完整覆盖1932文件，46个原DB例两库及故障夹具均过；RFC314 PG计数例480.29ms满足原5秒预算。原full exact `dfb8427f3` 仍5/9项PG更慢、4项原绝对预算失败；新反最大值查询未证明减少热点工作，已撤回，严格AC11与完整RFC继续开放
+- W12 第二十五批：任务页加入同快照、有严格完备性证明的有限物理前缀及原全量回退；Overview仅复用SQL AST并保留每次编译/prepare/all。再迁4旧套件至累计226，原176断言保留并增加24个真实并发见证。W24八Ubuntu完整覆盖1933文件，40原DB例及成员投影两库通过；Main终态38success/2failure。W25真PG计划及原full效果待新SHA；最近原full仍5/9项PG更慢、4项原绝对预算失败，RFC继续In Progress
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）
