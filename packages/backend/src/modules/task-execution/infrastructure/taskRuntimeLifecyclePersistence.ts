@@ -3,7 +3,7 @@
 // 统一写事务 + owner 围栏（PG READ COMMITTED：CAS 与围栏都是行级条件 UPDATE）。同步内核暂留给尚未迁移的 legacy 直接调用方。
 
 import type { TaskStatus } from '@agent-workflow/shared'
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 
 import { tasks } from '@/db/schema'
@@ -13,23 +13,23 @@ import {
   ConcurrentTaskTransition,
   isTerminalTaskStatus,
   resolveTerminalWorkspacePruneDecision,
-  type TerminalWorkspacePruneDecision,
 } from '@/services/lifecycle'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type {
   TaskRuntimeLifecycleMutation,
   TaskRuntimeLifecyclePersistence,
 } from '../application/ports/taskRuntimeLifecyclePersistence'
-import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
+import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
+import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
 import {
-  appendTaskLifecycleTransitionCommittedEvent,
-  type TaskCommittedEventIdentity,
-} from './taskLifecycleCommittedEvents'
+  taskLifecycleWriteSequence,
+  type TaskLifecycleWriteInput,
+} from './taskLifecycleWriteSequence'
 
 type LifecycleRow = Readonly<{
   status: TaskStatus
@@ -42,30 +42,23 @@ type LifecycleRow = Readonly<{
   errorSummary: string | null
 }>
 
-type TaskRuntimeLifecycleWriteInput = Readonly<{
-  taskId: string
-  from: TaskStatus
-  to: TaskStatus
-  extra?: TaskRuntimeLifecycleMutation &
-    Partial<
-      Pick<typeof tasks.$inferInsert, 'sourceTerminationFence' | 'sourceTerminationEffectRev'>
-    >
-  now: number
-  isRevival?: boolean
-  workspacePruneDecision: TerminalWorkspacePruneDecision
-  previousErrorSummary: string | null
-  expectedLifecycleRevision?: number
-  nodeChanges?: readonly TaskNodeChangeV1[]
-  sourceTerminationEffectRef?: string | null
-  committedEventIdentity?: Partial<TaskCommittedEventIdentity>
-  onTransitionTx?: (
-    tx: TaskExecutionTransaction,
-    transition: Readonly<{ from: TaskStatus; to: TaskStatus }>,
-    collector: Readonly<{ addNodeChanges(changes: readonly TaskNodeChangeV1[]): void }>,
-  ) => Promise<void>
-}>
+type TaskRuntimeLifecycleWriteInput = Omit<
+  TaskLifecycleWriteInput<TaskExecutionTransaction>,
+  'extra' | 'onTransitionTx'
+> &
+  Readonly<{
+    extra?: TaskRuntimeLifecycleMutation &
+      Partial<
+        Pick<typeof tasks.$inferInsert, 'sourceTerminationFence' | 'sourceTerminationEffectRev'>
+      >
+    onTransitionTx?: (
+      ...args: Parameters<
+        NonNullable<TaskLifecycleWriteInput<TaskExecutionTransaction>['onTransitionTx']>
+      >
+    ) => Promise<void>
+  }>
 
-/** The single physical task CAS and committed-event writer. Named atoms own
+/** Async interpretation of the shared physical CAS and event sequence. Named atoms own
  * validation and the transaction; companions run after the CAS, before its
  * event is appended. A CAS miss returns null before any companion runs, while
  * companion failures propagate so the enclosing transaction rolls back. */
@@ -73,73 +66,10 @@ export async function writeTaskRuntimeLifecycleInTx(
   tx: TaskExecutionTransaction,
   input: TaskRuntimeLifecycleWriteInput,
 ) {
-  const prune = input.workspacePruneDecision
-  const updated = await tx
-    .update(tasks)
-    .set({
-      status: input.to,
-      ...(input.to === 'running'
-        ? { runningSince: input.now }
-        : input.from === 'running'
-          ? {
-              runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
-              runningSince: null,
-            }
-          : {}),
-      ...(input.extra ?? {}),
-      ...(prune.prune ? { workspacePruningAt: input.now, workspacePruneCause: prune.cause } : {}),
-      lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-    })
-    .where(
-      and(
-        eq(tasks.id, input.taskId),
-        eq(tasks.status, input.from),
-        ...(input.expectedLifecycleRevision === undefined
-          ? []
-          : [eq(tasks.lifecycleEventRevision, input.expectedLifecycleRevision)]),
-        ...(input.isRevival
-          ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)]
-          : []),
-        ...(prune.prune
-          ? [
-              isNull(tasks.workspacePruningAt),
-              isNull(tasks.workspacePruneCause),
-              isNull(tasks.workspacePrunedAt),
-            ]
-          : []),
-      ),
-    )
-    .returning({ lifecycleEventRevision: tasks.lifecycleEventRevision })
-  const changed = updated[0]
-  if (changed === undefined) return null
-  const nodeChanges = [...(input.nodeChanges ?? [])]
-  await input.onTransitionTx?.(
-    tx,
-    { from: input.from, to: input.to },
-    {
-      addNodeChanges: (changes) => {
-        nodeChanges.push(...changes)
-      },
-    },
+  return driveAsyncProgram(
+    taskLifecycleWriteSequence(tx, input, appendTaskLifecycleTransitionCommittedEvent),
+    (step) => step(),
   )
-  const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
-    taskId: input.taskId,
-    lifecycleRevision: changed.lifecycleEventRevision,
-    previousStatus: input.from,
-    status: input.to,
-    errorSummary:
-      input.extra?.errorSummary === undefined
-        ? input.previousErrorSummary
-        : (input.extra.errorSummary ?? null),
-    nodeChanges,
-    workspacePruneClaim: prune.prune
-      ? { claimedAt: new Date(input.now).toISOString(), cause: prune.cause }
-      : null,
-    sourceTerminationEffectRef: input.sourceTerminationEffectRef,
-    identity: input.committedEventIdentity,
-    occurredAt: input.now,
-  })
-  return { lifecycleEventRevision: changed.lifecycleEventRevision, eventRef }
 }
 
 export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecyclePersistence {

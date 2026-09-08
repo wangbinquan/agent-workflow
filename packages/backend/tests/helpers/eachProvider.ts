@@ -15,6 +15,7 @@
 // 对齐，含 auth_login_policy 的 bootstrap 标记）。
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
+import { SQL } from 'bun'
 import { randomUUID } from 'node:crypto'
 import { getTableName, isTable } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/sqlite-core'
@@ -471,6 +472,7 @@ interface PostgresqlHarnessDatabase {
   readonly raw: RawQuery
   readonly snapshot: PostgresqlSchemaSnapshot
   readonly sinks: Set<RecordedStatement[]>
+  readonly dropObservation: PostgresqlDropObservation
 }
 
 /** 每个真库都走原有的一次初始化：迁移、生成代、迁移种子与录制客户端。 */
@@ -479,6 +481,7 @@ async function createPostgresqlHarnessDatabase(
   env?: Readonly<Record<string, string | undefined>>,
 ): Promise<PostgresqlHarnessDatabase> {
   const sinks = new Set<RecordedStatement[]>()
+  const sourceUrl = (env ?? process.env)[urlEnv]
   const runtime = createPostgresqlDatabaseRuntime({
     config: {
       provider: 'postgresql',
@@ -529,7 +532,14 @@ async function createPostgresqlHarnessDatabase(
     // 这里做同一件事：把一个刚迁移完的 SQLite 内存库整表复制进来，两个引擎的「起点」才是同一个。
     await seedFromSqliteSnapshot(client)
     const snapshot = await snapshotSchema(query)
-    return { runtime, client, raw: query, snapshot, sinks }
+    return {
+      runtime,
+      client,
+      raw: query,
+      snapshot,
+      sinks,
+      dropObservation: createPostgresqlDropObservation(sourceUrl),
+    }
   } catch (error) {
     try {
       await runtime.close()
@@ -540,12 +550,172 @@ async function createPostgresqlHarnessDatabase(
   }
 }
 
+interface PostgresqlDropObservationEvent {
+  readonly databaseName: string
+  readonly statement: string
+  readonly elapsedMs: number
+  readonly phase: 'started' | 'snapshot' | 'failed' | 'close-failed'
+  readonly snapshot?: unknown
+  readonly error?: unknown
+}
+
+interface PostgresqlDropObservation {
+  schedule(onSlow: () => void): () => void
+  start(input: { readonly databaseName: string; readonly statement: string }): {
+    readonly result: Promise<unknown>
+    close(): Promise<void>
+  }
+  report(event: PostgresqlDropObservationEvent): void
+}
+
+// A single read on an independent connection distinguishes a server-side
+// CheckpointStart/CheckpointDone wait from a DROP absent from pg_stat_activity.
+// These limits belong only to the observer; the actual DROP keeps its runtime.
+function createPostgresqlDropObservation(sourceUrl: string | undefined): PostgresqlDropObservation {
+  return {
+    schedule(onSlow) {
+      const timer = setTimeout(onSlow, 1_000)
+      timer.unref()
+      return () => clearTimeout(timer)
+    },
+    start({ databaseName, statement }) {
+      if (sourceUrl === undefined) throw new Error('PostgreSQL observation URL is unavailable')
+      const url = new URL(sourceUrl)
+      url.searchParams.set('application_name', 'aw-each-provider-cleanup-observer')
+      url.searchParams.set('options', '-c statement_timeout=1000 -c lock_timeout=1000')
+      const observer = new SQL({
+        url: url.toString(),
+        max: 1,
+        connectionTimeout: 1,
+        idleTimeout: 1,
+      })
+      let cancelQuery = () => {}
+      const result = (async () => {
+        const query = observer.unsafe(
+          `select clock_timestamp()::text as observed_at,
+             exists(select 1 from pg_database where datname = $1) as target_database_exists,
+             coalesce((select json_agg(activity) from (
+               select pid, datname, backend_type, state, wait_event_type, wait_event,
+                 pg_blocking_pids(pid) as blocked_by,
+                 extract(epoch from (clock_timestamp() - query_start)) * 1000 as query_age_ms,
+                 case when query = $2 then 'drop' else lower(split_part(ltrim(query), ' ', 1)) end
+                   as statement,
+                 query = $2 as is_observed_drop
+               from pg_stat_activity
+               where pid <> pg_backend_pid()
+                 and (datname = current_database() or datname = $1 or backend_type = 'checkpointer')
+               order by pid limit 100
+             ) activity), '[]'::json) as activity`,
+          [databaseName, statement],
+        )
+        cancelQuery = () => {
+          void query.cancel() // result already observes this same query's settlement.
+        }
+        return await query
+      })()
+      return {
+        result,
+        async close() {
+          try {
+            cancelQuery()
+          } finally {
+            // Bun 1.4 pool.close({ timeout: 0 }) enters its graceful branch.
+            // Cancel first and bound only this diagnostic pool's shutdown.
+            await observer.close({ timeout: 1 })
+          }
+        },
+      }
+    },
+    report(event) {
+      console.warn(
+        '[each-provider-cleanup-observation]',
+        JSON.stringify({
+          ...event,
+          ...(event.error === undefined ? {} : { error: String(event.error) }),
+        }),
+      )
+    },
+  }
+}
+
+async function dropPostgresqlHarnessDatabase(
+  database: { readonly raw: RawQuery },
+  databaseName: string,
+  observation: PostgresqlDropObservation | undefined,
+): Promise<void> {
+  const statement = `drop database if exists "${databaseName}"`
+  const startedAt = performance.now()
+  let stopped = false
+  let observed: ReturnType<PostgresqlDropObservation['start']> | undefined
+  const report = (event: Pick<PostgresqlDropObservationEvent, 'phase' | 'snapshot' | 'error'>) => {
+    if (stopped) return
+    try {
+      observation?.report({
+        databaseName,
+        statement,
+        elapsedMs: performance.now() - startedAt,
+        ...event,
+      })
+    } catch {
+      // A diagnostic sink must not change the DROP result.
+    }
+  }
+  const closeObserver = () => {
+    const resource = observed
+    observed = undefined
+    if (resource === undefined) return
+    try {
+      void resource.close().catch((error: unknown) => report({ phase: 'close-failed', error }))
+    } catch (error) {
+      report({ phase: 'close-failed', error })
+    }
+  }
+  let cancelTimer = () => {}
+  try {
+    cancelTimer =
+      observation?.schedule(() => {
+        if (stopped) return
+        report({ phase: 'started' })
+        try {
+          observed = observation.start({ databaseName, statement })
+          void observed.result.then(
+            (snapshot) => {
+              report({ phase: 'snapshot', snapshot })
+              closeObserver()
+            },
+            (error: unknown) => {
+              report({ phase: 'failed', error })
+              closeObserver()
+            },
+          )
+        } catch (error) {
+          report({ phase: 'failed', error })
+          closeObserver()
+        }
+      }) ?? cancelTimer
+  } catch (error) {
+    report({ phase: 'failed', error })
+  }
+  try {
+    await database.raw(statement)
+  } finally {
+    stopped = true
+    try {
+      cancelTimer()
+    } catch {
+      // The original operation has already settled.
+    }
+    closeObserver()
+  }
+}
+
 export async function closePostgresqlHarnessDatabases(
   databases: readonly {
     readonly runtime: Pick<PostgresqlDatabaseRuntime, 'close'>
     readonly raw: RawQuery
   }[],
   createdDatabaseNames: readonly string[],
+  observation?: PostgresqlDropObservation,
 ): Promise<void> {
   const errors: unknown[] = []
   for (const [index, database] of [...databases.entries()].slice(1).reverse()) {
@@ -564,7 +734,7 @@ export async function closePostgresqlHarnessDatabases(
     // 这里只清理本次成功 CREATE 的附加库；主 URL 指向的库从不被 DROP。
     for (const name of [...createdDatabaseNames].reverse()) {
       try {
-        await primary.raw(`drop database if exists "${name}"`)
+        await dropPostgresqlHarnessDatabase(primary, name, observation)
       } catch (error) {
         errors.push(
           new Error(`PostgreSQL harness cleanup: drop additional database ${name}`, {
@@ -607,7 +777,11 @@ function registerPostgresql(
   let initialization: Promise<void> | undefined
   let cleanup: Promise<void> | undefined
   const closeAll = () =>
-    (cleanup ??= closePostgresqlHarnessDatabases(databases, createdDatabaseNames))
+    (cleanup ??= closePostgresqlHarnessDatabases(
+      databases,
+      createdDatabaseNames,
+      databases[0]?.dropObservation,
+    ))
 
   const initializeDatabases = async (): Promise<void> => {
     providerBefore = currentDatabaseSchemaProvider()

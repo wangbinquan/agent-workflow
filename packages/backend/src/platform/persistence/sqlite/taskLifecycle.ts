@@ -39,7 +39,7 @@
 // snaps back on refresh. Callers of these helpers place their
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import {
   type NodeRunTransitionEvent,
@@ -67,6 +67,14 @@ import type {
   TaskCommittedEventIdentity,
   TaskNodeChangeV1,
 } from '@/modules/task-execution/public/participants'
+import {
+  taskLifecycleWriteSequence,
+  type TaskLifecycleWriteExtra,
+} from '@/modules/task-execution/infrastructure/taskLifecycleWriteSequence'
+import {
+  driveSyncProgram,
+  executeTransactionStepSync,
+} from '@/platform/persistence/transactionProgram'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import {
@@ -443,21 +451,7 @@ export function isTerminalTaskStatus(s: string): boolean {
  *  `workgroupConfigJson` for the same reason: the dynamic-workflow confirm
  *  swaps the generated DAG into the snapshot AND flips dw.phase='executing'
  *  in ONE CAS, so a lost race can never leave phase and snapshot torn. */
-export type TaskStatusUpdateExtra = Partial<
-  Pick<
-    typeof tasks.$inferInsert,
-    | 'finishedAt'
-    | 'errorSummary'
-    | 'errorMessage'
-    | 'failedNodeId'
-    | 'workflowSnapshot'
-    | 'workflowVersion'
-    | 'refClosureJson'
-    | 'workgroupConfigJson'
-    | 'sourceTerminationFence'
-    | 'sourceTerminationEffectRev'
-  >
->
+export type TaskStatusUpdateExtra = TaskLifecycleWriteExtra
 // RFC-207 §3.8 — `runningMs` / `runningSince` are DELIBERATELY excluded from the
 // caller-writable extra: they are computed by writeStatus below, and `extra`
 // spreads AFTER that computation, so allowing them here would let any caller
@@ -564,7 +558,7 @@ interface WriteTaskStatusTxInput {
 }
 
 /**
- * The one physical tasks.status writer. Standalone lifecycle commands and the
+ * Synchronous interpretation of the shared writer. Standalone lifecycle commands and the
  * RFC-333 in-transaction human-gate participants both enter here, so adding an
  * atomic participant does not create a second lifecycle authority.
  */
@@ -572,81 +566,19 @@ function writeTaskStatusTx(input: WriteTaskStatusTxInput): Readonly<{
   revision: number
   eventRef: CommittedEventRef | null
 }> {
-  // rfc097-allow-direct-task-status-write -- single allowlisted writer
-  const updated = input.tx
-    .update(tasks)
-    .set({
-      status: input.to,
-      ...(input.to === 'running'
-        ? { runningSince: input.now }
-        : input.from === 'running'
-          ? {
-              runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
-              runningSince: null,
-            }
-          : {}),
-      ...(input.extra ?? {}),
-      ...(input.workspacePruneDecision.prune
-        ? {
-            workspacePruningAt: input.now,
-            workspacePruneCause: input.workspacePruneDecision.cause,
-          }
-        : {}),
-      lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-    })
-    .where(
-      and(
-        eq(tasks.id, input.taskId),
-        eq(tasks.status, input.from),
-        ...(input.isRevival
-          ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)]
-          : []),
-        ...(input.workspacePruneDecision.prune
-          ? [
-              isNull(tasks.workspacePruningAt),
-              isNull(tasks.workspacePruneCause),
-              isNull(tasks.workspacePrunedAt),
-            ]
-          : []),
-      ),
-    )
-    .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision })
-    .all()
-  if (updated.length === 0) {
+  const result = driveSyncProgram(
+    taskLifecycleWriteSequence(input.tx, input, (tx, event) =>
+      appendTaskLifecycleTransitionCommittedEventTx(tx, {
+        ...event,
+        sourceTerminationEffectRef: event.sourceTerminationEffectRef ?? null,
+      }),
+    ),
+    executeTransactionStepSync,
+  )
+  if (result === null) {
     throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
   }
-  const revision = updated[0]!.lifecycleEventRevision
-  const nodeChanges = [...(input.nodeChanges ?? [])]
-  input.onTransitionTx?.(
-    input.tx,
-    { from: input.from, to: input.to },
-    {
-      addNodeChanges(changes) {
-        nodeChanges.push(...changes)
-      },
-    },
-  )
-  const eventRef = appendTaskLifecycleTransitionCommittedEventTx(input.tx, {
-    taskId: input.taskId,
-    lifecycleRevision: revision,
-    previousStatus: input.from,
-    status: input.to,
-    errorSummary:
-      input.extra?.errorSummary === undefined
-        ? input.previousErrorSummary
-        : (input.extra.errorSummary ?? null),
-    nodeChanges,
-    workspacePruneClaim: input.workspacePruneDecision.prune
-      ? {
-          claimedAt: new Date(input.now).toISOString(),
-          cause: input.workspacePruneDecision.cause,
-        }
-      : null,
-    sourceTerminationEffectRef: input.sourceTerminationEffectRef ?? null,
-    occurredAt: input.now,
-    identity: input.committedEventIdentity,
-  })
-  return { revision, eventRef }
+  return { revision: result.lifecycleEventRevision, eventRef: result.eventRef }
 }
 
 export type HumanGateTaskTransition =

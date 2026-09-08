@@ -510,8 +510,11 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 743,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
+      "baseline": 744,
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。",
+      "allowGrowth": {
+        "why": "RFC-359 W16 adds one explicitly counted native SQLite construction in rfc359-w16-task-lifecycle-write-sequence.test.ts for four synchronous CAS, companion and rollback boundary cases. Its ten other physical-writer cases use the default dual-provider harness. The constructor scanner, corpus floor and exact equality remain unchanged; the new mechanism proof is not hidden or counted as a migrated legacy suite."
+      }
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -594,7 +597,7 @@
       "id": "tasks-status-blind-writes",
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "STATUS_WRITE_ALLOWLIST",
-      "baseline": 11,
+      "baseline": 10,
       "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T1：human-gate 任务跃迁合成一份中立实现 `humanGateTaskTransition.ts`（CAS on lifecycleEventRevision），两 provider 的旧写点在 W4 pair-deletion 前仍在，10 → 11；W4 删孪生后回落。"
     },
     {
@@ -762,7 +765,7 @@
       "id": "rfc359-w8-unnormalized-unique-insert",
       "file": "packages/backend/tests/architecture/rfc359-w8-t29-unnormalized-unique-insert.test.ts",
       "symbol": "UNNORMALIZED_UNIQUE_INSERT_DEBT",
-      "baseline": 21,
+      "baseline": 20,
       "why": "RFC-359 W8：事务作用域内插入唯一键表、且所在文件没有唯一键归一的站点。判据的预言力集中在 **READ COMMITTED opener + 读前无锁**那一档——SERIALIZABLE 下「读同一张表再插它」由 SIREAD 谓词锁兜住（实测 20/20），真正危险的是「读 A 表算序号、插 B 表」。账本因此额外输出 opener / openerSerializes / serializedBeforeRead 三个诊断字段（不进判据），红了能一眼看出落在哪一档。"
     },
     {
@@ -776,10 +779,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1732,
+      "baseline": 1734,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-359 W15 extracts the two existing archive-store query implementations into createEventsArchiveStore. The original SQLite and PostgreSQL factory exports remain typed compatibility wrappers. The single new canonical writer entry records the shared pre-existing delete query body; the original cursor, filesystem, archive transaction and watermark contracts remain unchanged."
+        "why": "RFC-359 W16 adds two exact census entries: the unchanged distinct-open-alert SQL moved into openAlertTasksJoin, and executeTransactionStepSync for the shared synchronous transaction interpreter. The census algorithm stays unchanged; these entries do not claim two additional physical lifecycle writers. The real task CAS bodies merge from two to one, with an exact owner classification for taskLifecycleWriteSequence."
       }
     },
     {
@@ -814,8 +817,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5283,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5294,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W16 adds twelve and retires one exact import edges, net plus eleven, when the existing task lifecycle writers and committed event append algorithms share transactionProgram and taskLifecycleWriteSequence. Public APIs and caller-owned transaction boundaries stay unchanged. The native compatibility entry still reaches the shared owner body; every observed edge remains listed and the scanner is unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -835,8 +841,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4751,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4761,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W16 adds eleven and retires one exact existing-category exception edges, net plus ten, for the newly shared task lifecycle body and generic transaction interpreter. This records the retained native legacy bridge and module-to-platform imports without changing exception classification, expiry, ownership or scanner rules; it does not retire the public SQLite lifecycle contract."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -870,15 +879,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24944,
+      "baseline": 24959,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W15 registers twelve and retires nine exact symbols, net plus three: the shared archive-store file and its factory/two numeric decoders, the neutral maintenance-state file and three unchanged moved functions, and four shared Workflow validation/reference symbols. Nine original duplicated or moved symbols disappear. The compatibility export files remain and no scanner, owner policy or original runtime contract changes."
+        "why": "RFC-359 W16 registers nineteen and retires four exact symbols, net plus fifteen: taskLifecycleWriteSequence and its two types/file, the shared alert join, transactionProgram and its typed interpreters, and appendProgram with its four algorithms/two types/file. The four old duplicate private append helpers disappear. Full typed shared programs reduce production code overall; canonical ownership accounting still records all new symbols."
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2",
+    "sourceDigest": "sha256:cb396ccf7d61bc140159d7c916bc2d4e81c948c25cf3377b23949e053b16935e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -891,8 +900,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7a19e5744ed52f2db92ad27dc0806485836cac3a",
-    "contentDigest": "sha256:0e78a976d3b90b1d555cd0d37d69081c66743101acb8d9d5deebbdfe2b4759bc",
+    "currentSnapshotSha": "f05a4d3ed569803b0ec109543c9f673e331a58b1",
+    "contentDigest": "sha256:21ac59a8a5f8940a86d45ea40b106104531096afa55fa95224170f6888a7ff90",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

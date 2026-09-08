@@ -24,6 +24,9 @@ import type { renderWgProtocolBlock as RenderWgProtocolBlock } from '../../src/m
 import type * as WorkflowRepository from '../../src/modules/resource-catalog/infrastructure/workflowRepository'
 import type * as DevelopmentAutomation from '../../src/modules/development-automation/composition'
 import type * as SkillCatalogBoot from '../../src/modules/resource-catalog/composition/skillCatalogBoot'
+import { TaskExecutionError } from '../../src/modules/task-execution/application/taskExecutionError'
+import type * as TaskDriverRelease from '../../src/modules/task-execution/infrastructure/taskDriverRelease'
+import type * as OwnedTaskExecution from '../../src/modules/task-execution/infrastructure/ownedTaskExecution'
 
 function sourcePath(relative: string): string {
   return fileURLToPath(new URL(`../../src/${relative}`, import.meta.url))
@@ -139,7 +142,7 @@ async function restoreDecodeBeforeWorkflowDelete(): Promise<void> {
 function registerMemorySource(
   target: string,
   changed: string,
-  name: 'seal' | 'workflow-delete',
+  name: 'seal' | 'workflow-delete' | 'driver-release' | 'ownerless-recovery',
 ): string {
   const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'bun' })
   const javascript = transpiler.transformSync(changed)
@@ -269,6 +272,107 @@ async function restoreMissingSkillBootCall(call: 'barrier' | 'reverify'): Promis
   }))
 }
 
+async function restoreUnsettledDriverRelease(): Promise<void> {
+  const target = sourcePath('modules/task-execution/infrastructure/taskDriverRelease.ts')
+  const original: typeof TaskDriverRelease = await import(target)
+  const source = readFileSync(target, 'utf8')
+  const start = '      await persistence.effects.resolveQuiescedManagedProcesses({'
+  const end = '    } else {\n      await persistence.ownership.markRecoveryRequired({'
+  if (source.split(start).length !== 2 || source.split(end).length !== 2) {
+    throw new Error('P0-10 mutation site drifted')
+  }
+  const from = source.indexOf(start)
+  const to = source.indexOf(end, from)
+  const removed = source.slice(from, to)
+  if (
+    to <= from ||
+    !removed.includes('await persistence.effects.unresolvedEffectIds(input.taskId)') ||
+    !removed.includes('await persistence.effects.closeOutcomeUnknownAndRelease({') ||
+    !removed.includes('await persistence.ownership.releaseAfterStop({')
+  ) {
+    throw new Error('P0-10 release sequence drifted')
+  }
+  // 01e4b1b7b: postgresqlTaskDriverLifecycle.ts:106–159 released the owner
+  // directly, without settling process effects or closing outcome-unknown.
+  // The same real stop proof is already constructed immediately above this
+  // span. Keep today's two-phase registry scaffolding: copying the historical
+  // awaitStopped placement would deadlock the newer API, not reproduce P0-10.
+  const changed = `${source.slice(0, from)}      await persistence.ownership.releaseAfterStop({
+        token,
+        intentId,
+        proof: stopProof,
+        now: verifiedAt,
+      })
+${source.slice(to)}`
+  const mutated: typeof TaskDriverRelease = await import(
+    registerMemorySource(target, changed, 'driver-release')
+  )
+  const releaseTaskDriverAndFinalize: typeof TaskDriverRelease.releaseTaskDriverAndFinalize =
+    async (deps, input) => {
+      try {
+        await mutated.releaseTaskDriverAndFinalize(deps, input)
+      } catch (error) {
+        if (
+          error instanceof TaskExecutionError &&
+          error.code === 'task-execution-recovery-required'
+        ) {
+          // Read actual persistence after its failed release transaction. This
+          // witness does not create the error, replace rows or alter settlement.
+          const owner = await deps.persistence.ownership.read(input.taskId)
+          const unresolved = await deps.persistence.effects.unresolvedEffectIds(input.taskId)
+          console.error(
+            `[rfc359-p0-10-state] ${JSON.stringify({
+              taskId: input.taskId,
+              ownerState: owner?.state,
+              unresolvedEffectCount: unresolved.length,
+            })}`,
+          )
+        }
+        throw error
+      }
+    }
+  mock.module(target, () => ({ ...original, releaseTaskDriverAndFinalize }))
+}
+
+async function restoreMissingTaskBootRecovery(): Promise<void> {
+  const target = sourcePath('modules/task-execution/composition/bootRecovery.ts')
+  const original = await import(target)
+  // 01e4b1b7b: cli/start.ts:1570–1581 awaits the never-returning PostgreSQL
+  // daemon from 1160–1163; the recovery calls at 2007–2037 are unreachable.
+  // This empty callback models the omitted CALL at today's shared boundary,
+  // not historical function bytes. It returns no fabricated recovery report:
+  // the selected test checks the actual owner/task/run/intent rows instead.
+  mock.module(target, () => ({
+    ...original,
+    runTaskExecutionBootRecovery: async () => {},
+  }))
+}
+
+async function restoreRevokedOwnerReconcileRefusal(): Promise<void> {
+  const target = sourcePath('modules/task-execution/infrastructure/ownedTaskExecution.ts')
+  const original: typeof OwnedTaskExecution = await import(target)
+  const source = readFileSync(target, 'utf8')
+  const current = "  if (rows[0] !== undefined && rows[0].state === 'claimed') {"
+  if (source.split(current).length !== 2) throw new Error('P0-4 mutation site drifted')
+  // 01e4b1b7b: postgresqlTaskLifecycleTransaction.ts:182–199. Restore only
+  // its original state predicate. The actual lifecycle transaction raises its
+  // original error, and the unchanged recovery adapter catches it as false.
+  // The selected periodic command then leaves the real task/run in running;
+  // neither an error nor that result is supplied by this preload.
+  const changed = source.replace(
+    current,
+    "  if (rows[0] !== undefined && rows[0].state !== 'released') {",
+  )
+  const mutated: typeof OwnedTaskExecution = await import(
+    registerMemorySource(target, changed, 'ownerless-recovery')
+  )
+  mock.module(target, () => ({
+    ...original,
+    assertTaskOwnerlessTx: mutated.assertTaskOwnerlessTx,
+    fenceTaskWrite: mutated.fenceTaskWrite,
+  }))
+}
+
 const mutation = process.env['RFC359_P0_MUTATION']
 switch (mutation) {
   case 'p0-12-protocol':
@@ -297,6 +401,15 @@ switch (mutation) {
     break
   case 'p0-11-reverify':
     await restoreMissingSkillBootCall('reverify')
+    break
+  case 'p0-10-unsettled-release':
+    await restoreUnsettledDriverRelease()
+    break
+  case 'p0-3-boot-omitted':
+    await restoreMissingTaskBootRecovery()
+    break
+  case 'p0-4-revoked-reconcile':
+    await restoreRevokedOwnerReconcileRefusal()
     break
   default:
     throw new Error(`Unknown RFC359_P0_MUTATION: ${mutation ?? '(missing)'}`)

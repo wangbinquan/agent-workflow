@@ -514,19 +514,17 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *   modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1
  *     :80 taskExecutionEffects。why —— 接过句柄的助手，调用方是 task-execution 的 SERIALIZABLE
  *       事务面。removeWhen —— 调用方降级时重判。
- *   platform/events/committed/append.ts: 2
- *     :116 committedEventAggregateHeads / :235 committedEvents。
+ *   platform/events/committed/appendProgram.ts: 2
+ *     committedEventAggregateHeads / committedEvents。
  *     why —— **事件骨干，已实测安全**：`reserveAggregateSequence` 在读 heads 之前取
  *       **per-aggregate** 的 `engineOf(tx).advisoryLock(producer:family:kind:id)`；:235 那条的
  *       序号由同一个函数分配（锁在别的函数里，本判据看不见 ⇒ 假阳性）。实测同一聚合两条并发追加
  *       在两个引擎、两种 opener 下都拿到 seq 1 / 2；删掉那行 advisoryLock 后 READ COMMITTED 上
  *       PG 25/25 全红（SERIALIZABLE 上仍绿，SSI 兜住）。
- *     removeWhen —— 判据若改成「认得出读前串行化」，:116 自动出账；:235 要判据能跨函数才行。
- *   platform/events/committed/sqliteStore.ts: 2
- *     :163 committedEventAggregateHeads / :276 committedEvents。
- *     why —— 句柄类型是 `DbTxSync`（bun:sqlite 同步面），PostgreSQL 客户端产生不出来，这两条在
- *       PG 上一次都不会执行；SQLite 上有 `BEGIN IMMEDIATE` 独占。文件头已写明「不要往这里加新东西」。
- *     removeWhen —— 两个还挂在 `dbTxSync` 上的参与者迁走后整份文件删除。
+ *     W16 —— append.ts 与 sqliteStore.ts 的 2+2 处物理插入合为 generator 中的这 2 处；
+ *       transactionStep 的无形参闭包捕获外层 tx，原作用域判据仍能看见两处先读后插。
+ *       锁由异步入口注入，作用域内只见 lockAggregate，诊断不能假称已跨函数识别其串行化。
+ *     removeWhen —— 判据能跨函数追到注入的锁，或物理插入形状实际改变时重判。
  *   platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 1
  *     :273 resourceBundleApplies（`uniq_resource_bundle_applies_key`）。
  *     why —— **本轮未复核**；opener 是 `.transaction()`。removeWhen —— 与 runtimeStore /
@@ -556,8 +554,7 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3',
   'modules/task-execution/infrastructure/taskContinuationAdmission.ts: 1',
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
-  'platform/events/committed/append.ts: 2',
-  'platform/events/committed/sqliteStore.ts: 2',
+  'platform/events/committed/appendProgram.ts: 2',
   'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 1',
   'services/task.ts: 1',
 ]
@@ -766,6 +763,16 @@ export function link(tx: Tx, a: string, b: string) {
 }
 `
 
+/** 共享 append 的两类插入：无形参闭包捕获 generator 的同一个事务句柄。 */
+const GENERATOR_DEBT_FIXTURE = `
+export function* append(tx: Tx, name: string, a: string, b: string) {
+  const widget = yield* transactionStep(() => tx.select().from(widgets).get())
+  yield* transactionStep(() => tx.insert(widgets).values({ id: mintId(), name }))
+  const gadget = yield* transactionStep(() => tx.select().from(gadgets).get())
+  yield* transactionStep(() => tx.insert(gadgets).values({ a, b }))
+}
+`
+
 /** 伪造 schema 里带唯一约束的表——判据 ① 的自证输入。 */
 const FIXTURE_TABLES = uniqueConstrainedTables(FIXTURE_SCHEMA)
 
@@ -788,6 +795,41 @@ describe('RFC-359 W8-T29 —— 判据自证（负 fixture）', () => {
         (site) => site.table,
       ),
     ).toEqual(['gadgets'])
+  })
+
+  test('generator 闭包仍按 lexical tx 配对两张表，upsert、错误前置表与先后顺序仍被区分', () => {
+    expect(
+      uniqueInsertDebtSites('fixture-generator.ts', GENERATOR_DEBT_FIXTURE, FIXTURE_TABLES).map(
+        (site) => site.table,
+      ),
+    ).toEqual(['widgets', 'gadgets'])
+    expect(
+      uniqueInsertDebtSites(
+        'fixture-generator-upsert.ts',
+        GENERATOR_DEBT_FIXTURE.replace(
+          'tx.insert(widgets).values({ id: mintId(), name })',
+          'tx.insert(widgets).values({ id: mintId(), name }).onConflictDoNothing()',
+        ),
+        FIXTURE_TABLES,
+      ).map((site) => site.table),
+    ).toEqual(['gadgets'])
+    expect(
+      uniqueInsertDebtSites(
+        'fixture-generator-wrong-table.ts',
+        GENERATOR_DEBT_FIXTURE.replace('.from(widgets)', '.from(notes)'),
+        FIXTURE_TABLES,
+      ).map((site) => site.table),
+    ).toEqual(['gadgets'])
+    expect(
+      uniqueInsertDebtSites(
+        'fixture-generator-reversed.ts',
+        GENERATOR_DEBT_FIXTURE.replace(
+          '  const gadget = yield* transactionStep(() => tx.select().from(gadgets).get())\n  yield* transactionStep(() => tx.insert(gadgets).values({ a, b }))',
+          '  yield* transactionStep(() => tx.insert(gadgets).values({ a, b }))\n  const gadget = yield* transactionStep(() => tx.select().from(gadgets).get())',
+        ),
+        FIXTURE_TABLES,
+      ).map((site) => site.table),
+    ).toEqual(['widgets'])
   })
 
   test('正解与无关形状一律放过（否则判据会逼着人给正确代码改写法）', () => {

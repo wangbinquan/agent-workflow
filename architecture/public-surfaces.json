@@ -144334,9 +144334,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.lifecycleRevision",
           "type": "number"
         },
@@ -144348,16 +144346,12 @@
           "type": "readonly TaskNodeChangeV1[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.occurredAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.previousStatus",
           "type": "z.infer<typeof TaskStatusSchema>"
         },
@@ -144386,9 +144380,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:0631f2968bfc8de312a2"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.workspacePruneClaim",
           "type": "TaskLifecycleTransitionedPayloadV1['workspacePruneClaim']"
         },
@@ -161839,7 +161831,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2",
+  "sourceDigest": "sha256:cb396ccf7d61bc140159d7c916bc2d4e81c948c25cf3377b23949e053b16935e",
   "targetContexts": [
     "collaboration",
     "development-automation",

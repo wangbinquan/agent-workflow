@@ -11,6 +11,7 @@ import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
+  committedEvents,
   nodeRunOutputs,
   nodeRuns,
   taskExecutionIntents,
@@ -45,6 +46,7 @@ import {
   terminalizeTaskExecutionIntentsInTx,
 } from '@/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence'
 import { DrizzleTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
+import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -148,6 +150,62 @@ function continuation(taskId: string): CanonicalContinuationRequest {
 }
 
 describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', (harness) => {
+  test('guard stays before CAS; successful publication reads committed rows and a failed guard rolls back', async () => {
+    const db = harness.db
+    const taskId = await seedTask(db, { status: 'pending' })
+    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(db)
+    const order: string[] = []
+    const published: { status: string | undefined; eventIds: string[] }[] = []
+    registerAfterCommitEventPump({
+      async publishNow(refs) {
+        order.push('publish')
+        const row = await taskRow(db, taskId)
+        const events = await db
+          .select({ id: committedEvents.id })
+          .from(committedEvents)
+          .where(eq(committedEvents.aggregateId, taskId))
+        published.push({
+          status: row?.status,
+          eventIds: events
+            .map((event) => event.id)
+            .filter((id) => refs.some((ref) => ref.eventId === id)),
+        })
+      },
+      nudge() {},
+    })
+    try {
+      const before = await taskRow(db, taskId)
+      expect(
+        await lifecycle.trySetWithGuard(
+          { taskId, to: 'running', allowedFrom: ['pending'], now: 20, reason: 'guard-order' },
+          async (tx) => {
+            order.push('guard')
+            expect(await taskRow(tx, taskId)).toEqual(before)
+            await tx.update(tasks).set({ name: 'guard-written' }).where(eq(tasks.id, taskId))
+          },
+        ),
+      ).toBe(true)
+      order.push('returned')
+      expect(order).toEqual(['guard', 'publish', 'returned'])
+      expect(published).toEqual([{ status: 'running', eventIds: [`task-lifecycle:${taskId}:2`] }])
+      const committed = await db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+      const sentinel = new Error('guard rollback')
+      await expect(
+        lifecycle.trySetWithGuard(
+          { taskId, to: 'done', allowedFrom: ['running'], now: 30, reason: 'failed-guard' },
+          async (tx) => {
+            await tx.update(tasks).set({ name: 'must-rollback' }).where(eq(tasks.id, taskId))
+            throw sentinel
+          },
+        ),
+      ).rejects.toBe(sentinel)
+      expect(await db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toEqual(committed)
+      expect(published).toHaveLength(1)
+    } finally {
+      registerAfterCommitEventPump(null)
+    }
+  })
+
   test('CAS 推进 revision；非法来源 / 终态覆盖 ⇒ false；复活门与 owner 围栏', async () => {
     const db = harness.db
     const taskId = await seedTask(db, { status: 'pending' })

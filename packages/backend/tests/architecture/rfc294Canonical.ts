@@ -2669,6 +2669,20 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'CanonicalControlTransaction',
     }
   }
+  // RFC-359 W16 moves both physical task-status CAS bodies into this exact
+  // shared program; the original native/async entries still own their transaction.
+  if (
+    /modules\/task-execution\/infrastructure\/taskLifecycleWriteSequence\.ts#taskLifecycleWriteSequence$/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'task-status-and-optional-lifecycle-revision-cas',
+      requiredBrandedProof: 'CanonicalControlTransaction',
+    }
+  }
   if (
     /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)TaskExecutionRecovery|effectQuiescence)/.test(
       value,

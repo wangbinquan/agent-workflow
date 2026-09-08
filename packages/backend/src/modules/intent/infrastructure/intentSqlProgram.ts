@@ -1,4 +1,8 @@
 import type { SQLWrapper } from 'drizzle-orm'
+import {
+  driveAsyncProgram as driveAsyncTransactionProgram,
+  driveSyncProgram as driveSyncTransactionProgram,
+} from '@/platform/persistence/transactionProgram'
 import type {
   IntentContextResourceAuthorization,
   IntentContextResourceAuthorityPair,
@@ -57,16 +61,12 @@ export function driveSyncProgram<T>(
   program: IntentSqlProgram<T>,
   execute: (statement: IntentSqlStatement) => unknown,
 ): T {
-  let state = program.next()
-  while (!state.done) state = program.next(execute(state.value))
-  return state.value
+  return driveSyncTransactionProgram(program, execute)
 }
 
 export async function driveAsyncProgram<T>(
   program: IntentSqlProgram<T>,
   execute: (statement: IntentSqlStatement) => Promise<unknown>,
 ): Promise<T> {
-  let state = program.next()
-  while (!state.done) state = program.next(await execute(state.value))
-  return state.value
+  return await driveAsyncTransactionProgram(program, execute)
 }

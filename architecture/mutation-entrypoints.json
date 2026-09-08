@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1732,
+    "entries": 1734,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -28331,6 +28331,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/query.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/query.ts#openAlertTasksJoin",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/query.ts#openAlertTasksJoin",
+      "symbol": "openAlertTasksJoin",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts#createTaskOverviewQuery",
@@ -32700,6 +32725,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts#openSqliteLogicalSourceWorker",
       "symbol": "openSqliteLogicalSourceWorker",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/platform/persistence/transactionProgram.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/transactionProgram.ts#executeTransactionStepSync",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/transactionProgram.ts#executeTransactionStepSync",
+      "symbol": "executeTransactionStepSync",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -41375,7 +41424,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2",
+  "sourceDigest": "sha256:cb396ccf7d61bc140159d7c916bc2d4e81c948c25cf3377b23949e053b16935e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41485,7 +41534,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 190,
+      "durableWriterSites": 189,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -43700,6 +43749,22 @@
       },
       {
         "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "taskLifecycleWriteSequence",
+        "controlSubtype": "terminal-control",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#73:tasks",
+        "line": 73,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#taskLifecycleWriteSequence",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-status-and-optional-lifecycle-revision-cas",
+        "symbol": "taskLifecycleWriteSequence"
+      },
+      {
+        "allowedTables": [
           "taskExecutionOwners"
         ],
         "authorityKind": "control-revision",
@@ -43899,28 +43964,12 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#218:tasks",
-        "line": 218,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#148:tasks",
+        "line": 148,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "DrizzleTaskRuntimeLifecyclePersistence"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "writeTaskRuntimeLifecycleInTx",
-        "controlSubtype": "continuation-admission",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#77:tasks",
-        "line": 77,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#writeTaskRuntimeLifecycleInTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "writeTaskRuntimeLifecycleInTx"
       },
       {
         "allowedTables": [
@@ -44267,8 +44316,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1126:nodeRuns",
-        "line": 1126,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1058:nodeRuns",
+        "line": 1058,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionMergeState",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44283,8 +44332,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1239:nodeRuns",
-        "line": 1239,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#1171:nodeRuns",
+        "line": 1171,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#abandonSupersededMergeStates",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44299,8 +44348,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#202:nodeRuns",
-        "line": 202,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#210:nodeRuns",
+        "line": 210,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#transitionNodeRunStatusTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44315,8 +44364,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#335:nodeRuns",
-        "line": 335,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#343:nodeRuns",
+        "line": 343,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setNodeRunStatus",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44331,8 +44380,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#394:nodeRuns",
-        "line": 394,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#402:nodeRuns",
+        "line": 402,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setNodeRunStatusTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",
@@ -44343,28 +44392,12 @@
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "writeTaskStatusTx",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#576:tasks",
-        "line": 576,
-        "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#writeTaskStatusTx",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-or-node-lifecycle-status-cas",
-        "symbol": "writeTaskStatusTx"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
         "consumer": "setTaskStatus",
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#885:tasks",
-        "line": 885,
+        "id": "task-authority:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#817:tasks",
+        "line": 817,
         "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#setTaskStatus",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-or-node-lifecycle-status-cas",

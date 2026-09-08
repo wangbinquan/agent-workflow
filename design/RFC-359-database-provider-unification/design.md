@@ -2,13 +2,21 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- 物理 task CAS/companion/event 顺序与 committed append 各由一份共享程序解释执行；调用方仍
+  持有原同步或异步事务，原同步返回、异步锁位置、nullable/strict miss及提交后发布保持。
+  `transactionProgram` 只复用步进机制；public SQLite生命周期入口和未迁移companion继续显式留债。
+- filtered task 根页复用原default的去重告警联接，只投影所需匹配列，fam限定页内唯一root集合。
+  默认SQL/绑定/结果与原页/游标/筛选计数合同保持，性能提升以原规模双库HTTP P95实测为准。
+- 计时后SQL诊断对含写入的CTE只取不执行的计划，普通读查询保留实际ANALYZE；计划模式显式
+  入报告，原只读事务、清理与计时样本保持，计划缺失不能用报告complete假装解决。
+
 - 归档查询 store 与维护键值读写各只有一份中立实现；原 provider 工厂退为类型兼容壳，
   保留数值、NULL、游标/文件追加和 archive 事务顺序。测试移到双库但原大语料仍由 hosted 执行。
 - Workflow 共享校验只合并实际相同的算法，原入口的 canonicalization 时点、缺失引用排序、
   no-op 分支和事件回调位置保持；不能用共享名义静默改变旧合同。
 - PG 借用内部工作区的宿主任务必须沿用 internal 分类，与已有 platform input roster 一致。
   真执行证明从实际租约写入一路经过原 artifact path 查询，再到子进程、task done 与终态观察。
-- P0 历史变异保留原七阶段并追加四个 boot/legacy omission 场景，使用真实任务或非空恢复状态。
+- P0 历史变异保留原阶段并追加 boot/revoked-owner/release 场景，现14阶段，使用真实任务或非空恢复状态。
   原调用遗漏的重建与字面历史函数替换分别记证据，全部以指定失败和前后真实控制判定。
 - Workgroup 的规范化、快照、hash、行/修订/详情解码共用纯函数；legacy 的数组 slice 与中立
   数组展开仍各在原边界执行，保留稀疏数组、自定义迭代器及异常语义。共享 codec 不改变 SQL、

@@ -2,6 +2,15 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第十六批（2026-09-08）**：物理task生命周期和committed append各共享一份算法，
+> 原同步/异步事务及发布位置保留；上述两组生产合计净删114行。公共任务查询去重告警并限定页内family，
+> 原完整页/游标/计数对拍通过，微型SQLite计划已用root索引；原规模HTTP性能待hosted，AC11仍开。
+> 新增P0-3/4 periodic/10历史变异，14阶段SQLite共48 pass+16指定故障/665expect，最终51源码摘要稳定。
+> 上批f05a4d3的真双库11阶段均通过，PG legacy mission实际done与九变异有证；Main 34200442568
+> 为34 success/2 failure，唯一后端失败在RFC287清理DROP临时库时30s idle timeout；已补checkpoint等待观测，根因仍待确认。
+> 本批完整backend tsc与154项定向架构检查通过；新增同步机制构库如实记账T19f743→744，
+> 旧套件迁移累计仍174，RFC继续In Progress。详见RFC359 plan §0b/§0c。
+
 > **RFC-359 W12 第十五批（2026-09-08）**：再迁移 11 个运行时与2个归档旧套件，累计174个；
 > AST 实际构库1440→1416，文件675→663，T19f755→743。归档与维护共享体净删108行，Workflow净删34行。
 > 上批 `7a19e5744` Main CI `34196252484` 为31 success /4 failure /1 cancelled：真PG legacy任务

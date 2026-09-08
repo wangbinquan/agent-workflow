@@ -17,6 +17,69 @@ export interface ProfileStatement {
   readonly error: string | null
 }
 
+export type ProfileExplainMode = 'analyze' | 'plan-only'
+
+// Diagnostic classification only: a WITH may contain an UPDATE even when its
+// final operation is SELECT. Keep those plans, but do not request ANALYZE.
+// Quoted text and comments must not turn an ordinary read into an estimate.
+function statementPlanMode(statement: string): ProfileExplainMode | null {
+  let first: string | undefined
+  let modifies = false
+  let index = 0
+  while (index < statement.length) {
+    const char = statement[index]!
+    const next = statement[index + 1]
+    if (char === "'" || char === '"' || char === '`') {
+      index += 1
+      while (index < statement.length) {
+        if (statement[index] === char) {
+          if (statement[index + 1] === char) {
+            index += 2
+            continue
+          }
+          index += 1
+          break
+        }
+        index += 1
+      }
+      continue
+    }
+    if (char === '-' && next === '-') {
+      const end = statement.indexOf('\n', index + 2)
+      index = end < 0 ? statement.length : end + 1
+      continue
+    }
+    if (char === '/' && next === '*') {
+      let depth = 1
+      index += 2
+      while (index < statement.length && depth > 0) {
+        const pair = statement.slice(index, index + 2)
+        if (pair === '/*') depth += 1
+        if (pair === '*/') depth -= 1
+        index += pair === '/*' || pair === '*/' ? 2 : 1
+      }
+      continue
+    }
+    if (char === '$') {
+      const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(statement.slice(index))?.[0]
+      if (tag !== undefined) {
+        const end = statement.indexOf(tag, index + tag.length)
+        index = end < 0 ? statement.length : end + tag.length
+        continue
+      }
+    }
+    const token = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(statement.slice(index))?.[0]
+    if (token !== undefined) {
+      const word = token.toUpperCase()
+      first ??= word
+      if (['INSERT', 'UPDATE', 'DELETE', 'MERGE'].includes(word)) modifies = true
+      index += token.length
+    } else index += 1
+  }
+  if (first !== 'SELECT' && first !== 'WITH') return null
+  return modifies ? 'plan-only' : 'analyze'
+}
+
 function errorText(error: unknown): string {
   if (error instanceof AggregateError)
     return `${error.name}: ${error.message}; ${error.errors.map(errorText).join('; ')}`
@@ -162,7 +225,7 @@ export async function profilePerformanceQueries(input: {
     'complete' | 'scenarios' | 'sourceSha' | 'executionId' | 'provider' | 'tier'
   >
   readonly capture: ReturnType<typeof createQueryCapture>
-  readonly explain: (statement: ProfileStatement) => Promise<unknown>
+  readonly explain: (statement: ProfileStatement, mode: ProfileExplainMode) => Promise<unknown>
 }) {
   if (
     !input.report.complete ||
@@ -184,7 +247,9 @@ export async function profilePerformanceQueries(input: {
     const plans = []
     const seen = new Set<string>()
     for (const statement of observed.statements) {
-      if (!/^\s*(?:select|with)\b/i.test(statement.sql)) continue
+      const classifiedMode = statementPlanMode(statement.sql)
+      if (classifiedMode === null) continue
+      const mode = input.report.provider === 'sqlite' ? 'plan-only' : classifiedMode
       const key = JSON.stringify([statement.sql, statement.parameters], (_key, value: unknown) =>
         typeof value === 'bigint' ? { bigint: String(value) } : value,
       )
@@ -194,13 +259,15 @@ export async function profilePerformanceQueries(input: {
         plans.push({
           sql: statement.sql,
           parameters: statement.parameters,
-          plan: await input.explain(statement),
+          mode,
+          plan: await input.explain(statement, mode),
           error: null,
         })
       } catch (error) {
         plans.push({
           sql: statement.sql,
           parameters: statement.parameters,
+          mode,
           plan: null,
           error: errorText(error),
         })

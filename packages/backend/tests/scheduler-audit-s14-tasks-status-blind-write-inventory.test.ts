@@ -35,19 +35,18 @@ import { join, relative, resolve, sep } from 'node:path'
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 /**
- * Provider-owned lifecycle kernels are the only legal direct task-status writers.
- * SQLite retains its synchronous CAS kernel; PostgreSQL owns equivalent atomic
- * transactions in its infrastructure adapters. Exact counts make this a frozen
- * authority ledger rather than a growth allowance.
+ * The shared lifecycle CAS and remaining exact adapters own direct task-status writes.
+ * RFC-359 W16 moves the native and async physical kernels into one shared body;
+ * their original entry points retain their transaction and return mechanisms.
+ * Exact counts keep every physical writer visible.
  */
 const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
-  'platform/persistence/sqlite/taskLifecycle.ts': 1,
+  'modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
   'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 3,
   'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
-  'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts': 1,
   // RFC-359 W1-T1：human-gate 任务跃迁的一份中立实现（SQLite/PG 共用），CAS on lifecycleEventRevision。
   'modules/task-execution/infrastructure/humanGateTaskTransition.ts': 1,
@@ -180,14 +179,26 @@ describe('S-14 ratchet: direct tasks.status writes confined to provider lifecycl
       )
     }
     expect(violations).toEqual([])
-    // allowlist 本身必须被占用：lifecycle.ts 的那 1 处 CAS 写真实存在
+    // allowlist 本身必须被占用：共享程序的那 1 处 CAS 写真实存在
     // （防止扫描器失效导致全文件 0 命中的空洞绿）。
-    expect(counts.status['platform/persistence/sqlite/taskLifecycle.ts']).toBe(1)
+    expect(
+      counts.status['modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts'],
+    ).toBe(1)
+    expect(counts.status['platform/persistence/sqlite/taskLifecycle.ts']).toBeUndefined()
+    expect(
+      counts.status['modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts'],
+    ).toBeUndefined()
   })
 
   test('the single allowlisted write carries the rfc097 marker comment', () => {
     const helper = readFileSync(
-      join(BACKEND_SRC, 'platform', 'persistence', 'sqlite', 'taskLifecycle.ts'),
+      join(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'taskLifecycleWriteSequence.ts',
+      ),
       'utf8',
     )
     expect(helper).toContain('rfc097-allow-direct-task-status-write')

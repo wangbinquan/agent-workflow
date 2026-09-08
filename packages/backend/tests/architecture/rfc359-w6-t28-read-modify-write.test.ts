@@ -96,15 +96,13 @@
 //        `applyLock.run(sessionId, …)`（`application/sessionApplyLock.ts`，同 sessionId 排成一条
 //        Promise 链），而 daemon 是 flock 单实例的单进程。同一个 session 的两笔 apply 因此不可能
 //        同时进这笔事务；不同 session 各写各的行。SQLite provider 走的是同一把锁、同一个算法。
-//   platform/events/committed/sqliteStore.ts                              1 处
-//     :198  committedEventAggregateHeads —— lastSeq = (head.lastSeq ?? 0) + 1（序号分配）
-//     —— **不可达且即将退役**（W8-T28 实测判定）：`reserveAggregateSequenceTx` 的句柄类型是
-//        `DbTxSync`＝bun:sqlite 的**同步**事务面，PostgreSQL 客户端根本产生不出这种句柄，这条
-//        代码在 PG 上一次都不会执行；SQLite 上它在 `BEGIN IMMEDIATE` 独占里。provider-中立的
-//        那一份 append（`platform/events/committed/append.ts`）早已改用
-//        `engineOf(tx).advisoryLock`。本文件只为两个还挂在 `dbTxSync` 上的参与者
-//        （`collaborationCommittedEventParticipant.ts` / `taskLifecycleEventParticipant.ts`）活着，
-//        随它们迁到 `DatabaseSession` 一起删；不给一段即将退役的代码加锁。
+//   platform/events/committed/appendProgram.ts                            1 处
+//     committedEventAggregateHeads —— lastSeq = (head.lastSeq ?? 0) + 1（序号分配）
+//     —— W16 两入口共用同一 generator：旧 sqliteStore 的物理更新已删除，读值由
+//        `yield* transactionStep(() => tx.select(...))` 返回，再经闭包写回同一个 tx。
+//        异步入口传入真实 `engineOf(tx).advisoryLock`；同步入口的 BEGIN IMMEDIATE 已独占。
+//        本作用域只看见注入的 `lockAggregate(...)`，原判据不跨函数追锁，因此继续记 1，
+//        不能因读移入 step 闭包而把这处误报成消失。
 //
 // ---------------------------------------------------------------------------
 // W8-T28 这一刀（可达的 6 处已修，账本相应减 5 个文件）
@@ -251,12 +249,31 @@ interface ChainCall {
   readonly call: ts.CallExpression
 }
 
-/** 链上每一段 `.m(…)`。`await` / 括号透明。 */
+/** 链上每一段 `.m(…)`。`await` / 括号 / generator 的 transactionStep 表达式闭包透明。 */
 function chainCalls(root: ts.Node): ChainCall[] {
   const out: ChainCall[] = []
   const visit = (node: ts.Node): void => {
     if (ts.isAwaitExpression(node) || ts.isParenthesizedExpression(node)) {
       visit(node.expression)
+      return
+    }
+    if (
+      ts.isYieldExpression(node) &&
+      node.asteriskToken !== undefined &&
+      node.expression !== undefined &&
+      ts.isCallExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'transactionStep' &&
+      node.expression.arguments.length === 1
+    ) {
+      const step = node.expression.arguments[0]
+      if (
+        step !== undefined &&
+        ts.isArrowFunction(step) &&
+        step.parameters.length === 0 &&
+        !ts.isBlock(step.body)
+      )
+        visit(step.body)
       return
     }
     if (ts.isCallExpression(node)) {
@@ -518,7 +535,7 @@ export const READ_MODIFY_WRITE_DEBT: readonly string[] = [
   // W8-T28：`acceptMessage` 的两处已按 §10.1 取会话聚合根行锁修掉（10 → 8）。剩下 8 处实测不可达，
   // 理由见上面清单里那段与 `tests/rfc359-w8-t28-mcp-runtime-lost-update.test.ts` 的头注释。
   'modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts: 8',
-  'platform/events/committed/sqliteStore.ts: 1',
+  'platform/events/committed/appendProgram.ts: 1',
 ]
 
 interface ScannedFile {
@@ -636,6 +653,19 @@ export function bump(tx: Tx, id: string) {
 }
 `
 
+/** 与共享 append 程序同形：两步闭包捕获同一个外层 tx，读值由 yield* 返回。 */
+const GENERATOR_DEBT_FIXTURE = `
+export function* bump(tx: Tx, id: string) {
+  const current = yield* transactionStep(() =>
+    tx.select().from(cases).where(eq(cases.id, id)).get(),
+  )
+  const next = current.revision + 1
+  yield* transactionStep(() =>
+    tx.update(cases).set({ revision: next }).where(eq(cases.id, id)).run(),
+  )
+}
+`
+
 describe('RFC-359 W6-T28 —— 判据的负 fixture（matcher 不咬了 ⇒ 违规集合同样回到空）', () => {
   test('真债被报出：读出 revision、算出新值写回，既没锁也没 CAS', () => {
     const sites = readModifyWriteSites('fixture-debt.ts', DEBT_FIXTURE)
@@ -648,5 +678,38 @@ describe('RFC-359 W6-T28 —— 判据的负 fixture（matcher 不咬了 ⇒ 违
 
   test('正解 B 不被报出：where 带上读到的旧 revision（CAS 谓词）', () => {
     expect(readModifyWriteSites('fixture-cas.ts', CAS_FIXTURE)).toEqual([])
+  }, 30_000)
+
+  test('generator 的 transactionStep 表达式闭包仍读写同一个 lexical tx', () => {
+    expect(
+      readModifyWriteSites('fixture-generator.ts', GENERATOR_DEBT_FIXTURE).map(
+        (site) => `${site.table}<-${site.readVariable}`,
+      ),
+    ).toEqual(['cases<-current'])
+  }, 30_000)
+
+  test('generator 仍保留锁、CAS、值流、同表与精确 transactionStep 闭包判据', () => {
+    const locked = GENERATOR_DEBT_FIXTURE.replace(
+      '  const current =',
+      '  yield* transactionStep(() => engineOf(tx).lockAggregateRoot(tx, cases, cases.id, id))\n  const current =',
+    )
+    const cas = GENERATOR_DEBT_FIXTURE.replace(
+      '.set({ revision: next }).where(eq(cases.id, id))',
+      '.set({ revision: next }).where(and(eq(cases.id, id), eq(cases.revision, current.revision)))',
+    )
+    for (const fixture of [
+      locked,
+      cas,
+      GENERATOR_DEBT_FIXTURE.replace('.set({ revision: next })', '.set({ revision: 10 })'),
+      GENERATOR_DEBT_FIXTURE.replace('tx.update(cases)', 'tx.update(otherTable)'),
+      GENERATOR_DEBT_FIXTURE.replace('yield* transactionStep(() =>', 'yield* unrelated(() =>'),
+      GENERATOR_DEBT_FIXTURE.replace('yield* transactionStep(() =>', 'transactionStep(() =>'),
+      GENERATOR_DEBT_FIXTURE.replace('yield* transactionStep(() =>', 'yield transactionStep(() =>'),
+      GENERATOR_DEBT_FIXTURE.replace(
+        'yield* transactionStep(() =>',
+        'yield* transactionStep((tx: OtherTx) =>',
+      ),
+    ])
+      expect(readModifyWriteSites('fixture-generator-control.ts', fixture)).toEqual([])
   }, 30_000)
 })

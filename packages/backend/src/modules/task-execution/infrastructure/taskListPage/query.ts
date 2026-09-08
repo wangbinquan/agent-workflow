@@ -290,6 +290,16 @@ export function isDefaultView(viewer: TaskListViewer, filters: TaskOperationsFil
  * the authorized set). Wire shape, cursor encoding and item shape are
  * byte-identical; the rfc311 page oracle pins new === old on random forests.
  */
+function openAlertTasksJoin(): SQL {
+  return sql`
+    LEFT JOIN (
+      SELECT DISTINCT la.task_id AS task_id
+      FROM lifecycle_alerts la
+      WHERE la.resolved_at IS NULL
+    ) open_alerts ON open_alerts.task_id = t.id
+  `
+}
+
 export function fastDefaultRootQuery(
   db: TaskListPageDb,
   viewer: TaskListViewer,
@@ -397,13 +407,7 @@ export function fastDefaultRootQuery(
   // 或任何一个 `SUM`，这是改写等价的支点（一个任务挂多条未闭合告警是生产常态）。
   // 未匹配到的行 `open_alerts.task_id` 为 NULL，正是原来的 `NOT EXISTS`。
   // 由 `rfc359-w8-t26-plan-reshape-conformance` 在两个引擎上钉住。
-  const openAlertTasks = sql`
-    LEFT JOIN (
-      SELECT DISTINCT la.task_id AS task_id
-      FROM lifecycle_alerts la
-      WHERE la.resolved_at IS NULL
-    ) open_alerts ON open_alerts.task_id = t.id
-  `
+  const openAlertTasks = openAlertTasksJoin()
   return sql`
     WITH facet_values AS (
       SELECT
@@ -483,9 +487,9 @@ export function fastFilteredRootQuery(
       { id: sql.raw(`${alias}.id`), ownerUserId: sql.raw(`${alias}.owner_user_id`) },
       viewer,
     )
-  const openAlertExists = sql`EXISTS (
-    SELECT 1 FROM lifecycle_alerts la WHERE la.task_id = t.id AND la.resolved_at IS NULL
-  )`
+  // RFC-359 full HTTP run 34196371681: the former scalar EXISTS ran
+  // 100,000 times. The shared distinct join preserves one row per task.
+  const openAlertTasks = openAlertTasksJoin()
   // 合格集的两层：non_view 决定 facets 的分母，再叠 view 得到真正的匹配集。
   // 与旧管线共用 nonViewCondition / viewCondition，只是换了别名。
   const nonView = nonViewCondition(db, viewer, parsed.filters, 't')
@@ -502,14 +506,15 @@ export function fastFilteredRootQuery(
         t.root_task_id AS rid,
         t.started_at,
         t.status,
-        ${openAlertExists} AS has_open_alert
+        (open_alerts.task_id IS NOT NULL) AS has_open_alert
       FROM tasks t
+      ${openAlertTasks}
       WHERE ${authOf('t')}
         AND ${catalogVisibilityCondition('t', catalogVisibility)}
         AND ${nonView}
     ),
     matches AS MATERIALIZED (
-      SELECT nvm.* FROM non_view_matches nvm
+      SELECT nvm.id, nvm.rid, nvm.started_at FROM non_view_matches nvm
       WHERE ${viewCondition(parsed.filters.view, 'nvm', sql`nvm.has_open_alert`)}
     ),
     roots AS MATERIALIZED (
@@ -532,8 +537,8 @@ export function fastFilteredRootQuery(
     fam AS MATERIALIZED (
       SELECT t.id, t.parent_task_id
       FROM tasks t
-      JOIN page_roots pr ON pr.rid = t.root_task_id
-      WHERE ${authOf('t')} AND ${catalogVisibilityCondition('t', catalogVisibility)}
+      WHERE t.root_task_id IN (SELECT pr.rid FROM page_roots pr)
+        AND ${authOf('t')} AND ${catalogVisibilityCondition('t', catalogVisibility)}
     ),
     -- Q = 匹配行 ∪ 其祖先（自底向上闭包；UNION 去重顺带防成环）。
     qualified(id) AS (

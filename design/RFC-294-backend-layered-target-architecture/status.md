@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:4a41e442f4966540912d8e906293a83214739cbaa2a0407d3e0913747856e3c2`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:cb396ccf7d61bc140159d7c916bc2d4e81c948c25cf3377b23949e053b16935e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1790 |
+| backend production TS 文件 | 1793 |
 | `services/` 文件 | 323 |
-| `modules/**` 文件 / 非空 context | 1187 / 17 |
+| `modules/**` 文件 / 非空 context | 1188 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 338 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 285 / 35 |
+| RFC-317 boundary census（inbound / outbound） | 287 / 35 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 4751 |
+| `architectureExceptions` | 4761 |
 | `backgroundJobs` | 338 |
-| `crossContextImports` | 5283 |
+| `crossContextImports` | 5294 |
 | `facades` | 323 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24944 |
-| `mutationEntrypoints` | 1732 |
+| `moduleSymbolOwners` | 24959 |
+| `mutationEntrypoints` | 1734 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 983 |
 | `transactionExternalEffects` | 272 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 106 |
+| task-execution / infrastructure | 107 |
 | resource-catalog / infrastructure | 99 |
 | task-execution / application | 87 |
 | resource-catalog / application | 56 |
@@ -142,7 +142,7 @@
 | targetContext | 数量 |
 | --- | --- |
 | task-execution | 193 |
-| platform | 146 |
+| platform | 148 |
 | identity-access | 44 |
 | runtime-management | 44 |
 | resource-catalog | 43 |
@@ -200,9 +200,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3135 |
-| legacy-inbound | 1435 |
-| infrastructure-external | 275 |
+| legacy-outbound | 3143 |
+| legacy-inbound | 1437 |
+| infrastructure-external | 276 |
 | offered-consumption | 157 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 82 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3135 |
-| legacy-inbound | 1435 |
+| legacy-outbound | 3143 |
+| legacy-inbound | 1437 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 82 |
 | no-circular | 6 |
@@ -227,8 +227,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2410 |
-| W4-E1 | 813 |
+| W9 | 2418 |
+| W4-E1 | 815 |
 | W4-C | 398 |
 | W4-E0 | 219 |
 | W4 | 194 |

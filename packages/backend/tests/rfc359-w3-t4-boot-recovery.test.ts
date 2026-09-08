@@ -28,6 +28,8 @@ import {
   type CanonicalContinuationRequest,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
+import { reconcileDeadRunningRuns } from '@/services/orphanReconcile'
+import { listRecoveryEventsForTask } from '@/services/recovery'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const rootPath = (taskId: string): readonly LineageSlot[] => [
@@ -108,6 +110,99 @@ async function crashPreviousDaemon(db: ProviderNeutralDatabase, taskId: string) 
 const silentLog = { info: () => {}, warn: () => {} }
 
 describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', (harness) => {
+  test('P0-3 实际启动恢复调用释放前代 owner，持久终态后新意图可继续认领', async () => {
+    const db = harness.db
+    const taskId = `w3t4_${ulid()}`
+    const runId = await seedRunningTask(db, taskId)
+    const { persistence, intentId } = await crashPreviousDaemon(db, taskId)
+    const previousOwner = await persistence.ownership.read(taskId)
+    expect(previousOwner?.state).toBe('claimed')
+    const daemonGeneration = `gen-new-${ulid()}`
+
+    // Do not consume a report here. A missing historical root call must fail
+    // on the real durable state, not on reading a property from undefined.
+    await runTaskExecutionBootRecovery({
+      persistence,
+      runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
+      lockProof: createDaemonLockProof({
+        lockPath: '/tmp/aw.lock',
+        lockPid: process.pid,
+        daemonGeneration,
+      }),
+      log: silentLog,
+    })
+    const recoveredOwner = await persistence.ownership.read(taskId)
+    expect(recoveredOwner?.state).toBe('released')
+    const recoveredTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    expect(recoveredTask.status).toBe('interrupted')
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]?.status).toBe(
+      'interrupted',
+    )
+    expect(
+      (await db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.id, intentId)))[0]
+        ?.state,
+    ).toBe('failed')
+
+    const successor = createProviderTaskExecutionModule({ daemonGeneration, persistence })
+    const nextIntentId = `intent_${ulid()}`
+    await persistence.intents.submit({
+      request: {
+        ...continuation(taskId),
+        kind: 'resume',
+        expectedTaskRevision: recoveredTask.lifecycleEventRevision,
+      },
+      intentId: nextIntentId,
+    })
+    const next = await successor.claimPersisted({ intentId: nextIntentId })
+    successor.claimGate.leave(next.permit)
+    expect(next.token.epoch).toBe(previousOwner!.epoch + 1)
+    expect((await persistence.ownership.read(taskId))?.state).toBe('claimed')
+  })
+
+  test('P0-4 前代 owner 已真实撤销时，周期回收仍写入任务和节点终态', async () => {
+    const db = harness.db
+    const taskId = `w3t4_${ulid()}`
+    const runId = await seedRunningTask(db, taskId)
+    const { persistence } = await crashPreviousDaemon(db, taskId)
+    await db.update(nodeRuns).set({ pid: 999 }).where(eq(nodeRuns.id, runId))
+    // Only prepare runs: the actual previous owner becomes revoked while the
+    // old running task/run are left for the periodic recovery command itself.
+    await persistence.recovery.prepare({
+      lockProof: createDaemonLockProof({
+        lockPath: '/tmp/aw.lock',
+        lockPid: process.pid,
+        daemonGeneration: `gen-new-${ulid()}`,
+      }),
+    })
+    expect((await persistence.ownership.read(taskId))?.state).toBe('revoked')
+    const result = await reconcileDeadRunningRuns({
+      operations: persistence.recoveryAdministration,
+      graceMs: 0,
+      now: Date.now(),
+      probeProcessAlive: () => false,
+      taskHasDriver: () => false,
+    })
+    const state = {
+      reapedRuns: result.reapedRuns,
+      reapedTasks: result.reapedTasks,
+      taskStatus: (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status,
+      runStatus: (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]?.status,
+      ownerState: (await persistence.ownership.read(taskId))?.state,
+    }
+    expect(state).toEqual({
+      reapedRuns: [runId],
+      reapedTasks: [taskId],
+      taskStatus: 'interrupted',
+      runStatus: 'interrupted',
+      ownerState: 'revoked',
+    })
+    expect(
+      (await listRecoveryEventsForTask(persistence.recoveryAdministration, taskId)).some(
+        (event) => event.kind === 'periodic-reap',
+      ),
+    ).toBe(true)
+  })
+
   test('上一代 daemon 崩溃后：owner 撤销并释放、任务 / node_run 翻 interrupted、意图 failed', async () => {
     const db = harness.db
     const taskId = `w3t4_${ulid()}`

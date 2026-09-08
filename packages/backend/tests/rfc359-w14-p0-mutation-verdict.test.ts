@@ -81,6 +81,40 @@ Expected: true
 Received: false
       at <anonymous> (/repo/packages/backend/tests/rfc359-t7d-postgresql-skill-catalog-boot.test.ts:169:45)`,
   ],
+  'p0-10-unsettled-release': [
+    `[rfc359-p0-10-state] {"taskId":"t7b_task-1","ownerState":"claimed","unresolvedEffectCount":1}
+TaskExecutionError: task 't7b_task-1' still has unresolved effects or resource holds
+  status: 409,
+    code: "task-execution-recovery-required"
+      at <anonymous> (/repo/packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts:381:15)`,
+  ],
+  'p0-3-boot-omitted': [
+    `135 |     expect(recoveredOwner?.state).toBe('released')
+error: expect(received).toBe(expected)
+Expected: "released"
+Received: "claimed"
+      at <anonymous> (/repo/packages/backend/tests/rfc359-w3-t4-boot-recovery.test.ts:135:35)`,
+  ],
+  'p0-4-revoked-reconcile': [
+    `193 |     expect(state).toEqual({
+error: expect(received).toEqual(expected)
+  {
+    "ownerState": "revoked",
+-   "reapedRuns": [
+-     "run-1",
+-   ],
+-   "reapedTasks": [
+-     "task-1",
+-   ],
+-   "runStatus": "interrupted",
+-   "taskStatus": "interrupted",
++   "reapedRuns": [],
++   "reapedTasks": [],
++   "runStatus": "running",
++   "taskStatus": "running",
+  }
+      at <anonymous> (/repo/packages/backend/tests/rfc359-w3-t4-boot-recovery.test.ts:193:19)`,
+  ],
 }
 
 function phase(id: string): Phase {
@@ -188,6 +222,17 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
       ],
       ['p0-11-barrier', '+   "intent",', '+   "fs-staged",'],
       ['p0-11-reverify', 'Received: false', 'Received: true'],
+      ['p0-10-unsettled-release', '"ownerState":"claimed"', '"ownerState":"released"'],
+      ['p0-10-unsettled-release', '"unresolvedEffectCount":1', '"unresolvedEffectCount":0'],
+      ['p0-10-unsettled-release', 'code: "task-execution-recovery-required"', 'code: "unrelated"'],
+      ['p0-10-unsettled-release', 'taskOwnershipPersistence.ts', 'unrelated-fixture.ts'],
+      ['p0-3-boot-omitted', 'Received: "claimed"', 'Received: "revoked"'],
+      ['p0-3-boot-omitted', 'recoveredOwner?.state', 'unrelated?.state'],
+      ['p0-4-revoked-reconcile', '"ownerState": "revoked"', '"ownerState": "claimed"'],
+      ['p0-4-revoked-reconcile', '+   "reapedRuns": [],', '+   "reapedRuns": ["run-1"],'],
+      ['p0-4-revoked-reconcile', '+   "reapedTasks": [],', '+   "reapedTasks": ["task-1"],'],
+      ['p0-4-revoked-reconcile', '+   "runStatus": "running",', '+   "runStatus": "done",'],
+      ['p0-4-revoked-reconcile', '+   "taskStatus": "running",', '+   "taskStatus": "done",'],
     ] as const
     for (const [id, from, to] of changes) {
       expect(verdict(id, transcript(id).replace(from, to)).valid).toBe(false)
@@ -200,6 +245,9 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
       'p0-9-terminal-observer',
       'p0-11-barrier',
       'p0-11-reverify',
+      'p0-10-unsettled-release',
+      'p0-3-boot-omitted',
+      'p0-4-revoked-reconcile',
     ]) {
       for (const replacement of [
         'error: Test timed out after 60000ms',
@@ -214,6 +262,22 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
       )
       expect(verdict(id, `${transcript(id)}\nTimeoutError: fixture deadline\n`).valid).toBe(false)
     }
+  })
+
+  test('requires the release witness exactly once and linked to the same failing task', () => {
+    const id = 'p0-10-unsettled-release'
+    const log = transcript(id)
+    const witness = log.match(/^\[rfc359-p0-10-state\] .+$/m)![0]
+    for (const changed of [
+      log.replace(`${witness}\n`, ''),
+      `${log}\n${witness}\n`,
+      log.replace('"taskId":"t7b_task-1"', '"taskId":"unrelated-task"'),
+      `${witness}\n${log.replace(`${witness}\n`, '')}`,
+    ])
+      expect(verdict(id, changed).valid).toBe(false)
+    expect(
+      verdict('current-before', `${transcript('current-before')}\n${witness}\n`, 0).valid,
+    ).toBe(false)
   })
 
   test('requires diagnostics to precede their own failing test, not a different result', () => {

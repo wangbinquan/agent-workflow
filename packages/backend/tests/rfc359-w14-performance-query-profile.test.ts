@@ -68,6 +68,57 @@ function measuredReport() {
 }
 
 describe('RFC-359 query diagnosis after completed HTTP measurement', () => {
+  test('the observed write CTE gets an estimated plan while recursive reads keep actual analysis', async () => {
+    // Exact statement shape from the completed full run 34196371681. Its
+    // outer SELECT does not make the UPDATE inside the CTE an analyzed read.
+    const marker = `WITH marked AS (
+      UPDATE "agent_workflow_meta"."database_generations"
+      SET first_live_write_at = $1
+      WHERE generation_id = $2 AND first_live_write_at IS NULL
+      RETURNING generation_id
+    ) SELECT generation_id FROM marked
+      UNION ALL SELECT generation_id FROM "agent_workflow_meta"."database_generations"
+      WHERE generation_id = $2 LIMIT 1`
+    const recursive = `WITH RECURSIVE walk(id) AS (
+      SELECT 1 UNION ALL SELECT id + 1 FROM walk WHERE id < 2
+    ) SELECT id, 'UPDATE is text' AS note FROM walk`
+    const quoted = `/* UPDATE is a comment */ SELECT 'it''s DELETE', "update", $note$MERGE$note$`
+    const capture = createQueryCapture()
+    const report = { ...measuredReport(), provider: 'postgresql' as const }
+    const snapshot = JSON.stringify(report)
+    const seen: Array<{ sql: string; mode: string | undefined }> = []
+    const result = await profilePerformanceQueries({
+      report,
+      token: 'unit',
+      capture,
+      app: {
+        request() {
+          capture.start(marker, [123, 'generation'])(1)
+          capture.start(recursive, [])(2)
+          capture.start(quoted, [])(1)
+          return new Response('ok')
+        },
+      },
+      explain: async (statement, mode?: string) => {
+        seen.push({ sql: statement.sql, mode })
+        return [{ node: statement.sql === marker ? 'ModifyTable' : 'Result' }]
+      },
+    })
+    expect(result.complete).toBe(true)
+    expect(seen).toHaveLength(27)
+    expect(seen.slice(0, 3)).toEqual([
+      { sql: marker, mode: 'plan-only' },
+      { sql: recursive, mode: 'analyze' },
+      { sql: quoted, mode: 'analyze' },
+    ])
+    expect(result.results[0]?.plans[0]).toMatchObject({
+      parameters: [123, 'generation'],
+      mode: 'plan-only',
+      error: null,
+    })
+    expect(JSON.stringify(report)).toBe(snapshot)
+  })
+
   test('native SQLite preserves bindings, getters, results and restoration', async () => {
     const { sqlite, profile } = sqliteFixture()
     const query = sqlite.query('SELECT ? AS n UNION ALL SELECT ? AS n')

@@ -681,6 +681,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-engine-capabilities.test.ts: 1',
   // 原同步资源包提交必须在返回前写完并可回滚；这条真 SQLite 机制判据照样精确入账。
   'rfc359-w14-agent-commit-sequence.test.ts: 1',
+  // 四条原生同步 companion/CAS/回滚判据共用一处构库；十条公共写入行为仍跑双引擎。
+  'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   // RFC-359 W8：这一格**不是**本守卫要防的那种债，但照样入账，因为判据是纯文本、不该为它开洞。

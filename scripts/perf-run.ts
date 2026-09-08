@@ -303,7 +303,7 @@ async function withDatabase(
           token: PERF_CORPUS_ENTRY.bearerToken,
           report,
           capture: (pgProfile ?? sqliteProfile)!.capture,
-          explain: async (statement) => {
+          explain: async (statement, mode) => {
             if (sqlite !== null)
               return sqlite.$client
                 .query(`EXPLAIN QUERY PLAN ${statement.sql}`)
@@ -313,7 +313,9 @@ async function withDatabase(
               async () => {
                 await connection.unsafe('BEGIN READ ONLY')
                 return await connection.unsafe(
-                  `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.sql}`,
+                  mode === 'analyze'
+                    ? `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.sql}`
+                    : `EXPLAIN (FORMAT JSON) ${statement.sql}`,
                   statement.parameters,
                 )
               },

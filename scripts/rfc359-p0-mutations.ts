@@ -90,6 +90,24 @@ const skillBootReverify: TestCase = {
   ...skillBootRecovery,
   name: 'P0-11 非空启动：原 boot 重验健康快照并恢复本次启动的目录可用状态',
 }
+const driverEffectRelease: TestCase = {
+  file: 'packages/backend/tests/rfc359-t7b-driver-release-settles-effects.test.ts',
+  suite: 'RFC-359 T7b —— 驱动释放清算 process effect（P0-10）',
+  name: '有 spawn receipt 且 run 已终态 → effect succeeded、fence 释放、owner released、intent completed',
+}
+const taskBootRecovery: TestCase = {
+  file: 'packages/backend/tests/rfc359-w3-t4-boot-recovery.test.ts',
+  suite: 'RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）',
+  name: 'P0-3 实际启动恢复调用释放前代 owner，持久终态后新意图可继续认领',
+}
+const revokedOwnerReconcile: TestCase = {
+  ...taskBootRecovery,
+  name: 'P0-4 前代 owner 已真实撤销时，周期回收仍写入任务和节点终态',
+}
+const emptyTaskBootRecovery: TestCase = {
+  ...taskBootRecovery,
+  name: '没有孤儿时四步都是 no-op',
+}
 const currentCases = [
   clarifyTurn,
   spentBudget,
@@ -105,6 +123,10 @@ const currentCases = [
   legacyScript,
   skillBootRecovery,
   skillBootReverify,
+  driverEffectRelease,
+  taskBootRecovery,
+  revokedOwnerReconcile,
+  emptyTaskBootRecovery,
 ]
 
 export const PHASES: readonly Phase[] = [
@@ -275,6 +297,59 @@ export const PHASES: readonly Phase[] = [
       },
     ],
   },
+  {
+    id: 'p0-10-unsettled-release',
+    mutation: 'p0-10-unsettled-release',
+    passes: [skillBootRecovery],
+    failures: [
+      {
+        test: driverEffectRelease,
+        diagnostics: [
+          /\[rfc359-p0-10-state\] \{"taskId":"([^"]+)","ownerState":"claimed","unresolvedEffectCount":1\}\n[\s\S]*TaskExecutionError: task '\1' still has unresolved effects or resource holds/,
+          /code: "task-execution-recovery-required"/,
+          /at <anonymous> \([^\n]*taskOwnershipPersistence\.ts:\d+:\d+\)/,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'p0-3-boot-omitted',
+    mutation: 'p0-3-boot-omitted',
+    passes: [rootExecution],
+    failures: [
+      {
+        test: taskBootRecovery,
+        diagnostics: [
+          /expect\(recoveredOwner\?\.state\)\.toBe\('released'\)/,
+          /error: expect\(received\)\.toBe\(expected\)/,
+          /Expected: "released"\s+Received: "claimed"/,
+          /rfc359-w3-t4-boot-recovery\.test\.ts:\d+:\d+/,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'p0-4-revoked-reconcile',
+    mutation: 'p0-4-revoked-reconcile',
+    passes: [emptyTaskBootRecovery],
+    failures: [
+      {
+        test: revokedOwnerReconcile,
+        diagnostics: [
+          /expect\(state\)\.toEqual\(/,
+          /error: expect\(received\)\.toEqual\(expected\)/,
+          /^\s+"ownerState": "revoked",?$/m,
+          /^\+\s+"reapedRuns": \[\],?$/m,
+          /^\+\s+"reapedTasks": \[\],?$/m,
+          /^-\s+"runStatus": "interrupted",?$/m,
+          /^-\s+"taskStatus": "interrupted",?$/m,
+          /^\+\s+"runStatus": "running",?$/m,
+          /^\+\s+"taskStatus": "running",?$/m,
+          /rfc359-w3-t4-boot-recovery\.test\.ts:\d+:\d+/,
+        ],
+      },
+    ],
+  },
   { id: 'current-after', passes: currentCases, failures: [] },
 ]
 
@@ -336,6 +411,9 @@ export function validatePhaseLog(raw: string, exitCode: number, phase: Phase, pr
   )
   if (JSON.stringify(markers) !== JSON.stringify(phase.mutation ? [phase.mutation] : []))
     reasons.push('mutation preload marker differs')
+  const releaseWitnesses = [...log.matchAll(/^\[rfc359-p0-10-state\] (.+)$/gm)]
+  if (releaseWitnesses.length !== (phase.mutation === 'p0-10-unsettled-release' ? 1 : 0))
+    reasons.push('durable release witness count differs')
   for (const failure of phase.failures) {
     const name = fullName(failure.test, provider)
     const event = events.find((item) => item.status === 'fail' && item.name === name)
@@ -386,6 +464,28 @@ const sourceFiles = [
   'packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts',
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts',
+  'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts',
+  'packages/backend/src/modules/task-execution/composition/bootRecovery.ts',
+  'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleCommittedEvents.ts',
+  'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
+  'packages/backend/src/platform/persistence/transactionProgram.ts',
+  'packages/backend/src/platform/events/committed/append.ts',
+  'packages/backend/src/platform/events/committed/appendProgram.ts',
+  'packages/backend/src/platform/events/committed/appendShared.ts',
+  'packages/backend/src/platform/events/committed/sqliteStore.ts',
+  'packages/backend/src/services/orphanReconcile.ts',
+  'packages/backend/src/services/orphans.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/workflowRepository.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistence.ts',
   'packages/backend/src/modules/development-automation/composition.ts',
@@ -395,6 +495,7 @@ const sourceFiles = [
   'packages/backend/src/modules/resource-catalog/infrastructure/skillCatalogBootAdapter.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
+  'packages/backend/tests/helpers/eachProvider.ts',
   'packages/backend/tests/helpers/eachProviderTaskExecution.ts',
   ...new Set(currentCases.map((test) => test.file)),
   fixture,
