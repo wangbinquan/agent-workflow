@@ -50,8 +50,8 @@ function restoreText(text: string): string {
   if (end < 0) throw new Error('missing original page boundary')
   return text.slice(0, start) + ORIGINAL_ROOTS + text.slice(end)
 }
-// Remove only the new CTE span and its two interpolation objects. Every old
-// interpolation, including the original cursor object, remains in original order.
+// Remove only the prefix CTE span, both equal budget bindings and its optional
+// cursor interpolation. Every pre-prefix binding remains in original order.
 function originalQuery(query: SQL): SQL {
   const chunks: SQL['queryChunks'] = []
   let dropping = false
@@ -92,6 +92,7 @@ function originalBindings(
   const offset = [...prefix.matchAll(/\?|\$\d+/g)].length
   const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
   const added = [
+    parsed.limit + 1,
     parsed.limit + 1,
     ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
   ]

@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第二十七批：再迁3旧套件至累计232，任务页把有限前缀回接改为精确ID标量查找，共用两处原错误文本算法；功能扫描保守跳过无候选词且无转义的文件。W26八Ubuntu1939文件恰一次，78选定执行75过/3红，Main终态35success/5failure；本批修正真实PG schema SQL锁与取消夹具的过早快照，原断言和预算保持。最新072c8f575原full360样本已核，7项PG更慢、2项原绝对预算失败。W27最终backend tsc及功能metadata/canonical通过，新SHA真PG和原full待托管；RFC继续In Progress
+- W12 第二十八批：共享Workgroup完整快照构造及原cutover CAS，RFC341的2个旧DB例接入默认双库（原232套件外再接入1个部分套件）。新增任务facet覆盖索引及不可变PG增量迁移，有限前缀LIMIT直接绑定原等值预算；1944测试文件、423文件使用harness，仍601构库文件无harness。W27 exact69a22bdc4 Main终态33success/7failure，八Ubuntu1941文件恰一次，74选定执行72过/2PG原始BIGINT断言红；本批保留原wire差异并修正断言、来源位置和Webhook等待。原full360样本仍9项PG更慢/4项绝对预算失败；新SHA真PG、完整Main和原full待托管，RFC继续In Progress。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

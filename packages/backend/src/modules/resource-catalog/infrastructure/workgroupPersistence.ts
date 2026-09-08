@@ -80,13 +80,14 @@ export function workgroupDraftMemberOf(
       }
 }
 
-export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapshot {
-  const ordered = [...group.members].sort(
-    (left, right) =>
-      left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
-  )
-  const leader = ordered.find((member) => member.id === group.leaderMemberId)
-  return normalizeWorkgroupSnapshot({
+export function workgroupSnapshotValues(
+  group: Workgroup,
+  leader: WorkgroupMember | undefined,
+  members: () => WorkgroupDraftMember[],
+  copySwitches = false,
+  clarifyBudget = WG_CLARIFY_BUDGET_DEFAULT,
+): WorkgroupDraftSnapshot {
+  return {
     name: group.name,
     description: group.description,
     instructions: group.instructions,
@@ -95,13 +96,29 @@ export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapsh
     ...(group.mode === 'leader_worker' && leader !== undefined
       ? { leaderDisplayName: leader.displayName }
       : {}),
-    switches: { ...group.switches },
+    switches: copySwitches ? { ...group.switches } : group.switches,
     maxRounds: group.maxRounds,
     completionGate: group.completionGate,
-    clarifyBudget: group.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
+    clarifyBudget: group.clarifyBudget ?? clarifyBudget,
     fanOut: group.fanOut ?? false,
-    members: ordered.map((member) => workgroupDraftMemberOf(member, QUARANTINED_SNAPSHOT_AGENT_ID)),
-  })
+    members: members(),
+  }
+}
+
+export function workgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnapshot {
+  const ordered = [...group.members].sort(
+    (left, right) =>
+      left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
+  )
+  const leader = ordered.find((member) => member.id === group.leaderMemberId)
+  return normalizeWorkgroupSnapshot(
+    workgroupSnapshotValues(
+      group,
+      leader,
+      () => ordered.map((member) => workgroupDraftMemberOf(member, QUARANTINED_SNAPSHOT_AGENT_ID)),
+      true,
+    ),
+  )
 }
 
 export function workgroupSnapshotHashOf(snapshot: WorkgroupDraftSnapshot): WorkgroupSnapshotHash {

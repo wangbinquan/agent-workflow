@@ -123,6 +123,7 @@ function exposeFunction<T>(expression: string): T {
     'resolveWorkgroupOutputContract',
     'QUARANTINED_SNAPSHOT_AGENT_ID',
     'workgroupDraftMemberOf',
+    'workgroupSnapshotValues',
     `${code}\nreturn selected`,
   )
   const result: unknown = factory(
@@ -131,6 +132,7 @@ function exposeFunction<T>(expression: string): T {
     resolveWorkgroupOutputContract,
     QUARANTINED_SNAPSHOT_AGENT_ID,
     Reflect.get(persistence, 'workgroupDraftMemberOf'),
+    persistence.workgroupSnapshotValues,
   )
   if (typeof result !== 'function') throw new Error('expected an exposed codec function')
   return result as T

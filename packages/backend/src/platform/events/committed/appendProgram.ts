@@ -36,6 +36,10 @@ import type {
 type AppendProgramDatabase = Pick<ProviderNeutralDatabase, 'select' | 'insert' | 'update'>
 type AggregateLock = (key: string) => void | Promise<void>
 
+function changed(result: unknown): number {
+  return (result as { changes?: number }).changes ?? 0
+}
+
 export function* readCommittedEventCutoverProgram(
   tx: AppendProgramDatabase,
   producer: CommittedEventProducer,
@@ -58,6 +62,54 @@ export function* readCommittedEventCutoverProgram(
     throw new Error(`committed event cutover is missing: ${producer}/${family}`)
   }
   return cutoverFromRow(row)
+}
+
+export function* changeCommittedEventCutoverProgram(
+  tx: AppendProgramDatabase,
+  input: Readonly<{
+    producer: CommittedEventProducer
+    family: CommittedEventFamily
+    expectedMode: CommittedEventCutover['mode']
+    expectedEpoch: number
+    mode: CommittedEventCutover['mode']
+    changedAt: number
+    changeRef: string
+  }>,
+): Generator<TransactionProgramStep, CommittedEventCutover, void> {
+  assertProducerFamily(input.producer, input.family)
+  assertPositiveInteger(input.expectedEpoch, 'expectedEpoch')
+  if (
+    !Number.isSafeInteger(input.changedAt) ||
+    input.changedAt < 0 ||
+    input.changeRef.length === 0
+  ) {
+    throw new Error('committed event cutover change requires time and durable ref')
+  }
+  const result = yield* transactionStep(() =>
+    tx
+      .update(committedEventFamilyCutovers)
+      .set({
+        mode: input.mode,
+        epoch: input.expectedEpoch + 1,
+        changedAt: input.changedAt,
+        changeRef: input.changeRef,
+      })
+      .where(
+        and(
+          eq(committedEventFamilyCutovers.producer, input.producer),
+          eq(committedEventFamilyCutovers.family, input.family),
+          eq(committedEventFamilyCutovers.mode, input.expectedMode),
+          eq(committedEventFamilyCutovers.epoch, input.expectedEpoch),
+        ),
+      )
+      .run(),
+  )
+  if (changed(result) !== 1) {
+    throw new Error(
+      `committed event cutover changed concurrently: ${input.producer}/${input.family}`,
+    )
+  }
+  return yield* readCommittedEventCutoverProgram(tx, input.producer, input.family)
 }
 
 function* sameConsumerManifestProgram(

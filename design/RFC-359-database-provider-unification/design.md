@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W28原cutover CAS整体进入shared transaction program，同步公开边界保持，异步入口
+  驱动同一算法；原四谓词、SET对象、affected-row判断及readback顺序原样。
+  Workgroup三调用点共享完整快照构造，保留各调用者的解码、成员顺序及switches引用差异。
+- tasks新增facet覆盖索引，SQLite 0226与PG append-only 0002由原生成器产生；旧迁移链、
+  合同生成器和既有查询条件不变。physical_prefix的LIMIT直接CAST绑定与原预算同值的参数，
+  原CTE预算、物理页界、NULL匹配、快照、游标和fallback保持。两项收益等待同SHA原full。
+
 - W27有限physical prefix经两个精确ID标量子查询取得matched_id/rid；独立matched_id
   保留匹配但rid为NULL的行。未增加参数或LIMIT掩盖重复，原快照、18插值、完整性判据、
   strict gap、游标、fallback、facets与全行投影保持；真实PG计划和原full收益待新SHA。

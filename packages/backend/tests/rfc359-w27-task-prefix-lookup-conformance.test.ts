@@ -46,16 +46,66 @@ const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/taskListPage/query.ts',
 )
+const ORIGINAL_LIMIT = '      LIMIT 4 * (SELECT page_rows FROM root_prefix_budget)'
+const DIRECT_LIMIT_START = '      LIMIT 4 * CAST('
+const DIRECT_LIMIT_END = ' AS INTEGER)'
 function restoreText(text: string): string {
-  return text.replace(LOOKUP, ORIGINAL)
+  return text
+    .replace(`${DIRECT_LIMIT_START}\${parsed.limit + 1}${DIRECT_LIMIT_END}`, ORIGINAL_LIMIT)
+    .replace(LOOKUP, ORIGINAL)
 }
-// This literal-only span adds no interpolation. Keep all original bound objects.
+// Restore the lookup literals and remove exactly the additional LIMIT binding.
+// The original budget binding and all other bound objects retain their order.
 function originalQuery(query: SQL): SQL {
-  return new SQL(
-    query.queryChunks.map((chunk) =>
-      chunk instanceof StringChunk ? new StringChunk(chunk.value.map(restoreText)) : chunk,
-    ),
-  )
+  const chunks: SQL['queryChunks'] = []
+  let limit: 'before' | 'binding' | 'suffix' | 'after' = 'before'
+  for (const chunk of query.queryChunks) {
+    if (!(chunk instanceof StringChunk)) {
+      if (limit === 'binding') limit = 'suffix'
+      else chunks.push(chunk)
+      continue
+    }
+    for (let text of chunk.value) {
+      if (limit === 'before' && text.endsWith(DIRECT_LIMIT_START)) {
+        text = text.slice(0, -DIRECT_LIMIT_START.length) + ORIGINAL_LIMIT
+        limit = 'binding'
+      } else if (limit === 'suffix') {
+        if (!text.startsWith(DIRECT_LIMIT_END)) throw new Error('missing bound LIMIT suffix')
+        text = text.slice(DIRECT_LIMIT_END.length)
+        limit = 'after'
+      }
+      chunks.push(new StringChunk(restoreText(text)))
+    }
+  }
+  if (limit !== 'after') throw new Error('missing additional physical prefix LIMIT binding')
+  return new SQL(chunks)
+}
+function originalCompiledText(text: string): string {
+  const start = text.indexOf(DIRECT_LIMIT_START)
+  const end = text.indexOf(DIRECT_LIMIT_END, start)
+  const placeholder = text.slice(start + DIRECT_LIMIT_START.length, end)
+  if (start < 0 || end < 0 || !/^(?:\?|\$[1-9]\d*)$/.test(placeholder))
+    throw new Error('missing exact physical prefix LIMIT placeholder')
+  const restored = text.slice(0, start) + ORIGINAL_LIMIT + text.slice(end + DIRECT_LIMIT_END.length)
+  let ordinal = 0
+  return restoreText(restored).replace(/\$\d+/g, () => `$${++ordinal}`)
+}
+function originalBindings(
+  sql: string,
+  values: readonly unknown[],
+  raw: TaskOperationsRawQuery,
+): readonly unknown[] {
+  const start = sql.indexOf('    root_prefix_budget AS MATERIALIZED (')
+  const limit = sql.indexOf(DIRECT_LIMIT_START)
+  if (start < 0 || limit < start) throw new Error('missing physical prefix budget boundaries')
+  const count = (text: string) =>
+    [...text.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, '').matchAll(/\?|\$\d+/g)].length
+  const offset = count(sql.slice(0, start))
+  if (count(sql.slice(0, limit)) !== offset + 1)
+    throw new Error('additional LIMIT must immediately follow the original budget binding')
+  const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
+  expect(values.slice(offset, offset + 2)).toEqual([parsed.limit + 1, parsed.limit + 1])
+  return [...values.slice(0, offset + 1), ...values.slice(offset + 2)]
 }
 function inspectCte(query: SQL, end: string, select: string): SQL {
   const chunks: SQL['queryChunks'] = []
@@ -204,11 +254,11 @@ async function compare(
     expect(recording.statements).toHaveLength(2)
     const [left, right] = recording.statements
     if (!left || !right) throw new Error('missing actual W27 SQL pair')
-    expect(restoreText(right.sql)).toBe(left.sql)
+    expect(originalCompiledText(right.sql)).toBe(left.sql)
     expect(left.params).toBeGreaterThan(0)
     expect(left.values).toHaveLength(left.params)
     expect(right.values).toHaveLength(right.params)
-    expect(right.values).toEqual(left.values)
+    expect(originalBindings(right.sql, right.values, raw)).toEqual(left.values)
     expect(right.rows).toBe(left.rows)
     return actual
   } finally {
@@ -251,10 +301,18 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
       ).toEqual([])
       await compare(harness, harness.db, raw)
     }
-    const matching = await harness.db.all<{ id: string; rid: string | null; started_at: number }>(
-      prefixRows(queryFor(harness.db, { ...RAW, view: 'attention' })),
-    )
-    expect(matching).toEqual([{ id: 'root-00', rid: 'root-00', started_at: 1000 }])
+    const matching = await harness.db.all<{
+      id: string
+      rid: string | null
+      started_at: number | string
+    }>(prefixRows(queryFor(harness.db, { ...RAW, view: 'attention' })))
+    expect(matching).toEqual([
+      {
+        id: 'root-00',
+        rid: 'root-00',
+        started_at: harness.capabilities.provider === 'postgresql' ? '1000' : 1000,
+      },
+    ])
   })
   const cases = [
     { name: 'strict gap with a small bounded prefix', rows: roots(), raw: RAW },
@@ -302,18 +360,20 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
     ])
     const raw = { ...RAW, q: 'match' }
     const query = queryFor(harness.db, raw)
-    const prefix = await harness.db.all<{ id: string; rid: string | null; started_at: number }>(
-      prefixRows(query),
-    )
+    const prefix = await harness.db.all<{
+      id: string
+      rid: string | null
+      started_at: number | string
+    }>(prefixRows(query))
     expect(prefix.find((row) => row.id === 'null-family')).toEqual({
       id: 'null-family',
       rid: null,
-      started_at: 1200,
+      started_at: harness.capabilities.provider === 'postgresql' ? '1200' : 1200,
     })
     expect(prefix.find((row) => row.id === 'missing-family')?.rid).toBe('missing-root')
     expect(prefix.some((row) => row.id === 'outside-newest')).toBe(false)
     expect(prefix).toEqual(
-      await harness.db.all<{ id: string; rid: string | null; started_at: number }>(
+      await harness.db.all<{ id: string; rid: string | null; started_at: number | string }>(
         prefixRows(originalQuery(query)),
       ),
     )
@@ -391,9 +451,9 @@ test('the actual PG compiler preserves original SQL and bindings without executi
       const before = statements[start],
         after = statements[start + 1]
       if (!before || !after) throw new Error('missing actual compiler pair')
-      expect(restoreText(after.sql)).toBe(before.sql)
+      expect(originalCompiledText(after.sql)).toBe(before.sql)
       expect(before.values.length).toBeGreaterThan(0)
-      expect(after.values).toEqual(before.values)
+      expect(originalBindings(after.sql, after.values, raw)).toEqual(before.values)
     }
   } finally {
     restore()

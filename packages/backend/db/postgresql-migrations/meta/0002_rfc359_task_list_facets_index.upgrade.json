@@ -1,0 +1,91 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:0a8fe7af8576c0642020a55a1609f2fe48df69a22459234ba785f2148a69f4d4', 178, 6)"
+    },
+    "beforeDigest": "sha256:0070171edef499ad0e26499089382b9fefcc38aac27a4f6742bb34b13e73db55"
+  },
+  "digest": "sha256:655114f79720c7666ffc53fac668ebb716a920268ad529dc0941b2f13e9d8d8a",
+  "executableStatements": [
+    {
+      "kind": "index",
+      "logicalId": "tasks:index:idx_tasks_list_facets_cover",
+      "sql": "CREATE INDEX \"idx_tasks_list_facets_cover\" ON \"agent_workflow\".\"tasks\" (\"catalog_visibility\", \"source_agent_name\", \"workgroup_id\", \"status\", \"id\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:0a8fe7af8576c0642020a55a1609f2fe48df69a22459234ba785f2148a69f4d4', active_table_count = 178, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94",
+    "planDigest": "sha256:c7da5aac3234d9937a51ec7b6546fe20275afe727ec7dda48568870b830a2d0d"
+  },
+  "id": "0002_rfc359_task_list_facets_index",
+  "indexAdditions": [
+    {
+      "position": 484,
+      "statement": {
+        "kind": "index",
+        "logicalId": "tasks:index:idx_tasks_list_facets_cover",
+        "sql": "CREATE INDEX \"idx_tasks_list_facets_cover\" ON \"agent_workflow\".\"tasks\" (\"catalog_visibility\", \"source_agent_name\", \"workgroup_id\", \"status\", \"id\")"
+      }
+    }
+  ],
+  "logicalIndexes": [
+    {
+      "index": {
+        "columns": ["catalog_visibility", "source_agent_name", "workgroup_id", "status", "id"],
+        "name": "idx_tasks_list_facets_cover",
+        "unique": false,
+        "where": null
+      },
+      "position": 22,
+      "tableId": "tasks"
+    }
+  ],
+  "previousEntryDigest": "sha256:097e05c346175a2c9ade3a04f78122b39e9057b6fbd06c8cea1ae5052008c929",
+  "sequence": 2,
+  "sqlDigest": "sha256:a3572c4b4e457179adef4176546491adc33f13a48c4aa64c6f917dd2b3c84d69",
+  "sqlFile": "0002_rfc359_task_list_facets_index.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790179212066,
+        "hash": "43195bc288669c8ba468d6612cfe2a52569b25cde78217ecc60b48aad2bad869",
+        "index": 225,
+        "tag": "0226_rfc359_task_list_facets_index"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:9dd402d02facaaa8dd3e0f028a0b57ee2e854c2118539caecb32ddf3e7ac048b",
+      "count": 225,
+      "last": {
+        "folderMillis": 1790092812066,
+        "hash": "d95bfa070dc94fc4ea66626556d008b8408cc392ca53bfdb6ad5159211f1c310",
+        "index": 224,
+        "tag": "0225_rfc359_task_count_indexes"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:e37a8fb5e2ebdf21cd3648ba904f24adb079eab3cc5ad5395b953904f5b2bf10",
+      "count": 226,
+      "last": {
+        "folderMillis": 1790179212066,
+        "hash": "43195bc288669c8ba468d6612cfe2a52569b25cde78217ecc60b48aad2bad869",
+        "index": 225,
+        "tag": "0226_rfc359_task_list_facets_index"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:0a8fe7af8576c0642020a55a1609f2fe48df69a22459234ba785f2148a69f4d4",
+    "planDigest": "sha256:e47d5390010b2be5fe34797e7cd4f48d2377357300f0c766e00747d9feb624a4"
+  },
+  "version": 1
+}

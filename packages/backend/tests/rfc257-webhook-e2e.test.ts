@@ -372,7 +372,15 @@ describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路�
       body: second.body,
     })
     expect(res2.status).toBe(200)
-    await waitFor(async () => (h.canceled.length > 0 ? true : null))
+    const { deliveryId: secondDeliveryId } = (await res2.json()) as { deliveryId: string }
+    await waitFor(async () => {
+      if (h.canceled.length === 0) return null
+      const fires = await h.db
+        .select()
+        .from(webhookTriggerFires)
+        .where(eq(webhookTriggerFires.deliveryId, secondDeliveryId))
+      return fires.find((entry) => entry.outcome === 'launched') ?? null
+    })
     expect(h.canceled).toEqual([task?.id ?? '(missing)'])
     const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
     expect(running.length).toBe(1) // 每流至多一活任务（AC-9/AC-11）

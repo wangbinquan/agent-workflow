@@ -1342,6 +1342,13 @@ export const tasks = sqliteTable(
       t.catalogVisibility,
       t.finishedAt,
     ),
+    listFacetsCoverIdx: index('idx_tasks_list_facets_cover').on(
+      t.catalogVisibility,
+      t.sourceAgentName,
+      t.workgroupId,
+      t.status,
+      t.id,
+    ),
     statusWorkgroupIdx: index('idx_tasks_status_workgroup').on(t.status, t.workgroupId),
     workgroupIdx: index('idx_tasks_workgroup').on(t.workgroupId),
     workspacePruningAtShape: check(

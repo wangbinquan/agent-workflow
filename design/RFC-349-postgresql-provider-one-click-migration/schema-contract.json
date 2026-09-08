@@ -2,7 +2,7 @@
   "activeTableCount": 178,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:4cf10ecd7bdb13887e94766ac7ef16df4d4c2b3b6e68a08b481685ad1629cf94",
+  "digest": "sha256:0a8fe7af8576c0642020a55a1609f2fe48df69a22459234ba785f2148a69f4d4",
   "sourceProjection": "sqlite",
   "sourceTableCount": 184,
   "tables": [
@@ -52868,6 +52868,18 @@
             "finished_at"
           ],
           "name": "idx_tasks_overview_counts",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
+            "catalog_visibility",
+            "source_agent_name",
+            "workgroup_id",
+            "status",
+            "id"
+          ],
+          "name": "idx_tasks_list_facets_cover",
           "unique": false,
           "where": null
         },

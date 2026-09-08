@@ -1969,7 +1969,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 182
+      "lines": 196
     },
     {
       "id": "rfc359-w8-capability-pair-conformance",
@@ -2405,14 +2405,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9d395efbb49037c0e39dda0125b07eb1c4c3b65549ff1df9b8c0669fc778d815",
+    "sourceDigest": "sha256:c4b5a22522a8f36ccc397a501055c49a8b1bac96fa6dea37575de92144498a6e",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "072c8f575125ae1d6818008339c74527c3fe8d3a",
-    "contentDigest": "sha256:9ab982da879baa53cab676c89464cb17ff24efdb31388e2683c86ba00f7dc67c",
+    "currentSnapshotSha": "69a22bdc49b7e88219e4b4499ee45333273d7689",
+    "contentDigest": "sha256:fbc2f2d1385dc2f3c5a81c61847fd19ee973b24c031c87f5d0e01d7b01d6a565",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

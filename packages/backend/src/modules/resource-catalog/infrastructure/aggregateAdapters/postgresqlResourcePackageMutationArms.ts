@@ -1,5 +1,6 @@
 import {
   workgroupMemberPersistenceValues,
+  workgroupSnapshotValues,
   resolveWorkgroupLeaderMemberId as workgroupLeaderMemberId,
 } from '../workgroupPersistence'
 import {
@@ -1325,43 +1326,32 @@ function currentWorkgroupSnapshot(
       left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
   )
   const leader = ordered.find((member) => member.id === current.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse({
-    name: current.name,
-    description: current.description,
-    instructions: current.instructions,
-    mode: current.mode,
-    outputContract: resolveWorkgroupOutputContract(current.outputContract),
-    ...(current.mode === 'leader_worker' && leader !== undefined
-      ? { leaderDisplayName: leader.displayName }
-      : {}),
-    switches: current.switches,
-    maxRounds: current.maxRounds,
-    completionGate: current.completionGate,
-    clarifyBudget: current.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-    fanOut: current.fanOut ?? false,
-    members: ordered.map((member) => {
-      if (member.memberType === 'agent' && member.agentId !== null) {
-        return {
-          memberType: 'agent',
-          agentId: member.agentId,
-          displayName: member.displayName,
-          roleDesc: member.roleDesc,
+  return WorkgroupDraftSnapshotSchema.parse(
+    workgroupSnapshotValues(current, leader, () =>
+      ordered.map((member) => {
+        if (member.memberType === 'agent' && member.agentId !== null) {
+          return {
+            memberType: 'agent',
+            agentId: member.agentId,
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          }
         }
-      }
-      if (member.memberType === 'human' && member.userId !== null) {
-        return {
-          memberType: 'human',
-          userId: member.userId,
-          displayName: member.displayName,
-          roleDesc: member.roleDesc,
+        if (member.memberType === 'human' && member.userId !== null) {
+          return {
+            memberType: 'human',
+            userId: member.userId,
+            displayName: member.displayName,
+            roleDesc: member.roleDesc,
+          }
         }
-      }
-      throw new ValidationError(
-        'workgroup-member-row-corrupt',
-        `workgroup member '${member.id}' has no canonical identity`,
-      )
-    }),
-  })
+        throw new ValidationError(
+          'workgroup-member-row-corrupt',
+          `workgroup member '${member.id}' has no canonical identity`,
+        )
+      }),
+    ),
+  )
 }
 
 function workgroupCandidate(input: {

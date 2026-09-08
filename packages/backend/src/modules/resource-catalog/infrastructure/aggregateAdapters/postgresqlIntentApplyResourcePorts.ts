@@ -71,7 +71,11 @@ import {
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
-import { workgroupDraftMemberOf, workgroupMemberPersistenceValues } from '../workgroupPersistence'
+import {
+  workgroupDraftMemberOf,
+  workgroupMemberPersistenceValues,
+  workgroupSnapshotValues,
+} from '../workgroupPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import type {
   PostgresqlIntentApplyArtifact,
@@ -1306,22 +1310,15 @@ function workgroupSnapshotFromRows(
   const group = workgroupFromRows(row, members)
   const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
   const leader = ordered.find((member) => member.id === group.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse({
-    name: group.name,
-    description: group.description,
-    instructions: group.instructions,
-    mode: group.mode,
-    outputContract: resolveWorkgroupOutputContract(group.outputContract),
-    ...(group.mode === 'leader_worker' && leader !== undefined
-      ? { leaderDisplayName: leader.displayName }
-      : {}),
-    switches: group.switches,
-    maxRounds: group.maxRounds,
-    completionGate: group.completionGate,
-    clarifyBudget: group.clarifyBudget ?? 3,
-    fanOut: group.fanOut ?? false,
-    members: ordered.map((member) => workgroupDraftMemberOf(member, '')),
-  })
+  return WorkgroupDraftSnapshotSchema.parse(
+    workgroupSnapshotValues(
+      group,
+      leader,
+      () => ordered.map((member) => workgroupDraftMemberOf(member, '')),
+      false,
+      3,
+    ),
+  )
 }
 
 async function workgroupMemberValues(

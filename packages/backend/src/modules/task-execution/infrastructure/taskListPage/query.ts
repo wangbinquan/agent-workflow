@@ -523,7 +523,7 @@ export function fastFilteredRootQuery(
     physical_prefix AS MATERIALIZED (
       SELECT t.id, t.started_at FROM tasks t
       ORDER BY t.started_at DESC, t.id DESC
-      LIMIT 4 * (SELECT page_rows FROM root_prefix_budget)
+      LIMIT 4 * CAST(${parsed.limit + 1} AS INTEGER)
     ),
     root_prefix_lookup AS MATERIALIZED (
       SELECT p.id, p.started_at,

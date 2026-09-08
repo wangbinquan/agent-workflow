@@ -14,6 +14,7 @@
 // 就再也重试不了准备）。
 
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
+import ts from 'typescript'
 import { asc, eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -921,8 +922,37 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
 
   test('准备段确实把 details.stderr 折进了 earlyError（否则上一条锁的是空气）', () => {
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    // 折叠函数存在，且准备段用的是它而不是裸 message。
-    expect(src).toMatch(/function diagnosticTextOf\(err: unknown\): string/)
+    const taskSource = ts.createSourceFile('task.ts', src, ts.ScriptTarget.Latest, true)
+    const importedDiagnostics = taskSource.statements
+      .filter(ts.isImportDeclaration)
+      .filter(
+        (statement) =>
+          ts.isStringLiteral(statement.moduleSpecifier) &&
+          statement.moduleSpecifier.text === '@/util/errors',
+      )
+      .flatMap((statement) => {
+        const clause = statement.importClause
+        const bindings = clause?.namedBindings
+        if (clause?.isTypeOnly || bindings === undefined || !ts.isNamedImports(bindings)) return []
+        return bindings.elements
+          .filter((binding) => !binding.isTypeOnly && binding.name.text === 'diagnosticTextOf')
+          .map((binding) => binding.propertyName?.text ?? binding.name.text)
+      })
+    expect(importedDiagnostics).toEqual(['diagnosticTextOf'])
+    const diagnosticSource = ts.createSourceFile(
+      'errors.ts',
+      readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'errors.ts'), 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const diagnostic = diagnosticSource.statements.find(
+      (statement) =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'diagnosticTextOf',
+    )
+    // 准备段绑定到真实导出的折叠函数，而不是同名文本或裸 message。
+    expect(diagnostic?.getText(diagnosticSource) ?? '').toMatch(
+      /^export function diagnosticTextOf\(err: unknown\): string/,
+    )
     const i = src.indexOf('async function runDeferredRepoPreparation')
     const j = src.indexOf('\n}\n', i)
     const body = src.slice(i, j)

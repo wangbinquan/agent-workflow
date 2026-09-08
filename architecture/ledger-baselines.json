@@ -406,10 +406,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
       "baseline": 5,
-      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。",
-      "allowGrowth": {
-        "why": "RFC-359 W27 the newly explicit PostgreSQL Intent composition in the migrated rfc355 test adds one real named reference and constructor to each existing adapter. ArtifactLifecycle now has 3 versus 6 references, crossing the original unchanged threshold 3; operations narrows from 21 versus 6 to 21 versus 7. This records one new observed imbalance, not a new provider exemption."
-      }
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
     },
     {
       "id": "rfc359-w5-name-collision-definition-drift",
@@ -815,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5329,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W27 reuses diagnosticTextOf from the already-imported util/errors module in PostgreSQL repository retry; this is one actual added named-symbol edge while two duplicate private bodies become one shared body."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -839,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4796,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W27 records the exact added diagnosticTextOf named-symbol edge to the existing util/errors dependency; no new provider-specific implementation or exception category is introduced."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -876,12 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25049,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25052,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W28 adds one shared workgroupSnapshotValues function plus the shared cutover generator and its real asynchronous public adapter. The unchanged affected-row helper moves between existing files, so the symbol inventory has four added identities and one removed identity, a net growth of three. No provider exemption or second cutover algorithm is introduced."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9d395efbb49037c0e39dda0125b07eb1c4c3b65549ff1df9b8c0669fc778d815",
+    "sourceDigest": "sha256:c4b5a22522a8f36ccc397a501055c49a8b1bac96fa6dea37575de92144498a6e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -894,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "072c8f575125ae1d6818008339c74527c3fe8d3a",
-    "contentDigest": "sha256:c63b55aa25ce88012ab72c58b0a1c0573e72592964ddc43ec1fbdfc66e599bdc",
+    "currentSnapshotSha": "69a22bdc49b7e88219e4b4499ee45333273d7689",
+    "contentDigest": "sha256:37b8d78bbc50cbc2e26f920712fb9c4e64d7b95cb449126e53500c2c4f202992",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

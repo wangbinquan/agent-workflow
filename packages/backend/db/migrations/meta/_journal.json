@@ -1576,6 +1576,13 @@
       "when": 1790092812066,
       "tag": "0225_rfc359_task_count_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 225,
+      "version": "6",
+      "when": 1790179212066,
+      "tag": "0226_rfc359_task_list_facets_index",
+      "breakpoints": true
     }
   ]
 }

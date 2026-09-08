@@ -6,7 +6,7 @@
     "moduleFiles": 1191,
     "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25049
+    "symbolsIncludingFileRoots": 25052
   },
   "entries": [
     {
@@ -99956,6 +99956,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts#workgroupSnapshotValues",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "workgroupSnapshotValues",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupPersistence.ts#workgroupToDetail",
       "removeAfterWave": null,
       "status": "current-module",
@@ -141379,6 +141391,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/events/committed/append.ts",
+      "id": "owner:packages/backend/src/platform/events/committed/append.ts#changeCommittedEventCutover",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "changeCommittedEventCutover",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/events/committed/append.ts",
       "id": "owner:packages/backend/src/platform/events/committed/append.ts#readCommittedEventCutover",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -141431,6 +141455,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "AppendProgramDatabase",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/events/committed/appendProgram.ts",
+      "id": "owner:packages/backend/src/platform/events/committed/appendProgram.ts#changeCommittedEventCutoverProgram",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "changeCommittedEventCutoverProgram",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/events/committed/appendProgram.ts",
+      "id": "owner:packages/backend/src/platform/events/committed/appendProgram.ts#changed",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "changed",
       "targetContext": "platform",
       "targetLayer": "events"
     },
@@ -141983,18 +142031,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "changeCommittedEventCutoverTx",
-      "targetContext": "platform",
-      "targetLayer": "events"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/events/committed/sqliteStore.ts",
-      "id": "owner:packages/backend/src/platform/events/committed/sqliteStore.ts#changed",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "changed",
       "targetContext": "platform",
       "targetLayer": "events"
     },
@@ -301290,5 +301326,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9d395efbb49037c0e39dda0125b07eb1c4c3b65549ff1df9b8c0669fc778d815"
+  "sourceDigest": "sha256:c4b5a22522a8f36ccc397a501055c49a8b1bac96fa6dea37575de92144498a6e"
 }
