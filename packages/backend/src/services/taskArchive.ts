@@ -57,7 +57,7 @@ import {
   workgroupMemberCursors,
   workgroupMessages,
   workgroupTaskState,
-  type LegacySqliteTaskDatabase,
+  type LegacyProviderNeutralDatabase as ProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -132,7 +132,7 @@ export interface ArchiveSweepResult {
  *  没有任何事后价值,归档它等于归档一把过期的锁。 */
 interface ExportSpec {
   name: string
-  load: (db: LegacySqliteTaskDatabase, ids: readonly string[]) => Promise<unknown[]>
+  load: (db: ProviderNeutralDatabase, ids: readonly string[]) => Promise<unknown[]>
 }
 
 const TASK_SCOPED: readonly ExportSpec[] = [
@@ -326,7 +326,7 @@ interface ExecutionLedgerExport {
  * possible task/effect anchor instead of relying on FK traversal.
  */
 async function loadExecutionLedgers(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   taskIds: readonly string[],
 ): Promise<ExecutionLedgerExport> {
   const owners = await chunkedAll(taskIds, (chunk) =>
@@ -413,7 +413,7 @@ export const ARCHIVE_EXEMPT_TABLES: readonly string[] = ['runtime_session_leases
 
 /** 一棵树的全部任务 id(root 优先,深度受 MAX_TREE_DEPTH 同款上限约束)。 */
 export async function collectTree(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   rootTaskId: string,
 ): Promise<string[]> {
   const out: string[] = [rootTaskId]
@@ -436,7 +436,7 @@ interface TreeCandidate {
 
 /** 可归档的树:整树全终态,且 max(finishedAt) 早于 cutoff。 */
 export async function findArchivableTrees(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   cutoff: number,
   limit: number,
 ): Promise<TreeCandidate[]> {
@@ -483,7 +483,7 @@ function writeJsonl(file: string, rows: readonly unknown[]): void {
 }
 
 async function exportTable(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   dir: string,
   name: string,
   rows: readonly unknown[],
@@ -502,7 +502,7 @@ async function exportTable(
  * only reproducible DB JSONL files are rebuilt.
  */
 async function archiveClaimedTree(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   rootTaskId: string,
   taskIds: readonly string[],
   initialClaim: TerminalMaintenanceClaim,
@@ -641,7 +641,7 @@ async function archiveClaimedTree(
  * exact claim 与 cleanup plan，boot/sweeper 可从同一 revision 继续。
  */
 export async function archiveTaskTree(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   rootTaskId: string,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchivedTree> {
@@ -679,7 +679,7 @@ export async function archiveTaskTree(
  * 每次都从同一个 revision 起算。
  */
 async function deleteTreeRows(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   rootTaskId: string,
   taskIds: readonly string[],
   claim: TerminalMaintenanceClaim,
@@ -740,7 +740,7 @@ function parseArchiveCleanupPlan(value: string): ArchiveCleanupPlanV2 | null {
  * its runs/logs directories have been restored.
  */
 export async function recoverInterruptedArchives(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   opts: TaskArchiveOptions = {},
 ): Promise<{ promoted: string[]; discarded: string[]; claimedRoots: ReadonlySet<string> }> {
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
@@ -866,7 +866,7 @@ export interface TaskArchiveConfig {
  * 删掉,审计必须活得比它们久,否则「谁归档了多少」随归档一起消失。
  */
 async function writeArchiveAudit(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   row: {
     source: ArchiveSource
     actorUserId: string | null
@@ -890,7 +890,7 @@ async function writeArchiveAudit(
 
 /** 一轮归档扫描。默认关闭;`enabled=false` 或 `retentionDays<=0` 直接返回。 */
 export async function runTaskArchiveSweep(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   config: TaskArchiveConfig,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchiveSweepResult> {
@@ -950,7 +950,7 @@ export interface ManualArchiveRequest {
  * 且带操作者。
  */
 export async function runManualTaskArchive(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   req: ManualArchiveRequest,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchiveSweepResult> {
@@ -999,7 +999,7 @@ export function startTaskArchiveSweeper(
 
 /** 供 CLI / admin API 使用:按条件预览可归档的树,不动任何数据。 */
 export async function previewArchivableTrees(
-  db: LegacySqliteTaskDatabase,
+  db: ProviderNeutralDatabase,
   retentionDays: number,
   limit: number = 50,
   now: number = Date.now(),

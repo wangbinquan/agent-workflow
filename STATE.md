@@ -2,6 +2,20 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十三批（2026-09-09）**：任务页匹配元数据改从原页内fam计算，原全局排序/分组与完整结果保持。
+> 再迁8旧套件，原后57 pass/234 expect，46原DB例默认双库、11纯/原生例单跑，累计218。
+> 当前1932测试文件，628构库文件/1324调用、616构库文件无harness、397文件harness；T19f718→711。
+> frameBackfill/lookup/taskArchive只中立化类型；resolver两个真实async all补await后map，原Promise错误控制转绿。
+> 故障夹具保留原三故障点及SQLite DDL，PG对应trigger/function与清理协议待新SHA真库；完整种子对拍通过。
+> W22 exactd2c27 Main34242698161终态37success/3failure，12后端matrix11success/1failure、无取消；独立PG成功。
+> 八Ubuntu1931文件恰一次，W22旧套件/Skill/编译器/三个旧CI合同修复均过；仅RFC314计数例在播种阶段超时。
+> 本批只合批该例未录制事件写入，820事件及原窗口SQL/绑定值/返回行数不变，4 pass/13 expect，原5秒预算保持。
+> 新task-page加原控制9 pass/1517 expect；两种workgroup索引候选改变实际顺序，已拒绝，生产保持原字节。
+> 原full34243073181官方artifact10064133565的8+4源码、六份五表全行投影与360 raw/floor P95已核；
+> PG仍5/9项更慢，两库首/次任务页与SQLite工作组共5项原绝对预算失败；严格AC11与完整RFC继续开放。
+> 类型/metadata首轮发现新kind字面量拓宽与归档类型导入边界，最小修正后完整backend tsc及203/419、13/55通过。
+> 本批无本地PG/服务/性能/E2E/完整门禁；新SHA真PG/Main/full待验，AC1/6/8/9/11/12仍开放。
+
 > **RFC-359 W12 第二十二批（2026-09-08）**：有界成功SQL文本编译复用、Skill两处标量映射合一、再迁3旧套件。
 > 编译cache保留新绑定/真实client提交，双界/FIFO/原错误通过；Skill保留两入口原JSON与属性顺序，第三映射不动。
 > 旧套件原后11 pass/28 expect，5原DB例默认双库、6纯/原生例单跑，累计210；原种子23整行/919字段一致。

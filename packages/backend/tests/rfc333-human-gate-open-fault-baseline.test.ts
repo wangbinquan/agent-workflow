@@ -1,13 +1,14 @@
 // RFC-333 — deterministic human-gate open fault witnesses.
 //
-// The tests use real SQLite triggers at the exact later write, as required by
-// docs/dev-gotchas.md. T6 flips review-open to the target invariant; clarify
-// remains the T7 debt witness until its vertical cut lands.
+// Both providers install real row triggers at the same later write. The original
+// rollback, retry, filesystem and committed-frame assertions share the same
+// public entry points; only trigger DDL and native fixture teardown differ.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
+import { Database } from 'bun:sqlite'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, type Dirent } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
+import { join, relative } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -17,7 +18,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import {
   agents as agentsTable,
   clarifyRounds,
@@ -34,18 +35,86 @@ import { createClarifyRound } from '../src/services/clarify/service'
 import { dispatchReviewNode } from '../src/services/review'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const REVIEW_DOCS = ['# Alpha\n\nalpha', '# Beta\n\nbeta', '# Gamma\n\ngamma']
 
 async function failureOf(run: () => Promise<unknown>): Promise<Error> {
   try {
     await run()
   } catch (error) {
-    if (error instanceof Error) return error
-    throw error
+    if (!(error instanceof Error)) throw error
+    let failure = error
+    while (failure.cause instanceof Error) failure = failure.cause
+    return failure
   }
   throw new Error('expected operation to fail')
+}
+
+/** Fixture DDL bypasses the business SQL compiler on the selected real database. */
+async function installFaultTrigger(
+  harness: ProviderHarness,
+  fault: {
+    readonly name: string
+    readonly table: string
+    readonly event: string
+    readonly when?: string
+    readonly message: string
+  },
+  sqliteStatement: string,
+): Promise<() => Promise<void>> {
+  const native = harness.capabilities.isolation === 'exclusive'
+  const functionName = `${fault.name}_fn`
+  let functionInstalled = false
+  let triggerInstalled = false
+  const remove = async (): Promise<void> => {
+    if (triggerInstalled) {
+      await harness.executeFixtureDdl(
+        native
+          ? `DROP TRIGGER ${fault.name}`
+          : `DROP TRIGGER "${fault.name}" ON "agent_workflow"."${fault.table}"`,
+      )
+      triggerInstalled = false
+    }
+    if (functionInstalled) {
+      await harness.executeFixtureDdl(`DROP FUNCTION "agent_workflow"."${functionName}"()`)
+      functionInstalled = false
+    }
+  }
+  try {
+    if (native) {
+      await harness.executeFixtureDdl(sqliteStatement)
+    } else {
+      await harness.executeFixtureDdl(`
+        CREATE FUNCTION "agent_workflow"."${functionName}"() RETURNS trigger
+        LANGUAGE plpgsql AS $rfc333_fault$
+        BEGIN
+          RAISE EXCEPTION USING MESSAGE = '${fault.message}', ERRCODE = 'P0001';
+        END;
+        $rfc333_fault$;
+      `)
+      functionInstalled = true
+      await harness.executeFixtureDdl(`
+        CREATE TRIGGER "${fault.name}"
+        BEFORE ${fault.event} ON "agent_workflow"."${fault.table}"
+        FOR EACH ROW${fault.when === undefined ? '' : ` WHEN (${fault.when})`}
+        EXECUTE FUNCTION "agent_workflow"."${functionName}"();
+      `)
+    }
+    triggerInstalled = true
+    return remove
+  } catch (error) {
+    await remove()
+    throw error
+  }
+}
+
+/** Close the same native handle at the original finally boundary; PG owns its runtime. */
+function closeNativeFixture(harness: ProviderHarness): void {
+  if (harness.capabilities.isolation !== 'exclusive') return
+  const native: unknown = Reflect.get(harness.db, '$client')
+  if (!(native instanceof Database)) throw new Error('expected original SQLite fixture handle')
+  native.close()
 }
 
 function filesBelow(root: string): string[] {
@@ -68,7 +137,7 @@ function filesBelow(root: string): string[] {
 }
 
 async function seedReview(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   worktree: string,
 ): Promise<{
   taskId: string
@@ -126,6 +195,11 @@ async function seedReview(
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
+    // Preserve the original SQLite task-root trigger bytes on both providers.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   const sourceRunId = ulid()
   await db.insert(nodeRuns).values({
@@ -150,7 +224,7 @@ async function seedReview(
   }
 }
 
-async function seedClarify(db: DbClient): Promise<{
+async function seedClarify(db: ProviderNeutralDatabase): Promise<{
   taskId: string
   sourceRunId: string
 }> {
@@ -185,6 +259,11 @@ async function seedClarify(db: DbClient): Promise<{
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
+    // Preserve the original SQLite task-root trigger bytes on both providers.
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   const sourceRunId = ulid()
   await db.insert(nodeRuns).values({
@@ -200,26 +279,37 @@ async function seedClarify(db: DbClient): Promise<{
 
 afterEach(() => resetBroadcastersForTests())
 
-describe('RFC-333 open fault witnesses', () => {
+describeEachProvider('RFC-333 open fault witnesses', (harness) => {
   test('review member 2 failure leaves only a retryable prepared operation and private staging', async () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc333-review-open-'))
     const appHome = join(root, 'home')
     const worktree = join(root, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const uninstallProjection = await installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
+    let removeFault = async (): Promise<void> => {}
     try {
       const { taskId, definition, reviewNode } = await seedReview(db, worktree)
       unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (frame) => frames.push(frame))
-      db.$client.exec(`
+      removeFault = await installFaultTrigger(
+        harness,
+        {
+          name: 'rfc333_second_doc_down',
+          table: 'doc_versions',
+          event: 'INSERT',
+          when: 'NEW.item_index = 1',
+          message: 'rfc333-second-doc',
+        },
+        `
         CREATE TRIGGER rfc333_second_doc_down
         BEFORE INSERT ON doc_versions
         FOR EACH ROW WHEN NEW.item_index = 1
         BEGIN SELECT RAISE(ABORT, 'rfc333-second-doc'); END;
-      `)
+      `,
+      )
 
       const error = await failureOf(() =>
         dispatchReviewNode({
@@ -240,18 +330,18 @@ describe('RFC-333 open fault witnesses', () => {
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'review'))
-      const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get()!
+      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).get())!
       const allFiles = filesBelow(appHome)
       const canonicalFiles = allFiles.filter(
         (file) => file.startsWith('runs/') && !file.startsWith('runs/.human-gate-staging/'),
       )
       const stagedFiles = allFiles.filter((file) => file.startsWith('runs/.human-gate-staging/'))
-      const operation = db
+      const operation = await db
         .select()
         .from(collaborationGateOperations)
         .where(eq(collaborationGateOperations.taskId, taskId))
         .get()
-      const artifacts = db
+      const artifacts = await db
         .select()
         .from(collaborationGateArtifacts)
         .where(eq(collaborationGateArtifacts.operationId, operation!.id))
@@ -278,7 +368,7 @@ describe('RFC-333 open fault witnesses', () => {
         artifactStates: ['staged', 'staged', 'staged'],
       })
 
-      db.$client.exec('DROP TRIGGER rfc333_second_doc_down')
+      await removeFault()
       const retried = await dispatchReviewNode({
         db,
         taskId,
@@ -290,34 +380,32 @@ describe('RFC-333 open fault witnesses', () => {
       })
       expect(retried.kind).toBe('awaiting_review')
       expect(
-        db.select().from(docVersions).where(eq(docVersions.taskId, taskId)).all(),
+        await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)).all(),
       ).toHaveLength(3)
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(eq(nodeRuns.taskId, taskId))
-          .all()
-          .filter((row) => row.nodeId === 'review'),
+        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()).filter(
+          (row) => row.nodeId === 'review',
+        ),
       ).toHaveLength(1)
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+      expect(await db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
         status: 'awaiting_review',
         lifecycleEventRevision: 2,
       })
       expect(
-        db
+        await db
           .select()
           .from(collaborationGateOperations)
           .where(eq(collaborationGateOperations.id, operation!.id))
           .get(),
       ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
       expect(
-        db
-          .select()
-          .from(collaborationGateArtifacts)
-          .where(eq(collaborationGateArtifacts.operationId, operation!.id))
-          .all()
-          .map((artifact) => artifact.state),
+        (
+          await db
+            .select()
+            .from(collaborationGateArtifacts)
+            .where(eq(collaborationGateArtifacts.operationId, operation!.id))
+            .all()
+        ).map((artifact) => artifact.state),
       ).toEqual(['finalized', 'finalized', 'finalized'])
       expect(
         filesBelow(appHome).filter((file) => file.startsWith('runs/.human-gate-staging/')),
@@ -326,8 +414,15 @@ describe('RFC-333 open fault witnesses', () => {
     } finally {
       unsubscribe()
       uninstallProjection()
-      db.$client.close()
-      rmSync(root, { recursive: true, force: true })
+      try {
+        await removeFault()
+      } finally {
+        try {
+          closeNativeFixture(harness)
+        } finally {
+          rmSync(root, { recursive: true, force: true })
+        }
+      }
     }
   })
 
@@ -337,19 +432,30 @@ describe('RFC-333 open fault witnesses', () => {
     const worktree = join(root, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const uninstallProjection = await installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
+    let removeFault = async (): Promise<void> => {}
     try {
       const { taskId, definition, reviewNode } = await seedReview(db, worktree)
       unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (frame) => frames.push(frame))
-      db.$client.exec(`
+      removeFault = await installFaultTrigger(
+        harness,
+        {
+          name: 'rfc333_task_park_down',
+          table: 'tasks',
+          event: 'UPDATE OF status',
+          when: `NEW.id = '${taskId}'`,
+          message: 'rfc333-task-park',
+        },
+        `
         CREATE TRIGGER rfc333_task_park_down
         BEFORE UPDATE OF status ON tasks
         FOR EACH ROW WHEN NEW.id = '${taskId}'
         BEGIN SELECT RAISE(ABORT, 'rfc333-task-park'); END;
-      `)
+      `,
+      )
 
       const error = await failureOf(() =>
         dispatchReviewNode({
@@ -363,29 +469,31 @@ describe('RFC-333 open fault witnesses', () => {
         }),
       )
       expect(error.message).toContain('rfc333-task-park')
-      expect(db.select().from(docVersions).where(eq(docVersions.taskId, taskId)).all()).toEqual([])
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(eq(nodeRuns.taskId, taskId))
-          .all()
-          .filter((row) => row.nodeId === 'review'),
+        await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)).all(),
       ).toEqual([])
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
-      const operation = db
+      expect(
+        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()).filter(
+          (row) => row.nodeId === 'review',
+        ),
+      ).toEqual([])
+      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)).get())?.status).toBe(
+        'running',
+      )
+      const operation = (await db
         .select()
         .from(collaborationGateOperations)
         .where(eq(collaborationGateOperations.taskId, taskId))
-        .get()!
+        .get())!
       expect(operation.state).toBe('prepared')
       expect(
-        db
-          .select()
-          .from(collaborationGateArtifacts)
-          .where(eq(collaborationGateArtifacts.operationId, operation.id))
-          .all()
-          .map((artifact) => artifact.state),
+        (
+          await db
+            .select()
+            .from(collaborationGateArtifacts)
+            .where(eq(collaborationGateArtifacts.operationId, operation.id))
+            .all()
+        ).map((artifact) => artifact.state),
       ).toEqual(['staged', 'staged', 'staged'])
       expect(
         filesBelow(appHome).filter(
@@ -396,24 +504,41 @@ describe('RFC-333 open fault witnesses', () => {
     } finally {
       unsubscribe()
       uninstallProjection()
-      db.$client.close()
-      rmSync(root, { recursive: true, force: true })
+      try {
+        await removeFault()
+      } finally {
+        try {
+          closeNativeFixture(harness)
+        } finally {
+          rmSync(root, { recursive: true, force: true })
+        }
+      }
     }
   })
 
   test('clarify round failure leaves only a retryable prepared manifest, then retries atomically', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const uninstallProjection = await installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
+    let removeFault = async (): Promise<void> => {}
     try {
       const { taskId, sourceRunId } = await seedClarify(db)
       unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (frame) => frames.push(frame))
-      db.$client.exec(`
+      removeFault = await installFaultTrigger(
+        harness,
+        {
+          name: 'rfc333_clarify_round_down',
+          table: 'clarify_rounds',
+          event: 'INSERT',
+          message: 'rfc333-clarify-round',
+        },
+        `
         CREATE TRIGGER rfc333_clarify_round_down
         BEFORE INSERT ON clarify_rounds
         BEGIN SELECT RAISE(ABORT, 'rfc333-clarify-round'); END;
-      `)
+      `,
+      )
 
       const request = {
         kind: 'self' as const,
@@ -456,13 +581,13 @@ describe('RFC-333 open fault witnesses', () => {
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'clarify'))
-      const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get()!
-      const questions = db
+      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).get())!
+      const questions = await db
         .select()
         .from(taskQuestions)
         .where(eq(taskQuestions.taskId, taskId))
         .all()
-      const operations = db
+      const operations = await db
         .select()
         .from(collaborationGateOperations)
         .where(eq(collaborationGateOperations.taskId, taskId))
@@ -485,28 +610,25 @@ describe('RFC-333 open fault witnesses', () => {
       expect(operations).toHaveLength(1)
       expect(operations[0]).toMatchObject({ state: 'prepared', gateKind: 'clarify' })
 
-      db.$client.exec('DROP TRIGGER rfc333_clarify_round_down')
+      await removeFault()
       const retried = await createClarifyRound(request)
       expect(retried.round.id).toBe(operations[0]!.id + ':round')
       expect(
-        db
-          .select()
-          .from(nodeRuns)
-          .where(eq(nodeRuns.taskId, taskId))
-          .all()
-          .filter((row) => row.nodeId === 'clarify'),
+        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).all()).filter(
+          (row) => row.nodeId === 'clarify',
+        ),
       ).toHaveLength(1)
       expect(
-        db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+        await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
       ).toHaveLength(1)
       expect(
-        db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+        await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
       ).toHaveLength(1)
-      expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
+      expect(await db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
         status: 'awaiting_human',
       })
       expect(
-        db
+        await db
           .select()
           .from(collaborationGateOperations)
           .where(eq(collaborationGateOperations.taskId, taskId))
@@ -516,7 +638,11 @@ describe('RFC-333 open fault witnesses', () => {
     } finally {
       unsubscribe()
       uninstallProjection()
-      db.$client.close()
+      try {
+        await removeFault()
+      } finally {
+        closeNativeFixture(harness)
+      }
     }
   })
 })

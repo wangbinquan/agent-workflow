@@ -22,7 +22,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { join as pathJoin } from 'node:path'
 import type { Agent, AgentSkillRef, Mcp, Plugin } from '@agent-workflow/shared'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { mcps as mcpRows, plugins as pluginRows, skills } from '@/db/schema'
 import type { Logger } from '@/util/log'
 import { ConflictError, SkillQuarantinedError } from '@/util/errors'
@@ -86,7 +86,7 @@ export interface ResolveInjectionOpts {
  * or ambiguous resources, disabled plugins, quarantined skills alike).
  */
 export async function resolveInjection(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   agent: Agent,
   opts: ResolveInjectionOpts,
 ): Promise<InjectionResolution> {
@@ -167,12 +167,13 @@ export async function resolveInjection(
     {
       async loadByIds(ids) {
         if (ids.length === 0) return []
-        return db
-          .select()
-          .from(mcpRows)
-          .where(inArray(mcpRows.id, [...ids]))
-          .all()
-          .map(taskExecutionResourceDependencies.rowToMcp)
+        return (
+          await db
+            .select()
+            .from(mcpRows)
+            .where(inArray(mcpRows.id, [...ids]))
+            .all()
+        ).map(taskExecutionResourceDependencies.rowToMcp)
       },
     },
     mcpIds,
@@ -215,12 +216,13 @@ export async function resolveInjection(
     {
       async loadByIds(ids) {
         if (ids.length === 0) return []
-        return db
-          .select()
-          .from(pluginRows)
-          .where(inArray(pluginRows.id, [...ids]))
-          .all()
-          .map(taskExecutionResourceDependencies.rowToPlugin)
+        return (
+          await db
+            .select()
+            .from(pluginRows)
+            .where(inArray(pluginRows.id, [...ids]))
+            .all()
+        ).map(taskExecutionResourceDependencies.rowToPlugin)
       },
     },
     pluginIds,
@@ -269,7 +271,7 @@ type SkillsResolution =
 // canonical-path gate return typed failures now (they were the only THROWS in
 // this resolver; a throw escaped runScope into a task-level failure).
 async function resolveSkills(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   refs: AgentSkillRef[],
 ): Promise<SkillsResolution> {

@@ -23,7 +23,9 @@ import { and, asc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows, workgroupAssignments } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import type {
@@ -275,7 +277,10 @@ function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeC
   }
 }
 
-async function seedEngineTask(db: DbClient, config: WorkgroupRuntimeConfig): Promise<string> {
+async function seedEngineTask(
+  db: ProviderNeutralDatabase,
+  config: WorkgroupRuntimeConfig,
+): Promise<string> {
   const taskId = ulid()
   const agentIds = new Map<string, string>()
   for (const name of ['wg-planner', 'wg-coder']) {
@@ -307,6 +312,10 @@ async function seedEngineTask(db: DbClient, config: WorkgroupRuntimeConfig): Pro
   await db.insert(tasks).values({
     id: taskId,
     name: 'wg-rfc189',
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     workflowId: wf?.id ?? ulid(),
     workflowSnapshot: JSON.stringify(buildWorkgroupHostSnapshot(canonicalConfig)),
     repoPath: '/tmp/never',
@@ -362,119 +371,121 @@ const skipEnvelope = (): WorkgroupHostRunResult => ({
   failureCode: 'envelope-missing',
 })
 
-async function hostRows(db: DbClient, taskId: string) {
+async function hostRows(db: ProviderNeutralDatabase, taskId: string) {
   return (
     await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).orderBy(asc(nodeRuns.id))
   ).filter((r) => r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__')
 }
 
-describe('RFC-189 引擎打戳（lw）', () => {
-  test('两轮：leader wgRound=1,2 / retryIndex=0；worker 继承派单轮', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedEngineTask(db, cfg())
-    const { hooks } = scriptedHooks({
-      leader: [leaderDispatch(), leaderDone()],
-      member: [memberDone()],
+describeEachProvider('RFC-189 workgroup round providers', (harness) => {
+  describe('RFC-189 引擎打戳（lw）', () => {
+    test('两轮：leader wgRound=1,2 / retryIndex=0；worker 继承派单轮', async () => {
+      const db = harness.db
+      const taskId = await seedEngineTask(db, cfg())
+      const { hooks } = scriptedHooks({
+        leader: [leaderDispatch(), leaderDone()],
+        member: [memberDone()],
+      })
+      const res = await runWorkgroupEngine({ db, taskId, log, hooks })
+      expect(res.kind).toBe('ok')
+      const rows = await hostRows(db, taskId)
+      const leaders = rows.filter((r) => r.nodeId === '__wg_leader__')
+      expect(leaders.map((r) => r.wgRound)).toEqual([1, 2])
+      expect(leaders.every((r) => r.retryIndex === 0)).toBe(true)
+      const workers = rows.filter((r) => r.nodeId === '__wg_member__')
+      expect(workers).toHaveLength(1)
+      expect(workers[0]?.wgRound).toBe(1) // assignment.round = 派单时的轮
+      expect(workers[0]?.retryIndex).toBe(0)
     })
-    const res = await runWorkgroupEngine({ db, taskId, log, hooks })
-    expect(res.kind).toBe('ok')
-    const rows = await hostRows(db, taskId)
-    const leaders = rows.filter((r) => r.nodeId === '__wg_leader__')
-    expect(leaders.map((r) => r.wgRound)).toEqual([1, 2])
-    expect(leaders.every((r) => r.retryIndex === 0)).toBe(true)
-    const workers = rows.filter((r) => r.nodeId === '__wg_member__')
-    expect(workers).toHaveLength(1)
-    expect(workers[0]?.wgRound).toBe(1) // assignment.round = 派单时的轮
-    expect(workers[0]?.retryIndex).toBe(0)
+
+    test('协议三连滑：四行同 wgRound、retryIndex=0..3、账本只烧一轮（AC-4 换 oracle）', async () => {
+      const db = harness.db
+      const taskId = await seedEngineTask(db, cfg({ maxRounds: 2 }))
+      const { hooks } = scriptedHooks({
+        leader: [skipEnvelope(), skipEnvelope(), skipEnvelope(), leaderDone()],
+        member: [],
+      })
+      const res = await runWorkgroupEngine({ db, taskId, log, hooks })
+      expect(res.kind).toBe('ok') // maxRounds=2 未被重试膨胀击穿
+      const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
+      // 同毫秒 mint 的普通 ULID 不保证 id 序 → 断言用集合/排序口径（账本语义
+      // 本就与行序无关：countBudgetUsed 走 max）。
+      expect(leaders.map((r) => r.wgRound)).toEqual([1, 1, 1, 1])
+      expect([...leaders.map((r) => r.retryIndex)].sort()).toEqual([0, 1, 2, 3])
+      expect(leaders.filter((r) => r.rerunCause === 'wg-leader-round')).toHaveLength(1)
+      expect(leaders.filter((r) => r.rerunCause === 'wg-protocol-retry')).toHaveLength(3)
+    })
+
+    test('领养打戳：引擎外 mint 的 pending leader 行被 adopt 时就地 stamp、账本计一轮', async () => {
+      const db = harness.db
+      const taskId = await seedEngineTask(db, cfg())
+      // 模拟崩溃残留：引擎外 mint 的 pending leader 行（无 wgRound）。
+      const orphanId = ulid()
+      await db.insert(nodeRuns).values({
+        id: orphanId,
+        taskId,
+        nodeId: '__wg_leader__',
+        status: 'pending',
+        rerunCause: 'wg-leader-round',
+        // Codex 实现门 P2-1 场景：领养行带存量 index（clarify-answer 续跑经标准
+        // dispatch mint 的 max+1 形态）——后续协议重试必须从它续排，不得回 0 重复。
+        retryIndex: 4,
+        startedAt: Date.now(),
+      })
+      const { hooks } = scriptedHooks({
+        // 领养轮先滑一次信封（触发协议重试）再 done + 派单（P2-2：effects 轮号
+        // 必须与领养行的 stamp 同轮），worker 一单完成后 leader 第二轮收 done。
+        leader: [skipEnvelope(), leaderDispatch(), leaderDone()],
+        member: [memberDone()],
+      })
+      // 真实 runHostNode 会把行推进到终态；fake hook 不落库 → 手动补一层状态翻转，
+      // 否则 orphan 永远 pending 被引擎二次领养（脚本耗尽 → 假失败）。
+      const flipping: WorkgroupEngineHooks = {
+        runHostNode: async (req) => {
+          const result = await hooks.runHostNode(req)
+          await db
+            .update(nodeRuns)
+            .set({ status: result.status === 'done' ? 'done' : 'failed' })
+            .where(eq(nodeRuns.id, req.nodeRunId))
+          return result
+        },
+      }
+      const res = await runWorkgroupEngine({ db, taskId, log, hooks: flipping })
+      expect(res.kind).toBe('ok')
+      const adopted = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, orphanId)))[0]
+      expect(adopted?.wgRound).toBe(1) // NULL-qualifying 尾巴计入后就地 stamp 为当前轮
+      const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
+      // P2-1：领养轮的协议重试 retryIndex = 存量 4 续排为 5（同轮 wgRound=1），
+      // 不回 0 造成 (node, shard, retry_index) 重复。
+      const retryRow = leaders.find((r) => r.rerunCause === 'wg-protocol-retry')
+      expect(retryRow?.retryIndex).toBe(5)
+      expect(retryRow?.wgRound).toBe(1)
+      // P2-2：领养轮派出的 assignment 与其 stamp 同轮（旧代码劈成 run=1 / 效果=2）。
+      const cards = await db
+        .select()
+        .from(workgroupAssignments)
+        .where(eq(workgroupAssignments.taskId, taskId))
+      expect(cards).toHaveLength(1)
+      expect(cards[0]?.round).toBe(1)
+      const worker = (await hostRows(db, taskId)).find((r) => r.nodeId === '__wg_member__')
+      expect(worker?.wgRound).toBe(1)
+    })
   })
 
-  test('协议三连滑：四行同 wgRound、retryIndex=0..3、账本只烧一轮（AC-4 换 oracle）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedEngineTask(db, cfg({ maxRounds: 2 }))
-    const { hooks } = scriptedHooks({
-      leader: [skipEnvelope(), skipEnvelope(), skipEnvelope(), leaderDone()],
-      member: [],
+  describe('RFC-189 fc 免疫', () => {
+    test('fc 成员行 wgRound 恒 NULL，轮预算仍按行计数（maxRounds 生效）', async () => {
+      const db = harness.db
+      const taskId = await seedEngineTask(db, cfg({ mode: 'free_collab', leaderMemberId: null }))
+      const { hooks } = scriptedHooks({
+        leader: [],
+        // fc initial burst：两个成员各一轮，各产出 wg_result（无 tasks_add → 收敛 done）。
+        member: [memberDone(), memberDone()],
+      })
+      const res = await runWorkgroupEngine({ db, taskId, log, hooks })
+      expect(res.kind).toBe('ok')
+      const members = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_member__')
+      expect(members.length).toBeGreaterThanOrEqual(2)
+      expect(members.every((r) => r.wgRound === null)).toBe(true)
     })
-    const res = await runWorkgroupEngine({ db, taskId, log, hooks })
-    expect(res.kind).toBe('ok') // maxRounds=2 未被重试膨胀击穿
-    const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
-    // 同毫秒 mint 的普通 ULID 不保证 id 序 → 断言用集合/排序口径（账本语义
-    // 本就与行序无关：countBudgetUsed 走 max）。
-    expect(leaders.map((r) => r.wgRound)).toEqual([1, 1, 1, 1])
-    expect([...leaders.map((r) => r.retryIndex)].sort()).toEqual([0, 1, 2, 3])
-    expect(leaders.filter((r) => r.rerunCause === 'wg-leader-round')).toHaveLength(1)
-    expect(leaders.filter((r) => r.rerunCause === 'wg-protocol-retry')).toHaveLength(3)
-  })
-
-  test('领养打戳：引擎外 mint 的 pending leader 行被 adopt 时就地 stamp、账本计一轮', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedEngineTask(db, cfg())
-    // 模拟崩溃残留：引擎外 mint 的 pending leader 行（无 wgRound）。
-    const orphanId = ulid()
-    await db.insert(nodeRuns).values({
-      id: orphanId,
-      taskId,
-      nodeId: '__wg_leader__',
-      status: 'pending',
-      rerunCause: 'wg-leader-round',
-      // Codex 实现门 P2-1 场景：领养行带存量 index（clarify-answer 续跑经标准
-      // dispatch mint 的 max+1 形态）——后续协议重试必须从它续排，不得回 0 重复。
-      retryIndex: 4,
-      startedAt: Date.now(),
-    })
-    const { hooks } = scriptedHooks({
-      // 领养轮先滑一次信封（触发协议重试）再 done + 派单（P2-2：effects 轮号
-      // 必须与领养行的 stamp 同轮），worker 一单完成后 leader 第二轮收 done。
-      leader: [skipEnvelope(), leaderDispatch(), leaderDone()],
-      member: [memberDone()],
-    })
-    // 真实 runHostNode 会把行推进到终态；fake hook 不落库 → 手动补一层状态翻转，
-    // 否则 orphan 永远 pending 被引擎二次领养（脚本耗尽 → 假失败）。
-    const flipping: WorkgroupEngineHooks = {
-      runHostNode: async (req) => {
-        const result = await hooks.runHostNode(req)
-        await db
-          .update(nodeRuns)
-          .set({ status: result.status === 'done' ? 'done' : 'failed' })
-          .where(eq(nodeRuns.id, req.nodeRunId))
-        return result
-      },
-    }
-    const res = await runWorkgroupEngine({ db, taskId, log, hooks: flipping })
-    expect(res.kind).toBe('ok')
-    const adopted = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, orphanId)))[0]
-    expect(adopted?.wgRound).toBe(1) // NULL-qualifying 尾巴计入后就地 stamp 为当前轮
-    const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
-    // P2-1：领养轮的协议重试 retryIndex = 存量 4 续排为 5（同轮 wgRound=1），
-    // 不回 0 造成 (node, shard, retry_index) 重复。
-    const retryRow = leaders.find((r) => r.rerunCause === 'wg-protocol-retry')
-    expect(retryRow?.retryIndex).toBe(5)
-    expect(retryRow?.wgRound).toBe(1)
-    // P2-2：领养轮派出的 assignment 与其 stamp 同轮（旧代码劈成 run=1 / 效果=2）。
-    const cards = await db
-      .select()
-      .from(workgroupAssignments)
-      .where(eq(workgroupAssignments.taskId, taskId))
-    expect(cards).toHaveLength(1)
-    expect(cards[0]?.round).toBe(1)
-    const worker = (await hostRows(db, taskId)).find((r) => r.nodeId === '__wg_member__')
-    expect(worker?.wgRound).toBe(1)
-  })
-})
-
-describe('RFC-189 fc 免疫', () => {
-  test('fc 成员行 wgRound 恒 NULL，轮预算仍按行计数（maxRounds 生效）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const taskId = await seedEngineTask(db, cfg({ mode: 'free_collab', leaderMemberId: null }))
-    const { hooks } = scriptedHooks({
-      leader: [],
-      // fc initial burst：两个成员各一轮，各产出 wg_result（无 tasks_add → 收敛 done）。
-      member: [memberDone(), memberDone()],
-    })
-    const res = await runWorkgroupEngine({ db, taskId, log, hooks })
-    expect(res.kind).toBe('ok')
-    const members = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_member__')
-    expect(members.length).toBeGreaterThanOrEqual(2)
-    expect(members.every((r) => r.wgRound === null)).toBe(true)
   })
 })

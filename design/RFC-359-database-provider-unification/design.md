@@ -20,6 +20,16 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W23只把fast filtered任务页的根自身命中与后代命中数移到既有页内fam汇总；全局roots仍保留
+  原MAX(started_at)、分组、分页边界和排序，facets与全部动态SQL表达式保持。不是全局聚合消除，
+  小型真实旧/新查询和完整结果对拍通过不等于原规模P95已达标。
+- Legacy注入resolver的两个既有async loadByIds显式await真实all结果后才map，补上PG Promise
+  没有map的实际缺陷。frameBackfill、taskArchive及测试lookup helper只中立化类型；taskArchive
+  沿用既有transport mechanism的中立类型导出，不引入service直连db/query的新边界。
+- 旧human-gate故障夹具保留三处原故障时机、SQLite DDL、原事件/WS/文件清理；PG用独立
+  trigger/function表达同一个数据库故障点，按创建逆序清理。原生关闭控制只在原SQLite例中执行。
+  RFC314仅在计数case的未录制播种阶段合批事件，全部事件与原5秒/查询条数断言保持。
+
 - W22只按完整输入SQL字符串复用成功编译的输出字符串；FIFO同时受256项与输入/输出合计
   524288个UTF-16 code unit约束。命中不改顺序，超大项不保留也不逐出旧项，失败仍重新编译并抛原错误。
   每次仍由真实Drizzle/client构造当前绑定，不缓存SQL对象、参数数组、结果或native statement。

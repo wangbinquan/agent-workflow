@@ -12,21 +12,21 @@
 //
 // 对应 proposal.md AC-11 与能力影响清单 I-4（用户 2026-09-02 逐项确认）。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { count } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { taskRepos, tasks, users, workflows } from '../src/db/schema'
 import { runTaskArchiveSweep } from '../src/services/taskArchive'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc350-archive-'))
@@ -63,6 +63,17 @@ async function addTask(
   await db.insert(tasks).values({
     id: seed.id,
     name: seed.id,
+    executionLineageId: seed.parentTaskId ?? seed.id,
+    lineageSlotPathJson: JSON.stringify([
+      {
+        stableNodeKey: 'task-root',
+        frozenOccurrenceKey: seed.parentTaskId ?? seed.id,
+        workflowRevision: null,
+      },
+      ...(seed.parentTaskId === undefined
+        ? []
+        : [{ stableNodeKey: 'child-task', frozenOccurrenceKey: seed.id, workflowRevision: null }]),
+    ]),
     workflowId: 'wf1',
     workflowSnapshot: '{}',
     repoPath: '/tmp/never-read',
@@ -94,9 +105,9 @@ async function taskCount(db: Db): Promise<number> {
   return rows[0]?.n ?? 0
 }
 
-describe('RFC-350 —— interrupted 树进入归档面', () => {
+describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) => {
   test('T-15 全 interrupted 的树过了保留期会被归档出库（此前永远不会）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'orphaned', status: 'interrupted', finishedAt: NOW - 300 * DAY })
@@ -112,7 +123,7 @@ describe('RFC-350 —— interrupted 树进入归档面', () => {
   })
 
   test('T-16 还在保留期内的 interrupted 树不动', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'recent', status: 'interrupted', finishedAt: NOW - 10 * DAY })
@@ -128,7 +139,7 @@ describe('RFC-350 —— interrupted 树进入归档面', () => {
   })
 
   test('T-17 混合树按 max(finished_at) 判保留期，且非终态成员仍然挡住整棵树', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const dirs = tmpDirs()
     await seedBase(db)
     // 树 A：canceled 根 + interrupted 子，最近完成时间仍在保留期内 ⇒ 不动。
@@ -166,7 +177,7 @@ describe('RFC-350 —— interrupted 树进入归档面', () => {
   })
 
   test('默认关闭时 interrupted 树同样一行不动（新面不改变默认行为）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'orphaned', status: 'interrupted', finishedAt: NOW - 300 * DAY })

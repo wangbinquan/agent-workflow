@@ -3,9 +3,9 @@
 // pins the contract on the helper itself (not the full scheduler tick) so
 // red here points squarely at the closure→mcp glue, not at fan-out timing.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { beforeEach, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
@@ -13,10 +13,8 @@ import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { createLogger } from '../src/util/log'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   opts: { dependsOn?: string[]; mcp?: string[] } = {},
 ) {
@@ -35,11 +33,11 @@ async function seedAgent(
   })
 }
 
-describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
-  let db: DbClient
+describeEachProvider('prepareNodeRunInjection — RFC-028 mcp union', (harness) => {
+  let db: ProviderNeutralDatabase
   let mcpIdByName: Map<string, string>
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     mcpIdByName = new Map()
     // Seed a small fleet of MCPs so agents can reference their canonical ids.
     for (const [index, mcp] of [
@@ -66,7 +64,8 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
       },
     ].entries()) {
       const id = `mcp-${index + 1}`
-      db.insert(mcps)
+      await db
+        .insert(mcps)
         .values({ ...mcp, id, config: JSON.stringify(mcp.config) })
         .run()
       mcpIdByName.set(mcp.name, id)

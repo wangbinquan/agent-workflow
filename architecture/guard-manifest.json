@@ -1897,7 +1897,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 857
+      "lines": 850
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -2405,14 +2405,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:44316c2af9a9102e6cb4dea3681b2fc48a9f6281b6013793f8743caeeaf5778c",
+    "sourceDigest": "sha256:24d268d72628636d8d018eb00cddb9209a2d2493a3e675115d04620d71ff7e70",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "cb0403df4fc92e6b5b481548dd1baa2d7311c1ba",
-    "contentDigest": "sha256:c663a9ecb66bbb30fed5d15a2fd9a2d47cea18f95d8072429ba38a99bbaf2b65",
+    "currentSnapshotSha": "d2c27f5ec4f8f84841862c6bb6211f3f201e4d04",
+    "contentDigest": "sha256:ecf817470a28881ebe551a9837b1f85353849cb90ff3a2f9216cf98567eb01c0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

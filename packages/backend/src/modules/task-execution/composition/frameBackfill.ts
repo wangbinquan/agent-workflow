@@ -1,13 +1,12 @@
 // RFC-354 T4 — composition of the one-shot frame backfill per database provider.
 
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { runFrameBackfill, type FrameBackfillReport } from '../application/frameBackfillJob'
 import { createFrameBackfillStore } from '../infrastructure/frameBackfillStore'
 
 export type FrameBackfillDatabase =
-  | { readonly provider: 'sqlite'; readonly db: DbClient }
-  | { readonly provider: 'postgresql'; readonly db: PostgresqlDatabaseClient }
+  | { readonly provider: 'sqlite'; readonly db: ProviderNeutralDatabase }
+  | { readonly provider: 'postgresql'; readonly db: ProviderNeutralDatabase }
 
 export type { FrameBackfillReport }
 

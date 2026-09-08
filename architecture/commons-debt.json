@@ -5361,7 +5361,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:82027543323ddac924a7"
+        "import:32eb394fb5381e161449"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskArchive.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -8795,15 +8795,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:44316c2af9a9102e6cb4dea3681b2fc48a9f6281b6013793f8743caeeaf5778c",
+    "sourceDigest": "sha256:24d268d72628636d8d018eb00cddb9209a2d2493a3e675115d04620d71ff7e70",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "cb0403df4fc92e6b5b481548dd1baa2d7311c1ba",
-    "contentDigest": "sha256:b295224a4fbdcbc17ca8e4758393931c532c8c6f92bf14e111e4782af3550062",
+    "currentSnapshotSha": "d2c27f5ec4f8f84841862c6bb6211f3f201e4d04",
+    "contentDigest": "sha256:c320cbdfa19b9fe5725d65757474c919fcefa81e94d68c872dd303652a82cb6d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

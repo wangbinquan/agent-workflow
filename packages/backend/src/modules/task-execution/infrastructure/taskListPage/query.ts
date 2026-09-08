@@ -520,14 +520,12 @@ export function fastFilteredRootQuery(
     roots AS NOT MATERIALIZED (
       SELECT
         m.rid AS rid,
-        MAX(m.started_at) AS bsa,
-        MAX(CASE WHEN m.id = m.rid THEN 1 ELSE 0 END) AS is_self,
-        SUM(CASE WHEN m.id <> m.rid THEN 1 ELSE 0 END) AS matching_descendant_count
+        MAX(m.started_at) AS bsa
       FROM matches m
       GROUP BY m.rid
     ),
     page_roots AS MATERIALIZED (
-      SELECT r.rid, r.bsa, r.is_self, r.matching_descendant_count
+      SELECT r.rid, r.bsa
       FROM roots r
       WHERE ${boundary}
       ORDER BY r.bsa DESC, r.rid DESC
@@ -535,7 +533,7 @@ export function fastFilteredRootQuery(
     ),
     -- 页内 root 的整棵树。root_task_id 让它是一次索引取回，而不是递归下钻。
     fam AS MATERIALIZED (
-      SELECT t.id, t.parent_task_id,
+      SELECT t.id, t.root_task_id AS rid, t.parent_task_id,
         CASE WHEN (${nonView})
           AND ${viewCondition(parsed.filters.view, 't', sql`(open_alerts.task_id IS NOT NULL)`)}
           THEN 1 ELSE 0 END AS is_match
@@ -550,6 +548,14 @@ export function fastFilteredRootQuery(
       UNION
       SELECT f.parent_task_id FROM qualified q JOIN fam f ON f.id = q.id
       WHERE f.parent_task_id IS NOT NULL
+    ),
+    match_counts AS (
+      SELECT f.rid,
+        MAX(CASE WHEN f.id = f.rid AND f.is_match = 1 THEN 1 ELSE 0 END) AS is_self,
+        SUM(CASE WHEN f.id <> f.rid AND f.is_match = 1 THEN 1 ELSE 0 END)
+          AS matching_descendant_count
+      FROM fam f
+      GROUP BY f.rid
     ),
     child_counts AS (
       SELECT f.parent_task_id AS rid, COUNT(*) AS qualifying_child_count
@@ -602,11 +608,12 @@ export function fastFilteredRootQuery(
         t.source_agent_id,
         t.owner_user_id,
         pr.bsa AS branch_started_at,
-        CASE WHEN pr.is_self = 1 THEN 'self' ELSE 'context' END AS match_kind,
+        CASE WHEN mc.is_self = 1 THEN 'self' ELSE 'context' END AS match_kind,
         COALESCE(cc.qualifying_child_count, 0) AS qualifying_child_count,
-        pr.matching_descendant_count
+        mc.matching_descendant_count
       FROM page_roots pr
       JOIN tasks t ON t.id = pr.rid
+      JOIN match_counts mc ON mc.rid = pr.rid
       LEFT JOIN workflows w ON w.id = t.workflow_id
       LEFT JOIN child_counts cc ON cc.rid = pr.rid
     )

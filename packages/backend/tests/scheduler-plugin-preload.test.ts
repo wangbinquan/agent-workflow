@@ -3,11 +3,12 @@
 // contract on the helper itself (not the full scheduler tick) so red here
 // points squarely at the closure→plugin glue, not at fan-out timing.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
@@ -15,12 +16,10 @@ import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { createLogger } from '../src/util/log'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 let pluginsDir = ''
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   opts: { dependsOn?: string[]; plugins?: string[] } = {},
 ) {
@@ -39,17 +38,18 @@ async function seedAgent(
   })
 }
 
-describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
-  let db: DbClient
+describeEachProvider('prepareNodeRunInjection — RFC-031 plugin union', (harness) => {
+  let db: ProviderNeutralDatabase
   let pluginIdByName: Map<string, string>
   beforeEach(async () => {
     pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-sched-'))
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     pluginIdByName = new Map()
     // Seed three plugins so the agents below can reference their canonical ids.
     for (const [index, name] of ['p-root', 'p-leaf', 'p-extra'].entries()) {
       const id = `plugin-${index + 1}`
-      db.insert(plugins)
+      await db
+        .insert(plugins)
         .values({
           id,
           name,

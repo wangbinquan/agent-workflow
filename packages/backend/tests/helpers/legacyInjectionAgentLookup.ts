@@ -12,12 +12,12 @@
 
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents as agentRows } from '@/db/schema'
 import type { AgentDependencyLookup } from '@/services/agentDeps'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 
-export function legacyInjectionAgentLookup(db: DbClient): AgentDependencyLookup {
+export function legacyInjectionAgentLookup(db: ProviderNeutralDatabase): AgentDependencyLookup {
   return Object.freeze({
     async get(id: string) {
       const rows = await db.select().from(agentRows).where(eq(agentRows.id, id)).limit(1)

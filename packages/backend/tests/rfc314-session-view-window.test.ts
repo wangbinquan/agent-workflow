@@ -83,6 +83,7 @@ async function seedRun(
   runId: string,
   events: SeedEvent[],
   retryIndex = 0,
+  eventChunkSize = 1,
 ): Promise<void> {
   await db.insert(nodeRuns).values({
     id: runId,
@@ -94,16 +95,18 @@ async function seedRun(
     promptText: `prompt for ${runId}`,
     opencodeSessionId: SESSION,
   })
-  for (const e of events) {
-    await db.insert(nodeRunEvents).values({
-      id: e.id,
-      nodeRunId: runId,
-      ts: e.ts,
-      kind: 'text',
-      sessionId: SESSION,
-      parentSessionId: null,
-      payload: e.payload,
-    })
+  for (let offset = 0; offset < events.length; offset += eventChunkSize) {
+    await db.insert(nodeRunEvents).values(
+      events.slice(offset, offset + eventChunkSize).map((e) => ({
+        id: e.id,
+        nodeRunId: runId,
+        ts: e.ts,
+        kind: 'text' as const,
+        sessionId: SESSION,
+        parentSessionId: null,
+        payload: e.payload,
+      })),
+    )
   }
 }
 
@@ -200,8 +203,12 @@ async function capture(
 }> {
   const db = database?.db ?? createInMemoryDb(MIGRATIONS)
   await seedBase(db)
-  await seedRun(db, 'nr_a', monotonic(1_000, eventsPerRun, 'A'))
-  await seedRun(db, 'nr_b', monotonic(100_000, eventsPerRun, 'B'), 1)
+  // W22 hosted PG timed out in this unrecorded fixture setup. Keep all rows and
+  // their order, with at most 700 explicit parameters per batch. The native
+  // SQLite plan case retains its original single-row inserts.
+  const eventChunkSize = database ? 100 : 1
+  await seedRun(db, 'nr_a', monotonic(1_000, eventsPerRun, 'A'), 0, eventChunkSize)
+  await seedRun(db, 'nr_b', monotonic(100_000, eventsPerRun, 'B'), 1, eventChunkSize)
   const rec =
     database?.recordStatements() ??
     recordStatements((db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client)

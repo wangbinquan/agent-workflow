@@ -9,10 +9,10 @@
 //   • `doctor --backfill-containers` refuses while the daemon runs.
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds, maintenanceState, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { frameBackfillCommand } from '../src/cli/frameBackfill'
 import { FRAME_BACKFILL_MARKER_KEY } from '../src/modules/task-execution/application/frameBackfillJob'
@@ -21,8 +21,6 @@ import {
   planFrameBackfill,
   type FrameBackfillRunRow,
 } from '../src/modules/task-execution/domain/frameBackfill'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function row(
   id: string,
@@ -161,7 +159,7 @@ const DEFINITION: WorkflowDefinition = {
   edges: [],
 }
 
-async function seedLegacyTask(db: ReturnType<typeof createInMemoryDb>) {
+async function seedLegacyTask(db: ProviderNeutralDatabase) {
   const wfId = '01WF0000000000000000000000'
   const taskId = '01TASK00000000000000000000'
   await db.insert(workflows).values({
@@ -175,6 +173,10 @@ async function seedLegacyTask(db: ReturnType<typeof createInMemoryDb>) {
   await db.insert(tasks).values({
     id: taskId,
     name: 'nested',
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     workflowId: wfId,
     workflowSnapshot: JSON.stringify(DEFINITION),
     repoPath: '/tmp',
@@ -226,12 +228,15 @@ async function seedLegacyTask(db: ReturnType<typeof createInMemoryDb>) {
   return { taskId }
 }
 
-describe('RFC-354 T4 — SQLite store end-to-end', () => {
+describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
   test('backfills node_runs + clarify_rounds frames, marks completion, force re-walks', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedLegacyTask(db)
 
-    const first = await runFrameBackfillOnBoot({ provider: 'sqlite', db })
+    const first = await runFrameBackfillOnBoot({
+      provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
+      db,
+    })
     expect(first.skipped).toBe(false)
     expect(first.tasks).toBe(1)
     expect(first.rowsUpdated).toBe(4)
@@ -289,11 +294,17 @@ describe('RFC-354 T4 — SQLite store end-to-end', () => {
     })
 
     // Next boot: the marker short-circuits the walk.
-    const second = await runFrameBackfillOnBoot({ provider: 'sqlite', db })
+    const second = await runFrameBackfillOnBoot({
+      provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
+      db,
+    })
     expect(second.skipped).toBe(true)
 
     // Manual re-run: walks again, finds nothing left to do (idempotent).
-    const forced = await runFrameBackfillOnBoot({ provider: 'sqlite', db }, { force: true })
+    const forced = await runFrameBackfillOnBoot(
+      { provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql', db },
+      { force: true },
+    )
     expect(forced.skipped).toBe(false)
     expect(forced.tasks).toBe(1)
     expect(forced.rowsUpdated).toBe(0)
@@ -301,10 +312,13 @@ describe('RFC-354 T4 — SQLite store end-to-end', () => {
   })
 
   test('a task whose snapshot cannot be parsed is reported and left untouched', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const { taskId } = await seedLegacyTask(db)
     await db.update(tasks).set({ workflowSnapshot: '{not json' }).where(eq(tasks.id, taskId))
-    const report = await runFrameBackfillOnBoot({ provider: 'sqlite', db })
+    const report = await runFrameBackfillOnBoot({
+      provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
+      db,
+    })
     expect(report.unreadableTasks).toEqual([taskId])
     expect(report.rowsUpdated).toBe(0)
     const framed = await db
@@ -329,14 +343,23 @@ describe('RFC-354 T4 — doctor --backfill-containers', () => {
     expect(result.output).toContain('agent-workflow stop')
     expect(ran).toBe(false)
   })
+})
 
+describeEachProvider('RFC-354 T4 — doctor --backfill-containers', (harness) => {
   test('walks the database with force and reports counts', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedLegacyTask(db)
     const result = await frameBackfillCommand({
       daemonPid: () => null,
       // the bootstrap composes provider + walk; the command only gates and formats
-      run: () => runFrameBackfillOnBoot({ provider: 'sqlite', db }, { force: true }),
+      run: () =>
+        runFrameBackfillOnBoot(
+          {
+            provider: harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql',
+            db,
+          },
+          { force: true },
+        ),
     })
     expect(result.status).toBe('ok')
     expect(result.output).toContain(
