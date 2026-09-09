@@ -8,6 +8,8 @@ import { dirname, join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, plugins, tasks, workflows } from '../src/db/schema'
 import { composePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
 import {
@@ -35,13 +37,13 @@ import { ConflictError } from '../src/util/errors'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let pluginsDir = ''
 let binding: PluginServiceBinding
 
 const deps = () => ({ pluginsDir, npmBin: FAKE_NPM })
 
-beforeEach(async () => {
+const setupNativeFixture = async () => {
   db = createInMemoryDb(MIGRATIONS)
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc201-plugin-'))
   process.env.FAKE_NPM_MODE = 'success'
@@ -50,7 +52,18 @@ beforeEach(async () => {
   delete process.env.FAKE_NPM_COUNTER_FILE
   resetNpmProbeCacheForTests()
   binding = composePluginServiceBindingForTest(db, deps())
-})
+}
+
+async function setupProviderFixture(database: ProviderNeutralDatabase) {
+  db = database
+  pluginsDir = await mkdtemp(join(tmpdir(), 'rfc201-plugin-'))
+  process.env.FAKE_NPM_MODE = 'success'
+  process.env.FAKE_NPM_VERSION = '1.0.0'
+  delete process.env.FAKE_NPM_COMMIT
+  delete process.env.FAKE_NPM_COUNTER_FILE
+  resetNpmProbeCacheForTests()
+  binding = composePluginServiceBindingForTest(db, deps())
+}
 
 afterEach(async () => {
   await rm(pluginsDir, { recursive: true, force: true })
@@ -60,7 +73,9 @@ afterEach(async () => {
   delete process.env.FAKE_NPM_COUNTER_FILE
 })
 
-describe('immutable generation publication', () => {
+describeEachProvider('immutable generation publication', (harness) => {
+  beforeEach(() => setupProviderFixture(harness.db))
+
   test('explicit same-version reinstall publishes a fresh immutable generation', async () => {
     const created = await createPlugin(binding, { name: 'same-version', spec: 'same-version@1' })
     resetNpmProbeCacheForTests()
@@ -134,7 +149,9 @@ describe('immutable generation publication', () => {
   })
 })
 
-describe('source identity update checks', () => {
+describeEachProvider('source identity update checks', (harness) => {
+  beforeEach(() => setupProviderFixture(harness.db))
+
   test('same package version at a new Git commit is update-ready', async () => {
     process.env.FAKE_NPM_COMMIT = '1111111111111111111111111111111111111111'
     const created = await createPlugin(binding, { name: 'git-source', spec: 'github:org/repo' })
@@ -144,6 +161,10 @@ describe('source identity update checks', () => {
     expect(checked.available).toBe(true)
     expect(checked.latest).toBe('222222222222')
   })
+})
+
+describe('source identity update checks', () => {
+  beforeEach(setupNativeFixture)
 
   test('legacy cachedPath without manifest fails closed as identity unknown', async () => {
     const created = await createPlugin(binding, { name: 'legacy', spec: 'legacy@1' })
@@ -174,6 +195,8 @@ describe('source identity update checks', () => {
 })
 
 describe('generation GC safety', () => {
+  beforeEach(setupNativeFixture)
+
   test('empty plugin storage bypasses the active-run database scan', async () => {
     const dbThatMustNotBeRead = new Proxy({} as DbClient, {
       get() {
@@ -214,6 +237,10 @@ describe('generation GC safety', () => {
     ).toEqual([])
     expect(existsSync(fresh)).toBe(true)
   })
+})
+
+describeEachProvider('generation GC safety', (harness) => {
+  beforeEach(() => setupProviderFixture(harness.db))
 
   test('keeps referenced generation, removes only aged orphan and crashed check dir', async () => {
     const created = await createPlugin(binding, { name: 'kept', spec: 'kept@1' })
@@ -259,6 +286,11 @@ describe('generation GC safety', () => {
       status: 'running',
       inputs: '{}',
       startedAt: Date.now(),
+
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
     })
     await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
 
@@ -299,6 +331,8 @@ describe('generation GC safety', () => {
 })
 
 describe('production coordinator callsite ratchet', () => {
+  beforeEach(setupNativeFixture)
+
   test('Plugin mutations, Check/Upgrade, create, and generic ACL use the stable id fence', async () => {
     const route = await readFile(
       resolve(import.meta.dir, '..', 'src', 'routes', 'plugins.ts'),

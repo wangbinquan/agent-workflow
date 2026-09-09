@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-164 PR-1 — workgroups resource: service CRUD + zod shape + route ACL.
 //
 // Locks:
@@ -56,7 +58,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 const agentId = (name: string): string => `agent-${name}`
 const AGENT_NAMES = ['planner-agent', 'coder-a', 'a', 'b', 'auditor', 'lead-agent'] as const
 
-async function getWorkgroupForTest(db: DbClient, name: string) {
+async function getWorkgroupForTest(db: ProviderNeutralDatabase, name: string) {
   const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
   return row === undefined ? null : getWorkgroupById(db, row.id)
 }
@@ -90,7 +92,7 @@ function groupInput(overrides: Partial<CreateWorkgroup> = {}): CreateWorkgroup {
 }
 
 async function saveByName(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   next: (snapshot: WorkgroupDraftSnapshot) => WorkgroupDraftSnapshot,
 ) {
@@ -110,7 +112,12 @@ async function saveByName(
   ).workgroup
 }
 
-async function renameByName(db: DbClient, name: string, newName: string, description?: string) {
+async function renameByName(
+  db: ProviderNeutralDatabase,
+  name: string,
+  newName: string,
+  description?: string,
+) {
   const current = await getWorkgroupForTest(db, name)
   if (current === null) throw new Error(`missing fixture workgroup ${name}`)
   return (
@@ -284,7 +291,7 @@ describe('RFC-164 — CreateWorkgroupSchema shape', () => {
 
 describe('RFC-164 — services/workgroups.ts CRUD', () => {
   let db: DbClient
-  beforeEach(async () => {
+  const setupNative = async () => {
     db = createInMemoryDb(MIGRATIONS)
     await db.insert(agents).values(
       AGENT_NAMES.map((name) => ({
@@ -292,232 +299,266 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
         name,
       })),
     )
+  }
+
+  describeEachProvider('workgroup CRUD persistence', (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(async () => {
+      db = harness.db
+      await db.insert(agents).values(
+        AGENT_NAMES.map((name) => ({
+          id: agentId(name),
+          name,
+        })),
+      )
+    })
+
+    test('create + get round-trip: leader resolved, members ordered, switches persisted', async () => {
+      const g = await createWorkgroup(db, groupInput())
+      expect(g.id).toBeTruthy()
+      expect(g.mode).toBe('leader_worker')
+      expect(g.members).toHaveLength(2)
+      expect(g.members[0]?.displayName).toBe('planner') // sortOrder = input order
+      expect(g.members[1]?.displayName).toBe('coder')
+      const leader = g.members.find((m) => m.id === g.leaderMemberId)
+      expect(leader?.displayName).toBe('planner')
+      expect(leader?.memberType).toBe('agent')
+      expect(g.switches).toEqual({ shareOutputs: true, directMessages: false, blackboard: false })
+      expect(g.maxRounds).toBe(12)
+      expect(g.completionGate).toBe(true)
+
+      const fetched = await getWorkgroupForTest(db, 'payment-squad')
+      expect(fetched?.id).toBe(g.id)
+      expect((await listWorkgroups(db)).map((x) => x.name)).toEqual(['payment-squad'])
+    })
+
+    test('name conflict → ConflictError', async () => {
+      await createWorkgroup(db, groupInput())
+      await expect(createWorkgroup(db, groupInput())).rejects.toThrow(ConflictError)
+    })
+
+    test('same member displayName across two groups is fine (uniqueness is per-group)', async () => {
+      await createWorkgroup(db, groupInput())
+      const g2 = await createWorkgroup(db, groupInput({ name: 'another-squad' }))
+      expect(g2.members.map((m) => m.displayName)).toContain('planner')
+    })
+
+    test('versioned save replaces changed roster, re-resolves leader, and clears it in fc', async () => {
+      const g1 = await createWorkgroup(db, groupInput())
+      const oldIds = new Set(g1.members.map((m) => m.id))
+
+      const g2 = await saveByName(db, 'payment-squad', (snapshot) => ({
+        ...snapshot,
+        description: 'v2',
+        instructions: '',
+        mode: 'free_collab',
+        leaderDisplayName: undefined,
+        switches: { shareOutputs: false, directMessages: false, blackboard: false },
+        maxRounds: 30,
+        completionGate: false,
+        members: [
+          {
+            memberType: 'agent',
+            agentId: agentId('coder-a'),
+            displayName: 'coder',
+            roleDesc: '实现',
+          },
+          {
+            memberType: 'agent',
+            agentId: agentId('auditor'),
+            displayName: 'auditor',
+            roleDesc: '审计',
+          },
+        ],
+      }))
+      expect(g2.mode).toBe('free_collab')
+      expect(g2.leaderMemberId).toBeNull()
+      expect(g2.members).toHaveLength(2)
+      for (const m of g2.members) expect(oldIds.has(m.id)).toBe(false)
+      expect(g2.description).toBe('v2')
+      expect(g2.maxRounds).toBe(30)
+    })
+
+    test('service-level defensive leader validation (bypassing route zod)', async () => {
+      const input = groupInput()
+      // hand-corrupt: leader name that matches no member
+      const corrupted = { ...input, leaderDisplayName: 'ghost' }
+      await expect(createWorkgroup(db, corrupted)).rejects.toThrow(ValidationError)
+    })
   })
 
-  test('create + get round-trip: leader resolved, members ordered, switches persisted', async () => {
-    const g = await createWorkgroup(db, groupInput())
-    expect(g.id).toBeTruthy()
-    expect(g.mode).toBe('leader_worker')
-    expect(g.members).toHaveLength(2)
-    expect(g.members[0]?.displayName).toBe('planner') // sortOrder = input order
-    expect(g.members[1]?.displayName).toBe('coder')
-    const leader = g.members.find((m) => m.id === g.leaderMemberId)
-    expect(leader?.displayName).toBe('planner')
-    expect(leader?.memberType).toBe('agent')
-    expect(g.switches).toEqual({ shareOutputs: true, directMessages: false, blackboard: false })
-    expect(g.maxRounds).toBe(12)
-    expect(g.completionGate).toBe(true)
+  describe('retained original cases', () => {
+    beforeEach(setupNative)
 
-    const fetched = await getWorkgroupForTest(db, 'payment-squad')
-    expect(fetched?.id).toBe(g.id)
-    expect((await listWorkgroups(db)).map((x) => x.name)).toEqual(['payment-squad'])
-  })
+    test('human member must be an existing active user', async () => {
+      const withGhostHuman = groupInput({
+        members: [
+          { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
+          { memberType: 'human', userId: 'no-such-user', displayName: 'pm', roleDesc: '' },
+        ],
+      })
+      expect(createWorkgroup(db, withGhostHuman)).rejects.toThrow(ValidationError)
 
-  test('name conflict → ConflictError', async () => {
-    await createWorkgroup(db, groupInput())
-    expect(createWorkgroup(db, groupInput())).rejects.toThrow(ConflictError)
-  })
+      const u = await createUser(db, {
+        username: 'pmuser',
+        displayName: 'pm',
+        role: 'user',
+        password: 'longEnoughPassword',
+      })
+      const ok = await createWorkgroup(db, {
+        ...groupInput({ name: 'with-human' }),
+        members: [
+          { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
+          { memberType: 'human', userId: u.id, displayName: 'pm', roleDesc: '把关' },
+        ],
+      })
+      const human = ok.members.find((m) => m.memberType === 'human')
+      expect(human?.userId).toBe(u.id)
+      expect(human?.displayName).toBe('pm')
+    })
 
-  test('same member displayName across two groups is fine (uniqueness is per-group)', async () => {
-    await createWorkgroup(db, groupInput())
-    const g2 = await createWorkgroup(db, groupInput({ name: 'another-squad' }))
-    expect(g2.members.map((m) => m.displayName)).toContain('planner')
-  })
+    test('versioned save rechecks human status in the final transaction', async () => {
+      const u = await createUser(db, {
+        username: 'raceuser',
+        displayName: 'race user',
+        role: 'user',
+        password: 'longEnoughPassword',
+      })
+      const created = await createWorkgroup(db, {
+        ...groupInput({ name: 'human-race' }),
+        members: [
+          { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
+          { memberType: 'human', userId: u.id, displayName: 'reviewer', roleDesc: '' },
+        ],
+      })
 
-  test('versioned save replaces changed roster, re-resolves leader, and clears it in fc', async () => {
-    const g1 = await createWorkgroup(db, groupInput())
-    const oldIds = new Set(g1.members.map((m) => m.id))
-
-    const g2 = await saveByName(db, 'payment-squad', (snapshot) => ({
-      ...snapshot,
-      description: 'v2',
-      instructions: '',
-      mode: 'free_collab',
-      leaderDisplayName: undefined,
-      switches: { shareOutputs: false, directMessages: false, blackboard: false },
-      maxRounds: 30,
-      completionGate: false,
-      members: [
+      const save = saveWorkgroup(
+        db,
+        created.id,
         {
-          memberType: 'agent',
-          agentId: agentId('coder-a'),
-          displayName: 'coder',
-          roleDesc: '实现',
+          expectedVersion: created.version,
+          clientMutationId: ulid(),
+          snapshot: { ...workgroupDraftSnapshotOf(created), description: 'must not commit' },
         },
+        { kind: 'actor', actor: T6_ACTOR },
         {
-          memberType: 'agent',
-          agentId: agentId('auditor'),
-          displayName: 'auditor',
-          roleDesc: '审计',
+          beforeWriteTransaction: async () => {
+            await db.update(users).set({ status: 'disabled' }).where(eq(users.id, u.id)).run()
+          },
         },
-      ],
-    }))
-    expect(g2.mode).toBe('free_collab')
-    expect(g2.leaderMemberId).toBeNull()
-    expect(g2.members).toHaveLength(2)
-    for (const m of g2.members) expect(oldIds.has(m.id)).toBe(false)
-    expect(g2.description).toBe('v2')
-    expect(g2.maxRounds).toBe(30)
+      )
+
+      await expect(save).rejects.toMatchObject({ code: 'workgroup-member-user-invalid' })
+      expect((await getWorkgroupById(db, created.id))?.description).not.toBe('must not commit')
+    })
   })
 
-  test('service-level defensive leader validation (bypassing route zod)', async () => {
-    const input = groupInput()
-    // hand-corrupt: leader name that matches no member
-    const corrupted = { ...input, leaderDisplayName: 'ghost' }
-    expect(createWorkgroup(db, corrupted)).rejects.toThrow(ValidationError)
-  })
-
-  test('human member must be an existing active user', async () => {
-    const withGhostHuman = groupInput({
-      members: [
-        { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
-        { memberType: 'human', userId: 'no-such-user', displayName: 'pm', roleDesc: '' },
-      ],
-    })
-    expect(createWorkgroup(db, withGhostHuman)).rejects.toThrow(ValidationError)
-
-    const u = await createUser(db, {
-      username: 'pmuser',
-      displayName: 'pm',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    const ok = await createWorkgroup(db, {
-      ...groupInput({ name: 'with-human' }),
-      members: [
-        { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
-        { memberType: 'human', userId: u.id, displayName: 'pm', roleDesc: '把关' },
-      ],
-    })
-    const human = ok.members.find((m) => m.memberType === 'human')
-    expect(human?.userId).toBe(u.id)
-    expect(human?.displayName).toBe('pm')
-  })
-
-  test('versioned save rechecks human status in the final transaction', async () => {
-    const u = await createUser(db, {
-      username: 'raceuser',
-      displayName: 'race user',
-      role: 'user',
-      password: 'longEnoughPassword',
-    })
-    const created = await createWorkgroup(db, {
-      ...groupInput({ name: 'human-race' }),
-      members: [
-        { memberType: 'agent', agentId: agentId('a'), displayName: 'planner', roleDesc: '' },
-        { memberType: 'human', userId: u.id, displayName: 'reviewer', roleDesc: '' },
-      ],
+  describeEachProvider('workgroup rename persistence', (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(async () => {
+      db = harness.db
+      await db.insert(agents).values(
+        AGENT_NAMES.map((name) => ({
+          id: agentId(name),
+          name,
+        })),
+      )
     })
 
-    const save = saveWorkgroup(
-      db,
-      created.id,
-      {
-        expectedVersion: created.version,
-        clientMutationId: ulid(),
-        snapshot: { ...workgroupDraftSnapshotOf(created), description: 'must not commit' },
-      },
-      { kind: 'actor', actor: T6_ACTOR },
-      {
-        beforeWriteTransaction: async () => {
-          await db.update(users).set({ status: 'disabled' }).where(eq(users.id, u.id)).run()
-        },
-      },
-    )
+    test('rename happy path + conflict + delete + not-found', async () => {
+      await createWorkgroup(db, groupInput())
+      const renamed = await renameByName(db, 'payment-squad', 'pay-squad')
+      expect(renamed.name).toBe('pay-squad')
+      expect(await getWorkgroupForTest(db, 'payment-squad')).toBeNull()
 
-    await expect(save).rejects.toMatchObject({ code: 'workgroup-member-user-invalid' })
-    expect((await getWorkgroupById(db, created.id))?.description).not.toBe('must not commit')
-  })
+      await createWorkgroup(db, groupInput())
+      await expect(renameByName(db, 'pay-squad', 'payment-squad')).rejects.toThrow(ConflictError)
 
-  test('rename happy path + conflict + delete + not-found', async () => {
-    await createWorkgroup(db, groupInput())
-    const renamed = await renameByName(db, 'payment-squad', 'pay-squad')
-    expect(renamed.name).toBe('pay-squad')
-    expect(await getWorkgroupForTest(db, 'payment-squad')).toBeNull()
-
-    await createWorkgroup(db, groupInput())
-    expect(renameByName(db, 'pay-squad', 'payment-squad')).rejects.toThrow(ConflictError)
-
-    const current = await getWorkgroupForTest(db, 'pay-squad')
-    if (current === null) throw new Error('missing pay-squad')
-    await deleteWorkgroup(
-      db,
-      current.id,
-      { expectedVersion: current.version, clientMutationId: ulid(), confirm: current.name },
-      { kind: 'actor', actor: T6_ACTOR },
-    )
-    expect(await getWorkgroupForTest(db, 'pay-squad')).toBeNull()
-    expect(
-      deleteWorkgroup(
+      const current = await getWorkgroupForTest(db, 'pay-squad')
+      if (current === null) throw new Error('missing pay-squad')
+      await deleteWorkgroup(
         db,
         current.id,
         { expectedVersion: current.version, clientMutationId: ulid(), confirm: current.name },
         { kind: 'actor', actor: T6_ACTOR },
-      ),
-    ).rejects.toThrow(NotFoundError)
-    expect(
-      saveWorkgroup(
-        db,
-        current.id,
-        {
-          expectedVersion: current.version,
-          clientMutationId: ulid(),
-          snapshot: workgroupDraftSnapshotOf(current),
-        },
-        { kind: 'actor', actor: T6_ACTOR },
-      ),
-    ).rejects.toThrow(NotFoundError)
+      )
+      expect(await getWorkgroupForTest(db, 'pay-squad')).toBeNull()
+      await expect(
+        deleteWorkgroup(
+          db,
+          current.id,
+          { expectedVersion: current.version, clientMutationId: ulid(), confirm: current.name },
+          { kind: 'actor', actor: T6_ACTOR },
+        ),
+      ).rejects.toThrow(NotFoundError)
+      await expect(
+        saveWorkgroup(
+          db,
+          current.id,
+          {
+            expectedVersion: current.version,
+            clientMutationId: ulid(),
+            snapshot: workgroupDraftSnapshotOf(current),
+          },
+          { kind: 'actor', actor: T6_ACTOR },
+        ),
+      ).rejects.toThrow(NotFoundError)
+    })
+
+    test('rename + description edit atomically (2026-07-13 后端原子端点)', async () => {
+      await createWorkgroup(db, groupInput())
+      // name + description together
+      const both = await renameByName(db, 'payment-squad', 'pay-squad', 'new blurb')
+      expect(both.name).toBe('pay-squad')
+      expect(both.description).toBe('new blurb')
+
+      // description-only: name unchanged, the conflict/scheduled guards don't run,
+      // the description is updated in place.
+      const descOnly = await renameByName(db, 'pay-squad', 'pay-squad', 'blurb v2')
+      expect(descOnly.name).toBe('pay-squad')
+      expect(descOnly.description).toBe('blurb v2')
+
+      // pure rename (description omitted) leaves the stored description untouched.
+      const pure = await renameByName(db, 'pay-squad', 'pay-team')
+      expect(pure.name).toBe('pay-team')
+      expect(pure.description).toBe('blurb v2')
+
+      // no-op (same name, description omitted) returns the row unchanged.
+      const noop = await renameByName(db, 'pay-team', 'pay-team')
+      expect(noop.name).toBe('pay-team')
+      expect(noop.description).toBe('blurb v2')
+    })
   })
 
-  test('rename + description edit atomically (2026-07-13 后端原子端点)', async () => {
-    await createWorkgroup(db, groupInput())
-    // name + description together
-    const both = await renameByName(db, 'payment-squad', 'pay-squad', 'new blurb')
-    expect(both.name).toBe('pay-squad')
-    expect(both.description).toBe('new blurb')
+  describe('retained original utility', () => {
+    beforeEach(setupNative)
 
-    // description-only: name unchanged, the conflict/scheduled guards don't run,
-    // the description is updated in place.
-    const descOnly = await renameByName(db, 'pay-squad', 'pay-squad', 'blurb v2')
-    expect(descOnly.name).toBe('pay-squad')
-    expect(descOnly.description).toBe('blurb v2')
-
-    // pure rename (description omitted) leaves the stored description untouched.
-    const pure = await renameByName(db, 'pay-squad', 'pay-team')
-    expect(pure.name).toBe('pay-team')
-    expect(pure.description).toBe('blurb v2')
-
-    // no-op (same name, description omitted) returns the row unchanged.
-    const noop = await renameByName(db, 'pay-team', 'pay-team')
-    expect(noop.name).toBe('pay-team')
-    expect(noop.description).toBe('blurb v2')
-  })
-
-  test('diffNewAgentMemberIds — only new agent refs, humans ignored, dedup', () => {
-    const prev = {
-      members: [
-        {
-          id: '1',
-          memberType: 'agent' as const,
-          agentId: 'agent-a',
-          agentName: 'a',
-          userId: null,
-          displayName: 'a',
-          roleDesc: '',
-          sortOrder: 0,
-        },
-      ],
-    }
-    const next = {
-      members: [
-        { memberType: 'agent', agentId: 'agent-a' },
-        { memberType: 'agent', agentId: 'agent-b' },
-        { memberType: 'agent', agentId: 'agent-b' },
-        { memberType: 'human', agentId: undefined },
-      ],
-    }
-    expect(diffNewAgentMemberIds(prev, next)).toEqual(['agent-b'])
-    expect(diffNewAgentMemberIds(null, next)).toEqual(['agent-a', 'agent-b'])
+    test('diffNewAgentMemberIds — only new agent refs, humans ignored, dedup', () => {
+      const prev = {
+        members: [
+          {
+            id: '1',
+            memberType: 'agent' as const,
+            agentId: 'agent-a',
+            agentName: 'a',
+            userId: null,
+            displayName: 'a',
+            roleDesc: '',
+            sortOrder: 0,
+          },
+        ],
+      }
+      const next = {
+        members: [
+          { memberType: 'agent', agentId: 'agent-a' },
+          { memberType: 'agent', agentId: 'agent-b' },
+          { memberType: 'agent', agentId: 'agent-b' },
+          { memberType: 'human', agentId: undefined },
+        ],
+      }
+      expect(diffNewAgentMemberIds(prev, next)).toEqual(['agent-b'])
+      expect(diffNewAgentMemberIds(null, next)).toEqual(['agent-a', 'agent-b'])
+    })
   })
 })
 

@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十五批（2026-09-09）**：插件与workgroup CRUD两旧套件保留38原声明/145完整matcher，15原DB例/70 matcher默认双库，23原single/75 matcher保留；均为部分迁移，候选累计242完整/12混合。原后选定15例/71实际expect通过；生产源码保持。
+> Plugin原70 SQL中69全同，1处task INSERT保原70列/23绑定前缀，补原物理谱系值并保留changes2→1；79快照/25重复行/635字段/26原JSON保持。27完整返回保持、1丢弃写返回差量单列；327重复文件的55537字节保持，728自然mtime和1观察label差量保留，不称整份capture相同。
+> Workgroup原后247 SQL、82快照/156重复行/2737字段/672原JSON、20原await返回与14次实际COMMIT后通知保持。原matcher只补5处外层await，三helper仅DB参数类型且完整运行JS不变；59 Promise观察含嵌套与6份三字段错误投影，不是59个独立业务操作或完整错误对象。
+> W34 exact2a4a3bcc3 Main34314486701终态37success/3failure、13后端12过1红；两OS各1950文件恰一次，52官方blob/14发布路径及196原callback已核。31选定文件506执行全过，新增9真PG、旧HTTP/mission、RFC185原失败例及RFC314本次观察/清理均过，历史根因未宣称修复。
+> 本次macOS4剩余失败为RFC234单个故障注入用例5059.18ms超过原5000ms；同SHA Ubuntu20.56ms通过，日志没有阶段证据，原因待定位。当前1950文件、605构库文件/1233调用、580无harness/447有harness；T19f整文件/688条及原生兼容4文件/7调用保持。两core一次最终tsc、211/433功能metadata、13/55canonical通过，新SHA与六项AC及原full性能判据继续待验。
+
 > **RFC-359 W12 第三十四批（2026-09-09）**：三个旧套件保留17原声明/55完整callback matcher，9原DB例/30 matcher默认双库，8原single/25 matcher继续单跑；均为部分迁移，候选累计242完整/10混合。原后9例/30 expect通过；生产源码保持。
 > Revision/pending原后105快照、101重复行/2406字段/148原JSON保持；209 SQL中203全同，6处显式补原物理谱系并保留changes2→1差量，17完整返回与3void保持、1丢弃write返回差量单列。8次实际COMMIT后通知保持。WS首producer原后26 SQL、完整行、4返回及3次实际commit后广播保持；其他两native原样。
 > W33 exact13b0e3b3f Main34311234467终态37success/3failure、13后端12过1红；两OS各1950文件恰一次。31文件是本批计划；上批28选定文件467执行466过，唯一PG fan-out返回failed，原详情未打印。新增16 PG及六MCP HTTP均过；RFC223源码检查两OS过，RFC314本次观察/清理过不等于历史机制修复。

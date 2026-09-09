@@ -20,6 +20,12 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W35继续只适配原测试夹具：插件八例和workgroup CRUD七例用默认双库，23原single仍独立运行。
+  原native setup只服务保留组，provider组使用实际harness.db并沿用原完整种子/FS/setup尾部，避免额外SQLite。
+  插件GC只为原task INSERT显式提供原已观察到的两个谱系值，node_runs原行及NULL保持，原busy/clear输入不变。
+  Workgroup五个rejects等待原Promise；三个helper只放宽DB参数类型，完整运行JS保持。
+  数据库返回与文件元数据的实际差量保留在证据中；夹具适配不代表生产实现合一、真实PG通过或完整套件关闭。
+
 - W34继续适配原测试的夹具边界：revision五例、pending三例与WS首producer一例接默认双库，
   八个原single完整注册保持。Pending只在选定种子路径显式提供原物理行已有的两个谱系值，
   原26个绑定前缀与非选定native默认分支保持；底层changes差量原样记录，未改生产触发器或规则。
