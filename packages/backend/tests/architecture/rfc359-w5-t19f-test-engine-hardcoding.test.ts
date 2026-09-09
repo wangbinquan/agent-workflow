@@ -88,7 +88,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'contracts/harness.ts: 1',
   'createindb-snapshot-parity.test.ts: 8',
   'daemon-info-route.test.ts: 1',
-  'digital-employee-agent-template-reconcile.test.ts: 5',
+  'digital-employee-agent-template-reconcile.test.ts: 2',
   'distill-session-capture.test.ts: 1',
   'e2e-sqlite-fixture-lock-contention.test.ts: 3',
   'execution-contract-platform.test.ts: 5',

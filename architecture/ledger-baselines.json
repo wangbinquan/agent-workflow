@@ -867,12 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25063,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25064,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W40: replace the old private skillMarkdown owner with the shared resourcePackageSkillDocument file and renderResourcePackageSkillMarkdown symbol, consumed by both existing artifact writers; net one source-backed owner identity."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:19764fe60645f2898b2e837348592a2128dd35e644dd79582a31d810453318e2",
+    "sourceDigest": "sha256:9cad328b940e62bc133f4ddbc059f28b7fa17f68a83eeb31c947292dee01f3b2",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "66a877da6260decbb84a6a9ae268c578c777629f",
-    "contentDigest": "sha256:aec57f38b73c354383566c84c939e2b34ed198f14c755be5c6979fa9688bea4e",
+    "currentSnapshotSha": "50e9e58cd5a7574ab463096c3da6fe487a49078a",
+    "contentDigest": "sha256:38c8e8882aa9c4fe8eb43f7bc888d7d77cc99072666439939b5ce9783adf5e62",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

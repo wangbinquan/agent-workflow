@@ -20,6 +20,18 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W40 将两个资源包writer中完全相同的YAML字段投影与SKILL.md framing提取为
+  `renderResourcePackageSkillMarkdown`；保留原字段求值/展开顺序、lineWidth和完整输出字节。
+  PostgreSQL writer保留原局部调用名的import alias，legacy writer只替换原initializer；
+  两端原解析、文件操作、暂存和事务边界保持，不因此宣称两个完整artifact owner已合一。
+  模板三个原修复例接默认provider harness，保留原种子、原matcher、漂移写入时机及另两个原例。
+  W31源锁识别实际被await的生命周期包装，并提取执行真实helper的无observer路径；
+  仍要求原reset参数/返回Promise、最终client对象和注册相邻次序。
+  RFC341故障夹具的try覆盖原setup及全部操作/断言，finally只在原PG分支依次await删除
+  该例创建的trigger和function，保持SQLite夹具与其余原callback。
+  W39的Linux VM首UNION ALL标记缺失尚未解释；仅在原missing-row断言构造实际VM诊断，
+  保留所有原谓词/断言/SQL/预算，不用macOS同Bun版本通过替代Linux验证。
+
 - W39 在原 roots 前物化只含 `complete = 0` 的 `fallback_gate`，以
   `fallback_gate CROSS JOIN matches` 驱动fallback；原标量完整性条件和所有查询插值保持。
   SQLite真实VM确认空gate跳过fallback的主Seek/Next及其内部调用；此前OpenRead/SorterOpen仍存在。

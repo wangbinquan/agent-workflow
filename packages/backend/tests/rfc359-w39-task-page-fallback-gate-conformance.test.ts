@@ -89,11 +89,50 @@ interface Opcode {
   p2: number
   p3: number
   p4: string | null
+  p5: number
+}
+
+let opcodeLookupSequence = 0
+
+function missingOpcodeDiagnostic(
+  program: readonly Opcode[],
+  predicate: (row: Opcode) => boolean,
+  sequence: number,
+): string {
+  return JSON.stringify({
+    sequence,
+    predicate: predicate.toString(),
+    bunVersion: Bun.version,
+    bunRevision: Bun.revision,
+    platform: process.platform,
+    architecture: process.arch,
+    program: program.map((row) => ({
+      addr: row.addr,
+      opcode: row.opcode,
+      p1: row.p1,
+      p2: row.p2,
+      p3: row.p3,
+      p5: row.p5,
+      p4:
+        row.opcode === 'Explain'
+          ? row.p4
+          : {
+              type: row.p4 === null ? 'null' : typeof row.p4,
+              sha256: createHash('sha256')
+                .update(JSON.stringify(row.p4) ?? 'undefined')
+                .digest('hex'),
+            },
+    })),
+  })
 }
 
 function opcode(program: readonly Opcode[], predicate: (row: Opcode) => boolean): Opcode {
+  const sequence = ++opcodeLookupSequence
   const row = program.find(predicate)
-  expect(row).toBeDefined()
+  expect(
+    row,
+    row === undefined ? missingOpcodeDiagnostic(program, predicate, sequence) : undefined,
+  ).toBeDefined()
   if (row === undefined) throw new Error('missing required SQLite control-flow instruction')
   return row
 }

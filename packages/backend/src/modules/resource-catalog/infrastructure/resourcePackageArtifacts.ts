@@ -14,7 +14,7 @@ import {
   BundleSkillPayloadSchema,
   isProtectedSkillMainFile,
 } from '@agent-workflow/shared'
-import { stringify as stringifyYaml } from 'yaml'
+import { renderResourcePackageSkillMarkdown as skillMarkdown } from './resourcePackageSkillDocument'
 
 import { ValidationError } from '@/util/errors'
 import { safeJoin } from '@/util/safePath'
@@ -80,13 +80,6 @@ function copyRegularTree(source: string, target: string): void {
     }
     writeFileSync(targetPath, readFileSync(sourcePath), { mode: 0o600 })
   }
-}
-
-function skillMarkdown(payload: ReturnType<typeof BundleSkillPayloadSchema.parse>): string {
-  return `---\n${stringifyYaml(
-    { name: payload.name, description: payload.description, ...payload.frontmatterExtra },
-    { lineWidth: 0 },
-  )}---\n\n${payload.bodyMd}\n`
 }
 
 function writeSkillTree(

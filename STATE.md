@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十批（2026-09-09）**：两个资源包writer共用原SKILL.md序列化，完整输出/属性读取顺序与原错误身份保持；原两份表达式控制各3/33、共享实现4/38。模板修复三个旧例接默认双库，原后各3/39，507 SQL、90整行快照及16原await返回逐值相同；另两原例保留，旧迁移累计242完整/17混合。
+> 修复W31三个pure检查对初始化包装层的过期源锁，原3红→3/24，实际helper与原reset Promise/对象/相邻次序保持。RFC341故障例补PG自有trigger/function的finally清理，原断言/DDL及其余三例保持；六纯协议与四指定负控通过，实际PG恢复待新SHA。
+> W39 exact50e9e58cd Main34342947550终态35 success/5 failure、13后端10过3红；两OS各1954文件恰一次，860重点执行848过12红，另2 sidecar过。12红为W31两OS共6、RFC341 PG1、Ubuntu fallback VM5；后者缺首UNION ALL标记，本批仅补真实VM失败现场，原检查不放宽，Linux修复仍开放。
+> 最终9core一次完整tsc、211/433功能metadata与13/55canonical通过；13 metadata按原writer更新，canonical1740/272/983/5328/4794/25064，净增1真实共享owner。当前1955文件、606构库文件/1225调用、575无harness/455有harness，T19f689与T17命名59保持。W39原full34343025829的360样本已核：两库任务页满足原预算，PG仍六端点较慢，overview MAX13.222187ms未过10ms；RFC及AC-1/6/8/9/11/12保持开放。
+
 > **RFC-359 W12 第三十九批（2026-09-09）**：任务分页新增物化 fallback_gate，在完整前缀时跳过 fallback 主索引遍历，保留原查询条件与23处插值/绑定顺序。五个新默认双库行为例与一个纯源码例本地SQLite合计6 pass/218 expect；实际VM控制补齐，真PG计划和原规模P95待新SHA托管验证。
 > 四个旧测试文件只绑定可选provider生命周期诊断，16个原声明/51 matcher与原预算保持；纯控制8 pass/149 expect及五个指定负控通过。默认路径无新observer/timer，诊断不代表W37历史根因已修复。无数据库依赖的resourcePackageArtifacts整文件改为中立名，T17命名债务60→59。
 > 首次完整tsc仅新测试readonly类型报错，类型参数修正后完整Bun/TS运行JS保持，修后14 core完整tsc、211/433功能metadata与13/55canonical通过。原writer更新13份metadata，六canonical数保持；当前1954文件、606构库文件/1228调用、576无harness/454有harness，旧迁移累计242完整/16混合。

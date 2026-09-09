@@ -16,7 +16,7 @@ import {
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-import { stringify as stringifyYaml } from 'yaml'
+import { renderResourcePackageSkillMarkdown } from '../resourcePackageSkillDocument'
 import {
   CreateAgentSchema,
   CreateMcpSchema,
@@ -1202,10 +1202,7 @@ function writeSkillTree(
     bodyMd: string
     files: Array<{ path: string; ref: string }>
   }
-  const skillMd = `---\n${stringifyYaml(
-    { name: payload.name, description: payload.description, ...payload.frontmatterExtra },
-    { lineWidth: 0 },
-  )}---\n\n${payload.bodyMd}\n`
+  const skillMd = renderResourcePackageSkillMarkdown(payload)
   writeFileSync(join(filesDir, 'SKILL.md'), skillMd)
   for (const file of payload.files) {
     const absolutePath = join(filesDir, file.path)

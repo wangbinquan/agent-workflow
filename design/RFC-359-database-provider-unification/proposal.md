@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第三十九批：任务分页物化fallback_gate跳过完整前缀的fallback主索引遍历；五个新默认双库行为例及一个纯源码例本地6/218，原SQL条件与绑定保持，真实PG/原full待新SHA。四个旧文件仅绑定可选初始化诊断，16原声明/51 matcher与预算保持，纯8/149及五个指定负控通过；不宣称修复W37历史根因。无DB依赖的artifact文件整字节改中立名，命名债务60→59。修后14 core完整tsc、211/433功能metadata、13/55canonical通过，当前1954文件、576构库文件无harness/454有harness，旧迁移仍242完整/16混合。W38 exact66a877da6 Main38 success/2 failure、13后端全过，742重点执行另2 sidecar全过，独立P0两库134 pass/44指定历史失败。完整Main与六项AC保持开放。
+- W12 第四十批：资源包两个writer共用原SKILL.md序列化，原两份控制各3/33、候选4/38；模板三个旧例默认双库，原后各3/39、完整SQL/行/返回保持，另两例保留。W31实际包装层源锁原3红→3/24；RFC341故障夹具补PG自有trigger/function清理，实际PG恢复待新SHA。W39 exact50e9e58cd Main35 success/5 failure、后端10/13，860重点执行848过12红，另2 sidecar过；Ubuntu五个VM检查缺首UNION ALL标记，本批只补现场，不宣称修复或放宽检查。9core一次完整tsc、211/433功能metadata、13/55canonical通过，1955文件、575构库文件无harness/455有harness，旧迁移242完整/17混合。W39原full34343025829的360样本已核：两库任务页满足原预算，PG仍六端点较慢，唯一原绝对失败为PG overview MAX13.222187ms未过10ms。完整Main与六项AC继续开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

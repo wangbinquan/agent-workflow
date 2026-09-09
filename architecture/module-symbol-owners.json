@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1799,
+    "backendFiles": 1800,
     "frontendFiles": 622,
     "legacyFiles": 606,
-    "moduleFiles": 1193,
-    "productionFiles": 2576,
+    "moduleFiles": 1194,
+    "productionFiles": 2577,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25063
+    "symbolsIncludingFileRoots": 25064
   },
   "entries": [
     {
@@ -98372,18 +98372,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#skillMarkdown",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "skillMarkdown",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#SkillPlanState",
       "removeAfterWave": null,
       "status": "current-module",
@@ -98412,6 +98400,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "writeSkillTree",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageSkillDocument.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageSkillDocument.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageSkillDocument.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageSkillDocument.ts#renderResourcePackageSkillMarkdown",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "renderResourcePackageSkillMarkdown",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301458,5 +301470,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:19764fe60645f2898b2e837348592a2128dd35e644dd79582a31d810453318e2"
+  "sourceDigest": "sha256:9cad328b940e62bc133f4ddbc059f28b7fa17f68a83eeb31c947292dee01f3b2"
 }

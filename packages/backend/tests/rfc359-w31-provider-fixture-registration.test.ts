@@ -65,6 +65,30 @@ function sqliteRegistration(text: string): string {
   return statement.getText(source)
 }
 
+function isAwaitedSnapshotReset(statement: ts.Statement, source: ts.SourceFile): boolean {
+  if (!ts.isExpressionStatement(statement) || !ts.isAwaitExpression(statement.expression)) {
+    return false
+  }
+  const step = statement.expression.expression
+  if (
+    !ts.isCallExpression(step) ||
+    compact(step.expression, source) !== 'runProviderHarnessLifecycleStep' ||
+    step.arguments.length !== 3 ||
+    compact(step.arguments[0]!, source) !== 'phase' ||
+    !ts.isStringLiteral(step.arguments[1]!) ||
+    step.arguments[1]!.text !== 'fixture.reset'
+  ) {
+    return false
+  }
+  const operation = step.arguments[2]!
+  return (
+    ts.isArrowFunction(operation) &&
+    operation.parameters.length === 0 &&
+    operation.modifiers === undefined &&
+    compact(operation.body, source) === 'resetToSnapshot(raw,snapshot,options)'
+  )
+}
+
 function postgresqlRegistration(text: string): string {
   const source = parse(text)
   const owner = declaration(source, 'registerPostgresql')
@@ -78,9 +102,7 @@ function postgresqlRegistration(text: string): string {
     throw new Error('expected one per-database reset loop')
   }
   const statements = loop.statements
-  const resetIndex = statements.findIndex(
-    (statement) => compact(statement, source) === 'awaitresetToSnapshot(raw,snapshot,options)',
-  )
+  const resetIndex = statements.findIndex((statement) => isAwaitedSnapshotReset(statement, source))
   if (resetIndex < 0) throw new Error('missing awaited original snapshot reset')
   const registration = registrationBranch(statements[resetIndex + 1], source, 'options', 'client')
   if (
@@ -113,6 +135,11 @@ function runPostgresqlRegistration(
   raw: object,
   snapshot: object,
 ) {
+  const source = parse(harnessText)
+  const step = declaration(source, 'runProviderHarnessLifecycleStep')
+  const stepJavaScript = ts.transpileModule(step.getText(source), {
+    compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext },
+  }).outputText
   const run = new Function(
     'client',
     'options',
@@ -120,9 +147,18 @@ function runPostgresqlRegistration(
     'raw',
     'snapshot',
     'registerLegacyDaemonTestFixture',
-    `return (async () => { ${postgresqlRegistration(harnessText)} })()`,
+    'phase',
+    `${stepJavaScript}\nreturn (async () => { ${postgresqlRegistration(harnessText)} })()`,
   )
-  return run(client, options, reset, raw, snapshot, fixtureRegistry.registerLegacyDaemonTestFixture)
+  return run(
+    client,
+    options,
+    reset,
+    raw,
+    snapshot,
+    fixtureRegistry.registerLegacyDaemonTestFixture,
+    undefined,
+  )
 }
 
 describe('RFC-359 W31: provider fixture registration identity', () => {
@@ -215,7 +251,7 @@ describe('RFC-359 W31: provider fixture registration identity', () => {
 
   test('source controls reject wrong object, changed option and registration before reset', () => {
     const span = postgresqlRegistration(harnessText)
-    expect(span).toContain('await resetToSnapshot(raw, snapshot, options)')
+    expect(span).toContain("await runProviderHarnessLifecycleStep(phase, 'fixture.reset',")
     for (const candidate of [
       harnessText.replace(
         'registerLegacyDaemonTestFixture(client)',
@@ -230,6 +266,17 @@ describe('RFC-359 W31: provider fixture registration identity', () => {
         "if (options.bootstrap === 'required') registerLegacyDaemonTestFixture(client)",
       ),
       harnessText.replace(span, span.split('\n').reverse().join('\n')),
+      harnessText.replace(
+        span,
+        span.replace('await runProviderHarnessLifecycleStep', 'runProviderHarnessLifecycleStep'),
+      ),
+      harnessText.replace(
+        span,
+        span.replace(
+          'resetToSnapshot(raw, snapshot, options)',
+          '{ resetToSnapshot(raw, snapshot, options) }',
+        ),
+      ),
     ]) {
       expect(candidate === harnessText).toBe(false)
       expect(() => postgresqlRegistration(candidate)).toThrow()

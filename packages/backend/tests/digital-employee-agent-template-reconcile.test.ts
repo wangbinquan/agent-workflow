@@ -19,6 +19,7 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents as agentRows } from '@/db/schema'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
@@ -28,10 +29,11 @@ import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function templateCatalog(db: ReturnType<typeof createInMemoryDb>) {
+function templateCatalog(db: ProviderNeutralDatabase) {
   return composeDigitalEmployeeAgentTemplateCatalogFor(
     db,
     composeDigitalEmployeeAgentTemplateCatalogParticipant,
@@ -39,16 +41,16 @@ function templateCatalog(db: ReturnType<typeof createInMemoryDb>) {
 }
 
 /** Everything the template owns; timestamps move on every repair by design. */
-async function definitionOf(db: ReturnType<typeof createInMemoryDb>, id: string) {
+async function definitionOf(db: ProviderNeutralDatabase, id: string) {
   const agent = await getAgentById(db, id)
   expect(agent).not.toBeNull()
   const { createdAt: _createdAt, updatedAt: _updatedAt, ...definition } = agent!
   return definition
 }
 
-describe('digital employee Agent template reconciliation', () => {
+describeEachProvider('digital employee Agent template reconciliation', (harness) => {
   test('every seeded built-in converges after its stored definition drifts', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = templateCatalog(db)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const seeded = await Promise.all(
@@ -56,7 +58,8 @@ describe('digital employee Agent template reconciliation', () => {
     )
 
     for (const id of DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS) {
-      db.update(agentRows)
+      await db
+        .update(agentRows)
         .set({
           description: 'drifted description',
           bodyMd: 'drifted body',
@@ -76,14 +79,14 @@ describe('digital employee Agent template reconciliation', () => {
   })
 
   test('a drifted name is repaired in place, never as a second Agent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = templateCatalog(db)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
     const seeded = await definitionOf(db, id)
     const seededCount = (await listAgents(db)).length
 
-    db.update(agentRows).set({ name: 'drifted-name' }).where(eq(agentRows.id, id)).run()
+    await db.update(agentRows).set({ name: 'drifted-name' }).where(eq(agentRows.id, id)).run()
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
     expect(await definitionOf(db, id)).toEqual(seeded)
@@ -91,19 +94,21 @@ describe('digital employee Agent template reconciliation', () => {
   })
 
   test('repeated seeding after a repair stays idempotent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const catalog = templateCatalog(db)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-    db.update(agentRows).set({ description: 'drifted' }).where(eq(agentRows.id, id)).run()
+    await db.update(agentRows).set({ description: 'drifted' }).where(eq(agentRows.id, id)).run()
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const repaired = await getAgentById(db, id)
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
     expect(await getAgentById(db, id)).toEqual(repaired)
   })
+})
 
+describe('digital employee Agent template reconciliation', () => {
   test('a built-in an administrator made private does not cost the daemon its boot', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const catalog = templateCatalog(db)

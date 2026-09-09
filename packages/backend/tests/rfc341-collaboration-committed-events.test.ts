@@ -172,34 +172,35 @@ describe('RFC-341 collaboration committed-event contracts', () => {
 describeEachProvider('RFC-341 collaboration committed-event contracts', (harness) => {
   test('domain write, operation and event all roll back when event insertion fails', async () => {
     const db = harness.db
-    await dispatchCollaboration(db)
-    await db
-      .insert(tasks)
-      .values({
-        id: 'task-question-rollback',
-        name: 'task-question-rollback',
-        workflowId: 'workflow-question-rollback',
-        workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-        repoPath: '/tmp/rfc341',
-        worktreePath: '/tmp/rfc341',
-        baseBranch: 'main',
-        branch: 'agent-workflow/task-question-rollback',
-        status: 'running',
-        inputs: '{}',
-        startedAt: NOW,
-        executionLineageId: 'task-question-rollback',
-        lineageSlotPathJson:
-          '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-question-rollback","workflowRevision":null}]',
-      })
-      .run()
-    if (harness.capabilities.isolation === 'exclusive') {
-      await harness.executeFixtureDdl(`
+    try {
+      await dispatchCollaboration(db)
+      await db
+        .insert(tasks)
+        .values({
+          id: 'task-question-rollback',
+          name: 'task-question-rollback',
+          workflowId: 'workflow-question-rollback',
+          workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+          repoPath: '/tmp/rfc341',
+          worktreePath: '/tmp/rfc341',
+          baseBranch: 'main',
+          branch: 'agent-workflow/task-question-rollback',
+          status: 'running',
+          inputs: '{}',
+          startedAt: NOW,
+          executionLineageId: 'task-question-rollback',
+          lineageSlotPathJson:
+            '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-question-rollback","workflowRevision":null}]',
+        })
+        .run()
+      if (harness.capabilities.isolation === 'exclusive') {
+        await harness.executeFixtureDdl(`
       CREATE TRIGGER rfc341_fail_collaboration_event
       BEFORE INSERT ON committed_events
       BEGIN SELECT RAISE(ABORT, 'rfc341-collaboration-event-fault'); END
     `)
-    } else {
-      await harness.executeFixtureDdl(`
+      } else {
+        await harness.executeFixtureDdl(`
         CREATE FUNCTION "agent_workflow"."rfc341_fail_collaboration_event_fn"() RETURNS trigger
         LANGUAGE plpgsql AS $rfc341_fault$
         BEGIN
@@ -207,26 +208,36 @@ describeEachProvider('RFC-341 collaboration committed-event contracts', (harness
         END;
         $rfc341_fault$;
       `)
-      await harness.executeFixtureDdl(`
+        await harness.executeFixtureDdl(`
         CREATE TRIGGER rfc341_fail_collaboration_event
         BEFORE INSERT ON "agent_workflow"."committed_events"
         FOR EACH ROW EXECUTE FUNCTION "agent_workflow"."rfc341_fail_collaboration_event_fn"();
       `)
-    }
+      }
 
-    await expect(
-      createManualQuestionOpen(createCollaborationCommandContext({ db }), {
-        taskId: 'task-question-rollback',
-        title: 'Question',
-        body: 'Investigate the failed append.',
-        targetNodeId: 'designer',
-        actorUserId: 'user-rfc341',
-        now: NOW + 1,
-      }),
-    ).rejects.toThrow()
-    expect(await db.select().from(taskQuestions).all()).toEqual([])
-    expect(await db.select().from(collaborationGateOperations).all()).toEqual([])
-    expect(await db.select().from(committedEvents).all()).toEqual([])
+      await expect(
+        createManualQuestionOpen(createCollaborationCommandContext({ db }), {
+          taskId: 'task-question-rollback',
+          title: 'Question',
+          body: 'Investigate the failed append.',
+          targetNodeId: 'designer',
+          actorUserId: 'user-rfc341',
+          now: NOW + 1,
+        }),
+      ).rejects.toThrow()
+      expect(await db.select().from(taskQuestions).all()).toEqual([])
+      expect(await db.select().from(collaborationGateOperations).all()).toEqual([])
+      expect(await db.select().from(committedEvents).all()).toEqual([])
+    } finally {
+      if (harness.capabilities.isolation !== 'exclusive') {
+        await harness.executeFixtureDdl(
+          'DROP TRIGGER IF EXISTS "rfc341_fail_collaboration_event" ON "agent_workflow"."committed_events"',
+        )
+        await harness.executeFixtureDdl(
+          'DROP FUNCTION IF EXISTS "agent_workflow"."rfc341_fail_collaboration_event_fn"()',
+        )
+      }
+    }
   })
 
   test('immediate pump orders a group, dedupes it, and dispatcher recovers an unpumped event', async () => {
