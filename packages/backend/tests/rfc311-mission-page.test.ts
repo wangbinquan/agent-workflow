@@ -11,27 +11,30 @@
 //   3. 断点是**行值比较**：同一 `created_at` 上的多行不能重复也不能漏（RFC-311
 //      在 10 万任务库上实测过展开式断点会让 SQLite 走 TEMP B-TREE 全排序）。
 
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { taskMatchesListView } from '@agent-workflow/shared'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { developmentMissions, users } from '../src/db/schema'
 import {
   listMissionSummaries,
   listMissionSummariesPage,
 } from '../src/modules/development-automation/infrastructure/missionReadModels'
-import { createApp } from '../src/server'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'a'.repeat(64)
 const T0 = 1_700_000_000_000
 
-async function seed(db: DbClient, count: number): Promise<void> {
+async function seed(db: ProviderNeutralDatabase, count: number): Promise<void> {
   await db.insert(users).values({
     id: 'u1',
     username: 'u1',
@@ -59,7 +62,7 @@ async function seed(db: DbClient, count: number): Promise<void> {
 }
 
 /** 状态/文本都铺开的种子——否则过滤组合大半命中空集，对拍等于没跑。 */
-async function seedVaried(db: DbClient, count: number): Promise<void> {
+async function seedVaried(db: ProviderNeutralDatabase, count: number): Promise<void> {
   await db.insert(users).values({
     id: 'u1',
     username: 'u1',
@@ -102,7 +105,7 @@ async function seedVaried(db: DbClient, count: number): Promise<void> {
   }
 }
 
-async function pageAll(db: DbClient, limit: number): Promise<string[]> {
+async function pageAll(db: ProviderNeutralDatabase, limit: number): Promise<string[]> {
   const ids: string[] = []
   let cursor = undefined as undefined | { createdAt: number; id: string }
   for (let guard = 0; guard < 100; guard += 1) {
@@ -117,9 +120,9 @@ async function pageAll(db: DbClient, limit: number): Promise<string[]> {
   return ids
 }
 
-describe('RFC-311 — mission list paging === the legacy full listing', () => {
+describeEachProvider('RFC-311 — mission list paging === the legacy full listing', (harness) => {
   test('every page size reproduces the full-list order exactly, ties included', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seed(db, 25)
     const expected = (await listMissionSummaries(db)).map((m) => m.id)
     expect(expected).toHaveLength(25)
@@ -131,68 +134,81 @@ describe('RFC-311 — mission list paging === the legacy full listing', () => {
 
   test('the wire keeps both shapes: bare call is legacy, any paging param pages', async () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-missions-'))
-    process.env.AGENT_WORKFLOW_HOME = home
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, 12)
-    const app: Hono = createApp({
-      token: TOKEN,
-      configPath: join(home, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 17,
-      db,
-    })
-    const get = (path: string) =>
-      app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
+    const previousAppHome = process.env.AGENT_WORKFLOW_HOME
+    let application: ProviderHttpApplication | undefined
+    try {
+      process.env.AGENT_WORKFLOW_HOME = home
+      const db = harness.db
+      await seed(db, 12)
+      application = await createProviderHttpApplication(harness, {
+        token: TOKEN,
+        configPath: join(home, 'config.json'),
+        opencodeVersion: '1.14.25',
+        dbVersion: 17,
+        appHome: home,
+      })
+      const app: Hono = application.app
+      const get = (path: string) =>
+        app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
 
-    const legacy = (await (await get('/api/code/missions')).json()) as Record<string, unknown>
-    expect(Array.isArray(legacy.items)).toBe(true)
-    expect((legacy.items as unknown[]).length).toBe(12)
-    expect('nextCursor' in legacy).toBe(false)
+      const legacy = (await (await get('/api/code/missions')).json()) as Record<string, unknown>
+      expect(Array.isArray(legacy.items)).toBe(true)
+      expect((legacy.items as unknown[]).length).toBe(12)
+      expect('nextCursor' in legacy).toBe(false)
 
-    const first = (await (await get('/api/code/missions?limit=5')).json()) as {
-      items: Array<{ id: string }>
-      nextCursor: string | null
+      const first = (await (await get('/api/code/missions?limit=5')).json()) as {
+        items: Array<{ id: string }>
+        nextCursor: string | null
+      }
+      expect(first.items).toHaveLength(5)
+      expect(first.nextCursor).not.toBeNull()
+
+      const second = (await (
+        await get(`/api/code/missions?limit=5&cursor=${encodeURIComponent(first.nextCursor!)}`)
+      ).json()) as { items: Array<{ id: string }>; nextCursor: string | null }
+      // 翻页不重复:第二页与第一页零交集(游标写错最典型的症状就是重复首行)。
+      const firstIds = new Set(first.items.map((m) => m.id))
+      for (const item of second.items) expect(firstIds.has(item.id)).toBe(false)
+
+      // 逐条**点名 code**,而不只看 422:`route-error-code-coverage` 守卫要求每个新
+      // 错误码在测试里出现过字面量——否则「换了个码」这种回归无人接住(422 还是 422)。
+      const failure = async (path: string): Promise<{ status: number; code: string }> => {
+        const res = await get(path)
+        return { status: res.status, code: ((await res.json()) as { code: string }).code }
+      }
+      expect(await failure('/api/code/missions?limit=0')).toEqual({
+        status: 422,
+        code: 'mission-limit-invalid',
+      })
+      expect(await failure('/api/code/missions?limit=999')).toEqual({
+        status: 422,
+        code: 'mission-limit-invalid',
+      })
+      expect(await failure('/api/code/missions?cursor=not-base64url-json')).toEqual({
+        status: 422,
+        code: 'mission-cursor-invalid',
+      })
+      expect(await failure('/api/code/missions?view=nope')).toEqual({
+        status: 422,
+        code: 'mission-view-invalid',
+      })
+      expect(await failure('/api/code/missions?statuses=not-a-status')).toEqual({
+        status: 422,
+        code: 'mission-statuses-invalid',
+      })
+      expect(await failure('/api/code/missions?missionStatuses=not-a-mission-status')).toEqual({
+        status: 422,
+        code: 'mission-raw-statuses-invalid',
+      })
+    } finally {
+      try {
+        await application?.dispose()
+      } finally {
+        if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+        else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+        rmSync(home, { recursive: true, force: true })
+      }
     }
-    expect(first.items).toHaveLength(5)
-    expect(first.nextCursor).not.toBeNull()
-
-    const second = (await (
-      await get(`/api/code/missions?limit=5&cursor=${encodeURIComponent(first.nextCursor!)}`)
-    ).json()) as { items: Array<{ id: string }>; nextCursor: string | null }
-    // 翻页不重复:第二页与第一页零交集(游标写错最典型的症状就是重复首行)。
-    const firstIds = new Set(first.items.map((m) => m.id))
-    for (const item of second.items) expect(firstIds.has(item.id)).toBe(false)
-
-    // 逐条**点名 code**,而不只看 422:`route-error-code-coverage` 守卫要求每个新
-    // 错误码在测试里出现过字面量——否则「换了个码」这种回归无人接住(422 还是 422)。
-    const failure = async (path: string): Promise<{ status: number; code: string }> => {
-      const res = await get(path)
-      return { status: res.status, code: ((await res.json()) as { code: string }).code }
-    }
-    expect(await failure('/api/code/missions?limit=0')).toEqual({
-      status: 422,
-      code: 'mission-limit-invalid',
-    })
-    expect(await failure('/api/code/missions?limit=999')).toEqual({
-      status: 422,
-      code: 'mission-limit-invalid',
-    })
-    expect(await failure('/api/code/missions?cursor=not-base64url-json')).toEqual({
-      status: 422,
-      code: 'mission-cursor-invalid',
-    })
-    expect(await failure('/api/code/missions?view=nope')).toEqual({
-      status: 422,
-      code: 'mission-view-invalid',
-    })
-    expect(await failure('/api/code/missions?statuses=not-a-status')).toEqual({
-      status: 422,
-      code: 'mission-statuses-invalid',
-    })
-    expect(await failure('/api/code/missions?missionStatuses=not-a-mission-status')).toEqual({
-      status: 422,
-      code: 'mission-raw-statuses-invalid',
-    })
   })
 })
 
@@ -235,9 +251,9 @@ function oracleFilter(
   })
 }
 
-describe('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', () => {
+describeEachProvider('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', (harness) => {
   test('64 组过滤逐页对拍，且 facets 恒为全集计数', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedVaried(db, 40)
     const all = (await listMissionSummaries(db)) as unknown as Array<Record<string, unknown>>
 
@@ -280,9 +296,9 @@ describe('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', ()
   })
 })
 
-describe('RFC-311 — employeeId / missionStatuses 过滤与 counts', () => {
+describeEachProvider('RFC-311 — employeeId / missionStatuses 过滤与 counts', (harness) => {
   test('counts 算在过滤集上，且原始状态过滤不会把 blocked 混进终态', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedVaried(db, 40)
     const all = await listMissionSummaries(db)
 

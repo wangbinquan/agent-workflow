@@ -6,7 +6,7 @@
     "moduleFiles": 1191,
     "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25057
+    "symbolsIncludingFileRoots": 25058
   },
   "entries": [
     {
@@ -5563,6 +5563,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "OpenDbOptions",
+      "targetContext": "platform",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/client.ts",
+      "id": "owner:packages/backend/src/db/client.ts#registerLegacyDaemonTestFixture",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "registerLegacyDaemonTestFixture",
       "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
@@ -301386,5 +301398,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5bcbb754fd979c65885e6074c492fe55de3796905e6f9eca2315d109b9e39063"
+  "sourceDigest": "sha256:4990702d009fff879e3880807ec8f04419a1e724aeb9467d1d42020f475fd793"
 }

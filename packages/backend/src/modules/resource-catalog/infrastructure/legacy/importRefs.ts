@@ -1,3 +1,8 @@
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 // RFC-223 AC10 — SQLite provider adapter for ACL-aware portable import selectors.
 //
 // This is intentionally the only production service that may turn a resource
@@ -18,7 +23,7 @@ import {
 import { inArray } from 'drizzle-orm'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { type DbTxSync, dbTxSync } from '@/db/txSync'
+
 import { users } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
@@ -26,10 +31,10 @@ import {
   isVisibleRow,
 } from '@/modules/resource-catalog/domain/resourceAccess'
 import {
-  listAclResourceIdentityRowsByIdsInTx,
-  listAclResourceIdentityRowsByNamesInTx,
+  listAclResourceIdentityRowsByIds,
+  listAclResourceIdentityRowsByNames,
 } from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
-import { listGrantedResourceIdsInTx } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+import { listGrantedResourceIds } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 
 interface ImportRefRow {
   id: string
@@ -154,7 +159,7 @@ export async function resolveAgentImportRefs(
  * rename/transfer/visibility race fails closed instead of rebinding by name.
  */
 export async function resolveImportRefs(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   selectors: readonly ImportRefSelector[],
   requestedSelections: readonly ImportRefSelection[] = [],
@@ -162,7 +167,9 @@ export async function resolveImportRefs(
   // Candidate rows, the actor's fresh grants, and owner usernames must be one
   // coherent SQLite snapshot. Splitting these reads across awaits can combine
   // a pre-transfer row with post-transfer ACL/username metadata.
-  return dbTxSync(db, (tx) => resolveImportRefsInTx(tx, actor, selectors, requestedSelections))
+  return await databaseSessionFor(db).transaction(
+    async (tx) => await resolveImportRefsInTx(tx, actor, selectors, requestedSelections),
+  )
 }
 
 /**
@@ -177,17 +184,17 @@ export async function resolveImportRefs(
  * INSERT/UPDATE. It performs no async work and never opens a nested
  * transaction.
  */
-export function assertImportRefsStableInTx(
-  tx: DbTxSync,
+export async function assertImportRefsStableInTx(
+  tx: DatabaseTransaction,
   actor: Actor,
   fence: ImportRefResolutionFence,
-): void {
+): Promise<void> {
   if (fence.entries.length === 0) return
 
-  assertSelectedIdsVisibleInTx(tx, actor, fence.entries)
+  await assertSelectedIdsVisibleInTx(tx, actor, fence.entries)
 
   const selectors = fence.entries.map((entry) => entry.selector)
-  const currentBySelector = buildCandidateSnapshotsInTx(tx, actor, selectors)
+  const currentBySelector = await buildCandidateSnapshotsInTx(tx, actor, selectors)
   const newlyAmbiguous: ImportRefAmbiguity[] = []
   const stale: ImportRefAmbiguity[] = []
   for (const entry of fence.entries) {
@@ -224,12 +231,12 @@ export function assertImportRefsStableInTx(
   if (stale.length > 0) throw staleSelections(stale)
 }
 
-function resolveImportRefsInTx(
-  tx: DbTxSync,
+async function resolveImportRefsInTx(
+  tx: DatabaseTransaction,
   actor: Actor,
   selectors: readonly ImportRefSelector[],
   requestedSelections: readonly ImportRefSelection[],
-): ResolvedImportRefs {
+): Promise<ResolvedImportRefs> {
   const uniqueSelectors = dedupeSelectors(selectors)
   if (uniqueSelectors.length === 0) {
     return { bySelector: new Map(), selections: [], fence: { entries: [] } }
@@ -244,7 +251,7 @@ function resolveImportRefsInTx(
       },
     ]),
   )
-  assertSelectedIdsVisibleInTx(
+  await assertSelectedIdsVisibleInTx(
     tx,
     actor,
     uniqueSelectors.flatMap((selector) => {
@@ -252,7 +259,7 @@ function resolveImportRefsInTx(
       return requested === undefined ? [] : [{ selector, selectedId: requested.resourceId }]
     }),
   )
-  const candidatesBySelector = buildCandidateSnapshotsInTx(tx, actor, uniqueSelectors)
+  const candidatesBySelector = await buildCandidateSnapshotsInTx(tx, actor, uniqueSelectors)
 
   const unresolved = uniqueSelectors.filter((selector) => {
     const key = importRefSelectorKey(selector)
@@ -342,24 +349,24 @@ function resolveImportRefsInTx(
   return { bySelector, selections, fence: { entries: fenceEntries } }
 }
 
-function assertSelectedIdsVisibleInTx(
-  tx: DbTxSync,
+async function assertSelectedIdsVisibleInTx(
+  tx: DatabaseTransaction,
   actor: Actor,
   entries: readonly {
     selector: ImportRefSelector
     selectedId: string
   }[],
-): void {
+): Promise<void> {
   const invisibleSelectors: ImportRefSelector[] = []
   for (const type of new Set(entries.map((entry) => entry.selector.type))) {
     const typeEntries = entries.filter((entry) => entry.selector.type === type)
     const selectedIds = [...new Set(typeEntries.map((entry) => entry.selectedId))]
-    const selectedRows = listAclResourceIdentityRowsByIdsInTx(
+    const selectedRows = (await listAclResourceIdentityRowsByIds(
       tx,
       type,
       selectedIds,
-    ) as ImportRefRow[]
-    const grantedIds = grantedIdsInTx(tx, actor, type)
+    )) as ImportRefRow[]
+    const grantedIds = await grantedIdsInTx(tx, actor, type)
     const visibleSelectedIds = new Set(
       selectedRows.filter((row) => isVisibleRow(actor, row, grantedIds)).map((row) => row.id),
     )
@@ -370,17 +377,17 @@ function assertSelectedIdsVisibleInTx(
   if (invisibleSelectors.length > 0) throw unresolvedReferences(invisibleSelectors)
 }
 
-function buildCandidateSnapshotsInTx(
-  tx: DbTxSync,
+async function buildCandidateSnapshotsInTx(
+  tx: DatabaseTransaction,
   actor: Actor,
   selectors: readonly ImportRefSelector[],
-): Map<string, ImportRefCandidateSnapshot[]> {
+): Promise<Map<string, ImportRefCandidateSnapshot[]>> {
   const candidatesBySelector = new Map<string, ImportRefCandidateSnapshot[]>()
   for (const type of new Set(selectors.map((selector) => selector.type))) {
     const typeSelectors = selectors.filter((selector) => selector.type === type)
     const names = [...new Set(typeSelectors.map((selector) => selector.name))]
-    const rows = listAclResourceIdentityRowsByNamesInTx(tx, type, names) as ImportRefRow[]
-    const grantedIds = grantedIdsInTx(tx, actor, type)
+    const rows = (await listAclResourceIdentityRowsByNames(tx, type, names)) as ImportRefRow[]
+    const grantedIds = await grantedIdsInTx(tx, actor, type)
     const visible = rows.filter((row) => isVisibleRow(actor, row, grantedIds))
     const ownerIds = [
       ...new Set(
@@ -392,7 +399,7 @@ function buildCandidateSnapshotsInTx(
     const ownerRows =
       ownerIds.length === 0
         ? []
-        : tx
+        : await tx
             .select({ id: users.id, username: users.username })
             .from(users)
             .where(inArray(users.id, ownerIds))
@@ -431,9 +438,13 @@ function buildCandidateSnapshotsInTx(
 
 /** RFC-282 D2 — the grant-set SQL lives in resourceAcl only; this shell keeps
  *  importRefs' `resource-acl:bypass` short-circuit semantics. */
-function grantedIdsInTx(tx: DbTxSync, actor: Actor, type: ImportRefType): ReadonlySet<string> {
+async function grantedIdsInTx(
+  tx: DatabaseTransaction,
+  actor: Actor,
+  type: ImportRefType,
+): Promise<ReadonlySet<string>> {
   if (hasResourceAclBypass(actor)) return new Set()
-  return listGrantedResourceIdsInTx(tx, actor, type)
+  return await listGrantedResourceIds(tx, actor, type)
 }
 
 function candidateSnapshotsEqual(

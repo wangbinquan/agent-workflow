@@ -12,6 +12,8 @@ import { ulid } from 'ulid'
 import { count, eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   mcpProbes,
   mcps,
@@ -42,14 +44,14 @@ const OFF: RetentionConfig = {
 }
 
 async function rowsIn(
-  db: Db,
+  db: ProviderNeutralDatabase,
   table: typeof userAccessAudit | typeof mcpProbes | typeof memoryDistillEvents,
 ): Promise<number> {
   const r = await db.select({ n: count() }).from(table)
   return r[0]?.n ?? 0
 }
 
-async function seedUser(db: Db, id: string): Promise<void> {
+async function seedUser(db: ProviderNeutralDatabase, id: string): Promise<void> {
   await db
     .insert(users)
     .values({ id, username: id, displayName: id, role: 'user', createdAt: NOW, updatedAt: NOW })
@@ -90,9 +92,11 @@ describe('RFC-311 — retention sweep', () => {
     expect(await rowsIn(db, userAccessAudit)).toBe(1)
     expect(() => db.$client.exec('DELETE FROM user_access_audit')).toThrow(/append_only/)
   })
+})
 
+describeEachProvider('RFC-311 — retention sweep', (harness) => {
   test('mcp_probes is a per-MCP upsert row (UNIQUE mcp_id) — retention rightly skips it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await db.insert(mcps).values({ id: 'm1', name: 'm1', type: 'local' })
     const probe = {
       id: ulid(),
@@ -115,7 +119,7 @@ describe('RFC-311 — retention sweep', () => {
   })
 
   test('memory_distill_events (event-stream family): pure-timestamp expiry', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const jobId = ulid()
     await db.insert(memoryDistillJobs).values({
       id: jobId,
@@ -148,8 +152,8 @@ describe('RFC-311 — retention sweep', () => {
 // 实现门 P0-4(变异 #14:同时关掉 webhook_trigger_fires 与另两条事件腿,3 个用例
 // 全绿)—— proposal §5 C6 承诺六张表,此前只有 memory_distill_events 有正向断言,
 // 而 webhook_trigger_fires 恰恰是审计里增长最快的一张。
-describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
-  async function seedFires(db: Db, ages: readonly number[]): Promise<void> {
+describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness) => {
+  async function seedFires(db: ProviderNeutralDatabase, ages: readonly number[]): Promise<void> {
     await db.insert(webhookEndpoints).values({
       id: 'ep1',
       name: 'ep',
@@ -183,13 +187,13 @@ describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
     }
   }
 
-  async function fireCount(db: Db): Promise<number> {
+  async function fireCount(db: ProviderNeutralDatabase): Promise<number> {
     const r = await db.select({ n: count() }).from(webhookTriggerFires)
     return r[0]?.n ?? 0
   }
 
   test('rows past the window go, in-window rows stay', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedUser(db, 'u1')
     await seedFires(db, [200, 120, 91, 89, 1])
     const result = await runRetentionSweep(
@@ -206,7 +210,7 @@ describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
   // 同流触发就不再取消它——同一 MR 上两个活任务在同一分支互相踩,而代码里没有
   // 任何地方承认这个 90 天的界。保留期必须豁免仍未终态的那一行。
   test('a fire whose launched task is still non-terminal survives the window', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedUser(db, 'u1')
     await seedFires(db, [200, 150])
     await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
@@ -216,6 +220,10 @@ describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
         name: id,
         workflowId: 'wf1',
         workflowSnapshot: '{}',
+        executionLineageId: id,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+        ]),
         repoPath: '/tmp/x',
         worktreePath: '/tmp/x',
         baseBranch: 'main',
@@ -251,7 +259,7 @@ describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
   })
 
   test('0 disables the stage', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedUser(db, 'u1')
     await seedFires(db, [500, 400])
     const result = await runRetentionSweep(db, OFF, NOW)
@@ -260,9 +268,9 @@ describe('RFC-311 C6 — webhook_trigger_fires retention', () => {
   })
 })
 
-describe('RFC-311 C6 — the other two event streams share the window', () => {
+describeEachProvider('RFC-311 C6 — the other two event streams share the window', (harness) => {
   test('intent_turn_events past the window go; 0 disables', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedUser(db, 'u1')
     await db
       .insert(intentSessions)
@@ -298,7 +306,9 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
     expect(result.intentTurnEvents).toBe(3)
     expect(await counted()).toBe(2)
   })
+})
 
+describe('RFC-311 C6 — the other two event streams share the window', () => {
   // mcp_runtime_test_events 的 fixture 需要一整条 runtime-test session 链(必填列
   // 远多于上面两张),这里用源码守卫锁住「第三条腿仍然接着」；RFC-338 后每条腿
   // 必须是一个 predicate-rechecking bounded DELETE，不能退回全阶段同步循环。

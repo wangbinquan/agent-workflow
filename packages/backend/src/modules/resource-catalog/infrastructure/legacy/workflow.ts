@@ -1,3 +1,4 @@
+import type { ProviderNeutralDatabase } from '@/db/query'
 // Workflow service — CRUD on the workflows table.
 //
 // Definition is stored as a JSON string in the DB and parsed at this boundary.
@@ -40,7 +41,7 @@ import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { type DbTxSync, dbTxSync } from '@/db/txSync'
+
 import { scheduledTasks, tasks, workflows } from '@/db/schema'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import {
@@ -57,7 +58,7 @@ import {
 } from '@/ws/broadcaster'
 import {
   assertNoMissingRefs,
-  assertRefsUsableInTx,
+  assertRefsUsableForTx,
   diffNewNames,
   extractWorkflowAgentRefs,
   extractWorkflowWorkflowRefs,
@@ -72,17 +73,16 @@ import {
   initialPrivateResourceAcl,
 } from '@/modules/resource-catalog/application/resourceDefaults'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
-import {
-  canViewResourceInTx,
-  resolveResourceAccessFor,
-  resolveResourceAccessForInTx,
-} from '@/modules/resource-catalog/composition/resourceAcl'
+import { resolveResourceAccessFor } from '@/modules/resource-catalog/composition/resourceAcl'
 import {
   canEditAccess,
   canGovernAccess,
   canViewAccess,
 } from '@/modules/resource-catalog/domain/resourceAccess'
-import { resolveResourceAccessForTx } from '@/modules/resource-catalog/infrastructure/resourceAclTransaction'
+import {
+  canViewResourceForTx,
+  resolveResourceAccessForTx,
+} from '@/modules/resource-catalog/infrastructure/resourceAclTransaction'
 import {
   databaseSessionFor,
   type DatabaseTransaction,
@@ -113,10 +113,10 @@ type WorkflowRow = typeof workflows.$inferSelect
 
 export interface WorkflowWriteInTxGuard {
   /**
-   * Synchronous check executed in the exact transaction immediately before
-   * the workflow INSERT/UPDATE. It must only use drizzle's sync surface.
+   * Check executed in the exact transaction immediately before the workflow
+   * INSERT/UPDATE. The transaction awaits completion of this guard.
    */
-  assert(tx: DbTxSync): void
+  assert(tx: DatabaseTransaction): void | Promise<void>
 }
 
 export interface CreateWorkflowOptions {
@@ -137,7 +137,10 @@ export async function listWorkflows(db: DbClient): Promise<Workflow[]> {
   return rows.map(rowToWorkflow)
 }
 
-export async function getWorkflow(db: DbClient, id: string): Promise<WorkflowDetail | null> {
+export async function getWorkflow(
+  db: ProviderNeutralDatabase,
+  id: string,
+): Promise<WorkflowDetail | null> {
   const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
   const row = rows[0]
   return row ? rowToWorkflowDetail(row) : null
@@ -182,7 +185,7 @@ export async function getWorkflowAclRow(
 }
 
 export async function createWorkflow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   input: CreateWorkflow,
   opts?: CreateWorkflowOptions,
 ): Promise<WorkflowDetail> {
@@ -225,18 +228,18 @@ export async function createWorkflow(
   // validator/launch time. Fence only ids that preflight actually matched.
   const fenceableAgentIds = new Set(resolvedNewAgents.byToken.values())
   await opts?.beforeWriteTransaction?.()
-  const insertedRow = dbTxSync(db, (tx) => {
+  const insertedRow = await databaseSessionFor(db).transaction(async (tx) => {
     // Preserve the import selector fence's richer stale/ambiguity errors, then
     // apply the ordinary exact-id existence/usability invariant. Both checks
     // run before the sole production workflow INSERT.
-    opts?.inTxGuard?.assert(tx)
-    assertRefsUsableInTx(tx, actor, [
+    await opts?.inTxGuard?.assert(tx)
+    await assertRefsUsableForTx(tx, actor, [
       { type: 'agent', names: newAgentIds.filter((id) => fenceableAgentIds.has(id)), domain: 'id' },
       // Name domain is dangle-tolerant in-tx too: no fenceable filter needed.
       { type: 'workflow', names: newWorkflowNames, domain: 'name' },
       { type: 'workgroup', names: newWorkgroupNames, domain: 'name' },
     ])
-    return insertWorkflowInTx(tx, {
+    return await insertWorkflowInTx(tx, {
       id,
       name: input.name,
       description: input.description,
@@ -263,7 +266,7 @@ export async function createWorkflow(
  * name allocation and target INSERT share one synchronous transaction.
  */
 export async function copyWorkflow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   sourceId: string,
   input: CopyWorkflowRequest,
   actor: Actor,
@@ -275,10 +278,10 @@ export async function copyWorkflow(
     })
   }
 
-  const inserted = dbTxSync(db, (tx) => {
+  const inserted = await databaseSessionFor(db).transaction(async (tx) => {
     // Gate only on ACL identity first: an invisible corrupt workflow must be
     // indistinguishable from an absent one and must never reach JSON parsing.
-    const aclRow = tx
+    const aclRow = await tx
       .select({
         id: workflows.id,
         ownerUserId: workflows.ownerUserId,
@@ -288,12 +291,12 @@ export async function copyWorkflow(
       .from(workflows)
       .where(eq(workflows.id, sourceId))
       .get()
-    if (aclRow === undefined || !canViewResourceInTx(tx, actor, 'workflow', aclRow)) {
+    if (aclRow === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', aclRow))) {
       throwWorkflowNotFound(sourceId)
     }
     assertNotBuiltin('workflow', aclRow)
 
-    const currentRow = tx.select().from(workflows).where(eq(workflows.id, sourceId)).get()
+    const currentRow = await tx.select().from(workflows).where(eq(workflows.id, sourceId)).get()
     if (currentRow === undefined) throwWorkflowNotFound(sourceId)
     const source = rowToWorkflow(currentRow)
     const currentRevision = workflowRevisionOf(source)
@@ -309,7 +312,7 @@ export async function copyWorkflow(
     }
 
     assertCanonicalWorkflowAgentIds(source.definition)
-    assertRefsUsableInTx(tx, actor, [
+    await assertRefsUsableForTx(tx, actor, [
       { type: 'agent', names: [...extractWorkflowAgentRefs(source.definition)], domain: 'id' },
       // RFC-243 (§5.3): copy re-checks the FULL call-ref set — the copier must
       // be able to see every referenced workflow name it is about to adopt
@@ -322,18 +325,19 @@ export async function copyWorkflow(
       },
     ])
 
-    const occupiedNames = tx
-      .select({ name: workflows.name })
-      .from(workflows)
-      .where(eq(workflows.ownerUserId, actor.user.id))
-      .all()
-      .map((row) => row.name)
+    const occupiedNames = (
+      await tx
+        .select({ name: workflows.name })
+        .from(workflows)
+        .where(eq(workflows.ownerUserId, actor.user.id))
+        .all()
+    ).map((row) => row.name)
     // RFC-264: persist the PARSED name — the schema is also the normalizer, so
     // ignoring its output would store an unfolded copy name.
     const name = WorkflowNameSchema.parse(
       nextResourceCopyName(source.name, occupiedNames, 'workflow'),
     )
-    return insertWorkflowInTx(tx, {
+    return await insertWorkflowInTx(tx, {
       id: ulid(),
       name,
       description: source.description,
@@ -376,7 +380,7 @@ export interface PreparedWorkflowSave {
 }
 
 export async function prepareWorkflowSave(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   input: UpdateWorkflow,
   principal: WorkflowWritePrincipal,
@@ -517,10 +521,10 @@ export async function prepareWorkflowSave(
   }
 }
 
-export function commitWorkflowSaveInTx(
-  tx: DbTxSync,
+export async function commitWorkflowSaveInTx(
+  tx: DatabaseTransaction,
   p: PreparedWorkflowSave,
-): { receipt: SaveWorkflowReceipt; committed: boolean } {
+): Promise<{ receipt: SaveWorkflowReceipt; committed: boolean }> {
   const {
     id,
     principal,
@@ -531,10 +535,10 @@ export function commitWorkflowSaveInTx(
     fenceableAgentIds,
   } = p
   const opts = { inTxGuard: p.inTxGuard }
-  const currentRow = tx.select().from(workflows).where(eq(workflows.id, id)).get()
+  const currentRow = await tx.select().from(workflows).where(eq(workflows.id, id)).get()
   if (currentRow === undefined) throwWorkflowNotFound(id)
 
-  const access = assertPrincipalCanEditInTx(tx, principal, currentRow)
+  const access = await assertPrincipalCanEditInTx(tx, principal, currentRow)
   const current = rowToWorkflow(currentRow)
   // RFC-324 —— 权威的一次：事务内读到的当前名字，防并发改名把编辑者的改名放进来。
   assertNameUnchangedForEditor(access, current.name, normalizedSnapshot.name)
@@ -544,7 +548,7 @@ export function commitWorkflowSaveInTx(
   // then re-read here from the transaction's fresh ACL snapshot. This must
   // precede version/logical-no-op reconciliation: a response-loss retry may
   // not report success after its selected reference became stale/invisible.
-  opts?.inTxGuard?.assert(tx)
+  await opts?.inTxGuard?.assert(tx)
   const newAgentIds = diffNewNames(
     extractWorkflowAgentRefs(current.definition),
     extractWorkflowAgentRefs(normalizedSnapshot.definition),
@@ -559,7 +563,7 @@ export function commitWorkflowSaveInTx(
     new Set(extractWorkflowWorkgroupRefs(current.definition)),
     new Set(extractWorkflowWorkgroupRefs(normalizedSnapshot.definition)),
   )
-  assertRefsUsableInTx(tx, principal.kind === 'actor' ? principal.actor : null, [
+  await assertRefsUsableForTx(tx, principal.kind === 'actor' ? principal.actor : null, [
     { type: 'agent', names: newAgentIds, domain: 'id' },
     { type: 'workflow', names: newWorkflowNames, domain: 'name' },
     { type: 'workgroup', names: newWorkgroupNames, domain: 'name' },
@@ -607,7 +611,7 @@ export function commitWorkflowSaveInTx(
   }
 
   const updatedAt = Date.now()
-  const returned = tx
+  const returned = await tx
     .update(workflows)
     .set({
       name: normalizedSnapshot.name,
@@ -641,7 +645,7 @@ export function commitWorkflowSaveInTx(
 }
 
 export async function updateWorkflow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   input: UpdateWorkflow,
   principal: WorkflowWritePrincipal,
@@ -654,9 +658,10 @@ export async function updateWorkflow(
   const prepared = await prepareWorkflowSave(db, id, input, principal, opts)
   await opts?.beforeWriteTransaction?.()
 
-  const txResult = dbTxSync<{ receipt: SaveWorkflowReceipt; committed: boolean }>(db, (tx) =>
-    commitWorkflowSaveInTx(tx, prepared),
-  )
+  const txResult = await databaseSessionFor(db).transaction<{
+    receipt: SaveWorkflowReceipt
+    committed: boolean
+  }>(async (tx) => await commitWorkflowSaveInTx(tx, prepared))
 
   if (txResult.committed) {
     workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
@@ -672,7 +677,7 @@ export async function updateWorkflow(
 }
 
 export async function deleteWorkflow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   id: string,
   input: DeleteWorkflow,
   principal: WorkflowWritePrincipal,
@@ -828,8 +833,8 @@ export function scheduledRowsReferencingWorkflow<
 /** RFC-234 (T6): exported for the intent apply pipeline (its big transaction
  *  runs assertRefsUsableInTx + this core per created workflow, exactly like
  *  createWorkflow's own composition above). */
-export function insertWorkflowInTx(
-  tx: DbTxSync,
+export async function insertWorkflowInTx(
+  tx: DatabaseTransaction,
   input: {
     id: string
     name: string
@@ -858,7 +863,7 @@ export function insertWorkflowInTx(
      */
     scriptPrincipal: ScriptAuthorPrincipal
   },
-): WorkflowRow {
+): Promise<WorkflowRow> {
   assertScriptAuthorAllowed({ next: input.definition, principal: input.scriptPrincipal })
   // RFC-269 — same persistence primitive, same provenance value (the two
   // principal types are structurally identical by design).
@@ -867,7 +872,7 @@ export function insertWorkflowInTx(
     input.builtin || input.visibility === 'public'
       ? initialBuiltinResourceAcl(input.ownerUserId)
       : initialPrivateResourceAcl(input.ownerUserId)
-  const inserted = tx
+  const inserted = await tx
     .insert(workflows)
     .values({
       id: input.id,
@@ -925,7 +930,10 @@ export function workflowSnapshotHashOf(snapshot: WorkflowDraftSnapshot): Workflo
   return hashWorkflowSnapshot(normalized)
 }
 
-async function loadRawWorkflow(db: DbClient, id: string): Promise<WorkflowRow | null> {
+async function loadRawWorkflow(
+  db: ProviderNeutralDatabase,
+  id: string,
+): Promise<WorkflowRow | null> {
   const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
   return rows[0] ?? null
 }
@@ -935,7 +943,7 @@ async function loadRawWorkflow(db: DbClient, id: string): Promise<WorkflowRow | 
  * 系统主体（导入 / 内部改写）不走 ACL，按 `own` 处理。
  */
 async function assertPrincipalCanEditPreflight(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
 ): Promise<ResourceAccess> {
@@ -951,18 +959,18 @@ async function assertPrincipalCanEditPreflight(
 }
 
 /** In-tx twin of the save gate — the authoritative one (the preflight is UX). */
-function assertPrincipalCanEditInTx(
-  tx: DbTxSync,
+async function assertPrincipalCanEditInTx(
+  tx: DatabaseTransaction,
   principal: WorkflowWritePrincipal,
   row: WorkflowRow,
-): ResourceAccess {
+): Promise<ResourceAccess> {
   if (principal.kind === 'system') {
     assertNotBuiltin('workflow', row)
     return 'own'
   }
   // RFC-282 D1 — visibility, edit right and the 404 → builtin → 403 order all
   // come off ONE resolved verdict; the order itself is contract.
-  const access = resolveResourceAccessForInTx(tx, principal.actor, 'workflow', row)
+  const access = await resolveResourceAccessForTx(tx, principal.actor, 'workflow', row)
   if (!canViewAccess(access)) throwWorkflowNotFound(row.id)
   assertNotBuiltin('workflow', row)
   if (!canEditAccess(access)) throw workflowReadOnlyError()

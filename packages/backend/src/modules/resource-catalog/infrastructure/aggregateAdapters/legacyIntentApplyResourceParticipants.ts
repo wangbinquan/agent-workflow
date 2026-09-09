@@ -293,7 +293,7 @@ export interface LegacyIntentApplyResourceDependencies {
     principal: { readonly kind: 'actor'; readonly actor: Actor },
   ) => Promise<unknown>
   readonly insertWorkflowInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     input: {
       readonly scriptPrincipal: { readonly kind: 'actor'; readonly actor: Actor }
       readonly id: string
@@ -304,11 +304,11 @@ export interface LegacyIntentApplyResourceDependencies {
       readonly builtin: false
       readonly now: number
     },
-  ) => unknown
+  ) => Promise<unknown>
   readonly commitWorkflowSaveInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     prepared: unknown,
-  ) => { readonly receipt: { readonly outcome: string }; readonly committed: boolean }
+  ) => Promise<{ readonly receipt: { readonly outcome: string }; readonly committed: boolean }>
   readonly broadcastWorkflowCreated: (row: unknown) => void
 
   readonly prepareWorkgroupCreate: (
@@ -771,7 +771,7 @@ export function createLegacyIntentApplyResourceSession(
         ])
         const payload = prepared.plan.payload
         createdWorkflowRows.push(
-          dependencies.insertWorkflowInTx(tx, {
+          await dependencies.insertWorkflowInTx(tx, {
             scriptPrincipal: { kind: 'actor', actor },
             id: prepared.plan.resourceId,
             name: payload.name,
@@ -785,7 +785,7 @@ export function createLegacyIntentApplyResourceSession(
         break
       }
       case 'workflow-update': {
-        const result = dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
+        const result = await dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
         if (!result.committed && result.receipt.outcome !== 'already-current') {
           throw new ConflictError('intent-baseline-stale', 'workflow save did not commit')
         }

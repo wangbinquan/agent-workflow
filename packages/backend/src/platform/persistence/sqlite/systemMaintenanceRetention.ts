@@ -19,6 +19,7 @@
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   intentSessions,
   intentTurnEvents,
@@ -221,7 +222,7 @@ function webhookFireCandidates(cutoff: number | null, batchSize: number): SQL {
  * contract; it cannot keep SQLite's writer lock across phases or batches.
  */
 export async function runRetentionSweepSlice(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   config: RetentionConfig,
   cursorValue: unknown,
   now: number = Date.now(),
@@ -284,7 +285,7 @@ export async function runRetentionSweepSlice(
 
 /** One hourly retention pass. Every stage is independent and fail-soft. */
 export async function runRetentionSweep(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   config: RetentionConfig,
   now: number = Date.now(),
 ): Promise<RetentionSweepResult> {

@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第三十批：W30将四份旧套件的15个数据库例接入默认双库，保留8个原pure/native例；候选累计236份完整套件完成参数化，另有W28一份及W30两份混合套件。source termination七处参数类型中立化，三生产文件完整运行JS不变；原行/JSON/SQL和预算保持。1947测试文件、430文件harness，仍595构库文件无harness；T19f694。W29 exactff67b9eeb Main36success/4failure，13后端任务12过；两平台1947文件各恰一次，选定Ubuntu74执行71过/3个PG HTTP入口失败，macOS53过。本批修两处已登记ready的Promise lint，HTTP失败根因尚未证明。一次backend tsc、211功能metadata/433 expect及13canonical/55 expect通过，新SHA托管待验。原full仍归exact6f3，六端点PG较慢及SQLite任务首页超原预算未闭合；RFC和六项剩余AC保持开放。
+- W12 第三十一批：workflow/importRefs四处同步事务与两个aggregate的真实workflow委托改接既有异步端口；原整体SQLite aggregate构造仍保留。三份旧套件14个DB例默认双库、3个原single保持，原17声明/75完整matcher及预算不变；候选累计238完整套件、另4混合套件。原fixture对象登记供两引擎共用，PG沿原reset/选项注册实际client，6纯控制旧1过5红→新6/34；真实HTTP恢复仍待新SHA。1949测试文件/434文件harness，仍592构库文件无harness，T19f692。最终backend tsc及211/433功能metadata、13/55canonical通过，首轮三类类型遗漏与实际SQL差量保留。W30 exact0bfa2e7e0 Main37success/3failure，13后端12过，普通Lint联合任务成功；选定Ubuntu102过/10个PG HTTP红，macOS76过。原full仍仅归exact6f3，原P95判据、RFC与六项剩余AC继续开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

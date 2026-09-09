@@ -10,11 +10,11 @@ import {
   type WorkflowDefinition,
   type WorkflowDetail,
 } from '@agent-workflow/shared'
-import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createApp, type AppDeps } from '../src/server'
 import {
   createWorkflow,
@@ -23,9 +23,29 @@ import {
   updateWorkflow,
   workflowDraftSnapshotOf,
 } from '../src/services/workflow'
+import { tmpdir } from 'node:os'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+
+const applications = new Set<ProviderHttpApplication>()
+const applicationHomes = new Set<string>()
+afterEach(async () => {
+  try {
+    for (const application of applications) {
+      applications.delete(application)
+      await application.dispose()
+    }
+  } finally {
+    for (const appHome of applicationHomes) rmSync(appHome, { recursive: true, force: true })
+    applicationHomes.clear()
+  }
+})
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const ROUTE_SOURCE = resolve(import.meta.dir, '..', 'src', 'routes', 'workflows.ts')
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,
@@ -35,28 +55,26 @@ const EMPTY_DEFINITION: WorkflowDefinition = {
 }
 const SYSTEM = { kind: 'system', reason: 'rfc199-exact-operation-test' } as const
 
-function buildHarness(
+async function buildHarness(
+  harness: ProviderDatabaseHarness,
   hook?: AppDeps['workflowExactOperationHook'],
-  existingDb?: DbClient,
-): {
-  db: DbClient
-  app: ReturnType<typeof createApp>
-} {
-  const db = existingDb ?? createInMemoryDb(MIGRATIONS)
-  return {
-    db,
-    app: createApp({
-      token: TOKEN,
-      configPath: '/tmp/aw-rfc199-exact-never-used.json',
-      opencodeVersion: '1.15.0',
-      dbVersion: 1,
-      db,
-      workflowExactOperationHook: hook,
-    }),
-  }
+): Promise<{ db: ProviderNeutralDatabase; app: ReturnType<typeof createApp> }> {
+  const db = harness.db
+  const appHome = mkdtempSync(join(tmpdir(), 'rfc199-workflow-'))
+  applicationHomes.add(appHome)
+  const application = await createProviderHttpApplication(harness, {
+    token: TOKEN,
+    configPath: '/tmp/aw-rfc199-exact-never-used.json',
+    opencodeVersion: '1.15.0',
+    dbVersion: 1,
+    workflowExactOperationHook: hook,
+    appHome,
+  })
+  applications.add(application)
+  return { db, app: application.app }
 }
 
-async function seed(db: DbClient, name: string): Promise<WorkflowDetail> {
+async function seed(db: ProviderNeutralDatabase, name: string): Promise<WorkflowDetail> {
   return createWorkflow(db, {
     name,
     description: 'captured-description',
@@ -82,9 +100,9 @@ function exactBody(workflow: WorkflowDetail) {
   }
 }
 
-describe('RFC-199 exact workflow Validate', () => {
+describeEachProvider('RFC-199 exact workflow Validate', (harness) => {
   test('returns a schema-valid receipt bound to the captured revision and live context', async () => {
-    const { db, app } = buildHarness()
+    const { db, app } = await buildHarness(harness)
     const workflow = await seed(db, 'exact-validate')
     const before = Date.now()
     const response = await api(app, `/api/workflows/${workflow.id}/validate`, {
@@ -108,7 +126,7 @@ describe('RFC-199 exact workflow Validate', () => {
   })
 
   test('rejects missing/malformed fences and reports version or hash drift as validation stale', async () => {
-    const { db, app } = buildHarness()
+    const { db, app } = await buildHarness(harness)
     const workflow = await seed(db, 'validate-stale')
 
     const missing = await api(app, `/api/workflows/${workflow.id}/validate`, {
@@ -155,10 +173,10 @@ describe('RFC-199 exact workflow Validate', () => {
   })
 
   test('writer after guard cannot switch validation to the newer definition', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db, 'validate-captured')
     let hookCalls = 0
-    const { app } = buildHarness(async ({ operation, revision }) => {
+    const { app } = await buildHarness(harness, async ({ operation, revision }) => {
       if (operation !== 'validate') return
       hookCalls += 1
       expect(revision).toMatchObject({
@@ -189,7 +207,7 @@ describe('RFC-199 exact workflow Validate', () => {
         },
         SYSTEM,
       )
-    }, db)
+    })
 
     const response = await api(app, `/api/workflows/${workflow.id}/validate`, {
       method: 'POST',
@@ -209,9 +227,9 @@ describe('RFC-199 exact workflow Validate', () => {
   })
 
   test('delete after guard still validates the captured revision without a latest-row reread', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const workflow = await seed(db, 'validate-delete-captured')
-    const { app } = buildHarness(async ({ operation }) => {
+    const { app } = await buildHarness(harness, async ({ operation }) => {
       if (operation !== 'validate') return
       await deleteWorkflow(
         db,
@@ -219,7 +237,7 @@ describe('RFC-199 exact workflow Validate', () => {
         { expectedVersion: workflow.version, clientMutationId: ulid() },
         SYSTEM,
       )
-    }, db)
+    })
 
     const response = await api(app, `/api/workflows/${workflow.id}/validate`, {
       method: 'POST',

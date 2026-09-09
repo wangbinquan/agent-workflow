@@ -117,7 +117,7 @@ export function stripWorkflowNodeAgentIds(def: WorkflowDefinition): WorkflowDefi
  * aggregate `missing` across groups into one `acl-missing-refs`.
  */
 export async function resolveRefsUsableByName(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor | null,
   type: AclResourceType,
   names: readonly string[],

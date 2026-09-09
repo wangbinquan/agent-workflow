@@ -459,11 +459,14 @@ export interface LegacyResourcePackageMutationDependencies {
     input: Readonly<Record<string, unknown>>,
     principal: { readonly kind: 'actor'; readonly actor: Actor },
   ) => Promise<unknown>
-  readonly insertWorkflowInTx: (tx: DbTxSync, input: Readonly<Record<string, unknown>>) => unknown
+  readonly insertWorkflowInTx: (
+    tx: DatabaseTransaction,
+    input: Readonly<Record<string, unknown>>,
+  ) => Promise<unknown>
   readonly commitWorkflowSaveInTx: (
-    tx: DbTxSync,
+    tx: DatabaseTransaction,
     prepared: unknown,
-  ) => { readonly committed: boolean; readonly receipt: { readonly outcome: string } }
+  ) => Promise<{ readonly committed: boolean; readonly receipt: { readonly outcome: string } }>
   readonly rowToWorkflowDetail: (row: unknown) => unknown
   readonly broadcastWorkflowCreated: (workflow: unknown) => void
   readonly prepareWorkgroupCreate: (
@@ -1004,7 +1007,7 @@ export function createLegacyResourcePackageMutationAdapter(
             ])
             const payload = prepared.op.payload as { name: string; description: string }
             createdWorkflowRows.push(
-              dependencies.insertWorkflowInTx(syncTx, {
+              await dependencies.insertWorkflowInTx(tx, {
                 scriptPrincipal: { kind: 'actor', actor },
                 id: prepared.op.resourceId,
                 name: payload.name,
@@ -1018,7 +1021,7 @@ export function createLegacyResourcePackageMutationAdapter(
             return
           }
           case 'workflow-update': {
-            const result = dependencies.commitWorkflowSaveInTx(syncTx, prepared.prepared)
+            const result = await dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
             if (!result.committed && result.receipt.outcome !== 'already-current') {
               throw new ConflictError('bundle-baseline-stale', 'workflow save did not commit')
             }

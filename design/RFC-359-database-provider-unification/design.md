@@ -20,6 +20,12 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W31旧workflow写入和importRefs使用现有中立事务及异步读取端口，guard仍在原位置等待，
+  create/copy/save的实际提交和通知顺序保持。两个aggregate只接通自身原已async的workflow分支，
+  不据此宣称整个旧aggregate可用PG。原copy读取改用已有async端口后保留两条SQL的LIMIT差量。
+  测试数据库沿既有bootstrap选项登记其最终对象；PG只在原reset成功后登记，完整应用与消费者保持。
+  原测试的完整断言/预算与原物理值保持，新增HTTP和真PG行为仍必须由包含本批的新SHA验证。
+
 - W30 source termination的七处数据库参数接受中立类型，三个生产文件完整运行JS保持；
   测试借用原harness与实际完整应用。原SQLite专属机制例继续独立执行，旧业务例默认双库。
   原播种若依赖SQLite触发器，本批只显式填入从原真实行观察到的等值谱系字段，保留其它NULL。

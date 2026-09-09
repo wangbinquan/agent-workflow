@@ -111,6 +111,17 @@
       "targetContext": "bootstrap"
     },
     {
+      "callee": "registerLegacyDaemonTestFixture",
+      "file": "packages/backend/src/db/client.ts",
+      "id": "ambient:packages/backend/src/db/client.ts#registerLegacyDaemonTestFixture:407",
+      "kind": "register-call",
+      "line": 407,
+      "ownerEntryId": "owner:packages/backend/src/db/client.ts#createInMemoryDb",
+      "removeAfterWave": "W6/W9",
+      "symbol": "createInMemoryDb",
+      "targetContext": "platform"
+    },
+    {
       "callee": "registerTool",
       "file": "packages/backend/src/mcp/server.ts",
       "id": "ambient:packages/backend/src/mcp/server.ts#registerTool:46",
@@ -5441,7 +5452,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 493,
+    "ambientWiring": 494,
     "disabled": 9,
     "entries": 338,
     "executionLocal": 43,
@@ -12907,5 +12918,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5bcbb754fd979c65885e6074c492fe55de3796905e6f9eca2315d109b9e39063"
+  "sourceDigest": "sha256:4990702d009fff879e3880807ec8f04419a1e724aeb9467d1d42020f475fd793"
 }

@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto'
 import { getTableName, isTable } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/sqlite-core'
 
-import { createInMemoryDb, type DbClient } from '@/db/client'
+import { createInMemoryDb, type DbClient, registerLegacyDaemonTestFixture } from '@/db/client'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import * as schema from '@/db/schema'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -904,6 +904,7 @@ function registerPostgresql(
       for (const [index, database] of databases.entries()) {
         const { client, raw, snapshot, sinks } = database
         await resetToSnapshot(raw, snapshot, options)
+        if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
         const state = states[index]!
         const query = raw
         state.db = client

@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十一批（2026-09-09）**：workflow/importRefs四处同步事务改接中立异步事务，两个原已async的aggregate等待真实workflow结果；整体旧SQLite aggregate边界仍保留。copy复用既有async reader，原参数/顺序/完整返回保持。
+> 三份旧套件14个DB例默认双库、3个原single保持单跑，原17声明/75完整matcher及预算保留；候选累计238完整套件、另4混合套件。新增6个真实owner双库控制与6个纯夹具登记控制；本批5个HTTP例仍待托管。
+> 原SQLite夹具注册抽成同一helper，PG在原reset成功后按原bootstrap选项登记同一client；原消费者/完整装配未改。相同6控制旧源1过5红、候选6过/34 expect；此证据不替代真实HTTP恢复。
+> 原后mission3/160、retention6/17与workflow原行为/完整行对拍保持；workflow最终6/27。两copy SQL由原3绑定增加末尾LIMIT 1，其余58 SQL保持；retention两INSERT显式补原物理谱系，未使用changes从2变1，差量均保留。
+> W30 exact0bfa2e7e0 Main34298444484终态37success/3failure，13后端12过；普通Lint联合任务成功。两OS各1947文件恰一次，43官方blob/28发布路径已核；选定Ubuntu112执行102过/10个PG HTTP红，macOS76过。八例明确401、两例只记录缺失字段。
+> 当前1949测试文件、609构库文件/1253调用、592无harness/434有harness；T19f692、同步兼容账本5文件，provider命名60。新增一个真实fixture helper owner及一个原工厂调用，25057旧owner行保留。
+> 首轮三类类型遗漏修正后最终backend tsc通过、15 core hash不变；211/433功能metadata和13/55canonical通过。未运行本地HTTP/PG/daemon/E2E/规模库/全门禁，新SHA托管待验；原full严格判据与六项剩余AC继续开放。
+
 > **RFC-359 W12 第三十批（2026-09-09）**：四份旧套件15个DB例默认双库，8个pure/native例保持单跑；候选累计236份完整套件完成参数化，另保W28一份和W30两份混合套件。原180组分页组合、完整断言/预算保持，HTTP7例待新SHA。
 > source termination七处参数类型接受中立DB，三生产文件完整Bun/TypeScript运行JS逐字不变；协作与终态原物理行、JSON和SQL对拍保持。原SQLite触发器已有谱系值按真实观察显式播种，其余NULL保持。
 > W29 exactff67b9eeb Main34293982365终态36success/4failure，13后端任务12过；两平台1947文件各恰一次，39官方blob/33发布路径已核。选定Ubuntu74执行71过/3个PG HTTP入口失败，macOS53全过；四处旧功能夹具修复已过。

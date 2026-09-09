@@ -346,6 +346,11 @@ export function allowsLegacyDaemonTestAccess(db: object): boolean {
   return legacyDaemonTestDbs.has(db)
 }
 
+/** Register the exact database object created by a test fixture. */
+export function registerLegacyDaemonTestFixture(db: object): void {
+  legacyDaemonTestDbs.add(db)
+}
+
 function migratedSnapshot(migrationsFolder: string): Uint8Array {
   const key = resolve(migrationsFolder)
   let snapshot = migratedSnapshotCache.get(key)
@@ -399,6 +404,6 @@ export function createInMemoryDb(
   }
   const db = drizzle(sqlite, { schema })
   guardForeignStatements(sqlite, db as object)
-  if (opts.bootstrap !== 'required') legacyDaemonTestDbs.add(db as object)
+  if (opts.bootstrap !== 'required') registerLegacyDaemonTestFixture(db)
   return db
 }
