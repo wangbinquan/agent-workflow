@@ -28,10 +28,10 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                          | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                       | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1960测试文件；createInMemoryDb口径605文件/1224调用、570无harness/460有harness；本批5原HTTP例默认双库，其余4例/native工厂保持。W43主975/987通过、12未执行、199选定PG通过，另2 sidecar过；本批新HTTP待验                      | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1960测试文件；createInMemoryDb口径605文件/1224调用、570无harness/460有harness保持。W44选定主1018次完整执行、1014过4源码锁红，204选定PG全过；另2 sidecar过。本批保原8callback修复旧锁，未扩全量行为覆盖                      | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                 | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                                                                | 进行中 |
-| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W43 exact171bee3f6 Main34364763034终态37 success/2 failure/1 cancelled；13后端12过1取消。主975/987通过、12因mac1未执行而缺失，另2 sidecar通过；新增HTTP33/33过。完整Main未绿，本批新SHA待验                                     | 待办   |
+| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W44 exact8c5e62753 Main34370615318终态36 success/4 failure；13后端11过2红。主1014/1018通过，四红为两条旧结构锁跨两OS重复；新增31次全过。完整Main未绿，本批修复后新SHA待验                                                       | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | exact50e9原full34343025829的360样本：SQLite任务首页142.563024ms已满足原150ms；PG三任务页80.726695/51.165668/50.808485ms均较快且达标，其余六端点PG仍较慢；唯一原绝对失败PG overview MAX13.222187ms未过10ms。原规模/轮数/判据保持 | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12原始占位32→9，未构造根账本0；九个诊断为四个作用域查询、四个协作检查和一个兼容诊断。provider命名88→59保持；W42分支端口校验真实共享，其余内联重复与装配继续核验                                                                | 进行中 |
@@ -1603,6 +1603,46 @@ PG overview max<10ms。九项稳定wire相同，末次完整body摘要八项相�
   canonical13/55通过。定向源lint/format及独立代码、metadata、文档复核完成；两生成合同和RFC294
   status的原/候选直接Prettier均红，保留原生成器字节及精确投影，格式限制单列。未跑本地PG/服务/E2E/性能/完整门禁，原W20限制保留；本批新SHA真PG、
   完整Main及原full待托管，AC1/6/8/9/11/12和RFC保持开放。
+
+### W12 第四十五批：保留原装配判据，修复已发布增量的结构锁
+
+基于已发布 `8c5e6275338c6077cb08aa031cb42a7060571532`，只修改W29完整应用装配测试。
+W44已发布的同一repositoryWorkspaceStore输出改变两个旧源码观察形状：
+SQLite完整装配的末尾返回值多一个字段，helper将原直接compose调用保存为composed再挂载。
+原失败在两OS同为两条断言，旧摘要常量没有随生产源码更新而替换。
+
+- 测试先验证SqliteAppComposition中的必需readonly字段、最终Object.freeze返回值和
+  最后一个实际bootstrap store属性，然后只移除这个已知新增属性进行原完整摘要比较。
+  保留TypeScript原NodeArray尾逗号标记；原八个完整callback、42个matcher及九个摘要常量逐字保持。
+- helper只接受唯一compose→createComposedApp(composed)→同一composed.store的完整函数体。
+  验证后仅将该新增别名形状逆换成原调用观察，不忽略其他语句或新增字段。
+  六种单输入变异包括可选store类型、错误bootstrap store、额外返回字段、错误helper store、
+  返回次序改变和第二次compose；五项在同步结构检查拒绝，一项到原完整摘要断言失败。
+  没有把装载错误或未执行的case计作有效负控。
+- 原两条选定测试0 pass/2 fail/8 expect；最终原整套8 pass/46 expect。
+  首轮候选因尾逗号标记丢失出现7 pass/1 fail，修正后通过，失败记录保留。
+  严格lint（max-warnings 0）、format及冻结候选的一次完整backend tsc通过。
+  原canonical writer产生的13份结果与8c5e逐字相同；四份provenance刷新到8c5e，
+  只移除W44新增两个owner所用的一次性allowGrowth，25066 baseline及全部原规则保持。
+  功能metadata211 pass/433 expect、选定canonical13 pass/55 expect通过。
+
+W44 exact `8c5e6275338c6077cb08aa031cb42a7060571532` Main `34370615318`：
+40 jobs终态36 success/4 failure，无取消；13后端11 success/2 failure。
+选定主集仍是60文件/388源码callback，1018次执行完整、1014 pass/4 fail；
+四次失败恰为上述两条旧结构锁在两个OS的结果。204个选定PG执行全部通过。
+两个OS各1960个原生文件恰一次；原生文件被发现不等于全量行为已完成PG参数化。
+本批前W44新增31次全过，W43此前未执行的12次已在W44实际通过，旧W43结果不改写。
+RFC234两个sidecar与原18个hook所属case也分别通过，分母独立，不并入1018。
+其他两失败任务仅保身份和状态，完整Main未绿。
+
+生产代码未改，1960测试文件、605构库文件/1224调用、570无harness/460有harness保持；
+T19f688、provider命名59、原始占位9及主架构分母均不变。
+证据入口为`/private/tmp/rfc359-w45-composition-lock-manifest.json`和root最终发布清单。
+本地只运行纯源码、受控生命周期及限定功能metadata检查，没有运行实际PG、App/HTTP/WS、
+TaskEngine、daemon、真实Git夹具、E2E或规模库；真实托管结果仍须绑定新发布SHA。
+最新原full仍归exact50e9的34343025829：三个任务页PG已满足原判据，六个其他端点较慢，
+PG overview MAX13.222187ms仍未满足10ms。原规模、20轮/360样本和严格判据保持。
+AC-1/6/8/9/11/12及整个RFC继续开放。
 
 ### W12 第四十四批：依赖解析合一与缓存仓库HTTP双库
 

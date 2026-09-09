@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第四十四批：两份agent依赖JSON解析共用生产函数，保留原异常边界；原后各8/64、32组完整记录相同，4项有效负控红。5个原缓存仓库HTTP例接默认双库，装配返回同一store实例、原构造时序保持；seed补原SQLite触发器两项值，真实HTTP待本批托管。W43 exact171bee3f6 Main37 success/2 failure/1 cancelled，主975/987通过、12未执行、另2 sidecar通过，新增HTTP33/33通过。7core一次tsc、211/433功能metadata、13/55canonical通过；1960文件、605工厂文件/1224调用、570无harness/460有harness。六项AC及原W39 full性能缺口保持。
+- W12 第四十五批：精确适配W44已发布的同store装配输出，保留原8完整callback、42 matcher及9个摘要常量；原两例0过2红，候选8/46通过，6个指定源码变异均失败。W44 exact8c5e62753 Main36 success/4 failure；选定1018次完整执行、1014过4红，四红为两条旧结构锁跨两OS重复。新增31次及W43此前缺失12次均过，完整Main仍未绿。本批一次backend tsc、211/433功能metadata、13/55canonical通过；生产生成投影与覆盖分母保持，新SHA托管待验，AC-1/6/8/9/11/12开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

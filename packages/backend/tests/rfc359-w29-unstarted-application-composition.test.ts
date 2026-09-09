@@ -6,6 +6,8 @@ import ts from 'typescript'
 
 // No application or service is started here. Whole-body AST inverses pin the
 // original complete graph; the pure controls execute the actual lifetime helper.
+// W44 exposed the existing repository store and named the SQLite composition.
+// Validate those exact same-instance seams before restoring the W29 source locks.
 const sourceRoot = process.env.AW_RFC359_COMPOSITION_SOURCE_ROOT ?? resolve(import.meta.dir, '..')
 const pgPath = 'src/cli/postgresqlDaemonApplication.ts'
 const serverPath = 'src/server.ts'
@@ -46,7 +48,77 @@ function functionBody(source: ts.SourceFile, name: string): ts.Block {
 }
 
 function compact(node: ts.Node, source: ts.SourceFile): string {
+  if (
+    source === applicationHelper &&
+    ts.isCallExpression(node) &&
+    node.expression.getText(source) === 'createComposedApp'
+  ) {
+    const body = functionBody(source, 'composeSqliteUnstartedApplication')
+    if (descendants(body, (candidate) => candidate === node).length === 1) {
+      const expected =
+        '{returncomposeUnstartedApplication((scope)=>{' +
+        'constcomposed=composeSqliteApplicationDeps(deps,scope)' +
+        'return{app:createComposedApp(composed),' +
+        'repositoryWorkspaceStore:composed.repositoryWorkspaceStore,}})}'
+      if (body.getText(source).replace(/\s/g, '') !== expected)
+        throw new Error('SQLite helper must return the same composed store after one app mount')
+      const composition = namedCalls(body, source, 'composeSqliteApplicationDeps')[0]
+      if (composition === undefined) throw new Error('missing SQLite composition binding')
+      return `createComposedApp(${composition.getText(source)})`.replace(/\s/g, '')
+    }
+  }
   return node.getText(source).replace(/\s/g, '')
+}
+
+function oldSqliteStoreReturn(source: ts.SourceFile, body: ts.Block): ts.Block {
+  const composition = source.statements.find(
+    (node): node is ts.InterfaceDeclaration =>
+      ts.isInterfaceDeclaration(node) && node.name.text === 'SqliteAppComposition',
+  )
+  const storeMembers = composition?.members.filter(
+    (node) => node.name?.getText(source) === 'repositoryWorkspaceStore',
+  )
+  if (
+    storeMembers?.length !== 1 ||
+    compact(storeMembers[0]!, source) !==
+      'readonlyrepositoryWorkspaceStore:RepositoryWorkspaceStore'
+  )
+    throw new Error('SQLite composition must require the original repository store type')
+  const last = body.statements.at(-1)
+  if (
+    last === undefined ||
+    !ts.isReturnStatement(last) ||
+    last.expression === undefined ||
+    !ts.isCallExpression(last.expression) ||
+    last.expression.expression.getText(source) !== 'Object.freeze' ||
+    last.expression.arguments.length !== 1
+  )
+    throw new Error('SQLite composition must keep its final frozen return')
+  const value = last.expression.arguments[0]
+  if (
+    value === undefined ||
+    !ts.isObjectLiteralExpression(value) ||
+    value.properties.at(-1) === undefined ||
+    compact(value.properties.at(-1)!, source) !==
+      'repositoryWorkspaceStore:repositoryBootstrap.repositoryWorkspaceStore'
+  )
+    throw new Error('SQLite composition must return the existing bootstrap store last')
+  const restored = ts.factory.updateObjectLiteralExpression(
+    value,
+    ts.factory.createNodeArray(value.properties.slice(0, -1), value.properties.hasTrailingComma),
+  )
+  return ts.factory.updateBlock(body, [
+    ...body.statements.slice(0, -1),
+    ts.factory.updateReturnStatement(
+      last,
+      ts.factory.updateCallExpression(
+        last.expression,
+        last.expression.expression,
+        last.expression.typeArguments,
+        [restored],
+      ),
+    ),
+  ])
 }
 
 function isDaemonChoice(node: ts.Node, source: ts.SourceFile): node is ts.ConditionalExpression {
@@ -65,7 +137,11 @@ function isRuntimeFactoryChoice(node: ts.Node, source: ts.SourceFile): node is t
 
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
-  const original = functionBody(source, name)
+  const body = functionBody(source, name)
+  const original =
+    source === server && name === 'composeSqliteApplicationDeps'
+      ? oldSqliteStoreReturn(source, body)
+      : body
   const transformed = ts.transform(original, [
     (context) => {
       const visit: ts.Visitor = (node) => {

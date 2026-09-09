@@ -20,6 +20,12 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W45 的旧装配源码锁先验证W44新增输出的完整形状，再仅逆换该增量。
+  SQLite根必须保留必需的repositoryWorkspaceStore类型及末尾原bootstrap实例字段；
+  完整应用helper必须恰一次compose、随后挂载同一composed并返回其store。
+  原完整函数摘要和八个测试callback保持，额外字段、错误store、第二次compose及次序变化仍失败。
+  此次只改测试适配，生产装配及实例生命周期没有新增变动。
+
 - W44 将两个实际agent依赖图loader里的JSON解析体交给同步共享函数。
   调用方保留完整原JSON.parse表达式：中立loader的row getter仍在catch内，
   PG薄stringArray入口的row getter仍在入口外，原查询、await和遍历保持。
