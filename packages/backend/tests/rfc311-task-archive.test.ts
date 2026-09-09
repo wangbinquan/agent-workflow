@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-311 T19 — 终态任务树归档出库(proposal §5 C1,用户拍板「归档到归档目录、
 // 从表里删除、界面不可见」)。
 //
@@ -59,7 +61,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 interface Dirs {
   archiveDir: string
@@ -97,7 +99,11 @@ interface TaskSeed {
   parentTaskId?: string
 }
 
-async function addTask(db: Db, seed: TaskSeed): Promise<void> {
+async function addTask(
+  db: Db,
+  seed: TaskSeed,
+  lineage?: { executionLineageId: string; lineageSlotPathJson: string },
+): Promise<void> {
   await db.insert(tasks).values({
     id: seed.id,
     name: seed.id,
@@ -116,6 +122,7 @@ async function addTask(db: Db, seed: TaskSeed): Promise<void> {
     launchOrigin: 'manual',
     parentTaskId: seed.parentTaskId ?? null,
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
+    ...lineage,
   })
   await db.insert(taskRepos).values({
     taskId: seed.id,
@@ -124,6 +131,31 @@ async function addTask(db: Db, seed: TaskSeed): Promise<void> {
     worktreePath: '/tmp/never-read',
     branch: `agent-workflow/${seed.id}`,
   })
+}
+
+type FixtureLineage = {
+  executionLineageId: string
+  frames: { stableNodeKey: string; frozenOccurrenceKey: string; workflowRevision: null }[]
+}
+
+// Original native seeds keep their trigger; provider seeds retain its measured values.
+function createProviderTaskSeed() {
+  const lineageByTaskId = new Map<string, FixtureLineage>()
+  return async (db: Db, seed: TaskSeed): Promise<void> => {
+    const parent =
+      seed.parentTaskId === undefined ? undefined : lineageByTaskId.get(seed.parentTaskId)
+    const frames = [
+      ...(parent?.frames ?? []),
+      {
+        stableNodeKey: parent === undefined ? 'task-root' : 'child-task',
+        frozenOccurrenceKey: seed.id,
+        workflowRevision: null,
+      },
+    ]
+    const executionLineageId = parent?.executionLineageId ?? seed.id
+    await addTask(db, seed, { executionLineageId, lineageSlotPathJson: JSON.stringify(frames) })
+    lineageByTaskId.set(seed.id, { executionLineageId, frames })
+  }
 }
 
 async function addRunWithEvents(db: Db, taskId: string, runId: string, events: number) {
@@ -145,14 +177,15 @@ async function addRunWithEvents(db: Db, taskId: string, runId: string, events: n
   }
 }
 
-async function taskCount(db: DbClient): Promise<number> {
+async function taskCount(db: ProviderNeutralDatabase): Promise<number> {
   const r = await db.select({ n: count() }).from(tasks)
   return r[0]?.n ?? 0
 }
 
-describe('RFC-311 T19 — task archive', () => {
+describeEachProvider('RFC-311 T19 — task archive', (harness) => {
   test('is off by default: neither disabled nor zero-retention touches any row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
@@ -170,7 +203,8 @@ describe('RFC-311 T19 — task archive', () => {
   })
 
   test('a whole tree is excluded when any member is non-terminal or still inside the window', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
     await seedBase(db)
     // ① 有一个后代仍在运行 ⇒ 整树不动。
     await addTask(db, { id: 'r1', status: 'done', finishedAt: NOW - 300 * DAY })
@@ -196,7 +230,8 @@ describe('RFC-311 T19 — task archive', () => {
   })
 
   test('archiving exports the tree, moves runs/logs, and clears the rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'root', status: 'done', finishedAt: NOW - 300 * DAY })
@@ -292,7 +327,8 @@ describe('RFC-311 T19 — task archive', () => {
   })
 
   test('a failure before rename leaves the database intact (crash branch A)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'root', status: 'done', finishedAt: NOW - 300 * DAY })
@@ -308,7 +344,8 @@ describe('RFC-311 T19 — task archive', () => {
   })
 
   test('boot recovery promotes a post-rename crash and discards a pre-delete one (crash branch B)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
     const dirs = tmpDirs()
     await seedBase(db)
     await addTask(db, { id: 'still-here', status: 'done', finishedAt: NOW - 300 * DAY })
@@ -332,7 +369,8 @@ describe('RFC-311 T19 — task archive', () => {
   })
 
   test('the sweep is bounded per tick and reports failures without touching the database', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
+    const addTask = createProviderTaskSeed()
     const dirs = tmpDirs()
     await seedBase(db)
     for (let i = 0; i < 3; i += 1) {
@@ -359,7 +397,7 @@ describe('RFC-311 T19 — task archive', () => {
 // (审计行记录操作者与数量)」。审计行是这条路径唯一的事后证据——归档把任务行删了,
 // 之后除了 task_archive_audit,库里再没有任何地方能回答「谁在什么时候删了什么」。
 describe('RFC-311 T19 — 手动批量归档入口与审计行', () => {
-  async function auditRows(db: DbClient) {
+  async function auditRows(db: ProviderNeutralDatabase) {
     return db.select().from(taskArchiveAudit)
   }
 
@@ -499,31 +537,33 @@ describe('RFC-311 T19 — 手动批量归档入口与审计行', () => {
     expect(await taskCount(db)).toBe(1)
     expect(await auditRows(db)).toHaveLength(0)
   })
+  describeEachProvider('ordinary sweep audit persistence', (harness) => {
+    test('sweeper 的审计行归给系统(无操作者),且空转不写行', async () => {
+      const db = harness.db
+      const addTask = createProviderTaskSeed()
+      const dirs = tmpDirs()
+      await seedBase(db)
+      // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
+      await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
+      await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+      expect(await auditRows(db)).toHaveLength(0)
 
-  test('sweeper 的审计行归给系统(无操作者),且空转不写行', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const dirs = tmpDirs()
-    await seedBase(db)
-    // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
-    await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
-    await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
-    expect(await auditRows(db)).toHaveLength(0)
-
-    await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-    await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
-    const audit = await auditRows(db)
-    expect(audit).toHaveLength(1)
-    expect(audit[0]!.source).toBe('sweep')
-    expect(audit[0]!.actorUserId).toBeNull()
-    expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
-    expect(
-      await db
-        .select({
-          operation: taskExecutionMaintenanceClaims.operation,
-          state: taskExecutionMaintenanceClaims.state,
-        })
-        .from(taskExecutionMaintenanceClaims),
-    ).toContainEqual({ operation: 'retention', state: 'completed' })
+      await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
+      await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+      const audit = await auditRows(db)
+      expect(audit).toHaveLength(1)
+      expect(audit[0]!.source).toBe('sweep')
+      expect(audit[0]!.actorUserId).toBeNull()
+      expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
+      expect(
+        await db
+          .select({
+            operation: taskExecutionMaintenanceClaims.operation,
+            state: taskExecutionMaintenanceClaims.state,
+          })
+          .from(taskExecutionMaintenanceClaims),
+      ).toContainEqual({ operation: 'retention', state: 'completed' })
+    })
   })
 })
 

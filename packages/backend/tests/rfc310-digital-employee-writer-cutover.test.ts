@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
 import { developmentMissions, developmentMrClaims } from '@/db/schema'
 import { composeDigitalEmployeeWriterCutoverFor } from '@/modules/digital-employee/composition'
 
@@ -19,9 +20,9 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-describe('RFC-310 Digital Employee OS single-writer cutover', () => {
+describeEachProvider('RFC-310 Digital Employee OS single-writer cutover', (harness) => {
   test('boot atomically retires legacy admission and activates generation one', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const writer = composeDigitalEmployeeWriterCutoverFor(db)
     await expect(writer.read()).resolves.toMatchObject({
       activeGeneration: 0,
@@ -44,8 +45,9 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
   })
 
   test('existing Missions retain their claims until terminal and are never mechanically adopted', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    db.insert(developmentMissions)
+    const db = harness.db
+    await db
+      .insert(developmentMissions)
       .values({
         id: 'legacy-mission-1',
         status: 'running',
@@ -56,7 +58,8 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
         updatedAt: 1,
       })
       .run()
-    db.insert(developmentMrClaims)
+    await db
+      .insert(developmentMrClaims)
       .values({
         id: 'legacy-claim-1',
         codeHostEndpointRef: 'endpoint-1',
@@ -94,7 +97,8 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       ],
     })
 
-    db.update(developmentMissions)
+    await db
+      .update(developmentMissions)
       .set({ status: 'completed', terminalAt: 30_000, updatedAt: 30_000 })
       .where(eq(developmentMissions.id, 'legacy-mission-1'))
       .run()
@@ -106,8 +110,9 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
   })
 
   test('migration reporting stays bounded while preserving the exact drain total', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    db.insert(developmentMissions)
+    const db = harness.db
+    await db
+      .insert(developmentMissions)
       .values(
         Array.from({ length: 101 }, (_, index) => ({
           id: `legacy-mission-${String(index).padStart(3, '0')}`,
@@ -134,7 +139,9 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
     expect(report.draining[0]?.missionId).toBe('legacy-mission-000')
     expect(report.draining.at(-1)?.missionId).toBe('legacy-mission-099')
   })
+})
 
+describe('RFC-310 Digital Employee OS single-writer cutover', () => {
   test('HTTP refuses new legacy Missions after cutover while exposing the drain report', async () => {
     const [{ createSession }, { createApp }, { createUser }] = await Promise.all([
       import('./helpers/auth/sessionStore'),

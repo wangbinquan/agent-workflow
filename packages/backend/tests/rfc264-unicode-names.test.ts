@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-264 — human-readable (Chinese) workflow / workgroup names, server side.
 //
 // User report: 「工作组、工作流名称要能支持中文」. The shared charset + normalizer
@@ -42,9 +44,10 @@ function actor(id: string): Actor {
   })
 }
 
-function seedUser(id: string): void {
+function seedUserWrite(db: ProviderNeutralDatabase, id: string) {
   const now = Date.now()
-  db.insert(users)
+  return db
+    .insert(users)
     .values({
       id,
       username: id,
@@ -57,11 +60,20 @@ function seedUser(id: string): void {
     .run()
 }
 
-beforeEach(() => {
+function seedUser(id: string): void {
+  void seedUserWrite(db, id)
+}
+
+async function seedProviderUsers(db: ProviderNeutralDatabase): Promise<void> {
+  await seedUserWrite(db, 'alice')
+  await seedUserWrite(db, 'bob')
+}
+
+function setupNative() {
   db = createInMemoryDb(MIGRATIONS)
   seedUser('alice')
   seedUser('bob')
-})
+}
 
 function workgroupInput(name: string) {
   return CreateWorkgroupSchema.parse({ name, description: '' })
@@ -77,28 +89,40 @@ function workflowInput(name: string) {
   return CreateWorkflowSchema.parse({ name, description: '', definition: EMPTY_DEFINITION })
 }
 
-describe('RFC-264 workflow names', () => {
+describeEachProvider('RFC-264 workflow names', (harness) => {
+  beforeEach(() => seedProviderUsers(harness.db))
   test('create accepts Chinese and stores the folded name', async () => {
+    const db = harness.db
     const created = await createWorkflow(db, workflowInput('代码审计流水线 '))
     expect(created.name).toBe('代码审计流水线')
     expect((await getWorkflow(db, created.id))?.name).toBe('代码审计流水线')
   })
 
   test('mixed script, uppercase and full-width punctuation all pass', async () => {
+    const db = harness.db
     for (const name of ['审计 Pipeline v2', 'Code Review（重构专用）', '审计　流程']) {
       const created = await createWorkflow(db, workflowInput(name))
       // U+3000 folds to an ordinary space; everything else is verbatim.
       expect(created.name).toBe(name.replace('　', ' '))
     }
   })
+})
+
+describe('RFC-264 workflow names', () => {
+  beforeEach(setupNative)
 
   test('illegal names are still refused at the create boundary', () => {
     for (const name of ['_reserved', 'two\nlines', '   ', '审'.repeat(129)]) {
       expect(() => workflowInput(name)).toThrow()
     }
   })
+})
+
+describeEachProvider('RFC-264 workflow names', (harness) => {
+  beforeEach(() => seedProviderUsers(harness.db))
 
   test('duplicate workflow names stay legal (the ULID is the identity)', async () => {
+    const db = harness.db
     const first = await createWorkflow(db, workflowInput('代码审计'))
     const second = await createWorkflow(db, workflowInput('代码审计'))
     expect(first.id).not.toBe(second.id)
@@ -107,6 +131,7 @@ describe('RFC-264 workflow names', () => {
 })
 
 describe('RFC-264 YAML import', () => {
+  beforeEach(setupNative)
   test('a Chinese name previews as the folded value', () => {
     const preview = previewWorkflowYaml(
       ['name: 代码审计流水线', 'description: ""', 'definition:', '  $schema_version: 4'].join('\n'),
@@ -132,8 +157,10 @@ describe('RFC-264 YAML import', () => {
   })
 })
 
-describe('RFC-264 workgroup names', () => {
+describeEachProvider('RFC-264 workgroup names', (harness) => {
+  beforeEach(() => seedProviderUsers(harness.db))
   test('create + rename accept Chinese and store the folded name', async () => {
+    const db = harness.db
     const created = await createWorkgroup(db, workgroupInput('代码审计组 '), {
       ownerUserId: 'alice',
       actor: actor('alice'),
@@ -155,6 +182,7 @@ describe('RFC-264 workgroup names', () => {
   })
 
   test('the owner-unique index holds — and padding no longer evades it', async () => {
+    const db = harness.db
     await createWorkgroup(db, workgroupInput('代码审计组'), {
       ownerUserId: 'alice',
       actor: actor('alice'),
@@ -173,6 +201,10 @@ describe('RFC-264 workgroup names', () => {
     })
     expect(bobs.name).toBe('代码审计组')
   })
+})
+
+describe('RFC-264 workgroup names', () => {
+  beforeEach(setupNative)
 
   test('illegal names are still refused at the schema boundary', () => {
     for (const name of ['_reserved', 'two\nlines', '   ']) {

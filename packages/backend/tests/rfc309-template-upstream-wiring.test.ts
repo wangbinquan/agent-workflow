@@ -20,6 +20,8 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { capabilityTemplates } from '../src/db/schema'
 import {
   mergeFromUpstream as mergeFromUpstreamWithPort,
@@ -56,20 +58,23 @@ import { errorHandler } from '../src/util/errors'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
-const readUpstreamReport = async (db: DbClient, row: typeof capabilityTemplates.$inferSelect) => {
+const readUpstreamReport = async (
+  db: ProviderNeutralDatabase,
+  row: typeof capabilityTemplates.$inferSelect,
+) => {
   const report = await readUpstreamReportWithPort(createTemplateUpstreamPersistence(db), row.id)
   if (report === null) throw new Error(`no template ${row.id}`)
   return report
 }
 const mergeFromUpstream = (
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   row: typeof capabilityTemplates.$inferSelect,
   actor: Actor,
   now?: number,
 ) => mergeFromUpstreamWithPort(createTemplateUpstreamPersistence(db), row.id, actor, now)
 
 const copyTemplate = (
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   source: typeof capabilityTemplates.$inferSelect,
   actor: Actor,
   name: string | undefined,
@@ -98,21 +103,6 @@ const AUTHOR = {
 
 let db: DbClient
 
-beforeEach(async () => {
-  db = await createInMemoryDb(MIGRATIONS)
-  await db.insert(capabilityTemplates).values({
-    id: 'up-1',
-    name: 'department review',
-    capability: 'mr-review',
-    scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
-    paramsJson: JSON.stringify({ maxFindings: 20 }),
-    agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
-    visibility: 'public',
-    createdAt: NOW,
-    updatedAt: NOW,
-  })
-})
-
 async function row(id: string) {
   const found = (
     await db.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id))
@@ -129,7 +119,65 @@ async function moveUpstream(patch: Partial<typeof capabilityTemplates.$inferInse
     .where(eq(capabilityTemplates.id, 'up-1'))
 }
 
-describe('RFC-309 T16 — reading where a copy stands', () => {
+function createProviderTemplateRows(db: ProviderNeutralDatabase) {
+  async function row(id: string) {
+    const found = (
+      await db.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id))
+    )[0]
+    if (found === undefined) throw new Error(`no template ${id}`)
+    return found
+  }
+
+  async function moveUpstream(patch: Partial<typeof capabilityTemplates.$inferInsert>) {
+    await db
+      .update(capabilityTemplates)
+      .set({ updatedAt: NOW + 5_000, ...patch })
+      .where(eq(capabilityTemplates.id, 'up-1'))
+  }
+  return { row, moveUpstream }
+}
+
+function describeNativeTemplateCases(name: string, cases: () => void) {
+  describe(name, () => {
+    beforeEach(async () => {
+      db = await createInMemoryDb(MIGRATIONS)
+      await db.insert(capabilityTemplates).values({
+        id: 'up-1',
+        name: 'department review',
+        capability: 'mr-review',
+        scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
+        paramsJson: JSON.stringify({ maxFindings: 20 }),
+        agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
+        visibility: 'public',
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+    })
+    cases()
+  })
+}
+
+describeEachProvider('RFC-309 T16 — reading where a copy stands', (harness) => {
+  let db: ProviderNeutralDatabase
+  let row: ReturnType<typeof createProviderTemplateRows>['row']
+  let moveUpstream: ReturnType<typeof createProviderTemplateRows>['moveUpstream']
+
+  beforeEach(async () => {
+    db = await harness.db
+    await db.insert(capabilityTemplates).values({
+      id: 'up-1',
+      name: 'department review',
+      capability: 'mr-review',
+      scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
+      paramsJson: JSON.stringify({ maxFindings: 20 }),
+      agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
+      visibility: 'public',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    ;({ row, moveUpstream } = createProviderTemplateRows(db))
+  })
+
   test('a template authored here reports no upstream at all — not an error', async () => {
     // The common case for an original. Making the caller handle a failure for
     // it would put an error path on the majority of rows.
@@ -207,7 +255,27 @@ describe('RFC-309 T16 — reading where a copy stands', () => {
   })
 })
 
-describe('RFC-309 T16 — merging only what was not overridden', () => {
+describeEachProvider('RFC-309 T16 — merging only what was not overridden', (harness) => {
+  let db: ProviderNeutralDatabase
+  let row: ReturnType<typeof createProviderTemplateRows>['row']
+  let moveUpstream: ReturnType<typeof createProviderTemplateRows>['moveUpstream']
+
+  beforeEach(async () => {
+    db = await harness.db
+    await db.insert(capabilityTemplates).values({
+      id: 'up-1',
+      name: 'department review',
+      capability: 'mr-review',
+      scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
+      paramsJson: JSON.stringify({ maxFindings: 20 }),
+      agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
+      visibility: 'public',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    ;({ row, moveUpstream } = createProviderTemplateRows(db))
+  })
+
   test('takes upstream’s change, keeps ours, and rebases the link', async () => {
     const copy = await copyTemplate(db, await row('up-1'), COPIER, 'our review', NOW + 1_000)
     await db
@@ -297,7 +365,9 @@ describe('RFC-309 T16 — merging only what was not overridden', () => {
     })
     expect(await row(copy.id)).toEqual(before)
   })
+})
 
+describeNativeTemplateCases('RFC-309 T16 — merging only what was not overridden', () => {
   test('without scripts:author the merge is refused BEFORE anything is read', async () => {
     // AC-6's shape applied to the merge: a person who cannot author a script
     // must not be able to install one by pressing "update from upstream". The
@@ -315,6 +385,27 @@ describe('RFC-309 T16 — merging only what was not overridden', () => {
       collect: { script: 'echo v1' },
     })
   })
+})
+
+describeEachProvider('RFC-309 T16 — merging only what was not overridden', (harness) => {
+  let db: ProviderNeutralDatabase
+  let row: ReturnType<typeof createProviderTemplateRows>['row']
+
+  beforeEach(async () => {
+    db = await harness.db
+    await db.insert(capabilityTemplates).values({
+      id: 'up-1',
+      name: 'department review',
+      capability: 'mr-review',
+      scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
+      paramsJson: JSON.stringify({ maxFindings: 20 }),
+      agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
+      visibility: 'public',
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    ;({ row } = createProviderTemplateRows(db))
+  })
 
   test('a template with no upstream refuses rather than doing nothing quietly', async () => {
     const outcome = await mergeFromUpstream(db, await row('up-1'), AUTHOR, NOW + 9_000)
@@ -331,72 +422,95 @@ describe('RFC-309 T16 — merging only what was not overridden', () => {
   })
 })
 
-describe('RFC-309 T16 — a copy with no recorded base (everything made before 0175)', () => {
-  /** A copy exactly as RFC-304 wrote them: link and digest, no base values. */
-  async function legacyCopy(): Promise<string> {
-    const source = await row('up-1')
-    await db.insert(capabilityTemplates).values({
-      ...source,
-      id: 'legacy-1',
-      name: 'legacy copy',
-      ownerUserId: 'u-copier',
-      upstreamId: 'up-1',
-      upstreamVersion: source.updatedAt,
-      baseDigest: templateDigest(source),
-      baseSnapshotJson: null,
-      createdAt: NOW + 1_000,
-      updatedAt: NOW + 1_000,
-    })
-    return 'legacy-1'
-  }
+describeEachProvider(
+  'RFC-309 T16 — a copy with no recorded base (everything made before 0175)',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    let row: ReturnType<typeof createProviderTemplateRows>['row']
+    let moveUpstream: ReturnType<typeof createProviderTemplateRows>['moveUpstream']
 
-  test('says so, so the interface can stop offering a merge it cannot predict', async () => {
-    const id = await legacyCopy()
-    expect((await readUpstreamReport(db, await row(id))).baseRecorded).toBe(false)
-  })
-
-  test('every difference is a CONFLICT — never a silent take-upstream', async () => {
-    // The whole point. With local standing in for the missing base, `scripts`
-    // below would read `take-upstream` and the merge would overwrite a script
-    // this copy may well have edited — and there is no record either way.
-    const id = await legacyCopy()
-    await moveUpstream({
-      scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v2' } }),
+    beforeEach(async () => {
+      db = await harness.db
+      await db.insert(capabilityTemplates).values({
+        id: 'up-1',
+        name: 'department review',
+        capability: 'mr-review',
+        scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v1' } }),
+        paramsJson: JSON.stringify({ maxFindings: 20 }),
+        agentBySlotJson: JSON.stringify({ reviewer: 'agent-dept' }),
+        visibility: 'public',
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      ;({ row, moveUpstream } = createProviderTemplateRows(db))
     })
 
-    const report = await readUpstreamReport(db, await row(id))
-    expect(report.fields.find((f) => f.field === 'scripts')?.action).toBe('conflict')
-    // Fields the two sides already agree on are still `unchanged`: refusing to
-    // guess must not turn into flagging everything.
-    expect(report.fields.find((f) => f.field === 'params')?.action).toBe('unchanged')
-  })
+    /** A copy exactly as RFC-304 wrote them: link and digest, no base values. */
+    async function legacyCopy(): Promise<string> {
+      const source = await row('up-1')
+      await db.insert(capabilityTemplates).values({
+        ...source,
+        id: 'legacy-1',
+        name: 'legacy copy',
+        ownerUserId: 'u-copier',
+        upstreamId: 'up-1',
+        upstreamVersion: source.updatedAt,
+        baseDigest: templateDigest(source),
+        baseSnapshotJson: null,
+        createdAt: NOW + 1_000,
+        updatedAt: NOW + 1_000,
+      })
+      return 'legacy-1'
+    }
 
-  test('so its merge applies NOTHING', async () => {
-    const id = await legacyCopy()
-    await moveUpstream({
-      scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v2' } }),
+    test('says so, so the interface can stop offering a merge it cannot predict', async () => {
+      const id = await legacyCopy()
+      expect((await readUpstreamReport(db, await row(id))).baseRecorded).toBe(false)
     })
 
-    const outcome = await mergeFromUpstream(db, await row(id), AUTHOR, NOW + 9_000)
-    expect(outcome).toMatchObject({ ok: true, applied: [], stillConflicted: ['scripts'] })
-  })
+    test('every difference is a CONFLICT — never a silent take-upstream', async () => {
+      // The whole point. With local standing in for the missing base, `scripts`
+      // below would read `take-upstream` and the merge would overwrite a script
+      // this copy may well have edited — and there is no record either way.
+      const id = await legacyCopy()
+      await moveUpstream({
+        scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v2' } }),
+      })
 
-  test('but a copy made TODAY records one', async () => {
-    // The forward guarantee that makes the degradation above temporary rather
-    // than permanent.
-    const copy = await copyTemplate(db, await row('up-1'), COPIER, 'fresh', NOW + 1_000)
-    const stored = await row(copy.id)
-    expect(stored.baseSnapshotJson).not.toBeNull()
-    expect(JSON.parse(stored.baseSnapshotJson ?? 'null')).toEqual(
-      mergeableSnapshot(await row('up-1')) as Record<string, unknown>,
-    )
-  })
-})
+      const report = await readUpstreamReport(db, await row(id))
+      expect(report.fields.find((f) => f.field === 'scripts')?.action).toBe('conflict')
+      // Fields the two sides already agree on are still `unchanged`: refusing to
+      // guess must not turn into flagging everything.
+      expect(report.fields.find((f) => f.field === 'params')?.action).toBe('unchanged')
+    })
+
+    test('so its merge applies NOTHING', async () => {
+      const id = await legacyCopy()
+      await moveUpstream({
+        scriptsJson: JSON.stringify({ collect: { language: 'bash', script: 'echo v2' } }),
+      })
+
+      const outcome = await mergeFromUpstream(db, await row(id), AUTHOR, NOW + 9_000)
+      expect(outcome).toMatchObject({ ok: true, applied: [], stillConflicted: ['scripts'] })
+    })
+
+    test('but a copy made TODAY records one', async () => {
+      // The forward guarantee that makes the degradation above temporary rather
+      // than permanent.
+      const copy = await copyTemplate(db, await row('up-1'), COPIER, 'fresh', NOW + 1_000)
+      const stored = await row(copy.id)
+      expect(stored.baseSnapshotJson).not.toBeNull()
+      expect(JSON.parse(stored.baseSnapshotJson ?? 'null')).toEqual(
+        mergeableSnapshot(await row('up-1')) as Record<string, unknown>,
+      )
+    })
+  },
+)
 
 // The HTTP face. Kept in this file rather than a separate one because the codes
 // below only make sense next to the states above — and the guard that requires
 // every route-thrown error code to be NAMED by a test reads this file for them.
-describe('RFC-309 T16 — the merge endpoint says which thing went wrong', () => {
+describeNativeTemplateCases('RFC-309 T16 — the merge endpoint says which thing went wrong', () => {
   const TOKEN = 'aw-fixture-upstream-token'
   let app: Hono
 

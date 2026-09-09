@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十八批（2026-09-10）**：11个旧测试文件部分接默认双库，保留129原声明/462个完整matcher；62原DB例/236 matcher迁移，67原例/226 matcher继续native。原预算保持，未选完整call逐字保留。新增2个真实Intent skill创建例检查完整文件字节与收据回放；真实业务行为待新SHA托管。
+> 修复W47的RFC144旧源码锁：先验证原SQLite入口通过同步runner把原tx/input交给共享mint程序，再在该程序中查原abandon→insert顺序。其余12个完整call和文件其余内容保持；提取原两例1过1红，候选2 pass/8 expect，5个指定变异均红；没有运行完整Git/TaskEngine夹具。
+> W47 exact1f6738e51 Main34407576737终态36 success/4 failure，13后端11过2红；1143/1143重点执行、另2 sidecar全过，两OS各1962文件恰一次。两个后端失败均为上述原源码锁，修复后仍须新SHA确认；完整Main未绿。
+> 最终14core一次完整backend tsc、221 pass/452 expect功能metadata、13 pass/55 expect canonical及严格lint/format通过。构库605文件/1224→1198调用，无harness567→556、有harness463→474；T19f仅六个原条目数值下降，688条目保持。原生成投影不变，刷新四份provenance并删除W47三项已过期一次性增长标记，原baseline/why/规则保持。
+> 仅两次必要的原SQLite种子观察已关闭；候选业务DB/PG/App/HTTP/进程夹具与本地完整门禁均未运行。六项AC与原full性能缺口继续开放。
+
 > **RFC-359 W12 第四十七批（2026-09-10）**：node-run 两个原入口共用一个 mint 生成器，直接 INSERT 2→1；同步仍立即返回并用原 all，异步仍等待原 thenable 与每个写入。五个完整查询 AST、插入值和八个消费者保持，原后25份受控记录/431事件相同；这是纯端口验证，真实数据库行为待新SHA托管。
 > Intent 两处 SKILL.md 渲染复用现有共享函数，原共享运行体及文件写入逻辑保持；旧四例和新增三例7/96通过。Mint新三例3/110及三个指定负控通过；初版等待检查过早和类型错误均保留原失败，修正后通过，未把辅助脚本失败算产品回归。
 > W46 exact340aee207 Main34402411359终态38 success/2 failure，13后端全过；63选定文件1126/1126实际通过，含本批前36个原功能例新增108次双库执行。另2 sidecar与原18 hook所属例均过，两OS各1960文件恰一次；完整Main未绿。

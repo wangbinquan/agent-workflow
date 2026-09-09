@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   employeeCases,
   employeeDefinitionRevisions,
@@ -274,7 +276,7 @@ function versionedOrderedDispatchDesignPackage(revision: number): EmployeeTypePa
 }
 
 function createFixtureModule(input: {
-  db: ReturnType<typeof createInMemoryDb>
+  db: ProviderNeutralDatabase
   appHome: string
   typePackage: EmployeeTypePackageRegistration
   platformTools?: DigitalEmployeePlatformToolCatalogParticipant
@@ -514,10 +516,7 @@ function orderedDispatchPlatformToolCatalog(): DigitalEmployeePlatformToolCatalo
   }
 }
 
-async function seedPublishedEmployee(input: {
-  db: ReturnType<typeof createInMemoryDb>
-  appHome: string
-}) {
+async function seedPublishedEmployee(input: { db: ProviderNeutralDatabase; appHome: string }) {
   const module = createFixtureModule({
     ...input,
     typePackage: versionedDesignPackage(1),
@@ -764,11 +763,13 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       expect.objectContaining({ reasonCode: 'adapter-binding-missing' }),
     )
   })
+})
 
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
   test('a current employee auto-reconciles a contract-required Adapter published later', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc323-current-adapter-reconcile-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const typeRef = { typeId: 'design', revision: 2 }
       const typePackage = versionedAdapterDesignPackage({
         revision: 2,
@@ -856,7 +857,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test('rebuilds job route metadata from the upgraded classifier revision', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-ordered-dispatch-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const platformTools = orderedDispatchPlatformToolCatalog()
       const sourceTypeRef = { typeId: 'design', revision: 1 }
       const source = createFixtureModule({
@@ -953,7 +954,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test('reconciles nested collaboration targets after every compatible employee upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-collaboration-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       let descendingId = 100
       const v1 = createFixtureModule({
         db,
@@ -1110,10 +1111,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const parentRevisions = db
-        .select()
-        .from(employeeDefinitionRevisions)
-        .all()
+      const parentRevisions = (await db.select().from(employeeDefinitionRevisions).all())
         .filter((revision) => revision.employeeId === parent.id)
         .map((revision) => ({
           revision: revision.revision,
@@ -1130,10 +1128,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           targetEmployeeRef: { id: target.id, revision: 2 },
         },
       ])
-      const rootRevisions = db
-        .select()
-        .from(employeeDefinitionRevisions)
-        .all()
+      const rootRevisions = (await db.select().from(employeeDefinitionRevisions).all())
         .filter((revision) => revision.employeeId === root.id)
         .map((revision) => ({
           revision: revision.revision,
@@ -1151,7 +1146,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         },
       ])
 
-      const targetV2Revision = db
+      const targetV2Revision = (await db
         .select()
         .from(employeeDefinitionRevisions)
         .where(
@@ -1160,8 +1155,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
             eq(employeeDefinitionRevisions.revision, 2),
           ),
         )
-        .get()!
-      db.insert(employeeDefinitionRevisions)
+        .get())!
+      await db
+        .insert(employeeDefinitionRevisions)
         .values({
           ...targetV2Revision,
           revision: 3,
@@ -1169,7 +1165,8 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           createdBy: null,
         })
         .run()
-      db.update(employeeDefinitions)
+      await db
+        .update(employeeDefinitions)
         .set({ currentRevision: 3, updatedAt: targetV2Revision.createdAt + 1 })
         .where(eq(employeeDefinitions.id, target.id))
         .run()
@@ -1198,7 +1195,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         },
       })
 
-      const revisionCount = db.select().from(employeeDefinitionRevisions).all().length
+      const revisionCount = (await db.select().from(employeeDefinitionRevisions).all()).length
       const replayed = createFixtureModule({
         db,
         appHome,
@@ -1208,12 +1205,14 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       })
       expect((await replayed.queries.getEmployee(parent.id)).revision).toBe(4)
       expect((await replayed.queries.getEmployee(root.id)).revision).toBe(4)
-      expect(db.select().from(employeeDefinitionRevisions).all()).toHaveLength(revisionCount)
+      expect(await db.select().from(employeeDefinitionRevisions).all()).toHaveLength(revisionCount)
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }
   })
+})
 
+describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test('automatically re-plans a legacy invocation when only its target can upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-invocation-'))
     try {
@@ -1646,11 +1645,13 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       rmSync(appHome, { recursive: true, force: true })
     }
   })
+})
 
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
   test('restarts upgrade custom tool -> job -> stable employee exactly once', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const original = await seedPublishedEmployee({ db, appHome })
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const targetPackage = versionedDesignPackage(2, (descriptor) => {
@@ -1679,11 +1680,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         workScope: { kind: 'global' },
       })
       expect(
-        db
-          .select()
-          .from(employeeDefinitions)
-          .all()
-          .find((row) => row.id === original.id),
+        (await db.select().from(employeeDefinitions).all()).find((row) => row.id === original.id),
       ).toMatchObject({
         ownerUserId: 'owner-1',
         visibility: 'private',
@@ -1697,10 +1694,10 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       ).toHaveLength(1)
 
       const countsAfterUpgrade = {
-        tools: db.select().from(employeeToolRegistrations).all().length,
-        jobs: db.select().from(employeeJobTemplates).all().length,
-        employees: db.select().from(employeeDefinitions).all().length,
-        revisions: db.select().from(employeeDefinitionRevisions).all().length,
+        tools: (await db.select().from(employeeToolRegistrations).all()).length,
+        jobs: (await db.select().from(employeeJobTemplates).all()).length,
+        employees: (await db.select().from(employeeDefinitions).all()).length,
+        revisions: (await db.select().from(employeeDefinitionRevisions).all()).length,
       }
       const replayedModule = createFixtureModule({
         db,
@@ -1710,16 +1707,13 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       })
       expect((await replayedModule.queries.listLaunchableEmployees())[0]?.revision).toBe(2)
       expect({
-        tools: db.select().from(employeeToolRegistrations).all().length,
-        jobs: db.select().from(employeeJobTemplates).all().length,
-        employees: db.select().from(employeeDefinitions).all().length,
-        revisions: db.select().from(employeeDefinitionRevisions).all().length,
+        tools: (await db.select().from(employeeToolRegistrations).all()).length,
+        jobs: (await db.select().from(employeeJobTemplates).all()).length,
+        employees: (await db.select().from(employeeDefinitions).all()).length,
+        revisions: (await db.select().from(employeeDefinitionRevisions).all()).length,
       }).toEqual(countsAfterUpgrade)
 
-      const frozenRevisions = db
-        .select()
-        .from(employeeDefinitionRevisions)
-        .all()
+      const frozenRevisions = (await db.select().from(employeeDefinitionRevisions).all())
         .filter((row) => row.employeeId === original.id)
         .map((row) => ({
           revision: row.revision,
@@ -1733,7 +1727,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       rmSync(appHome, { recursive: true, force: true })
     }
   })
+})
 
+describe('RFC-310 Type Package automatic compatible upgrades', () => {
   for (const source of [
     { ownerUserId: 'owner-1', visibility: 'private' as const },
     { ownerUserId: 'owner-1', visibility: 'public' as const },
@@ -1918,11 +1914,13 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       rmSync(appHome, { recursive: true, force: true })
     }
   })
+})
 
+describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harness) => {
   test('a target-rejected WorkContract successor stays pinned without partial writes', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-blocked-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const original = await seedPublishedEmployee({ db, appHome })
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const incompatiblePackage = versionedDesignPackage(2, (descriptor) => {
@@ -1958,14 +1956,14 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           }),
         ]),
       )
-      expect(db.select().from(employeeDefinitions).all()).toEqual([
+      expect(await db.select().from(employeeDefinitions).all()).toEqual([
         expect.objectContaining({
           id: original.id,
           typeRevision: 1,
           currentRevision: 1,
         }),
       ])
-      expect(db.select().from(employeeDefinitionRevisions).all()).toHaveLength(1)
+      expect(await db.select().from(employeeDefinitionRevisions).all()).toHaveLength(1)
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }
@@ -1974,7 +1972,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test('changed WorkContract auto-upgrades after its target successor validates', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-revalidated-'))
     try {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = harness.db
       const original = await seedPublishedEmployee({ db, appHome })
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const compatiblePackage = versionedDesignPackage(2, (descriptor) => {
@@ -2009,7 +2007,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const migratedTool = db
+      const migratedTool = await db
         .select()
         .from(employeeToolRegistrations)
         .where(eq(employeeToolRegistrations.typeRevision, 2))
@@ -2026,7 +2024,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       rmSync(appHome, { recursive: true, force: true })
     }
   })
+})
 
+describe('RFC-310 Type Package automatic compatible upgrades', () => {
   test('a target scope codec rejection is diagnostic-only and never asks the user to upgrade', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-scope-blocked-'))
     try {

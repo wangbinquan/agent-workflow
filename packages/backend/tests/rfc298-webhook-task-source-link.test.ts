@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-298 — task detail derives a minimal webhook source link from the task's
 // own frozen context. Raw context remains private, historical flat rows are
 // supported, corrupt rows fail closed, and inherited child context works
@@ -15,10 +17,11 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 type TestDb = ReturnType<typeof createInMemoryDb>
 
-function seedWorkflow(db: TestDb): string {
+function seedWorkflowWrite(db: ProviderNeutralDatabase) {
   const id = ulid()
   const now = Date.now()
-  db.insert(workflows)
+  const write = db
+    .insert(workflows)
     .values({
       id,
       name: 'RFC-298 fixture workflow',
@@ -27,11 +30,15 @@ function seedWorkflow(db: TestDb): string {
       updatedAt: now,
     })
     .run()
-  return id
+  return { id, write }
 }
 
-function seedTask(
-  db: TestDb,
+function seedWorkflow(db: TestDb): string {
+  return seedWorkflowWrite(db).id
+}
+
+function seedTaskWrite(
+  db: ProviderNeutralDatabase,
   workflowId: string,
   options: {
     triggerContextJson?: string | null
@@ -39,10 +46,12 @@ function seedTask(
     webhookTriggerId?: string
     webhookFireId?: string
   } = {},
-): string {
+  lineage?: (id: string) => { executionLineageId: string; lineageSlotPathJson: string },
+) {
   const id = ulid()
   const now = Date.now()
-  db.insert(tasks)
+  const write = db
+    .insert(tasks)
     .values({
       id,
       name: `RFC-298 task ${id}`,
@@ -60,22 +69,72 @@ function seedTask(
       parentTaskId: options.parentTaskId ?? null,
       webhookTriggerId: options.webhookTriggerId ?? null,
       webhookFireId: options.webhookFireId ?? null,
+      ...lineage?.(id),
     })
     .run()
-  return id
+  return { id, write }
+}
+
+function seedTask(
+  db: TestDb,
+  workflowId: string,
+  options: Parameters<typeof seedTaskWrite>[2] = {},
+): string {
+  return seedTaskWrite(db, workflowId, options).id
+}
+
+type FixtureLineage = {
+  executionLineageId: string
+  frames: { stableNodeKey: string; frozenOccurrenceKey: string; workflowRevision: null }[]
+}
+
+// Match the original SQLite seed's observed root and inherited child frames.
+function createProviderSeeds() {
+  const lineageByTaskId = new Map<string, FixtureLineage>()
+  return {
+    async seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
+      const { id, write } = seedWorkflowWrite(db)
+      await write
+      return id
+    },
+    async seedTask(
+      db: ProviderNeutralDatabase,
+      workflowId: string,
+      options: Parameters<typeof seedTaskWrite>[2] = {},
+    ): Promise<string> {
+      const { id, write } = seedTaskWrite(db, workflowId, options, (taskId) => {
+        const parent =
+          options.parentTaskId === undefined ? undefined : lineageByTaskId.get(options.parentTaskId)
+        const frames = [
+          ...(parent?.frames ?? []),
+          {
+            stableNodeKey: parent === undefined ? 'task-root' : 'child-task',
+            frozenOccurrenceKey: taskId,
+            workflowRevision: null,
+          },
+        ]
+        const executionLineageId = parent?.executionLineageId ?? taskId
+        lineageByTaskId.set(taskId, { executionLineageId, frames })
+        return { executionLineageId, lineageSlotPathJson: JSON.stringify(frames) }
+      })
+      await write
+      return id
+    },
+  }
 }
 
 function canonical(fields: TriggerContext['trigger']['webhook']): string {
   return JSON.stringify({ trigger: { webhook: fields } })
 }
 
-describe('RFC-298 getTask webhook source projection', () => {
+describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
   test('canonical note context projects the comment link and no raw fields', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflowId = seedWorkflow(db)
+    const db = harness.db
+    const { seedWorkflow, seedTask } = createProviderSeeds()
+    const workflowId = await seedWorkflow(db)
     const commentUrl =
       'https://gitlab.example/platform/api/-/merge_requests/42#note_12345678901234567890'
-    const taskId = seedTask(db, workflowId, {
+    const taskId = await seedTask(db, workflowId, {
       webhookTriggerId: 'trigger-1',
       webhookFireId: 'fire-1',
       triggerContextJson: canonical({
@@ -100,10 +159,11 @@ describe('RFC-298 getTask webhook source projection', () => {
   })
 
   test('historical flat context follows the same fallback and reports the selected target kind', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflowId = seedWorkflow(db)
+    const db = harness.db
+    const { seedWorkflow, seedTask } = createProviderSeeds()
+    const workflowId = await seedWorkflow(db)
     const mrUrl = 'https://github.example/acme/widgets/pull/7'
-    const taskId = seedTask(db, workflowId, {
+    const taskId = await seedTask(db, workflowId, {
       triggerContextJson: JSON.stringify({
         event_type: 'note',
         provider: 'github',
@@ -120,11 +180,12 @@ describe('RFC-298 getTask webhook source projection', () => {
   })
 
   test('a child with inherited context projects its source without webhook attribution rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflowId = seedWorkflow(db)
-    const parentTaskId = seedTask(db, workflowId)
+    const db = harness.db
+    const { seedWorkflow, seedTask } = createProviderSeeds()
+    const workflowId = await seedWorkflow(db)
+    const parentTaskId = await seedTask(db, workflowId)
     const pipelineUrl = 'https://github.example/acme/widgets/actions/runs/101'
-    const childTaskId = seedTask(db, workflowId, {
+    const childTaskId = await seedTask(db, workflowId, {
       parentTaskId,
       triggerContextJson: canonical({
         event_type: 'pipeline_failed',
@@ -137,15 +198,13 @@ describe('RFC-298 getTask webhook source projection', () => {
     const detail = await getTask(db, childTaskId)
     expect(detail?.parentTaskId).toBe(parentTaskId)
     expect(detail?.webhookSourceLink).toEqual({ kind: 'pipeline', url: pipelineUrl })
-    const stored = db
-      .select()
-      .from(tasks)
-      .all()
-      .find((row) => row.id === childTaskId)
+    const stored = (await db.select().from(tasks).all()).find((row) => row.id === childTaskId)
     expect(stored?.webhookTriggerId).toBeNull()
     expect(stored?.webhookFireId).toBeNull()
   })
+})
 
+describe('RFC-298 getTask webhook source projection', () => {
   test('non-webhook, corrupt and all-unsafe contexts fail closed to null', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const workflowId = seedWorkflow(db)
@@ -171,11 +230,14 @@ describe('RFC-298 getTask webhook source projection', () => {
       expect((await getTask(db, taskId))?.webhookSourceLink).toBeNull()
     }
   })
+})
 
+describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
   test('list summaries remain narrow and never gain the detail-only link', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflowId = seedWorkflow(db)
-    const taskId = seedTask(db, workflowId, {
+    const db = harness.db
+    const { seedWorkflow, seedTask } = createProviderSeeds()
+    const workflowId = await seedWorkflow(db)
+    const taskId = await seedTask(db, workflowId, {
       triggerContextJson: canonical({
         event_type: 'mr_opened',
         mr_url: 'https://gitlab.example/group/repo/-/merge_requests/1',

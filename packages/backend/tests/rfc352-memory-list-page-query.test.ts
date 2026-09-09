@@ -13,7 +13,9 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, memories } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
@@ -29,7 +31,7 @@ function actorOfRole(role: 'admin' | 'user', id = `u_${role}`): Actor {
   })
 }
 
-function catalogOf(db: DbClient): MemoryCatalogOperations {
+function catalogOf(db: ProviderNeutralDatabase): MemoryCatalogOperations {
   return composeSqliteMemoryCatalogOperations({
     db,
     contexts: composeIdentityAccess(db).contexts,
@@ -37,7 +39,7 @@ function catalogOf(db: DbClient): MemoryCatalogOperations {
   })
 }
 
-function scopeAuthorityOf(db: DbClient, actor: Actor) {
+function scopeAuthorityOf(db: ProviderNeutralDatabase, actor: Actor) {
   const identityAccess = composeIdentityAccess(db)
   const context = identityAccess.contexts.fromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },
@@ -47,7 +49,7 @@ function scopeAuthorityOf(db: DbClient, actor: Actor) {
 }
 
 /** 造 n 条 global scope 的 approved 记忆；createdAt 递减，且**故意让部分同毫秒**。 */
-async function seedGlobal(db: DbClient, n: number): Promise<void> {
+async function seedGlobal(db: ProviderNeutralDatabase, n: number): Promise<void> {
   const base = 1_700_000_000_000
   for (let i = 0; i < n; i += 1) {
     await db.insert(memories).values({
@@ -66,9 +68,9 @@ async function seedGlobal(db: DbClient, n: number): Promise<void> {
   }
 }
 
-describe('RFC-352 T8 — 分页与全量等价', () => {
+describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
   test('逐页拼起来 === 全量，顺序一致、不重不漏', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedGlobal(db, 37)
     const catalog = catalogOf(db)
     const authority = scopeAuthorityOf(db, actorOfRole('admin'))
@@ -94,7 +96,7 @@ describe('RFC-352 T8 — 分页与全量等价', () => {
   })
 
   test('分页项的字段集与全量项逐字相同（游标用的 createdAt 不上 wire）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedGlobal(db, 5)
     const catalog = catalogOf(db)
     const authority = scopeAuthorityOf(db, actorOfRole('admin'))
@@ -117,7 +119,7 @@ describe('RFC-352 T8 — 分页与全量等价', () => {
   })
 
   test('标签过滤在分页路径上与全量一致', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedGlobal(db, 20)
     const catalog = catalogOf(db)
     const authority = scopeAuthorityOf(db, actorOfRole('admin'))
@@ -141,7 +143,9 @@ describe('RFC-352 T8 — 分页与全量等价', () => {
     expect(collected).toEqual(full.map((m) => m.id))
     expect(collected.length).toBeGreaterThan(0)
   })
+})
 
+describe('RFC-352 T8 — 分页与全量等价', () => {
   test('候选收窄（RFC-285 Q4）在分页路径上照样生效', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await db.insert(memories).values({
@@ -214,9 +218,11 @@ describe('RFC-352 T8 — 分页与全量等价', () => {
     expect(page.items.length).toBe(6)
     expect(page.items.every((m) => m.scopeType === 'global')).toBe(true)
   })
+})
 
+describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
   test('坏游标显式报错，不静默从头开始', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await seedGlobal(db, 3)
     const catalog = catalogOf(db)
     const authority = scopeAuthorityOf(db, actorOfRole('admin'))

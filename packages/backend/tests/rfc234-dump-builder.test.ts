@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   agents,
   mcps,
@@ -80,15 +82,51 @@ async function seedAgent(over: Partial<typeof agents.$inferInsert> = {}): Promis
   return id
 }
 
-beforeEach(() => {
-  db = createInMemoryDb(MIGRATIONS)
-  appHome = mkdtempSync(join(tmpdir(), 'aw-intent-dump-'))
-})
-afterEach(() => {
-  rmSync(appHome, { recursive: true, force: true })
-})
+function createProviderDumpSeeds(db: ProviderNeutralDatabase) {
+  async function seedUser(id: string): Promise<void> {
+    await db.insert(users).values({
+      id,
+      username: `u-${id.slice(5, 12)}`,
+      displayName: `User ${id.slice(5, 9)}`,
+      role: 'user',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof users.$inferInsert)
+  }
 
-describe('buildIntentDump', () => {
+  async function seedAgent(over: Partial<typeof agents.$inferInsert> = {}): Promise<string> {
+    const id = ulid()
+    await db.insert(agents).values({
+      id,
+      name: `agent-${id.slice(-6).toLowerCase()}`,
+      description: 'an agent',
+      outputs: JSON.stringify(['result']),
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      ...over,
+    } as typeof agents.$inferInsert)
+    return id
+  }
+  return { seedUser, seedAgent }
+}
+
+function describeNativeDumpCases(name: string, cases: () => void) {
+  describe(name, () => {
+    beforeEach(() => {
+      db = createInMemoryDb(MIGRATIONS)
+      appHome = mkdtempSync(join(tmpdir(), 'aw-intent-dump-'))
+    })
+    afterEach(() => {
+      rmSync(appHome, { recursive: true, force: true })
+    })
+    cases()
+  })
+}
+
+describeNativeDumpCases('buildIntentDump', () => {
   test('inventory is visible-only with handles; truncation is explicit', async () => {
     await seedUser(OWNER)
     await seedUser(STRANGER)
@@ -326,6 +364,22 @@ describe('buildIntentDump', () => {
     expect(skillMd?.content).toContain('review-checklist')
     expect(skillMd?.content).not.toContain(SECRET)
   })
+})
+
+describeEachProvider('buildIntentDump', (harness) => {
+  let db: ProviderNeutralDatabase
+  let appHome: string
+  let seedUser: ReturnType<typeof createProviderDumpSeeds>['seedUser']
+  let seedAgent: ReturnType<typeof createProviderDumpSeeds>['seedAgent']
+
+  beforeEach(() => {
+    db = harness.db
+    appHome = mkdtempSync(join(tmpdir(), 'aw-intent-dump-'))
+    ;({ seedUser, seedAgent } = createProviderDumpSeeds(db))
+  })
+  afterEach(() => {
+    rmSync(appHome, { recursive: true, force: true })
+  })
 
   test('handles stay stable across epochs via priorManifest', async () => {
     await seedUser(OWNER)
@@ -348,7 +402,9 @@ describe('buildIntentDump', () => {
     })
     expect(manifestEntryFor(second.manifest, 'agent', agentId)?.handle).toBe(firstHandle)
   })
+})
 
+describeNativeDumpCases('buildIntentDump', () => {
   // RFC-291 面 C 起，不可见的挂载根**不再抛错**：整轮生成继续，该根被跳过并
   // 记入 unavailableMounts（用户手里那条挂载仍然存在、仍可取消）。原用例的核心
   // 意图——「不泄漏它的名字」——原样保留在下面，只是断言从「抛错」改成「跳过且
@@ -410,7 +466,7 @@ describe('buildIntentDump', () => {
 
 // RFC-253 T28 — script-node env is the workflow definition's closed secret
 // carrier: values never enter a dump, keys and every other field ride verbatim.
-describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
+describeNativeDumpCases('RFC-253 T28 — script-node env masked in workflow dumps', () => {
   test('env values are redacted, keys and script body survive', async () => {
     await seedUser(OWNER)
     const wfId = ulid()
@@ -515,7 +571,21 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
 })
 
 // RFC-348 D5 / D5c — branch ports are dumped; inventory rows carry port names.
-describe('RFC-348 — dump additions', () => {
+describeEachProvider('RFC-348 — dump additions', (harness) => {
+  let db: ProviderNeutralDatabase
+  let appHome: string
+  let seedUser: ReturnType<typeof createProviderDumpSeeds>['seedUser']
+  let seedAgent: ReturnType<typeof createProviderDumpSeeds>['seedAgent']
+
+  beforeEach(() => {
+    db = harness.db
+    appHome = mkdtempSync(join(tmpdir(), 'aw-intent-dump-'))
+    ;({ seedUser, seedAgent } = createProviderDumpSeeds(db))
+  })
+  afterEach(() => {
+    rmSync(appHome, { recursive: true, force: true })
+  })
+
   test('mounted agent dumps branchPorts; inventory rows list in/out ports; runtimes.md exists', async () => {
     await seedUser(OWNER)
     const id = await seedAgent({
@@ -544,7 +614,21 @@ describe('RFC-348 — dump additions', () => {
 
 // RFC-348 AC-13 (impl-gate r2 #2) — the port projection is ONE narrow call for
 // exactly the agents that survived the cap; an agent without ports still renders.
-describe('RFC-348 — agent port projection call boundary', () => {
+describeEachProvider('RFC-348 — agent port projection call boundary', (harness) => {
+  let db: ProviderNeutralDatabase
+  let appHome: string
+  let seedUser: ReturnType<typeof createProviderDumpSeeds>['seedUser']
+  let seedAgent: ReturnType<typeof createProviderDumpSeeds>['seedAgent']
+
+  beforeEach(() => {
+    db = harness.db
+    appHome = mkdtempSync(join(tmpdir(), 'aw-intent-dump-'))
+    ;({ seedUser, seedAgent } = createProviderDumpSeeds(db))
+  })
+  afterEach(() => {
+    rmSync(appHome, { recursive: true, force: true })
+  })
+
   test('loadAgentPorts is called once with only the kept ids; empty ports render as []', async () => {
     await seedUser(OWNER)
     const a = await seedAgent({

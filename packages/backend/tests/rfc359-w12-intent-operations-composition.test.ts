@@ -18,7 +18,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
+import {
+  canonicalIntentJson,
+  parseIntentChangeset,
+  type IntentChangeset,
+  type IntentSkillPayload,
+} from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -31,6 +36,7 @@ import {
   intentTurns,
   intentWorkingSetChanges,
   plugins,
+  skills,
   users,
 } from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
@@ -193,13 +199,16 @@ async function seedSession(harness: ProviderHarness): Promise<string> {
   return id
 }
 
-async function seedDraft(harness: ProviderHarness): Promise<IntentApplyInput> {
+async function seedDraft(
+  harness: ProviderHarness,
+  ops?: IntentChangeset['ops'],
+): Promise<IntentApplyInput> {
   const sessionId = await seedSession(harness)
   const draftId = ulid()
   const parsed = parseIntentChangeset(
     JSON.stringify({
       $schema_version: 1,
-      ops: [
+      ops: ops ?? [
         {
           opId: 'op-1',
           action: 'create',
@@ -322,6 +331,53 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })
   })
+
+  // W48 exercises W47's shared renderer through both real Intent resource writers.
+  // Expected documents are fixed bytes, independent of the production renderer.
+  async function expectCreatedSkillDocument(payload: IntentSkillPayload, document: string) {
+    const composition = composeFor(harness, appHome)
+    const command = await seedDraft(harness, [
+      {
+        opId: 'op-1',
+        action: 'create',
+        resourceType: 'skill',
+        tempRef: '$new:skill',
+        payload,
+      },
+    ])
+    const request = { actor, authority: composition.authority, command }
+    const receipt = await composition.apply.apply(request)
+    expect(receipt.commitSeq).toBe(1)
+    expect(receipt.applied).toMatchObject([
+      { action: 'create', resourceType: 'skill', name: payload.name, fromCopy: false },
+    ])
+    const skillId = receipt.applied[0]!.resourceId
+    const [created] = await harness.db.select().from(skills).where(eq(skills.id, skillId))
+    expect(created).toMatchObject({
+      name: payload.name,
+      description: payload.description,
+      reservationState: 'ready',
+    })
+    const files = join(appHome, 'skills', skillId, 'files')
+    expect(readFileSync(join(files, 'SKILL.md'))).toEqual(Buffer.from(document, 'utf8'))
+    for (const file of payload.files) {
+      expect(readFileSync(join(files, file.path))).toEqual(Buffer.from(file.content, 'utf8'))
+    }
+    const [journal] = await harness.db
+      .select()
+      .from(intentApplyJournal)
+      .where(eq(intentApplyJournal.id, receipt.journalId))
+    expect(journal).toMatchObject({
+      state: 'committed',
+      error: null,
+      receiptJson: JSON.stringify(receipt),
+    })
+    expect(await composition.apply.apply(request)).toEqual(receipt)
+    expect(readFileSync(join(files, 'SKILL.md'))).toEqual(Buffer.from(document, 'utf8'))
+    expect(
+      await harness.db.select({ id: skills.id }).from(skills).where(eq(skills.name, payload.name)),
+    ).toEqual([{ id: skillId }])
+  }
 
   test('apply creates the resource and receipt once; snapshots track the exact live apply', async () => {
     const reached = signal()
@@ -532,5 +588,30 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
       .where(eq(intentApplyJournal.id, journalId))
     expect(settled).toMatchObject({ state: 'committed', error: null })
     expect(readFileSync(join(generationDir, 'index.js'), 'utf8')).toBe('export default {}')
+  })
+
+  test('skill create preserves the complete document when extra frontmatter is absent', async () => {
+    await expectCreatedSkillDocument(
+      {
+        name: 'composition-skill-basic',
+        description: 'plain description',
+        bodyMd: '# Basic\n\nExact body.',
+        files: [{ path: 'ref/extra.md', content: 'supporting text\n' }],
+      },
+      '---\nname: composition-skill-basic\ndescription: plain description\n---\n\n# Basic\n\nExact body.\n',
+    )
+  })
+
+  test('skill create preserves extra frontmatter and complete UTF-8 file bytes', async () => {
+    await expectCreatedSkillDocument(
+      {
+        name: 'composition-skill-extra',
+        description: '额外说明',
+        frontmatterExtra: { license: 'MIT', tags: ['one', 'two'] },
+        bodyMd: '# 中文技能\n\n保留内容 🚀',
+        files: [{ path: 'ref/extra.md', content: '辅助文档\n第二行 🚀\n' }],
+      },
+      '---\nname: composition-skill-extra\ndescription: 额外说明\nlicense: MIT\ntags:\n  - one\n  - two\n---\n\n# 中文技能\n\n保留内容 🚀\n',
+    )
   })
 })

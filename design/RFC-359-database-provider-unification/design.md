@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W48 的11个旧测试文件按原callback划分默认双库与保留native部分，原声明顺序、完整matcher
+  和预算保持；fixture绑定当前harness数据库，保留原种子值及必要的父子任务谱系。
+  仅给真实异步数据库终端补await，native工厂/清理hook仍只属于原保留用例。
+  原W12 Intent装配套件另加两条实际skill创建回归，固定完整SKILL.md与辅助文件字节，
+  同时验证原收据回放只对应一条技能记录。新用例不修改生产writer或共享renderer。
+  RFC144源码锁沿SQLite入口到共享mint程序检查原tx/input、同步runner及abandon→insert顺序。
+
 - W47 的两个 node-run mint 工厂驱动同一个 `nodeRunMintProgram`，继续由调用方持有原事务。
   同步工厂使用原 `query.all()` 与同步 runner，立即返回 id 或抛出原错误；异步工厂保留原
   query thenable，并等待 container、task、prior、abandon、insert 各终端完成。

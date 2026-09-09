@@ -28,6 +28,8 @@ import { ulid } from 'ulid'
 import type { CodeHostEvent } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   legacyCodeWorkItemLinks,
   tasks,
@@ -63,7 +65,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BOX = createSecretBoxFromKey(Buffer.alloc(32, 7))
 const NOW = 1_755_500_000_000
 
-function freshDeps(db: DbClient) {
+function freshDeps(db: ProviderNeutralDatabase) {
   let seq = 0
   return {
     cutoverStore: createCutoverStore(db),
@@ -127,28 +129,30 @@ describe('RFC-310 PR-9 — cutover state machine (domain)', () => {
   })
 })
 
-describe('RFC-310 PR-9 — cutover commands persist through the sqlite store', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => db.$client.close())
+describeEachProvider(
+  'RFC-310 PR-9 — cutover commands persist through the sqlite store',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
 
-  test('freeze → flip survive a re-read; rollback after flip is refused durably', async () => {
-    const deps = freshDeps(db)
-    expect((await runCutoverCommand(deps, 'flip')).ok).toBe(false)
-    expect((await runCutoverCommand(deps, 'freeze')).ok).toBe(true)
-    // 重读面（新 store 实例=重启模拟）：frozen 落盘。
-    expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('frozen')
-    const flipped = await runCutoverCommand(freshDeps(db), 'flip')
-    expect(flipped.ok).toBe(true)
-    if (flipped.ok) expect(flipped.state.generation).not.toBeNull()
-    const refused = await runCutoverCommand(freshDeps(db), 'rollback')
-    expect(refused.ok).toBe(false)
-    if (!refused.ok) expect(refused.code).toBe('cutover-rollback-after-flip')
-    expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('live')
-  })
-})
+    test('freeze → flip survive a re-read; rollback after flip is refused durably', async () => {
+      const deps = freshDeps(db)
+      expect((await runCutoverCommand(deps, 'flip')).ok).toBe(false)
+      expect((await runCutoverCommand(deps, 'freeze')).ok).toBe(true)
+      // 重读面（新 store 实例=重启模拟）：frozen 落盘。
+      expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('frozen')
+      const flipped = await runCutoverCommand(freshDeps(db), 'flip')
+      expect(flipped.ok).toBe(true)
+      if (flipped.ok) expect(flipped.state.generation).not.toBeNull()
+      const refused = await runCutoverCommand(freshDeps(db), 'rollback')
+      expect(refused.ok).toBe(false)
+      if (!refused.ok) expect(refused.code).toBe('cutover-rollback-after-flip')
+      expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('live')
+    })
+  },
+)
 
 // ---------------------------------------------------------------------------
 // legacy 双入口 gate
@@ -304,219 +308,221 @@ function mrEffectsObserving(
   }
 }
 
-describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', () => {
-  let db: DbClient
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => db.$client.close())
+describeEachProvider(
+  'RFC-310 PR-9 — adoptActiveMr builds missions from external truth',
+  (harness) => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
 
-  const input = {
-    repositoryId: 'repo-1',
-    mrIid: '42',
-    codeHostEndpointRef: 'gitlab',
-    stableProjectRef: 'team/app',
-    employee: { id: 'emp-1', revision: 3 },
-    policy: null,
-    legacyWorkItemId: 'wi-9',
-    legacyRoundId: null,
-    actorUserId: null,
-  }
-
-  test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
-    const store = createMissionPersistence(db)
-    const deps = {
-      store: createMissionPersistence(db),
-      ports: { mrEffects: mrEffectsObserving('opened') },
-      ...freshDeps(db),
-    }
-    const result = await adoptActiveMr(deps, input)
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.terminal).toBeNull()
-
-    const mission = (await store.getMission(result.missionId))!
-    expect(mission.status).toBe('watching')
-    expect(mission.deliveryKind).toBe('adopt-merge-request')
-    expect(mission.adoptedMrRef).toBe('42')
-    expect(mission.deliveryTargetRef).toBe('main')
-    expect(mission.employeeRevision).toBe(3)
-    expect(mission.mrClaimId).not.toBeNull()
-    const claim = await store.findMrClaim({
+    const input = {
+      repositoryId: 'repo-1',
+      mrIid: '42',
       codeHostEndpointRef: 'gitlab',
       stableProjectRef: 'team/app',
-      mrIid: '42',
-    })
-    expect(claim?.missionId).toBe(result.missionId)
-
-    const links = await db
-      .select()
-      .from(legacyCodeWorkItemLinks)
-      .where(eq(legacyCodeWorkItemLinks.missionId, result.missionId))
-    expect(links).toHaveLength(1)
-    expect(links[0]!.legacyWorkItemId).toBe('wi-9')
-    expect(JSON.parse(links[0]!.cutoverReceiptJson)).toMatchObject({
-      observedState: 'opened',
-      targetBranch: 'main',
-    })
-  })
-
-  test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
-    const store = createMissionPersistence(db)
-    const deps = {
-      store: createMissionPersistence(db),
-      ports: { mrEffects: mrEffectsObserving('merged') },
-      ...freshDeps(db),
+      employee: { id: 'emp-1', revision: 3 },
+      policy: null,
+      legacyWorkItemId: 'wi-9',
+      legacyRoundId: null,
+      actorUserId: null,
     }
-    const result = await adoptActiveMr(deps, input)
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.terminal).toBe('merged')
-    const mission = (await store.getMission(result.missionId))!
-    expect(mission.status).toBe('merged')
-    expect(mission.terminalAt).toBe(NOW)
-    expect(mission.mrClaimId).toBeNull()
-    expect(mission.currentActionRunId).toBeNull()
-    expect(
-      await store.findMrClaim({
+
+    test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
+      const store = createMissionPersistence(db)
+      const deps = {
+        store: createMissionPersistence(db),
+        ports: { mrEffects: mrEffectsObserving('opened') },
+        ...freshDeps(db),
+      }
+      const result = await adoptActiveMr(deps, input)
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.terminal).toBeNull()
+
+      const mission = (await store.getMission(result.missionId))!
+      expect(mission.status).toBe('watching')
+      expect(mission.deliveryKind).toBe('adopt-merge-request')
+      expect(mission.adoptedMrRef).toBe('42')
+      expect(mission.deliveryTargetRef).toBe('main')
+      expect(mission.employeeRevision).toBe(3)
+      expect(mission.mrClaimId).not.toBeNull()
+      const claim = await store.findMrClaim({
         codeHostEndpointRef: 'gitlab',
         stableProjectRef: 'team/app',
         mrIid: '42',
-      }),
-    ).toBeNull()
-  })
+      })
+      expect(claim?.missionId).toBe(result.missionId)
 
-  test('a closed MR maps to closed-unmerged', async () => {
-    const store = createMissionPersistence(db)
-    const deps = {
-      store: createMissionPersistence(db),
-      ports: { mrEffects: mrEffectsObserving('closed') },
-      ...freshDeps(db),
-    }
-    const result = await adoptActiveMr(deps, input)
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.terminal).toBe('closed-unmerged')
-      expect((await store.getMission(result.missionId))!.status).toBe('closed-unmerged')
-    }
-  })
-
-  test('re-running the same adopt is idempotent (runbook is re-runnable)', async () => {
-    const deps = {
-      store: createMissionPersistence(db),
-      ports: { mrEffects: mrEffectsObserving('opened') },
-      ...freshDeps(db),
-    }
-    const first = await adoptActiveMr(deps, input)
-    const second = await adoptActiveMr(
-      {
-        store: createMissionPersistence(db),
-        ports: { mrEffects: mrEffectsObserving('opened') },
-        ...freshDeps(db),
-      },
-      input,
-    )
-    expect(first.ok && second.ok).toBe(true)
-    if (first.ok && second.ok) expect(second.missionId).toBe(first.missionId)
-    const links = await db.select().from(legacyCodeWorkItemLinks)
-    expect(links).toHaveLength(1)
-  })
-
-  test('an MR already claimed by a non-adopt mission is refused', async () => {
-    // 同 (endpoint, project, iid) 的重复 **adopt** 是幂等命中（launch key 相同，
-    // 上一测试锁定）；「被另一 mission 占用」发生在 MR 已被正常 delivery 链
-    // （create-merge-request mission 的 claimMr）持有时——adopt 的 createMission
-    // 走新 launch key 成功建行，claim 撞唯一后 findMrClaim 归属他人 ⇒ typed 拒。
-    const store = createMissionPersistence(db)
-    const holdingMissionId = ulid()
-    await store.createMission({
-      id: holdingMissionId,
-      revision: 0,
-      epoch: 0,
-      status: 'watching',
-      automationMode: 'active',
-      transitionFence: 'none',
-      repositoryId: 'repo-legacy',
-      sourceKind: 'direct',
-      sourceContentDigest: null,
-      requestedSourceKey: null,
-      externalId: null,
-      resolvedSourceKey: null,
-      resolvedAdapterId: null,
-      resolvedAdapterRevision: null,
-      deliveryKind: 'create-merge-request',
-      deliveryTargetRef: 'main',
-      deliverySourceBranch: 'aw/holding',
-      adoptedMrRef: null,
-      assignmentId: null,
-      employeeId: null,
-      employeeRevision: null,
-      policyId: null,
-      policyRevision: null,
-      requirementBundleRef: null,
-      repositoryFactsRef: null,
-      uploadPlanRef: null,
-      uploadPlacementRef: null,
-      uploadPublicationRef: null,
-      mrClaimId: null,
-      currentActionRunId: null,
-      readinessJson: null,
-      blockCode: null,
-      blockDetail: null,
-      terminalKind: null,
-      terminalUploadFulfillment: null,
-      terminalAt: null,
-      launchIdempotencyKey: `holder:${ulid()}`,
-      createdBy: null,
-      createdAt: NOW,
-      updatedAt: NOW,
+      const links = await db
+        .select()
+        .from(legacyCodeWorkItemLinks)
+        .where(eq(legacyCodeWorkItemLinks.missionId, result.missionId))
+      expect(links).toHaveLength(1)
+      expect(links[0]!.legacyWorkItemId).toBe('wi-9')
+      expect(JSON.parse(links[0]!.cutoverReceiptJson)).toMatchObject({
+        observedState: 'opened',
+        targetBranch: 'main',
+      })
     })
-    expect(
-      (
-        await store.claimMr({
-          id: ulid(),
+
+    test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
+      const store = createMissionPersistence(db)
+      const deps = {
+        store: createMissionPersistence(db),
+        ports: { mrEffects: mrEffectsObserving('merged') },
+        ...freshDeps(db),
+      }
+      const result = await adoptActiveMr(deps, input)
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.terminal).toBe('merged')
+      const mission = (await store.getMission(result.missionId))!
+      expect(mission.status).toBe('merged')
+      expect(mission.terminalAt).toBe(NOW)
+      expect(mission.mrClaimId).toBeNull()
+      expect(mission.currentActionRunId).toBeNull()
+      expect(
+        await store.findMrClaim({
           codeHostEndpointRef: 'gitlab',
           stableProjectRef: 'team/app',
           mrIid: '42',
-          missionId: holdingMissionId,
-          epoch: 0,
-          headSha: null,
-          now: NOW,
-        })
-      ).ok,
-    ).toBe(true)
-    const clashing = await adoptActiveMr(
-      {
+        }),
+      ).toBeNull()
+    })
+
+    test('a closed MR maps to closed-unmerged', async () => {
+      const store = createMissionPersistence(db)
+      const deps = {
+        store: createMissionPersistence(db),
+        ports: { mrEffects: mrEffectsObserving('closed') },
+        ...freshDeps(db),
+      }
+      const result = await adoptActiveMr(deps, input)
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.terminal).toBe('closed-unmerged')
+        expect((await store.getMission(result.missionId))!.status).toBe('closed-unmerged')
+      }
+    })
+
+    test('re-running the same adopt is idempotent (runbook is re-runnable)', async () => {
+      const deps = {
         store: createMissionPersistence(db),
         ports: { mrEffects: mrEffectsObserving('opened') },
         ...freshDeps(db),
-      },
-      input,
-    )
-    expect(clashing.ok).toBe(false)
-    if (!clashing.ok) expect(clashing.code).toBe('mr-owned-by-another-mission')
-    // 拒绝路径不留 legacy link 半行。
-    expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
-  })
+      }
+      const first = await adoptActiveMr(deps, input)
+      const second = await adoptActiveMr(
+        {
+          store: createMissionPersistence(db),
+          ports: { mrEffects: mrEffectsObserving('opened') },
+          ...freshDeps(db),
+        },
+        input,
+      )
+      expect(first.ok && second.ok).toBe(true)
+      if (first.ok && second.ok) expect(second.missionId).toBe(first.missionId)
+      const links = await db.select().from(legacyCodeWorkItemLinks)
+      expect(links).toHaveLength(1)
+    })
 
-  test('observe failure propagates its typed code (the "MR does not exist" sample)', async () => {
-    const failing: MrEffectsPort = {
-      ...mrEffectsObserving('opened'),
-      observe: () => Promise.resolve({ ok: false as const, code: 'mr-not-found', detail: '42' }),
-    }
-    const result = await adoptActiveMr(
-      {
-        store: createMissionPersistence(db),
-        ports: { mrEffects: failing },
-        ...freshDeps(db),
-      },
-      input,
-    )
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.code).toBe('mr-not-found')
-    expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
-  })
-})
+    test('an MR already claimed by a non-adopt mission is refused', async () => {
+      // 同 (endpoint, project, iid) 的重复 **adopt** 是幂等命中（launch key 相同，
+      // 上一测试锁定）；「被另一 mission 占用」发生在 MR 已被正常 delivery 链
+      // （create-merge-request mission 的 claimMr）持有时——adopt 的 createMission
+      // 走新 launch key 成功建行，claim 撞唯一后 findMrClaim 归属他人 ⇒ typed 拒。
+      const store = createMissionPersistence(db)
+      const holdingMissionId = ulid()
+      await store.createMission({
+        id: holdingMissionId,
+        revision: 0,
+        epoch: 0,
+        status: 'watching',
+        automationMode: 'active',
+        transitionFence: 'none',
+        repositoryId: 'repo-legacy',
+        sourceKind: 'direct',
+        sourceContentDigest: null,
+        requestedSourceKey: null,
+        externalId: null,
+        resolvedSourceKey: null,
+        resolvedAdapterId: null,
+        resolvedAdapterRevision: null,
+        deliveryKind: 'create-merge-request',
+        deliveryTargetRef: 'main',
+        deliverySourceBranch: 'aw/holding',
+        adoptedMrRef: null,
+        assignmentId: null,
+        employeeId: null,
+        employeeRevision: null,
+        policyId: null,
+        policyRevision: null,
+        requirementBundleRef: null,
+        repositoryFactsRef: null,
+        uploadPlanRef: null,
+        uploadPlacementRef: null,
+        uploadPublicationRef: null,
+        mrClaimId: null,
+        currentActionRunId: null,
+        readinessJson: null,
+        blockCode: null,
+        blockDetail: null,
+        terminalKind: null,
+        terminalUploadFulfillment: null,
+        terminalAt: null,
+        launchIdempotencyKey: `holder:${ulid()}`,
+        createdBy: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      expect(
+        (
+          await store.claimMr({
+            id: ulid(),
+            codeHostEndpointRef: 'gitlab',
+            stableProjectRef: 'team/app',
+            mrIid: '42',
+            missionId: holdingMissionId,
+            epoch: 0,
+            headSha: null,
+            now: NOW,
+          })
+        ).ok,
+      ).toBe(true)
+      const clashing = await adoptActiveMr(
+        {
+          store: createMissionPersistence(db),
+          ports: { mrEffects: mrEffectsObserving('opened') },
+          ...freshDeps(db),
+        },
+        input,
+      )
+      expect(clashing.ok).toBe(false)
+      if (!clashing.ok) expect(clashing.code).toBe('mr-owned-by-another-mission')
+      // 拒绝路径不留 legacy link 半行。
+      expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+    })
+
+    test('observe failure propagates its typed code (the "MR does not exist" sample)', async () => {
+      const failing: MrEffectsPort = {
+        ...mrEffectsObserving('opened'),
+        observe: () => Promise.resolve({ ok: false as const, code: 'mr-not-found', detail: '42' }),
+      }
+      const result = await adoptActiveMr(
+        {
+          store: createMissionPersistence(db),
+          ports: { mrEffects: failing },
+          ...freshDeps(db),
+        },
+        input,
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.code).toBe('mr-not-found')
+      expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+    })
+  },
+)
 
 describe('RFC-310 PR-9 — cutover route error codes are named', () => {
   // route error code ratchet 点名（见文件头）：cutover-adopt-rejected 与

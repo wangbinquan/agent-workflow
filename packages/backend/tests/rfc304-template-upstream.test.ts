@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-304 §11.6 (T64) — the four states, and the base that makes them knowable.
 //
 // Copying is how teams start, so within a quarter there are dozens of templates
@@ -30,7 +32,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function bindTemplatePersistence<Args extends unknown[], Result>(
   operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
-): (db: DbClient, ...args: Args) => Result {
+): (db: ProviderNeutralDatabase, ...args: Args) => Result {
   return (db, ...args) => operation(createCapabilityTemplatePersistence(db), ...args)
 }
 
@@ -208,22 +210,12 @@ describe('RFC-304 T64 — what a package says about origin', () => {
 // every copy `orphaned`-looking forever, and the three facts it needs cannot be
 // reconstructed later — after the copy, the source moves on and its `updatedAt`
 // no longer describes what was taken.
-describe('RFC-304 T64 — copying records the origin', () => {
-  let db: DbClient
-
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-  afterEach(() => {
-    db.$client.close()
-  })
-
+function templateCopyInputs() {
   const AUTHOR = {
     user: { id: 'u-1', name: 'u-1', role: 'user' },
     permissions: new Set(['capability-templates:create', 'scripts:author']),
     source: 'session',
   } as unknown as Actor
-
   const FRAMEWORK = {
     name: 'gitlab standard',
     description: null,
@@ -237,14 +229,21 @@ describe('RFC-304 T64 — copying records the origin', () => {
     params: {},
     stageContractVer: 1,
   }
+  return { AUTHOR, FRAMEWORK }
+}
 
+const { AUTHOR, FRAMEWORK } = templateCopyInputs()
+
+describeEachProvider('RFC-304 T64 — copying records the origin', (harness) => {
   test('a fresh template has NO origin — that is a state, not missing data', async () => {
+    const db = harness.db
     const row = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     expect(row.upstreamId).toBeNull()
     expect(row.baseDigest).toBeNull()
   })
 
   test('a copy records source, version and base digest together', async () => {
+    const db = harness.db
     const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     const copy = await copyTemplate(db, source, AUTHOR, 'mine', 2000)
 
@@ -254,6 +253,7 @@ describe('RFC-304 T64 — copying records the origin', () => {
   })
 
   test('the base digest matches the source at copy time, so a fresh copy is CURRENT', async () => {
+    const db = harness.db
     const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     const copy = await copyTemplate(db, source, AUTHOR, 'mine', 2000)
 
@@ -268,6 +268,16 @@ describe('RFC-304 T64 — copying records the origin', () => {
       localOverrides: [],
     })
     expect(status.state).toBe('current')
+  })
+})
+
+describe('RFC-304 T64 — copying records the origin', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createInMemoryDb(MIGRATIONS)
+  })
+  afterEach(() => {
+    db.$client.close()
   })
 
   test('the digest ignores the ACL, so a visibility change is not a body change', async () => {

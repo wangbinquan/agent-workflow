@@ -726,7 +726,7 @@ describe('RFC-144 deriveFrontier — abandoned 分桶（穷举 switch 的新格�
 
 describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
   test('SQLite mint participant：同一 reserved tx 内先 abandon superseded rows 再 insert（D12/P1-1）', () => {
-    const src = readFileSync(
+    const nativeSrc = readFileSync(
       join(
         BACKEND_SRC,
         'modules',
@@ -736,7 +736,17 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
       ),
       'utf-8',
     )
-    const participantAt = src.indexOf('createSqliteNodeRunMintParticipantInTx(')
+    // RFC-359 W47 moves the writes into a shared program; the reserved tx and
+    // synchronous runner must still reach that program before checking its order.
+    expect(nativeSrc).toContain("import { nodeRunMintProgram } from './nodeRunMintParticipant'")
+    expect(nativeSrc).toMatch(
+      /return driveSyncProgram\(\s*nodeRunMintProgram\(tx, input, \(query\) => query\.all\(\)\),\s*executeTransactionStepSync,?\s*\)/,
+    )
+    const src = readFileSync(
+      join(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'nodeRunMintParticipant.ts'),
+      'utf-8',
+    )
+    const participantAt = src.indexOf('function* nodeRunMintProgram(')
     const abandonAt = src.indexOf(".set({ mergeState: 'abandoned' })", participantAt)
     const insertAt = src.indexOf('.insert(nodeRuns)', abandonAt)
     expect(participantAt).toBeGreaterThan(-1)

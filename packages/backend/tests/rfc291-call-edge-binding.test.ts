@@ -21,6 +21,8 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { parseIntentChangeset } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { users, workflows, workgroups } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
@@ -56,46 +58,11 @@ async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): 
   return id
 }
 
-async function seedWorkgroup(name: string): Promise<string> {
-  const id = ulid()
-  const now = Date.now()
-  await db.insert(workgroups).values({
-    id,
-    name,
-    description: '',
-    instructions: 'work',
-    mode: 'leader_worker',
-    version: 1,
-    ownerUserId: OWNER,
-    visibility: 'private',
-    createdAt: now,
-    updatedAt: now,
-  } as typeof workgroups.$inferInsert)
-  return id
-}
-
 const callWorkflowNode = (nodeId: string, name: string, id?: string) => ({
   id: nodeId,
   kind: 'call-workflow',
   workflowName: name,
   ...(id === undefined ? {} : { workflowId: id }),
-})
-
-beforeEach(async () => {
-  appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
-  db = createInMemoryDb(MIGRATIONS)
-  await db.insert(users).values({
-    id: OWNER,
-    username: 'owner',
-    displayName: 'Owner',
-    role: 'user',
-    status: 'active',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  } as typeof users.$inferInsert)
-})
-afterEach(() => {
-  rmSync(appHome, { recursive: true, force: true })
 })
 
 /** The dumped YAML of a mounted workflow, as the model would read it. */
@@ -114,7 +81,106 @@ async function dumpParentDoc(
   return { doc: file?.content ?? '', manifest: dump.manifest }
 }
 
-describe('dump 侧：call 边带 handle、不带 canonical id（AC-18）', () => {
+function createProviderCallEdgeFixture(db: ProviderNeutralDatabase, appHome: string) {
+  async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): Promise<string> {
+    const id = forcedId ?? ulid()
+    const now = Date.now()
+    await db.insert(workflows).values({
+      id,
+      name,
+      description: '',
+      definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes, edges: [] }),
+      version: 1,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: now,
+      updatedAt: now,
+    } as typeof workflows.$inferInsert)
+    return id
+  }
+
+  async function seedWorkgroup(name: string): Promise<string> {
+    const id = ulid()
+    const now = Date.now()
+    await db.insert(workgroups).values({
+      id,
+      name,
+      description: '',
+      instructions: 'work',
+      mode: 'leader_worker',
+      version: 1,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: now,
+      updatedAt: now,
+    } as typeof workgroups.$inferInsert)
+    return id
+  }
+
+  async function dumpParentDoc(
+    parentId: string,
+  ): Promise<{ doc: string; manifest: IntentContextManifest }> {
+    const dump = await buildIntentDump({
+      db,
+      actor,
+      appHome,
+      mounts: [{ resourceType: 'workflow', resourceId: parentId }],
+    })
+    const entry = dump.manifest.find((e) => e.resourceId === parentId)
+    const base = `mounted/${entry?.handle.replace(/#/g, '.')}`
+    const file = dump.seedFiles.find((f) => f.path === `${base}.yaml`)
+    return { doc: file?.content ?? '', manifest: dump.manifest }
+  }
+  return { seedWorkflow, seedWorkgroup, dumpParentDoc }
+}
+
+function describeNativeCallEdgeCases(name: string, cases: () => void) {
+  describe(name, () => {
+    beforeEach(async () => {
+      appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
+      db = createInMemoryDb(MIGRATIONS)
+      await db.insert(users).values({
+        id: OWNER,
+        username: 'owner',
+        displayName: 'Owner',
+        role: 'user',
+        status: 'active',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } as typeof users.$inferInsert)
+    })
+    afterEach(() => {
+      rmSync(appHome, { recursive: true, force: true })
+    })
+    cases()
+  })
+}
+
+describeEachProvider('dump 侧：call 边带 handle、不带 canonical id（AC-18）', (harness) => {
+  let db: ProviderNeutralDatabase
+  let appHome: string
+  let seedWorkflow: ReturnType<typeof createProviderCallEdgeFixture>['seedWorkflow']
+  let seedWorkgroup: ReturnType<typeof createProviderCallEdgeFixture>['seedWorkgroup']
+  let dumpParentDoc: ReturnType<typeof createProviderCallEdgeFixture>['dumpParentDoc']
+
+  beforeEach(async () => {
+    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
+    db = harness.db
+    await db.insert(users).values({
+      id: OWNER,
+      username: 'owner',
+      displayName: 'Owner',
+      role: 'user',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof users.$inferInsert)
+    ;({ seedWorkflow, seedWorkgroup, dumpParentDoc } = createProviderCallEdgeFixture(db, appHome))
+  })
+  afterEach(() => {
+    rmSync(appHome, { recursive: true, force: true })
+  })
+
   test('workflowId 被剥离，替换为指向真实目标的 workflowRef', async () => {
     const child = await seedWorkflow('child-flow', [])
     const parent = await seedWorkflow('parent-flow', [callWorkflowNode('c1', 'child-flow', child)])
@@ -161,7 +227,9 @@ describe('dump 侧：call 边带 handle、不带 canonical id（AC-18）', () =>
     const newerHandle = manifest.find((e) => e.resourceId === newer)?.handle
     expect(doc).toContain(newerHandle!)
   })
+})
 
+describeNativeCallEdgeCases('dump 侧：call 边带 handle、不带 canonical id（AC-18）', () => {
   test('目标不可解析 → 标记隐藏，不泄漏 id', async () => {
     const parent = await seedWorkflow('parent-flow', [callWorkflowNode('c1', 'ghost-flow')])
     const { doc } = await dumpParentDoc(parent)
@@ -170,7 +238,29 @@ describe('dump 侧：call 边带 handle、不带 canonical id（AC-18）', () =>
   })
 })
 
-describe('resolve 侧：回写不丢绑定（AC-19）', () => {
+describeEachProvider('resolve 侧：回写不丢绑定（AC-19）', (harness) => {
+  let db: ProviderNeutralDatabase
+  let appHome: string
+  let seedWorkflow: ReturnType<typeof createProviderCallEdgeFixture>['seedWorkflow']
+
+  beforeEach(async () => {
+    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-e-'))
+    db = harness.db
+    await db.insert(users).values({
+      id: OWNER,
+      username: 'owner',
+      displayName: 'Owner',
+      role: 'user',
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as typeof users.$inferInsert)
+    ;({ seedWorkflow } = createProviderCallEdgeFixture(db, appHome))
+  })
+  afterEach(() => {
+    rmSync(appHome, { recursive: true, force: true })
+  })
+
   test('把 dump 出的 ref 原样回传 → 落库的 workflowId 是 dump 所示的那一行', async () => {
     // 「修一半」的失败路径：只抹 id 不给 ref，模型回写后缓存丢失，下次启动
     // 按名字回落到最老可见行——用户以为改的是被调用的那个，平台跑的是另一个。
@@ -237,7 +327,9 @@ describe('resolve 侧：回写不丢绑定（AC-19）', () => {
     // 名字随节点一起保留
     expect(callNode?.workflowName).toBe('build')
   })
+})
 
+describeNativeCallEdgeCases('resolve 侧：回写不丢绑定（AC-19）', () => {
   test('按名字建边（无 ref）仍然合法——RFC-243 §5.3 的 dangle-tolerant 路径不变', async () => {
     // 刻意的不对称：把 *Ref 做成必填会静默废掉 intentDoc 一直教的那条路径。
     const changeset = parseIntentChangeset(

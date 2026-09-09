@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5332,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W47 replaces the duplicate native mint body with one shared program: five references to existing transactionProgram primitives replace three direct Drizzle/schema imports, net +2. SQL and sync/async caller contracts remain covered by original/current controlled traces."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4799,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W47 records five imports of existing transactionProgram primitives in the current legacy-classified platform layer, replacing two direct native schema references, net +3. The shared mint removes the second INSERT; this one-commit allowance records the actual generated edges without changing any rule."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -874,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25067,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W47 adds the shared nodeRunMintProgram and two private query-terminal types, while removing the duplicate native merge-state constant and intent markdown function, net +1 symbol. The source-derived owner inventory remains complete; this allowance is for the exact current batch only."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -894,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "340aee20760fdb093179d338cb77f665b4a3c420",
-    "contentDigest": "sha256:72921947e5a3887810c6b59ba3625b52e0ffd643d311cb99481ce8647cd1e992",
+    "currentSnapshotSha": "1f6738e5109f47bc5255f5de7695f0975ec52aea",
+    "contentDigest": "sha256:dc358f128f42894353cca36d07552c7792a4e4527c03355275a502dce25768a0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
