@@ -11,6 +11,8 @@ import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
@@ -70,7 +72,7 @@ function get(app: H['app'], path: string, token: string): Promise<Response> {
 }
 
 async function seed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   row: {
     receivedAt: number
     status?: WebhookDeliveryStatus
@@ -261,59 +263,61 @@ describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
 describe("RFC-261 · D9' 保留天数可配", () => {
   const DAY = 24 * 60 * 60 * 1000
 
-  test('gcDeliveries 按传入 retention 生效（body 清空 / 整行删除分层）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const now = 100 * DAY
-    const dead = await seed(db, { receivedAt: now - 25 * DAY, bodyJson: '{"a":1}' })
-    const pruned = await seed(db, { receivedAt: now - 15 * DAY, bodyJson: '{"b":2}' })
-    const fresh = await seed(db, { receivedAt: now - 5 * DAY, bodyJson: '{"c":3}' })
-    const res = await gcDeliveries(createWebhookDeliveryPersistence(db), now, {
-      bodyRetentionMs: 10 * DAY,
-      rowRetentionMs: 20 * DAY,
+  describeEachProvider('RFC-261 delivery retention', (harness) => {
+    test('gcDeliveries 按传入 retention 生效（body 清空 / 整行删除分层）', async () => {
+      const db = harness.db
+      const now = 100 * DAY
+      const dead = await seed(db, { receivedAt: now - 25 * DAY, bodyJson: '{"a":1}' })
+      const pruned = await seed(db, { receivedAt: now - 15 * DAY, bodyJson: '{"b":2}' })
+      const fresh = await seed(db, { receivedAt: now - 5 * DAY, bodyJson: '{"c":3}' })
+      const res = await gcDeliveries(createWebhookDeliveryPersistence(db), now, {
+        bodyRetentionMs: 10 * DAY,
+        rowRetentionMs: 20 * DAY,
+      })
+      // dead 行先被 body 段清空再被 row 段删除 → bodiesCleared 计 2（既有段序语义）
+      expect(res).toEqual({ bodiesCleared: 2, rowsDeleted: 1 })
+      const rows = await db.select().from(webhookDeliveries)
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      expect(byId.has(dead)).toBe(false) // 25 天 > row 20 天 → 删行
+      expect(byId.get(pruned)!.bodyJson).toBeNull() // 15 天 > body 10 天 → 置空
+      expect(byId.get(fresh)!.bodyJson).toBe('{"c":3}') // 5 天 → 不动
     })
-    // dead 行先被 body 段清空再被 row 段删除 → bodiesCleared 计 2（既有段序语义）
-    expect(res).toEqual({ bodiesCleared: 2, rowsDeleted: 1 })
-    const rows = await db.select().from(webhookDeliveries)
-    const byId = new Map(rows.map((r) => [r.id, r]))
-    expect(byId.has(dead)).toBe(false) // 25 天 > row 20 天 → 删行
-    expect(byId.get(pruned)!.bodyJson).toBeNull() // 15 天 > body 10 天 → 置空
-    expect(byId.get(fresh)!.bodyJson).toBe('{"c":3}') // 5 天 → 不动
-  })
 
-  test('分批清理（评审门 P1-②）：小 batchSize 跨批完整、计数正确、不越界', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const now = 100 * DAY
-    for (let i = 0; i < 25; i += 1) {
-      await seed(db, { receivedAt: now - 25 * DAY, bodyJson: `{"i":${i}}` })
-    }
-    await seed(db, { receivedAt: now - 1 * DAY, bodyJson: '{"keep":1}' })
-    const res = await gcDeliveries(
-      createWebhookDeliveryPersistence(db),
-      now,
-      { bodyRetentionMs: 10 * DAY, rowRetentionMs: 20 * DAY },
-      10, // 25 行 → 3 批（10/10/5），锁跨批推进与终止条件
-    )
-    expect(res).toEqual({ bodiesCleared: 25, rowsDeleted: 25 })
-    const left = await db.select().from(webhookDeliveries)
-    expect(left.length).toBe(1)
-    expect(left[0]!.bodyJson).toBe('{"keep":1}')
-  })
-
-  test('runDeliveryGcSweep 每次调用热读 getter（评审门 P2-④）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const now = Date.now()
-    await seed(db, { receivedAt: now - 50 * DAY, bodyJson: '{"old":1}' })
-    let days = { webhookDeliveryBodyRetentionDays: 3650, webhookDeliveryRowRetentionDays: 3650 }
-    const persistence = createWebhookDeliveryPersistence(db)
-    expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
-      bodiesCleared: 0,
-      rowsDeleted: 0,
+    test('分批清理（评审门 P1-②）：小 batchSize 跨批完整、计数正确、不越界', async () => {
+      const db = harness.db
+      const now = 100 * DAY
+      for (let i = 0; i < 25; i += 1) {
+        await seed(db, { receivedAt: now - 25 * DAY, bodyJson: `{"i":${i}}` })
+      }
+      await seed(db, { receivedAt: now - 1 * DAY, bodyJson: '{"keep":1}' })
+      const res = await gcDeliveries(
+        createWebhookDeliveryPersistence(db),
+        now,
+        { bodyRetentionMs: 10 * DAY, rowRetentionMs: 20 * DAY },
+        10, // 25 行 → 3 批（10/10/5），锁跨批推进与终止条件
+      )
+      expect(res).toEqual({ bodiesCleared: 25, rowsDeleted: 25 })
+      const left = await db.select().from(webhookDeliveries)
+      expect(left.length).toBe(1)
+      expect(left[0]!.bodyJson).toBe('{"keep":1}')
     })
-    // 两次 sweep 之间收缩保留期——不重启、不重建 ticker，直接生效
-    days = { webhookDeliveryBodyRetentionDays: 30, webhookDeliveryRowRetentionDays: 40 }
-    expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
-      bodiesCleared: 1,
-      rowsDeleted: 1,
+
+    test('runDeliveryGcSweep 每次调用热读 getter（评审门 P2-④）', async () => {
+      const db = harness.db
+      const now = Date.now()
+      await seed(db, { receivedAt: now - 50 * DAY, bodyJson: '{"old":1}' })
+      let days = { webhookDeliveryBodyRetentionDays: 3650, webhookDeliveryRowRetentionDays: 3650 }
+      const persistence = createWebhookDeliveryPersistence(db)
+      expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
+        bodiesCleared: 0,
+        rowsDeleted: 0,
+      })
+      // 两次 sweep 之间收缩保留期——不重启、不重建 ticker，直接生效
+      days = { webhookDeliveryBodyRetentionDays: 30, webhookDeliveryRowRetentionDays: 40 }
+      expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
+        bodiesCleared: 1,
+        rowsDeleted: 1,
+      })
     })
   })
 

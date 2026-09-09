@@ -7,6 +7,8 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
@@ -88,11 +90,16 @@ function servicePayload(name: string): Parameters<typeof createAgent>[1] {
   }
 }
 
-describe('agent service', () => {
-  let db: DbClient
+let db: DbClient
 
+function initializeNativeServiceDb() {
+  db = createInMemoryDb(MIGRATIONS)
+}
+
+describeEachProvider('agent service provider create/read', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('list/empty -> []', async () => {
@@ -123,6 +130,10 @@ describe('agent service', () => {
     const fetched = await getAgent(db, 'auditor')
     expect(fetched).toEqual(created)
   })
+})
+
+describe('agent service', () => {
+  beforeEach(initializeNativeServiceDb)
 
   test('create rejects duplicate name', async () => {
     await createAgent(db, {
@@ -190,6 +201,13 @@ describe('agent service', () => {
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     )
     expect(rejected?.reason).toMatchObject({ code: 'agent-name-in-use', status: 409 })
+  })
+})
+
+describeEachProvider('agent service provider update/delete', (harness) => {
+  let db: ProviderNeutralDatabase
+  beforeEach(() => {
+    db = harness.db
   })
 
   test('update partial patch preserves other fields', async () => {
@@ -275,6 +293,10 @@ describe('agent service', () => {
     expect(await getAgent(db, 'a')).toBeNull()
     await expect(deleteAgent(db, created.id, T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
   })
+})
+
+describe('agent service', () => {
+  beforeEach(initializeNativeServiceDb)
 
   test('delete refuses when a workflow references the agent', async () => {
     const created = await createAgent(db, {

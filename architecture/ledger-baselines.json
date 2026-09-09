@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5328,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 W37 adds the shared plugin cached-path query file and its exact existing schema import. Both maintenance owners still require their other schema reads, so this real source edge is retained and counted."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4794,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 W37 records the shared plugin cached-path query schema edge; it does not remove either maintenance owner or its other required schema imports."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -874,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25063,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W37 records the shared plugin cached-path query file and its exported function, replacing two identical query prefixes in the existing native and PostgreSQL maintenance owners."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -894,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "283582f8786b6ab79e602342dd06a2199836d886",
-    "contentDigest": "sha256:9fdce1dc02f152ab89f1d856533c74f9217b306167b1c4bc030cc74d10b1791b",
+    "currentSnapshotSha": "7fb629ebdda5a56f3b89b25b26f1466e6d29331b",
+    "contentDigest": "sha256:1070cbf01da76e055e91c656b0e24724007d740e26c0f359a8aca8d15e7cb7e7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

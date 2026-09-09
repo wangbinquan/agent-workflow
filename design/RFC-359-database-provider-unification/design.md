@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W38 只迁移原 Agents 六个异步 CRUD 与 RFC261 三个 GC 行为例，生产端口与算法保持。
+  Agents 将原service声明按2/3/4/4顺序放入四个同层组，两个provider组各自绑定真实harness.db；
+  两个保留组共享原native初始化赋值，未新增构库调用点，全部22个原call/callback字节保持。
+  RFC261仅将三个独立GC构库接到harness，seed helper只改数据库参数类型、完整运行JS保持。
+  两个空facet计划探针均被实际SQLite反例否决：末尾条件不省分页工作，前缀条件可能绕过LIMIT递减；
+  未改变生产查询、绑定顺序、原性能样本、规模或验收判据。
+
 - W37 将两个实际资源包恢复owner中的 `plugins.cachedPath` 惰性查询前缀提取为
   `pluginCachedPathQuery`，复用已发布的 `ProviderNeutralDatabaseForMode` 类型。
   将原artifact对象传入函数，维持select、from、pluginId求值顺序，get和await仍由调用方执行；

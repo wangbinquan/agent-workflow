@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十八批（2026-09-09）**：Agents 6个旧CRUD例与RFC261 3个GC例接入默认双库，39原声明/139完整matcher保留，30未选例完整call字节保持。选定原后合计9 pass/29 expect；Agents通过同层分组保留全部22原callback/token，旧嵌套候选的格式差量与新候选实跑分别留证。
+> Agents原后99条SQL、34快照与16个返回保持，2个raw错误stack差量保留；GC原后78条SQL、46快照与36个返回保持，25行分批仍为10/10/5，动态配置仍由同一实例读取。累计242完整/16混合；1952文件、606构库文件/1228调用、576无harness/453有harness，T19f689条中仅GC计数7→4。
+> 最终3core一次完整tsc、211/433功能metadata、13/55canonical及定向严格lint/format通过。生产源码、8份canonical与parent status字节保持，仅4份provenance及三项过期增长许可按原合同刷新。
+> 两个空facet查询候选均被拒：分页末尾判断太晚，前缀内判断虽跳过投影却可能遍历完整时间索引。生产查询未改，无新full样本。W37 exact7fb629ebd Main34328144901终态37success/3failure，13后端12过1红；655重点执行与另2 sidecar全过。另一分片的8条旧失败记录继续沿初始化/清理链定位，完整Main未绿；W38主集742另2 sidecar待新SHA，六项AC继续开放。
+
 > **RFC-359 W12 第三十七批（2026-09-09）**：SQLite 与 PostgreSQL 资源包恢复中的两个 cachedPath 查询前缀共用 `pluginCachedPathQuery`，两个实际调用方保留原 get/await 和分支行为。新增3个默认双库回归，本地原后3/45、41条SQL及完整物理行一致，4个指定负控有效；生产净增7行，未宣称整个恢复owner已合一。
 > Workflows旧套件6个CRUD例默认双库，原22声明/52 matcher保留，另外16例维持原形；选定原后6/13。两task seed补原实际谱系，34完整快照、通知及查询结果保持，写返回与错误stack的实际差量单列。累计242完整/14混合，1952文件、606构库文件/1231调用、578无harness/451有harness；T19f689保持。
 > W36 exact283582f87 Main34323372154终态38success/2failure，13后端全过、普通严格lint过；两OS各1951文件恰一次，36选定文件628执行全过，另RFC234两个sidecar通过。原重试和新增竞态回归均获真PG验证，独立P0两库34阶段全有效；静态扫描及汇总仍红，完整Main未绿。
