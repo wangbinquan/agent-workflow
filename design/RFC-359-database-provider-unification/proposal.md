@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第四十批：资源包两个writer共用原SKILL.md序列化，原两份控制各3/33、候选4/38；模板三个旧例默认双库，原后各3/39、完整SQL/行/返回保持，另两例保留。W31实际包装层源锁原3红→3/24；RFC341故障夹具补PG自有trigger/function清理，实际PG恢复待新SHA。W39 exact50e9e58cd Main35 success/5 failure、后端10/13，860重点执行848过12红，另2 sidecar过；Ubuntu五个VM检查缺首UNION ALL标记，本批只补现场，不宣称修复或放宽检查。9core一次完整tsc、211/433功能metadata、13/55canonical通过，1955文件、575构库文件无harness/455有harness，旧迁移242完整/17混合。W39原full34343025829的360样本已核：两库任务页满足原预算，PG仍六端点较慢，唯一原绝对失败为PG overview MAX13.222187ms未过10ms。完整Main与六项AC继续开放。
+- W12 第四十一批：fallback检查从五份真实Linux VM定位游标/跳转关系，保留原扫描跳过判据，十份双平台记录/四十个指定变异/五个旧程序控制及一次SQLite6/228通过，新SHA Linux实跑待验。RFC331一例、RFC248四例默认双库，原后各1/4、4/11；25原整call保持，真实时间/写返回/生命周期差量单列。W40 exactbbe954aff Main36 success/4 failure、后端11/13，877重点872过/5个Linux VM红、另2 sidecar过，177选定PG均过；另一个mac分片Git config锁失败待修。4core一次tsc、211/433功能metadata、13/55canonical通过；1955文件、createInMemoryDb口径605文件/1224调用，T19f688。原W39 full仍六项PG较慢且overview MAX13.222187ms未过10ms，完整Main与六项AC继续开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

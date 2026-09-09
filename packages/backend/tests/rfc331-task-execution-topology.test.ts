@@ -6,7 +6,6 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
-import { createInMemoryDb } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { SchedulerDriverPort } from '../src/modules/task-execution/public/commands'
@@ -17,11 +16,11 @@ import {
   createPoisonSchedulerDriver,
   createRecordingSchedulerDriver,
 } from './helpers/taskExecutionTestTopology'
+import { describeEachProvider } from './helpers/eachProvider'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function source(path: string): string {
   return readFileSync(resolve(REPO_ROOT, path), 'utf8')
@@ -196,9 +195,9 @@ describe('RFC-331 scheduler topology contract', () => {
   })
 })
 
-describe('RFC-331 purpose-specific read models', () => {
+describeEachProvider('RFC-331 purpose-specific read models', (harness) => {
   test('status projection and legacy single-repo fallback preserve the old read shape', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await db.insert(workflows).values({
       id: 'wf-rfc331',
       name: 'wf-rfc331',
@@ -220,6 +219,9 @@ describe('RFC-331 purpose-specific read models', () => {
       errorSummary: 'fixture-error',
       inputs: '{}',
       startedAt: Date.now(),
+      executionLineageId: 'task-rfc331',
+      lineageSlotPathJson:
+        '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-rfc331","workflowRevision":null}]',
     })
 
     const reads = createTaskExecutionReadModels(db)
@@ -235,9 +237,10 @@ describe('RFC-331 purpose-specific read models', () => {
     })
     expect(await reads.statusProjection.find('missing')).toBeNull()
     expect(await reads.callGraphWorkspace.find('missing')).toBeNull()
-    db.$client.close()
   })
+})
 
+describe('RFC-331 purpose-specific read models', () => {
   test('call-graph keeps task-missing first and multi-repo unresolved behavior', async () => {
     await expect(
       getCallTargets({ find: async () => null }, 'missing', 'src/A.ts#A.run'),

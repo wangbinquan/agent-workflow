@@ -138,33 +138,58 @@ function opcode(program: readonly Opcode[], predicate: (row: Opcode) => boolean)
 }
 
 function checkGateProgram(program: readonly Opcode[], indexRootPage: number): void {
-  const union = opcode(program, (row) => row.opcode === 'Explain' && row.p4 === 'UNION ALL')
-  const materialize = opcode(
-    program.slice(union.addr),
-    (row) => row.opcode === 'Explain' && row.p4 === 'MATERIALIZE fallback_gate',
+  // W40 Linux VMs omit Explain instructions. Locate the one-column, seek-free
+  // materialization whose cursor gates the existing facet index instead.
+  const candidates = program.flatMap((definition) => {
+    if (definition.opcode !== 'Goto' || definition.p2 <= definition.addr) return []
+    const body = program.filter((row) => row.addr > definition.addr && row.addr < definition.p2)
+    if (body.some((row) => row.opcode.startsWith('Seek'))) return []
+    const gate = body.find((row) => row.opcode === 'OpenEphemeral' && row.p2 === 1)
+    if (gate === undefined) return []
+    const rewind = program.find(
+      (row) => row.addr >= definition.p2 && row.opcode === 'Rewind' && row.p1 === gate.p1,
+    )
+    if (rewind === undefined) return []
+    const index = program.find(
+      (row) =>
+        row.addr >= definition.p2 &&
+        row.addr < rewind.addr &&
+        row.opcode === 'OpenRead' &&
+        row.p2 === indexRootPage,
+    )
+    return index === undefined ? [] : [{ definition, gate, rewind, index }]
+  })
+  expect(candidates).toHaveLength(1)
+  const candidate = candidates[0]
+  if (candidate === undefined) throw new Error('missing unique fallback gate materialization')
+  const { definition, gate, index } = candidate
+  const once = opcode(program, (row) => row.addr === definition.addr + 1)
+  expect(once.opcode).toBe('Once')
+  const end = opcode(program, (row) => row.addr === definition.p2 - 1)
+  expect(end.opcode).toBe('Return')
+  expect(once.p2).toBe(end.addr)
+  opcode(
+    program,
+    (row) =>
+      row.opcode === 'Gosub' &&
+      row.p1 === end.p1 &&
+      row.p2 === once.addr &&
+      row.addr >= definition.p2 &&
+      row.addr < candidate.rewind.addr,
   )
-  const gate = opcode(program.slice(materialize.addr), (row) => row.opcode === 'OpenEphemeral')
-  const scan = opcode(
-    program.slice(union.addr),
-    (row) => row.opcode === 'Explain' && row.p4 === 'SCAN fallback_gate',
-  )
-  const rewind = opcode(program, (row) => row.addr === scan.addr + 1)
+  const rewind = opcode(program, (row) => row.addr === candidate.rewind.addr)
   expect(rewind.opcode).toBe('Rewind')
   expect(rewind.p1).toBe(gate.p1)
-  const index = opcode(
-    program.slice(union.addr, rewind.addr),
-    (row) => row.opcode === 'OpenRead' && row.p2 === indexRootPage,
-  )
   const seek = opcode(
-    program.slice(rewind.addr),
+    program.filter((row) => row.addr >= rewind.addr),
     (row) => row.opcode.startsWith('Seek') && row.p1 === index.p1,
   )
   const next = opcode(
-    program.slice(seek.addr),
+    program.filter((row) => row.addr >= seek.addr),
     (row) => row.opcode === 'Next' && row.p1 === index.p1,
   )
   const gateNext = opcode(
-    program.slice(next.addr),
+    program.filter((row) => row.addr >= next.addr),
     (row) => row.opcode === 'Next' && row.p1 === gate.p1,
   )
   expect(rewind.addr).toBeLessThan(seek.addr)
@@ -175,10 +200,12 @@ function checkGateProgram(program: readonly Opcode[], indexRootPage: number): vo
   expect(gateNext.p2).toBeLessThan(seek.addr)
 
   // A pre-gate auxiliary scan is a skipped definition; its calls stay in the loop.
-  for (const jump of program.slice(union.addr, rewind.addr)) {
+  for (const jump of program.filter(
+    (row) => row.addr >= definition.addr && row.addr < rewind.addr,
+  )) {
     if (jump.opcode !== 'Goto' || jump.p2 <= jump.addr) continue
-    const definition = program.slice(jump.addr + 1, jump.p2)
-    if (!definition.some((row) => row.opcode.startsWith('Seek'))) continue
+    const body = program.filter((row) => row.addr > jump.addr && row.addr < jump.p2)
+    if (!body.some((row) => row.opcode.startsWith('Seek'))) continue
     const calls = program.filter((row) => row.opcode === 'Gosub' && row.p2 === jump.addr + 1)
     expect(calls.length).toBeGreaterThan(0)
     for (const call of calls) {

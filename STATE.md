@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十一批（2026-09-09）**：根据W40五份真实Linux VM，fallback检查改用实际游标/跳转关系定位唯一物化门，不再要求Explain调试指令。原查询、六个展开用例、业务matcher与预算保持；十份双平台记录通过，移除调试行十份通过，四十个控制流变异及五份旧无门程序仍被拒绝；一次小型SQLite为6/228，新SHA Linux实跑待验。
+> RFC331一个与RFC248四个旧DB例接默认双库，另25个原整call字节保留。原后各1/4与4/11；RFC248完整113 SQL/90快照/原返回一致；RFC331旧trigger谱系值显式播种，保留六处native unixepoch字段、写changes2→1及nativeclose→harness解绑的真实差量。
+> W40 exactbbe954aff Main34348730483终态36 success/4 failure，13后端11过2红；两OS各1955文件恰一次，877重点执行872过/5个Linux VM红，另2 sidecar过，177选定PG均通过。W31六个旧红恢复；RFC341本次pump→fault都过，未据此宣称实测fault后pump。另一个mac分片有Git config锁失败，精确调用链已登记，候选修复留下一批。
+> 最终4core一次完整tsc、211/433功能metadata和13/55canonical通过；原writer仅改四份provenance，八份canonical及parent status字节保持。1955测试文件；原createInMemoryDb口径605文件/1224调用、573无harness/457有harness，T19f689→688、命名59保持。原full性能仍为W39的六个PG较慢端点及overview MAX13.222187ms未过10ms；RFC与六项AC继续开放。
+
 > **RFC-359 W12 第四十批（2026-09-09）**：两个资源包writer共用原SKILL.md序列化，完整输出/属性读取顺序与原错误身份保持；原两份表达式控制各3/33、共享实现4/38。模板修复三个旧例接默认双库，原后各3/39，507 SQL、90整行快照及16原await返回逐值相同；另两原例保留，旧迁移累计242完整/17混合。
 > 修复W31三个pure检查对初始化包装层的过期源锁，原3红→3/24，实际helper与原reset Promise/对象/相邻次序保持。RFC341故障例补PG自有trigger/function的finally清理，原断言/DDL及其余三例保持；六纯协议与四指定负控通过，实际PG恢复待新SHA。
 > W39 exact50e9e58cd Main34342947550终态35 success/5 failure、13后端10过3红；两OS各1954文件恰一次，860重点执行848过12红，另2 sidecar过。12红为W31两OS共6、RFC341 PG1、Ubuntu fallback VM5；后者缺首UNION ALL标记，本批仅补真实VM失败现场，原检查不放宽，Linux修复仍开放。

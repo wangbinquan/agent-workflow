@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 689,
+      "baseline": 688,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -868,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25064,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W40: replace the old private skillMarkdown owner with the shared resourcePackageSkillDocument file and renderResourcePackageSkillMarkdown symbol, consumed by both existing artifact writers; net one source-backed owner identity."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -888,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "50e9e58cd5a7574ab463096c3da6fe487a49078a",
-    "contentDigest": "sha256:38c8e8882aa9c4fe8eb43f7bc888d7d77cc99072666439939b5ce9783adf5e62",
+    "currentSnapshotSha": "bbe954aff87a8f076afd94726c43b09690dc8672",
+    "contentDigest": "sha256:a81d08538bd029f1d378fe85a357b250bfc3ee09f196da87fa02a139ab904926",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

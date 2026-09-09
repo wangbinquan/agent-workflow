@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W41 根据托管Linux的五份实际EXPLAIN程序，只替换测试的`checkGateProgram`定位算法。
+  唯一一列且不含Seek的物化定义、原facet索引rootpage与对应Rewind游标共同定位fallback门；
+  验证真实Once/Return/Gosub连接，保留原Seek/Next与门退出边界、所有前置辅助定义的调用范围。
+  地址范围按实际addr比较；Explain标签可有可无，生产SQL与原行为callback不变。
+  RFC331/RFC248五个原DB例复用默认harness；未选完整call保持，原真实trigger产物显式播种，
+  引擎内unixepoch时钟与清理生命周期差量如实保留，不伪造完整捕获字节相同。
+
 - W40 将两个资源包writer中完全相同的YAML字段投影与SKILL.md framing提取为
   `renderResourcePackageSkillMarkdown`；保留原字段求值/展开顺序、lineWidth和完整输出字节。
   PostgreSQL writer保留原局部调用名的import alias，legacy writer只替换原initializer；

@@ -9,6 +9,8 @@ import { resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { cachedRepos, memories, repoGroupNodes, repoGroups } from '../src/db/schema'
 import {
   RepoGroupHasReferencesError,
@@ -73,10 +75,11 @@ function updateRepoGroup(
   )
 }
 
-function makeRepo(db: DbClient, slug: string): string {
+async function makeRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(cachedRepos)
+  await db
+    .insert(cachedRepos)
     .values({
       id,
       urlHash: `${slug}00000000`.slice(0, 8),
@@ -100,20 +103,25 @@ async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
   return 'no-throw'
 }
 
-describe('RFC-248 repo group service', () => {
-  let db: DbClient
-  let store: RepositoryWorkspaceStore
-  let appRepo: string
-  let sdkRepo: string
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    store = composeSqliteRepositoryWorkspaceStore(db)
-    appRepo = makeRepo(db, 'app')
-    sdkRepo = makeRepo(db, 'sdk')
+let db: DbClient
+let store: RepositoryWorkspaceStore
+let appRepo: string
+let sdkRepo: string
+const deps = () => ({ store })
+
+function describeNativeRepoGroupCases(cases: () => void) {
+  describe('RFC-248 repo group service', () => {
+    beforeEach(async () => {
+      db = createInMemoryDb(MIGRATIONS)
+      store = composeSqliteRepositoryWorkspaceStore(db)
+      appRepo = await makeRepo(db, 'app')
+      sdkRepo = await makeRepo(db, 'sdk')
+    })
+    cases()
   })
+}
 
-  const deps = () => ({ store })
-
+describeNativeRepoGroupCases(() => {
   test('建组：挂载路径在落库前就被规范化', async () => {
     const g = await createRepoGroup(
       deps(),
@@ -437,6 +445,19 @@ describe('RFC-248 repo group service', () => {
     )
     expect(code).toBe('repo-group-attachment-conflict')
   })
+})
+
+describeEachProvider('RFC-248 repo group service', (harness) => {
+  let db: ProviderNeutralDatabase
+  let store: RepositoryWorkspaceStore
+  let appRepo: string
+  beforeEach(async () => {
+    db = harness.db
+    store = composeSqliteRepositoryWorkspaceStore(db)
+    appRepo = await makeRepo(db, 'app')
+    await makeRepo(db, 'sdk')
+  })
+  const deps = () => ({ store })
 
   test('PUT 让 version 自增', async () => {
     const g = await createRepoGroup(
@@ -475,7 +496,9 @@ describe('RFC-248 repo group service', () => {
     expect(g2.version).toBe(2)
     expect(g2.description).toBe('改了')
   })
+})
 
+describeNativeRepoGroupCases(() => {
   test('删组被别的组引用 → 409 并列出引用者；force 才摘', async () => {
     const inner = await createRepoGroup(
       deps(),
@@ -596,6 +619,19 @@ describe('RFC-248 repo group service', () => {
     expect((await getRepoGroup(store, g.id)).boundMemories).toBe(0)
     expect((await deleteRepoGroup(store, g.id)).archivedMemories).toBe(0)
   })
+})
+
+describeEachProvider('RFC-248 repo group service', (harness) => {
+  let db: ProviderNeutralDatabase
+  let store: RepositoryWorkspaceStore
+  let appRepo: string
+  beforeEach(async () => {
+    db = harness.db
+    store = composeSqliteRepositoryWorkspaceStore(db)
+    appRepo = await makeRepo(db, 'app')
+    await makeRepo(db, 'sdk')
+  })
+  const deps = () => ({ store })
 
   test('D13 删仓守卫：groupsReferencingRepo 去重，detach 摘干净', async () => {
     const g1 = await createRepoGroup(
@@ -654,7 +690,9 @@ describe('RFC-248 repo group service', () => {
       { path: 'compare', attachment: null },
     ])
   })
+})
 
+describeNativeRepoGroupCases(() => {
   test('外键挡住悬空的 child_group_id——坏数据进不了库', () => {
     // 服务层的 member-not-found 校验之外还有 DB 兜底：`child_group_id` 上的外键
     // 让「并发删组留下悬空引用」这件事在存储层就不可能发生。
@@ -914,6 +952,19 @@ describe('RFC-248 repo group service', () => {
     expect(rows.filter((m) => m.status === 'fused')).toHaveLength(1)
     expect(rows.filter((m) => m.status === 'archived')).toHaveLength(1)
   })
+})
+
+describeEachProvider('RFC-248 repo group service', (harness) => {
+  let db: ProviderNeutralDatabase
+  let store: RepositoryWorkspaceStore
+  let appRepo: string
+  beforeEach(async () => {
+    db = harness.db
+    store = composeSqliteRepositoryWorkspaceStore(db)
+    appRepo = await makeRepo(db, 'app')
+    await makeRepo(db, 'sdk')
+  })
+  const deps = () => ({ store })
 
   test('删不存在的组 → 404', async () => {
     expect(await codeOfAsync(() => deleteRepoGroup(store, 'nope'))).toBe('repo-group-not-found')
@@ -939,7 +990,7 @@ describe('RFC-248 repo group service', () => {
       null,
     )
     await deleteRepoGroup(store, g.id)
-    expect(db.select().from(repoGroupNodes).all()).toHaveLength(0)
-    expect(db.select().from(repoGroups).all()).toHaveLength(0)
+    expect(await db.select().from(repoGroupNodes).all()).toHaveLength(0)
+    expect(await db.select().from(repoGroups).all()).toHaveLength(0)
   })
 })

@@ -1897,7 +1897,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 828
+      "lines": 827
     },
     {
       "id": "rfc359-w5-t19f-toplevel-column-capture",
@@ -2411,8 +2411,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "50e9e58cd5a7574ab463096c3da6fe487a49078a",
-    "contentDigest": "sha256:4569937694863814633d1363c966e349dfea6af6c594d374f1fd96ea2c2df1a3",
+    "currentSnapshotSha": "bbe954aff87a8f076afd94726c43b09690dc8672",
+    "contentDigest": "sha256:c2a3108a770e70a43246570184530ec9cb30d31f30909cca02817b790bc8318b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

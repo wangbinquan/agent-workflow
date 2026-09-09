@@ -559,7 +559,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc330-employee-case-access.test.ts: 1',
   'rfc330-migration-backfill.test.ts: 1',
   'rfc330-tool-template-acl-matrix.test.ts: 2',
-  'rfc331-task-execution-topology.test.ts: 1',
   'rfc333-migration-human-gate-operations.test.ts: 4',
   'rfc333-task-participants.test.ts: 14',
   'rfc335-oidc-git-name-migration.test.ts: 1',
