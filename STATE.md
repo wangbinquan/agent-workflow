@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十六批（2026-09-10）**：MCP、Skills、Plugins三个旧测试文件分别将6、14、16个原功能例接入默认双库，原预算保持；另25个原例保留native。原36例两OS的72次旧W44执行全过，候选真实行为待新SHA托管。
+> MCP保21原call/40 matcher；Skills保19原call/65 callback matcher，原HTTP helper转为绑定当前夹具的同一函数；Plugins保21声明/81 callback matcher，只有第二次seed多一个await。种子的原id/时间/INSERT构造共用，native仍同步返回id，provider等待原write后返回，不改原数据或生产owner。
+> W45 exact29b6a3134 Main34398511514终态38 success/2 failure，13后端全过；原8装配用例两OS16次全过，W44四次旧锁失败对应4/4恢复。选定主集1018/1018实际通过、另2 sidecar及原18 hook所属例均过，两OS各1960文件恰一次；完整Main未绿。原W44结果不回写为绿，新SHA仍须独立验证。
+> 3core一次完整backend tsc、211/433功能metadata、13/55canonical通过。1960测试文件/605工厂文件/1224调用保持；无harness570→567、有harness460→463。13原生成投影逐字保持，只刷新四份provenance，原规则/分母不变；本地未执行实际HTTP/PG/进程夹具，六项AC与原full性能缺口继续开放。
+
 > **RFC-359 W12 第四十五批（2026-09-10）**：修复W44同一store返回值引起的两条旧装配结构锁。先精确验证新增必需字段和唯一compose→mount→同store链，再逆换该已发布增量；原8个完整callback、42个matcher及9个摘要常量保持。
 > 原两条源码测试0过2红，候选整套8过/46 expect；6个输入变异均在指定测试失败，其中5个同步结构检查拒绝、1个原完整摘要断言失败。严格lint/format与一次完整backend tsc通过；这些是纯源码及受控生命周期验证。
 > W44 exact8c5e62753 Main34370615318终态36 success/4 failure，13后端11过2红。选定主集1018次全执行、1014过4红，四红为上述两条旧锁在两OS的结果；另2 sidecar、18个原hook所属case均过。新增31次与W43此前未执行12次均已在W44通过，完整Main仍未绿。

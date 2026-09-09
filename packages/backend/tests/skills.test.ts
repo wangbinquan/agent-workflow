@@ -27,6 +27,12 @@ import {
 import { getSkill } from './helpers/resourceLookup'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -72,6 +78,91 @@ function buildHarness(): Harness {
   }
 }
 
+// RFC-359 W46: use the complete provider application while retaining native fixtures.
+interface ProviderSkillHarness extends Omit<Harness, 'db' | 'cleanup'> {
+  db: ProviderNeutralDatabase
+  cleanup: () => Promise<void>
+}
+
+async function buildProviderSkillHarness(
+  harness: ProviderDatabaseHarness,
+): Promise<ProviderSkillHarness> {
+  const appHome = mkdtempSync(join(tmpdir(), 'aw-skills-'))
+  const prev = process.env.AGENT_WORKFLOW_HOME
+  process.env.AGENT_WORKFLOW_HOME = appHome
+  let application: ProviderHttpApplication | undefined
+  const cleanup = async (): Promise<void> => {
+    try {
+      await application?.dispose()
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+      if (prev === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = prev
+    }
+  }
+  try {
+    application = await createProviderHttpApplication(harness, {
+      token: TOKEN,
+      configPath: join(appHome, 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      appHome,
+    })
+    return { db: harness.db, app: application.app, appHome, cleanup }
+  } catch (error) {
+    await cleanup().catch(() => undefined)
+    throw error
+  }
+}
+
+function describeProviderSkills(
+  name: string,
+  register: (buildHarness: () => ProviderSkillHarness) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('application fixture', () => {
+      let current: ProviderSkillHarness | undefined
+      beforeEach(async () => {
+        current = undefined
+        current = await buildProviderSkillHarness(harness)
+      })
+      afterEach(async () => {
+        const closing = current
+        current = undefined
+        await closing?.cleanup()
+      })
+      register(() => {
+        if (!current) throw new Error('provider skill fixture is not ready')
+        return current
+      })
+    })
+  })
+}
+
+function bindSkillHttpHarness(h: Pick<Harness, 'app'>) {
+  async function createHttpSkill(body: Record<string, unknown>): Promise<{
+    id: string
+    name: string
+    sourceKind: string
+    aclRevision?: number
+    metaRevision: number
+  }> {
+    const res = await req(h.app, '/api/skills', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+    expect(res.status).toBe(201)
+    return (await res.json()) as {
+      id: string
+      name: string
+      sourceKind: string
+      aclRevision?: number
+      metaRevision: number
+    }
+  }
+  return createHttpSkill
+}
+
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${TOKEN}`)
@@ -83,16 +174,14 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
 // Service layer
 // =============================================================================
 
-describe('skill service', () => {
-  let h: Harness
+describeProviderSkills('skill service', (buildHarness) => {
+  let h: ProviderSkillHarness
   let fsOpts: SkillFsOptions
 
   beforeEach(() => {
     h = buildHarness()
     fsOpts = { appHome: h.appHome }
   })
-
-  afterEach(() => h.cleanup())
 
   test('list empty -> []', async () => {
     expect(await listSkills(h.db)).toEqual([])
@@ -188,6 +277,18 @@ describe('skill service', () => {
       ConflictError,
     )
   })
+})
+
+describe('skill service (native fixture)', () => {
+  let h: Harness
+  let fsOpts: SkillFsOptions
+
+  beforeEach(() => {
+    h = buildHarness()
+    fsOpts = { appHome: h.appHome }
+  })
+
+  afterEach(() => h.cleanup())
 
   test('path traversal attempts rejected', async () => {
     const skill = await createManagedSkill(h.db, fsOpts, {
@@ -205,6 +306,16 @@ describe('skill service', () => {
     await expect(readSkillFile(h.db, fsOpts, skill.id, '../../etc/hosts')).rejects.toBeInstanceOf(
       ValidationError,
     )
+  })
+})
+
+describeProviderSkills('skill service (continued)', (buildHarness) => {
+  let h: ProviderSkillHarness
+  let fsOpts: SkillFsOptions
+
+  beforeEach(() => {
+    h = buildHarness()
+    fsOpts = { appHome: h.appHome }
   })
 
   test('delete removes fs + DB; refuses when referenced by an agent', async () => {
@@ -250,35 +361,13 @@ describe('skill service', () => {
 // HTTP layer
 // =============================================================================
 
-describe('skill HTTP routes', () => {
-  let h: Harness
-
+describeProviderSkills('skill HTTP routes', (buildHarness) => {
+  let h: ProviderSkillHarness
+  let createHttpSkill: ReturnType<typeof bindSkillHttpHarness>
   beforeEach(() => {
     h = buildHarness()
+    createHttpSkill = bindSkillHttpHarness(h)
   })
-
-  afterEach(() => h.cleanup())
-
-  async function createHttpSkill(body: Record<string, unknown>): Promise<{
-    id: string
-    name: string
-    sourceKind: string
-    aclRevision?: number
-    metaRevision: number
-  }> {
-    const res = await req(h.app, '/api/skills', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
-    expect(res.status).toBe(201)
-    return (await res.json()) as {
-      id: string
-      name: string
-      sourceKind: string
-      aclRevision?: number
-      metaRevision: number
-    }
-  }
 
   test('POST creates managed skill (201); GET roundtrips', async () => {
     const skill = await createHttpSkill({
@@ -402,6 +491,16 @@ describe('skill HTTP routes', () => {
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('path-required')
   })
+})
+
+describe('skill HTTP routes (native fixture)', () => {
+  let h: Harness
+  let createHttpSkill: ReturnType<typeof bindSkillHttpHarness>
+  beforeEach(() => {
+    h = buildHarness()
+    createHttpSkill = bindSkillHttpHarness(h)
+  })
+  afterEach(() => h.cleanup())
 
   test('DELETE refuses when an agent references the skill', async () => {
     const skill = await createHttpSkill({ name: 'foo' })

@@ -2,14 +2,21 @@
 // Locks status codes (201 / 200 / 204 / 404 / 409 / 422), shape of error
 // bodies (referencedBy on still-referenced delete) and auth (401 without token).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createApp } from '../src/server'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'rfc028-token-fixture'
@@ -57,10 +64,48 @@ async function createMcpHttp(
   return (await res.json()) as { id: string; name: string; operationConfigHash: string }
 }
 
-describe('POST /api/mcps', () => {
+function describeMcpProvider(name: string, register: (getApp: () => Hono) => void) {
+  describeEachProvider(name, (harness) => {
+    // Application-owned work settles before the outer harness resets its database.
+    describe('complete application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let appHome: string | undefined
+      let previousAppHome: string | undefined
+      beforeEach(async () => {
+        application = undefined
+        appHome = undefined
+        previousAppHome = process.env.AGENT_WORKFLOW_HOME
+        appHome = mkdtempSync(join(tmpdir(), 'aw-mcps-http-'))
+        process.env.AGENT_WORKFLOW_HOME = appHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: '/tmp/aw-test-config-never-used.json',
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+      })
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+          if (appHome !== undefined) rmSync(appHome, { recursive: true, force: true })
+        }
+      })
+      register(() => {
+        if (application === undefined) throw new Error('MCP HTTP application is not ready')
+        return application.app
+      })
+    })
+  })
+}
+
+describeMcpProvider('POST /api/mcps', (getApp) => {
   let app: Hono
   beforeEach(() => {
-    ;({ app } = buildHarness())
+    app = getApp()
   })
 
   test('happy path → 201 + created row', async () => {
@@ -73,6 +118,27 @@ describe('POST /api/mcps', () => {
     expect(body.name).toBe('postgres')
     expect(body.type).toBe('local')
     expect(typeof body.id).toBe('string')
+  })
+
+  test('duplicate name → 409 mcp-name-in-use', async () => {
+    await req(app, '/api/mcps', {
+      method: 'POST',
+      body: JSON.stringify(localPayload('dup')),
+    })
+    const res = await req(app, '/api/mcps', {
+      method: 'POST',
+      body: JSON.stringify(localPayload('dup')),
+    })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.code).toBe('mcp-name-in-use')
+  })
+})
+
+describe('POST /api/mcps', () => {
+  let app: Hono
+  beforeEach(() => {
+    ;({ app } = buildHarness())
   })
 
   test('invalid payload → 422 + issues', async () => {
@@ -116,20 +182,6 @@ describe('POST /api/mcps', () => {
     expect(res.status).toBe(201)
   })
 
-  test('duplicate name → 409 mcp-name-in-use', async () => {
-    await req(app, '/api/mcps', {
-      method: 'POST',
-      body: JSON.stringify(localPayload('dup')),
-    })
-    const res = await req(app, '/api/mcps', {
-      method: 'POST',
-      body: JSON.stringify(localPayload('dup')),
-    })
-    expect(res.status).toBe(409)
-    const body = (await res.json()) as Record<string, unknown>
-    expect(body.code).toBe('mcp-name-in-use')
-  })
-
   test('no token → 401', async () => {
     // call without the Authorization header
     const res = await app.request('/api/mcps', {
@@ -141,10 +193,10 @@ describe('POST /api/mcps', () => {
   })
 })
 
-describe('GET /api/mcps and /api/mcps/:id', () => {
+describeMcpProvider('GET /api/mcps and /api/mcps/:id', (getApp) => {
   let app: Hono
   beforeEach(() => {
-    ;({ app } = buildHarness())
+    app = getApp()
   })
 
   test('list empty → []', async () => {

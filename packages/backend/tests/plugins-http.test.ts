@@ -18,6 +18,12 @@ import { createAgent } from '../src/services/agent'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
@@ -39,6 +45,77 @@ function buildHarness(): { db: DbClient; app: Hono } {
   return { db, app }
 }
 
+// RFC-359 W46: the existing full application borrows the selected harness database.
+interface ProviderPluginHarness {
+  db: ProviderNeutralDatabase
+  app: Hono
+}
+interface ProviderPluginCrudHarness extends ProviderPluginHarness {
+  seededId: string
+}
+
+function describeProviderPluginCases(
+  name: string,
+  register: (buildHarness: () => ProviderPluginHarness) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('application fixture', () => {
+      let application: ProviderHttpApplication | undefined
+      beforeEach(async () => {
+        application = undefined
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: '/tmp/aw-test-config-never-used.json',
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome: pluginsDir,
+        })
+      })
+      afterEach(async () => {
+        const closing = application
+        application = undefined
+        await closing?.dispose()
+      })
+      register(() => {
+        if (!application) throw new Error('provider plugin fixture is not ready')
+        return { db: harness.db, app: application.app }
+      })
+    })
+  })
+}
+
+function describeProviderPluginCrud(
+  name: string,
+  register: (
+    getFixture: () => ProviderPluginCrudHarness,
+    seedPluginRow: typeof seedProviderPluginRow,
+  ) => void,
+): void {
+  describeProviderPluginCases(name, (buildHarness) => {
+    let current: ProviderPluginCrudHarness | undefined
+    beforeEach(async () => {
+      current = undefined
+      const { db, app } = buildHarness()
+      const seededId = await seedProviderPluginRow(db, 'seeded', 'pkg@1')
+      current = { db, app, seededId }
+    })
+    register(() => {
+      if (!current) throw new Error('provider plugin seed is not ready')
+      return current
+    }, seedProviderPluginRow)
+  })
+}
+
+let db: DbClient
+let app: Hono
+let seededId: string
+function registerNativePluginCrudFixture(): void {
+  beforeEach(() => {
+    ;({ db, app } = buildHarness())
+    seededId = seedPluginRow(db, 'seeded', 'pkg@1')
+  })
+}
+
 async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${TOKEN}`)
@@ -54,13 +131,11 @@ async function pluginRevision(app: Hono, path: string): Promise<string> {
   return ((await response.json()) as { operationConfigHash: string }).operationConfigHash
 }
 
-function seedPluginRow(db: DbClient, name: string, spec: string): string {
-  // CRUD route tests do not exercise installation. Seed the published row
-  // directly so their beforeEach cannot inherit fake-npm process latency; the
-  // dedicated install-path block below owns all subprocess coverage.
+function startPluginSeed(db: ProviderNeutralDatabase, name: string, spec: string) {
   const id = ulid()
   const now = Date.now()
-  db.insert(plugins)
+  const write = db
+    .insert(plugins)
     .values({
       id,
       name,
@@ -76,6 +151,20 @@ function seedPluginRow(db: DbClient, name: string, spec: string): string {
       updatedAt: now,
     })
     .run()
+  return { id, write }
+}
+
+function seedPluginRow(db: DbClient, name: string, spec: string): string {
+  return startPluginSeed(db, name, spec).id
+}
+
+async function seedProviderPluginRow(
+  db: ProviderNeutralDatabase,
+  name: string,
+  spec: string,
+): Promise<string> {
+  const { id, write } = startPluginSeed(db, name, spec)
+  await write
   return id
 }
 
@@ -139,14 +228,11 @@ describe('/api/plugins auth', () => {
 // CRUD path (DB-seeded so it does not depend on PATH lookups)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('/api/plugins CRUD (DB-seeded)', () => {
-  let db: DbClient
+describeProviderPluginCrud('/api/plugins CRUD (DB-seeded)', (getFixture) => {
   let app: Hono
   let seededId: string
-
   beforeEach(() => {
-    ;({ db, app } = buildHarness())
-    seededId = seedPluginRow(db, 'seeded', 'pkg@1')
+    ;({ app, seededId } = getFixture())
   })
 
   test('GET /api/plugins lists seeded rows', async () => {
@@ -170,6 +256,10 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     const body = (await r.json()) as { code: string }
     expect(body.code).toBe('plugin-not-found')
   })
+})
+
+describe('/api/plugins CRUD (DB-seeded) (continued 2) native fixture', () => {
+  registerNativePluginCrudFixture()
 
   test('legacy mutable-name URLs cannot read, mutate, delete, rename, or address ACL', async () => {
     const requests: Array<[string, RequestInit | undefined]> = [
@@ -233,6 +323,14 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
       visibility: 'public',
     })
   })
+})
+
+describeProviderPluginCrud('/api/plugins CRUD (part 3)', (getFixture) => {
+  let app: Hono
+  let seededId: string
+  beforeEach(() => {
+    ;({ app, seededId } = getFixture())
+  })
 
   test('PUT /api/plugins/:id updates non-spec fields without re-install', async () => {
     const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
@@ -245,6 +343,10 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     expect(body.enabled).toBe(false)
     expect(body.description).toBe('paused')
   })
+})
+
+describe('/api/plugins CRUD (DB-seeded) (continued 4) native fixture', () => {
+  registerNativePluginCrudFixture()
 
   test('ACL owner transfer invalidates a captured config-hash fence', async () => {
     const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
@@ -265,6 +367,15 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     }
     expect(current.description).toBe('')
   })
+})
+
+describeProviderPluginCrud('/api/plugins CRUD (part 5)', (getFixture, seedPluginRow) => {
+  let db: ProviderNeutralDatabase
+  let app: Hono
+  let seededId: string
+  beforeEach(() => {
+    ;({ db, app, seededId } = getFixture())
+  })
 
   test('PUT /api/plugins/:id 422 on invalid body (zod strict)', async () => {
     const r = await req(app, `/api/plugins/${seededId}`, {
@@ -278,7 +389,7 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
 
   test('POST /api/plugins/:id/rename succeeds + 409 on name conflict', async () => {
     // Seed a second plugin so we can attempt to collide.
-    seedPluginRow(db, 'other', 'o@1')
+    await seedPluginRow(db, 'other', 'o@1')
     const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
     const r1 = await req(app, `/api/plugins/${seededId}/rename`, {
       method: 'POST',
@@ -299,6 +410,10 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     const body = (await r2.json()) as { code: string }
     expect(body.code).toBe('plugin-name-in-use')
   })
+})
+
+describe('/api/plugins CRUD (DB-seeded) (continued 6) native fixture', () => {
+  registerNativePluginCrudFixture()
 
   test('DELETE 409 with principal-aware visible list when an agent depends on it', async () => {
     await createAgent(db, {
@@ -330,6 +445,14 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
     expect(body.details.visible.map((r) => r.name)).toContain('consumer')
     expect(body.details.hiddenCount).toBe(0)
   })
+})
+
+describeProviderPluginCrud('/api/plugins CRUD (part 7)', (getFixture) => {
+  let app: Hono
+  let seededId: string
+  beforeEach(() => {
+    ;({ app, seededId } = getFixture())
+  })
 
   test('DELETE 204 when not referenced', async () => {
     const expectedConfigHash = await pluginRevision(app, `/api/plugins/${seededId}`)
@@ -357,7 +480,9 @@ describe('/api/plugins CRUD (DB-seeded)', () => {
 // install paths (POST / upgrade / check-update) using PATH-injected fake npm
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('/api/plugins install path (PATH-injected fake npm)', () => {
+const PROVIDER_PLUGIN_INSTALL_GROUP = '/api/plugins install path (PATH-injected fake npm)'
+
+describeProviderPluginCases(PROVIDER_PLUGIN_INSTALL_GROUP, (buildHarness) => {
   test('POST creates + installs + 201; bad payload → 422', async () => {
     const { app } = buildHarness()
     process.env.FAKE_NPM_VERSION = '5.0.0'
@@ -590,7 +715,9 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     expect(final.status).toBe(200)
     expect(await final.json()).toMatchObject(updated)
   })
+})
 
+describe('/api/plugins install path (native fixture)', () => {
   test('ACL mutation waits behind Upgrade and advances the exact resource hash', async () => {
     const { app } = buildHarness()
     process.env.FAKE_NPM_VERSION = '1.0.0'

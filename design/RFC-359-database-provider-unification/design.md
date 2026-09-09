@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W46 三个旧行为套件复用完整providerHttpApplication，按原App选项构造，等待ready后交给旧回调。
+  内层fixture先释放应用，再执行对应原环境/目录清理；外层provider harness的释放在其后。
+  MCP六例不改回调；Skills的HTTP创建helper保持完整函数体，仅绑定到当例实际app。
+  Plugins把原id/时间/INSERT放到同一个test-local种子核心，保native即时id和同步失败；
+  provider只等待该核心返回的write再返同一id，第二种子调用在原位新增await。
+  原native夹具和未选择的完整回调保持。生产owner、安装逻辑和App装配没有改动。
+
 - W45 的旧装配源码锁先验证W44新增输出的完整形状，再仅逆换该增量。
   SQLite根必须保留必需的repositoryWorkspaceStore类型及末尾原bootstrap实例字段；
   完整应用helper必须恰一次compose、随后挂载同一composed并返回其store。
