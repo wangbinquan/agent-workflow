@@ -17,7 +17,8 @@ import { getTask } from '../src/services/task'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, tasks, users, workflows } from '../src/db/schema'
 import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
@@ -32,6 +33,7 @@ import {
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
 import { DomainError } from '../src/util/errors'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   ensureWorkgroupHostWorkflow,
   WORKGROUP_HOST_WORKFLOW_ID,
@@ -77,7 +79,7 @@ function snapshot(
 }
 
 function save(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   workflow: WorkflowDetail,
   next: WorkflowDraftSnapshot,
   opts: {
@@ -103,31 +105,33 @@ function codeOf(reason: unknown): string | undefined {
 }
 
 describe('RFC-199 workflow revision fencing', () => {
-  test('create stores canonical latest definition and returns a derived detail hash', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const legacy: WorkflowDefinition = {
-      $schema_version: 1,
-      inputs: [],
-      nodes: [],
-      edges: [],
-    }
-    const workflow = await createWorkflow(db, {
-      name: 'canonical-create',
-      description: '',
-      definition: legacy,
-    })
+  describeEachProvider('canonical storage', (harness) => {
+    test('create stores canonical latest definition and returns a derived detail hash', async () => {
+      const db = harness.db
+      const legacy: WorkflowDefinition = {
+        $schema_version: 1,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }
+      const workflow = await createWorkflow(db, {
+        name: 'canonical-create',
+        description: '',
+        definition: legacy,
+      })
 
-    const raw = (
-      await db
-        .select({ definition: workflows.definition })
-        .from(workflows)
-        .where(eq(workflows.id, workflow.id))
-    )[0]
-    expect(raw?.definition).toBe(
-      serializeWorkflowDefinitionStorageV1(migrateDefinitionToLatest(legacy)),
-    )
-    expect(workflow.snapshotHash).toBe(workflowSnapshotHashOf(workflowDraftSnapshotOf(workflow)))
-    expect(workflow.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
+      const raw = (
+        await db
+          .select({ definition: workflows.definition })
+          .from(workflows)
+          .where(eq(workflows.id, workflow.id))
+      )[0]
+      expect(raw?.definition).toBe(
+        serializeWorkflowDefinitionStorageV1(migrateDefinitionToLatest(legacy)),
+      )
+      expect(workflow.snapshotHash).toBe(workflowSnapshotHashOf(workflowDraftSnapshotOf(workflow)))
+      expect(workflow.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
+    })
   })
 
   test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
@@ -144,145 +148,147 @@ describe('RFC-199 workflow revision fencing', () => {
     expect(byId.get(WORKGROUP_HOST_WORKFLOW_ID)).toBe(expected)
   })
 
-  test('two writers from the same base produce one owned receipt and one conflict', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await createWorkflow(db, {
-      name: 'revision-race',
-      description: '',
-      definition: EMPTY_DEFINITION,
-    })
-
-    const results = await Promise.allSettled([
-      save(db, workflow, snapshot(workflow, { description: 'writer-a' })),
-      save(db, workflow, snapshot(workflow, { description: 'writer-b' })),
-    ])
-    const fulfilled = results.filter(
-      (result): result is PromiseFulfilledResult<SaveWorkflowReceipt> =>
-        result.status === 'fulfilled',
-    )
-    const rejected = results.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
-    )
-
-    expect(fulfilled).toHaveLength(1)
-    expect(rejected).toHaveLength(1)
-    const winner = fulfilled[0]
-    if (winner === undefined) throw new Error('missing winning writer')
-    expect(winner.value.outcome).toBe('committed')
-    expect(winner.value.revision.version).toBe(2)
-    expect(['writer-a', 'writer-b']).toContain(winner.value.snapshot.description)
-    expect(codeOf(rejected[0]?.reason)).toBe('resource-operation-stale')
-    const current = await getWorkflow(db, workflow.id)
-    expect(current?.version).toBe(2)
-    expect(current?.description).toBe(winner.value.snapshot.description)
-  })
-
-  test('logical no-op and stale exact retry do not bump or broadcast', async () => {
-    resetBroadcastersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await createWorkflow(db, {
-      name: 'retry-reconcile',
-      description: '',
-      definition: EMPTY_DEFINITION,
-    })
-    const frames: WorkflowsWsMessage[] = []
-    const unsubscribe = workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (frame) =>
-      frames.push(frame),
-    )
-
-    const noOp = await save(db, workflow, snapshot(workflow))
-    expect(noOp.outcome).toBe('already-current')
-    expect(noOp.revision.version).toBe(1)
-    expect(frames).toHaveLength(0)
-
-    const submitted = snapshot(workflow, { description: 'committed-once' })
-    const committed = await save(db, workflow, submitted)
-    expect(committed.outcome).toBe('committed')
-    expect(committed.revision.version).toBe(2)
-    expect(frames).toHaveLength(1)
-    expect(frames[0]).toMatchObject({
-      type: 'workflow.updated',
-      clientMutationId: committed.clientMutationId,
-      version: 2,
-      snapshotHash: committed.revision.snapshotHash,
-    })
-
-    const retry = await save(db, workflow, submitted, { expectedVersion: 1 })
-    expect(retry.outcome).toBe('already-current')
-    expect(retry.revision).toEqual(committed.revision)
-    expect(frames).toHaveLength(1)
-    unsubscribe()
-  })
-
-  test('same logical snapshot heals legacy/noncanonical storage exactly once', async () => {
-    resetBroadcastersForTests()
-    const db = createInMemoryDb(MIGRATIONS)
-    const id = ulid()
-    const legacy: WorkflowDefinition = {
-      $schema_version: 1,
-      inputs: [],
-      nodes: [],
-      edges: [],
-    }
-    await db.insert(workflows).values({
-      id,
-      name: 'legacy-heal',
-      description: '',
-      definition: JSON.stringify(legacy, null, 2),
-      version: 1,
-    })
-    const visible = await getWorkflow(db, id)
-    if (visible === null) throw new Error('legacy workflow missing')
-
-    const frames: WorkflowsWsMessage[] = []
-    const unsubscribe = workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (frame) =>
-      frames.push(frame),
-    )
-    const healed = await save(db, visible, snapshot(visible))
-    expect(healed.outcome).toBe('committed')
-    expect(healed.revision.version).toBe(2)
-    const raw = (
-      await db
-        .select({ definition: workflows.definition })
-        .from(workflows)
-        .where(eq(workflows.id, id))
-    )[0]
-    expect(raw?.definition).toBe(
-      serializeWorkflowDefinitionStorageV1(migrateDefinitionToLatest(legacy)),
-    )
-
-    const afterHeal = await getWorkflow(db, id)
-    if (afterHeal === null) throw new Error('healed workflow missing')
-    const noOp = await save(db, afterHeal, snapshot(afterHeal))
-    expect(noOp.outcome).toBe('already-current')
-    expect(noOp.revision.version).toBe(2)
-    expect(frames.filter((frame) => frame.type === 'workflow.updated')).toHaveLength(1)
-    unsubscribe()
-  })
-
-  test('stale different bytes return current revision and preserve the winner', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const workflow = await createWorkflow(db, {
-      name: 'stale-conflict',
-      description: '',
-      definition: EMPTY_DEFINITION,
-    })
-    const winner = await save(db, workflow, snapshot(workflow, { description: 'winner' }))
-
-    try {
-      await save(db, workflow, snapshot(workflow, { description: 'loser' }), {
-        expectedVersion: 1,
+  describeEachProvider('revision writes', (harness) => {
+    test('two writers from the same base produce one owned receipt and one conflict', async () => {
+      const db = harness.db
+      const workflow = await createWorkflow(db, {
+        name: 'revision-race',
+        description: '',
+        definition: EMPTY_DEFINITION,
       })
-      throw new Error('expected conflict')
-    } catch (error) {
-      expect(codeOf(error)).toBe('resource-operation-stale')
-      // RFC-285 B5：details 增 resource 字段（staleConflictError 统一形态）。
-      expect((error as DomainError).details).toEqual({
-        resource: 'workflow',
-        current: winner.revision,
+
+      const results = await Promise.allSettled([
+        save(db, workflow, snapshot(workflow, { description: 'writer-a' })),
+        save(db, workflow, snapshot(workflow, { description: 'writer-b' })),
+      ])
+      const fulfilled = results.filter(
+        (result): result is PromiseFulfilledResult<SaveWorkflowReceipt> =>
+          result.status === 'fulfilled',
+      )
+      const rejected = results.filter(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      )
+
+      expect(fulfilled).toHaveLength(1)
+      expect(rejected).toHaveLength(1)
+      const winner = fulfilled[0]
+      if (winner === undefined) throw new Error('missing winning writer')
+      expect(winner.value.outcome).toBe('committed')
+      expect(winner.value.revision.version).toBe(2)
+      expect(['writer-a', 'writer-b']).toContain(winner.value.snapshot.description)
+      expect(codeOf(rejected[0]?.reason)).toBe('resource-operation-stale')
+      const current = await getWorkflow(db, workflow.id)
+      expect(current?.version).toBe(2)
+      expect(current?.description).toBe(winner.value.snapshot.description)
+    })
+
+    test('logical no-op and stale exact retry do not bump or broadcast', async () => {
+      resetBroadcastersForTests()
+      const db = harness.db
+      const workflow = await createWorkflow(db, {
+        name: 'retry-reconcile',
+        description: '',
+        definition: EMPTY_DEFINITION,
       })
-    }
-    expect((await getWorkflow(db, workflow.id))?.description).toBe('winner')
+      const frames: WorkflowsWsMessage[] = []
+      const unsubscribe = workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (frame) =>
+        frames.push(frame),
+      )
+
+      const noOp = await save(db, workflow, snapshot(workflow))
+      expect(noOp.outcome).toBe('already-current')
+      expect(noOp.revision.version).toBe(1)
+      expect(frames).toHaveLength(0)
+
+      const submitted = snapshot(workflow, { description: 'committed-once' })
+      const committed = await save(db, workflow, submitted)
+      expect(committed.outcome).toBe('committed')
+      expect(committed.revision.version).toBe(2)
+      expect(frames).toHaveLength(1)
+      expect(frames[0]).toMatchObject({
+        type: 'workflow.updated',
+        clientMutationId: committed.clientMutationId,
+        version: 2,
+        snapshotHash: committed.revision.snapshotHash,
+      })
+
+      const retry = await save(db, workflow, submitted, { expectedVersion: 1 })
+      expect(retry.outcome).toBe('already-current')
+      expect(retry.revision).toEqual(committed.revision)
+      expect(frames).toHaveLength(1)
+      unsubscribe()
+    })
+
+    test('same logical snapshot heals legacy/noncanonical storage exactly once', async () => {
+      resetBroadcastersForTests()
+      const db = harness.db
+      const id = ulid()
+      const legacy: WorkflowDefinition = {
+        $schema_version: 1,
+        inputs: [],
+        nodes: [],
+        edges: [],
+      }
+      await db.insert(workflows).values({
+        id,
+        name: 'legacy-heal',
+        description: '',
+        definition: JSON.stringify(legacy, null, 2),
+        version: 1,
+      })
+      const visible = await getWorkflow(db, id)
+      if (visible === null) throw new Error('legacy workflow missing')
+
+      const frames: WorkflowsWsMessage[] = []
+      const unsubscribe = workflowsBroadcaster.subscribe(WORKFLOWS_CHANNEL, (frame) =>
+        frames.push(frame),
+      )
+      const healed = await save(db, visible, snapshot(visible))
+      expect(healed.outcome).toBe('committed')
+      expect(healed.revision.version).toBe(2)
+      const raw = (
+        await db
+          .select({ definition: workflows.definition })
+          .from(workflows)
+          .where(eq(workflows.id, id))
+      )[0]
+      expect(raw?.definition).toBe(
+        serializeWorkflowDefinitionStorageV1(migrateDefinitionToLatest(legacy)),
+      )
+
+      const afterHeal = await getWorkflow(db, id)
+      if (afterHeal === null) throw new Error('healed workflow missing')
+      const noOp = await save(db, afterHeal, snapshot(afterHeal))
+      expect(noOp.outcome).toBe('already-current')
+      expect(noOp.revision.version).toBe(2)
+      expect(frames.filter((frame) => frame.type === 'workflow.updated')).toHaveLength(1)
+      unsubscribe()
+    })
+
+    test('stale different bytes return current revision and preserve the winner', async () => {
+      const db = harness.db
+      const workflow = await createWorkflow(db, {
+        name: 'stale-conflict',
+        description: '',
+        definition: EMPTY_DEFINITION,
+      })
+      const winner = await save(db, workflow, snapshot(workflow, { description: 'winner' }))
+
+      try {
+        await save(db, workflow, snapshot(workflow, { description: 'loser' }), {
+          expectedVersion: 1,
+        })
+        throw new Error('expected conflict')
+      } catch (error) {
+        expect(codeOf(error)).toBe('resource-operation-stale')
+        // RFC-285 B5：details 增 resource 字段（staleConflictError 统一形态）。
+        expect((error as DomainError).details).toEqual({
+          resource: 'workflow',
+          current: winner.revision,
+        })
+      }
+      expect((await getWorkflow(db, workflow.id))?.description).toBe('winner')
+    })
   })
 
   test('current visibility precedes builtin/owner and current owner is rechecked', async () => {

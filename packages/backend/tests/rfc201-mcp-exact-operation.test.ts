@@ -2,12 +2,19 @@
 // deterministic foreign-write/finalize interleavings.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { createInMemoryDb } from '../src/db/client'
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
 import type { OpenClientFn, ProbedMcpClient } from '../src/services/mcpProbe'
 import { createApp } from '../src/server'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'rfc201-mcp-token'
@@ -95,125 +102,158 @@ async function waitForStart(predicate: () => boolean, label: string): Promise<vo
   }
 }
 
+const providerApplications = new Map<ProviderHttpApplication, string>()
+
+async function providerHarness(provider: ProviderDatabaseHarness): Promise<Hono> {
+  const appHome = mkdtempSync(join(tmpdir(), 'rfc201-mcp-'))
+  try {
+    const application = await createProviderHttpApplication(provider, {
+      token: TOKEN,
+      configPath: '/tmp/aw-rfc201-mcp.json',
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      appHome,
+    })
+    providerApplications.set(application, appHome)
+    return application.app
+  } catch (error) {
+    rmSync(appHome, { recursive: true, force: true })
+    throw error
+  }
+}
+
+afterEach(async () => {
+  for (const [application, appHome] of providerApplications) {
+    providerApplications.delete(application)
+    try {
+      await application.dispose()
+    } finally {
+      rmSync(appHome, { recursive: true, force: true })
+    }
+  }
+})
+
 afterEach(() => __setProbeOptionsForTesting(undefined))
 
 describe('RFC-201 MCP exact operation wire', () => {
-  test('GET/PUT return hashes and a semantic no-op does not bump revision or timestamp', async () => {
-    const app = harness()
-    const created = await createMcp(app)
-    expect(created.operationConfigHash).toMatch(/^[a-f0-9]{64}$/)
+  describeEachProvider('functional operations', (provider) => {
+    test('GET/PUT return hashes and a semantic no-op does not bump revision or timestamp', async () => {
+      const app = await providerHarness(provider)
+      const created = await createMcp(app)
+      expect(created.operationConfigHash).toMatch(/^[a-f0-9]{64}$/)
 
-    const noOp = await req(app, `/api/mcps/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'v1',
-        config: { command: ['fake'] },
-        enabled: true,
-        expectedConfigHash: created.operationConfigHash,
-      }),
-    })
-    expect(noOp.status).toBe(200)
-    const unchanged = (await noOp.json()) as Resource
-    expect(unchanged.updatedAt).toBe(created.updatedAt)
-    expect(unchanged.operationConfigHash).toBe(created.operationConfigHash)
+      const noOp = await req(app, `/api/mcps/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'v1',
+          config: { command: ['fake'] },
+          enabled: true,
+          expectedConfigHash: created.operationConfigHash,
+        }),
+      })
+      expect(noOp.status).toBe(200)
+      const unchanged = (await noOp.json()) as Resource
+      expect(unchanged.updatedAt).toBe(created.updatedAt)
+      expect(unchanged.operationConfigHash).toBe(created.operationConfigHash)
 
-    const changedResponse = await req(app, `/api/mcps/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'v2',
-        expectedConfigHash: unchanged.operationConfigHash,
-      }),
+      const changedResponse = await req(app, `/api/mcps/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'v2',
+          expectedConfigHash: unchanged.operationConfigHash,
+        }),
+      })
+      const changed = (await changedResponse.json()) as Resource
+      expect(changed.updatedAt).toBeGreaterThan(created.updatedAt)
+      expect(changed.operationConfigHash).not.toBe(created.operationConfigHash)
     })
-    const changed = (await changedResponse.json()) as Resource
-    expect(changed.updatedAt).toBeGreaterThan(created.updatedAt)
-    expect(changed.operationConfigHash).not.toBe(created.operationConfigHash)
-  })
 
-  test('stale expected hash returns stable 409 before opening transport', async () => {
-    const app = harness()
-    const created = await createMcp(app)
-    await req(app, `/api/mcps/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'foreign',
-        expectedConfigHash: created.operationConfigHash,
-      }),
+    test('stale expected hash returns stable 409 before opening transport', async () => {
+      const app = await providerHarness(provider)
+      const created = await createMcp(app)
+      await req(app, `/api/mcps/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'foreign',
+          expectedConfigHash: created.operationConfigHash,
+        }),
+      })
+      let opens = 0
+      __setProbeOptionsForTesting({
+        openClient: async () => {
+          opens += 1
+          return { client: client('never'), handshakeMs: 0 }
+        },
+      })
+      const response = await postProbe(app, created.id, created.operationConfigHash)
+      expect(response.status).toBe(409)
+      expect(((await response.json()) as { code: string }).code).toBe('resource-operation-stale')
+      expect(opens).toBe(0)
     })
-    let opens = 0
-    __setProbeOptionsForTesting({
-      openClient: async () => {
-        opens += 1
-        return { client: client('never'), handshakeMs: 0 }
-      },
-    })
-    const response = await postProbe(app, created.id, created.operationConfigHash)
-    expect(response.status).toBe(409)
-    expect(((await response.json()) as { code: string }).code).toBe('resource-operation-stale')
-    expect(opens).toBe(0)
-  })
 
-  test('same id+hash callers join start, I/O, persistence, and receipt', async () => {
-    const app = harness()
-    const created = await createMcp(app)
-    const gate = deferred()
-    let opens = 0
-    __setProbeOptionsForTesting({
-      openClient: async () => {
-        opens += 1
-        await gate.promise
-        return { client: client('joined'), handshakeMs: 1 }
-      },
+    test('same id+hash callers join start, I/O, persistence, and receipt', async () => {
+      const app = await providerHarness(provider)
+      const created = await createMcp(app)
+      const gate = deferred()
+      let opens = 0
+      __setProbeOptionsForTesting({
+        openClient: async () => {
+          opens += 1
+          await gate.promise
+          return { client: client('joined'), handshakeMs: 1 }
+        },
+      })
+      const a = postProbe(app, created.id, created.operationConfigHash)
+      const b = postProbe(app, created.id, created.operationConfigHash)
+      await waitForStart(() => opens > 0, 'joined probe transport')
+      expect(opens).toBe(1)
+      gate.resolve()
+      const [ar, br] = await Promise.all([a, b])
+      expect([ar.status, br.status]).toEqual([200, 200])
+      const bodies = (await Promise.all([ar.json(), br.json()])) as Array<{
+        id: string
+        configHashUsed: string
+      }>
+      const aj = bodies[0]!
+      const bj = bodies[1]!
+      expect(aj.id).toBe(bj.id)
+      expect(aj.configHashUsed).toBe(created.operationConfigHash)
+      expect(bj.configHashUsed).toBe(created.operationConfigHash)
     })
-    const a = postProbe(app, created.id, created.operationConfigHash)
-    const b = postProbe(app, created.id, created.operationConfigHash)
-    await waitForStart(() => opens > 0, 'joined probe transport')
-    expect(opens).toBe(1)
-    gate.resolve()
-    const [ar, br] = await Promise.all([a, b])
-    expect([ar.status, br.status]).toEqual([200, 200])
-    const bodies = (await Promise.all([ar.json(), br.json()])) as Array<{
-      id: string
-      configHashUsed: string
-    }>
-    const aj = bodies[0]!
-    const bj = bodies[1]!
-    expect(aj.id).toBe(bj.id)
-    expect(aj.configHashUsed).toBe(created.operationConfigHash)
-    expect(bj.configHashUsed).toBe(created.operationConfigHash)
-  })
 
-  test('H1 paused → PUT H2 → H2 completes → H1 late is 409 and cannot overwrite H2', async () => {
-    const app = harness()
-    const h1 = await createMcp(app, 'v1')
-    const oldGate = deferred()
-    let oldOpened = false
-    const opener: OpenClientFn = async (mcp) => {
-      if (mcp.description === 'v1') {
-        oldOpened = true
-        await oldGate.promise
-        return { client: client('old'), handshakeMs: 1 }
+    test('H1 paused → PUT H2 → H2 completes → H1 late is 409 and cannot overwrite H2', async () => {
+      const app = await providerHarness(provider)
+      const h1 = await createMcp(app, 'v1')
+      const oldGate = deferred()
+      let oldOpened = false
+      const opener: OpenClientFn = async (mcp) => {
+        if (mcp.description === 'v1') {
+          oldOpened = true
+          await oldGate.promise
+          return { client: client('old'), handshakeMs: 1 }
+        }
+        return { client: client('new'), handshakeMs: 1 }
       }
-      return { client: client('new'), handshakeMs: 1 }
-    }
-    __setProbeOptionsForTesting({ openClient: opener })
+      __setProbeOptionsForTesting({ openClient: opener })
 
-    const oldResponseP = postProbe(app, h1.id, h1.operationConfigHash)
-    await waitForStart(() => oldOpened, 'stale probe transport')
-    const put = await req(app, `/api/mcps/${h1.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ description: 'v2', expectedConfigHash: h1.operationConfigHash }),
+      const oldResponseP = postProbe(app, h1.id, h1.operationConfigHash)
+      await waitForStart(() => oldOpened, 'stale probe transport')
+      const put = await req(app, `/api/mcps/${h1.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description: 'v2', expectedConfigHash: h1.operationConfigHash }),
+      })
+      const h2 = (await put.json()) as Resource
+      const newResponse = await postProbe(app, h2.id, h2.operationConfigHash)
+      expect(newResponse.status).toBe(200)
+      oldGate.resolve()
+      const oldResponse = await oldResponseP
+      expect(oldResponse.status).toBe(409)
+      expect(((await oldResponse.json()) as { code: string }).code).toBe('resource-operation-stale')
+
+      const persisted = await req(app, `/api/mcps/${h2.id}/probe`)
+      const persistedJson = (await persisted.json()) as { tools: Array<{ name: string }> }
+      expect(persistedJson.tools.map((tool) => tool.name)).toEqual(['new'])
     })
-    const h2 = (await put.json()) as Resource
-    const newResponse = await postProbe(app, h2.id, h2.operationConfigHash)
-    expect(newResponse.status).toBe(200)
-    oldGate.resolve()
-    const oldResponse = await oldResponseP
-    expect(oldResponse.status).toBe(409)
-    expect(((await oldResponse.json()) as { code: string }).code).toBe('resource-operation-stale')
-
-    const persisted = await req(app, `/api/mcps/${h2.id}/probe`)
-    const persistedJson = (await persisted.json()) as { tools: Array<{ name: string }> }
-    expect(persistedJson.tools.map((tool) => tool.name)).toEqual(['new'])
   })
 
   test('rename and ACL mutation share the stable-id fence and stale a paused probe', async () => {
@@ -263,61 +303,63 @@ describe('RFC-201 MCP exact operation wire', () => {
     }
   })
 
-  test('persisted probe follows the stable MCP id across rename', async () => {
-    const app = harness()
-    const created = await createMcp(app)
-    __setProbeOptionsForTesting({
-      openClient: async () => ({ client: client('renamed-tool'), handshakeMs: 0 }),
-    })
-    expect((await postProbe(app, created.id, created.operationConfigHash)).status).toBe(200)
+  describeEachProvider('functional operations', (provider) => {
+    test('persisted probe follows the stable MCP id across rename', async () => {
+      const app = await providerHarness(provider)
+      const created = await createMcp(app)
+      __setProbeOptionsForTesting({
+        openClient: async () => ({ client: client('renamed-tool'), handshakeMs: 0 }),
+      })
+      expect((await postProbe(app, created.id, created.operationConfigHash)).status).toBe(200)
 
-    const renamed = await req(app, `/api/mcps/${created.id}/rename`, {
-      method: 'POST',
-      body: JSON.stringify({
-        newName: 'pg-renamed',
-        expectedConfigHash: created.operationConfigHash,
-      }),
-    })
-    expect(renamed.status).toBe(200)
+      const renamed = await req(app, `/api/mcps/${created.id}/rename`, {
+        method: 'POST',
+        body: JSON.stringify({
+          newName: 'pg-renamed',
+          expectedConfigHash: created.operationConfigHash,
+        }),
+      })
+      expect(renamed.status).toBe(200)
 
-    const probe = await req(app, `/api/mcps/${created.id}/probe`)
-    expect(probe.status).toBe(200)
-    expect(
-      (await probe.json()) as { mcpName: string; tools: Array<{ name: string }> },
-    ).toMatchObject({
-      mcpName: 'pg-renamed',
-      tools: [{ name: 'renamed-tool' }],
+      const probe = await req(app, `/api/mcps/${created.id}/probe`)
+      expect(probe.status).toBe(200)
+      expect(
+        (await probe.json()) as { mcpName: string; tools: Array<{ name: string }> },
+      ).toMatchObject({
+        mcpName: 'pg-renamed',
+        tools: [{ name: 'renamed-tool' }],
+      })
     })
-  })
 
-  test('frozen clock preserves Save→Probe freshness and Probe→Save staleness', async () => {
-    const app = harness()
-    const created = await createMcp(app)
-    __setProbeOptionsForTesting({
-      now: () => 1_000,
-      openClient: async () => ({ client: client('clock'), handshakeMs: 0 }),
-    })
-    const saveResponse = await req(app, `/api/mcps/${created.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'saved',
-        expectedConfigHash: created.operationConfigHash,
-      }),
-    })
-    const saved = (await saveResponse.json()) as Resource
-    const probeResponse = await postProbe(app, saved.id, saved.operationConfigHash)
-    const probe = (await probeResponse.json()) as { startedAt: number; configHashUsed: string }
-    expect(probe.startedAt).toBeGreaterThan(saved.updatedAt)
-    expect(probe.configHashUsed).toBe(saved.operationConfigHash)
+    test('frozen clock preserves Save→Probe freshness and Probe→Save staleness', async () => {
+      const app = await providerHarness(provider)
+      const created = await createMcp(app)
+      __setProbeOptionsForTesting({
+        now: () => 1_000,
+        openClient: async () => ({ client: client('clock'), handshakeMs: 0 }),
+      })
+      const saveResponse = await req(app, `/api/mcps/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'saved',
+          expectedConfigHash: created.operationConfigHash,
+        }),
+      })
+      const saved = (await saveResponse.json()) as Resource
+      const probeResponse = await postProbe(app, saved.id, saved.operationConfigHash)
+      const probe = (await probeResponse.json()) as { startedAt: number; configHashUsed: string }
+      expect(probe.startedAt).toBeGreaterThan(saved.updatedAt)
+      expect(probe.configHashUsed).toBe(saved.operationConfigHash)
 
-    const afterProbeResponse = await req(app, `/api/mcps/${saved.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        description: 'after-probe',
-        expectedConfigHash: saved.operationConfigHash,
-      }),
+      const afterProbeResponse = await req(app, `/api/mcps/${saved.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'after-probe',
+          expectedConfigHash: saved.operationConfigHash,
+        }),
+      })
+      const afterProbe = (await afterProbeResponse.json()) as Resource
+      expect(afterProbe.updatedAt).toBeGreaterThan(probe.startedAt)
     })
-    const afterProbe = (await afterProbeResponse.json()) as Resource
-    expect(afterProbe.updatedAt).toBeGreaterThan(probe.startedAt)
   })
 })

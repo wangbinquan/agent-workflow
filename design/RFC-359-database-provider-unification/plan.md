@@ -21,20 +21,20 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 「完整落地」= proposal §7 的 12 条 AC 全部达成。逐条实测状态如下——**数字都是跑出来的，不是估的**；
 本波仍有多刀在跑，未达成项的数字会继续动。
 
-| AC    | 判据                                              | 实测                                                                                                                                                                                                    | 状态   |
-| ----- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录文件对 153 → 9，全部有登记；resource-catalog 仍有跨目录或内联孪生，不能用同目录扫描归零宣称全部合一                                                                                               | 进行中 |
-| AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                          | ✅     |
-| AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                  | ✅     |
-| AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                               | ✅     |
-| AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                        | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1950文件；605构库文件/1247调用，588无harness/439有harness。候选242完整/4混合；W32新增20旧DB与6 owner例待新SHA。W31两OS各1949文件恰一次，18功能文件264过/2 PG mission顺序红，15个原/新增HTTP真PG通过 | 进行中 |
-| AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                         | ✅     |
-| AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                                        | 进行中 |
-| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W31 exact2770352be Main终态33success/7failure，13后端9过4红；普通lint单warning、两PG mission次序、RFC223双OS旧源码锁及RFC314 afterAll超时。本批修前三类，清理超时与新SHA完整CI仍待验证                  | 待办   |
-| AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                        | ✅     |
-| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | exact `6f3be930c` 原full360样本：PG三任务页83.832988/56.640931/50.267344ms均快于同轮SQLite并满足原绝对预算；其余六端点PG仍较慢，SQLite任务首页199.069889ms未过150ms。原样本/规模/判据保持               | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 9，未构造根账本 0 项；协作四能力与完整动态工作流合同已收紧，九个诊断为四个作用域查询、四个协作检查和一个保留的兼容诊断；provider 命名文件 88 → 60，残余继续核验                   | 进行中 |
+| AC    | 判据                                              | 实测                                                                                                                                                                                           | 状态   |
+| ----- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录文件对 153 → 9，全部有登记；resource-catalog 仍有跨目录或内联孪生，不能用同目录扫描归零宣称全部合一                                                                                      | 进行中 |
+| AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                 | ✅     |
+| AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                         | ✅     |
+| AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                      | ✅     |
+| AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                               | ✅     |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1950文件；605构库文件/1242调用，585无harness/442有harness。候选242完整/7混合；W33新增16旧DB例待新SHA。W32两OS各1950文件恰一次，25选定文件399过/2同一机械锁红，旧mission与HTTP真PG均过      | 进行中 |
+| AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                | ✅     |
+| AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                               | 进行中 |
+| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W32 exact0449e91ee Main终态36success/4failure，13后端11过2红；普通严格lint通过，两红均RFC223后继旧no-await断言。本批补完整async源码检查；RFC314本次未复发，历史机制未宣称修复，新SHA完整CI待验 | 待办   |
+| AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                               | ✅     |
+| AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | exact `6f3be930c` 原full360样本：PG三任务页83.832988/56.640931/50.267344ms均快于同轮SQLite并满足原绝对预算；其余六端点PG仍较慢，SQLite任务首页199.069889ms未过150ms。原样本/规模/判据保持      | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 9，未构造根账本 0 项；协作四能力与完整动态工作流合同已收紧，九个诊断为四个作用域查询、四个协作检查和一个保留的兼容诊断；provider 命名文件 88 → 60，残余继续核验          | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -1603,6 +1603,68 @@ PG overview max<10ms。九项稳定wire相同，末次完整body摘要八项相�
   canonical13/55通过。定向源lint/format及独立代码、metadata、文档复核完成；两生成合同和RFC294
   status的原/候选直接Prettier均红，保留原生成器字节及精确投影，格式限制单列。未跑本地PG/服务/E2E/性能/完整门禁，原W20限制保留；本批新SHA真PG、
   完整Main及原full待托管，AC1/6/8/9/11/12和RFC保持开放。
+
+### W12 第三十三批：旧套件部分双库迁移与完整异步源码检查
+
+本批基于已发布`0449e91eeba4e0ffb4619532ccd760921d1f551e`。三个旧套件保留全部25原声明：
+workflow revision为11声明中5DB/30完整callback matcher，intent state为7声明中5DB/35 matcher，
+MCP exact为7声明中6DB/25 matcher。16旧DB例默认双库，9原single继续单跑；原注册相对顺序与预算保持。
+三文件都保留原生兼容用例，本批只增加3份部分迁移，候选累计242完整套件与另7混合套件。
+90是选定callback的完整matcher数，不是25个声明的全文件matcher总数。MCP六例均为HTTP，未在本地运行应用。
+
+- Workflow revision只替换五个既有DB夹具，沿用真实workflow owner与原保存调用；本地save helper仅DB类型变化，
+  完整body与整个函数TypeScript输出相同。六个原single完整注册和callback字节保持；原生构库11→6。
+  原后各5 pass /30 expect，六原single全部过滤，原5s预算保持。59条实际SQL/执行SQL/ordered binding/底层结果全同；
+  19快照、14重复行/168字段/14 raw JSON、14完整返回全同；8个原广播都在实际COMMIT之后、连接inTransaction=false时发生。
+  原后完整capture payload字节相同；初次preload位置错误未产生capture的观察单独保留，不计入正式对照。
+- Intent state把五个原DB例接实际harness，原native setup仅作用于两个原single；中立组不额外创建SQLite。
+  原五条初始化语句完整AST与次序保持，共享原生constructor仍一处。seedFakeRoot仍非async并直接返回原run结果，
+  三个原生调用的即时完整行见证保持；选定调用在原位置等待，insertDraft的两个原写入依原序await。
+  原后各5 pass /35 expect，七声明/45全文件matcher保持，选定五例35 matcher、保留两single10 matcher。
+  一个single的完整注册/callback字节保持，另一个因夹具分组只增加统一两空格缩进，逆缩进与完整AST相同；
+  不能将后者描述为原始字节完全相同，两者均未本地执行。
+  初始自然capture的9个nonce差量完整保留；记录9个实际原生产者返回，以相同调用参数/次序提供给候选后，
+  253条callback完整SQL/绑定/结果与53快照、210重复物理行/3232字段/312原JSON、24完整返回保持。
+  全328条SQL文本、方法与顺序相同，但5个原setup binding及5个readback差量仍原样保留；
+  不归一化这些原值，不称全部328条绑定或整份capture字节相同。初始观察器递归单列为无效instrumentation。
+- MCP exact保留原native harness、八个原helper完整字节、probe清理和原四应用选项；两个默认双库组各4/2例，
+  中间原single完整注册字节及原位置保持。六个原app获取语句使用实际完整createProviderHttpApplication和同一harness。
+  首候选漏掉其必需appHome，独立复核在任何backend tsc之前发现；现已创建自有临时目录，
+  创建拒绝时清理，成功实例等待dispose后finally清理。没有实际运行过的首轮typecheck失败可供宣称。
+  全七个原注册经精确逆换后，完整AST及parser叶token相同；最初独立lexer没有template rescan产生的假差量单独保留。
+  仅做source/AST、严格lint/format与类型检查，真实六HTTP的SQLite/PG执行等待本批托管。
+- W32的RFC223首条完整async调用期望已经通过；真正红项是紧随其后的旧no-await matcher。
+  本批只修同一机械callback和所需AST工具，核实际外层return await transaction、async回调与同一tx，
+  以及内部原查询/委托的等待、参数身份与次序。保留原两条不透明断言及其他原用例/生产源码。
+  独立提取完整机械callback后，原检查在该后继断言红、新检查绿；7个针对原实际AST节点的漏await与错tx负控均在新增guard处红，原首条async字符串期望先通过。
+  未载入或执行原整文件的native setup和其他用例；这是源码合同检查，不是运行时PG事务证明。
+
+W32 Main`34307322957`、attempt1、exact`0449e91ee`终态40任务36 success /4 failure，
+13后端11 success /2 failure；普通Lint联合任务成功，backend严格max-warnings0实际exit0。
+61官方源码blob与32发布路径一致，两OS各1950原生Bun文件按8/4分片恰一次，无遗漏、重复或额外文件。
+25个选定源共401次实际执行：399 pass，2 fail都对应RFC223同一机械callback；其余23常规文件388次全过。
+Ubuntu为81 SQLite、81 PG、80 single通过及1 single失败；macOS为81 SQLite、76 single通过及1 single失败。
+原W31两条mission PG失败以同一完整callback hash恢复；此前十个HTTP PG原例仍全过。
+RFC314另11次选定观察全过，所属Ubuntu4/macOS4任务均成功且本组无afterAll失败；
+本次没有复发不证明历史checkpoint等待机制已修复，原预算、关闭顺序与历史诊断保持。
+401的口径含388常规执行、11个RFC314观察与2个RFC223机械执行，未选领域只记文件/任务数量。
+
+原四core冻结候选的一次backend tsc通过；追加实际typed RFC223 guard后，五core扩展候选的一次最终tsc通过，
+各自前后文件hash稳定，两份原始receipt分别保留，不因HEAD移动重复跑。各切片严格lint（max-warnings0）与format通过；
+211 pass /433 expect功能metadata、13 pass /55 expect canonical通过。
+当前1950测试文件，605构库文件/1242调用，585无harness/442有harness；T19f仅workflow一行11→6，688条保持。
+同步兼容4文件/7调用保持；2576生产输入全字节保持，sourceDigest仍
+`sha256:f16382c8d985c1d05b12b09dd0a6ab74f2a423237d8b244f99cbd2a692e9e611`，
+canonical六数1740/272/983/5327/4794/25058与8份canonical完整字节保持，parent status也不变。
+只有四份治理JSON的provenance.currentSnapshotSha从2770352be推进到0449e91ee；原origin、所有guard/ledger行、
+why及增长许可均保持，没有新许可。RFC223不是注册guard/ledger文件，不需要改基数。
+
+证据：`/private/tmp/rfc359-w33-{workflow-revision,rfc293,mcp-exact}-manifest.json`与各自独立复核、
+`/private/tmp/rfc359-w33-rfc223-manifest.json`与机械源码锁负控、两份tsc、metadata/canonical receipts；
+`/private/tmp/rfc359-w32-backend-hosted-evidence-planck.json`及独立root官方blob/原始日志复核。
+本批新SHA的16个原DB和六HTTP、完整CI仍待验；没有本地实际PG、HTTP、服务、daemon、TaskEngine、E2E、规模库或全门禁。
+本批无新full性能结果；原full360样本仍仅归exact`6f3be930c`：PG其余六端点较慢，SQLite任务首页199.069889ms未过原150ms。
+AC-1/6/8/9/11/12和RFC仍开放；W20范围、原历史、原规模、样本数与严格P95判据保持。
 
 ### W12 第三十二批：workgroup异步事务、旧套件双库与真实CI修正
 

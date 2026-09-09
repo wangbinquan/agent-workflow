@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W33只适配三个旧测试的夹具边界：16个原DB例使用默认双库harness，9个原single保留，
+  全部25原注册相对顺序、原输入/预期与预算保持。Intent的原生setup只作用于两个原single，
+  中立组直接使用harness.db，避免在PG运行前额外创建无用SQLite；共享种子helper仍同步返回原run结果。
+  MCP使用同一实际ProviderDatabaseHarness与完整应用，补齐必需appHome，dispose等待完毕后清理自有目录。
+  RFC223机械源码检查覆盖实际外层return await、async回调、同一tx以及内部查询/委托的完整等待关系；
+  原其他用例和所有生产源码保持，不能用静态检查代替真实PG/HTTP证据。
+
 - W32 workgroups的create/copy/save接同一中立事务，原读取/提交/通知顺序保持，
   两个legacy aggregate的四处workgroup委托在原位置等待；原整体SQLite构造合同继续保留。
   两个已有async getter只将DB参数收为中立类型，完整函数body保持；RFC291测试helper同样只改类型。

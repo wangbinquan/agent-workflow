@@ -322,7 +322,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc193-port-artifacts.test.ts: 1',
   'rfc193-wrapper-review.test.ts: 1',
   'rfc199-start-task-workflow-race.test.ts: 1',
-  'rfc199-workflow-revision.test.ts: 11',
+  'rfc199-workflow-revision.test.ts: 6',
   'rfc199-workflow-validate-draft.test.ts: 1',
   'rfc200-runner-wire.test.ts: 1',
   'rfc201-mcp-exact-operation.test.ts: 1',

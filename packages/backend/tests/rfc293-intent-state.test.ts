@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -57,20 +59,26 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-let db: DbClient
+let db: ProviderNeutralDatabase
 let actor: Actor
 let persistence: IntentPersistence
 let visibility: IntentContextResourceAuthorization
 
-test('intent builder keeps the ordinary runtime tool surface', () => {
-  expect(INTENT_BUILDER_SYSTEM_PROMPT).toContain('ordinary runtime tools')
-  expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO shell')
-  expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO network')
-  expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO write access')
+describe('RFC-293 native compatibility', () => {
+  beforeEach(async () => {
+    await setupNativeIntentFixture()
+  })
+
+  test('intent builder keeps the ordinary runtime tool surface', () => {
+    expect(INTENT_BUILDER_SYSTEM_PROMPT).toContain('ordinary runtime tools')
+    expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO shell')
+    expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO network')
+    expect(INTENT_BUILDER_SYSTEM_PROMPT).not.toContain('NO write access')
+  })
 })
 
-beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+async function setupIntentFixture(selectedDb: ProviderNeutralDatabase) {
+  db = selectedDb
   persistence = composeIntentPersistence({
     db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
@@ -93,14 +101,21 @@ beforeEach(async () => {
     source: 'session',
   })
   visibility = intentResourceVisibility(intentResourceCatalogBinding(db, actor))
-})
+}
+
+async function setupNativeIntentFixture(): Promise<DbClient> {
+  const nativeDb = createInMemoryDb(MIGRATIONS)
+  await setupIntentFixture(nativeDb)
+  return nativeDb
+}
 
 async function createBareSession(message = 'build it') {
   return (await createIntentSession(persistence, visibility, actor, { message })).session
 }
 
-function seedFakeRoot(sessionId: string): void {
-  db.update(intentSessions)
+function seedFakeRoot(sessionId: string) {
+  return db
+    .update(intentSessions)
     .set({
       contextManifestJson: JSON.stringify([
         {
@@ -117,10 +132,11 @@ function seedFakeRoot(sessionId: string): void {
     .run()
 }
 
-function insertDraft(sessionId: string) {
+async function insertDraft(sessionId: string) {
   const id = ulid()
   const hash = `sha256:${'a'.repeat(64)}`
-  db.insert(intentDrafts)
+  await db
+    .insert(intentDrafts)
     .values({
       id,
       sessionId,
@@ -132,17 +148,22 @@ function insertDraft(sessionId: string) {
       createdAt: Date.now(),
     })
     .run()
-  db.update(intentSessions)
+  await db
+    .update(intentSessions)
     .set({ currentDraftId: id })
     .where(eq(intentSessions.id, sessionId))
     .run()
   return { id, hash }
 }
 
-describe('RFC-293 Intent working state', () => {
+describeEachProvider('RFC-293 Intent working state', (harness) => {
+  beforeEach(async () => {
+    await setupIntentFixture(harness.db)
+  })
+
   test('idle working-context save applies once and reserves its automatic successor', async () => {
     const session = await createBareSession()
-    seedFakeRoot(session.id)
+    await seedFakeRoot(session.id)
     const input = {
       clientMutationId: ulid(),
       expectedTurnSeq: 1,
@@ -161,7 +182,11 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(submitted.change.state).toBe('applied')
     if (submitted.reservation === null) throw new Error('automatic successor was not reserved')
-    const fresh = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
+    const fresh = (await db
+      .select()
+      .from(intentSessions)
+      .where(eq(intentSessions.id, session.id))
+      .get())!
     expect(fresh.contextRevision).toBe(1)
     expect([submitted.change.resultingTurnId, fresh.inFlightTurnId]).toEqual([
       submitted.reservation.turnId,
@@ -169,12 +194,9 @@ describe('RFC-293 Intent working state', () => {
     ])
     expect(sessionManifest(fresh)[0]?.root).toBe(false)
     expect(
-      db
-        .select()
-        .from(intentTurns)
-        .where(eq(intentTurns.sessionId, session.id))
-        .all()
-        .map((t) => t.kind),
+      (await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id)).all()).map(
+        (t) => t.kind,
+      ),
     ).toEqual(['message', 'message', 'running'])
 
     const replay = await submitIntentWorkingSetChange(
@@ -191,7 +213,7 @@ describe('RFC-293 Intent working state', () => {
 
   test('running save queues, cancel drains exactly one successor, and a failed delta is replaceable', async () => {
     const session = await createBareSession()
-    seedFakeRoot(session.id)
+    await seedFakeRoot(session.id)
     await insertUserTurnAndReserve(
       persistence,
       actor,
@@ -200,7 +222,11 @@ describe('RFC-293 Intent working state', () => {
       { message: 'running' },
       50,
     )
-    const running = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
+    const running = (await db
+      .select()
+      .from(intentSessions)
+      .where(eq(intentSessions.id, session.id))
+      .get())!
     const queued = await submitIntentWorkingSetChange(
       persistence,
       visibility,
@@ -259,7 +285,7 @@ describe('RFC-293 Intent working state', () => {
         )
       ).change?.state,
     ).toBe('failed')
-    seedFakeRoot(failedSession.id)
+    await seedFakeRoot(failedSession.id)
     const replacement = await submitIntentWorkingSetChange(
       persistence,
       visibility,
@@ -277,17 +303,19 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(replacement.change.state).toBe('applied')
     expect(
-      db
-        .select()
-        .from(intentWorkingSetChanges)
-        .where(eq(intentWorkingSetChanges.id, failed.change.id))
-        .get()?.state,
+      (
+        await db
+          .select()
+          .from(intentWorkingSetChanges)
+          .where(eq(intentWorkingSetChanges.id, failed.change.id))
+          .get()
+      )?.state,
     ).toBe('canceled')
   })
 
   test('refine keeps the source current; discard is permanent across failure retry', async () => {
     const session = await createBareSession()
-    const draft = insertDraft(session.id)
+    const draft = await insertDraft(session.id)
     const refined = await reserveIntentIteration(
       persistence,
       actor,
@@ -305,16 +333,16 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(refined.reservation).not.toBeNull()
     expect(
-      db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get())
         ?.currentDraftId,
     ).toBe(draft.id)
     expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
 
-    const afterRefine = db
+    const afterRefine = (await db
       .select()
       .from(intentSessions)
       .where(eq(intentSessions.id, session.id))
-      .get()!
+      .get())!
     const regenerated = await reserveIntentIteration(
       persistence,
       actor,
@@ -331,22 +359,24 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(regenerated.reservation).not.toBeNull()
     expect(
-      db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get())
         ?.currentDraftId,
     ).toBeNull()
     expect(
-      db
-        .select()
-        .from(intentDraftResolutions)
-        .where(eq(intentDraftResolutions.draftId, draft.id))
-        .get()?.reason,
+      (
+        await db
+          .select()
+          .from(intentDraftResolutions)
+          .where(eq(intentDraftResolutions.draftId, draft.id))
+          .get()
+      )?.reason,
     ).toBe('discarded')
     expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
-    const failedTurn = db
+    const failedTurn = (await db
       .select()
       .from(intentTurns)
       .where(eq(intentTurns.id, regenerated.receipt.agentTurnId))
-      .get()!
+      .get())!
     const retried = await reserveExactIntentRetry(
       persistence,
       actor,
@@ -361,21 +391,27 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(retried.reservation).not.toBeNull()
     expect(
-      db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get())
         ?.currentDraftId,
     ).toBeNull()
     expect(
-      db
-        .select()
-        .from(intentDraftResolutions)
-        .where(eq(intentDraftResolutions.draftId, draft.id))
-        .get()?.reason,
+      (
+        await db
+          .select()
+          .from(intentDraftResolutions)
+          .where(eq(intentDraftResolutions.draftId, draft.id))
+          .get()
+      )?.reason,
     ).toBe('discarded')
   })
 
   test('continues from a committed checkpoint with no current candidate', async () => {
     const session = await createBareSession()
-    db.update(intentSessions).set({ commitSeq: 3 }).where(eq(intentSessions.id, session.id)).run()
+    await db
+      .update(intentSessions)
+      .set({ commitSeq: 3 })
+      .where(eq(intentSessions.id, session.id))
+      .run()
     const continued = await reserveIntentIteration(
       persistence,
       actor,
@@ -402,7 +438,8 @@ describe('RFC-293 Intent working state', () => {
       { ownerUserId: actor.user.id, actor },
     )
     const sourceTurnId = ulid()
-    db.insert(intentTurns)
+    await db
+      .insert(intentTurns)
       .values({
         id: sourceTurnId,
         sessionId: session.id,
@@ -419,7 +456,11 @@ describe('RFC-293 Intent working state', () => {
         createdAt: Date.now(),
       })
       .run()
-    db.update(intentSessions).set({ turnSeq: 2 }).where(eq(intentSessions.id, session.id)).run()
+    await db
+      .update(intentSessions)
+      .set({ turnSeq: 2 })
+      .where(eq(intentSessions.id, session.id))
+      .run()
     const input = {
       clientMutationId: ulid(),
       sourceTurnId,
@@ -444,7 +485,11 @@ describe('RFC-293 Intent working state', () => {
       50,
     )
     expect(action.reservation).not.toBeNull()
-    const fresh = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
+    const fresh = (await db
+      .select()
+      .from(intentSessions)
+      .where(eq(intentSessions.id, session.id))
+      .get())!
     expect(fresh.turnSeq).toBe(4)
     expect(fresh.contextRevision).toBe(1)
     expect(
@@ -453,12 +498,9 @@ describe('RFC-293 Intent working state', () => {
         .map((entry) => entry.resourceId),
     ).toEqual([agent.id])
     expect(
-      db
-        .select()
-        .from(intentTurns)
-        .where(eq(intentTurns.sessionId, session.id))
-        .all()
-        .map((turn) => turn.kind),
+      (await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id)).all()).map(
+        (turn) => turn.kind,
+      ),
     ).toEqual(['message', 'questions', 'answers', 'running'])
     const replay = await reserveIntentCurrentAction(
       persistence,
@@ -470,6 +512,14 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(replay.receipt).toEqual({ ...action.receipt, replayed: true })
     expect(replay.reservation).toBeNull()
+  })
+})
+
+describe('RFC-293 Intent working state', () => {
+  let db: DbClient
+
+  beforeEach(async () => {
+    db = await setupNativeIntentFixture()
   })
 
   test('boot recovery resumes an idle queued working-context successor without a browser', async () => {

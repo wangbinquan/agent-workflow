@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十三批（2026-09-09）**：三个旧套件保留25原声明，其中16个DB例/90个完整callback matcher接默认双库，9原single继续单跑；本批均为部分迁移，候选累计242完整/7混合。workflow与intent原后各5例通过，MCP六HTTP经真实完整应用/harness等待托管；生产源码保持。
+> Workflow原后59 SQL、完整行/JSON、14返回及8次实际commit后通知保持。Intent在同9个原nonce输入下，253 callback记录与53快照/210重复行/3232字段/312 JSON、24返回保持；原5个setup binding和5个readback差量完整保留，不称整份capture相同。MCP补齐必需appHome与自有目录清理，原四应用选项不变。
+> W32 exact0449e91ee Main34307322957终态36success/4failure、13后端11过2红；两OS各1950文件恰一次。25选定文件401执行399过，两红均RFC223后继旧no-await机械断言；原两mission PG和旧十HTTP PG均过。RFC314本次11观察与清理通过，不据此称历史checkpoint机制已修复。
+> RFC223补全实际异步事务源码检查：完整调用、同一tx与内部委托/查询等待链；原后机械callback及负控独立提取执行，其他原用例与生产保持。四core类型检查已过，追加此typed guard后的五core最终检查也通过；两份原始收据分别保留。
+> 当前1950测试文件、605构库文件/1242调用、585无harness/442有harness；T19f688，原生兼容4文件/7调用保持。211/433功能metadata、13/55canonical和严格lint/format通过；2576生产输入与8份canonical、parent status字节保持，仅四份provenance推进。新SHA真实PG/HTTP及完整CI待验，六项AC与原full性能判据继续开放。
+
 > **RFC-359 W12 第三十二批（2026-09-09）**：workgroups三处原生事务接现有中立异步事务，两个legacy aggregate等待四处真实workgroup委托；整体旧SQLite aggregate边界仍保留。原RFC185完整29声明/81 matcher保留，12DB默认双库、17原pure声明继续单跑；实际原后31/92，新owner六例6/28。
 > 四份旧套件合计40声明/110完整matcher、20DB默认双库与20原single声明保留；候选累计242完整套件、另4混合套件。RFC203/RFC291原后4/5与3/12通过，原source组未本地执行；outcome沿同一完整应用/harness，唯一HTTP例待托管。
 > workgroup完整行/JSON、12返回和15次实际commit后通知保持；1329 SQL为1318原样、2既有async reader差量、9task谱系显式化差量。RFC203完整行保持、两task INSERT有序绑定补原谱系且未使用changes从2变1；RFC291整份75 SQL/返回/物理行capture字节相同。

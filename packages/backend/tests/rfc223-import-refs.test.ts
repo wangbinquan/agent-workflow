@@ -1,3 +1,4 @@
+import ts from 'typescript'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -13,6 +14,119 @@ import {
   resolveImportRefs,
 } from '../src/modules/resource-catalog/infrastructure/legacy/importRefs'
 import { importWorkflowYaml, workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
+
+function assertImportRefTransactionAwaiting(source: string): void {
+  const file = ts.createSourceFile('importRefs.ts', source, ts.ScriptTarget.Latest, true)
+  const identifier = (node: ts.Node | undefined): string =>
+    node && ts.isIdentifier(node) ? node.text : '<expression>'
+  const functionByName = (name: string): ts.FunctionDeclaration => {
+    const matches = file.statements.filter(
+      (node): node is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(node) && node.name?.text === name,
+    )
+    const fn = matches[0]
+    if (matches.length !== 1 || !fn?.body) throw new Error(`Expected one body for ${name}`)
+    expect(fn.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)).toBe(
+      true,
+    )
+    return fn
+  }
+  const outer = functionByName('resolveImportRefs')
+  const returns = outer.body?.statements.filter(ts.isReturnStatement) ?? []
+  const result = returns[0]?.expression
+  if (returns.length !== 1 || !result || !ts.isAwaitExpression(result)) {
+    throw new Error('resolveImportRefs must return the awaited transaction')
+  }
+  const transaction = result.expression
+  if (
+    !ts.isCallExpression(transaction) ||
+    !ts.isPropertyAccessExpression(transaction.expression) ||
+    !ts.isCallExpression(transaction.expression.expression)
+  ) {
+    throw new Error('Expected the databaseSessionFor transaction call')
+  }
+  const session = transaction.expression.expression
+  expect(transaction.expression.name.text).toBe('transaction')
+  expect(identifier(session.expression)).toBe('databaseSessionFor')
+  expect(session.arguments.map(identifier)).toEqual(['db'])
+  expect(transaction.arguments).toHaveLength(1)
+  const callback = transaction.arguments[0]
+  if (!callback || !ts.isArrowFunction(callback) || !ts.isAwaitExpression(callback.body)) {
+    throw new Error('Expected the transaction callback to await its delegate')
+  }
+  expect(callback.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)).toBe(
+    true,
+  )
+  expect(callback.parameters.map((parameter) => identifier(parameter.name))).toEqual(['tx'])
+  const delegate = callback.body.expression
+  if (!ts.isCallExpression(delegate)) throw new Error('Expected the transaction delegate call')
+  expect(identifier(delegate.expression)).toBe('resolveImportRefsInTx')
+  expect(delegate.arguments.map(identifier)).toEqual([
+    'tx',
+    'actor',
+    'selectors',
+    'requestedSelections',
+  ])
+
+  const asyncDelegates = new Set([
+    'assertSelectedIdsVisibleInTx',
+    'buildCandidateSnapshotsInTx',
+    'grantedIdsInTx',
+    'listAclResourceIdentityRowsByIds',
+    'listAclResourceIdentityRowsByNames',
+    'listGrantedResourceIds',
+  ])
+  const reads: string[] = []
+  for (const name of [
+    'resolveImportRefsInTx',
+    'assertSelectedIdsVisibleInTx',
+    'buildCandidateSnapshotsInTx',
+    'grantedIdsInTx',
+  ]) {
+    const fn = functionByName(name)
+    expect(identifier(fn.parameters[0]?.name)).toBe('tx')
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        let root: ts.Expression = node
+        const chain: string[] = []
+        while (ts.isCallExpression(root) && ts.isPropertyAccessExpression(root.expression)) {
+          chain.unshift(`${root.expression.name.text}/${root.arguments.length}`)
+          root = root.expression.expression
+        }
+        const directDelegate =
+          ts.isIdentifier(node.expression) && asyncDelegates.has(node.expression.text)
+        const queryTerminal =
+          ts.isPropertyAccessExpression(node.expression) &&
+          ['all', 'get', 'run', 'execute', 'values'].includes(node.expression.name.text) &&
+          chain.some((step) => step.startsWith('select/'))
+        if (directDelegate || queryTerminal) {
+          let scope: ts.Node | undefined = node.parent
+          while (scope && !ts.isFunctionLike(scope)) scope = scope.parent
+          expect(scope === fn).toBe(true)
+          expect(ts.isAwaitExpression(node.parent)).toBe(true)
+          expect(identifier(directDelegate ? node.arguments[0] : root)).toBe('tx')
+          reads.push(
+            directDelegate
+              ? `${name}:${identifier(node.expression)}(${node.arguments.map(identifier).join(',')})`
+              : `${name}:${identifier(root)}.${chain.join('.')}`,
+          )
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    if (fn.body) visit(fn.body)
+  }
+  expect(reads).toEqual([
+    'resolveImportRefsInTx:assertSelectedIdsVisibleInTx(tx,actor,<expression>)',
+    'resolveImportRefsInTx:buildCandidateSnapshotsInTx(tx,actor,uniqueSelectors)',
+    'assertSelectedIdsVisibleInTx:listAclResourceIdentityRowsByIds(tx,type,selectedIds)',
+    'assertSelectedIdsVisibleInTx:grantedIdsInTx(tx,actor,type)',
+    'buildCandidateSnapshotsInTx:listAclResourceIdentityRowsByNames(tx,type,names)',
+    'buildCandidateSnapshotsInTx:grantedIdsInTx(tx,actor,type)',
+    'buildCandidateSnapshotsInTx:tx.select/1.from/1.where/1.all/0',
+    'grantedIdsInTx:listGrantedResourceIds(tx,actor,type)',
+  ])
+}
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -121,7 +235,7 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
     })
   })
 
-  test('candidate, grant, and owner reads stay on the synchronous transaction surface', () => {
+  test('candidate, grant, and owner reads stay on the asynchronous transaction surface', () => {
     const source = readFileSync(
       resolve(
         import.meta.dir,
@@ -138,7 +252,7 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
       source.indexOf('function resolveImportRefsInTx('),
       source.indexOf('function ownerUsernameFor('),
     )
-    expect(syncCore).not.toMatch(/\bawait\b/)
+    assertImportRefTransactionAwaiting(source)
     expect(syncCore).not.toContain('filterVisibleRows')
     expect(syncCore).toContain('.all()')
   })
