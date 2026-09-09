@@ -12,16 +12,19 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTask, getTaskNodeRuns, listTaskItems, listTasks } from '../src/services/task'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function seedFailedTask(db: DbClient, failureCode: string | null): { taskId: string } {
+async function seedFailedTask(
+  db: ProviderNeutralDatabase,
+  failureCode: string | null,
+): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({
       id: workflowId,
       name: 'wf',
@@ -30,7 +33,8 @@ function seedFailedTask(db: DbClient, failureCode: string | null): { taskId: str
       updatedAt: Date.now(),
     })
     .run()
-  db.insert(tasks)
+  await db
+    .insert(tasks)
     .values({
       id: taskId,
       name: 'ft',
@@ -45,10 +49,15 @@ function seedFailedTask(db: DbClient, failureCode: string | null): { taskId: str
       errorSummary: 'no <workflow-output> envelope found in stdout',
       inputs: '{}',
       startedAt: Date.now(),
+      executionLineageId: taskId,
+      lineageSlotPathJson: JSON.stringify([
+        { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+      ]),
     })
     .run()
   // Older retry (must lose the freshest pick) + freshest failed run.
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id: '01OLD' + ulid().slice(5),
       taskId,
@@ -61,7 +70,8 @@ function seedFailedTask(db: DbClient, failureCode: string | null): { taskId: str
       failureCode: null,
     })
     .run()
-  db.insert(nodeRuns)
+  await db
+    .insert(nodeRuns)
     .values({
       id: '01ZZZ' + ulid().slice(5),
       taskId,
@@ -77,20 +87,20 @@ function seedFailedTask(db: DbClient, failureCode: string | null): { taskId: str
   return { taskId }
 }
 
-describe('RFC-203 T4 — failureCode projection', () => {
-  let db: DbClient
+describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('getTask projects the freshest failed run failure code', async () => {
-    const { taskId } = seedFailedTask(db, 'envelope-missing')
+    const { taskId } = await seedFailedTask(db, 'envelope-missing')
     const task = await getTask(db, taskId)
     expect(task?.failureCode).toBe('envelope-missing')
   })
 
   test('listTasks batches the projection; non-failed tasks stay null-free', async () => {
-    const { taskId } = seedFailedTask(db, 'port-validation-failed')
+    const { taskId } = await seedFailedTask(db, 'port-validation-failed')
     const rows = await listTasks(db, {})
     const row = rows.find((r) => r.id === taskId)
     expect(row?.failureCode).toBe('port-validation-failed')
@@ -100,13 +110,13 @@ describe('RFC-203 T4 — failureCode projection', () => {
   })
 
   test('failed task without a coded run projects null (legacy rows)', async () => {
-    const { taskId } = seedFailedTask(db, null)
+    const { taskId } = await seedFailedTask(db, null)
     const task = await getTask(db, taskId)
     expect(task?.failureCode ?? null).toBeNull()
   })
 
   test('getTaskNodeRuns surfaces per-run failureCode', async () => {
-    const { taskId } = seedFailedTask(db, 'clarify-required')
+    const { taskId } = await seedFailedTask(db, 'clarify-required')
     const res = await getTaskNodeRuns(db, taskId)
     const coded = res.runs.find((r) => r.failureCode === 'clarify-required')
     expect(coded).toBeDefined()

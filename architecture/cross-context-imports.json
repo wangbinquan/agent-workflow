@@ -8178,23 +8178,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:18bcd7b1b042ea57af9c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -33406,23 +33389,6 @@
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:69c4ae0f4ec8fe1e0f2d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "DbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
@@ -38115,6 +38081,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7870e31a85b7e00aeaea",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
@@ -38894,23 +38877,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#RenderedLaunch",
       "toPath": "packages/backend/src/services/webhook/webhookDispatch.ts",
       "toSymbol": "RenderedLaunch",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7a784f588deb6caaa9db",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "dbTxSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -81534,9 +81500,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4796,
+    "architectureExceptions": 4794,
     "implementationSccs": 0,
-    "observedEdges": 5329,
+    "observedEdges": 5327,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -89879,22 +89845,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
-      "id": "import:18bcd7b1b042ea57af9c",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -116569,22 +116519,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#DigitalEmployeeExecutionParticipant"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
-      "id": "import:69c4ae0f4ec8fe1e0f2d",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "DbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
@@ -121465,6 +121399,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
+      "id": "import:7870e31a85b7e00aeaea",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/userIdentities.ts",
@@ -122215,22 +122165,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/webhook/webhookDispatch.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#RenderedLaunch"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
-      "id": "import:7a784f588deb6caaa9db",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "dbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
     },
     {
       "edgeKind": "type",
@@ -167346,7 +167280,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4990702d009fff879e3880807ec8f04419a1e724aeb9467d1d42020f475fd793",
+  "sourceDigest": "sha256:f16382c8d985c1d05b12b09dd0a6ab74f2a423237d8b244f99cbd2a692e9e611",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

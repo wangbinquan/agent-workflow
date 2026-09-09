@@ -326,11 +326,14 @@ export interface LegacyIntentApplyResourceDependencies {
     input: UpdateWorkgroup,
     principal: { readonly kind: 'actor'; readonly actor: Actor },
   ) => Promise<unknown>
-  readonly commitWorkgroupCreateInTx: (tx: DbTxSync, prepared: unknown) => unknown
-  readonly commitWorkgroupSaveInTx: (
-    tx: DbTxSync,
+  readonly commitWorkgroupCreateInTx: (
+    tx: DatabaseTransaction,
     prepared: unknown,
-  ) => { readonly receipt: { readonly outcome: string }; readonly committed: boolean }
+  ) => Promise<unknown>
+  readonly commitWorkgroupSaveInTx: (
+    tx: DatabaseTransaction,
+    prepared: unknown,
+  ) => Promise<{ readonly receipt: { readonly outcome: string }; readonly committed: boolean }>
   readonly broadcastWorkgroupCreated: (row: unknown) => void
 
   readonly assertRefsUsableInTx: (
@@ -792,10 +795,10 @@ export function createLegacyIntentApplyResourceSession(
         break
       }
       case 'workgroup-create':
-        createdWorkgroups.push(dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared))
+        createdWorkgroups.push(await dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared))
         break
       case 'workgroup-update': {
-        const result = dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
+        const result = await dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
         if (!result.committed && result.receipt.outcome !== 'already-current') {
           throw new ConflictError('intent-baseline-stale', 'workgroup save did not commit')
         }

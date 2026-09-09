@@ -349,7 +349,7 @@
       "id": "rfc359-sync-transaction-surface",
       "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
       "symbol": "SYNC_TRANSACTION_DEBT",
-      "baseline": 5,
+      "baseline": 4,
       "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 28（调用点合计 72）；账本正文逐文件记着各自的调用点数，逐字相等。 RFC-359 W4-D28b：`sqliteOwnedTaskMutation.ts`（2 处 `dbTxSync` + 2 处 `withOwnedTaskTx`）整份退役，5 处调用点迁到中立的 `withTaskExecutionWrite` + `fenceTaskWrite`，30 → 29（调用点 81 → 77）。 RFC-359 W4-D28b 第二刀：runtime 注册表两份 provider 实现合成一份中立实现，`sqliteRuntimeRegistryPersistence.ts`（5 处 `dbTxSync`）随之退役，29 → 28（调用点 77 → 72）。"
     },
     {
@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 692,
+      "baseline": 688,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -805,16 +805,13 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 494,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-359 W31 gives the existing test-fixture registration one shared helper. The sole new observed call edge is createInMemoryDb -> registerLegacyDaemonTestFixture at the original registration position; no production bootstrap or recurring work is added."
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5329,
+      "baseline": 5327,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -835,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4796,
+      "baseline": 4794,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -871,14 +868,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25058,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 W31 names the existing object-registry add as registerLegacyDaemonTestFixture so both real provider fixtures register their own final database. Exactly one helper identity is added, with the original SQLite factory as a real source consumer and unchanged registry semantics."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4990702d009fff879e3880807ec8f04419a1e724aeb9467d1d42020f475fd793",
+    "sourceDigest": "sha256:f16382c8d985c1d05b12b09dd0a6ab74f2a423237d8b244f99cbd2a692e9e611",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -891,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0bfa2e7e0813ee39c11db4dede04bc39a1cd120a",
-    "contentDigest": "sha256:1d48928698ad2f1880a2c685f07f09944c8af3eccdb8f8065cf5a3a6b7082ed5",
+    "currentSnapshotSha": "2770352bee29eb0d36aa3964c13cec49ccf69f15",
+    "contentDigest": "sha256:186a7a108388fa4ec3e66d7820226708d39d5415d4228bd8df323f15712e04c2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

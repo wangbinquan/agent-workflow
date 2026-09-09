@@ -3,6 +3,7 @@ import { createWorkflowValidationPort } from '@/modules/resource-catalog/infrast
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { Actor } from '../../src/auth/actor'
 import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import type { DirectAuthenticatedAuthority } from '../../src/modules/identity-access/public/participants'
 import { createResourceCatalogQuery } from '../../src/modules/resource-catalog/infrastructure/catalogQuery'
@@ -60,7 +61,7 @@ const EMPTY_PLATFORM_INVENTORY: IntentPlatformInventoryParticipant = Object.free
   listRows: async () => [],
 })
 
-export function intentPersistenceForTest(db: DbClient): IntentPersistence {
+export function intentPersistenceForTest(db: ProviderNeutralDatabase): IntentPersistence {
   return composeIntentPersistence({
     db,
     contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
@@ -98,7 +99,7 @@ export function createIntentSessionAndReserveTurnForTest(
 }
 
 export function intentDumpAuxiliaryForTest(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   platformInventory: IntentPlatformInventoryParticipant = EMPTY_PLATFORM_INVENTORY,
 ): IntentDumpAuxiliaryQueries {
   return composeIntentDumpAuxiliaryQueries({
@@ -109,7 +110,7 @@ export function intentDumpAuxiliaryForTest(
 
 /** Test-only composition of the same closed query/context pair injected by bootstrap. */
 export function intentResourceCatalogBinding(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   appHome: string = Paths.root,
 ): IntentResourceCatalogBinding {
@@ -184,7 +185,7 @@ export function buildIntentDumpForTest(
     'resourceCatalog' | 'runtimeInventory' | 'loadAgentPorts' | 'platformInventory'
   > &
     Readonly<{
-      db: DbClient
+      db: ProviderNeutralDatabase
       runtimeInventory?: IntentDumpInput['runtimeInventory']
       loadAgentPorts?: IntentDumpInput['loadAgentPorts']
       platformInventory?: IntentDumpInput['platformInventory']

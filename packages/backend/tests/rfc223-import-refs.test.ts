@@ -130,7 +130,9 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
       'utf8',
     )
     expect(source).toContain(
-      'return dbTxSync(db, (tx) => resolveImportRefsInTx(tx, actor, selectors, requestedSelections))',
+      `return await databaseSessionFor(db).transaction(
+    async (tx) => await resolveImportRefsInTx(tx, actor, selectors, requestedSelections),
+  )`,
     )
     const syncCore = source.slice(
       source.indexOf('function resolveImportRefsInTx('),

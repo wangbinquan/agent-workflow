@@ -481,11 +481,14 @@ export interface LegacyResourcePackageMutationDependencies {
     input: Readonly<Record<string, unknown>>,
     principal: { readonly kind: 'actor'; readonly actor: Actor },
   ) => Promise<unknown>
-  readonly commitWorkgroupCreateInTx: (tx: DbTxSync, prepared: unknown) => unknown
-  readonly commitWorkgroupSaveInTx: (
-    tx: DbTxSync,
+  readonly commitWorkgroupCreateInTx: (
+    tx: DatabaseTransaction,
     prepared: unknown,
-  ) => { readonly committed: boolean; readonly receipt: { readonly outcome: string } }
+  ) => Promise<unknown>
+  readonly commitWorkgroupSaveInTx: (
+    tx: DatabaseTransaction,
+    prepared: unknown,
+  ) => Promise<{ readonly committed: boolean; readonly receipt: { readonly outcome: string } }>
   readonly broadcastWorkgroupCreated: (workgroup: unknown) => void
 }
 
@@ -1029,11 +1032,11 @@ export function createLegacyResourcePackageMutationAdapter(
           }
           case 'workgroup-create':
             createdWorkgroups.push(
-              dependencies.commitWorkgroupCreateInTx(syncTx, prepared.prepared),
+              await dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared),
             )
             return
           case 'workgroup-update': {
-            const result = dependencies.commitWorkgroupSaveInTx(syncTx, prepared.prepared)
+            const result = await dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
             if (!result.committed && result.receipt.outcome !== 'already-current') {
               throw new ConflictError('bundle-baseline-stale', 'workgroup save did not commit')
             }

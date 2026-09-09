@@ -83,7 +83,7 @@ export async function listMissionSummaries(
     await db
       .select(SUMMARY_COLUMNS)
       .from(developmentMissions)
-      .orderBy(desc(developmentMissions.createdAt))
+      .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
   ).map(summaryOf)
 }
 

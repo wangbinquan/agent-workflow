@@ -15,7 +15,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { createApp, type AppDeps } from '../src/server'
+import type { createApp, AppDeps } from '../src/server'
 import {
   createWorkflow,
   deleteWorkflow,

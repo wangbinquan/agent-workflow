@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十二批（2026-09-09）**：workgroups三处原生事务接现有中立异步事务，两个legacy aggregate等待四处真实workgroup委托；整体旧SQLite aggregate边界仍保留。原RFC185完整29声明/81 matcher保留，12DB默认双库、17原pure声明继续单跑；实际原后31/92，新owner六例6/28。
+> 四份旧套件合计40声明/110完整matcher、20DB默认双库与20原single声明保留；候选累计242完整套件、另4混合套件。RFC203/RFC291原后4/5与3/12通过，原source组未本地执行；outcome沿同一完整应用/harness，唯一HTTP例待托管。
+> workgroup完整行/JSON、12返回和15次实际commit后通知保持；1329 SQL为1318原样、2既有async reader差量、9task谱系显式化差量。RFC203完整行保持、两task INSERT有序绑定补原谱系且未使用changes从2变1；RFC291整份75 SQL/返回/物理行capture字节相同。
+> Mission全列表补与既有分页相同的id DESC次序，原四case/23 matcher原样，SQLite原后3/160通过；461 SQL中459相同、2仅排序后缀，153完整分页与2全列表返回保持。RFC199仅改type import修严格lint；RFC223仅换完整async事务源码锁，原锁红/新锁绿与三个负控有效。
+> W31 exact2770352be Main34302340035终态33success/7failure，13后端9过4红；两OS各1949文件恰一次。18功能文件266执行中264通过、2 PG mission顺序红；旧十个与新增五个PG HTTP例均通过。另有RFC223双OS源码锁、普通lint单warning和RFC314 afterAll清理超时；本批修正排序、源码锁与lint，待新SHA。
+> RFC314原DB行为和native例均通过，DROP的60s语句预算先于180s外层触发，日志见checkpoint等待；当前没有已证明的清理修复，原预算/关闭顺序保持。原full性能结果与严格判据保持，未运行新规模库。
+> 当前1950测试文件、605构库文件/1247调用、588无harness/439有harness；T19f688，同步兼容账本4文件/7调用。14 core一次最终backend tsc通过且hash不变，严格lint/format、211/433功能metadata与13/55canonical通过；新SHA真实PG/HTTP仍待验，六项AC与RFC继续开放。
+
 > **RFC-359 W12 第三十一批（2026-09-09）**：workflow/importRefs四处同步事务改接中立异步事务，两个原已async的aggregate等待真实workflow结果；整体旧SQLite aggregate边界仍保留。copy复用既有async reader，原参数/顺序/完整返回保持。
 > 三份旧套件14个DB例默认双库、3个原single保持单跑，原17声明/75完整matcher及预算保留；候选累计238完整套件、另4混合套件。新增6个真实owner双库控制与6个纯夹具登记控制；本批5个HTTP例仍待托管。
 > 原SQLite夹具注册抽成同一helper，PG在原reset成功后按原bootstrap选项登记同一client；原消费者/完整装配未改。相同6控制旧源1过5红、候选6过/34 expect；此证据不替代真实HTTP恢复。

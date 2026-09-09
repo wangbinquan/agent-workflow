@@ -16,7 +16,7 @@
 //      (awaiting_human does NOT block it — design.md §D3-3).
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -27,7 +27,8 @@ import {
   type WorkgroupAssignment,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import {
   nodeRuns,
   tasks,
@@ -71,12 +72,11 @@ function deriveWake(input: WakeInput) {
   return deriveWakeSet(snapshot, inflight)
 }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc185-fanout-test')
 const PLANNER_AGENT_ID = 'wg-agent-planner'
 const CODER_AGENT_ID = 'wg-agent-coder'
 
-async function getWorkgroupForTest(db: DbClient, name: string) {
+async function getWorkgroupForTest(db: ProviderNeutralDatabase, name: string) {
   const row = (await listWorkgroups(db)).find((candidate) => candidate.name === name)
   return row === undefined ? null : getWorkgroupById(db, row.id)
 }
@@ -407,7 +407,7 @@ describe('RFC-185 — wake set fans out; leader barrier is terminal-state only',
 // ---------------------------------------------------------------------------
 
 async function seedEngineTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   config: WorkgroupRuntimeConfig,
 ): Promise<{ taskId: string }> {
   const taskId = ulid()
@@ -433,6 +433,10 @@ async function seedEngineTask(
     startedAt: Date.now(),
     workgroupId: config.workgroupId,
     workgroupConfigJson: JSON.stringify(config),
+    executionLineageId: taskId,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
   for (const [name, id] of [
     ['planner', PLANNER_AGENT_ID],
@@ -505,10 +509,10 @@ const FAN_OUT_3 = [
   { member: 'coder', title: 'shard-C', brief: 'audit services/c.ts only' },
 ]
 
-describe('RFC-185 — engine fan-out integration (fake hooks)', () => {
-  let db: DbClient
+describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('one leader turn dispatches 3 same-member instances; all run concurrently then the leader aggregates', async () => {
@@ -627,10 +631,10 @@ describe('RFC-185 — engine fan-out integration (fake hooks)', () => {
 //         config PATCH landing during the leader turn is not silently dropped.
 // ---------------------------------------------------------------------------
 
-describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
-  let db: DbClient
+describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('P1: fanOut-off leader dispatching the same member twice is re-prompted, not fanned out', async () => {
@@ -895,11 +899,11 @@ describe('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', () => {
 //    omitted field, launch freezes the flag into the task runtime config.
 // ---------------------------------------------------------------------------
 
-describe('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', () => {
-  let db: DbClient
+describeEachProvider('RFC-185 D4 — fanOut CRUD roundtrip + launch freeze', (harness) => {
+  let db: ProviderNeutralDatabase
   let agentId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     agentId = (
       await createAgent(db, {
         name: 'a1',

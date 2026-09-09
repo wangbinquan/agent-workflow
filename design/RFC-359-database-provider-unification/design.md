@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W32 workgroups的create/copy/save接同一中立事务，原读取/提交/通知顺序保持，
+  两个legacy aggregate的四处workgroup委托在原位置等待；原整体SQLite构造合同继续保留。
+  两个已有async getter只将DB参数收为中立类型，完整函数body保持；RFC291测试helper同样只改类型。
+  原测试经默认双库harness调用真实owner和完整应用，不改旧预期、预算或业务规则。
+  Mission全列表与分页使用相同createdAt DESC、id DESC排序，修复相同时间戳时的真PG次序差异。
+  RFC223源码锁继续检查完整事务调用、同一tx与两层await；RFC199 type import只删除无用运行时导入。
+  RFC314的清理语句超时和外层预算保持，checkpoint超时仍有待实测修复。
+
 - W31旧workflow写入和importRefs使用现有中立事务及异步读取端口，guard仍在原位置等待，
   create/copy/save的实际提交和通知顺序保持。两个aggregate只接通自身原已async的workflow分支，
   不据此宣称整个旧aggregate可用PG。原copy读取改用已有async端口后保留两条SQL的LIMIT差量。
