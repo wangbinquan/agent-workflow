@@ -5,7 +5,8 @@ import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { plugins, skillOperations, skills } from '@/db/schema'
+import { plugins, skills } from '@/db/schema'
+import { skillOperationStateQuery } from './skillOperationStateQuery'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
   ResourcePackageApplyJournalSnapshot,
@@ -228,11 +229,7 @@ async function rollForwardArtifacts(input: {
       // 但同一段代码只要接上 PostgreSQL（或换成中立设施），`operation` 就成了 Promise，
       // `operation?.active === 1` 恒 false、`operation?.phase !== 'done'` 恒真 —— 静默改走告警分支。
       // 同函数上一处读 `plugins` 一直是 await 的，这一处是漏的。
-      const operation = await input.db
-        .select({ active: skillOperations.active, phase: skillOperations.phase })
-        .from(skillOperations)
-        .where(eq(skillOperations.opId, opId))
-        .get()
+      const operation = await skillOperationStateQuery(input.db, opId).get()
       if (operation?.active === 1) {
         pendingVersions.push(artifact)
         continue

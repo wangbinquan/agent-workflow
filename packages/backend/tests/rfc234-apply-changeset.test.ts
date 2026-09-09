@@ -49,6 +49,49 @@ const APPROVER = 'user_approver_apply_000000'
 
 let db: DbClient
 let appHome: string
+let fixtureTimings: ReturnType<typeof crashTiming>[]
+
+function crashTiming(phase: string) {
+  return { phase, wallMs: performance.now(), cpu: process.cpuUsage() }
+}
+
+// RFC-359: retain the original 5s deadline while locating the hosted macOS
+// timeout. Phase entries remain useful when a blocked event loop delays timers.
+function tracePluginInstallCrash(point: string) {
+  if (point !== 'afterPluginInstall') return
+  let phase = 'callback-enter'
+  const setupTimings = fixtureTimings
+  const startedAt = setupTimings[0]!.wallMs
+  const emit = (event: string) => {
+    const timing = crashTiming(phase)
+    console.info(
+      '[rfc234-apply-crash]',
+      JSON.stringify({
+        point,
+        event,
+        ...timing,
+        elapsedMs: timing.wallMs - startedAt,
+        fixtureTimings: setupTimings,
+      }),
+    )
+  }
+  emit('phase')
+  const timer = setTimeout(
+    () => emit('near-deadline'),
+    Math.max(0, 4000 - (performance.now() - startedAt)),
+  )
+  timer.unref()
+  return {
+    mark(next: string) {
+      phase = next
+      emit('phase')
+    },
+    finish() {
+      clearTimeout(timer)
+      emit('callback-settled')
+    },
+  }
+}
 
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
@@ -131,11 +174,14 @@ function filePluginFixture(): string {
 }
 
 beforeEach(async () => {
+  fixtureTimings = [crashTiming('setup-enter')]
   db = createInMemoryDb(MIGRATIONS)
+  fixtureTimings.push(crashTiming('database-created'))
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-apply-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
   await seedUser(OWNER, 'owner')
   await seedUser(APPROVER, 'approver')
+  fixtureTimings.push(crashTiming('setup-complete'))
 })
 afterEach(() => {
   rmSync(appHome, { recursive: true, force: true })
@@ -851,43 +897,57 @@ describe('applyIntentChangeset', () => {
   // clientMutationId must then return the ORIGINAL failure (never re-run).
   for (const point of ['afterPluginInstall', 'afterSkillStage', 'beforeTx'] as const) {
     test(`pre-commit crash at ${point}: failed + zero visible + failed-replay`, async () => {
-      const existing = await seedAgent('existing-agent')
-      const { session } = await createIntentSession(db, actor, { message: 'x' })
-      const draft = installDraft(
-        session.id,
-        fullBundle(existing.id, filePluginFixture()),
-        manifestWithAgent(existing.id, existing.updatedAt),
-      )
-      const clientMutationId = ulid()
-      await expect(
-        applyIntentChangeset(
-          deps({
-            faults: {
-              [point]: () => {
-                throw new Error(`boom-${point}`)
+      const diagnostic = tracePluginInstallCrash(point)
+      try {
+        diagnostic?.mark('seed-agent')
+        const existing = await seedAgent('existing-agent')
+        diagnostic?.mark('create-session')
+        const { session } = await createIntentSession(db, actor, { message: 'x' })
+        diagnostic?.mark('install-draft-and-file-fixture')
+        const draft = installDraft(
+          session.id,
+          fullBundle(existing.id, filePluginFixture()),
+          manifestWithAgent(existing.id, existing.updatedAt),
+        )
+        const clientMutationId = ulid()
+        diagnostic?.mark('first-apply')
+        await expect(
+          applyIntentChangeset(
+            deps({
+              faults: {
+                [point]: () => {
+                  diagnostic?.mark('fault-invoked')
+                  throw new Error(`boom-${point}`)
+                },
               },
-            },
+            }),
+            { sessionId: session.id, clientMutationId, ...draft, decisions: happyDecisions },
+          ),
+        ).rejects.toThrow(new RegExp(`boom-${point}`))
+        diagnostic?.mark('zero-visible-resources')
+        expect((await db.select().from(skills)).length).toBe(0)
+        expect((await db.select().from(mcps)).length).toBe(0)
+        expect((await db.select().from(plugins)).length).toBe(0)
+        expect((await db.select().from(workflows)).length).toBe(0)
+        expect((await db.select().from(workgroups)).length).toBe(0)
+        expect((await db.select().from(agents)).length).toBe(1)
+        expect(db.select().from(intentApplyJournal).get()?.state).toBe('failed')
+        // Idempotent replay of a failed journal: original error, no side effects.
+        diagnostic?.mark('failed-replay')
+        await expect(
+          applyIntentChangeset(deps(), {
+            sessionId: session.id,
+            clientMutationId,
+            ...draft,
+            decisions: happyDecisions,
           }),
-          { sessionId: session.id, clientMutationId, ...draft, decisions: happyDecisions },
-        ),
-      ).rejects.toThrow(new RegExp(`boom-${point}`))
-      expect((await db.select().from(skills)).length).toBe(0)
-      expect((await db.select().from(mcps)).length).toBe(0)
-      expect((await db.select().from(plugins)).length).toBe(0)
-      expect((await db.select().from(workflows)).length).toBe(0)
-      expect((await db.select().from(workgroups)).length).toBe(0)
-      expect((await db.select().from(agents)).length).toBe(1)
-      expect(db.select().from(intentApplyJournal).get()?.state).toBe('failed')
-      // Idempotent replay of a failed journal: original error, no side effects.
-      await expect(
-        applyIntentChangeset(deps(), {
-          sessionId: session.id,
-          clientMutationId,
-          ...draft,
-          decisions: happyDecisions,
-        }),
-      ).rejects.toMatchObject({ code: 'intent-apply-failed-replay' })
-      expect((await db.select().from(agents)).length).toBe(1)
+        ).rejects.toMatchObject({ code: 'intent-apply-failed-replay' })
+        diagnostic?.mark('final-agent-count')
+        expect((await db.select().from(agents)).length).toBe(1)
+        diagnostic?.mark('assertions-complete')
+      } finally {
+        diagnostic?.finish()
+      }
     })
   }
 })

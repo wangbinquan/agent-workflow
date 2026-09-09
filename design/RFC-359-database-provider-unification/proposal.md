@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第三十五批：两旧套件38声明/145完整matcher保持，15旧DB/70 matcher默认双库、23原single/75 matcher保留；候选累计242完整/12混合，原后15例/71实际expect通过，生产源码保持。插件原实测谱系与文件内容保持，native写返回和自然mtime差量保留；workgroup五原rejects补等待、三helper只改DB类型。W34 exact2a4a3bcc3 Main37success/3failure、后端12过1红，两OS各1950文件恰一次，31选定文件506执行全过，新增9 PG与旧HTTP/mission全过；RFC185本次通过但历史原因未知。剩余macOS4为RFC234一例超过原5秒，同SHA Ubuntu20.56ms通过，未有阶段诊断。当前447文件harness、580构库文件无harness，T19f688/原生兼容4文件7调用保持；两core一次tsc、211/433功能metadata、13/55canonical通过。新SHA待验，原full与六项剩余AC保持。
+- W12 第三十六批：三个状态查询前缀合一并保持调用尾部契约；修复turn在异步load期间完成后复用旧cursor快照的实际重复唤醒；3个child-count原DB例接入双库，2原single保留，累计242完整/13混合。P0栈解析适配完整wrapped/bare源位置，RFC234只加选定阶段诊断且原预算保持。W35 exact1aab39f65 Main35success/5failure、后端11过2红，597选定执行596过1红；新增15 PG通过，原RFC185重试例PG第三次调用红，独立P0因栈格式判红。当前1951文件，449有harness、579构库文件无harness，T19f689；13core一次tsc、211/433功能metadata及13/55canonical通过。新SHA主集628加2 sidecar为待验计划，原full与六AC保持。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

@@ -65,6 +65,14 @@ import {
 import { deriveWakeSet } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 import { createLogger } from '../src/util/log'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
+import {
+  createWorkgroupTurnsOperations,
+  type WorkgroupTurnsPersistencePort,
+} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 function deriveWake(input: WakeInput) {
@@ -778,6 +786,116 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
       [0, 'wg-message-turn'],
       [1, 'wg-protocol-retry'],
     ])
+  })
+
+  // RFC-359: a completed member must not be woken again from a snapshot read
+  // while its original retry was still running. Every row/commit below is real;
+  // only host completion and the return of that same snapshot are held.
+  test('member completion during an async load does not replay the consumed message', async () => {
+    const config = cfg({
+      switches: { shareOutputs: true, directMessages: true, blackboard: false },
+    })
+    const { taskId } = await seedEngineTask(db, config)
+    const messageId = await mentionCoder(taskId)
+    const deferred = () => {
+      let resolve = () => {}
+      const promise = new Promise<void>((done) => {
+        resolve = done
+      })
+      return { promise, resolve }
+    }
+    const memberRetryEntered = deferred()
+    const snapshotCaptured = deferred()
+    const memberCursorCommitted = deferred()
+    const controller = new AbortController()
+    const windows: Array<{ capturedCursor: string; committedCursor: string }> = []
+    let memberCalls = 0
+    let heldSnapshot = false
+    const actual = createWorkgroupTurnsPersistence({
+      db,
+      hostLedgerFactory: composeWorkgroupHostLedgerParticipantFactory({
+        collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
+      }),
+      clarifyAskGate: createWorkgroupClarifyAskGate(db),
+    })
+    const persistence: WorkgroupTurnsPersistencePort = {
+      ...actual,
+      async load(id) {
+        const snapshot = await actual.load(id)
+        if (!heldSnapshot && memberCalls > 0 && snapshot !== null) {
+          heldSnapshot = true
+          await memberRetryEntered.promise
+          snapshotCaptured.resolve()
+          await memberCursorCommitted.promise
+          const current = await actual.load(id)
+          // Drain the completed turn's Promise continuations before returning
+          // the unchanged earlier snapshot, as an asynchronous read can do.
+          await new Promise<void>((resolve) => setImmediate(resolve))
+          windows.push({
+            capturedCursor: snapshot.cursors.get('m-coder') ?? '',
+            committedCursor: current?.cursors.get('m-coder') ?? '',
+          })
+        }
+        return snapshot
+      },
+      async commit(input) {
+        const receipt = await actual.commit(input)
+        if (
+          receipt.committed &&
+          input.operations.some(
+            (operation) =>
+              operation.kind === 'advance-member-cursor' && operation.memberId === 'm-coder',
+          )
+        ) {
+          memberCursorCommitted.resolve()
+        }
+        return receipt
+      },
+    }
+    const drive = createWorkgroupTurnsOperations(persistence).drive({
+      taskId,
+      log,
+      signal: controller.signal,
+      host: {
+        async runHost(req) {
+          if (req.nodeId !== WG_MEMBER_NODE_ID) {
+            // Keep the first completion after the member has reached its held
+            // retry, so the following load always captures that inflight turn.
+            await memberRetryEntered.promise
+            return doneLeader({ decision: { action: 'done', summary: 'wrapped' } })
+          }
+          memberCalls += 1
+          if (memberCalls === 1) {
+            return {
+              status: 'failed',
+              outputs: {},
+              errorMessage: 'runtime stream persistence failed',
+              failureCode: 'runtime-stream-interrupted',
+            }
+          }
+          memberRetryEntered.resolve()
+          await snapshotCaptured.promise
+          return { status: 'done', outputs: { wg_result: 'recovered' } }
+        },
+      },
+    })
+    try {
+      const result = await drive
+      const ledger = await memberLedger(taskId)
+      expect(windows).toEqual([{ capturedCursor: '', committedCursor: messageId }])
+      expect(result.kind).toBe('ok')
+      expect(memberCalls, JSON.stringify({ windows, ledger })).toBe(2)
+      expect(ledger).toEqual([
+        [0, 'wg-message-turn'],
+        [1, 'wg-protocol-retry'],
+      ])
+    } finally {
+      memberRetryEntered.resolve()
+      snapshotCaptured.resolve()
+      memberCursorCommitted.resolve()
+      controller.abort()
+      await drive
+    }
   })
 
   test('runtime stream retries are bounded even for a single-shot message turn', async () => {

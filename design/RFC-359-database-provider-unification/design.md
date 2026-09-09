@@ -20,6 +20,16 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W36 将三个原生状态查询的相同前缀提取到 resource-catalog infrastructure 的 `skillOperationStateQuery`。
+  `ProviderNeutralDatabaseForMode` 保留具体 sync/async 推导，原公开 `ProviderNeutralDatabase` 完整别名不变；
+  三个调用方仍分别保留即时 `.get()`、原 `await .get()` 与原 `await .limit(1)` 后取首行的执行尾部。
+  Workgroup driver 在原 load 前记录 inflight 数量，原取消检查后检测期间是否有 turn 完成；若有则重新读取，
+  避免把已清除的busy标记与旧cursor快照组合。两处原同步添加与两处finally删除不变，不改原预算。
+  新回归只控制实际host完成和同一真实load快照的返回时刻；leader等待member已进入其第二次host后才完成，
+  防止夹具自身错过屏障。真实查询、commit及cursor均保留，原有用例完整字节保持。
+  Child-count fixture使用原parent顺序继承实际谱系，原FK检查不关闭；另两native原例保持。
+  P0修改只涉及栈格式解析，RFC234修改只涉及选定故障点的阶段/CPU诊断；二者不改业务行为或原预算。
+
 - W35继续只适配原测试夹具：插件八例和workgroup CRUD七例用默认双库，23原single仍独立运行。
   原native setup只服务保留组，provider组使用实际harness.db并沿用原完整种子/FS/setup尾部，避免额外SQLite。
   插件GC只为原task INSERT显式提供原已观察到的两个谱系值，node_runs原行及NULL保持，原busy/clear输入不变。

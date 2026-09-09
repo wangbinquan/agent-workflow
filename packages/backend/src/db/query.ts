@@ -18,3 +18,9 @@ import type * as schema from './schema'
  * 定义在模块内会让每个跨模块使用者都记一条「legacy 指向模块内部」的越界边。
  */
 export type ProviderNeutralDatabase = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>
+
+export type ProviderNeutralDatabaseForMode<TMode extends 'sync' | 'async'> = BaseSQLiteDatabase<
+  TMode,
+  unknown,
+  typeof schema
+>

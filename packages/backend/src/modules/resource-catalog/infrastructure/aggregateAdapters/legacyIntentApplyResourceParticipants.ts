@@ -28,7 +28,8 @@ import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { DbTxSync } from '@/db/txSync'
-import { agents, mcps, plugins, skillOperations, skills, workflows, workgroups } from '@/db/schema'
+import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
+import { skillOperationStateQuery } from '../skillOperationStateQuery'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import { createIntentApplyResourceParticipantInTx } from '../../application/participants/intentApplyResourceParticipant'
@@ -571,11 +572,7 @@ export function loadLegacyIntentResourceRevisionInTx<K extends CatalogSelectorKi
 
 /** Exact operation-state read used by the legacy SQLite roll-forward tail. */
 export function loadLegacyIntentSkillOperationState(db: DbClient, opId: string) {
-  return db
-    .select({ active: skillOperations.active, phase: skillOperations.phase })
-    .from(skillOperations)
-    .where(eq(skillOperations.opId, opId))
-    .get()
+  return skillOperationStateQuery(db, opId).get()
 }
 
 export interface LegacyIntentApplyResourceSession {

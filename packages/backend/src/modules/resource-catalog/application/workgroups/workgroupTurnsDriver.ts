@@ -2661,12 +2661,17 @@ export function createWorkgroupTurnsOperations(
           await Promise.allSettled(inflight.values())
           return fatalOutcome
         }
+        const inflightCountBeforeLoad = inflight.size
         const snapshot = await persistence.load(input.taskId)
         // Cancellation can arrive while the snapshot read is in flight.
         if (input.signal?.aborted) {
           await Promise.allSettled(inflight.values())
           return { kind: 'canceled' }
         }
+        // Only this loop adds turns; their finally handlers can remove them
+        // during load. Reload after a completion so cleared busy markers are
+        // never combined with an earlier cursor/assignment snapshot.
+        if (inflight.size !== inflightCountBeforeLoad) continue
         if (snapshot === null || snapshot.config.mode === 'dynamic_workflow') {
           return {
             kind: 'failed',

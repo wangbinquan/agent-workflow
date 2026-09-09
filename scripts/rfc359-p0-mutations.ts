@@ -352,7 +352,7 @@ export const PHASES: readonly Phase[] = [
         diagnostics: [
           /\[rfc359-p0-10-state\] \{"taskId":"([^"]+)","ownerState":"claimed","unresolvedEffectCount":1\}\n[\s\S]*TaskExecutionError: task '\1' still has unresolved effects or resource holds/,
           /code: "task-execution-recovery-required"/,
-          /at <anonymous> \([^\n]*taskOwnershipPersistence\.ts:\d+:\d+\)/,
+          /^[ \t]*at (?:<anonymous> \((?:\/(?:[^/\r\n()<>]+\/)*|(?:\.\.?\/)+)?packages\/backend\/src\/modules\/task-execution\/infrastructure\/taskOwnershipPersistence\.ts:\d+:\d+\)|(?:\/(?:[^/\r\n()<>]+\/)*|(?:\.\.?\/)+)?packages\/backend\/src\/modules\/task-execution\/infrastructure\/taskOwnershipPersistence\.ts:\d+:\d+)[ \t]*$/m,
         ],
       },
     ],

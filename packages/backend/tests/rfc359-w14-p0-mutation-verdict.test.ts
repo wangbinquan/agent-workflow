@@ -521,3 +521,57 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
       expect(verdict('p0-12-protocol', changed).valid).toBe(false)
   })
 })
+
+// RFC-359 W36: Bun 1.4 reports the same source frame both with and without an
+// anonymous wrapper. Exercise the real log validator without running mutations.
+test('RFC-359 W36 P0-10 stack accepts complete wrapped and bare target frames', () => {
+  const id = 'p0-10-unsettled-release'
+  const target =
+    'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts'
+  const originalFrame = `      at <anonymous> (/repo/${target}:381:15)`
+  for (const provider of ['sqlite', 'postgresql'] as const) {
+    const log = transcript(id, provider)
+    for (const path of [`/repo/${target}`, target]) {
+      for (const frame of [`      at <anonymous> (${path}:381:15)`, `      at ${path}:381:19`]) {
+        const result = validatePhaseLog(log.replace(originalFrame, frame), 1, phase(id), provider)
+        expect(result.valid).toBe(true)
+        expect(result.actualPasses).toEqual(result.expectedPasses)
+        expect(result.actualFailures).toEqual(result.expectedFailures)
+        expect(result.summary).toEqual({ pass: 1, fail: 1, expects: 10 })
+      }
+    }
+  }
+})
+
+test('RFC-359 W36 P0-10 stack rejects wrong targets, missing coordinates and body text', () => {
+  const id = 'p0-10-unsettled-release'
+  const target =
+    'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts'
+  const originalFrame = `      at <anonymous> (/repo/${target}:381:15)`
+  const invalidLocations = [
+    `/repo/${target.replace('/infrastructure/', '/application/')}:381:15`,
+    `/repo/${target.replace('taskOwnershipPersistence.ts', 'other.ts')}:381:15`,
+    'taskOwnershipPersistence.ts:381:15',
+    `/repo/${target}`,
+    `/repo/${target}:381`,
+    `/repo/${target}::15`,
+    `/repo/${target}:line:15`,
+    `/repo/${target}:381:column`,
+  ]
+  const invalidFrames = [
+    ...invalidLocations.flatMap((path) => [`      at <anonymous> (${path})`, `      at ${path}`]),
+    `error: source /repo/${target}:381:15`,
+    `error: at <anonymous> (/repo/${target}:381:15)`,
+    `error: at /repo/${target}:381:15`,
+    `      at <anonymous> (/repo/${target}:381:15`,
+    `      at /repo/${target}:381:15)`,
+    `      at <anonymous> /repo/${target}:381:15`,
+    `      at <anonymous> (/repo/${target}:381:15) trailing text`,
+    `      at /repo/${target}:381:15 trailing text`,
+  ]
+  for (const frame of invalidFrames) {
+    const result = verdict(id, transcript(id).replace(originalFrame, frame))
+    expect(result.valid).toBe(false)
+    expect(result.reasons.some((reason) => reason.includes('taskOwnershipPersistence'))).toBe(true)
+  }
+})

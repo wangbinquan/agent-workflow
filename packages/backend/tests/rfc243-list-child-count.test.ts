@@ -18,6 +18,8 @@ import { sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, users } from '../src/db/schema'
 import { listTaskItems } from '../src/services/task'
 
@@ -69,44 +71,82 @@ async function seed(
   await db.run(sql`PRAGMA foreign_keys = ON`)
 }
 
+// Preserve the original seed's observed parent-first lineage without changing
+// foreign-key enforcement on the provider-neutral query fixture.
+async function seedQueryRows(db: ProviderNeutralDatabase, rows: Parameters<typeof seed>[1]) {
+  const lineageByTaskId = new Map<
+    string,
+    {
+      executionLineageId: string
+      frames: { stableNodeKey: string; frozenOccurrenceKey: string; workflowRevision: null }[]
+    }
+  >()
+  await db.insert(tasks).values(
+    rows.map((r) => {
+      const parent = r.parent === undefined ? undefined : lineageByTaskId.get(r.parent)
+      const frames = [
+        ...(parent?.frames ?? []),
+        {
+          stableNodeKey: parent === undefined ? 'task-root' : 'child-task',
+          frozenOccurrenceKey: r.id,
+          workflowRevision: null,
+        },
+      ]
+      const executionLineageId = parent?.executionLineageId ?? r.id
+      lineageByTaskId.set(r.id, { executionLineageId, frames })
+      return {
+        ...baseTask(r.id, r.owner),
+        ...(r.parent === undefined ? {} : { parentTaskId: r.parent, invocationDepth: 1 }),
+        ...(r.status === undefined ? {} : { status: r.status as 'done' }),
+        executionLineageId,
+        lineageSlotPathJson: JSON.stringify(frames),
+      }
+    }),
+  )
+}
+
 function countOf(rows: { id: string; childCount: number }[], id: string): number | undefined {
   return rows.find((r) => r.id === id)?.childCount
 }
 
 describe('RFC-243 — list childCount', () => {
-  test('counts DIRECT children only, per row, and reports 0 for childless rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, [
-      { id: 'p-two', owner: null },
-      { id: 'p-one', owner: null },
-      { id: 'p-none', owner: null },
-      { id: 'c-a', owner: null, parent: 'p-two' },
-      { id: 'c-b', owner: null, parent: 'p-two' },
-      { id: 'c-c', owner: null, parent: 'p-one' },
-      // Grandchild: belongs to c-a, and must NOT roll up into p-two.
-      { id: 'g-a', owner: null, parent: 'c-a' },
-    ])
+  describeEachProvider('direct child counts', (harness) => {
+    const seed = seedQueryRows
 
-    const rows = await listTaskItems(db)
-    expect(countOf(rows, 'p-two')).toBe(2)
-    expect(countOf(rows, 'p-one')).toBe(1)
-    expect(countOf(rows, 'p-none')).toBe(0)
-    // The child that is itself a parent carries its own count — this is what
-    // lets the UI recurse into a second nesting level.
-    expect(countOf(rows, 'c-a')).toBe(1)
-    expect(countOf(rows, 'c-b')).toBe(0)
-  })
+    test('counts DIRECT children only, per row, and reports 0 for childless rows', async () => {
+      const db = harness.db
+      await seed(db, [
+        { id: 'p-two', owner: null },
+        { id: 'p-one', owner: null },
+        { id: 'p-none', owner: null },
+        { id: 'c-a', owner: null, parent: 'p-two' },
+        { id: 'c-b', owner: null, parent: 'p-two' },
+        { id: 'c-c', owner: null, parent: 'p-one' },
+        // Grandchild: belongs to c-a, and must NOT roll up into p-two.
+        { id: 'g-a', owner: null, parent: 'c-a' },
+      ])
 
-  test('status is not a gate: a failed parent still reports its children', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, [
-      { id: 'p-failed', owner: null, status: 'failed' },
-      { id: 'c-of-failed', owner: null, parent: 'p-failed' },
-    ])
+      const rows = await listTaskItems(db)
+      expect(countOf(rows, 'p-two')).toBe(2)
+      expect(countOf(rows, 'p-one')).toBe(1)
+      expect(countOf(rows, 'p-none')).toBe(0)
+      // The child that is itself a parent carries its own count — this is what
+      // lets the UI recurse into a second nesting level.
+      expect(countOf(rows, 'c-a')).toBe(1)
+      expect(countOf(rows, 'c-b')).toBe(0)
+    })
 
-    // The old status-gated arrow hid children under failed/canceled parents —
-    // exactly the rows a user most needs to open when diagnosing a failure.
-    expect(countOf(await listTaskItems(db), 'p-failed')).toBe(1)
+    test('status is not a gate: a failed parent still reports its children', async () => {
+      const db = harness.db
+      await seed(db, [
+        { id: 'p-failed', owner: null, status: 'failed' },
+        { id: 'c-of-failed', owner: null, parent: 'p-failed' },
+      ])
+
+      // The old status-gated arrow hid children under failed/canceled parents —
+      // exactly the rows a user most needs to open when diagnosing a failure.
+      expect(countOf(await listTaskItems(db), 'p-failed')).toBe(1)
+    })
   })
 
   test('counts only children VISIBLE to the actor (same predicate as the list)', async () => {
@@ -134,20 +174,24 @@ describe('RFC-243 — list childCount', () => {
     expect(countOf(await listTaskItems(db), 'p-alice')).toBe(2)
   })
 
-  test('children query rows carry their own counts (nested expansion)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, [
-      { id: 'root', owner: null },
-      { id: 'mid', owner: null, parent: 'root' },
-      { id: 'leaf', owner: null, parent: 'mid' },
-    ])
+  describeEachProvider('nested child counts', (harness) => {
+    const seed = seedQueryRows
 
-    const children = await listTaskItems(db, { parentTaskId: 'root' })
-    expect(children.map((r) => r.id)).toEqual(['mid'])
-    expect(countOf(children, 'mid')).toBe(1)
+    test('children query rows carry their own counts (nested expansion)', async () => {
+      const db = harness.db
+      await seed(db, [
+        { id: 'root', owner: null },
+        { id: 'mid', owner: null, parent: 'root' },
+        { id: 'leaf', owner: null, parent: 'mid' },
+      ])
 
-    const grandchildren = await listTaskItems(db, { parentTaskId: 'mid' })
-    expect(countOf(grandchildren, 'leaf')).toBe(0)
+      const children = await listTaskItems(db, { parentTaskId: 'root' })
+      expect(children.map((r) => r.id)).toEqual(['mid'])
+      expect(countOf(children, 'mid')).toBe(1)
+
+      const grandchildren = await listTaskItems(db, { parentTaskId: 'mid' })
+      expect(countOf(grandchildren, 'leaf')).toBe(0)
+    })
   })
 
   test('one grouped query for the whole page — never a per-row probe', async () => {

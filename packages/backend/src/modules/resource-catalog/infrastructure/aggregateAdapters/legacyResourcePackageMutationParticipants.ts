@@ -33,7 +33,8 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { plugins, skillOperations } from '@/db/schema'
+import { plugins } from '@/db/schema'
+import { skillOperationStateQuery } from '../skillOperationStateQuery'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Logger } from '@/util/log'
 import { monotonicNow } from '@/util/time'
@@ -1235,13 +1236,7 @@ async function rollForwardSkillTails(
       pendingSkillVersions.push(staged)
       continue
     }
-    const operation = (
-      await db
-        .select({ active: skillOperations.active, phase: skillOperations.phase })
-        .from(skillOperations)
-        .where(eq(skillOperations.opId, staged.opId))
-        .limit(1)
-    )[0]
+    const operation = (await skillOperationStateQuery(db, staged.opId).limit(1))[0]
     if (operation?.active === 1) {
       pendingSkillVersions.push(staged)
       continue

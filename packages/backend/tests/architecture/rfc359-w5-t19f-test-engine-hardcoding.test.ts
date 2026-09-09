@@ -389,7 +389,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc243-call-workflow.test.ts: 3',
   'rfc243-call-workgroup.test.ts: 1',
   'rfc243-executor-facade.test.ts: 6',
-  'rfc243-list-child-count.test.ts: 5',
+  'rfc243-list-child-count.test.ts: 2',
   'rfc243-parent-child-lifecycle.test.ts: 12',
   'rfc244-task-operations.test.ts: 9',
   'rfc247-api-docs.test.ts: 3',
@@ -634,6 +634,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
   'rfc359-w17-boot-orphan-terminalization.test.ts: 1',
   'rfc359-w25-task-page-bounded-prefix.test.ts: 1', // Native SQLite fallback non-consumption witness; behavior cases use both providers.
+  'rfc359-w36-skill-operation-state-query.test.ts: 1', // Native immediate-get return witness; three query behavior cases use both providers.
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   // RFC-359 W8：这一格**不是**本守卫要防的那种债，但照样入账，因为判据是纯文本、不该为它开洞。
