@@ -511,10 +511,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
       "baseline": 689,
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。",
-      "allowGrowth": {
-        "why": "RFC-359 W36 adds one actual native immediate-get return contract case; the three ordinary skill-operation query cases use both providers. The child-count fixture retires three constructor calls. No pre-existing native row is removed or exempted."
-      }
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
       "id": "rfc359-w5-test-engine-hardcoding-exempt",
@@ -814,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5327,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5328,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W37 adds the shared plugin cached-path query file and its exact existing schema import. Both maintenance owners still require their other schema reads, so this real source edge is retained and counted."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -835,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4793,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4794,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W37 records the shared plugin cached-path query schema edge; it does not remove either maintenance owner or its other required schema imports."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -870,15 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25061,
+      "baseline": 25063,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W36 records one provider-mode-preserving platform type and the new shared skill-operation query file plus exported function. The existing public database alias and every prior owner remain intact."
+        "why": "RFC-359 W37 records the shared plugin cached-path query file and its exported function, replacing two identical query prefixes in the existing native and PostgreSQL maintenance owners."
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c4520f71e0e68fffc4a4d5f29df42fe597ee5eec5287bf9c24720febf9d2e40e",
+    "sourceDigest": "sha256:319afb5cfe11ce5f6273bf8ff807e81080070768d6d994771fdf435e58144309",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -891,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1aab39f65ec5efd37d6b041ad70747a51dd65cd7",
-    "contentDigest": "sha256:1c4eda31ce5b5d032043e0ca1fba8a375d23f6c4d41a663ca484c65c6eccac9c",
+    "currentSnapshotSha": "283582f8786b6ab79e602342dd06a2199836d886",
+    "contentDigest": "sha256:9fdce1dc02f152ab89f1d856533c74f9217b306167b1c4bc030cc74d10b1791b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

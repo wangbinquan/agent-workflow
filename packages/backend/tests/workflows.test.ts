@@ -26,6 +26,7 @@ import {
 } from '../src/services/workflow'
 import { validateWorkflowById } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -96,153 +97,179 @@ function deleteInput(workflow: Pick<WorkflowDetail, 'version' | 'name'>): Delete
 describe('workflow service', () => {
   let db: DbClient
 
-  beforeEach(() => {
+  function setupNativeServiceDb() {
     db = createInMemoryDb(MIGRATIONS)
-  })
+  }
 
-  test('list empty -> []', async () => {
-    expect(await listWorkflows(db)).toEqual([])
-  })
+  describe('SQLite list compatibility', () => {
+    beforeEach(setupNativeServiceDb)
 
-  test('create stores definition + sets version=1', async () => {
-    const wf = await createWorkflow(db, {
-      name: 'my workflow',
-      description: 'desc',
-      definition: sampleDefinition(),
+    test('list empty -> []', async () => {
+      expect(await listWorkflows(db)).toEqual([])
     })
-    expect(wf.id).toMatch(/^[0-9A-HJKMNP-TV-Z]+$/) // ULID
-    expect(wf.name).toBe('my workflow')
-    expect(wf.version).toBe(1)
-    expect(wf.definition.nodes.length).toBe(2)
-    expect(wf.definition.edges.length).toBe(1)
   })
 
-  test('update bumps version + persists definition', async () => {
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: sampleDefinition(),
+  describeEachProvider('CRUD', (harness) => {
+    let db: ProviderDatabaseHarness['db']
+
+    beforeEach(() => {
+      db = harness.db
     })
-    const after = await updateWorkflow(
-      db,
-      wf.id,
-      saveInput(wf, {
-        name: 'renamed',
-        definition: { ...sampleDefinition(), nodes: [] },
-      }),
-      SYSTEM_PRINCIPAL,
-    )
-    expect(after.revision.version).toBe(2)
-    expect(after.snapshot.name).toBe('renamed')
-    expect(after.snapshot.definition.nodes.length).toBe(0)
-  })
 
-  test('update unknown id -> NotFoundError', async () => {
-    await expect(
-      updateWorkflow(
+    test('create stores definition + sets version=1', async () => {
+      const wf = await createWorkflow(db, {
+        name: 'my workflow',
+        description: 'desc',
+        definition: sampleDefinition(),
+      })
+      expect(wf.id).toMatch(/^[0-9A-HJKMNP-TV-Z]+$/) // ULID
+      expect(wf.name).toBe('my workflow')
+      expect(wf.version).toBe(1)
+      expect(wf.definition.nodes.length).toBe(2)
+      expect(wf.definition.edges.length).toBe(1)
+    })
+
+    test('update bumps version + persists definition', async () => {
+      const wf = await createWorkflow(db, {
+        name: 'wf',
+        description: '',
+        definition: sampleDefinition(),
+      })
+      const after = await updateWorkflow(
         db,
-        '01HXXXXXXXXXXXXXXXXXXX',
-        {
-          expectedVersion: 1,
-          clientMutationId: ulid(),
-          snapshot: { name: 'x', description: '', definition: sampleDefinition() },
-        },
+        wf.id,
+        saveInput(wf, {
+          name: 'renamed',
+          definition: { ...sampleDefinition(), nodes: [] },
+        }),
         SYSTEM_PRINCIPAL,
-      ),
-    ).rejects.toBeInstanceOf(NotFoundError)
+      )
+      expect(after.revision.version).toBe(2)
+      expect(after.snapshot.name).toBe('renamed')
+      expect(after.snapshot.definition.nodes.length).toBe(0)
+    })
+
+    test('update unknown id -> NotFoundError', async () => {
+      await expect(
+        updateWorkflow(
+          db,
+          '01HXXXXXXXXXXXXXXXXXXX',
+          {
+            expectedVersion: 1,
+            clientMutationId: ulid(),
+            snapshot: { name: 'x', description: '', definition: sampleDefinition() },
+          },
+          SYSTEM_PRINCIPAL,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundError)
+    })
+
+    test('delete removes; unknown -> NotFoundError', async () => {
+      const wf = await createWorkflow(db, {
+        name: 'wf',
+        description: '',
+        definition: sampleDefinition(),
+      })
+      const input = deleteInput(wf)
+      await deleteWorkflow(db, wf.id, input, SYSTEM_PRINCIPAL)
+      expect(await getWorkflow(db, wf.id)).toBeNull()
+      await expect(deleteWorkflow(db, wf.id, input, SYSTEM_PRINCIPAL)).rejects.toBeInstanceOf(
+        NotFoundError,
+      )
+    })
+
+    test('delete refuses when ANY task references the workflow (running)', async () => {
+      const wf = await createWorkflow(db, {
+        name: 'wf',
+        description: '',
+        definition: sampleDefinition(),
+      })
+      const taskId = ulid()
+      await db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id: taskId,
+        workflowId: wf.id,
+        workflowSnapshot: JSON.stringify(wf.definition),
+        repoPath: '/tmp/repo',
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: 'agent-workflow/T',
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
+      })
+      await expect(
+        deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL),
+      ).rejects.toBeInstanceOf(ConflictError)
+    })
+
+    test('delete SUCCEEDS with only terminal (done) references — RFC-285 B2 中档统一', async () => {
+      // 原「any reference blocks deletion」（design Q&A round 18 的旧约）已被
+      // RFC-285 B2（D5/E2）取代：只拒**非终态**引用；终态引用随 0151 软链化
+      // 允许悬空。running 半边仍由上一条用例锁死。
+      const wf = await createWorkflow(db, {
+        name: 'wf',
+        description: '',
+        definition: sampleDefinition(),
+      })
+      const taskId = ulid()
+      await db.insert(tasks).values({
+        name: 'fixture-task',
+
+        id: taskId,
+        workflowId: wf.id,
+        workflowSnapshot: JSON.stringify(wf.definition),
+        repoPath: '/tmp/repo',
+        worktreePath: '/tmp/wt',
+        baseBranch: 'main',
+        branch: 'agent-workflow/T',
+        status: 'done',
+        inputs: '{}',
+        startedAt: Date.now(),
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
+      })
+      await deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL)
+      expect(await getWorkflow(db, wf.id)).toBeNull()
+    })
   })
 
-  test('delete removes; unknown -> NotFoundError', async () => {
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: sampleDefinition(),
-    })
-    const input = deleteInput(wf)
-    await deleteWorkflow(db, wf.id, input, SYSTEM_PRINCIPAL)
-    expect(await getWorkflow(db, wf.id)).toBeNull()
-    await expect(deleteWorkflow(db, wf.id, input, SYSTEM_PRINCIPAL)).rejects.toBeInstanceOf(
-      NotFoundError,
-    )
-  })
+  describe('SQLite validation compatibility', () => {
+    beforeEach(setupNativeServiceDb)
 
-  test('delete refuses when ANY task references the workflow (running)', async () => {
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: sampleDefinition(),
+    test('validate on empty workflow definition returns ok', async () => {
+      // Rule coverage lives in workflow-validator.test.ts; this test pins down
+      // the service-level wiring (workflow lookup + ok-shape).
+      const wf = await createWorkflow(db, {
+        name: 'wf',
+        description: '',
+        definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
+      })
+      const result = await validateWorkflowById(db, wf.id)
+      expect(result).toEqual({ ok: true, issues: [] })
     })
-    await db.insert(tasks).values({
-      name: 'fixture-task',
 
-      id: ulid(),
-      workflowId: wf.id,
-      workflowSnapshot: JSON.stringify(wf.definition),
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/T',
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
+    test('validate surfaces concrete issues when references do not resolve', async () => {
+      const wf = await createWorkflow(db, {
+        name: 'wf',
+        description: '',
+        definition: sampleDefinition(),
+      })
+      const result = await validateWorkflowById(db, wf.id)
+      expect(result.ok).toBe(false)
+      const codes = result.issues.map((i) => i.code)
+      // sampleDefinition references agent 'code-worker' (not seeded) and edges
+      // an `out` port that doesn't exist on the input node.
+      expect(codes).toContain('agent-not-found')
+      expect(codes).toContain('edge-source-port-missing')
     })
-    await expect(
-      deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL),
-    ).rejects.toBeInstanceOf(ConflictError)
-  })
-
-  test('delete SUCCEEDS with only terminal (done) references — RFC-285 B2 中档统一', async () => {
-    // 原「any reference blocks deletion」（design Q&A round 18 的旧约）已被
-    // RFC-285 B2（D5/E2）取代：只拒**非终态**引用；终态引用随 0151 软链化
-    // 允许悬空。running 半边仍由上一条用例锁死。
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: sampleDefinition(),
-    })
-    await db.insert(tasks).values({
-      name: 'fixture-task',
-
-      id: ulid(),
-      workflowId: wf.id,
-      workflowSnapshot: JSON.stringify(wf.definition),
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: 'agent-workflow/T',
-      status: 'done',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    await deleteWorkflow(db, wf.id, deleteInput(wf), SYSTEM_PRINCIPAL)
-    expect(await getWorkflow(db, wf.id)).toBeNull()
-  })
-
-  test('validate on empty workflow definition returns ok', async () => {
-    // Rule coverage lives in workflow-validator.test.ts; this test pins down
-    // the service-level wiring (workflow lookup + ok-shape).
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
-    })
-    const result = await validateWorkflowById(db, wf.id)
-    expect(result).toEqual({ ok: true, issues: [] })
-  })
-
-  test('validate surfaces concrete issues when references do not resolve', async () => {
-    const wf = await createWorkflow(db, {
-      name: 'wf',
-      description: '',
-      definition: sampleDefinition(),
-    })
-    const result = await validateWorkflowById(db, wf.id)
-    expect(result.ok).toBe(false)
-    const codes = result.issues.map((i) => i.code)
-    // sampleDefinition references agent 'code-worker' (not seeded) and edges
-    // an `out` port that doesn't exist on the input node.
-    expect(codes).toContain('agent-not-found')
-    expect(codes).toContain('edge-source-port-missing')
   })
 })
 

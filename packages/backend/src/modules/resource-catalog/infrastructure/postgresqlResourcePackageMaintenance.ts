@@ -1,10 +1,11 @@
+import { pluginCachedPathQuery } from './pluginCachedPathQuery'
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { BUNDLE_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import { plugins, skills, skillVersions } from '@/db/schema'
+import { skills, skillVersions } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { safeJoin } from '@/util/safePath'
 import type {
@@ -298,11 +299,7 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
         try {
           assertOperationInReceipt(receipt, artifact)
           if (artifact.kind === 'plugin-install') {
-            const plugin = await input.db
-              .select({ cachedPath: plugins.cachedPath })
-              .from(plugins)
-              .where(eq(plugins.id, artifact.pluginId))
-              .get()
+            const plugin = await pluginCachedPathQuery(input.db, artifact).get()
             if (plugin !== undefined && !existsSync(plugin.cachedPath)) {
               throw new Error(`resource-package-plugin-publication-missing:${artifact.pluginId}`)
             }

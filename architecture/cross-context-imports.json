@@ -51870,6 +51870,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a4d8d239427f303ec1e5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabaseForMode",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabaseForMode",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
       "fromPath": "packages/backend/src/auth/session.ts",
       "fromSymbol": "$file",
@@ -59039,6 +59056,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bc38237003668fe0c927",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "plugins",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -70055,23 +70089,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
       "toPath": "packages/backend/src/util/hash.ts",
       "toSymbol": "sha256Hex",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:dbd22b039be91aa2192d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "plugins",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -81483,9 +81500,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4793,
+    "architectureExceptions": 4794,
     "implementationSccs": 0,
-    "observedEdges": 5327,
+    "observedEdges": 5328,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -125334,22 +125351,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#$file",
-      "id": "import:854d2e5bb81805b7ff21",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "provider-mirror",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "plugins",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/developmentDeliveryDeps.ts",
@@ -135815,6 +135816,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
+      "id": "import:a4d8d239427f303ec1e5",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabaseForMode",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabaseForMode"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/auth/session.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
@@ -135908,6 +135925,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createTaskExecutionContext"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
+      "id": "import:a54e88ad796f698bb982",
+      "owner": "resource-catalog",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "value",
@@ -143332,6 +143365,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
+      "id": "import:bc38237003668fe0c927",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "plugins",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
     },
     {
       "edgeKind": "type",
@@ -154900,22 +154949,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/hash.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#$file",
-      "id": "import:dbd22b039be91aa2192d",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "plugins",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
     },
     {
       "edgeKind": "value",
@@ -167263,7 +167296,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c4520f71e0e68fffc4a4d5f29df42fe597ee5eec5287bf9c24720febf9d2e40e",
+  "sourceDigest": "sha256:319afb5cfe11ce5f6273bf8ff807e81080070768d6d994771fdf435e58144309",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

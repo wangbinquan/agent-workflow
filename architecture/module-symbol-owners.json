@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1798,
+    "backendFiles": 1799,
     "frontendFiles": 622,
     "legacyFiles": 606,
-    "moduleFiles": 1192,
-    "productionFiles": 2575,
+    "moduleFiles": 1193,
+    "productionFiles": 2576,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25061
+    "symbolsIncludingFileRoots": 25063
   },
   "entries": [
     {
@@ -97200,6 +97200,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SKILL_MAIN",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#pluginCachedPathQuery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "pluginCachedPathQuery",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301434,5 +301458,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c4520f71e0e68fffc4a4d5f29df42fe597ee5eec5287bf9c24720febf9d2e40e"
+  "sourceDigest": "sha256:319afb5cfe11ce5f6273bf8ff807e81080070768d6d994771fdf435e58144309"
 }

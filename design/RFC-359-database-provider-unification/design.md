@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W37 将两个实际资源包恢复owner中的 `plugins.cachedPath` 惰性查询前缀提取为
+  `pluginCachedPathQuery`，复用已发布的 `ProviderNeutralDatabaseForMode` 类型。
+  将原artifact对象传入函数，维持select、from、pluginId求值顺序，get和await仍由调用方执行；
+  不移动原恢复事务、文件操作、回执或条件分支。两种模式的准确返回类型与实际查询行为分别验证。
+  Workflows仅将原六个异步CRUD行为例接入现有provider harness；原native list、两个validation例
+  和完整HTTP组维持原形。两个task seed显式补足原native触发器生成的实际谱系值，原NULL和JSON保留。
+
 - W36 将三个原生状态查询的相同前缀提取到 resource-catalog infrastructure 的 `skillOperationStateQuery`。
   `ProviderNeutralDatabaseForMode` 保留具体 sync/async 推导，原公开 `ProviderNeutralDatabase` 完整别名不变；
   三个调用方仍分别保留即时 `.get()`、原 `await .get()` 与原 `await .limit(1)` 后取首行的执行尾部。

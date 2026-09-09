@@ -1,3 +1,4 @@
+import { pluginCachedPathQuery } from './pluginCachedPathQuery'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -5,7 +6,7 @@ import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { plugins, skills } from '@/db/schema'
+import { skills } from '@/db/schema'
 import { skillOperationStateQuery } from './skillOperationStateQuery'
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
@@ -210,11 +211,7 @@ async function rollForwardArtifacts(input: {
         continue
       }
       if (artifact.kind === 'plugin-install') {
-        const row = await input.db
-          .select({ cachedPath: plugins.cachedPath })
-          .from(plugins)
-          .where(eq(plugins.id, artifact.pluginId))
-          .get()
+        const row = await pluginCachedPathQuery(input.db, artifact).get()
         if (row !== undefined && !existsSync(row.cachedPath)) {
           throw new Error(`resource-package-plugin-publication-missing:${artifact.pluginId}`)
         }
