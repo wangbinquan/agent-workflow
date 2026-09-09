@@ -28,10 +28,10 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                          | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                       | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1957测试文件；createInMemoryDb口径605文件/1224调用、572无harness/458有harness；本批六个原HTTP callback默认双库，原native工厂1→1。W41两OS各1955文件恰一次，892主执行全过、182选定PG全过、另2 sidecar过；本批新HTTP待验       | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1959测试文件；createInMemoryDb口径605文件/1224调用、571无harness/459有harness；本批11个原HTTP call默认双库，原native工厂1→1。W42两OS各1957文件恰一次，932主执行全过、188选定PG全过、另2 sidecar过；本批新HTTP待验           | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                 | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                                                                | 进行中 |
-| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W41 exact35053515d Main34354058081终态36 success/4 failure，13后端11过2红、普通lint与独立PG通过；892主执行及另2 sidecar全过，五个Linux gate恢复。另两分片daemon-start/RFC210的hook超时仍待定位，本批新SHA待验                   | 待办   |
+| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W42 exactdfdadd6ad Main34358743177终态36 success/4 failure，13后端11过2红；932主执行及另2 sidecar全过。历史两组beforeAll所属例本次均过，另具名daemon case在macOS以5000ms预算超时；其余失败独立保留，本批新SHA待验               | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | exact50e9原full34343025829的360样本：SQLite任务首页142.563024ms已满足原150ms；PG三任务页80.726695/51.165668/50.808485ms均较快且达标，其余六端点PG仍较慢；唯一原绝对失败PG overview MAX13.222187ms未过10ms。原规模/轮数/判据保持 | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12原始占位32→9，未构造根账本0；九个诊断为四个作用域查询、四个协作检查和一个兼容诊断。provider命名88→59保持；W42分支端口校验真实共享，其余内联重复与装配继续核验                                                                | 进行中 |
@@ -1603,6 +1603,60 @@ PG overview max<10ms。九项稳定wire相同，末次完整body摘要八项相�
   canonical13/55通过。定向源lint/format及独立代码、metadata、文档复核完成；两生成合同和RFC294
   status的原/候选直接Prettier均红，保留原生成器字节及精确投影，格式限制单列。未跑本地PG/服务/E2E/性能/完整门禁，原W20限制保留；本批新SHA真PG、
   完整Main及原full待托管，AC1/6/8/9/11/12和RFC保持开放。
+
+### W12 第四十三批：仓库组HTTP双库与历史hook阶段诊断
+
+基于已发布 `dfdadd6ad10e2ba8fe3e73b2ad68a6656cdfeb83`，五个核心路径冻结后一次完整backend tsc通过。
+
+- 仓库组HTTP选择11个原完整call/28 matcher；全部14个call及其前导注释保持，另3个仅保留原样。
+  三个原节点构造const移入同一个共享工厂；seed只有中立参数类型、async与外层await变化，
+  SQL表达式、原7值及次序、ULID/时钟输入和返回保持。原native beforeEach仅顺序await两次seed，
+  native工厂1→1。本文件是部分选择，未把其他原例算入双库覆盖。
+  默认describeEachProvider通过内层describe调用具名注册函数，保持真实provider上下文；
+  复用完整provider应用工厂，四个原应用选项保持，并显式传入本次appHome。
+  原seed与新seed各在一份微型原生SQLite夹具上执行两次，重放实际生成的两个ID与时钟值；
+  完整6条SQL/bind记录、2次全行快照中的3行/36字段和两个返回值逐值相同。
+  其中2条是INSERT记录、4条是两次显式observer query().all()的SELECT记录；记录条目数不等于
+  独立native执行数。未使用的native run()返回对象没有录制，不扩称返回对象已对拍。
+  16个纯控制包括5个失败/清理场景及11次真实Bun嵌套hook调度；实际应用/DB端口和原HTTP
+  callback均替换为受控端口。208条原始事件保留，其中198为provider生命周期、10为手动控制
+  外层原global hook。证明dispose与目录/环境清理先于DB释放，不替代真实HTTP行为验证。
+  原collector误将全部208条期望为198，修正临时observer后通过；原seed报告一处旧数量说明
+  由派生报告纠正，原脚本/日志/收据/捕获均保留，没有重跑夹具或改产品源码。
+- daemon-start原beforeAll的9个操作、6处await、原10000ms reader参数、cleanup及9个原整call
+  保持；新增18个固定阶段标记。纯验证仅执行前4个原setup操作及原清理，后5个操作和原行为例
+  不执行。初版报告函数的sink抛错问题在交叉复核中发现并修正；初始化时钟和报告函数自身
+  各自保护诊断失败，不包裹原操作。原3例保持，另4项诊断故障在修前真实断言红，修后共7/41。
+  此处只增加后续托管定位能力，未改reader协议，也不宣称历史5秒超时已修复。
+- RFC210原beforeAll的23个statement、10处await、60000ms预算、原git adapter与afterAll保持，
+  5个原完整call仅作raw保真；新增46个固定阶段begin/end及单调耗时，sink失败不替换原错误。
+  从原真实hook/adapter提取并注入非进程端口，4/79通过；17组前后各411条完整受控端口事件
+  相等，10个pending边界与700条诊断保留。4项指定负控在真实断言红；未执行真实Git/原行为例。
+- 当前1959测试文件，605个createInMemoryDb调用文件/1224调用、571无harness/459有harness。
+  T19f整源/688条、provider命名59与生产sourceDigest保持；新增两文件均为纯诊断回归。
+  原canonical writer后13份metadata全部raw不变；初次功能检查为210/1：两份诊断期望序列需按原T72规则登记。
+  原NOT_A_LEDGER及其逐条相等断言显式增加两项，未改matcher或以改名绕过；修后211/433通过。
+  治理更新为四份provenance、上一批两个一次性allowGrowth标记，以及原T72 guard行lines+6；
+  其余199行、全部124个baseline、why和规则保持，parent status不变。五core唯一完整类型检查
+  通过；后加的两项literal登记采用严格lint/format与功能复验，未重跑整包tsc。
+  最终metadata的13/55选定canonical也通过，保留首轮失败收据。
+
+W42 exact `dfdadd6ad10e2ba8fe3e73b2ad68a6656cdfeb83` 的Main `34358743177`终态：
+40 jobs为36 success/4 failure，13后端11 success/2 failure。两OS各1957原生文件恰一次。
+932主身份全部通过：Ubuntu562=188 SQLite+188 PostgreSQL+186 single，
+macOS370=188 SQLite+182 single；另RFC234两个sidecar通过，分母独立保持。
+W42新增40次全部通过，原Git配置并发callback两OS也通过；本批所选11个旧HTTP例两OS22次通过。
+W41历史daemon beforeAll所属3例和RFC210所属5例在W42两OS均过。
+W42另一个具名per-test daemon case在Ubuntu3525.51ms通过、macOS5014.05ms以5000ms预算失败，
+没有stack或await阶段证据，不能混同前面的beforeAll，也不能据此判断哪一原操作超时。
+其他未选失败仅记录身份与作业状态，不扩入932分母或解释为本批阶段诊断已解决。
+
+最新原full仍为exact50e9的`34343025829`：三个任务页PG较快且满足原预算，
+其余六端点PG较慢，PG overview MAX13.222186999992118ms仍未满足10ms。
+本批不改性能查询、不派发重复full；原规模、20轮/360样本及严格P95判据保持。
+证据入口为`/private/tmp/rfc359-w43-final-manifest.json`与三份切片清单、独立复核。
+本地未执行实际PG、App/HTTP/WS、TaskEngine、daemon、真实Git夹具、E2E或规模性能库。
+新SHA真实双库HTTP和完整Main待托管；AC-1/6/8/9/11/12继续开放。
 
 ### W12 第四十二批：共享端口校验、公共Git配置串行与六个HTTP例双库
 

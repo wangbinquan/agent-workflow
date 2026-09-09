@@ -1212,7 +1212,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 1258
+      "lines": 1264
     },
     {
       "id": "rfc317-lifecycle-origin-neutrality",
@@ -2411,8 +2411,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "35053515dcc23f9975ddade91cbbe07b2c80f719",
-    "contentDigest": "sha256:012b9ba70e8b559b982452b630a98600ffdcc40ed847b3c4a6e44b215ba1db58",
+    "currentSnapshotSha": "dfdadd6ad10e2ba8fe3e73b2ad68a6656cdfeb83",
+    "contentDigest": "sha256:aff79b52aff4a098d5c2faa620f2db38f7acea9ca4a4b3edf4ccfc94bcb99876",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

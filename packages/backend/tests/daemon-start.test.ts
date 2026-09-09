@@ -31,14 +31,44 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
   let sessionToken: string
 
   beforeAll(async () => {
+    // W41 macOS reported a 5002.62 ms hook timeout; record only existing operation progress.
+    const setupStartedAt = (() => {
+      try {
+        return performance.now()
+      } catch {
+        return undefined
+      }
+    })()
+    const reportSetupStage = (stage: string): void => {
+      try {
+        if (setupStartedAt === undefined) return
+        console.error(
+          `[daemon-start setup] ${stage} elapsedMs=${(performance.now() - setupStartedAt).toFixed(2)}`,
+        )
+      } catch {
+        // Diagnostic failures must not replace the original setup result.
+      }
+    }
+
+    reportSetupStage('operation-01-enter')
     tmp = mkdtempSync(join(tmpdir(), 'aw-daemon-'))
+    reportSetupStage('operation-01-complete')
+
+    reportSetupStage('operation-02-enter')
     const env = { ...(process.env as Record<string, string>), AGENT_WORKFLOW_HOME: tmp }
+    reportSetupStage('operation-02-complete')
+
+    reportSetupStage('operation-03-enter')
     child = spawnDaemon(env)
+    reportSetupStage('operation-03-complete')
+    reportSetupStage('operation-04-enter')
     ;({ url, token } = await waitForReady(child.stdout, 10_000))
+    reportSetupStage('operation-04-complete')
 
     // RFC-221: the daemon token is bootstrap-only. Complete the one-way
     // handoff once, then exercise the normal API contract with an admin
     // session rather than relying on a credential that must now be retired.
+    reportSetupStage('operation-05-enter')
     const bootstrap = await fetch(`${url}api/auth/bootstrap/admin`, {
       method: 'POST',
       headers: {
@@ -51,9 +81,15 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
         password: 'correctPassword123',
       }),
     })
+    reportSetupStage('operation-05-complete')
+
+    reportSetupStage('operation-06-enter')
     if (bootstrap.status !== 201) {
       throw new Error(`bootstrap admin failed: ${bootstrap.status} ${await bootstrap.text()}`)
     }
+    reportSetupStage('operation-06-complete')
+
+    reportSetupStage('operation-07-enter')
     const login = await fetch(`${url}api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -62,10 +98,17 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
         password: 'correctPassword123',
       }),
     })
+    reportSetupStage('operation-07-complete')
+
+    reportSetupStage('operation-08-enter')
     if (login.status !== 200) {
       throw new Error(`admin login failed: ${login.status} ${await login.text()}`)
     }
+    reportSetupStage('operation-08-complete')
+
+    reportSetupStage('operation-09-enter')
     ;({ sessionToken } = (await login.json()) as { sessionToken: string })
+    reportSetupStage('operation-09-complete')
   })
 
   afterAll(async () => {

@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第四十二批：两份分支端口校验收为一个共享函数，三个原调用保持，原两套各5/18、共享5/18；公共Git配置接现有按common-directory串行锁，原并发/命令/预算保持，受控原红与候选6/30及查询差量已核。六个batch HTTP原callback/19 matcher默认双库，原500ms及其余整call保持，新HTTP待托管。W41 exact35053515d Main36 success/4 failure，后端11/13、主892/892与另2 sidecar全过、182选定PG全过，五个Linux gate恢复；另两hook超时继续定位。7core一次tsc、211/433功能metadata、13/55canonical通过；1957文件、工厂605文件/1224调用，T19f688。原W39 full六个PG较慢端点与overview MAX13.222187ms未过10ms保持，六项AC继续开放。
+- W12 第四十三批：11个原仓库组HTTP call/28 matcher接默认双库完整应用，原seed顺序await、其余3个整call保持；微型SQLite seed逐值对拍与16个纯生命周期控制通过，真实HTTP待托管。两处历史beforeAll仅补阶段诊断，保留原操作/预算/清理，日志故障不替换原错误，纯验证7/41及4/79。W42 exactdfdadd6ad Main36 success/4 failure、后端11/13，932主执行及另2 sidecar全过、188选定PG过；原两组hook本次全过，另具名daemon case的macOS 5000ms超时继续定位。5core一次tsc、211/433功能metadata、13/55canonical过；1959文件、605工厂文件/1224调用、571无harness/459有harness。六项AC及原W39 full性能缺口保持。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

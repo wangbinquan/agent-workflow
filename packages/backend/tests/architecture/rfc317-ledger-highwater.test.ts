@@ -302,6 +302,10 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   //    是「只读工具至少得有这些」的正向清单，多一个只读工具时它本来就该长。
   'packages/backend/tests/rfc326-mcp-review-tools.test.ts|READ_TOOLS':
     'RFC-326 只读评审工具的正向清单，经 expect.arrayContaining 部分匹配，不是仓内存量的快照',
+  'packages/backend/tests/rfc359-w43-alternates-hook-diagnostics.test.ts|stages':
+    '原 beforeAll 的固定诊断阶段期望序列，用于逐值核对操作开始/结束次序；不是生产债务或绕过清单。',
+  'packages/backend/tests/rfc359-w43-daemon-setup-diagnostic.test.ts|pendingStages':
+    '原初始化前缀停在 pending 时应出现的固定诊断消息，用于等待/清理协议对拍；不是生产债务或绕过清单。',
 }
 
 describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () => {
@@ -379,6 +383,8 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       'packages/backend/tests/rfc359-w26-workgroup-empty-scan.test.ts|observedValues',
       'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|directMembers',
       'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|fields',
+      'packages/backend/tests/rfc359-w43-alternates-hook-diagnostics.test.ts|stages',
+      'packages/backend/tests/rfc359-w43-daemon-setup-diagnostic.test.ts|pendingStages',
     ])
   })
 

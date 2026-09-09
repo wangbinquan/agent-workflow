@@ -17,6 +17,12 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -74,10 +80,11 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
   })
 }
 
-function seedRepo(db: DbClient, slug: string): string {
+async function seedRepo(db: ProviderNeutralDatabase, slug: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  db.insert(cachedRepos)
+  await db
+    .insert(cachedRepos)
     .values({
       id,
       urlHash: `${slug}00000000`.slice(0, 8),
@@ -91,16 +98,7 @@ function seedRepo(db: DbClient, slug: string): string {
   return id
 }
 
-describe('RFC-248 /api/repo-groups HTTP', () => {
-  let h: Harness
-  let appRepo: string
-  let sdkRepo: string
-  beforeEach(() => {
-    h = buildHarness()
-    appRepo = seedRepo(h.db, 'app')
-    sdkRepo = seedRepo(h.db, 'sdk')
-  })
-
+function createRepoGroupNodeHelpers() {
   const repoNode = (cachedRepoId: string, path: string, extra: Record<string, unknown> = {}) => ({
     path,
     attachment: { kind: 'repo', cachedRepoId, ref: '', subdir: '', readonly: false, ...extra },
@@ -125,27 +123,53 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     }
     return [...nodes.values()]
   }
+  return { repoNode, groupNode, nodeTree }
+}
+
+function registerProviderRepoGroupHttpCases(provider: ProviderHarness): void {
+  let h: Pick<Harness, 'app'>
+  let appRepo: string
+  let sdkRepo: string
+  let application: ProviderHttpApplication | undefined
+  let cleanup: (() => void) | undefined
+  const { repoNode, groupNode, nodeTree } = createRepoGroupNodeHelpers()
+
+  beforeEach(async () => {
+    application = undefined
+    cleanup = undefined
+    const tmp = mkdtempSync(join(tmpdir(), 'aw-repo-groups-http-'))
+    const previousAppHome = process.env.AGENT_WORKFLOW_HOME
+    cleanup = () => {
+      rmSync(tmp, { recursive: true, force: true })
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+    }
+    const appHome = join(tmp, 'home')
+    mkdirSync(appHome, { recursive: true })
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    application = await createProviderHttpApplication(provider, {
+      token: TOKEN,
+      configPath: join(tmp, 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 8,
+      appHome,
+    })
+    h = { app: application.app }
+    appRepo = await seedRepo(provider.db, 'app')
+    sdkRepo = await seedRepo(provider.db, 'sdk')
+  })
+  afterEach(async () => {
+    try {
+      await application?.dispose()
+    } finally {
+      cleanup?.()
+    }
+  })
 
   test('GET 空列表', async () => {
     const res = await req(h.app, '/api/repo-groups')
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ items: [] })
-  })
-
-  test('POST 建组 → 201，且响应里只有脱敏 URL', async () => {
-    const res = await req(h.app, '/api/repo-groups', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: '全栈',
-        nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'vendor/sdk', { readonly: true })),
-      }),
-    })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { id: string; flatRepoCount: number; nodes: unknown[] }
-    expect(body.flatRepoCount).toBe(2)
-    expect(body.nodes).toHaveLength(3)
-    expect(JSON.stringify(body)).not.toContain('secret')
-    expect(JSON.stringify(body)).toContain('https://git.example/app.git')
   })
 
   test('POST 坏 body → 422 repo-group-invalid', async () => {
@@ -191,19 +215,6 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code?: string; error?: { code?: string } }
     expect(body.code ?? body.error?.code).toBe('repo-group-invalid')
-  })
-
-  test('非法挂载路径 → 422，错误码来自布局层', async () => {
-    const res = await req(h.app, '/api/repo-groups', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'g',
-        nodes: [{ path: '', attachment: null }, repoNode(appRepo, '../escape')],
-      }),
-    })
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code?: string; error?: { code?: string } }
-    expect(body.code ?? body.error?.code).toBe('mount-path-traversal')
   })
 
   test('GET /:id 不存在 → 404', async () => {
@@ -312,6 +323,52 @@ describe('RFC-248 /api/repo-groups HTTP', () => {
     expect((await forced.json()) as { detachedReferences: number }).toMatchObject({
       detachedReferences: 1,
     })
+  })
+}
+
+describeEachProvider('RFC-248 /api/repo-groups HTTP', (provider) => {
+  describe('complete application lifetime', () => registerProviderRepoGroupHttpCases(provider))
+})
+
+describe('RFC-248 /api/repo-groups HTTP', () => {
+  let h: Harness
+  let appRepo: string
+  let sdkRepo: string
+  beforeEach(async () => {
+    h = buildHarness()
+    appRepo = await seedRepo(h.db, 'app')
+    sdkRepo = await seedRepo(h.db, 'sdk')
+  })
+
+  const { repoNode, nodeTree } = createRepoGroupNodeHelpers()
+
+  test('POST 建组 → 201，且响应里只有脱敏 URL', async () => {
+    const res = await req(h.app, '/api/repo-groups', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '全栈',
+        nodes: nodeTree(repoNode(appRepo, ''), repoNode(sdkRepo, 'vendor/sdk', { readonly: true })),
+      }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { id: string; flatRepoCount: number; nodes: unknown[] }
+    expect(body.flatRepoCount).toBe(2)
+    expect(body.nodes).toHaveLength(3)
+    expect(JSON.stringify(body)).not.toContain('secret')
+    expect(JSON.stringify(body)).toContain('https://git.example/app.git')
+  })
+
+  test('非法挂载路径 → 422，错误码来自布局层', async () => {
+    const res = await req(h.app, '/api/repo-groups', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'g',
+        nodes: [{ path: '', attachment: null }, repoNode(appRepo, '../escape')],
+      }),
+    })
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { code?: string; error?: { code?: string } }
+    expect(body.code ?? body.error?.code).toBe('mount-path-traversal')
   })
 
   test('无认证 → 401（六条路由都在认证门后面）', async () => {

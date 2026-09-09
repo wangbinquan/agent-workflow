@@ -46,40 +46,98 @@ let wt = ''
 let prevGlobal: string | undefined
 
 beforeAll(async () => {
+  const setupStartedAt = performance.now()
+  const markSetupPhase = (phase: string): void => {
+    try {
+      console.info('[rfc210-beforeAll]', {
+        phase,
+        elapsedMs: performance.now() - setupStartedAt,
+      })
+    } catch {
+      // Diagnostics must not replace fixture failures.
+    }
+  }
+
+  markSetupPhase('fixture-root:begin')
   root = mkdtempSync(join(tmpdir(), 'aw-rfc210-alt-'))
+  markSetupPhase('fixture-root:end')
 
   // git >= 2.38 refuses the `file` transport for submodules regardless of whether
   // the URL is spelled absolute, relative, or file://. Production argv deliberately
   // omits the allowance, so tests inject it through a throwaway global config
   // (same approach as git-repo-cache-submodule.test.ts).
+  markSetupPhase('config-path:begin')
   const cfg = join(root, 'gitconfig')
+  markSetupPhase('config-path:end')
+  markSetupPhase('config-write:begin')
   writeFileSync(cfg, '[protocol "file"]\n\tallow = always\n[user]\n\tname = t\n\temail = t@t\n')
+  markSetupPhase('config-write:end')
+  markSetupPhase('previous-config-value:begin')
   prevGlobal = process.env.GIT_CONFIG_GLOBAL
+  markSetupPhase('previous-config-value:end')
+  markSetupPhase('fixture-config-value:begin')
   process.env.GIT_CONFIG_GLOBAL = cfg
+  markSetupPhase('fixture-config-value:end')
 
+  markSetupPhase('module-path:begin')
   const sub = join(root, 'sub')
+  markSetupPhase('module-path:end')
+  markSetupPhase('module-directory:begin')
   mkdirSync(sub)
+  markSetupPhase('module-directory:end')
+  markSetupPhase('module-init:begin')
   await git(sub, ['init', '-q', '-b', 'main'])
+  markSetupPhase('module-init:end')
+  markSetupPhase('module-content:begin')
   writeFileSync(join(sub, 'a.txt'), 'v1\n')
+  markSetupPhase('module-content:end')
+  markSetupPhase('module-stage:begin')
   await git(sub, ['add', '-A'])
+  markSetupPhase('module-stage:end')
+  markSetupPhase('module-commit:begin')
   await git(sub, ['commit', '-qm', 'v1'])
+  markSetupPhase('module-commit:end')
 
+  markSetupPhase('cache-path:begin')
   const cache = join(root, 'cache')
+  markSetupPhase('cache-path:end')
+  markSetupPhase('cache-directory:begin')
   mkdirSync(cache)
+  markSetupPhase('cache-directory:end')
+  markSetupPhase('cache-init:begin')
   await git(cache, ['init', '-q', '-b', 'main'])
+  markSetupPhase('cache-init:end')
+  markSetupPhase('cache-content:begin')
   writeFileSync(join(cache, 'README.md'), 'root\n')
+  markSetupPhase('cache-content:end')
+  markSetupPhase('cache-stage:begin')
   await git(cache, ['add', '-A'])
+  markSetupPhase('cache-stage:end')
+  markSetupPhase('cache-commit:begin')
   await git(cache, ['commit', '-qm', 'init'])
+  markSetupPhase('cache-commit:end')
+  markSetupPhase('cache-module-add:begin')
   await git(cache, ['submodule', 'add', '-q', sub, 'vendor'])
+  markSetupPhase('cache-module-add:end')
+  markSetupPhase('cache-module-commit:begin')
   await git(cache, ['commit', '-qm', 'add submodule'])
+  markSetupPhase('cache-module-commit:end')
 
+  markSetupPhase('pool-path:begin')
   pool = join(cache, '.git', 'modules', 'vendor')
+  markSetupPhase('pool-path:end')
 
   // A linked worktree, initialized the way production does it today: WITHOUT
   // --reference. This is the "already initialized module dir" case.
+  markSetupPhase('worktree-path:begin')
   wt = join(root, 'wt')
+  markSetupPhase('worktree-path:end')
+  markSetupPhase('worktree-create:begin')
   await git(cache, ['worktree', 'add', '-q', '--detach', wt, 'HEAD'])
+  markSetupPhase('worktree-create:end')
+  markSetupPhase('worktree-module-update:begin')
   await git(wt, ['submodule', 'update', '--init', '-q'])
+  markSetupPhase('worktree-module-update:end')
 }, 60_000)
 
 afterAll(() => {

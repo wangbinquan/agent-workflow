@@ -20,6 +20,12 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W43 将仓库组HTTP的11个原行为例接入默认双provider的完整应用夹具。
+  原节点构造函数只保留一份，两个原seed保持SQL及返回值并顺序await；内层应用先dispose，
+  自有目录与环境值清理后再释放外层provider数据库。部分选择不等于整文件迁移。
+  两处历史beforeAll保持原操作、await和预算，只增固定阶段及单调耗时；
+  诊断输出失败被限制在报告函数内，不能代替原初始化错误或据此认定历史根因。
+
 - W42 将两个资源包owner的完整`assertBranchPortsDeclared`函数移入同context的
   `agentBranchPorts.ts`，原CreateAgent Pick/同步void、读取次序、重复值/错误与三个调用保持。
   公共Git配置写入只包入已有`withWorktreeRegistryLock`，复用实际common-directory归一和队列；
