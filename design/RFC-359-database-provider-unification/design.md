@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W49 两个原字符串数组decoder只将JSON.parse/filter/catch交给既有共享parser，
+  原私有签名、五个调用及完整调用者保持；row getter仍先于wrapper入口，解析仍同步执行。
+  11个旧文件仅将选定75例及其fixture接当前provider；未选55例完整call、原matcher与预算保持。
+  CPU采样只启用于既有comparison落盘后的profile-sqlite/profile-postgresql子进程，
+  其他worker的全部argv与原阶段顺序保持，生成JSON沿用原工件上传路径。
+  该记录覆盖诊断子进程的初始化/EXPLAIN/清理，不等同计时HTTP或PostgreSQL服务端CPU。
+  不用采样改变原full语料、九端点、20轮和严格P95判据，也不以本地算术smoke代替托管实测。
+
 - W48 的11个旧测试文件按原callback划分默认双库与保留native部分，原声明顺序、完整matcher
   和预算保持；fixture绑定当前harness数据库，保留原种子值及必要的父子任务谱系。
   仅给真实异步数据库终端补await，native工厂/清理hook仍只属于原保留用例。

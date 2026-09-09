@@ -239,3 +239,140 @@ for (const side of ['semantics', 'package'] as const) {
     })
   })
 }
+
+// RFC-359 W49: run only the actual decoders and their original property-read expressions.
+function checkStringDecoder(file: string, name: string, fields: readonly string[]) {
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
+  const declarations = ast.statements.filter(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === name,
+  )
+  if (declarations.length !== 1 || declarations[0] === undefined) {
+    throw new Error('missing unique string decoder')
+  }
+  const calls: ts.CallExpression[] = []
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node) && node.expression.getText(ast) === name) calls.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(ast)
+  expect(calls.map((call) => call.getText(ast))).toEqual(
+    fields.map((field) => `${name}(row.${field})`),
+  )
+  const javascript = new Bun.Transpiler({ loader: 'ts' }).transformSync(
+    declarations[0].getText(ast),
+  )
+  const inputs: { raw: string; expected: string[] }[] = [
+    { raw: '["z","z","",null,2,false,{},[],"雪","a"]', expected: ['z', 'z', '', '雪', 'a'] },
+    { raw: '[]', expected: [] },
+    { raw: 'null', expected: [] },
+    { raw: '{}', expected: [] },
+    { raw: '"scalar"', expected: [] },
+    { raw: '17', expected: [] },
+    { raw: 'false', expected: [] },
+    { raw: '', expected: [] },
+    { raw: '[invalid', expected: [] },
+  ]
+  const observations: unknown[] = []
+  for (const [index, call] of calls.entries()) {
+    const field = fields[index]
+    if (field === undefined) throw new Error('unexpected decoder caller')
+    const events: string[] = []
+    const failure = new Error('controlled decoder failure')
+    let fault = ''
+    const reader: unknown = new Function(
+      'parseAgentDependencyIds',
+      'JSON',
+      `${javascript}\nreturn (row) => ${call.getText(ast)};`,
+    )(parseAgentDependencyIds, {
+      get parse() {
+        events.push('parse-get')
+        if (fault === 'parse-get') throw failure
+        return (raw: string): unknown => {
+          events.push('parse-call')
+          if (fault === 'parse-call') throw failure
+          if (!fault.startsWith('filter-')) return JSON.parse(raw)
+          return Object.defineProperty([], 'filter', {
+            get() {
+              events.push('filter-get')
+              if (fault === 'filter-get') throw failure
+              return () => {
+                events.push('filter-call')
+                throw failure
+              }
+            },
+          })
+        }
+      },
+    })
+    if (typeof reader !== 'function') throw new Error('decoder caller is not callable')
+    const read = (raw: string): unknown => {
+      events.length = 0
+      return reader(
+        Object.defineProperty({}, field, {
+          get() {
+            events.push('row-get')
+            if (fault === 'row-get') throw failure
+            return raw
+          },
+        }),
+      )
+    }
+    for (const input of inputs) {
+      const result = read(input.raw)
+      expect(result).toEqual(input.expected)
+      expect(events).toEqual(['row-get', 'parse-get', 'parse-call'])
+      observations.push({ field, raw: input.raw, result, events: [...events] })
+    }
+    for (const raw of ['[]', '["kept"]']) {
+      const first = read(raw)
+      const second = read(raw)
+      expect(second).toEqual(first)
+      expect(second).not.toBe(first)
+      expect(second).not.toBeInstanceOf(Promise)
+      observations.push({ field, raw, first, second, fresh: first !== second })
+    }
+    fault = 'row-get'
+    let escaped: unknown
+    try {
+      read('[]')
+    } catch (error) {
+      escaped = error
+    }
+    expect(escaped).toBe(failure)
+    expect(events).toEqual(['row-get'])
+    observations.push({
+      field,
+      fault,
+      escaped,
+      sameError: escaped === failure,
+      events: [...events],
+    })
+    for (const nextFault of ['parse-get', 'parse-call', 'filter-get', 'filter-call']) {
+      fault = nextFault
+      const result = read('[]')
+      expect(result).toEqual([])
+      const expectedEvents = ['row-get', 'parse-get', 'parse-call', 'filter-get', 'filter-call']
+      expect(events).toEqual(expectedEvents.slice(0, expectedEvents.indexOf(fault) + 1))
+      observations.push({ field, fault, result, events: [...events] })
+    }
+  }
+  return observations
+}
+
+test('RFC-359 W49 persistence decoder preserves ordered values and catch boundaries', () => {
+  checkStringDecoder(
+    '../src/modules/resource-catalog/infrastructure/agentPersistence.ts',
+    'stringArray',
+    ['outputs', 'dependsOn', 'mcp', 'plugins'],
+  )
+})
+
+test('RFC-359 W49 Intent decoder preserves ordered values and catch boundaries', () => {
+  checkStringDecoder(
+    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
+    'parseStringArray',
+    ['dependsOn'],
+  )
+})

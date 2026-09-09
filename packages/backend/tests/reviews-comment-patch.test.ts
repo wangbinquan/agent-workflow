@@ -19,25 +19,42 @@ import { eq } from 'drizzle-orm'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import type { AppDeps } from '../src/server'
 import { deleteReviewComment, updateReviewCommentText } from '../src/services/review'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-interface Seed {
-  db: DbClient
+interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
+  db: Database
   taskId: string
   nodeRunId: string
   docVersionId: string
   commentId: string
 }
 
-async function seed(opts: { decision?: 'pending' | 'approved' } = {}): Promise<Seed> {
+function seed(opts?: { decision?: 'pending' | 'approved' }): Promise<Seed>
+function seed(
+  opts: { decision?: 'pending' | 'approved' } | undefined,
+  suppliedDb: ProviderNeutralDatabase,
+): Promise<Seed<ProviderNeutralDatabase>>
+async function seed(
+  opts: { decision?: 'pending' | 'approved' } = {},
+  suppliedDb?: ProviderNeutralDatabase,
+): Promise<Seed<ProviderNeutralDatabase>> {
   const decision = opts.decision ?? 'pending'
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = suppliedDb ?? createInMemoryDb(MIGRATIONS)
   const workflowId = 'wf_test'
   const taskId = 'task_test'
   const nodeRunId = 'run_test'
@@ -67,6 +84,7 @@ async function seed(opts: { decision?: 'pending' | 'approved' } = {}): Promise<S
     status: 'awaiting_review',
     inputs: '{}',
     startedAt: 1,
+    ...(suppliedDb === undefined ? {} : providerTaskLineage(taskId)),
   })
   await db.insert(nodeRuns).values({
     id: nodeRunId,
@@ -114,70 +132,78 @@ async function seed(opts: { decision?: 'pending' | 'approved' } = {}): Promise<S
 // 保持原语义；作者矩阵的专项覆盖在 reviews-comment-patch 的 B6① describe。
 const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
 
+describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => {
+  describe('fixture lifetime', () => {
+    test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
+      const s = await seedForProvider(harness.db)
+      const uninstallProjection = await installCommittedEventProjectionHarness(s.db)
+
+      let captured: unknown = null
+      const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(s.taskId), (evt) => {
+        captured = evt
+      })
+
+      const updated = await updateReviewCommentText(
+        s.db,
+        s.nodeRunId,
+        s.commentId,
+        'revised text',
+        OWNER_AUTHZ,
+      ).finally(() => {
+        unsub()
+        uninstallProjection()
+      })
+
+      expect(updated.commentText).toBe('revised text')
+      expect(updated.id).toBe(s.commentId)
+      expect(updated.anchor.selectedText).toBe('Hello')
+
+      const stored = await s.db
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.id, s.commentId))
+      expect(stored[0]?.commentText).toBe('revised text')
+
+      expect(captured).toMatchObject({
+        type: 'review.comment_updated',
+        nodeRunId: s.nodeRunId,
+        docVersionId: s.docVersionId,
+      })
+    })
+
+    test('404 — commentId does not exist', async () => {
+      const s = await seedForProvider(harness.db)
+      await expect(
+        updateReviewCommentText(s.db, s.nodeRunId, 'cmt_missing', 'x', OWNER_AUTHZ),
+      ).rejects.toBeInstanceOf(NotFoundError)
+    })
+  })
+})
+
 describe('RFC-009-T1 updateReviewCommentText service', () => {
-  test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
-    const s = await seed()
-    const uninstallProjection = await installCommittedEventProjectionHarness(s.db)
-
-    let captured: unknown = null
-    const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(s.taskId), (evt) => {
-      captured = evt
-    })
-
-    const updated = await updateReviewCommentText(
-      s.db,
-      s.nodeRunId,
-      s.commentId,
-      'revised text',
-      OWNER_AUTHZ,
-    ).finally(() => {
-      unsub()
-      uninstallProjection()
-    })
-
-    expect(updated.commentText).toBe('revised text')
-    expect(updated.id).toBe(s.commentId)
-    expect(updated.anchor.selectedText).toBe('Hello')
-
-    const stored = await s.db
-      .select()
-      .from(reviewComments)
-      .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('revised text')
-
-    expect(captured).toMatchObject({
-      type: 'review.comment_updated',
-      nodeRunId: s.nodeRunId,
-      docVersionId: s.docVersionId,
-    })
-  })
-
-  test('404 — commentId does not exist', async () => {
-    const s = await seed()
-    await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, 'cmt_missing', 'x', OWNER_AUTHZ),
-    ).rejects.toBeInstanceOf(NotFoundError)
-  })
-
   test('404 — nodeRunId mismatched (cross-review write)', async () => {
     const s = await seed()
     await expect(
       updateReviewCommentText(s.db, 'run_other', s.commentId, 'x', OWNER_AUTHZ),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
+})
 
-  test('409 — doc_version no longer pending (review already decided)', async () => {
-    const s = await seed({ decision: 'approved' })
-    await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
-    ).rejects.toBeInstanceOf(ConflictError)
+describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => {
+  describe('fixture lifetime', () => {
+    test('409 — doc_version no longer pending (review already decided)', async () => {
+      const s = await seedForProvider(harness.db, { decision: 'approved' })
+      await expect(
+        updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
+      ).rejects.toBeInstanceOf(ConflictError)
 
-    // Original commentText untouched.
-    const stored = await s.db
-      .select()
-      .from(reviewComments)
-      .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('original')
+      // Original commentText untouched.
+      const stored = await s.db
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.id, s.commentId))
+      expect(stored[0]?.commentText).toBe('original')
+    })
   })
 })
 
@@ -234,76 +260,117 @@ describe('review comment ownership and terminal guards', () => {
       .where(eq(reviewComments.id, 'cmt_other'))
     expect(preserved).toHaveLength(1)
   })
+})
 
-  test('terminal task rejects comment edits before touching the row', async () => {
-    const s = await seed()
-    await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
+describeEachProvider('review comment ownership and terminal guards', (harness) => {
+  describe('fixture lifetime', () => {
+    test('terminal task rejects comment edits before touching the row', async () => {
+      const s = await seedForProvider(harness.db)
+      await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
 
-    await expect(
-      updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
-    ).rejects.toMatchObject({ code: 'task-terminal' })
-    const stored = await s.db
-      .select()
-      .from(reviewComments)
-      .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('original')
+      await expect(
+        updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),
+      ).rejects.toMatchObject({ code: 'task-terminal' })
+      const stored = await s.db
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.id, s.commentId))
+      expect(stored[0]?.commentText).toBe('original')
+    })
   })
 })
 
-describe('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id route', () => {
-  const HEADERS = { Authorization: 'Bearer tok' }
-  let s: Seed
-  beforeEach(async () => {
-    s = await seed()
-  })
-  afterEach(() => {
-    // in-memory db is GC'd; nothing else to clean.
-  })
+describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id route', (harness) => {
+  describe('fixture lifetime', () => {
+    let application: ProviderHttpApplication | undefined
+    let ownedHome: string | undefined
+    let previousHome: string | undefined
+    let homeAssigned = false
+    async function composeProviderApp(
+      input: Omit<AppDeps, 'db'> & { db: ProviderNeutralDatabase },
+    ) {
+      ownedHome = createFixtureDirectory(
+        joinFixturePath(fixtureTmpDirectory(), 'rfc359-w49-review-'),
+      )
+      previousHome = process.env.AGENT_WORKFLOW_HOME
+      process.env.AGENT_WORKFLOW_HOME = ownedHome
+      homeAssigned = true
+      application = await createProviderHttpApplication(harness, {
+        token: input.token,
+        configPath: joinFixturePath(ownedHome, 'config.json'),
+        opencodeVersion: input.opencodeVersion,
+        dbVersion: input.dbVersion,
+        appHome: ownedHome,
+      })
+      return application.app
+    }
 
-  test('200 — round-trip via HTTP, response body matches db', async () => {
-    const app = createApp({
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: s.db,
+    const HEADERS = { Authorization: 'Bearer tok' }
+    let s: Seed<ProviderNeutralDatabase>
+    beforeEach(async () => {
+      s = await seedForProvider(harness.db)
     })
-    const res = await app.fetch(
-      new Request(`http://localhost/api/reviews/${s.nodeRunId}/comments/${s.commentId}`, {
-        method: 'PATCH',
-        headers: { ...HEADERS, 'content-type': 'application/json' },
-        body: JSON.stringify({ commentText: 'edited via http' }),
-      }),
-    )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { id: string; commentText: string }
-    expect(body.commentText).toBe('edited via http')
-    expect(body.id).toBe(s.commentId)
-
-    const stored = await s.db
-      .select()
-      .from(reviewComments)
-      .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('edited via http')
-  })
-
-  test('422 — empty commentText rejected by zod (min length 1)', async () => {
-    const app = createApp({
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: s.db,
+    afterEach(async () => {
+      try {
+        await application?.dispose()
+      } finally {
+        application = undefined
+        if (homeAssigned) {
+          if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousHome
+        }
+        if (ownedHome !== undefined)
+          removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+        ownedHome = undefined
+        homeAssigned = false
+      }
     })
-    const res = await app.fetch(
-      new Request(`http://localhost/api/reviews/${s.nodeRunId}/comments/${s.commentId}`, {
-        method: 'PATCH',
-        headers: { ...HEADERS, 'content-type': 'application/json' },
-        body: JSON.stringify({ commentText: '' }),
-      }),
-    )
-    // ValidationError surfaces as 422 in this project's error handler.
-    expect(res.status).toBe(422)
+
+    test('200 — round-trip via HTTP, response body matches db', async () => {
+      const app = await composeProviderApp({
+        token: 'tok',
+        configPath: '',
+        opencodeVersion: '1.14.99',
+        dbVersion: 1,
+        db: s.db,
+      })
+      const res = await app.fetch(
+        new Request(`http://localhost/api/reviews/${s.nodeRunId}/comments/${s.commentId}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'content-type': 'application/json' },
+          body: JSON.stringify({ commentText: 'edited via http' }),
+        }),
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { id: string; commentText: string }
+      expect(body.commentText).toBe('edited via http')
+      expect(body.id).toBe(s.commentId)
+
+      const stored = await s.db
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.id, s.commentId))
+      expect(stored[0]?.commentText).toBe('edited via http')
+    })
+
+    test('422 — empty commentText rejected by zod (min length 1)', async () => {
+      const app = await composeProviderApp({
+        token: 'tok',
+        configPath: '',
+        opencodeVersion: '1.14.99',
+        dbVersion: 1,
+        db: s.db,
+      })
+      const res = await app.fetch(
+        new Request(`http://localhost/api/reviews/${s.nodeRunId}/comments/${s.commentId}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'content-type': 'application/json' },
+          body: JSON.stringify({ commentText: '' }),
+        }),
+      )
+      // ValidationError surfaces as 422 in this project's error handler.
+      expect(res.status).toBe(422)
+    })
   })
 })
 
@@ -444,3 +511,19 @@ describe('RFC-285 B6① — review comment authorship matrix', () => {
     ).rejects.toMatchObject({ code: 'review-not-awaiting', status: 409 })
   })
 })
+
+// RFC-359 W49: preserve the native seed and supply the selected provider to the same seed core.
+function seedForProvider(
+  db: ProviderNeutralDatabase,
+  opts: { decision?: 'pending' | 'approved' } = {},
+) {
+  return seed(opts, db)
+}
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

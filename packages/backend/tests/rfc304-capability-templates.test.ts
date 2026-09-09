@@ -39,13 +39,22 @@ import {
 import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 
 function bindTemplatePersistence<Args extends unknown[], Result>(
   operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
-): (db: DbClient, ...args: Args) => Result {
+): (db: ProviderNeutralDatabase, ...args: Args) => Result {
   return (db, ...args) => operation(createCapabilityTemplatePersistence(db), ...args)
 }
 
@@ -237,7 +246,7 @@ describe('RFC-309 — a redacted reader can still edit the rest', () => {
 describe('RFC-309 — creation, copying and deletion', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createCrudFixtureDatabase()
   })
   afterEach(() => db.$client.close())
 
@@ -291,24 +300,157 @@ describe('RFC-309 — creation, copying and deletion', () => {
       updateTemplate(db, builtin!, { ...TEMPLATE_INPUT, name: 'x' }, AUTHOR, NOW + 1),
     ).rejects.toThrow(/ships with the platform/)
   })
+})
 
-  test('two templates of one owner cannot share a name', async () => {
-    await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    await expect(createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW + 1)).rejects.toThrow(/named/)
+describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => {
+  describe('fixture lifetime', () => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
+
+    test('two templates of one owner cannot share a name', async () => {
+      await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      await expect(createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW + 1)).rejects.toThrow(/named/)
+    })
   })
+})
+
+describe('RFC-309 — creation, copying and deletion', () => {
+  let db: DbClient
+  beforeEach(() => {
+    db = createCrudFixtureDatabase()
+  })
+  afterEach(() => db.$client.close())
 
   test('two OWNERS may each have one of the same name', async () => {
     await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
     await expect(createTemplate(db, PLAIN_INPUT, NOT_AN_AUTHOR, NOW + 1)).resolves.toBeDefined()
   })
+})
 
-  test('deleting no longer has a dependent layer to refuse for', async () => {
-    // RFC-304 refused to delete a framework while a binding pointed at it.
-    // There is no second layer now, so the guard has nothing to guard — and
-    // keeping it would have meant refusing every delete.
-    const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
-    await expect(deleteTemplate(db, row)).resolves.toBeUndefined()
-    expect(await getTemplateRow(db, row.id)).toBeNull()
+describeEachProvider('RFC-309 — creation, copying and deletion', (harness) => {
+  describe('fixture lifetime', () => {
+    let db: ProviderNeutralDatabase
+    beforeEach(() => {
+      db = harness.db
+    })
+
+    test('deleting no longer has a dependent layer to refuse for', async () => {
+      // RFC-304 refused to delete a framework while a binding pointed at it.
+      // There is no second layer now, so the guard has nothing to guard — and
+      // keeping it would have meant refusing every delete.
+      const row = await createTemplate(db, TEMPLATE_INPUT, AUTHOR, NOW)
+      await expect(deleteTemplate(db, row)).resolves.toBeUndefined()
+      expect(await getTemplateRow(db, row.id)).toBeNull()
+    })
+  })
+})
+
+describeEachProvider('RFC-309 — the template routes', (harness) => {
+  describe('fixture lifetime', () => {
+    let application: ProviderHttpApplication | undefined
+    let ownedHome: string | undefined
+    let previousHome: string | undefined
+    let homeAssigned = false
+    afterEach(async () => {
+      try {
+        await application?.dispose()
+      } finally {
+        application = undefined
+        if (homeAssigned) {
+          if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousHome
+        }
+        if (ownedHome !== undefined)
+          removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+        ownedHome = undefined
+        homeAssigned = false
+      }
+    })
+
+    const TOKEN = 'a'.repeat(64)
+
+    let app: ReturnType<typeof createApp>
+
+    beforeEach(async () => {
+      ownedHome = createFixtureDirectory(
+        joinFixturePath(fixtureTmpDirectory(), 'rfc359-w49-template-'),
+      )
+      previousHome = process.env.AGENT_WORKFLOW_HOME
+      process.env.AGENT_WORKFLOW_HOME = ownedHome
+      homeAssigned = true
+      application = await createProviderHttpApplication(harness, {
+        token: TOKEN,
+        configPath: joinFixturePath(ownedHome, 'config.json'),
+        opencodeVersion: '1.15.0',
+        dbVersion: 1,
+        appHome: ownedHome,
+      })
+      app = application.app
+    })
+
+    const auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }
+
+    test('one list endpoint, not two', async () => {
+      const res = await app.request('/api/capability-templates', { headers: auth })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual([])
+      // And the old pair is gone rather than left as an alias: two ways to write
+      // the same row is how the two drift.
+      expect((await app.request('/api/capability-bindings', { headers: auth })).status).toBe(404)
+      expect((await app.request('/api/capability-frameworks', { headers: auth })).status).toBe(404)
+    })
+
+    test('a template can be created and read back through HTTP', async () => {
+      const res = await app.request('/api/capability-templates', {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify(PLAIN_INPUT),
+      })
+      expect(res.status).toBe(201)
+      const created = (await res.json()) as { id: string; agentBySlot: Record<string, string> }
+      expect(created.agentBySlot).toEqual({ reviewer: 'agent-1' })
+
+      const got = await app.request(`/api/capability-templates/${created.id}`, { headers: auth })
+      expect(got.status).toBe(200)
+    })
+
+    test('a malformed body is refused by name', async () => {
+      // Named, not just "some 4xx": the repo's error-code ratchet requires every
+      // code a route can throw to be asserted somewhere, because a code nobody
+      // names is one nobody has seen fire.
+      const res = await app.request('/api/capability-templates', {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ name: '' }),
+      })
+      expect(res.status).toBeGreaterThanOrEqual(400)
+      expect(JSON.stringify(await res.json())).toContain('capability-template-invalid')
+    })
+
+    test('an unknown template is refused by name', async () => {
+      const res = await app.request('/api/capability-templates/no-such-id', { headers: auth })
+      expect(res.status).toBe(404)
+      expect(JSON.stringify(await res.json())).toContain('capability-template-not-found')
+    })
+
+    test('a malformed copy payload is refused by the same code', async () => {
+      const created = (await (
+        await app.request('/api/capability-templates', {
+          method: 'POST',
+          headers: auth,
+          body: JSON.stringify(PLAIN_INPUT),
+        })
+      ).json()) as { id: string }
+      const res = await app.request(`/api/capability-templates/${created.id}/copy`, {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ name: 123 }),
+      })
+      expect(res.status).toBeGreaterThanOrEqual(400)
+      expect(JSON.stringify(await res.json())).toContain('capability-template-invalid')
+    })
   })
 })
 
@@ -329,69 +471,14 @@ describe('RFC-309 — the template routes', () => {
   })
   afterEach(() => db.$client.close())
 
-  const auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }
-
-  test('one list endpoint, not two', async () => {
-    const res = await app.request('/api/capability-templates', { headers: auth })
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual([])
-    // And the old pair is gone rather than left as an alias: two ways to write
-    // the same row is how the two drift.
-    expect((await app.request('/api/capability-bindings', { headers: auth })).status).toBe(404)
-    expect((await app.request('/api/capability-frameworks', { headers: auth })).status).toBe(404)
-  })
-
-  test('a template can be created and read back through HTTP', async () => {
-    const res = await app.request('/api/capability-templates', {
-      method: 'POST',
-      headers: auth,
-      body: JSON.stringify(PLAIN_INPUT),
-    })
-    expect(res.status).toBe(201)
-    const created = (await res.json()) as { id: string; agentBySlot: Record<string, string> }
-    expect(created.agentBySlot).toEqual({ reviewer: 'agent-1' })
-
-    const got = await app.request(`/api/capability-templates/${created.id}`, { headers: auth })
-    expect(got.status).toBe(200)
-  })
-
-  test('a malformed body is refused by name', async () => {
-    // Named, not just "some 4xx": the repo's error-code ratchet requires every
-    // code a route can throw to be asserted somewhere, because a code nobody
-    // names is one nobody has seen fire.
-    const res = await app.request('/api/capability-templates', {
-      method: 'POST',
-      headers: auth,
-      body: JSON.stringify({ name: '' }),
-    })
-    expect(res.status).toBeGreaterThanOrEqual(400)
-    expect(JSON.stringify(await res.json())).toContain('capability-template-invalid')
-  })
-
-  test('an unknown template is refused by name', async () => {
-    const res = await app.request('/api/capability-templates/no-such-id', { headers: auth })
-    expect(res.status).toBe(404)
-    expect(JSON.stringify(await res.json())).toContain('capability-template-not-found')
-  })
-
-  test('a malformed copy payload is refused by the same code', async () => {
-    const created = (await (
-      await app.request('/api/capability-templates', {
-        method: 'POST',
-        headers: auth,
-        body: JSON.stringify(PLAIN_INPUT),
-      })
-    ).json()) as { id: string }
-    const res = await app.request(`/api/capability-templates/${created.id}/copy`, {
-      method: 'POST',
-      headers: auth,
-      body: JSON.stringify({ name: 123 }),
-    })
-    expect(res.status).toBeGreaterThanOrEqual(400)
-    expect(JSON.stringify(await res.json())).toContain('capability-template-invalid')
-  })
+  const _auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }
 
   test('without a bearer token every endpoint is refused', async () => {
     expect((await app.request('/api/capability-templates')).status).toBe(401)
   })
 })
+
+// RFC-359 W49: the retained CRUD groups reuse their original native constructor.
+function createCrudFixtureDatabase() {
+  return createInMemoryDb(MIGRATIONS)
+}

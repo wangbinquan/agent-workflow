@@ -36,6 +36,7 @@ import { runRetentionSweepSlice } from '@/services/maintenanceRetention'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { gcDeliveriesSlice } from '@/services/webhook/deliveryStore'
 import { MIGRATIONS } from './migration-freeze'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/application-home') => ({
   workspace: {
@@ -322,116 +323,122 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     )
   })
 
-  test('webhook delivery GC releases the write lock between bounded body and row batches', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(webhookDeliveries).values(
-      Array.from({ length: 3 }, (_, index) => ({
-        id: `delivery-${index}`,
-        endpointId: 'endpoint',
-        status: 'matched' as const,
-        bodyJson: '{}',
-        receivedAt: 1,
-      })),
-    )
-    const retention = { bodyRetentionMs: 10, rowRetentionMs: 20 }
-    const persistence = createWebhookDeliveryPersistence(db)
-    const first = await gcDeliveriesSlice(persistence, 100, retention, null, 2)
-    expect(first).toMatchObject({
-      done: false,
-      cursor: { version: 1, phase: 'bodies', bodyCutoff: 90, rowCutoff: 80 },
-      counters: { bodiesCleared: 2, rowsDeleted: 0 },
+  describeEachProvider('provider', (harness) => {
+    test('webhook delivery GC releases the write lock between bounded body and row batches', async () => {
+      const db = harness.db
+      await db.insert(webhookDeliveries).values(
+        Array.from({ length: 3 }, (_, index) => ({
+          id: `delivery-${index}`,
+          endpointId: 'endpoint',
+          status: 'matched' as const,
+          bodyJson: '{}',
+          receivedAt: 1,
+        })),
+      )
+      const retention = { bodyRetentionMs: 10, rowRetentionMs: 20 }
+      const persistence = createWebhookDeliveryPersistence(db)
+      const first = await gcDeliveriesSlice(persistence, 100, retention, null, 2)
+      expect(first).toMatchObject({
+        done: false,
+        cursor: { version: 1, phase: 'bodies', bodyCutoff: 90, rowCutoff: 80 },
+        counters: { bodiesCleared: 2, rowsDeleted: 0 },
+      })
+      const second = await gcDeliveriesSlice(persistence, 100, retention, first.cursor, 2)
+      expect(second).toMatchObject({
+        done: false,
+        cursor: { version: 1, phase: 'rows' },
+        counters: { bodiesCleared: 1, rowsDeleted: 0 },
+      })
+      const third = await gcDeliveriesSlice(persistence, 100, retention, second.cursor, 2)
+      expect(third).toMatchObject({
+        done: false,
+        counters: { bodiesCleared: 0, rowsDeleted: 2 },
+      })
+      const fourth = await gcDeliveriesSlice(persistence, 100, retention, third.cursor, 2)
+      expect(fourth).toMatchObject({
+        done: true,
+        counters: { bodiesCleared: 0, rowsDeleted: 1 },
+      })
+      expect(await db.select().from(webhookDeliveries)).toHaveLength(0)
     })
-    const second = await gcDeliveriesSlice(persistence, 100, retention, first.cursor, 2)
-    expect(second).toMatchObject({
-      done: false,
-      cursor: { version: 1, phase: 'rows' },
-      counters: { bodiesCleared: 1, rowsDeleted: 0 },
-    })
-    const third = await gcDeliveriesSlice(persistence, 100, retention, second.cursor, 2)
-    expect(third).toMatchObject({
-      done: false,
-      counters: { bodiesCleared: 0, rowsDeleted: 2 },
-    })
-    const fourth = await gcDeliveriesSlice(persistence, 100, retention, third.cursor, 2)
-    expect(fourth).toMatchObject({
-      done: true,
-      counters: { bodiesCleared: 0, rowsDeleted: 1 },
-    })
-    expect(await db.select().from(webhookDeliveries)).toHaveLength(0)
   })
 
-  test('retention sweep persists its table phase between bounded predicate-rechecking deletes', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(memoryDistillJobs).values({
-      id: 'distill-job',
-      debounceKey: 'key',
-      sourceKind: 'review',
-      sourceEventId: 'source',
-      scopeResolvedJson: '{}',
-      status: 'done',
-      nextRunAt: 1,
-      createdAt: 1,
+  describeEachProvider('provider', (harness) => {
+    test('retention sweep persists its table phase between bounded predicate-rechecking deletes', async () => {
+      const db = harness.db
+      await db.insert(memoryDistillJobs).values({
+        id: 'distill-job',
+        debounceKey: 'key',
+        sourceKind: 'review',
+        sourceEventId: 'source',
+        scopeResolvedJson: '{}',
+        status: 'done',
+        nextRunAt: 1,
+        createdAt: 1,
+      })
+      await db.insert(memoryDistillEvents).values(
+        [1, 2, 3, 99_000_000].map((ts) => ({
+          distillJobId: 'distill-job',
+          attemptIndex: 0,
+          sessionId: 'session',
+          ts,
+          kind: 'text',
+          payload: 'x',
+        })),
+      )
+      const config = { eventStreamRetentionDays: 1, webhookTriggerFiresRetentionDays: 0 }
+      const first = await runRetentionSweepSlice(db, config, null, 100_000_000, 2)
+      expect(first).toMatchObject({
+        done: false,
+        cursor: { version: 1, phase: 'distill-events', eventCutoff: 13_600_000 },
+        counters: { distillEvents: 2 },
+      })
+      const second = await runRetentionSweepSlice(db, config, first.cursor, 100_000_000, 2)
+      expect(second).toMatchObject({
+        done: false,
+        cursor: { version: 1, phase: 'intent-turn-events' },
+        counters: { distillEvents: 1 },
+      })
+      expect(await db.select().from(memoryDistillEvents)).toHaveLength(1)
     })
-    await db.insert(memoryDistillEvents).values(
-      [1, 2, 3, 99_000_000].map((ts) => ({
-        distillJobId: 'distill-job',
-        attemptIndex: 0,
-        sessionId: 'session',
-        ts,
-        kind: 'text',
-        payload: 'x',
-      })),
-    )
-    const config = { eventStreamRetentionDays: 1, webhookTriggerFiresRetentionDays: 0 }
-    const first = await runRetentionSweepSlice(db, config, null, 100_000_000, 2)
-    expect(first).toMatchObject({
-      done: false,
-      cursor: { version: 1, phase: 'distill-events', eventCutoff: 13_600_000 },
-      counters: { distillEvents: 2 },
-    })
-    const second = await runRetentionSweepSlice(db, config, first.cursor, 100_000_000, 2)
-    expect(second).toMatchObject({
-      done: false,
-      cursor: { version: 1, phase: 'intent-turn-events' },
-      counters: { distillEvents: 1 },
-    })
-    expect(await db.select().from(memoryDistillEvents)).toHaveLength(1)
   })
 
-  test('temporary upload owners delete only one bounded batch per maintenance slice', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const development = createUploadSessionPersistence(db)
-    const employee = createEmployeeInputUploadPersistence(db)
-    for (let index = 0; index < 3; index += 1) {
-      await development.createUpload({
-        actorUserId: null,
-        originalName: `development-${index}.txt`,
-        bytes: 1,
-        sha256: `development-${index}`,
-        blobRef: `blob-development-${index}`,
-        idempotencyKey: null,
-        now: 0,
-      })
-      await employee.create({
-        actorUserId: null,
-        originalName: `employee-${index}.txt`,
-        bytes: 1,
-        sha256: `employee-${index}`,
-        blobRef: `blob-employee-${index}`,
-        idempotencyKey: null,
-        now: 0,
-      })
-    }
+  describeEachProvider('provider', (harness) => {
+    test('temporary upload owners delete only one bounded batch per maintenance slice', async () => {
+      const db = harness.db
+      const development = createUploadSessionPersistence(db)
+      const employee = createEmployeeInputUploadPersistence(db)
+      for (let index = 0; index < 3; index += 1) {
+        await development.createUpload({
+          actorUserId: null,
+          originalName: `development-${index}.txt`,
+          bytes: 1,
+          sha256: `development-${index}`,
+          blobRef: `blob-development-${index}`,
+          idempotencyKey: null,
+          now: 0,
+        })
+        await employee.create({
+          actorUserId: null,
+          originalName: `employee-${index}.txt`,
+          bytes: 1,
+          sha256: `employee-${index}`,
+          blobRef: `blob-employee-${index}`,
+          idempotencyKey: null,
+          now: 0,
+        })
+      }
 
-    expect(await development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
-    expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
-    expect(db.select().from(missionInputUploads).all()).toHaveLength(1)
-    expect(db.select().from(employeeInputUploads).all()).toHaveLength(1)
+      expect(await development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
+      expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
+      expect(await db.select().from(missionInputUploads).all()).toHaveLength(1)
+      expect(await db.select().from(employeeInputUploads).all()).toHaveLength(1)
 
-    expect(await development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
-    expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
-    expect(db.select().from(missionInputUploads).all()).toHaveLength(0)
-    expect(db.select().from(employeeInputUploads).all()).toHaveLength(0)
+      expect(await development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
+      expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
+      expect(await db.select().from(missionInputUploads).all()).toHaveLength(0)
+      expect(await db.select().from(employeeInputUploads).all()).toHaveLength(0)
+    })
   })
 
   test('a contended Worker write yields quickly while the foreground writer keeps ownership', async () => {

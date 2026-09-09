@@ -21,13 +21,19 @@ import { tmpdir } from 'node:os'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
+import { createApp, type AppDeps } from '../src/server'
 import { getDocVersionDetail } from '../src/services/review'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-interface Seed {
-  db: DbClient
+interface Seed<Database extends ProviderNeutralDatabase = DbClient> {
+  db: Database
   appHome: string
   taskId: string
   nodeRunId: string
@@ -37,8 +43,10 @@ interface Seed {
   cleanup: () => void
 }
 
-async function seed(): Promise<Seed> {
-  const db = createInMemoryDb(MIGRATIONS)
+function seed(): Promise<Seed>
+function seed(suppliedDb: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDatabase>>
+async function seed(suppliedDb?: ProviderNeutralDatabase): Promise<Seed<ProviderNeutralDatabase>> {
+  const db = suppliedDb ?? createInMemoryDb(MIGRATIONS)
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc013-'))
   const appHome = join(tmp, 'home')
   mkdirSync(appHome, { recursive: true })
@@ -70,6 +78,7 @@ async function seed(): Promise<Seed> {
     status: 'awaiting_review',
     inputs: '{}',
     startedAt: 1,
+    ...(suppliedDb === undefined ? {} : providerTaskLineage(taskId)),
   })
   await db.insert(nodeRuns).values({
     id: nodeRunId,
@@ -180,36 +189,46 @@ async function seed(): Promise<Seed> {
   }
 }
 
+describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
+  describe('fixture lifetime', () => {
+    let s: Seed<ProviderNeutralDatabase>
+    beforeEach(async () => {
+      s = await seedForProvider(harness.db)
+    })
+    afterEach(() => s?.cleanup())
+
+    test('returns body + only the comments for the requested vid', async () => {
+      const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v2')
+      expect(dv).not.toBeNull()
+      expect(dv!.id).toBe('dv_v2')
+      expect(dv!.versionIndex).toBe(2)
+      expect(dv!.decision).toBe('iterated')
+      expect(dv!.body).toBe('# v2\n\nbody')
+      // Only v2 comments, NOT v1 or v3 (= 6 total in the seed).
+      expect(dv!.comments.length).toBe(2)
+      expect(dv!.comments.map((c) => c.id).sort()).toEqual(s.commentsByVersion[2]!.sort())
+    })
+
+    test('comments come back ordered by anchor (paragraphIdx asc, then offsetStart)', async () => {
+      const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v1')
+      expect(dv).not.toBeNull()
+      const paraIdx = dv!.comments.map((c) => c.anchor.paragraphIdx)
+      expect(paraIdx).toEqual([...paraIdx].sort((a, b) => a - b))
+    })
+
+    test('returns null when versionId does not exist', async () => {
+      const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_does_not_exist')
+      expect(dv).toBeNull()
+    })
+  })
+})
+
 describe('RFC-013-T2 getDocVersionDetail service', () => {
   let s: Seed
   beforeEach(async () => {
     s = await seed()
   })
   afterEach(() => s.cleanup())
-
-  test('returns body + only the comments for the requested vid', async () => {
-    const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v2')
-    expect(dv).not.toBeNull()
-    expect(dv!.id).toBe('dv_v2')
-    expect(dv!.versionIndex).toBe(2)
-    expect(dv!.decision).toBe('iterated')
-    expect(dv!.body).toBe('# v2\n\nbody')
-    // Only v2 comments, NOT v1 or v3 (= 6 total in the seed).
-    expect(dv!.comments.length).toBe(2)
-    expect(dv!.comments.map((c) => c.id).sort()).toEqual(s.commentsByVersion[2]!.sort())
-  })
-
-  test('comments come back ordered by anchor (paragraphIdx asc, then offsetStart)', async () => {
-    const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v1')
-    expect(dv).not.toBeNull()
-    const paraIdx = dv!.comments.map((c) => c.anchor.paragraphIdx)
-    expect(paraIdx).toEqual([...paraIdx].sort((a, b) => a - b))
-  })
-
-  test('returns null when versionId does not exist', async () => {
-    const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_does_not_exist')
-    expect(dv).toBeNull()
-  })
 
   test('returns null when versionId exists but belongs to a different nodeRunId', async () => {
     // dv_v1 belongs to s.nodeRunId; asking for it under a different runId
@@ -218,100 +237,175 @@ describe('RFC-013-T2 getDocVersionDetail service', () => {
     const dv = await getDocVersionDetail(s.db, s.appHome, 'run_someone_else', 'dv_v1')
     expect(dv).toBeNull()
   })
+})
 
-  test('decided versions source comments from commentsJson archive, not the live table', async () => {
-    // Production invariant: submitReviewDecision archives comments into
-    // commentsJson and deletes the live rows. The seed mirrors that —
-    // dv_v1 / dv_v2 have empty review_comments tables but populated
-    // commentsJson. The endpoint must surface those archived comments
-    // anyway, otherwise the historical view always shows zero comments
-    // for any decided version.
-    const dv1 = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v1')
-    expect(dv1).not.toBeNull()
-    expect(dv1!.comments.length).toBe(2)
-    expect(dv1!.comments[0]!.commentText).toBe('c v1 #0')
-
-    // Sanity: cross-check that nothing leaks from a different version.
-    expect(dv1!.comments.every((c) => c.docVersionId === 'dv_v1')).toBe(true)
-  })
-
-  test('archived commentsJson sorts by anchor.paragraphIdx asc, then offsetStart', async () => {
-    // We seed in (paragraphIdx 0, then 1) order, but the JSON is opaque
-    // to the storage layer; the read path must enforce the sort. Verify
-    // by injecting an out-of-order JSON for an extra version.
-    await s.db.insert(docVersions).values({
-      id: 'dv_v_unsorted',
-      taskId: s.taskId,
-      reviewNodeId: 'rev_1',
-      reviewNodeRunId: s.nodeRunId,
-      sourceNodeId: 'designer',
-      sourcePortName: 'design',
-      versionIndex: 99,
-      reviewIteration: 0,
-      bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
-      commentsJson: JSON.stringify([
-        {
-          id: 'c-b',
-          docVersionId: 'dv_v_unsorted',
-          anchor: {
-            sectionPath: 'x',
-            paragraphIdx: 5,
-            offsetStart: 0,
-            offsetEnd: 1,
-            selectedText: 'x',
-            contextBefore: '',
-            contextAfter: '',
-            occurrenceIndex: 1,
-          },
-          commentText: 'late',
-          author: 'local',
-          createdAt: 1,
-        },
-        {
-          id: 'c-a',
-          docVersionId: 'dv_v_unsorted',
-          anchor: {
-            sectionPath: 'x',
-            paragraphIdx: 1,
-            offsetStart: 0,
-            offsetEnd: 1,
-            selectedText: 'x',
-            contextBefore: '',
-            contextAfter: '',
-            occurrenceIndex: 1,
-          },
-          commentText: 'early',
-          author: 'local',
-          createdAt: 2,
-        },
-      ]),
-      decision: 'rejected',
-      createdAt: 99,
+describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
+  describe('fixture lifetime', () => {
+    let s: Seed<ProviderNeutralDatabase>
+    beforeEach(async () => {
+      s = await seedForProvider(harness.db)
     })
-    const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v_unsorted')
-    expect(dv!.comments.map((c) => c.id)).toEqual(['c-a', 'c-b'])
-  })
+    afterEach(() => s?.cleanup())
 
-  test('corrupt commentsJson degrades to empty array (does not throw)', async () => {
-    await s.db.insert(docVersions).values({
-      id: 'dv_v_corrupt',
-      taskId: s.taskId,
-      reviewNodeId: 'rev_1',
-      reviewNodeRunId: s.nodeRunId,
-      sourceNodeId: 'designer',
-      sourcePortName: 'design',
-      versionIndex: 100,
-      reviewIteration: 0,
-      bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
-      commentsJson: '{not json',
-      decision: 'rejected',
-      createdAt: 100,
+    test('decided versions source comments from commentsJson archive, not the live table', async () => {
+      // Production invariant: submitReviewDecision archives comments into
+      // commentsJson and deletes the live rows. The seed mirrors that —
+      // dv_v1 / dv_v2 have empty review_comments tables but populated
+      // commentsJson. The endpoint must surface those archived comments
+      // anyway, otherwise the historical view always shows zero comments
+      // for any decided version.
+      const dv1 = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v1')
+      expect(dv1).not.toBeNull()
+      expect(dv1!.comments.length).toBe(2)
+      expect(dv1!.comments[0]!.commentText).toBe('c v1 #0')
+
+      // Sanity: cross-check that nothing leaks from a different version.
+      expect(dv1!.comments.every((c) => c.docVersionId === 'dv_v1')).toBe(true)
     })
-    const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v_corrupt')
-    expect(dv).not.toBeNull()
-    expect(dv!.comments).toEqual([])
+
+    test('archived commentsJson sorts by anchor.paragraphIdx asc, then offsetStart', async () => {
+      // We seed in (paragraphIdx 0, then 1) order, but the JSON is opaque
+      // to the storage layer; the read path must enforce the sort. Verify
+      // by injecting an out-of-order JSON for an extra version.
+      await s.db.insert(docVersions).values({
+        id: 'dv_v_unsorted',
+        taskId: s.taskId,
+        reviewNodeId: 'rev_1',
+        reviewNodeRunId: s.nodeRunId,
+        sourceNodeId: 'designer',
+        sourcePortName: 'design',
+        versionIndex: 99,
+        reviewIteration: 0,
+        bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+        commentsJson: JSON.stringify([
+          {
+            id: 'c-b',
+            docVersionId: 'dv_v_unsorted',
+            anchor: {
+              sectionPath: 'x',
+              paragraphIdx: 5,
+              offsetStart: 0,
+              offsetEnd: 1,
+              selectedText: 'x',
+              contextBefore: '',
+              contextAfter: '',
+              occurrenceIndex: 1,
+            },
+            commentText: 'late',
+            author: 'local',
+            createdAt: 1,
+          },
+          {
+            id: 'c-a',
+            docVersionId: 'dv_v_unsorted',
+            anchor: {
+              sectionPath: 'x',
+              paragraphIdx: 1,
+              offsetStart: 0,
+              offsetEnd: 1,
+              selectedText: 'x',
+              contextBefore: '',
+              contextAfter: '',
+              occurrenceIndex: 1,
+            },
+            commentText: 'early',
+            author: 'local',
+            createdAt: 2,
+          },
+        ]),
+        decision: 'rejected',
+        createdAt: 99,
+      })
+      const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v_unsorted')
+      expect(dv!.comments.map((c) => c.id)).toEqual(['c-a', 'c-b'])
+    })
+
+    test('corrupt commentsJson degrades to empty array (does not throw)', async () => {
+      await s.db.insert(docVersions).values({
+        id: 'dv_v_corrupt',
+        taskId: s.taskId,
+        reviewNodeId: 'rev_1',
+        reviewNodeRunId: s.nodeRunId,
+        sourceNodeId: 'designer',
+        sourcePortName: 'design',
+        versionIndex: 100,
+        reviewIteration: 0,
+        bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+        commentsJson: '{not json',
+        decision: 'rejected',
+        createdAt: 100,
+      })
+      const dv = await getDocVersionDetail(s.db, s.appHome, s.nodeRunId, 'dv_v_corrupt')
+      expect(dv).not.toBeNull()
+      expect(dv!.comments).toEqual([])
+    })
   })
 })
+
+describeEachProvider(
+  'RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route',
+  (harness) => {
+    describe('fixture lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      async function composeProviderApp(
+        input: Omit<AppDeps, 'db'> & { db: ProviderNeutralDatabase },
+      ) {
+        application = await createProviderHttpApplication(harness, {
+          token: input.token,
+          configPath: join(s.appHome, 'config.json'),
+          opencodeVersion: input.opencodeVersion,
+          dbVersion: input.dbVersion,
+          appHome: s.appHome,
+        })
+        return application.app
+      }
+
+      let s: Seed<ProviderNeutralDatabase>
+      let prevHome: string | undefined
+      beforeEach(async () => {
+        s = await seedForProvider(harness.db)
+        // Route's appHomeFor() resolves to Paths.root which honors this env var.
+        prevHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = s.appHome
+      })
+
+      async function app(): Promise<ReturnType<typeof createApp>> {
+        return composeProviderApp({
+          token: 'tok',
+          configPath: '',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+          db: s.db,
+        })
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = prevHome
+          if (s !== undefined) s?.cleanup()
+        }
+      })
+
+      test('200 — returns body + comments scoped to vid', async () => {
+        const res = await (
+          await app()
+        ).fetch(
+          new Request(`http://localhost/api/reviews/${s.nodeRunId}/versions/dv_v2`, {
+            headers: { Authorization: 'Bearer tok' },
+          }),
+        )
+        expect(res.status).toBe(200)
+        const json = (await res.json()) as { body: string; comments: { id: string }[] }
+        expect(json.body).toBe('# v2\n\nbody')
+        expect(json.comments.length).toBe(2)
+        expect(json.comments.map((c) => c.id).sort()).toEqual(s.commentsByVersion[2]!.sort())
+      })
+    })
+  },
+)
 
 describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () => {
   let s: Seed
@@ -337,19 +431,6 @@ describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () 
       db: s.db,
     })
   }
-
-  test('200 — returns body + comments scoped to vid', async () => {
-    const res = await app().fetch(
-      new Request(`http://localhost/api/reviews/${s.nodeRunId}/versions/dv_v2`, {
-        headers: { Authorization: 'Bearer tok' },
-      }),
-    )
-    expect(res.status).toBe(200)
-    const json = (await res.json()) as { body: string; comments: { id: string }[] }
-    expect(json.body).toBe('# v2\n\nbody')
-    expect(json.comments.length).toBe(2)
-    expect(json.comments.map((c) => c.id).sort()).toEqual(s.commentsByVersion[2]!.sort())
-  })
 
   test('404 — versionId from a different nodeRunId', async () => {
     // Keep the parent run valid and visible so this exercises the version/run
@@ -384,14 +465,79 @@ describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () 
     expect(res.status).toBe(404)
     expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
   })
-
-  test('404 — unknown versionId', async () => {
-    const res = await app().fetch(
-      new Request(`http://localhost/api/reviews/${s.nodeRunId}/versions/dv_nope`, {
-        headers: { Authorization: 'Bearer tok' },
-      }),
-    )
-    expect(res.status).toBe(404)
-    expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
-  })
 })
+
+describeEachProvider(
+  'RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route',
+  (harness) => {
+    describe('fixture lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      async function composeProviderApp(
+        input: Omit<AppDeps, 'db'> & { db: ProviderNeutralDatabase },
+      ) {
+        application = await createProviderHttpApplication(harness, {
+          token: input.token,
+          configPath: join(s.appHome, 'config.json'),
+          opencodeVersion: input.opencodeVersion,
+          dbVersion: input.dbVersion,
+          appHome: s.appHome,
+        })
+        return application.app
+      }
+
+      let s: Seed<ProviderNeutralDatabase>
+      let prevHome: string | undefined
+      beforeEach(async () => {
+        s = await seedForProvider(harness.db)
+        // Route's appHomeFor() resolves to Paths.root which honors this env var.
+        prevHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = s.appHome
+      })
+
+      async function app(): Promise<ReturnType<typeof createApp>> {
+        return composeProviderApp({
+          token: 'tok',
+          configPath: '',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+          db: s.db,
+        })
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = prevHome
+          if (s !== undefined) s?.cleanup()
+        }
+      })
+
+      test('404 — unknown versionId', async () => {
+        const res = await (
+          await app()
+        ).fetch(
+          new Request(`http://localhost/api/reviews/${s.nodeRunId}/versions/dv_nope`, {
+            headers: { Authorization: 'Bearer tok' },
+          }),
+        )
+        expect(res.status).toBe(404)
+        expect(((await res.json()) as { code: string }).code).toBe('review-version-not-found')
+      })
+    })
+  },
+)
+
+// RFC-359 W49: preserve the native seed and supply the selected provider to the same seed core.
+function seedForProvider(db: ProviderNeutralDatabase) {
+  return seed(db)
+}
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

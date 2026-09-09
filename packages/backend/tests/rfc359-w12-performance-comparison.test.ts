@@ -13,9 +13,70 @@ import {
   PERF_CORPUS_SMALL_DIMENSIONS,
   perfCorpusCounts,
 } from '../../../scripts/perf-corpus'
-import { performanceDimensions, withPerformanceCleanup } from '../../../scripts/perf-run'
+import {
+  performanceDimensions,
+  performanceWorkerArguments,
+  withPerformanceCleanup,
+} from '../../../scripts/perf-run'
 
 const DIGEST = 'a'.repeat(64)
+
+describe('performance CPU sampling stays outside the measured workers', () => {
+  const input = {
+    output: '/tmp/performance output',
+    directory: '/tmp/performance corpus',
+    tier: 'full' as const,
+    sourceSha: 'b'.repeat(40),
+  }
+  const originalArguments = (stage: string, tier: PerfHttpReport['tier']) => [
+    'scripts/perf-run.ts',
+    '--output',
+    input.output,
+    '--directory',
+    input.directory,
+    '--scale',
+    tier,
+    '--sha',
+    input.sourceSha,
+    '--stage',
+    stage,
+  ]
+
+  test('seed, timed HTTP and archive workers keep every original argument for every tier', () => {
+    for (const tier of ['small', 'weekly', 'full'] as const) {
+      for (const stage of [
+        'template',
+        'seed-sqlite',
+        'seed-postgresql',
+        'http-sqlite',
+        'http-postgresql',
+        'archive-sqlite',
+        'archive-postgresql',
+      ]) {
+        expect(performanceWorkerArguments({ ...input, tier }, stage)).toEqual(
+          originalArguments(stage, tier),
+        )
+      }
+    }
+  })
+
+  test('only the two diagnostic workers emit separate sampled JSON profiles', () => {
+    for (const stage of ['profile-sqlite', 'profile-postgresql']) {
+      expect(performanceWorkerArguments(input, stage)).toEqual([
+        '--cpu-prof',
+        '--cpu-prof-interval=100',
+        `--cpu-prof-dir=${input.output}`,
+        `--cpu-prof-name=${stage}-cpu-profile.json`,
+        ...originalArguments(stage, input.tier),
+      ])
+    }
+  })
+
+  test('a different stage name never implicitly enables profiling', () => {
+    const stage = 'profile-http-postgresql'
+    expect(performanceWorkerArguments(input, stage)).toEqual(originalArguments(stage, input.tier))
+  })
+})
 
 // Deliberately synthetic reports exercise the comparator; they are never evidence
 // of a real full-corpus run. The hosted worker is the only report producer.

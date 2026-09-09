@@ -41,6 +41,9 @@ import {
 } from '../src/modules/collaboration/public/queries'
 import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/routes/reviews'
 import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HEADERS = { Authorization: 'Bearer tok', 'content-type': 'application/json' }
@@ -69,8 +72,11 @@ interface DocRow {
   body: string
 }
 
-interface Fixture {
-  db: DbClient
+interface Fixture<
+  Database extends ProviderNeutralDatabase = DbClient,
+  CleanupResult extends void | Promise<void> = void,
+> {
+  db: Database
   app: ReturnType<typeof createApp>
   taskId: string
   reviewRunId: string
@@ -80,12 +86,25 @@ interface Fixture {
   foreignPendingDocId: string
   /** A decided (non-pending) doc_version of the review run. */
   decidedDocId: string
-  cleanup: () => void
+  cleanup: () => CleanupResult
 }
+
+type ProviderFixture = Fixture<ProviderNeutralDatabase, Promise<void>>
+type AnyFixture = Fixture<ProviderNeutralDatabase, void | Promise<void>>
 
 type Mode = 'single' | 'multi-path' | 'multi-inline'
 
-async function buildFixture(mode: Mode, bodies: string[] = [SINGLE_BODY]): Promise<Fixture> {
+function buildFixture(mode: Mode, bodies?: string[]): Promise<Fixture>
+function buildFixture(
+  mode: Mode,
+  bodies: string[] | undefined,
+  provider: ProviderHarness,
+): Promise<ProviderFixture>
+async function buildFixture(
+  mode: Mode,
+  bodies: string[] = [SINGLE_BODY],
+  provider?: ProviderHarness,
+): Promise<AnyFixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc326-rest-'))
   const appHome = join(tmp, 'appHome')
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
@@ -93,7 +112,11 @@ async function buildFixture(mode: Mode, bodies: string[] = [SINGLE_BODY]): Promi
   // The route resolves doc_version bodies under Paths.root (AGENT_WORKFLOW_HOME).
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const connection =
+    provider === undefined
+      ? { kind: 'native' as const, db: createInMemoryDb(MIGRATIONS) }
+      : { kind: 'provider' as const, db: provider.db, harness: provider }
+  const db = connection.db
   const workflowId = ulid()
   await db.insert(workflows).values({ id: workflowId, name: 'wf', definition: '{}' })
   const taskId = ulid()
@@ -109,6 +132,14 @@ async function buildFixture(mode: Mode, bodies: string[] = [SINGLE_BODY]): Promi
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
+    ...(provider === undefined
+      ? {}
+      : {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }),
   })
   const reviewRunId = ulid()
   const otherRunId = ulid()
@@ -182,13 +213,42 @@ async function buildFixture(mode: Mode, bodies: string[] = [SINGLE_BODY]): Promi
     decision: 'pending',
   })
 
-  const app = createApp({
-    token: 'tok',
-    configPath: '',
-    opencodeVersion: '1.14.99',
-    dbVersion: 1,
-    db,
-  })
+  const cleanupFiles = () => {
+    rmSync(tmp, { recursive: true, force: true })
+    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+  }
+  let app: ReturnType<typeof createApp>
+  let cleanup: () => void | Promise<void>
+  if (connection.kind === 'native') {
+    app = createApp({
+      token: 'tok',
+      configPath: '',
+      opencodeVersion: '1.14.99',
+      dbVersion: 1,
+      db: connection.db,
+    })
+    cleanup = () => {
+      connection.db.$client.close()
+      cleanupFiles()
+    }
+  } else {
+    const application = await createProviderHttpApplication(connection.harness, {
+      token: 'tok',
+      configPath: join(appHome, 'config.json'),
+      opencodeVersion: '1.14.99',
+      dbVersion: 1,
+      appHome,
+    })
+    app = application.app
+    cleanup = async () => {
+      try {
+        await application.dispose()
+      } finally {
+        cleanupFiles()
+      }
+    }
+  }
   return {
     db,
     app,
@@ -197,17 +257,12 @@ async function buildFixture(mode: Mode, bodies: string[] = [SINGLE_BODY]): Promi
     docs,
     foreignPendingDocId,
     decidedDocId,
-    cleanup: () => {
-      db.$client.close()
-      rmSync(tmp, { recursive: true, force: true })
-      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-    },
+    cleanup,
   }
 }
 
 async function postJson(
-  f: Fixture,
+  f: AnyFixture,
   path: string,
   body: unknown,
 ): Promise<{ status: number; json: Record<string, unknown> }> {
@@ -221,11 +276,11 @@ async function postJson(
   return { status: res.status, json: (await res.json()) as Record<string, unknown> }
 }
 
-function commentsPath(f: Fixture): string {
+function commentsPath(f: AnyFixture): string {
   return `/api/reviews/${f.reviewRunId}/comments`
 }
 
-async function commentRowCount(f: Fixture): Promise<number> {
+async function commentRowCount(f: AnyFixture): Promise<number> {
   return (await f.db.select().from(reviewComments)).length
 }
 
@@ -238,9 +293,13 @@ function resolved(
   return r
 }
 
-describe('RFC-326 AC-11 / AC-12 — simplified anchors over REST', () => {
-  let f: Fixture
-  afterEach(() => f?.cleanup())
+registerProviderFixture('RFC-326 AC-11 / AC-12 — simplified anchors over REST', (harness) => {
+  let f: ProviderFixture
+  const buildFixture = (mode: Mode, bodies?: string[]) =>
+    buildFixtureOnProvider(harness, mode, bodies)
+  afterEach(async () => {
+    await f?.cleanup()
+  })
 
   test('quote → 201; the stored anchor is the resolver output field-by-field; GET hands it back', async () => {
     f = await buildFixture('single')
@@ -384,55 +443,67 @@ describe('RFC-326 AC-11 / AC-16 — refusals are 422s and write nothing', () => 
     }
     expect(await commentRowCount(f)).toBe(0)
   })
-
-  test('resolver refusals: not-found carries suggestions, ambiguous carries candidates + exact total', async () => {
-    f = await buildFixture('single')
-    const notFound = await postJson(f, commentsPath(f), {
-      quote: 'ENUM SHOULD include',
-      commentText: 'x',
-    })
-    expect(notFound.status).toBe(422)
-    expect(notFound.json.code).toBe('review-anchor-not-found')
-    const nf = notFound.json.details as { suggestions: Array<{ sourceText: string }> }
-    expect(nf.suggestions.map((s) => s.sourceText)).toContain('enum should include')
-
-    const ambiguous = await postJson(f, commentsPath(f), { quote: 'enum', commentText: 'x' })
-    expect(ambiguous.status).toBe(422)
-    expect(ambiguous.json.code).toBe('review-anchor-ambiguous')
-    const amb = ambiguous.json.details as { candidates: unknown[]; total: number }
-    expect(amb.total).toBe(2)
-    expect(amb.candidates.length).toBe(2)
-
-    const outOfRange = await postJson(f, commentsPath(f), {
-      quote: 'enum',
-      occurrence: 3,
-      commentText: 'x',
-    })
-    expect(outOfRange.status).toBe(422)
-    expect(outOfRange.json.code).toBe('review-anchor-occurrence-out-of-range')
-    expect(await commentRowCount(f)).toBe(0)
-  })
-
-  test('AC-16: a made-up web selectedText is a 422 anchor-selection-not-found, not a 500', async () => {
-    f = await buildFixture('single')
-    const { status, json } = await postJson(f, commentsPath(f), {
-      anchor: {
-        sectionPath: '',
-        paragraphIdx: 0,
-        offsetStart: 0,
-        offsetEnd: 5,
-        selectedText: 'never in this document',
-        contextBefore: '',
-        contextAfter: '',
-        occurrenceIndex: 1,
-      },
-      commentText: 'x',
-    })
-    expect(status).toBe(422)
-    expect(json.code).toBe('anchor-selection-not-found')
-    expect(await commentRowCount(f)).toBe(0)
-  })
 })
+
+registerProviderFixture(
+  'RFC-326 AC-11 / AC-16 — refusals are 422s and write nothing',
+  (harness) => {
+    let f: ProviderFixture
+    const buildFixture = (mode: Mode, bodies?: string[]) =>
+      buildFixtureOnProvider(harness, mode, bodies)
+    afterEach(async () => {
+      await f?.cleanup()
+    })
+
+    test('resolver refusals: not-found carries suggestions, ambiguous carries candidates + exact total', async () => {
+      f = await buildFixture('single')
+      const notFound = await postJson(f, commentsPath(f), {
+        quote: 'ENUM SHOULD include',
+        commentText: 'x',
+      })
+      expect(notFound.status).toBe(422)
+      expect(notFound.json.code).toBe('review-anchor-not-found')
+      const nf = notFound.json.details as { suggestions: Array<{ sourceText: string }> }
+      expect(nf.suggestions.map((s) => s.sourceText)).toContain('enum should include')
+
+      const ambiguous = await postJson(f, commentsPath(f), { quote: 'enum', commentText: 'x' })
+      expect(ambiguous.status).toBe(422)
+      expect(ambiguous.json.code).toBe('review-anchor-ambiguous')
+      const amb = ambiguous.json.details as { candidates: unknown[]; total: number }
+      expect(amb.total).toBe(2)
+      expect(amb.candidates.length).toBe(2)
+
+      const outOfRange = await postJson(f, commentsPath(f), {
+        quote: 'enum',
+        occurrence: 3,
+        commentText: 'x',
+      })
+      expect(outOfRange.status).toBe(422)
+      expect(outOfRange.json.code).toBe('review-anchor-occurrence-out-of-range')
+      expect(await commentRowCount(f)).toBe(0)
+    })
+
+    test('AC-16: a made-up web selectedText is a 422 anchor-selection-not-found, not a 500', async () => {
+      f = await buildFixture('single')
+      const { status, json } = await postJson(f, commentsPath(f), {
+        anchor: {
+          sectionPath: '',
+          paragraphIdx: 0,
+          offsetStart: 0,
+          offsetEnd: 5,
+          selectedText: 'never in this document',
+          contextBefore: '',
+          contextAfter: '',
+          occurrenceIndex: 1,
+        },
+        commentText: 'x',
+      })
+      expect(status).toBe(422)
+      expect(json.code).toBe('anchor-selection-not-found')
+      expect(await commentRowCount(f)).toBe(0)
+    })
+  },
+)
 
 describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
   let f: Fixture
@@ -469,6 +540,15 @@ describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
       .where(eq(reviewComments.docVersionId, f.docs[1]!.id))
     expect(rows.length).toBe(1)
   })
+})
+
+registerProviderFixture('RFC-326 AC-13 — multi-document rounds name their document', (harness) => {
+  let f: ProviderFixture
+  const buildFixture = (mode: Mode, bodies?: string[]) =>
+    buildFixtureOnProvider(harness, mode, bodies)
+  afterEach(async () => {
+    await f?.cleanup()
+  })
 
   test('a ONE-item multi-document round is still multi-document (item_index set)', async () => {
     f = await buildFixture('multi-inline', ['# Only\n\nsolo text\n'])
@@ -483,6 +563,11 @@ describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
     })
     expect(ok.status).toBe(201)
   })
+})
+
+describe('RFC-326 AC-13 — multi-document rounds name their document', () => {
+  let f: Fixture
+  afterEach(() => f?.cleanup())
 
   test('single-document rounds keep the implicit target; a foreign docVersionId is still a 404', async () => {
     f = await buildFixture('single')
@@ -578,3 +663,21 @@ describe('RFC-326 P10 — verified body limit on both review write routes', () =
     expect(json.warnings).toEqual([])
   })
 })
+
+// RFC-359 W49: the inner scope finishes application disposal before provider release.
+function registerProviderFixture(
+  title: string,
+  register: (harness: ProviderHarness) => void,
+): void {
+  describeEachProvider(title, (harness) => {
+    describe('fixture lifetime', () => register(harness))
+  })
+}
+
+function buildFixtureOnProvider(
+  harness: ProviderHarness,
+  mode: Mode,
+  bodies?: string[],
+): Promise<ProviderFixture> {
+  return buildFixture(mode, bodies, harness)
+}

@@ -83,6 +83,7 @@ import type {
   PostgresqlIntentApplyResourcePorts,
   PostgresqlIntentApplyResourceSessionOptions,
 } from './postgresqlIntentApplyResourceParticipants'
+import { parseAgentDependencyIds } from '../agentDependencyJson'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
   VersionedIntentResourceChangesetPlan,
@@ -435,14 +436,7 @@ function agentReferenceGroups(
 }
 
 function parseStringArray(value: string): readonly string[] {
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return Array.isArray(parsed)
-      ? parsed.filter((entry): entry is string => typeof entry === 'string')
-      : []
-  } catch {
-    return []
-  }
+  return parseAgentDependencyIds(() => JSON.parse(value))
 }
 
 async function assertAgentGraphAcyclic(

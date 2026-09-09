@@ -7,6 +7,7 @@ import {
   type CreateAgent,
   type UpdateAgent,
 } from '@agent-workflow/shared'
+import { parseAgentDependencyIds } from './agentDependencyJson'
 
 export interface AgentPersistenceRow {
   readonly id: string
@@ -43,14 +44,7 @@ function jsonRecord(value: string): Record<string, unknown> {
 }
 
 function stringArray(value: string): string[] {
-  try {
-    const decoded: unknown = JSON.parse(value)
-    return Array.isArray(decoded)
-      ? decoded.filter((entry): entry is string => typeof entry === 'string')
-      : []
-  } catch {
-    return []
-  }
+  return parseAgentDependencyIds(() => JSON.parse(value))
 }
 
 function skillRefs(value: string): AgentSkillRef[] {

@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第四十八批：11个旧测试文件部分接默认双库，保留129原声明/462个完整matcher；62原DB例/236 matcher迁移，67原例/226 matcher继续native。原预算保持，未选完整call逐字保留。新增2个真实Intent skill创建例检查完整文件字节与收据回放；真实业务行为待新SHA托管。修复W47的RFC144旧源码锁，原两纯例1过1红→2/8，5个破坏调用或顺序的变异被拒绝，其余12整call保持。14core一次backend tsc、功能metadata221/452及canonical13/55通过。1962文件、605构库文件/1198调用、无harness556/有harness474。W47 exact1f6738e51 Main34407576737终态36/4、后端11过2红，1143/1143重点执行全过；两后端红为该源码锁，新SHA仍待验。AC-1/6/8/9/11/12与原full性能判据保持开放。
+- W12 第四十九批：11个旧测试文件中75个原功能声明（原循环展开77例）接默认双库；130原声明、398 callback matcher及3个共享helper matcher保留，另55个原例保持native完整call与预算。两处decoder复用既有parser；五调用与完整调用者保持，纯对照2/172、80记录一致。原比较之后的两profile worker新增CPU采样，纯比较33/101和8组实际run受控对照通过；正式语料/轮数/P95不变，实际采样待新SHA。最终17个core整批backend tsc先修正两份评审fixture的重载输入类型；随后补齐9个HTTP文件的真实配置路径前置，最终必要复验通过；功能metadata 221 pass/452 expect、canonical 13 pass/55 expect及严格lint/format通过。1962测试文件、605构库文件/1195调用，无harness556→545、有harness474→485。W48 exact509e0f35d Main34411434156终态38 success/2 failure，13后端全过；主1339/1339、新增196/196、独立2/2与原hook18/18全部通过，两OS各1962文件恰一次。完整Main仍未绿。AC-1/6/8/9/11/12及原full性能缺口保持开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

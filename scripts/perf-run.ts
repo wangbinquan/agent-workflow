@@ -55,6 +55,33 @@ interface RunInput {
   readonly sourceSha: string
 }
 
+export function performanceWorkerArguments(input: RunInput, workerStage: string): string[] {
+  // CPU sampling belongs only to the existing post-comparison diagnostics.
+  // Timed HTTP workers, corpus setup and archive workers keep their original argv.
+  const profile = workerStage === 'profile-sqlite' || workerStage === 'profile-postgresql'
+  return [
+    ...(profile
+      ? [
+          '--cpu-prof',
+          '--cpu-prof-interval=100',
+          `--cpu-prof-dir=${input.output}`,
+          `--cpu-prof-name=${workerStage}-cpu-profile.json`,
+        ]
+      : []),
+    'scripts/perf-run.ts',
+    '--output',
+    input.output,
+    '--directory',
+    input.directory,
+    '--scale',
+    input.tier,
+    '--sha',
+    input.sourceSha,
+    '--stage',
+    workerStage,
+  ]
+}
+
 interface TemplateReceipt {
   readonly generationId: string
   readonly operationId: string
@@ -450,19 +477,7 @@ async function run(input: RunInput, stage: string | undefined): Promise<void> {
   if (stage === 'archive-postgresql') return await withDatabase(input, 'postgresql', 'archive')
   if (stage !== undefined) throw new Error(`unknown performance worker stage: ${stage}`)
   const child = async (workerStage: string) => {
-    await runProcess([
-      'scripts/perf-run.ts',
-      '--output',
-      input.output,
-      '--directory',
-      input.directory,
-      '--scale',
-      input.tier,
-      '--sha',
-      input.sourceSha,
-      '--stage',
-      workerStage,
-    ])
+    await runProcess(performanceWorkerArguments(input, workerStage))
   }
   for (const workerStage of [
     'template',

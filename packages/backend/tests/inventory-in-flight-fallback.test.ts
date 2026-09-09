@@ -32,6 +32,12 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -70,8 +76,9 @@ interface SeedOpts {
 }
 
 async function seed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SeedOpts = {},
+  lineage?: (id: string) => { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
@@ -109,6 +116,7 @@ async function seed(
     status: opts.runStatus === 'running' ? 'running' : 'done',
     inputs: '{}',
     startedAt: 1000,
+    ...(lineage?.(taskId) ?? {}),
   })
   const nodeRunId = ulid()
   await db.insert(nodeRuns).values({
@@ -167,112 +175,10 @@ afterEach(() => {
 })
 
 describe('RFC-062 GET /inventory in-flight fallback', () => {
-  test('AC-1: running + DB NULL + runRoot has valid inventory.json → captured snapshot', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
-    const runRoot = runRootFor(taskId, nodeRunId)
-    mkdirSync(runRoot, { recursive: true })
-    writeFileSync(join(runRoot, 'inventory.json'), JSON.stringify(makeCapturedSnapshot()), 'utf-8')
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('captured')
-    if (body.observation.state === 'captured') {
-      const { faces } = body.observation
-      expect(faces.agents?.[0]?.name).toBe('coder')
-      expect(faces.skills?.[0]?.name).toBe('foo')
-      expect(faces.mcps?.[0]?.status).toBe('connected')
-      // plugins 的面内键是 specifier（RFC-297 统一形状把它同时放进 key 与 name）。
-      expect(faces.plugins?.[0]?.key).toBe('file:///a.mjs')
-    }
-  })
-
-  test('AC-2: running + DB NULL + runRoot dir exists but inventory.json absent → in-flight', async () => {
-    // Realistic queueMicrotask race window: runner.ts:376 already
-    // mkdirSync'd runRoot before launching opencode, but the dump plugin's
-    // first dump() call hasn't completed yet so inventory.json doesn't exist.
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
-    mkdirSync(runRootFor(taskId, nodeRunId), { recursive: true })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    // RFC-297: 「还在跑，清单尚未生成」是正常状态 → not-produced，不是故障。
-    expect(body.observation.state).toBe('not-produced')
-    if (body.observation.state === 'not-produced') {
-      expect(body.observation.reason).toBe('in-flight')
-      expect(body.observation.message).toBeNull()
-    }
-  })
-
-  test('running + runRoot dir NEVER created → reason=plugin-load-failed (real diagnostic)', async () => {
-    // Distinct from AC-2: when runRoot itself is missing, the runner couldn't
-    // mkdir it (disk full / permission denied / runner crashed before launch).
-    // `plugin-load-failed` is the accurate diagnostic; don't mask it with
-    // 'in-flight' which would imply "the plugin is still working on it".
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
-    // Intentionally do NOT create runRoot.
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('unavailable')
-    if (body.observation.state === 'unavailable') {
-      expect(body.observation.reason).toBe('plugin-load-failed')
-    }
-  })
-
-  test('AC-3: running + DB NULL + runRoot file corrupt → reason=parse-failed', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
-    const runRoot = runRootFor(taskId, nodeRunId)
-    mkdirSync(runRoot, { recursive: true })
-    writeFileSync(join(runRoot, 'inventory.json'), '{ this is not json', 'utf-8')
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    // 观测源在但坏了 → malformed（与「压根没有」区分开）。
-    expect(body.observation.state).toBe('malformed')
-    if (body.observation.state === 'malformed') {
-      expect(body.observation.reason).toBe('parse-failed')
-    }
-  })
-
-  test('AC-4: running + DB has valid JSON → DB path wins (file on disk is ignored)', async () => {
-    const { db, app } = buildApp()
-    const dbSnap = makeCapturedSnapshot('from-db')
-    const { taskId, nodeRunId } = await seed(db, {
-      runStatus: 'running',
-      inventoryJson: JSON.stringify(dbSnap),
-    })
-    // Plant a *different* snapshot on disk; the DB should still win.
-    const runRoot = runRootFor(taskId, nodeRunId)
-    mkdirSync(runRoot, { recursive: true })
-    writeFileSync(
-      join(runRoot, 'inventory.json'),
-      JSON.stringify(makeCapturedSnapshot('from-disk')),
-      'utf-8',
-    )
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('captured')
-    if (body.observation.state === 'captured') {
-      expect(body.observation.faces.agents?.[0]?.name).toBe('from-db')
-    }
-  })
-
-  // AC-5 terminal states (done/canceled/failed): DB NULL is authoritative even
-  // when a stale runRoot file is still on disk. The service has no per-status
-  // branching — its only discriminant is the binary `if (status === 'running')`
-  // guard, so all three terminal values drive the identical fallback. Table-driven
-  // over the three so each real terminal value stays exercised without 3× the
-  // byte-identical body. (AC-5a models the underlying race: runner step 12 cleanup
-  // failed but step 11 DB write also didn't happen — DB NULL wins for terminal rows.)
-  for (const runStatus of ['done', 'canceled', 'failed'] as const) {
-    test(`AC-5(${runStatus}): status=${runStatus} + DB NULL + runRoot file on disk → file-missing`, async () => {
-      const { db, app } = buildApp()
-      const { taskId, nodeRunId } = await seed(db, { runStatus, inventoryJson: null })
+  registerProviderApplication((buildApp, seed) => {
+    test('AC-1: running + DB NULL + runRoot has valid inventory.json → captured snapshot', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
       const runRoot = runRootFor(taskId, nodeRunId)
       mkdirSync(runRoot, { recursive: true })
       writeFileSync(
@@ -283,70 +189,194 @@ describe('RFC-062 GET /inventory in-flight fallback', () => {
       const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
       expect(res.status).toBe(200)
       const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('captured')
+      if (body.observation.state === 'captured') {
+        const { faces } = body.observation
+        expect(faces.agents?.[0]?.name).toBe('coder')
+        expect(faces.skills?.[0]?.name).toBe('foo')
+        expect(faces.mcps?.[0]?.status).toBe('connected')
+        // plugins 的面内键是 specifier（RFC-297 统一形状把它同时放进 key 与 name）。
+        expect(faces.plugins?.[0]?.key).toBe('file:///a.mjs')
+      }
+    })
+  })
+
+  registerProviderApplication((buildApp, seed) => {
+    test('AC-2: running + DB NULL + runRoot dir exists but inventory.json absent → in-flight', async () => {
+      // Realistic queueMicrotask race window: runner.ts:376 already
+      // mkdirSync'd runRoot before launching opencode, but the dump plugin's
+      // first dump() call hasn't completed yet so inventory.json doesn't exist.
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
+      mkdirSync(runRootFor(taskId, nodeRunId), { recursive: true })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      // RFC-297: 「还在跑，清单尚未生成」是正常状态 → not-produced，不是故障。
+      expect(body.observation.state).toBe('not-produced')
+      if (body.observation.state === 'not-produced') {
+        expect(body.observation.reason).toBe('in-flight')
+        expect(body.observation.message).toBeNull()
+      }
+    })
+  })
+
+  registerProviderApplication((buildApp, seed) => {
+    test('running + runRoot dir NEVER created → reason=plugin-load-failed (real diagnostic)', async () => {
+      // Distinct from AC-2: when runRoot itself is missing, the runner couldn't
+      // mkdir it (disk full / permission denied / runner crashed before launch).
+      // `plugin-load-failed` is the accurate diagnostic; don't mask it with
+      // 'in-flight' which would imply "the plugin is still working on it".
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
+      // Intentionally do NOT create runRoot.
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('unavailable')
+      if (body.observation.state === 'unavailable') {
+        expect(body.observation.reason).toBe('plugin-load-failed')
+      }
+    })
+  })
+
+  registerProviderApplication((buildApp, seed) => {
+    test('AC-3: running + DB NULL + runRoot file corrupt → reason=parse-failed', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
+      const runRoot = runRootFor(taskId, nodeRunId)
+      mkdirSync(runRoot, { recursive: true })
+      writeFileSync(join(runRoot, 'inventory.json'), '{ this is not json', 'utf-8')
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      // 观测源在但坏了 → malformed（与「压根没有」区分开）。
+      expect(body.observation.state).toBe('malformed')
+      if (body.observation.state === 'malformed') {
+        expect(body.observation.reason).toBe('parse-failed')
+      }
+    })
+  })
+
+  registerProviderApplication((buildApp, seed) => {
+    test('AC-4: running + DB has valid JSON → DB path wins (file on disk is ignored)', async () => {
+      const { db, app } = await buildApp()
+      const dbSnap = makeCapturedSnapshot('from-db')
+      const { taskId, nodeRunId } = await seed(db, {
+        runStatus: 'running',
+        inventoryJson: JSON.stringify(dbSnap),
+      })
+      // Plant a *different* snapshot on disk; the DB should still win.
+      const runRoot = runRootFor(taskId, nodeRunId)
+      mkdirSync(runRoot, { recursive: true })
+      writeFileSync(
+        join(runRoot, 'inventory.json'),
+        JSON.stringify(makeCapturedSnapshot('from-disk')),
+        'utf-8',
+      )
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('captured')
+      if (body.observation.state === 'captured') {
+        expect(body.observation.faces.agents?.[0]?.name).toBe('from-db')
+      }
+    })
+  })
+
+  // AC-5 terminal states (done/canceled/failed): DB NULL is authoritative even
+  // when a stale runRoot file is still on disk. The service has no per-status
+  // branching — its only discriminant is the binary `if (status === 'running')`
+  // guard, so all three terminal values drive the identical fallback. Table-driven
+  // over the three so each real terminal value stays exercised without 3× the
+  // byte-identical body. (AC-5a models the underlying race: runner step 12 cleanup
+  // failed but step 11 DB write also didn't happen — DB NULL wins for terminal rows.)
+  for (const runStatus of ['done', 'canceled', 'failed'] as const) {
+    registerProviderApplication((buildApp, seed) => {
+      test(`AC-5(${runStatus}): status=${runStatus} + DB NULL + runRoot file on disk → file-missing`, async () => {
+        const { db, app } = await buildApp()
+        const { taskId, nodeRunId } = await seed(db, { runStatus, inventoryJson: null })
+        const runRoot = runRootFor(taskId, nodeRunId)
+        mkdirSync(runRoot, { recursive: true })
+        writeFileSync(
+          join(runRoot, 'inventory.json'),
+          JSON.stringify(makeCapturedSnapshot()),
+          'utf-8',
+        )
+        const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as RuntimeInventoryResponse
+        expect(body.observation.state).toBe('unavailable')
+        if (body.observation.state === 'unavailable') {
+          expect(body.observation.reason).toBe('file-missing')
+        }
+      })
+    })
+  }
+
+  registerProviderApplication((buildApp, seed) => {
+    test('AC-7: non-agent kinds still return 410 (in-flight branch never reached)', async () => {
+      const { db, app } = await buildApp()
+      for (const kind of ['wrapper-git', 'review', 'clarify', 'input', 'output'] as const) {
+        const { taskId, nodeRunId } = await seed(db, {
+          nodeKind: kind,
+          runStatus: 'running',
+          inventoryJson: null,
+        })
+        const runRoot = runRootFor(taskId, nodeRunId)
+        mkdirSync(runRoot, { recursive: true })
+        writeFileSync(
+          join(runRoot, 'inventory.json'),
+          JSON.stringify(makeCapturedSnapshot()),
+          'utf-8',
+        )
+        const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+        expect(res.status).toBe(410)
+      }
+    })
+  })
+
+  registerProviderApplication((buildApp, seed) => {
+    test('AC-8: status=pending + DB NULL + no runRoot → reason=file-missing (NOT in-flight)', async () => {
+      // Pending = opencode not yet started; "in-flight" would mislead the user
+      // into thinking inventory is being generated when it really isn't yet.
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runStatus: 'pending', inventoryJson: null })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
       expect(body.observation.state).toBe('unavailable')
       if (body.observation.state === 'unavailable') {
         expect(body.observation.reason).toBe('file-missing')
       }
     })
-  }
+  })
 
-  test('AC-7: non-agent kinds still return 410 (in-flight branch never reached)', async () => {
-    const { db, app } = buildApp()
-    for (const kind of ['wrapper-git', 'review', 'clarify', 'input', 'output'] as const) {
-      const { taskId, nodeRunId } = await seed(db, {
-        nodeKind: kind,
-        runStatus: 'running',
-        inventoryJson: null,
-      })
+  registerProviderApplication((buildApp, seed) => {
+    test('dump-plugin internal error stub is propagated verbatim — NOT promoted to in-flight', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
       const runRoot = runRootFor(taskId, nodeRunId)
       mkdirSync(runRoot, { recursive: true })
       writeFileSync(
         join(runRoot, 'inventory.json'),
-        JSON.stringify(makeCapturedSnapshot()),
+        JSON.stringify({
+          captured: false,
+          reason: 'dump-plugin-internal-error',
+          message: 'agents() call threw',
+        }),
         'utf-8',
       )
       const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-      expect(res.status).toBe(410)
-    }
-  })
-
-  test('AC-8: status=pending + DB NULL + no runRoot → reason=file-missing (NOT in-flight)', async () => {
-    // Pending = opencode not yet started; "in-flight" would mislead the user
-    // into thinking inventory is being generated when it really isn't yet.
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runStatus: 'pending', inventoryJson: null })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('unavailable')
-    if (body.observation.state === 'unavailable') {
-      expect(body.observation.reason).toBe('file-missing')
-    }
-  })
-
-  test('dump-plugin internal error stub is propagated verbatim — NOT promoted to in-flight', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runStatus: 'running', inventoryJson: null })
-    const runRoot = runRootFor(taskId, nodeRunId)
-    mkdirSync(runRoot, { recursive: true })
-    writeFileSync(
-      join(runRoot, 'inventory.json'),
-      JSON.stringify({
-        captured: false,
-        reason: 'dump-plugin-internal-error',
-        message: 'agents() call threw',
-      }),
-      'utf-8',
-    )
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('unavailable')
-    if (body.observation.state === 'unavailable') {
-      expect(body.observation.reason).toBe('dump-plugin-internal-error')
-      // RFC-297：统一形状必须原样带上插件给的诊断详情，不许因为「统一」吃掉它。
-      expect(body.observation.message).toBe('agents() call threw')
-    }
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('unavailable')
+      if (body.observation.state === 'unavailable') {
+        expect(body.observation.reason).toBe('dump-plugin-internal-error')
+        // RFC-297：统一形状必须原样带上插件给的诊断详情，不许因为「统一」吃掉它。
+        expect(body.observation.message).toBe('agents() call threw')
+      }
+    })
   })
 })
 
@@ -378,3 +408,47 @@ describe('RFC-062 grep guard', () => {
     expect(src).toContain('runRootFor(taskId, nodeRunId)')
   })
 })
+
+// RFC-359 W49: keep native fixtures while running the original selected calls on each provider.
+function registerProviderApplication(
+  register: (
+    buildProviderApp: () => Promise<
+      Omit<ReturnType<typeof buildApp>, 'db'> & { db: ProviderNeutralDatabase }
+    >,
+    seedForCase: typeof seed,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      async function buildApp() {
+        const appHome = appHomeOverride
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: join(appHome, 'config.json'),
+          opencodeVersion: '1.15.0',
+          dbVersion: 1,
+          appHome,
+        })
+        return { db: harness.db, app: application.app }
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+        }
+      })
+      register(buildApp, (db, opts) => seed(db, opts, providerTaskLineage))
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

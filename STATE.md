@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十九批（2026-09-10）**：11个旧测试文件中75个原功能声明（原循环展开77例）接默认双库；130原声明、398 callback matcher及3个共享helper matcher保留，另55个原例保持native完整call与预算。
+> 两处字符串数组decoder复用原共享parser，五个调用及两个完整调用者保持，生产净减12行；原后各2 pass/172 expect、80条完整受控记录相同，旧8个graph例未在本地运行。
+> 只给原comparison落盘后的两个profile worker加CPU采样；正式测量、语料、20轮与严格P95判据保持。纯比较33 pass/101 expect，8组实际run函数受控对照和本地Bun1.3.13算术CLI落盘通过；实际托管Bun1.4采样待新SHA，不能据此宣称性能改善。
+> W48 exact509e0f35d Main34411434156终态38 success/2 failure，13后端全过；主1339/1339、新增196/196、独立2/2与原hook18/18全部通过，两OS各1962文件恰一次。完整Main仍未绿。
+> 最终17个core整批backend tsc先修正两份评审fixture的重载输入类型；随后补齐9个HTTP文件的真实配置路径前置，最终必要复验通过；功能metadata 221 pass/452 expect、canonical 13 pass/55 expect及严格lint/format通过。1962测试文件、605构库文件/1195调用，无harness556→545、有harness474→485。
+> 本批没有运行本地实际业务DB/App/HTTP/PG/进程夹具或完整门禁。AC-1/6/8/9/11/12继续开放，原full六个PG端点较慢、overview13.222187ms超10ms的缺口保持。
+
 > **RFC-359 W12 第四十八批（2026-09-10）**：11个旧测试文件部分接默认双库，保留129原声明/462个完整matcher；62原DB例/236 matcher迁移，67原例/226 matcher继续native。原预算保持，未选完整call逐字保留。新增2个真实Intent skill创建例检查完整文件字节与收据回放；真实业务行为待新SHA托管。
 > 修复W47的RFC144旧源码锁：先验证原SQLite入口通过同步runner把原tx/input交给共享mint程序，再在该程序中查原abandon→insert顺序。其余12个完整call和文件其余内容保持；提取原两例1过1红，候选2 pass/8 expect，5个指定变异均红；没有运行完整Git/TaskEngine夹具。
 > W47 exact1f6738e51 Main34407576737终态36 success/4 failure，13后端11过2红；1143/1143重点执行、另2 sidecar全过，两OS各1962文件恰一次。两个后端失败均为上述原源码锁，修复后仍须新SHA确认；完整Main未绿。

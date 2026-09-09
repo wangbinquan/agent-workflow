@@ -17,6 +17,15 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -54,8 +63,9 @@ interface SeedOpts {
 }
 
 async function seed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: SeedOpts = {},
+  lineage?: (id: string) => { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
@@ -94,6 +104,7 @@ async function seed(
     status: 'done',
     inputs: '{}',
     startedAt: 1000,
+    ...(lineage?.(taskId) ?? {}),
   })
   const nodeRunId = ulid()
   await db.insert(nodeRuns).values({
@@ -149,86 +160,98 @@ describe('RFC-297 GET /inventory — claude-code 运行时', () => {
     },
   })
 
-  test('inventory 列恒 NULL 的 claude run 也能拿到清单（不再报「插件失败」）', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, {
-      runtime: 'claude-code',
-      inventoryJson: null, // claude 从不写这一列
-      startupVerificationJson: claudeVerification,
+  registerProviderApplication((buildApp, seed) => {
+    test('inventory 列恒 NULL 的 claude run 也能拿到清单（不再报「插件失败」）', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, {
+        runtime: 'claude-code',
+        inventoryJson: null, // claude 从不写这一列
+        startupVerificationJson: claudeVerification,
+      })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('captured')
+      if (body.observation.state !== 'captured') return
+      const { faces } = body.observation
+      expect(faces.agents?.map((a) => a.key)).toEqual(['auditor', 'general-purpose'])
+      expect(faces.skills?.map((s) => s.key)).toEqual(['lint', 'never-loaded'])
+      expect(faces.tools?.map((t) => t.key)).toEqual(['Read', 'Write'])
+      expect(faces.mcps?.map((m) => [m.key, m.status])).toEqual([['rag', 'connected']])
     })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('captured')
-    if (body.observation.state !== 'captured') return
-    const { faces } = body.observation
-    expect(faces.agents?.map((a) => a.key)).toEqual(['auditor', 'general-purpose'])
-    expect(faces.skills?.map((s) => s.key)).toEqual(['lint', 'never-loaded'])
-    expect(faces.tools?.map((t) => t.key)).toEqual(['Read', 'Write'])
-    expect(faces.mcps?.map((m) => [m.key, m.status])).toEqual([['rag', 'connected']])
   })
 
-  test('来源对账：注入的记 injected、运行时自带记 ambient、声明未加载记 declared-missing', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, {
-      runtime: 'claude-code',
-      startupVerificationJson: claudeVerification,
+  registerProviderApplication((buildApp, seed) => {
+    test('来源对账：注入的记 injected、运行时自带记 ambient、声明未加载记 declared-missing', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, {
+        runtime: 'claude-code',
+        startupVerificationJson: claudeVerification,
+      })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      if (body.observation.state !== 'captured') throw new Error('expected captured')
+      const { faces } = body.observation
+      expect(faces.agents?.find((a) => a.key === 'auditor')?.provenance).toBe('injected')
+      expect(faces.agents?.find((a) => a.key === 'general-purpose')?.provenance).toBe('ambient')
+      // 与告警 banner 报的 skillsMissing 是同一个名字（同源判定）。
+      expect(faces.skills?.find((s) => s.key === 'never-loaded')?.provenance).toBe(
+        'declared-missing',
+      )
+      // declared.tools === null（本轮未约束工具集）→ 工具全部算 ambient，不产生缺失。
+      expect(faces.tools?.every((t) => t.provenance === 'ambient')).toBe(true)
     })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    if (body.observation.state !== 'captured') throw new Error('expected captured')
-    const { faces } = body.observation
-    expect(faces.agents?.find((a) => a.key === 'auditor')?.provenance).toBe('injected')
-    expect(faces.agents?.find((a) => a.key === 'general-purpose')?.provenance).toBe('ambient')
-    // 与告警 banner 报的 skillsMissing 是同一个名字（同源判定）。
-    expect(faces.skills?.find((s) => s.key === 'never-loaded')?.provenance).toBe('declared-missing')
-    // declared.tools === null（本轮未约束工具集）→ 工具全部算 ambient，不产生缺失。
-    expect(faces.tools?.every((t) => t.provenance === 'ambient')).toBe(true)
   })
 
-  test('响应带回 claude 的表态：plugins 面 unsupported、tools 面 supported', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, {
-      runtime: 'claude-code',
-      startupVerificationJson: claudeVerification,
+  registerProviderApplication((buildApp, seed) => {
+    test('响应带回 claude 的表态：plugins 面 unsupported、tools 面 supported', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, {
+        runtime: 'claude-code',
+        startupVerificationJson: claudeVerification,
+      })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.declaration.plugins.support).toBe('unsupported')
+      expect(body.declaration.tools.support).toBe('supported')
+      // claude 只按名字报告，富字段整列不该出现在界面上。
+      expect(body.declaration.agents.fields.mode).toBe('unsupported')
+      expect(body.declaration.mcps.fields.status).toBe('supported')
     })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.declaration.plugins.support).toBe('unsupported')
-    expect(body.declaration.tools.support).toBe('supported')
-    // claude 只按名字报告，富字段整列不该出现在界面上。
-    expect(body.declaration.agents.fields.mode).toBe('unsupported')
-    expect(body.declaration.mcps.fields.status).toBe('supported')
   })
 
-  test('claude run 完全没有验证记录 → unavailable，且 reason 不再甩锅插件', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, {
-      runtime: 'claude-code',
-      inventoryJson: null,
-      startupVerificationJson: null,
+  registerProviderApplication((buildApp, seed) => {
+    test('claude run 完全没有验证记录 → unavailable，且 reason 不再甩锅插件', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, {
+        runtime: 'claude-code',
+        inventoryJson: null,
+        startupVerificationJson: null,
+      })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('unavailable')
+      if (body.observation.state === 'unavailable') {
+        expect(body.observation.reason).toBe('no-observation-recorded')
+        // 旧行为会给出 'file-missing'（→「插件可能加载失败」）。
+        expect(body.observation.reason).not.toBe('file-missing')
+      }
     })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('unavailable')
-    if (body.observation.state === 'unavailable') {
-      expect(body.observation.reason).toBe('no-observation-recorded')
-      // 旧行为会给出 'file-missing'（→「插件可能加载失败」）。
-      expect(body.observation.reason).not.toBe('file-missing')
-    }
   })
 
-  test('NULL runtime（RFC-111 之前的存量行）仍按 opencode 处理', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { runtime: null, inventoryJson: null })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    // opencode 的观测源是快照文件，缺失即 file-missing（保持既有诊断）。
-    expect(body.observation.state).toBe('unavailable')
-    if (body.observation.state === 'unavailable') {
-      expect(body.observation.reason).toBe('file-missing')
-    }
-    expect(body.declaration.tools.support).toBe('unsupported')
+  registerProviderApplication((buildApp, seed) => {
+    test('NULL runtime（RFC-111 之前的存量行）仍按 opencode 处理', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { runtime: null, inventoryJson: null })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      // opencode 的观测源是快照文件，缺失即 file-missing（保持既有诊断）。
+      expect(body.observation.state).toBe('unavailable')
+      if (body.observation.state === 'unavailable') {
+        expect(body.observation.reason).toBe('file-missing')
+      }
+      expect(body.declaration.tools.support).toBe('unsupported')
+    })
   })
 })
 
@@ -240,68 +263,76 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     resetBroadcastersForTests()
   })
 
-  test('200 captured: persisted snapshot is returned verbatim through zod validation', async () => {
-    const { db, app } = buildApp()
-    const snapshot = {
-      captured: true,
-      schemaVersion: 1,
-      capturedAt: 1700000000000,
-      agents: [
-        {
-          name: 'coder',
-          mode: 'primary',
-          modelProviderId: 'anthropic',
-          modelId: 'claude-opus-4-7',
-          source: 'inline',
-        },
-      ],
-      skills: [{ name: 'foo', source: 'managed', path: '/x', description: null }],
-      mcps: [{ name: 'memcache', type: 'local', status: 'connected', hint: null }],
-      plugins: [{ specifier: 'file:///a.mjs', source: 'inline' }],
-    }
-    const { taskId, nodeRunId } = await seed(db, { inventoryJson: JSON.stringify(snapshot) })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('captured')
-    if (body.observation.state === 'captured') {
-      expect(body.observation.faces.agents?.[0]?.name).toBe('coder')
-      expect(body.observation.faces.mcps?.[0]?.status).toBe('connected')
-    }
-    // RFC-297：响应同时带上该 run 所用运行时的静态表态，前端据此选列。
-    expect(body.declaration.plugins.support).toBe('supported')
-    expect(body.declaration.tools.support).toBe('unsupported')
+  registerProviderApplication((buildApp, seed) => {
+    test('200 captured: persisted snapshot is returned verbatim through zod validation', async () => {
+      const { db, app } = await buildApp()
+      const snapshot = {
+        captured: true,
+        schemaVersion: 1,
+        capturedAt: 1700000000000,
+        agents: [
+          {
+            name: 'coder',
+            mode: 'primary',
+            modelProviderId: 'anthropic',
+            modelId: 'claude-opus-4-7',
+            source: 'inline',
+          },
+        ],
+        skills: [{ name: 'foo', source: 'managed', path: '/x', description: null }],
+        mcps: [{ name: 'memcache', type: 'local', status: 'connected', hint: null }],
+        plugins: [{ specifier: 'file:///a.mjs', source: 'inline' }],
+      }
+      const { taskId, nodeRunId } = await seed(db, { inventoryJson: JSON.stringify(snapshot) })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('captured')
+      if (body.observation.state === 'captured') {
+        expect(body.observation.faces.agents?.[0]?.name).toBe('coder')
+        expect(body.observation.faces.mcps?.[0]?.status).toBe('connected')
+      }
+      // RFC-297：响应同时带上该 run 所用运行时的静态表态，前端据此选列。
+      expect(body.declaration.plugins.support).toBe('supported')
+      expect(body.declaration.tools.support).toBe('unsupported')
+    })
   })
 
-  test('200 captured:false reason=file-missing when column is NULL (legacy row or pre-run-not-yet)', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { inventoryJson: null })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('unavailable')
-    if (body.observation.state === 'unavailable') {
-      expect(body.observation.reason).toBe('file-missing')
-    }
+  registerProviderApplication((buildApp, seed) => {
+    test('200 captured:false reason=file-missing when column is NULL (legacy row or pre-run-not-yet)', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { inventoryJson: null })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('unavailable')
+      if (body.observation.state === 'unavailable') {
+        expect(body.observation.reason).toBe('file-missing')
+      }
+    })
   })
 
-  test('200 captured:false reason=parse-failed when stored JSON is corrupt', async () => {
-    const { db, app } = buildApp()
-    const { taskId, nodeRunId } = await seed(db, { inventoryJson: '{ broken json' })
-    const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as RuntimeInventoryResponse
-    expect(body.observation.state).toBe('malformed')
-    if (body.observation.state === 'malformed') {
-      expect(body.observation.reason).toBe('parse-failed')
-    }
+  registerProviderApplication((buildApp, seed) => {
+    test('200 captured:false reason=parse-failed when stored JSON is corrupt', async () => {
+      const { db, app } = await buildApp()
+      const { taskId, nodeRunId } = await seed(db, { inventoryJson: '{ broken json' })
+      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as RuntimeInventoryResponse
+      expect(body.observation.state).toBe('malformed')
+      if (body.observation.state === 'malformed') {
+        expect(body.observation.reason).toBe('parse-failed')
+      }
+    })
   })
 
-  test('404 when the task does not exist', async () => {
-    const { db, app } = buildApp()
-    const { nodeRunId } = await seed(db)
-    const res = await req(app, `/api/tasks/no_such_task/node-runs/${nodeRunId}/inventory`)
-    expect(res.status).toBe(404)
+  registerProviderApplication((buildApp, seed) => {
+    test('404 when the task does not exist', async () => {
+      const { db, app } = await buildApp()
+      const { nodeRunId } = await seed(db)
+      const res = await req(app, `/api/tasks/no_such_task/node-runs/${nodeRunId}/inventory`)
+      expect(res.status).toBe(404)
+    })
   })
 
   test('404 when node_run does not belong to the task', async () => {
@@ -312,12 +343,73 @@ describe('GET /api/tasks/:id/node-runs/:nodeRunId/inventory', () => {
     expect(res.status).toBe(404)
   })
 
-  test('410 for non-agent node kinds', async () => {
-    const { db, app } = buildApp()
-    for (const kind of ['wrapper-git', 'review', 'clarify', 'input', 'output'] as const) {
-      const { taskId, nodeRunId } = await seed(db, { nodeKind: kind })
-      const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
-      expect(res.status).toBe(410)
-    }
+  registerProviderApplication((buildApp, seed) => {
+    test('410 for non-agent node kinds', async () => {
+      const { db, app } = await buildApp()
+      for (const kind of ['wrapper-git', 'review', 'clarify', 'input', 'output'] as const) {
+        const { taskId, nodeRunId } = await seed(db, { nodeKind: kind })
+        const res = await req(app, `/api/tasks/${taskId}/node-runs/${nodeRunId}/inventory`)
+        expect(res.status).toBe(410)
+      }
+    })
   })
 })
+
+// RFC-359 W49: keep native fixtures while running the original selected calls on each provider.
+function registerProviderApplication(
+  register: (
+    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    seedForCase: typeof seed,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function buildApp() {
+        ownedHome = createFixtureDirectory(
+          joinFixturePath(fixtureTmpDirectory(), 'rfc359-w49-routes-inventory-'),
+        )
+        previousHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = ownedHome
+        homeAssigned = true
+        const appHome = ownedHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: joinFixturePath(appHome, 'config.json'),
+          opencodeVersion: '1.15.0',
+          dbVersion: 1,
+          appHome,
+        })
+        return { db: harness.db, app: application.app }
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedHome !== undefined)
+            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register(buildApp, (db, opts) => seed(db, opts, providerTaskLineage))
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

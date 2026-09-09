@@ -31,7 +31,8 @@ import { canonicalDigest } from '../src/modules/development-automation/domain/ca
 import { createApp } from '../src/server'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '../src/services/users'
-import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { describeEachProvider } from './helpers/eachProvider'
 
 setDefaultTimeout(120_000)
 
@@ -114,7 +115,7 @@ async function expectCode(p: Promise<unknown>, code: string): Promise<void> {
   expect(err?.code).toBe(code)
 }
 
-function handoverDeps(fx: Pr3Fixture, mrEffects?: MrEffectsPort) {
+function handoverDeps(fx: ProviderPr3Fixture, mrEffects?: MrEffectsPort) {
   return {
     store: fx.deps().store,
     snapshots: fx.snapshots,
@@ -124,226 +125,235 @@ function handoverDeps(fx: Pr3Fixture, mrEffects?: MrEffectsPort) {
 }
 
 describe('rfc310 pr7b — handoff command', () => {
-  test('fences, revokes in-flight action, invalidates prepared effects; dispatched effects keep the fence pending', async () => {
-    const fx = await buildPr3Fixture()
-    const now = Date.now()
+  describeEachProvider('provider', (harness) => {
+    test('fences, revokes in-flight action, invalidates prepared effects; dispatched effects keep the fence pending', async () => {
+      const fx = await buildPr3Fixture({ db: harness.db })
+      const now = Date.now()
 
-    // A) 干净 mission：直接收口 tracking-only（epoch+1、fence 清、claim 保留）。
-    const clean = await seedMission(fx.store, { mrClaimId: 'claim-keep' })
-    const done = await handoffMission(handoverDeps(fx), { missionId: clean, reason: 'manual' })
-    expect(done).toEqual({ automationMode: 'tracking-only', status: 'watching', pending: false })
-    const cleanRow = (await fx.store.getMission(clean))!
-    expect(cleanRow.epoch).toBe(1)
-    expect(cleanRow.transitionFence).toBe('none')
-    expect(cleanRow.mrClaimId).toBe('claim-keep')
+      // A) 干净 mission：直接收口 tracking-only（epoch+1、fence 清、claim 保留）。
+      const clean = await seedMission(fx.store, { mrClaimId: 'claim-keep' })
+      const done = await handoffMission(handoverDeps(fx), { missionId: clean, reason: 'manual' })
+      expect(done).toEqual({ automationMode: 'tracking-only', status: 'watching', pending: false })
+      const cleanRow = (await fx.store.getMission(clean))!
+      expect(cleanRow.epoch).toBe(1)
+      expect(cleanRow.transitionFence).toBe('none')
+      expect(cleanRow.mrClaimId).toBe('claim-keep')
 
-    // B) 在途 action + prepared/dispatched effect 的处置矩阵。
-    const busy = await seedMission(fx.store, { status: 'working' })
-    const runId = `run-${busy}`
-    await fx.store.createActionRun({
-      id: runId,
-      missionId: busy,
-      missionRevision: 0,
-      decisionId: `dec-${busy}`,
-      capabilityId: 'change.implement',
-      capabilityContractVersion: 1,
-      templateId: null,
-      templateRevision: null,
-      workSetDigest: null,
-      inputFactDigest: 'e'.repeat(64),
-      baselineRef: 'base',
-      writable: true,
-      now,
-    })
-    await fx.store.claimAttempt({
-      id: `att-${busy}`,
-      actionRunId: runId,
-      rerunSeq: 0,
-      attemptSeq: 0,
-      executionRef: null,
-      baselineRef: 'base',
-      nonceDigest: 'n'.repeat(64),
-      inputDigest: 'i'.repeat(64),
-      now,
-    })
-    {
-      const m = (await fx.store.getMission(busy))!
-      await fx.store.occUpdate(m.id, m.revision, m.epoch, { currentActionRunId: runId })
-    }
-    const prepared = await fx.store.prepareEffect({
-      id: ulid(),
-      missionId: busy,
-      actionRunId: null,
-      effectKind: 'candidate-push',
-      intentDigest: canonicalDigest({ a: 1 }),
-      idempotencyKey: `p:${busy}`,
-      epoch: 0,
-      now,
-    })
-    const dispatched = await fx.store.prepareEffect({
-      id: ulid(),
-      missionId: busy,
-      actionRunId: null,
-      effectKind: 'mr-ensure',
-      intentDigest: canonicalDigest({ b: 2 }),
-      idempotencyKey: `d:${busy}`,
-      epoch: 0,
-      now,
-    })
-    await fx.store.markEffectDispatched(dispatched.effect.id, now)
+      // B) 在途 action + prepared/dispatched effect 的处置矩阵。
+      const busy = await seedMission(fx.store, { status: 'working' })
+      const runId = `run-${busy}`
+      await fx.store.createActionRun({
+        id: runId,
+        missionId: busy,
+        missionRevision: 0,
+        decisionId: `dec-${busy}`,
+        capabilityId: 'change.implement',
+        capabilityContractVersion: 1,
+        templateId: null,
+        templateRevision: null,
+        workSetDigest: null,
+        inputFactDigest: 'e'.repeat(64),
+        baselineRef: 'base',
+        writable: true,
+        now,
+      })
+      await fx.store.claimAttempt({
+        id: `att-${busy}`,
+        actionRunId: runId,
+        rerunSeq: 0,
+        attemptSeq: 0,
+        executionRef: null,
+        baselineRef: 'base',
+        nonceDigest: 'n'.repeat(64),
+        inputDigest: 'i'.repeat(64),
+        now,
+      })
+      {
+        const m = (await fx.store.getMission(busy))!
+        await fx.store.occUpdate(m.id, m.revision, m.epoch, { currentActionRunId: runId })
+      }
+      const prepared = await fx.store.prepareEffect({
+        id: ulid(),
+        missionId: busy,
+        actionRunId: null,
+        effectKind: 'candidate-push',
+        intentDigest: canonicalDigest({ a: 1 }),
+        idempotencyKey: `p:${busy}`,
+        epoch: 0,
+        now,
+      })
+      const dispatched = await fx.store.prepareEffect({
+        id: ulid(),
+        missionId: busy,
+        actionRunId: null,
+        effectKind: 'mr-ensure',
+        intentDigest: canonicalDigest({ b: 2 }),
+        idempotencyKey: `d:${busy}`,
+        epoch: 0,
+        now,
+      })
+      await fx.store.markEffectDispatched(dispatched.effect.id, now)
 
-    const pending = await handoffMission(handoverDeps(fx), { missionId: busy })
-    expect(pending.pending).toBe(true)
-    const busyRow = (await fx.store.getMission(busy))!
-    expect(busyRow.transitionFence).toBe('handoff-pending')
-    expect(busyRow.epoch).toBe(1)
-    expect(busyRow.currentActionRunId).toBeNull()
-    // 在途 attempt discarded、run failed。
-    expect((await fx.store.listAttempts(runId))[0]!.status).toBe('discarded')
-    expect((await fx.store.getActionRun(runId))!.status).toBe('failed')
-    // prepared 作废、dispatched 保留（settleFence 按外部真相结算）。
-    expect((await fx.store.getEffect(prepared.effect.id))!.state).toBe('invalidated')
-    expect((await fx.store.getEffect(dispatched.effect.id))!.state).toBe('dispatched')
+      const pending = await handoffMission(handoverDeps(fx), { missionId: busy })
+      expect(pending.pending).toBe(true)
+      const busyRow = (await fx.store.getMission(busy))!
+      expect(busyRow.transitionFence).toBe('handoff-pending')
+      expect(busyRow.epoch).toBe(1)
+      expect(busyRow.currentActionRunId).toBeNull()
+      // 在途 attempt discarded、run failed。
+      expect((await fx.store.listAttempts(runId))[0]!.status).toBe('discarded')
+      expect((await fx.store.getActionRun(runId))!.status).toBe('failed')
+      // prepared 作废、dispatched 保留（settleFence 按外部真相结算）。
+      expect((await fx.store.getEffect(prepared.effect.id))!.state).toBe('invalidated')
+      expect((await fx.store.getEffect(dispatched.effect.id))!.state).toBe('dispatched')
 
-    // 二次 handoff：fence 已挂 → mission-command-transition-pending。
-    await expect(handoffMission(handoverDeps(fx), { missionId: busy })).rejects.toThrow(
-      'transition-pending',
-    )
+      // 二次 handoff：fence 已挂 → mission-command-transition-pending。
+      await expect(handoffMission(handoverDeps(fx), { missionId: busy })).rejects.toThrow(
+        'transition-pending',
+      )
+    })
   })
 })
 
 describe('rfc310 pr7b — attach command', () => {
-  test('binds an open MR (adopt + claim + cells); merged MR settles terminal with honest fulfillment; typed refusals', async () => {
-    const fx = await buildPr3Fixture()
+  describeEachProvider('provider', (harness) => {
+    test('binds an open MR (adopt + claim + cells); merged MR settles terminal with honest fulfillment; typed refusals', async () => {
+      const fx = await buildPr3Fixture({ db: harness.db })
 
-    // 拒：非 tracking-only。
-    const active = await seedMission(fx.store)
-    await expect(
-      attachMergeRequest(handoverDeps(fx, observing('opened', 'aa'.repeat(20))), {
-        missionId: active,
-        mrIid: '7',
-        codeHostEndpointRef: 'gitlab',
-        stableProjectRef: 'grp/repo',
-      }),
-    ).rejects.toThrow('attach-requires-tracking-only')
+      // 拒：非 tracking-only。
+      const active = await seedMission(fx.store)
+      await expect(
+        attachMergeRequest(handoverDeps(fx, observing('opened', 'aa'.repeat(20))), {
+          missionId: active,
+          mrIid: '7',
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'grp/repo',
+        }),
+      ).rejects.toThrow('attach-requires-tracking-only')
 
-    // 拒：未结算 effect。
-    const withEffect = await seedMission(fx.store, { automationMode: 'tracking-only' })
-    const eff = await fx.store.prepareEffect({
-      id: ulid(),
-      missionId: withEffect,
-      actionRunId: null,
-      effectKind: 'mr-ensure',
-      intentDigest: canonicalDigest({ x: 1 }),
-      idempotencyKey: `k:${withEffect}`,
-      epoch: 0,
-      now: Date.now(),
-    })
-    await fx.store.markEffectDispatched(eff.effect.id, Date.now())
-    await expectCode(
-      attachMergeRequest(handoverDeps(fx, observing('opened', null)), {
+      // 拒：未结算 effect。
+      const withEffect = await seedMission(fx.store, { automationMode: 'tracking-only' })
+      const eff = await fx.store.prepareEffect({
+        id: ulid(),
         missionId: withEffect,
-        mrIid: '8',
+        actionRunId: null,
+        effectKind: 'mr-ensure',
+        intentDigest: canonicalDigest({ x: 1 }),
+        idempotencyKey: `k:${withEffect}`,
+        epoch: 0,
+        now: Date.now(),
+      })
+      await fx.store.markEffectDispatched(eff.effect.id, Date.now())
+      await expectCode(
+        attachMergeRequest(handoverDeps(fx, observing('opened', null)), {
+          missionId: withEffect,
+          mrIid: '8',
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'grp/repo',
+        }),
+        'mission-effects-unsettled',
+      )
+
+      // 拒：observe 端口缺 / claim 键推不出。
+      const bare = await seedMission(fx.store, { automationMode: 'tracking-only' })
+      await expectCode(
+        attachMergeRequest(handoverDeps(fx), { missionId: bare, mrIid: '9' }),
+        'mr-observe-unavailable',
+      )
+      await expectCode(
+        attachMergeRequest(handoverDeps(fx, observing('opened', null)), {
+          missionId: bare,
+          mrIid: '9',
+        }),
+        'mr-binding-unresolved',
+      )
+
+      // 拒：claim 已归他人。
+      const rival = await seedMission(fx.store, { automationMode: 'tracking-only' })
+      const rivalOwner = await seedMission(fx.store)
+      await fx.store.claimMr({
+        id: 'claim-rival',
         codeHostEndpointRef: 'gitlab',
         stableProjectRef: 'grp/repo',
-      }),
-      'mission-effects-unsettled',
-    )
-
-    // 拒：observe 端口缺 / claim 键推不出。
-    const bare = await seedMission(fx.store, { automationMode: 'tracking-only' })
-    await expectCode(
-      attachMergeRequest(handoverDeps(fx), { missionId: bare, mrIid: '9' }),
-      'mr-observe-unavailable',
-    )
-    await expectCode(
-      attachMergeRequest(handoverDeps(fx, observing('opened', null)), {
-        missionId: bare,
-        mrIid: '9',
-      }),
-      'mr-binding-unresolved',
-    )
-
-    // 拒：claim 已归他人。
-    const rival = await seedMission(fx.store, { automationMode: 'tracking-only' })
-    const rivalOwner = await seedMission(fx.store)
-    await fx.store.claimMr({
-      id: 'claim-rival',
-      codeHostEndpointRef: 'gitlab',
-      stableProjectRef: 'grp/repo',
-      mrIid: '10',
-      missionId: rivalOwner,
-      epoch: 0,
-      headSha: null,
-      now: Date.now(),
-    })
-    await expectCode(
-      attachMergeRequest(handoverDeps(fx, observing('opened', null)), {
-        missionId: rival,
         mrIid: '10',
-        codeHostEndpointRef: 'gitlab',
-        stableProjectRef: 'grp/repo',
-      }),
-      'mr-owned-by-another-mission',
-    )
+        missionId: rivalOwner,
+        epoch: 0,
+        headSha: null,
+        now: Date.now(),
+      })
+      await expectCode(
+        attachMergeRequest(handoverDeps(fx, observing('opened', null)), {
+          missionId: rival,
+          mrIid: '10',
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'grp/repo',
+        }),
+        'mr-owned-by-another-mission',
+      )
 
-    // 成：opened → adopt 绑定 + cells + tracking 继续。
-    const attach = await seedMission(fx.store, { automationMode: 'tracking-only' })
-    const bound = await attachMergeRequest(handoverDeps(fx, observing('opened', 'ab'.repeat(20))), {
-      missionId: attach,
-      mrIid: '11',
-      codeHostEndpointRef: 'gitlab',
-      stableProjectRef: 'grp/repo',
-    })
-    expect(bound.terminal).toBeNull()
-    expect(bound.deliveryKind).toBe('adopt-merge-request')
-    const attachRow = (await fx.store.getMission(attach))!
-    expect(attachRow.deliveryKind).toBe('adopt-merge-request')
-    expect(attachRow.adoptedMrRef).toBe('11')
-    expect(attachRow.mrClaimId).toBe(bound.mrClaimId)
-    const cells = (await fx.snapshots.getCells(attachRow.requirementBundleRef!))!
-    expect(cells['__mr.ref']).toMatchObject({ value: '11' })
+      // 成：opened → adopt 绑定 + cells + tracking 继续。
+      const attach = await seedMission(fx.store, { automationMode: 'tracking-only' })
+      const bound = await attachMergeRequest(
+        handoverDeps(fx, observing('opened', 'ab'.repeat(20))),
+        {
+          missionId: attach,
+          mrIid: '11',
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'grp/repo',
+        },
+      )
+      expect(bound.terminal).toBeNull()
+      expect(bound.deliveryKind).toBe('adopt-merge-request')
+      const attachRow = (await fx.store.getMission(attach))!
+      expect(attachRow.deliveryKind).toBe('adopt-merge-request')
+      expect(attachRow.adoptedMrRef).toBe('11')
+      expect(attachRow.mrClaimId).toBe(bound.mrClaimId)
+      const cells = (await fx.snapshots.getCells(attachRow.requirementBundleRef!))!
+      expect(cells['__mr.ref']).toMatchObject({ value: '11' })
 
-    // 成：merged → 同一命令内 authoritative terminal + fulfillment 如实定格。
-    const mergedM = await seedMission(fx.store, {
-      automationMode: 'tracking-only',
-      uploadPlanRef: 'plan-x',
+      // 成：merged → 同一命令内 authoritative terminal + fulfillment 如实定格。
+      const mergedM = await seedMission(fx.store, {
+        automationMode: 'tracking-only',
+        uploadPlanRef: 'plan-x',
+      })
+      const settled = await attachMergeRequest(
+        handoverDeps(fx, observing('merged', 'cd'.repeat(20))),
+        {
+          missionId: mergedM,
+          mrIid: '12',
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'grp/repo',
+        },
+      )
+      expect(settled.terminal).toBe('merged')
+      const mergedRow = (await fx.store.getMission(mergedM))!
+      expect(mergedRow.status).toBe('merged')
+      expect(mergedRow.terminalKind).toBe('merged')
+      // plan 在、无 publication receipt → unfulfilled（不是 success，只是被外部合入截断）。
+      expect(mergedRow.terminalUploadFulfillment).toBe('unfulfilled')
     })
-    const settled = await attachMergeRequest(
-      handoverDeps(fx, observing('merged', 'cd'.repeat(20))),
-      {
-        missionId: mergedM,
-        mrIid: '12',
-        codeHostEndpointRef: 'gitlab',
-        stableProjectRef: 'grp/repo',
-      },
-    )
-    expect(settled.terminal).toBe('merged')
-    const mergedRow = (await fx.store.getMission(mergedM))!
-    expect(mergedRow.status).toBe('merged')
-    expect(mergedRow.terminalKind).toBe('merged')
-    // plan 在、无 publication receipt → unfulfilled（不是 success，只是被外部合入截断）。
-    expect(mergedRow.terminalUploadFulfillment).toBe('unfulfilled')
   })
 })
 
 describe('rfc310 pr7b — resume command', () => {
-  test('marks facts stale, bumps epoch, returns to active; refuses non-tracking missions', async () => {
-    const fx = await buildPr3Fixture()
-    const tracked = await seedMission(fx.store, { automationMode: 'tracking-only' })
-    const out = await resumeMission(handoverDeps(fx), { missionId: tracked })
-    expect(out).toEqual({ automationMode: 'active', status: 'watching' })
-    const row = (await fx.store.getMission(tracked))!
-    expect(row.automationMode).toBe('active')
-    expect(row.epoch).toBe(1)
-    const cells = (await fx.snapshots.getCells(row.requirementBundleRef!))!
-    expect(cells['__mr.factsCollectedAt']).toMatchObject({ value: '0' })
-    expect(cells['__pipeline.collectedAt']).toMatchObject({ value: '0' })
+  describeEachProvider('provider', (harness) => {
+    test('marks facts stale, bumps epoch, returns to active; refuses non-tracking missions', async () => {
+      const fx = await buildPr3Fixture({ db: harness.db })
+      const tracked = await seedMission(fx.store, { automationMode: 'tracking-only' })
+      const out = await resumeMission(handoverDeps(fx), { missionId: tracked })
+      expect(out).toEqual({ automationMode: 'active', status: 'watching' })
+      const row = (await fx.store.getMission(tracked))!
+      expect(row.automationMode).toBe('active')
+      expect(row.epoch).toBe(1)
+      const cells = (await fx.snapshots.getCells(row.requirementBundleRef!))!
+      expect(cells['__mr.factsCollectedAt']).toMatchObject({ value: '0' })
+      expect(cells['__pipeline.collectedAt']).toMatchObject({ value: '0' })
 
-    const active = await seedMission(fx.store)
-    await expect(resumeMission(handoverDeps(fx), { missionId: active })).rejects.toThrow(
-      'not-tracking-only',
-    )
+      const active = await seedMission(fx.store)
+      await expect(resumeMission(handoverDeps(fx), { missionId: active })).rejects.toThrow(
+        'not-tracking-only',
+      )
+    })
   })
 })
 

@@ -563,7 +563,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc333-task-participants.test.ts: 14',
   'rfc335-oidc-git-name-migration.test.ts: 1',
   'rfc336-employee-case-advanced-migration.test.ts: 1',
-  'rfc338-maintenance-slices.test.ts: 7',
+  'rfc338-maintenance-slices.test.ts: 4',
   'rfc338-maintenance-status.test.ts: 2',
   'rfc338-websocket-heartbeat.test.ts: 1',
   'rfc340-review-access.test.ts: 1',
