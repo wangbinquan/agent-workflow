@@ -9,6 +9,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { __resetBatchImportForTests } from '../src/services/repoBatchImport'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -46,17 +51,36 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
   })
 }
 
-describe('cached-repos batch import HTTP (RFC-033)', () => {
-  let h: Harness
+function registerProviderBatchHttpCases(provider: ProviderHarness): void {
+  let h: Pick<Harness, 'app'>
+  let application: ProviderHttpApplication | undefined
+  let tmp: string | undefined
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    application = undefined
+    tmp = undefined
     __resetBatchImportForTests()
-    h = buildHarness()
+    tmp = mkdtempSync(join(tmpdir(), 'aw-batch-http-'))
+    const appHome = join(tmp, 'home')
+    mkdirSync(appHome, { recursive: true })
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    application = await createProviderHttpApplication(provider, {
+      token: TOKEN,
+      configPath: join(tmp, 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 8,
+      appHome,
+    })
+    h = { app: application.app }
   })
-  afterEach(() => {
+  afterEach(async () => {
     __resetBatchImportForTests()
-    resetBroadcastersForTests()
-    rmSync(h.tmp, { recursive: true, force: true })
+    try {
+      await application?.dispose()
+    } finally {
+      resetBroadcastersForTests()
+      if (tmp !== undefined) rmSync(tmp, { recursive: true, force: true })
+    }
   })
 
   test('POST /batch-import returns 201 + snapshot immediately', async () => {
@@ -158,6 +182,25 @@ describe('cached-repos batch import HTTP (RFC-033)', () => {
       { method: 'POST', body: '{}' },
     )
     expect(r2.status).toBe(404)
+  })
+}
+
+describeEachProvider('cached-repos batch import HTTP (RFC-033)', (provider) => {
+  // Application disposal completes before the outer harness releases its database.
+  describe('complete application lifetime', () => registerProviderBatchHttpCases(provider))
+})
+
+describe('cached-repos batch import HTTP (RFC-033)', () => {
+  let h: Harness
+
+  beforeEach(() => {
+    __resetBatchImportForTests()
+    h = buildHarness()
+  })
+  afterEach(() => {
+    __resetBatchImportForTests()
+    resetBroadcastersForTests()
+    rmSync(h.tmp, { recursive: true, force: true })
   })
 
   test('credential URL is redacted in HTTP response body', async () => {

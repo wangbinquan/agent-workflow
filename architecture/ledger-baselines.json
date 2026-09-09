@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5328,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5330,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W42: two source-bound runtime imports are now observed: the shared agentBranchPorts helper uses the original ValidationError, and workspaceExcludeManager uses the existing withWorktreeRegistryLock for common config writes. Both have real production consumers; no import rule or owner assignment is relaxed."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4794,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4796,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W42: the unchanged canonical projection records the same two newly observed edges for shared ValidationError and existing common-directory serialization. This is source-count growth from the original writer; the original rule, expiry and classification stay unchanged."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -872,7 +878,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9cad328b940e62bc133f4ddbc059f28b7fa17f68a83eeb31c947292dee01f3b2",
+    "sourceDigest": "sha256:3100f96aba941dddf01cdd5a62f46cea09154ca790760aab072a4f7a3fbce9c4",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +891,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bbe954aff87a8f076afd94726c43b09690dc8672",
-    "contentDigest": "sha256:a81d08538bd029f1d378fe85a357b250bfc3ee09f196da87fa02a139ab904926",
+    "currentSnapshotSha": "35053515dcc23f9975ddade91cbbe07b2c80f719",
+    "contentDigest": "sha256:05d9a8f5a49721947c706803e5e41fd24a7388501325fc04ca68e9ae2638dce8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

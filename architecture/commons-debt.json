@@ -8795,15 +8795,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9cad328b940e62bc133f4ddbc059f28b7fa17f68a83eeb31c947292dee01f3b2",
+    "sourceDigest": "sha256:3100f96aba941dddf01cdd5a62f46cea09154ca790760aab072a4f7a3fbce9c4",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "bbe954aff87a8f076afd94726c43b09690dc8672",
-    "contentDigest": "sha256:ce8006cf2c9e2e8352d9a4670d7b143d6e10cbe7974989639bd60f468186ab78",
+    "currentSnapshotSha": "35053515dcc23f9975ddade91cbbe07b2c80f719",
+    "contentDigest": "sha256:3fe7aa9cdefed8bed80677a7171200ab69e21f340ddb3f83715e0758249b9e48",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

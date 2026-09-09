@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { runGit } from '@/util/git'
+import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import { DomainError } from '@/util/errors'
 import { planWorkspaceExcludeProfile } from '../domain/workspaceExcludeProfile'
 import type { WorkspaceExcludeProfileReceipt } from '../public/types'
@@ -217,10 +217,12 @@ export async function ensureWorkspaceExcludeProfile(input: {
   writeFileSync(temp, plan.content, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
   renameSync(temp, profilePath)
 
-  await gitOutput(
-    input.worktreePath,
-    ['config', 'extensions.worktreeConfig', 'true'],
-    'enable worktree config',
+  await withWorktreeRegistryLock(input.worktreePath, () =>
+    gitOutput(
+      input.worktreePath,
+      ['config', 'extensions.worktreeConfig', 'true'],
+      'enable worktree config',
+    ),
   )
   await gitOutput(
     input.worktreePath,

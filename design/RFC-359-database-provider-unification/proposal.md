@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第四十一批：fallback检查从五份真实Linux VM定位游标/跳转关系，保留原扫描跳过判据，十份双平台记录/四十个指定变异/五个旧程序控制及一次SQLite6/228通过，新SHA Linux实跑待验。RFC331一例、RFC248四例默认双库，原后各1/4、4/11；25原整call保持，真实时间/写返回/生命周期差量单列。W40 exactbbe954aff Main36 success/4 failure、后端11/13，877重点872过/5个Linux VM红、另2 sidecar过，177选定PG均过；另一个mac分片Git config锁失败待修。4core一次tsc、211/433功能metadata、13/55canonical通过；1955文件、createInMemoryDb口径605文件/1224调用，T19f688。原W39 full仍六项PG较慢且overview MAX13.222187ms未过10ms，完整Main与六项AC继续开放。
+- W12 第四十二批：两份分支端口校验收为一个共享函数，三个原调用保持，原两套各5/18、共享5/18；公共Git配置接现有按common-directory串行锁，原并发/命令/预算保持，受控原红与候选6/30及查询差量已核。六个batch HTTP原callback/19 matcher默认双库，原500ms及其余整call保持，新HTTP待托管。W41 exact35053515d Main36 success/4 failure，后端11/13、主892/892与另2 sidecar全过、182选定PG全过，五个Linux gate恢复；另两hook超时继续定位。7core一次tsc、211/433功能metadata、13/55canonical通过；1957文件、工厂605文件/1224调用，T19f688。原W39 full六个PG较慢端点与overview MAX13.222187ms未过10ms保持，六项AC继续开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

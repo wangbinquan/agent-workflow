@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十二批（2026-09-09）**：资源包两份完整分支端口校验收为一个真实共享函数，三个生产调用原样；原两套各5/18、共享5/18及三个行为负控通过，生产净减6行。完整错误保留位置字段差量，不宣称错误对象字节全等。
+> 工作树公共Git配置写入接现有common-directory串行锁，后续per-worktree写入、原并发任务与70000ms预算保持。原片段在受控同key重叠下红，候选6/30通过；两个新增冷路径查询与实际串行次序单列。这证明候选协议，不把旧CI未记录的锁holder/交错当成已复现根因。
+> Batch import HTTP六个原callback/19 matcher接默认双库完整应用，原500ms保持，第七整call和原native夹具不动；工厂1→1。原W41两OS十二次执行通过，新候选真实HTTP等待托管。本地仅十个纯生命周期控制，验证失败清理与app disposal先于外层harness释放。
+> W41 exact35053515d Main34354058081终态36 success/4 failure，13后端11过2红、普通lint及独立PG通过；两OS各1955原生文件恰一次，892主执行全过、另2 sidecar过，182选定PG全过。原五个Linux gate红全部恢复；另外两个分片是daemon-start与RFC210的hook超时，保持原预算并继续定位。
+> 本批7core一次完整tsc、211/433功能metadata、13/55canonical通过。1957测试文件；createInMemoryDb口径605文件/1224调用、572无harness/458有harness，T19f688和provider命名59保持。原writer据实新增两个生产导入边，owner总数25064保持；六项AC与原W39 full性能判据继续开放。
+
 > **RFC-359 W12 第四十一批（2026-09-09）**：根据W40五份真实Linux VM，fallback检查改用实际游标/跳转关系定位唯一物化门，不再要求Explain调试指令。原查询、六个展开用例、业务matcher与预算保持；十份双平台记录通过，移除调试行十份通过，四十个控制流变异及五份旧无门程序仍被拒绝；一次小型SQLite为6/228，新SHA Linux实跑待验。
 > RFC331一个与RFC248四个旧DB例接默认双库，另25个原整call字节保留。原后各1/4与4/11；RFC248完整113 SQL/90快照/原返回一致；RFC331旧trigger谱系值显式播种，保留六处native unixepoch字段、写changes2→1及nativeclose→harness解绑的真实差量。
 > W40 exactbbe954aff Main34348730483终态36 success/4 failure，13后端11过2红；两OS各1955文件恰一次，877重点执行872过/5个Linux VM红，另2 sidecar过，177选定PG均通过。W31六个旧红恢复；RFC341本次pump→fault都过，未据此宣称实测fault后pump。另一个mac分片有Git config锁失败，精确调用链已登记，候选修复留下一批。

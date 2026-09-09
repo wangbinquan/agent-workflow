@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W42 将两个资源包owner的完整`assertBranchPortsDeclared`函数移入同context的
+  `agentBranchPorts.ts`，原CreateAgent Pick/同步void、读取次序、重复值/错误与三个调用保持。
+  公共Git配置写入只包入已有`withWorktreeRegistryLock`，复用实际common-directory归一和队列；
+  后续per-worktree写入与两个原任务并发不变，未缓存路径增加原resolver查询，差量独立登记。
+  六个batch HTTP原例复用现有完整provider应用夹具，内层describe确保先dispose应用再释放外层DB；
+  每次setup提前绑定自有目录，失败清理不复用上次应用。原完整callback和500ms要求原样保留。
+
 - W41 根据托管Linux的五份实际EXPLAIN程序，只替换测试的`checkGateProgram`定位算法。
   唯一一列且不含Seek的物化定义、原facet索引rootpage与对应Rewind游标共同定位fallback门；
   验证真实Once/Return/Gosub连接，保留原Seek/Next与门退出边界、所有前置辅助定义的调用范围。

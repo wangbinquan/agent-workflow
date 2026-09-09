@@ -1,4 +1,4 @@
-import type { Agent, AgentSkillRef, AclResourceType, CreateAgent } from '@agent-workflow/shared'
+import type { Agent, AgentSkillRef, AclResourceType } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
 import { agents, mcps, plugins, resourceGrants, skills, workflows } from '@/db/schema'
@@ -18,6 +18,7 @@ import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
 import type { AgentPersistenceSemantics } from './agentRepository'
 import { assertAgentDependencyTraversal } from './agentDependencyTraversal'
+import { assertBranchPortsDeclared } from './agentBranchPorts'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 interface NamedAclRow extends AclRow {
@@ -33,18 +34,6 @@ function unique(values: readonly string[]): string[] {
 
 function managedSkillIds(refs: readonly AgentSkillRef[]): string[] {
   return unique(refs.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])))
-}
-
-function assertBranchPortsDeclared(agent: Pick<CreateAgent, 'outputs' | 'branchPorts'>): void {
-  if (agent.branchPorts === undefined || agent.branchPorts.length === 0) return
-  const outputs = new Set(agent.outputs)
-  const missing = agent.branchPorts.filter((port) => !outputs.has(port))
-  if (missing.length === 0) return
-  throw new ValidationError(
-    'branch-port-not-declared',
-    `agent branchPorts reference undeclared output port(s): ${missing.join(', ')}`,
-    { notFound: missing },
-  )
 }
 
 async function rowsByIds(

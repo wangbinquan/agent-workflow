@@ -1,10 +1,10 @@
 {
   "denominator": {
-    "backendFiles": 1800,
+    "backendFiles": 1801,
     "frontendFiles": 622,
     "legacyFiles": 606,
-    "moduleFiles": 1194,
-    "productionFiles": 2577,
+    "moduleFiles": 1195,
+    "productionFiles": 2578,
     "sharedFiles": 155,
     "symbolsIncludingFileRoots": 25064
   },
@@ -86251,6 +86251,30 @@
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertBranchPortsDeclared",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertBranchPortsDeclared",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyTraversal.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyTraversal.ts#$file",
       "removeAfterWave": null,
@@ -86580,18 +86604,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "AgentRuntimeProfileLookup",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertBranchPortsDeclared",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertBranchPortsDeclared",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -88704,18 +88716,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "assertAgentResourceRows",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#assertBranchPortsDeclared",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertBranchPortsDeclared",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301470,5 +301470,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9cad328b940e62bc133f4ddbc059f28b7fa17f68a83eeb31c947292dee01f3b2"
+  "sourceDigest": "sha256:3100f96aba941dddf01cdd5a62f46cea09154ca790760aab072a4f7a3fbce9c4"
 }
