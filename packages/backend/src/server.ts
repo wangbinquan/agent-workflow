@@ -1049,6 +1049,7 @@ export interface SqliteAppComposition<
   TCore extends AppHttpProviderCore = AppHttpProviderCore,
 > extends ComposedAppDeps<TCore> {
   readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
+  readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
 }
 
 export type ProviderComposedAppDeps<
@@ -2156,6 +2157,7 @@ export function composeSqliteApplicationDeps(
   return Object.freeze({
     ...application,
     digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart,
+    repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
   })
 }
 

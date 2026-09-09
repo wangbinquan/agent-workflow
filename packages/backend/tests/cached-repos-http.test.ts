@@ -12,6 +12,12 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, tasks, workflows, taskRepos } from '../src/db/schema'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 import { createApp } from '../src/server'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { nonInteractiveGitEnv } from '../src/util/git'
@@ -107,10 +113,43 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('cached-repos HTTP routes (RFC-024 T5)', () => {
-  let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
+  let h: Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }
+  let application: ProviderHttpApplication | undefined
+  let cleanup: (() => void) | undefined
+
+  beforeEach(async () => {
+    application = undefined
+    cleanup = undefined
+    const tmp = mkdtempSync(join(tmpdir(), 'aw-cached-repos-http-'))
+    const previousAppHome = process.env.AGENT_WORKFLOW_HOME
+    cleanup = () => {
+      rmSync(tmp, { recursive: true, force: true })
+      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+    }
+    const appHome = join(tmp, 'home')
+    mkdirSync(appHome, { recursive: true })
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    const db = provider.db
+    application = await createProviderHttpApplication(provider, {
+      token: TOKEN,
+      configPath: join(tmp, 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 8,
+      appHome,
+    })
+    const store = application.repositoryWorkspaceStore
+    const app = application.app
+    const remoteUrl = buildBareRemote(tmp)
+    h = { db, store, app, appHome, remoteUrl }
+  })
+  afterEach(async () => {
+    try {
+      await application?.dispose()
+    } finally {
+      cleanup?.()
+    }
   })
 
   test('GET /api/cached-repos returns [] when empty', async () => {
@@ -118,21 +157,6 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { items: unknown[] }
     expect(body.items).toEqual([])
-  })
-
-  test('GET /api/cached-repos lists cached entries with redacted URL', async () => {
-    await resolveCachedRepo(
-      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
-      { url: h.remoteUrl },
-    )
-    const res = await req(h.app, '/api/cached-repos')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      items: Array<{ urlRedacted: string; defaultBranch: string | null }>
-    }
-    expect(body.items.length).toBe(1)
-    expect(typeof body.items[0]?.urlRedacted).toBe('string')
-    expect(body.items[0]?.defaultBranch).toBe('main')
   })
 
   test('POST /api/cached-repos/:id/refresh updates lastFetchedAt', async () => {
@@ -156,7 +180,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     )
     const res = await req(h.app, `/api/cached-repos/${r.cached.id}`, { method: 'DELETE' })
     expect(res.status).toBe(200)
-    expect(h.db.select().from(cachedRepos).all().length).toBe(0)
+    expect((await h.db.select().from(cachedRepos).all()).length).toBe(0)
   })
 
   test('DELETE blocked by reference count without ?force=1', async () => {
@@ -169,7 +193,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
     // for private repos, whose tasks.repo_url is stored redacted.
     const wfId = ulid()
     const taskId = ulid()
-    h.db
+    await h.db
       .insert(workflows)
       .values({
         id: wfId,
@@ -180,7 +204,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
         updatedAt: Date.now(),
       })
       .run()
-    h.db
+    await h.db
       .insert(tasks)
       .values({
         name: 'fixture-task',
@@ -198,9 +222,13 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
         inputs: '{}',
         startedAt: Date.now(),
         cachedRepoId: r.cached.id,
+        executionLineageId: taskId,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+        ]),
       })
       .run()
-    h.db
+    await h.db
       .insert(taskRepos)
       .values({
         taskId,
@@ -223,12 +251,38 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
       method: 'DELETE',
     })
     expect(forced.status).toBe(200)
-    expect(h.db.select().from(cachedRepos).all().length).toBe(0)
+    expect((await h.db.select().from(cachedRepos).all()).length).toBe(0)
   })
 
   test('DELETE 404 when id unknown', async () => {
     const res = await req(h.app, `/api/cached-repos/nonexistent`, { method: 'DELETE' })
     expect(res.status).toBe(404)
+  })
+}
+
+describeEachProvider('cached-repos HTTP routes (RFC-024 T5)', (provider) => {
+  describe('complete application lifetime', () => registerProviderCachedRepoHttpCases(provider))
+})
+
+describe('cached-repos HTTP routes (RFC-024 T5)', () => {
+  let h: Harness
+  beforeEach(() => {
+    h = buildHarness()
+  })
+
+  test('GET /api/cached-repos lists cached entries with redacted URL', async () => {
+    await resolveCachedRepo(
+      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
+      { url: h.remoteUrl },
+    )
+    const res = await req(h.app, '/api/cached-repos')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      items: Array<{ urlRedacted: string; defaultBranch: string | null }>
+    }
+    expect(body.items.length).toBe(1)
+    expect(typeof body.items[0]?.urlRedacted).toBe('string')
+    expect(body.items[0]?.defaultBranch).toBe('main')
   })
 })
 

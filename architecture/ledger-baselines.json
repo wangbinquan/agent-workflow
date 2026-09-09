@@ -867,12 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25064,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25066,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W44: the unchanged canonical writer records the new shared agentDependencyJson production file and its parseAgentDependencyIds function, both consumed by the two original dependency graph loaders. The two exact owner entries are source-derived; every existing owner, rule and classification remains unchanged."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3100f96aba941dddf01cdd5a62f46cea09154ca790760aab072a4f7a3fbce9c4",
+    "sourceDigest": "sha256:7ae58112a1a161c8873f9851b046ba877170fd6a8d7c5ad635179482ec254d4d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "dfdadd6ad10e2ba8fe3e73b2ad68a6656cdfeb83",
-    "contentDigest": "sha256:bec6eea10ef71ce3f3b0f5291a7a851306b1a8b355e265636be36609ed3a3a6f",
+    "currentSnapshotSha": "171bee3f6c85dda992c7c54d4a8131d070c824fc",
+    "contentDigest": "sha256:ace462752a8df654cdcfe4306bc6ee16bd894890c0778c708d07711999f9e6fa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

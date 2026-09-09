@@ -9,6 +9,7 @@ import {
 } from '@/cli/postgresqlDaemonApplication'
 import { invalidateReadConfigCache, loadConfig, saveConfigRaw } from '@/config'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import {
   composeSqliteApplicationDeps,
   createComposedApp,
@@ -25,6 +26,7 @@ export type ProviderHttpApplicationInput = Pick<
 
 export interface ProviderHttpApplication {
   readonly app: Hono
+  readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
   /** Close application-owned work before the harness resets its borrowed database. */
   dispose(): Promise<void>
 }
@@ -90,9 +92,13 @@ export function composePostgresqlUnstartedApplication(input: PostgresqlApplicati
 
 /** Test-only lifetime around the same complete composer called by createApp. */
 export function composeSqliteUnstartedApplication(deps: AppDeps) {
-  return composeUnstartedApplication((scope) => ({
-    app: createComposedApp(composeSqliteApplicationDeps(deps, scope)),
-  }))
+  return composeUnstartedApplication((scope) => {
+    const composed = composeSqliteApplicationDeps(deps, scope)
+    return {
+      app: createComposedApp(composed),
+      repositoryWorkspaceStore: composed.repositoryWorkspaceStore,
+    }
+  })
 }
 
 /**
@@ -110,7 +116,8 @@ export async function createProviderHttpApplication(
 ): Promise<ProviderHttpApplication> {
   const binding = harness.applicationBinding
   const originalConfig = existsSync(input.configPath) ? readFileSync(input.configPath) : null
-  let application: ProviderHttpApplication | undefined
+  let application: Pick<ProviderHttpApplication, 'app' | 'dispose'> | undefined
+  let repositoryWorkspaceStore: RepositoryWorkspaceStore
   let disposal: Promise<void> | undefined
   const dispose = (): Promise<void> => {
     disposal ??= (async () => {
@@ -146,17 +153,19 @@ export async function createProviderHttpApplication(
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 29))
     if (binding.provider === 'sqlite') {
       saveConfigRaw(input.configPath, { ...config, database: { provider: 'sqlite' } })
-      application = await composeSqliteUnstartedApplication({
+      const sqliteApplication = await composeSqliteUnstartedApplication({
         ...input,
         db: binding.db,
         secretBox,
         databaseMigration,
         daemonInfoPath: join(input.appHome, '.daemon.info'),
       })
+      application = sqliteApplication
+      repositoryWorkspaceStore = sqliteApplication.repositoryWorkspaceStore
     } else {
       const selectedConfig = { ...config, database: binding.databaseConfig }
       saveConfigRaw(input.configPath, selectedConfig)
-      application = await composePostgresqlUnstartedApplication({
+      const postgresqlApplication = await composePostgresqlUnstartedApplication({
         ...input,
         db: binding.db,
         provider: { runtime: binding.runtime, telemetry: binding.runtime.telemetry },
@@ -167,8 +176,10 @@ export async function createProviderHttpApplication(
         lockPath: join(input.appHome, '.daemon.lock'),
         workflowRuntime: { workflowExactOperationHook: input.workflowExactOperationHook },
       })
+      application = postgresqlApplication
+      repositoryWorkspaceStore = postgresqlApplication.core.repositoryWorkspaceStore
     }
-    return Object.freeze({ app: application.app, dispose })
+    return Object.freeze({ app: application.app, repositoryWorkspaceStore, dispose })
   } catch (error) {
     try {
       await dispose()

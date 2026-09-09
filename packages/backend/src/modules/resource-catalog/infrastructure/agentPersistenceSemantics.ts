@@ -18,6 +18,7 @@ import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
 import type { AgentPersistenceSemantics } from './agentRepository'
 import { assertAgentDependencyTraversal } from './agentDependencyTraversal'
+import { parseAgentDependencyIds } from './agentDependencyJson'
 import { assertBranchPortsDeclared } from './agentBranchPorts'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
@@ -173,16 +174,7 @@ async function assertDependencyGraph(
         .limit(1)
     )[0]
     if (row === undefined) return undefined
-    let nested: readonly string[] = []
-    try {
-      const decoded: unknown = JSON.parse(row.dependsOn)
-      if (Array.isArray(decoded)) {
-        nested = decoded.filter((value): value is string => typeof value === 'string')
-      }
-    } catch {
-      nested = []
-    }
-    return nested
+    return parseAgentDependencyIds(() => JSON.parse(row.dependsOn))
   })
 }
 

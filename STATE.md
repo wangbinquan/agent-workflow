@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十四批（2026-09-09）**：两份agent依赖JSON解析共用实际生产函数，保留两侧原getter/catch边界和遍历/查询。原后纯验证各8/64，32组完整记录相同，4项有效负控均使选定真实回归失败；未据此宣称完整owner退役。
+> 缓存仓库HTTP的5个原例接默认双库完整应用，其余4个整call和native工厂保持。装配返回现有同一store实例，保留构造次序和缓存共享；3次seed与2次读取补await，任务seed显式补原SQLite触发器的两项实际值。微型SQLite原后四表完整快照相同，真实双库HTTP待本批托管。
+> W43 exact171bee3f6 Main34364763034终态37 success/2 failure/1 cancelled；13后端12过1取消。主集固定987，975通过、12因mac1未执行而缺失，另2 sidecar通过；新增HTTP33/33、原18 hook所属例和本批所选5例旧源两OS10次均过。取消原因没有官方字段，不补称全套通过。
+> 7core一次完整tsc、211/433功能metadata、13/55canonical通过；1960测试文件，工厂605文件/1224调用、570无harness/460有harness。原生成器新增共享文件及函数两个owner记录25064→25066，其余主分母和200 guard行保持；T19f688与provider命名59保持。六项AC及原full性能验收继续开放。
+
 > **RFC-359 W12 第四十三批（2026-09-09）**：仓库组HTTP的11个原完整call/28 matcher接默认双库完整应用；其余3个整call保持，原native工厂1→1。原两次seed改为顺序await，共用原节点构造函数。两份微型SQLite seed前后SQL/bind记录、完整行和返回值一致；16个纯生命周期控制通过，候选真实HTTP待托管。
 > 两处历史beforeAll超时补固定阶段与单调耗时：daemon保留9原操作、原等待及清理，RFC210保留23原statement/10 await/60000ms。日志失败只舍弃诊断，受控纯验证分别7/41、4/79；没有据此宣称历史超时原因已修。
 > W42 exactdfdadd6ad的Main34358743177终态36 success/4 failure，13后端11过2红；主932/932及另2 sidecar通过，188选定PG通过。两OS各1957原生文件恰一次；新增40次与本批11例旧源两OS22次均通过。历史两组beforeAll所属3+5例本次均过；另具名daemon case在macOS以5000ms预算超时，其他失败保持独立。

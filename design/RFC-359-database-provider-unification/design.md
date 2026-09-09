@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W44 将两个实际agent依赖图loader里的JSON解析体交给同步共享函数。
+  调用方保留完整原JSON.parse表达式：中立loader的row getter仍在catch内，
+  PG薄stringArray入口的row getter仍在入口外，原查询、await和遍历保持。
+  缓存仓库HTTP通过完整应用夹具取得应用实际使用的repositoryWorkspaceStore；
+  SQLite装配只在既有返回对象增加必需字段，读取原bootstrap实例，PG读取原core实例。
+  不提前构造或另建store，确保实例内缓存仍与路由共享；任务seed显式保留原触发器生成的谱系值。
+
 - W43 将仓库组HTTP的11个原行为例接入默认双provider的完整应用夹具。
   原节点构造函数只保留一份，两个原seed保持SQL及返回值并顺序await；内层应用先dispose，
   自有目录与环境值清理后再释放外层provider数据库。部分选择不等于整文件迁移。

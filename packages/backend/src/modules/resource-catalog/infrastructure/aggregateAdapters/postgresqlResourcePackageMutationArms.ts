@@ -58,6 +58,7 @@ import {
   updateAgentPersistenceValues,
 } from '../agentPersistence'
 import { assertAgentDependencyTraversal } from '../agentDependencyTraversal'
+import { parseAgentDependencyIds } from '../agentDependencyJson'
 import { assertBranchPortsDeclared } from '../agentBranchPorts'
 import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
 import {
@@ -149,13 +150,7 @@ function uniqueStrings(values: readonly string[]): string[] {
 }
 
 function stringArray(raw: string): string[] {
-  try {
-    const decoded: unknown = JSON.parse(raw)
-    if (!Array.isArray(decoded)) return []
-    return decoded.filter((value): value is string => typeof value === 'string')
-  } catch {
-    return []
-  }
+  return parseAgentDependencyIds(() => JSON.parse(raw))
 }
 
 async function resolveIdentityReference(input: {
