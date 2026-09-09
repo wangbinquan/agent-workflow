@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第三十八批：Agents 6个旧CRUD例与RFC261 3个GC例默认双库，39原声明/139 matcher保留，30未选例完整call原字节保持；选定原后9/29，完整SQL/物理行与返回对拍通过，原错误stack差量单列。累计242完整/16混合，1952文件、576构库文件无harness/453有harness，T19f689条中GC计数7→4。最终3core一次完整tsc、211/433功能metadata及13/55canonical通过；生产、8份canonical和parent status保持。两空facet性能候选因实际SQLite机制反证被拒，无新full样本。W37 exact7fb629ebd Main37success/3failure，13后端12过1红；主集655与另2 sidecar全过，另一分片8条旧失败记录的实际生命周期链继续定位。完整Main未绿，W38主集742加2 sidecar待验，六AC开放。
+- W12 第三十九批：任务分页物化fallback_gate跳过完整前缀的fallback主索引遍历；五个新默认双库行为例及一个纯源码例本地6/218，原SQL条件与绑定保持，真实PG/原full待新SHA。四个旧文件仅绑定可选初始化诊断，16原声明/51 matcher与预算保持，纯8/149及五个指定负控通过；不宣称修复W37历史根因。无DB依赖的artifact文件整字节改中立名，命名债务60→59。修后14 core完整tsc、211/433功能metadata、13/55canonical通过，当前1954文件、576构库文件无harness/454有harness，旧迁移仍242完整/16混合。W38 exact66a877da6 Main38 success/2 failure、13后端全过，742重点执行另2 sidecar全过，独立P0两库134 pass/44指定历史失败。完整Main与六项AC保持开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

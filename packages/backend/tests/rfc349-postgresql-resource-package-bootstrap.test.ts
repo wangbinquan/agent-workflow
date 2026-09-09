@@ -10,7 +10,7 @@ import { AuthorityClaimRegistry } from '../src/modules/identity-access/applicati
 import {
   createPostgresqlResourcePackagePluginArtifactOwner,
   createPostgresqlResourcePackageSkillArtifactOwner,
-} from '../src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts'
+} from '../src/modules/resource-catalog/infrastructure/resourcePackageArtifacts'
 import type {
   PostgresqlResourcePackageApplyReceipt,
   PostgresqlResourcePackageMutationRequestContext,

@@ -132,7 +132,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
   'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
-  'modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts',
   'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
   'modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts',
   'modules/resource-catalog/infrastructure/sqlitePackageResourceRows.ts',

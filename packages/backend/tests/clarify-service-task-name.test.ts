@@ -3,13 +3,15 @@
 // for ordinary tasks; if the join silently drops the field, every row
 // renders empty.
 
-import { describeEachProvider } from './helpers/eachProvider'
+import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { ulid } from 'ulid'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
+
+const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 async function seed(
   db: ProviderNeutralDatabase,

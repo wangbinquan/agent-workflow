@@ -5,7 +5,7 @@
 // → 记 heartbeat-kill 事件；disabled → no-op；隔离 → 跳；kill 非 'killed' → 跳）；
 // ② findStalledRunningChildren 真查询（running+pid+静默 → 命中；近期/非 running/无 pid → 排除）。
 
-import { describeEachProvider } from './helpers/eachProvider'
+import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -20,6 +20,8 @@ import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+
+const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 

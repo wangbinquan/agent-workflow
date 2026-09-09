@@ -555,6 +555,9 @@ export function fastFilteredRootQuery(
             (SELECT MIN(started_at) FROM physical_prefix) THEN 1
         ELSE 0 END AS complete
     ),
+    fallback_gate AS MATERIALIZED (
+      SELECT complete FROM prefix_complete WHERE complete = 0
+    ),
     roots AS NOT MATERIALIZED (
       SELECT p.rid, p.bsa FROM prefix_roots p
       WHERE (SELECT complete FROM prefix_complete) = 1
@@ -562,7 +565,7 @@ export function fastFilteredRootQuery(
       SELECT
         m.rid AS rid,
         MAX(m.started_at) AS bsa
-      FROM matches m
+      FROM fallback_gate CROSS JOIN matches m
       WHERE (SELECT complete FROM prefix_complete) = 0
       GROUP BY m.rid
     ),

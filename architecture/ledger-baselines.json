@@ -447,7 +447,7 @@
       "id": "rfc359-w5-provider-named-file-location",
       "file": "packages/backend/tests/architecture/rfc359-w5-t17-provider-file-location.test.ts",
       "symbol": "PROVIDER_NAMED_FILE_DEBT",
-      "baseline": 60,
+      "baseline": 59,
       "why": "RFC-359 W5「防复辟」波次。落在 `platform/persistence/` 之外的 provider 命名文件。W4 收敛完应钉 0；现在是高水位，防的是「再开一份 sqliteX/postgresqlX」。注意其中一部分是**搬家债**（`db/sqliteMigrator.ts` 等按引擎分叉本就合理的方言资产，搬进 platform/persistence 即可销账），与需要合一的债销账方式不同。"
     },
     {
@@ -872,7 +872,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:319afb5cfe11ce5f6273bf8ff807e81080070768d6d994771fdf435e58144309",
+    "sourceDigest": "sha256:19764fe60645f2898b2e837348592a2128dd35e644dd79582a31d810453318e2",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7fb629ebdda5a56f3b89b25b26f1466e6d29331b",
-    "contentDigest": "sha256:1070cbf01da76e055e91c656b0e24724007d740e26c0f359a8aca8d15e7cb7e7",
+    "currentSnapshotSha": "66a877da6260decbb84a6a9ae268c578c777629f",
+    "contentDigest": "sha256:aec57f38b73c354383566c84c939e2b34ed198f14c755be5c6979fa9688bea4e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

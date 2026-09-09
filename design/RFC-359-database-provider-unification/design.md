@@ -20,6 +20,17 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W39 在原 roots 前物化只含 `complete = 0` 的 `fallback_gate`，以
+  `fallback_gate CROSS JOIN matches` 驱动fallback；原标量完整性条件和所有查询插值保持。
+  SQLite真实VM确认空gate跳过fallback的主Seek/Next及其内部调用；此前OpenRead/SorterOpen仍存在。
+  不完整前缀仍执行原fallback并返回相同行；PostgreSQL重排和原规模P95必须由托管原基准验证。
+  四个既有provider测试文件通过绑定器选择生命周期诊断，原五个suite调用及16个测试call保持。
+  默认路径直接执行原操作；选择诊断时同一个native Promise原样返回，64条阶段缓冲配合4750ms
+  unref单次提示定时器，保留原初始化memoization、cleanup等待和全部hook预算。
+  group/root operation ID与raw sourceFile仅定位实际阶段；没有子阶段父子ID或锁持有者因果证明。
+  `resourcePackageArtifacts.ts` 是无DB依赖的原文件中立命名，完整文件、导出合同与实际消费者保持；
+  不以仅有PG调用方为由保留历史前缀，也不因此宣称剩余真实机制或内联重复已退役。
+
 - W38 只迁移原 Agents 六个异步 CRUD 与 RFC261 三个 GC 行为例，生产端口与算法保持。
   Agents 将原service声明按2/3/4/4顺序放入四个同层组，两个provider组各自绑定真实harness.db；
   两个保留组共享原native初始化赋值，未新增构库调用点，全部22个原call/callback字节保持。

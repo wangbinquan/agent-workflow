@@ -19290,77 +19290,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts#createPostgresqlResourcePackagePluginArtifactOwner",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts#createPostgresqlResourcePackagePluginArtifactOwner",
-      "symbol": "createPostgresqlResourcePackagePluginArtifactOwner",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts#createPostgresqlResourcePackageSkillArtifactOwner",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts#createPostgresqlResourcePackageSkillArtifactOwner",
-      "symbol": "createPostgresqlResourcePackageSkillArtifactOwner",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts#publishImmutableVersion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageArtifacts.ts#publishImmutableVersion",
-      "symbol": "publishImmutableVersion",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#ApplyReceipt",
@@ -19517,6 +19446,77 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageApplyJournal.ts#createResourcePackageApplyJournalPort",
       "symbol": "createResourcePackageApplyJournalPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#createPostgresqlResourcePackagePluginArtifactOwner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#createPostgresqlResourcePackagePluginArtifactOwner",
+      "symbol": "createPostgresqlResourcePackagePluginArtifactOwner",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#createPostgresqlResourcePackageSkillArtifactOwner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#createPostgresqlResourcePackageSkillArtifactOwner",
+      "symbol": "createPostgresqlResourcePackageSkillArtifactOwner",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#publishImmutableVersion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#publishImmutableVersion",
+      "symbol": "publishImmutableVersion",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -41567,7 +41567,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:319afb5cfe11ce5f6273bf8ff807e81080070768d6d994771fdf435e58144309",
+  "sourceDigest": "sha256:19764fe60645f2898b2e837348592a2128dd35e644dd79582a31d810453318e2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

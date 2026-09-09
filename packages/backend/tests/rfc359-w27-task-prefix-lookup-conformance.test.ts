@@ -51,6 +51,14 @@ const DIRECT_LIMIT_START = '      LIMIT 4 * CAST('
 const DIRECT_LIMIT_END = ' AS INTEGER)'
 function restoreText(text: string): string {
   return text
+    .replace(
+      `    fallback_gate AS MATERIALIZED (
+      SELECT complete FROM prefix_complete WHERE complete = 0
+    ),
+`,
+      '',
+    )
+    .replace('      FROM fallback_gate CROSS JOIN matches m', '      FROM matches m')
     .replace(`${DIRECT_LIMIT_START}\${parsed.limit + 1}${DIRECT_LIMIT_END}`, ORIGINAL_LIMIT)
     .replace(LOOKUP, ORIGINAL)
 }

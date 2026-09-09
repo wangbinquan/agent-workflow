@@ -2,6 +2,11 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十九批（2026-09-09）**：任务分页新增物化 fallback_gate，在完整前缀时跳过 fallback 主索引遍历，保留原查询条件与23处插值/绑定顺序。五个新默认双库行为例与一个纯源码例本地SQLite合计6 pass/218 expect；实际VM控制补齐，真PG计划和原规模P95待新SHA托管验证。
+> 四个旧测试文件只绑定可选provider生命周期诊断，16个原声明/51 matcher与原预算保持；纯控制8 pass/149 expect及五个指定负控通过。默认路径无新observer/timer，诊断不代表W37历史根因已修复。无数据库依赖的resourcePackageArtifacts整文件改为中立名，T17命名债务60→59。
+> 首次完整tsc仅新测试readonly类型报错，类型参数修正后完整Bun/TS运行JS保持，修后14 core完整tsc、211/433功能metadata与13/55canonical通过。原writer更新13份metadata，六canonical数保持；当前1954文件、606构库文件/1228调用、576无harness/454有harness，旧迁移累计242完整/16混合。
+> W38 exact66a877da6 Main34334471348终态38 success/2 failure，13后端全部成功，742重点执行及另2 sidecar全过；独立P0两库134 pass/44指定历史失败。完整Main仍未绿，W39真实托管与原full性能待验，AC-1/6/8/9/11/12继续开放。
+
 > **RFC-359 W12 第三十八批（2026-09-09）**：Agents 6个旧CRUD例与RFC261 3个GC例接入默认双库，39原声明/139完整matcher保留，30未选例完整call字节保持。选定原后合计9 pass/29 expect；Agents通过同层分组保留全部22原callback/token，旧嵌套候选的格式差量与新候选实跑分别留证。
 > Agents原后99条SQL、34快照与16个返回保持，2个raw错误stack差量保留；GC原后78条SQL、46快照与36个返回保持，25行分批仍为10/10/5，动态配置仍由同一实例读取。累计242完整/16混合；1952文件、606构库文件/1228调用、576无harness/453有harness，T19f689条中仅GC计数7→4。
 > 最终3core一次完整tsc、211/433功能metadata、13/55canonical及定向严格lint/format通过。生产源码、8份canonical与parent status字节保持，仅4份provenance及三项过期增长许可按原合同刷新。

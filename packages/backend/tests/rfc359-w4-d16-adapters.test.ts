@@ -18,7 +18,9 @@ import { createMcpRepository } from '@/modules/resource-catalog/infrastructure/m
 import { transitionMcpAclRuntimeTests } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import { staleConflictError } from '@/util/errors'
-import { describeEachProvider } from './helpers/eachProvider'
+import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
+
+const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 const T0 = 1_700_000_000_000
 const HASH = 'a'.repeat(64)

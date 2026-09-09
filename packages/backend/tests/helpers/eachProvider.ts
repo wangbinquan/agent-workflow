@@ -133,6 +133,204 @@ export interface DescribeEachProviderOptions {
   readonly bootstrap?: 'required'
   /** 在 setup 中创建的独立数据库数量；每个用例分别重置，默认 1。 */
   readonly databaseCount?: number
+  readonly lifecycleDiagnostics?: Readonly<{ sourceFile: string }>
+}
+
+export interface ProviderHarnessLifecycleIdentity {
+  readonly sourceFile: string
+  readonly suite: string
+}
+
+export interface ProviderHarnessLifecycleRecord {
+  readonly phase: string
+  readonly state: 'enter' | 'fulfilled' | 'rejected'
+  readonly atMs: number
+  readonly errorCode?: string | number
+}
+
+export interface ProviderHarnessLifecycleEvent extends ProviderHarnessLifecycleIdentity {
+  readonly groupId: number
+  readonly operationId: string
+  readonly kind: 'near-deadline' | 'rejected' | 'settled'
+  readonly elapsedMs: number
+  readonly events: readonly ProviderHarnessLifecycleRecord[]
+}
+
+export interface ProviderHarnessLifecyclePorts {
+  now(): number
+  schedule(callback: () => void, delayMs: number): { unref(): void; clear(): void }
+  report(event: ProviderHarnessLifecycleEvent): void
+}
+
+export interface ProviderHarnessLifecyclePhase {
+  run<T>(phase: string, operation: () => T): T
+}
+
+export interface ProviderHarnessLifecycleObserver {
+  run<T>(phase: string, operation: (context: ProviderHarnessLifecyclePhase) => T): T
+}
+
+let providerHarnessLifecycleGroup = 0
+
+/** Passive metadata only: the 4750ms observation threshold does not replace a hook timeout. */
+export function createProviderHarnessLifecycleObserver(
+  identity: ProviderHarnessLifecycleIdentity,
+  ports: ProviderHarnessLifecyclePorts = {
+    now: () => performance.now(),
+    schedule(callback, delayMs) {
+      const timer = setTimeout(callback, delayMs)
+      return {
+        unref: () => {
+          timer.unref()
+        },
+        clear: () => clearTimeout(timer),
+      }
+    },
+    report: (event) => console.warn('[each-provider-lifecycle]', JSON.stringify(event)),
+  },
+): ProviderHarnessLifecycleObserver {
+  const groupId = ++providerHarnessLifecycleGroup
+  let invocation = 0
+  const safely = (operation: () => void) => {
+    try {
+      operation()
+    } catch {
+      /* Observation cannot change the original operation. */
+    }
+  }
+  const now = () => {
+    try {
+      return ports.now()
+    } catch {
+      return 0
+    }
+  }
+  const codeOf = (error: unknown): string | number | undefined => {
+    try {
+      if (typeof error !== 'object' || error === null) return undefined
+      const code: unknown = Reflect.get(error, 'code')
+      return typeof code === 'string' || typeof code === 'number' ? code : undefined
+    } catch {
+      return undefined
+    }
+  }
+  return {
+    run<T>(phase: string, operation: (context: ProviderHarnessLifecyclePhase) => T): T {
+      const operationId = `${groupId}:${++invocation}`
+      const startedAt = now()
+      const events: ProviderHarnessLifecycleRecord[] = []
+      let reported = false
+      let settled = false
+      let timer: ReturnType<ProviderHarnessLifecyclePorts['schedule']> | undefined
+      const record = (
+        name: string,
+        state: ProviderHarnessLifecycleRecord['state'],
+        error?: unknown,
+      ) => {
+        safely(() => {
+          if (events.length === 64) events.splice(1, 1)
+          const errorCode = state === 'rejected' ? codeOf(error) : undefined
+          events.push({
+            phase: name,
+            state,
+            atMs: now(),
+            ...(errorCode === undefined ? {} : { errorCode }),
+          })
+        })
+      }
+      const report = (kind: ProviderHarnessLifecycleEvent['kind']) => {
+        reported = true
+        safely(() =>
+          ports.report({
+            ...identity,
+            groupId,
+            operationId,
+            kind,
+            elapsedMs: Math.max(0, now() - startedAt),
+            events: [...events],
+          }),
+        )
+      }
+      const finish = (
+        name: string,
+        root: boolean,
+        state: 'fulfilled' | 'rejected',
+        error?: unknown,
+      ) => {
+        record(name, state, error)
+        if (!root) return
+        settled = true
+        safely(() => timer?.clear())
+        if (state === 'rejected') report('rejected')
+        else if (reported) report('settled')
+      }
+      const observe = <R>(name: string, root: boolean, original: () => R): R => {
+        record(name, 'enter')
+        let value: R
+        try {
+          value = original()
+        } catch (error) {
+          finish(name, root, 'rejected', error)
+          throw error
+        }
+        // All observed async boundaries are native async-function Promises, never raw driver thenables.
+        if (value instanceof Promise) {
+          safely(() => {
+            void value.then(
+              () => {
+                finish(name, root, 'fulfilled')
+              },
+              (error: unknown) => {
+                finish(name, root, 'rejected', error)
+              },
+            )
+          })
+        } else finish(name, root, 'fulfilled')
+        return value
+      }
+      safely(() => {
+        timer = ports.schedule(() => {
+          if (!settled) report('near-deadline')
+        }, 4_750)
+        try {
+          timer.unref()
+        } catch {
+          safely(() => timer?.clear())
+        }
+      })
+      const context: ProviderHarnessLifecyclePhase = {
+        run: (name, original) => observe(name, false, original),
+      }
+      return observe(phase, true, () => operation(context))
+    },
+  }
+}
+
+function runProviderHarnessLifecycle<T>(
+  observer: ProviderHarnessLifecycleObserver | undefined,
+  phase: string,
+  operation: (context?: ProviderHarnessLifecyclePhase) => T,
+): T {
+  return observer === undefined ? operation(undefined) : observer.run(phase, operation)
+}
+
+function runProviderHarnessLifecycleStep<T>(
+  context: ProviderHarnessLifecyclePhase | undefined,
+  phase: string,
+  operation: () => T,
+): T {
+  return context === undefined ? operation() : context.run(phase, operation)
+}
+
+/** Bind an explicit caller without changing the original two-argument suite registrations. */
+export function bindDescribeEachProviderLifecycle(
+  diagnostics: Readonly<{ sourceFile: string }>,
+): typeof describeEachProvider {
+  return (name, body, options = {}) =>
+    describeEachProvider(name, body, {
+      ...options,
+      lifecycleDiagnostics: diagnostics,
+    })
 }
 
 interface HarnessState {
@@ -248,7 +446,7 @@ export function describeEachProvider(
   for (const provider of resolveTestProviders(process.env)) {
     describe(`${name} [${provider}]`, () => {
       if (provider === 'sqlite') registerSqlite(body, options, databaseCount)
-      else registerPostgresql(body, options, databaseCount)
+      else registerPostgresql(body, options, databaseCount, name)
     })
   }
 }
@@ -504,6 +702,7 @@ interface PostgresqlHarnessDatabase {
 async function createPostgresqlHarnessDatabase(
   urlEnv: (typeof POSTGRESQL_URL_ENVS)[number],
   env?: Readonly<Record<string, string | undefined>>,
+  phase?: ProviderHarnessLifecyclePhase,
 ): Promise<PostgresqlHarnessDatabase> {
   const sinks = new Set<RecordedStatement[]>()
   const sourceUrl = (env ?? process.env)[urlEnv]
@@ -536,9 +735,15 @@ async function createPostgresqlHarnessDatabase(
       parameters === undefined ? await pool.unsafe(text) : await pool.unsafe(text, [...parameters])
     // 与 rfc357 / rfc359 的真库用例同一套姿势：清干净、按基线迁移、自己登记一个活跃生成代
     // （客户端的业务写围栏按 runtime.generationId 核对 database_generations）。
-    await query('drop schema if exists agent_workflow cascade')
-    await query('drop schema if exists agent_workflow_meta cascade')
-    await migratePostgresqlSchema({ runtime })
+    await runProviderHarnessLifecycleStep(phase, 'schema.drop-application', () =>
+      query('drop schema if exists agent_workflow cascade'),
+    )
+    await runProviderHarnessLifecycleStep(phase, 'schema.drop-metadata', () =>
+      query('drop schema if exists agent_workflow_meta cascade'),
+    )
+    await runProviderHarnessLifecycleStep(phase, 'schema.migrate', () =>
+      migratePostgresqlSchema({ runtime }),
+    )
     await query(
       'insert into "agent_workflow_meta"."logical_copy_operations" ' +
         '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
@@ -557,8 +762,12 @@ async function createPostgresqlHarnessDatabase(
     // PostgreSQL 的迁移器只投影 DDL；迁移脚本里 INSERT 的种子行（committed_event_family_cutovers、
     // auth_login_policy、框架内置资源……）在生产上是随 RFC-349 逻辑复制从 SQLite 带过来的。
     // 这里做同一件事：把一个刚迁移完的 SQLite 内存库整表复制进来，两个引擎的「起点」才是同一个。
-    await seedFromSqliteSnapshot(client)
-    const snapshot = await snapshotSchema(query)
+    await runProviderHarnessLifecycleStep(phase, 'fixture.seed', () =>
+      seedFromSqliteSnapshot(client),
+    )
+    const snapshot = await runProviderHarnessLifecycleStep(phase, 'fixture.snapshot', () =>
+      snapshotSchema(query),
+    )
     return {
       runtime,
       applicationBinding: Object.freeze({
@@ -576,7 +785,7 @@ async function createPostgresqlHarnessDatabase(
     }
   } catch (error) {
     try {
-      await runtime.close()
+      await runProviderHarnessLifecycleStep(phase, 'setup.failure-close', () => runtime.close())
     } catch (closeError) {
       throw new AggregateError([error, closeError], 'PostgreSQL harness setup and close failed')
     }
@@ -840,6 +1049,7 @@ function registerPostgresql(
   body: (harness: ProviderHarness) => void,
   options: DescribeEachProviderOptions,
   databaseCount: number,
+  suite: string,
 ): void {
   const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
   if (urlEnv === undefined) {
@@ -852,6 +1062,13 @@ function registerPostgresql(
     })
     return
   }
+  const lifecycle =
+    options.lifecycleDiagnostics === undefined
+      ? undefined
+      : createProviderHarnessLifecycleObserver({
+          sourceFile: options.lifecycleDiagnostics.sourceFile,
+          suite,
+        })
   const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
   const databases: PostgresqlHarnessDatabase[] = []
   const createdDatabaseNames: string[] = []
@@ -866,72 +1083,81 @@ function registerPostgresql(
       databases[0]?.dropObservation,
     ))
 
-  const initializeDatabases = async (): Promise<void> => {
-    providerBefore = currentDatabaseSchemaProvider()
-    try {
-      const sourceUrl = process.env[urlEnv]
-      const primary = await createPostgresqlHarnessDatabase(urlEnv)
-      databases.push(primary)
-      for (let index = 1; index < databaseCount; index += 1) {
-        const name = `aw_each_provider_${randomUUID().replaceAll('-', '')}`
-        await primary.raw(`create database "${name}"`)
-        createdDatabaseNames.push(name)
-        const url = new URL(sourceUrl!)
-        url.pathname = `/${name}`
-        databases.push(await createPostgresqlHarnessDatabase(urlEnv, { [urlEnv]: url.toString() }))
-      }
-    } catch (error) {
+  const initializeDatabases = (): Promise<void> =>
+    runProviderHarnessLifecycle(lifecycle, 'beforeAll.setup', async (phase): Promise<void> => {
+      providerBefore = currentDatabaseSchemaProvider()
       try {
-        await closeAll()
-      } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], 'PostgreSQL harness setup cleanup failed')
-      } finally {
-        if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
+        const sourceUrl = process.env[urlEnv]
+        const primary = await runProviderHarnessLifecycleStep(phase, 'factory.prepare', () =>
+          createPostgresqlHarnessDatabase(urlEnv, undefined, phase),
+        )
+        databases.push(primary)
+        for (let index = 1; index < databaseCount; index += 1) {
+          const name = `aw_each_provider_${randomUUID().replaceAll('-', '')}`
+          await primary.raw(`create database "${name}"`)
+          createdDatabaseNames.push(name)
+          const url = new URL(sourceUrl!)
+          url.pathname = `/${name}`
+          databases.push(
+            await createPostgresqlHarnessDatabase(urlEnv, { [urlEnv]: url.toString() }),
+          )
+        }
+      } catch (error) {
+        try {
+          await runProviderHarnessLifecycleStep(phase, 'setup.cleanup', () => closeAll())
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], 'PostgreSQL harness setup cleanup failed')
+        } finally {
+          if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
+        }
+        throw error
       }
-      throw error
-    }
-  }
+    })
   const setupDatabases = () => (initialization ??= initializeDatabases())
   if (databaseCount === 1) beforeAll(setupDatabases)
   else beforeAll(setupDatabases, databaseCount * POSTGRESQL_DATABASE_SETUP_TIMEOUT_MS)
 
-  beforeEach(async () => {
-    if (databases.length !== databaseCount) {
-      throw new Error('PostgreSQL harness 未完成装配（beforeAll 失败）')
-    }
-    restoreProvider = selectDatabaseSchemaProvider('postgresql')
-    try {
-      for (const [index, database] of databases.entries()) {
-        const { client, raw, snapshot, sinks } = database
-        await resetToSnapshot(raw, snapshot, options)
-        if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
-        const state = states[index]!
-        const query = raw
-        state.db = client
-        state.applicationBinding = database.applicationBinding
-        state.session = databaseSessionFor(client)
-        state.record = () => {
-          const statements: RecordedStatement[] = []
-          sinks.add(statements)
-          return {
-            statements,
-            selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
-            stop: () => sinks.delete(statements),
+  beforeEach(() =>
+    runProviderHarnessLifecycle(lifecycle, 'beforeEach.reset', async (phase) => {
+      if (databases.length !== databaseCount) {
+        throw new Error('PostgreSQL harness 未完成装配（beforeAll 失败）')
+      }
+      restoreProvider = selectDatabaseSchemaProvider('postgresql')
+      try {
+        for (const [index, database] of databases.entries()) {
+          const { client, raw, snapshot, sinks } = database
+          await runProviderHarnessLifecycleStep(phase, 'fixture.reset', () =>
+            resetToSnapshot(raw, snapshot, options),
+          )
+          if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
+          const state = states[index]!
+          const query = raw
+          state.db = client
+          state.applicationBinding = database.applicationBinding
+          state.session = databaseSessionFor(client)
+          state.record = () => {
+            const statements: RecordedStatement[] = []
+            sinks.add(statements)
+            return {
+              statements,
+              selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
+              stop: () => sinks.delete(statements),
+            }
+          }
+          state.explain = async (statement) => await postgresqlExplain(query, statement)
+          state.fixtureDdl = async (statement) => {
+            await query(statement)
           }
         }
-        state.explain = async (statement) => await postgresqlExplain(query, statement)
-        state.fixtureDdl = async (statement) => {
-          await query(statement)
-        }
+      } catch (error) {
+        restoreProvider?.()
+        restoreProvider = undefined
+        databases.forEach(({ sinks }) => sinks.clear())
+        states.forEach(clearState)
+        throw error
       }
-    } catch (error) {
-      restoreProvider?.()
-      restoreProvider = undefined
-      databases.forEach(({ sinks }) => sinks.clear())
-      states.forEach(clearState)
-      throw error
-    }
-  })
+    }),
+  )
 
   afterEach(() => {
     restoreProvider?.()
@@ -940,15 +1166,18 @@ function registerPostgresql(
     states.forEach(clearState)
   })
 
-  const cleanupDatabases = async (): Promise<void> => {
-    try {
-      // Hook 超时不取消初始化 Promise；等它收束，避免关闭主库后仍产生未登记的子 runtime。
-      await initialization?.catch(() => undefined)
-      await closeAll()
-    } finally {
-      if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
-    }
-  }
+  const cleanupDatabases = (): Promise<void> =>
+    runProviderHarnessLifecycle(lifecycle, 'afterAll.cleanup', async (phase): Promise<void> => {
+      try {
+        // Hook 超时不取消初始化 Promise；等它收束，避免关闭主库后仍产生未登记的子 runtime。
+        await runProviderHarnessLifecycleStep(phase, 'cleanup.wait-initialization', () =>
+          initialization?.catch(() => undefined),
+        )
+        await runProviderHarnessLifecycleStep(phase, 'cleanup.close', () => closeAll())
+      } finally {
+        if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
+      }
+    })
   if (databaseCount === 1) afterAll(cleanupDatabases)
   else afterAll(cleanupDatabases, databaseCount * POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS)
 

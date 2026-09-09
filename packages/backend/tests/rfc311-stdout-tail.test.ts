@@ -18,13 +18,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
+import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import {
   getNodeRunStdout,
   STDOUT_OMITTED_MARKER,
   STDOUT_TAIL_BUDGET_BYTES,
 } from '../src/services/task'
+
+const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 async function seed(db: ProviderNeutralDatabase, payloads: string[]): Promise<void> {
   await db.insert(users).values({

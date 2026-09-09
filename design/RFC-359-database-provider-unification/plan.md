@@ -28,13 +28,13 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                    | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                 | ✅     |
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                          | ✅     |
-| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1952文件；606构库文件/1228调用，576无harness/453有harness。候选242完整/16混合；W37两OS各1952文件恰一次、38文件655重点执行和另2 sidecar全过；W38主集40文件/742执行另2 sidecar待新SHA   | 进行中 |
+| AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1954文件；606构库文件/1228调用，576无harness/454有harness；旧迁移242完整/16混合。W38两OS各1952文件恰一次、742重点执行及另2 sidecar全过；W39新增五个默认双库行为例待新SHA              | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核           | ✅     |
 | AC-8  | 用户可见行为逐字不变                              | 各波已有对拍，完整覆盖仍受 AC-6 缺口限制；明确修复项继续逐项记录                                                                                                                          | 进行中 |
-| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W37 exact7fb629ebd Main34328144901终态37success/3failure，13后端12过1红、普通lint job通过；重点655与2 sidecar全过，另一分片8条旧失败记录的生命周期链待查。完整Main未绿；W38新SHA待托管    | 待办   |
+| AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W38 exact66a877da6 Main34334471348终态38 success/2 failure，13后端全部成功、普通lint通过；742重点执行与另2 sidecar全过，独立P0两库134 pass/44指定历史失败。完整Main未绿；W39新SHA待托管   | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                          | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | exact `6f3be930c` 原full360样本：PG三任务页83.832988/56.640931/50.267344ms均快于同轮SQLite并满足原绝对预算；其余六端点PG仍较慢，SQLite任务首页199.069889ms未过150ms。原样本/规模/判据保持 | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12 原始占位命中 32 → 9，未构造根账本 0 项；协作四能力与完整动态工作流合同已收紧，九个诊断为四个作用域查询、四个协作检查和一个保留的兼容诊断；provider 命名文件 88 → 60，残余继续核验     | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | W12原始占位32→9，未构造根账本0；九个诊断为四个作用域查询、四个协作检查和一个兼容诊断。provider命名文件88→59，W39只退役无DB依赖artifact文件的历史前缀；其余真实机制及装配继续核验          | 进行中 |
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
@@ -1603,6 +1603,55 @@ PG overview max<10ms。九项稳定wire相同，末次完整body摘要八项相�
   canonical13/55通过。定向源lint/format及独立代码、metadata、文档复核完成；两生成合同和RFC294
   status的原/候选直接Prettier均红，保留原生成器字节及精确投影，格式限制单列。未跑本地PG/服务/E2E/性能/完整门禁，原W20限制保留；本批新SHA真PG、
   完整Main及原full待托管，AC1/6/8/9/11/12和RFC保持开放。
+
+### W12 第三十九批：fallback执行门控、初始化诊断与中立artifact命名
+
+基于已发布 `66a877da6260decbb84a6a9ae268c578c777629f`，最终14个核心路径冻结（含一个移名旧路径删除）。
+
+- 任务分页只增加物化fallback_gate和对应CROSS JOIN，原完整性条件、LIMIT、CAST及23处插值/绑定保持。
+  首个LIMIT+EXISTS候选因实际VM仍遍历主索引而拒绝，未写生产；本批采用的是后续物化gate候选。
+  原24-task探针五组正常SQL/完整返回和VM记录有效，但后续poison替换脚本断言失败，整次exit1原样保留，
+  没有执行poison SQL，也不将该探针标成整体绿色。空gate的Rewind跳过主Seek/Next与内部调用；
+  OpenRead/SorterOpen仍在gate之前，不能宣称没有任何fallback初始化工作或直接推导P95改善。
+  新测试五个默认双库行为例覆盖首页、近页、深页、稀疏和空结果，另一个纯例锁住完整源码逆换；
+  本地SQLite合计6 pass/218 expect，10主语句经仅两处逆换后SQL相同，绑定及26返回行保持，10个完整物理快照无写入。
+  与独立探针跨运行比较时users设置的10个槽位差量以原值/位置/hash保留，不称跨运行所有物理行相同。
+  原W27只扩展逆换器，六个原注册及33完整matcher（30 direct、1 not、2 rejects）保持，两原纯例2/22通过。
+  指定VM控制直接对已记录程序使用实际checker：五旧VM在缺失物化gate处红、五候选绿；
+  五个已记录候选VM的Rewind跳址数据变异在边界断言红。这些是纯VM数据控制，不是五次SQL变异执行。
+- provider helper新增可选诊断绑定器，四个原测试文件保留五个suite调用、16原声明/51 matcher、完整callback与预算。
+  默认路径不创建observer/timer/附加Promise观察；选定路径原native Promise、值/错误身份和同步抛错保持。
+  原memoization和cleanup等待初始化再close的顺序保持；最多64条阶段记录、4750ms单次unref提示，快路径无输出。
+  实际合同是group/root operation ID与raw sourceFile；不提供子阶段父子ID、锁持有者或历史因果证明。
+  原生命周期纯控制2/14，最终纯控制8/149；派生Promise、漏clear、漏unref、漏初始化await、旁路异常外逃
+  五个指定负控均被拒。首次五次loader错误完整保留但不计有效负控；未在本地执行四个旧业务文件或真PG。
+- 无DB/client/SQL/PG协议依赖的resourcePackageArtifacts整文件17779字节移名，12原函数/4导出保持。
+  一个生产与一个测试消费者只换import literal，完整逆换和Bun/TS输出保持；T17仅删除对应一条，60→59。
+  原六候选计划因额外要求已有双库消费者而全部拒绝，原件保留；按proposal既有中立命名合同补页纠正该一项，
+  其余五项真实机制/类型差异未因此获准移名，也不将本项当作AC-1/12整体关闭。
+- 首次14 core完整tsc仅新测试readonly tuple断言类型不匹配；只补readonly类型参数，完整Bun/TS运行JS相同。
+  首次失败收据保留，修后完整tsc通过。6/218真实SQLite证据绑定修前55409d源码，经完整运行JS桥接至最终e39af032；
+  不将旧运行重新标记成修后源码实跑。各切片严格lint含实际max-warnings0、format及原T17四例通过。
+  原metadata writer/governance刷新13文件，211 pass/433 expect功能metadata和13 pass/55 expect canonical通过。
+  2578个当前生产输入中2575原blob保持，三个差量为artifact新路径、consumer import及任务query；旧artifact路径另删除。
+  sourceDigest为 `sha256:19764fe60645f2898b2e837348592a2128dd35e644dd79582a31d810453318e2`，
+  六canonical数仍1740/272/983/5328/4794/25063，全部无关规则按opaque原身份保持。
+  census为1954测试文件、606构库文件/1228调用、576无harness/454有harness；旧迁移仍242完整/16混合。
+  T19f整文件689条和native兼容4文件/7调用保持，新增五例不是五个旧文件迁移。
+
+W38 exact `66a877da6` Main `34334471348` 终态40 jobs为38 success/2 failure，13后端与普通lint全部成功。
+69份官方blob、12发布路径、294原callback和两OS各1952文件恰一次已核；742重点执行全过：
+Ubuntu446（146 SQLite、146 PG、154 single），macOS296（146 SQLite、150 single）。
+另2个原RFC234 sidecar为25.55/57.49ms，各10 phase加1 settled，无near timer；不混入742分母。
+独立P0 artifact 35成员/34阶段原日志有效，两库134 pass/44指定历史失败；99前后源码映射保持，
+其中只有2项独立对上该69份官方blob，不能宣称99项都经过这一官方来源核验。
+原watch已自然exit1且回收；这些新通过记录不证明W37八条历史失败同因或根因已修复。完整Main仍未绿。
+
+本批实际PG行为、PG查询计划及原规模full HTTP P95留待新发布SHA；原exact6f3的360样本、原规模/20轮/
+绝对预算与两库比较判据保持，六端点PG较慢及SQLite任务首页199.069889ms超过150ms的原结论未关闭。
+证据入口为 `/private/tmp/rfc359-w39-final-manifest.json`、三个切片最终清单及独立复核、W38官方终态复核。
+本地未运行实际PG、App/HTTP/WS监听、TaskEngine、daemon、E2E、完整门禁或规模性能库。
+RFC359及AC-1/6/8/9/11/12继续开放，原W20限制和所有原验收条款保持。
 
 ### W12 第三十八批：原 Agents CRUD 与 Webhook GC 双库覆盖
 

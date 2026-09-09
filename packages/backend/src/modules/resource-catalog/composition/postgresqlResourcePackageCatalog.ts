@@ -12,7 +12,7 @@ import {
   createPostgresqlResourcePackagePluginArtifactOwner,
   createPostgresqlResourcePackageSkillArtifactOwner,
   type PostgresqlResourcePackagePluginInstaller,
-} from '../infrastructure/postgresqlResourcePackageArtifacts'
+} from '../infrastructure/resourcePackageArtifacts'
 import { composeResourcePackageProvider } from './resourcePackageProvider'
 import {
   composeResourcePackageOperations,

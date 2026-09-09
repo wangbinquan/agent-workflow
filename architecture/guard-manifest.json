@@ -1825,7 +1825,7 @@
       "assertsAbsence": false,
       "negativeFixture": false,
       "classified": true,
-      "lines": 300
+      "lines": 299
     },
     {
       "id": "rfc359-w5-t18-bare-transaction",
@@ -2405,14 +2405,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:319afb5cfe11ce5f6273bf8ff807e81080070768d6d994771fdf435e58144309",
+    "sourceDigest": "sha256:19764fe60645f2898b2e837348592a2128dd35e644dd79582a31d810453318e2",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "7fb629ebdda5a56f3b89b25b26f1466e6d29331b",
-    "contentDigest": "sha256:617439e1d62cd1898eb5f072ccf842694c66cd20dbbc634d5e0d0d764259d209",
+    "currentSnapshotSha": "66a877da6260decbb84a6a9ae268c578c777629f",
+    "contentDigest": "sha256:6ea097b6a7c8e2be0a6c52cbe48ad7cd3833e27ca5c0bdcbee582d7e881d1140",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
