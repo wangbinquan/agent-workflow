@@ -23,7 +23,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { IntentSkillPayload } from '@agent-workflow/shared'
-import { stringify as stringifyYaml } from 'yaml'
+import { renderResourcePackageSkillMarkdown as skillMarkdown } from '../resourcePackageSkillDocument'
 
 import type {
   PostgresqlIntentPluginArtifactLifecycle,
@@ -62,17 +62,6 @@ function copyRegularTree(source: string, target: string): void {
     if (!stat.isFile()) throw new Error('intent-skill-source-tree-entry-invalid')
     writeFileSync(targetPath, readFileSync(sourcePath), { mode: 0o600 })
   }
-}
-
-function skillMarkdown(payload: IntentSkillPayload): string {
-  return `---\n${stringifyYaml(
-    {
-      name: payload.name,
-      description: payload.description,
-      ...(payload.frontmatterExtra ?? {}),
-    },
-    { lineWidth: 0 },
-  )}---\n\n${payload.bodyMd}\n`
 }
 
 function writeSkillTree(root: string, payload: IntentSkillPayload): void {

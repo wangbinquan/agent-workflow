@@ -2914,7 +2914,6 @@ interface NodeRunInsertSite {
 
 const CANONICAL_NODE_RUN_INSERT_FILES = new Set([
   'packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
 ])
 
 function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertSite[] {

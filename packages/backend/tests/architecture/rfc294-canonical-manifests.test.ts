@@ -423,10 +423,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
         file: 'packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
         status: 'canonical-writer',
       },
-      {
-        file: 'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
-        status: 'canonical-writer',
-      },
     ])
     expect(
       (generated.transactionExternalEffects.entries as Array<Record<string, unknown>>).length,

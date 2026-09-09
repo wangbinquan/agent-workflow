@@ -17,7 +17,7 @@
 //
 // # 判据与 W7 的 `insert(tasks)` 守卫同形，但多做一步「解一层局部常量」
 //
-// `insert(tasks)` 的四个站点都直接写对象字面量，取顶层键即可。`insert(nodeRuns)` 的两个站点
+// `insert(tasks)` 的四个站点都直接写对象字面量，取顶层键即可。`insert(nodeRuns)` 的唯一站点
 // 写的是 `.values(values)`，其中 `const values = { ...record, scopePath, lineageSlotPathJson }`。
 // 所以这里在同一个源文件里解析一层 `const` 声明再取键——**只解一层**：解得更深就等于写一个
 // 小型求值器，而那会让守卫自己变成需要被守卫的东西。解不开时按「零个键」记账，账本上会显示
@@ -37,15 +37,14 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 const REQUIRED_COLUMNS = ['continuationSlotKey', 'lineageSlotPathJson'] as const
 
 /**
- * 实测存量：两个站点（异步中立版 + 尚未退役的 SQLite 同步孪生），两列齐全。
+ * 实测存量：一个共享站点（同步与异步入口共用），两列齐全。
  * **这份账本的正确状态是「每一行都两列齐全」**——出现 `-` 就是那条静默分叉，
  * 去把那一列补上，不要把 `-` 登记进来了事。
  *
  * 键是 `file:line`，与 W7 的账本同形（那条账本里也记着「行号会因上方编辑而漂」的摩擦）。
  */
 const NODE_RUN_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:108 continuationSlotKey+ lineageSlotPathJson+',
-  'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts:102 continuationSlotKey+ lineageSlotPathJson+',
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:126 continuationSlotKey+ lineageSlotPathJson+',
 ]
 
 function sourceFiles(dir: string): string[] {

@@ -6,7 +6,7 @@
     "moduleFiles": 1196,
     "productionFiles": 2579,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25066
+    "symbolsIncludingFileRoots": 25067
   },
   "entries": [
     {
@@ -87776,18 +87776,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#skillMarkdown",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "skillMarkdown",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyArtifactOwners.ts#SkillStageState",
       "removeAfterWave": null,
       "status": "current-module",
@@ -129329,6 +129317,42 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "nodeRunMintProgram",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#PriorRows",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PriorRows",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#ReadPriorRows",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReadPriorRows",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#$file",
@@ -132647,18 +132671,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#ABANDONABLE_MERGE_STATES",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "ABANDONABLE_MERGE_STATES",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -301494,5 +301506,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7ae58112a1a161c8873f9851b046ba877170fd6a8d7c5ad635179482ec254d4d"
+  "sourceDigest": "sha256:74a8470a4be06876caf3aa7ed75710c9f45655d33ca0d29a2200dd4eb34f88e6"
 }

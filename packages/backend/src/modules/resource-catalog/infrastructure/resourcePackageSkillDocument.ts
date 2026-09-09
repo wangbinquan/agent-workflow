@@ -1,9 +1,10 @@
 import type { BundleSkillPayload } from '@agent-workflow/shared'
 import { stringify as stringifyYaml } from 'yaml'
 
-/** The original resource-package SKILL.md bytes, shared by both artifact writers. */
+/** The original SKILL.md bytes, shared by resource-package and intent artifact writers. */
 export function renderResourcePackageSkillMarkdown(
-  payload: Pick<BundleSkillPayload, 'name' | 'description' | 'frontmatterExtra' | 'bodyMd'>,
+  payload: Pick<BundleSkillPayload, 'name' | 'description' | 'bodyMd'> &
+    Partial<Pick<BundleSkillPayload, 'frontmatterExtra'>>,
 ): string {
   return `---\n${stringifyYaml(
     { name: payload.name, description: payload.description, ...payload.frontmatterExtra },

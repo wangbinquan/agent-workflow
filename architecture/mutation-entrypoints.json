@@ -1,7 +1,7 @@
 {
   "denominator": {
     "entries": 1740,
-    "nodeRunInsertSites": 2,
+    "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
   "entries": [
@@ -41548,26 +41548,16 @@
     {
       "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
       "guard": "rfc098-node-run-mint-grep-guard",
-      "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#108",
-      "line": 108,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
+      "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#126",
+      "line": 126,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
       "removeAfterWave": null,
       "status": "canonical-writer",
-      "symbol": "createNodeRunMintParticipantInTx"
-    },
-    {
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-      "guard": "rfc098-node-run-mint-grep-guard",
-      "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#102",
-      "line": 102,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
-      "removeAfterWave": null,
-      "status": "canonical-writer",
-      "symbol": "createSqliteNodeRunMintParticipantInTx"
+      "symbol": "nodeRunMintProgram"
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7ae58112a1a161c8873f9851b046ba877170fd6a8d7c5ad635179482ec254d4d",
+  "sourceDigest": "sha256:74a8470a4be06876caf3aa7ed75710c9f45655d33ca0d29a2200dd4eb34f88e6",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -41677,7 +41667,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 187,
+      "durableWriterSites": 185,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -42455,32 +42445,32 @@
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
-        "consumer": "mint",
+        "consumer": "nodeRunMintProgram",
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#108:nodeRuns",
-        "line": 108,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#113:nodeRuns",
+        "line": 113,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createNodeRunMintParticipantInTx"
+        "symbol": "nodeRunMintProgram"
       },
       {
         "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
-        "consumer": "mint",
+        "consumer": "nodeRunMintProgram",
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#96:nodeRuns",
-        "line": 96,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#126:nodeRuns",
+        "line": 126,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createNodeRunMintParticipantInTx"
+        "symbol": "nodeRunMintProgram"
       },
       {
         "allowedTables": [
@@ -43025,38 +43015,6 @@
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "writeFence"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "mint",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#102:nodeRuns",
-        "line": 102,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createSqliteNodeRunMintParticipantInTx"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "mint",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#91:nodeRuns",
-        "line": 91,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createSqliteNodeRunMintParticipantInTx"
       },
       {
         "allowedTables": [

@@ -18,7 +18,7 @@ import {
   type UpdateWorkgroup,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { stringify as stringifyYaml } from 'yaml'
+import { renderResourcePackageSkillMarkdown } from '../resourcePackageSkillDocument'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
@@ -626,14 +626,7 @@ function skillPayload(plan: PlanOf<'skill'>): {
 }
 
 function writeSkillTree(root: string, payload: ReturnType<typeof skillPayload>): void {
-  const skillMd = `---\n${stringifyYaml(
-    {
-      name: payload.name,
-      description: payload.description,
-      ...payload.frontmatterExtra,
-    },
-    { lineWidth: 0 },
-  )}---\n\n${payload.bodyMd}\n`
+  const skillMd = renderResourcePackageSkillMarkdown(payload)
   writeFileSync(join(root, 'SKILL.md'), skillMd)
   for (const file of payload.files) {
     const absolute = join(root, file.path)

@@ -20,6 +20,15 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W47 的两个 node-run mint 工厂驱动同一个 `nodeRunMintProgram`，继续由调用方持有原事务。
+  同步工厂使用原 `query.all()` 与同步 runner，立即返回 id 或抛出原错误；异步工厂保留原
+  query thenable，并等待 container、task、prior、abandon、insert 各终端完成。
+  完整查询、条件、行构造与谱系 helper 不改，直接 INSERT 只剩共享程序中的一处。
+  原始同步/异步接口及八个直接消费者保持；共享步骤控制不替代真实两库事务验证。
+  Intent 的 legacy 与 PG artifact writer 复用现有 `renderResourcePackageSkillMarkdown`；
+  只将输入的 frontmatterExtra 标为可选，原共享运行体、字段访问顺序和返回字符串保持。
+  原文件写入/路径/模式及事务和清理逻辑不动，已有两个资源包消费者继续使用同一函数。
+
 - W46 三个旧行为套件复用完整providerHttpApplication，按原App选项构造，等待ready后交给旧回调。
   内层fixture先释放应用，再执行对应原环境/目录清理；外层provider harness的释放在其后。
   MCP六例不改回调；Skills的HTTP创建helper保持完整函数体，仅绑定到当例实际app。

@@ -1,12 +1,12 @@
 // RFC-098 WP-10 T-a (audit S-16) — source-grep guard against direct
-// node_runs INSERTS outside TaskExecution's provider-native mint adapters.
+// node_runs INSERTS outside TaskExecution's shared mint program.
 //
 // Before WP-10, 13 call sites across 6 files each hand-rolled their own
 // `db.insert(nodeRuns).values({...})` with hand-copied inheritance subsets —
 // the substrate the proxy-signal gating bugs (audit S-25) grew on. All
 // Minting now resolves the provider-neutral record once and persists it through
-// the SQLite or PostgreSQL TaskExecution adapter. Each adapter owns exactly one
-// provider-native INSERT; every other source file must contain none.
+// shared TaskExecution mint program. The sync and async entries drive that one
+// INSERT; every other source file must contain none.
 //
 // Mechanism mirrors lifecycle-grep-guard.test.ts (RFC-053): production
 // source files under packages/backend/src must contain ZERO direct inserts
@@ -19,10 +19,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
-const MINT_ADAPTERS = [
-  'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
-] as const
+const MINT_ADAPTERS = ['modules/task-execution/infrastructure/nodeRunMintParticipant.ts'] as const
 
 const PATTERN_INSERT_NODE_RUNS = /\.insert\s*\(\s*nodeRuns\s*\)/
 const ALLOW_MARKER = /rfc098-allow-direct-node-run-insert/

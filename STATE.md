@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第四十七批（2026-09-10）**：node-run 两个原入口共用一个 mint 生成器，直接 INSERT 2→1；同步仍立即返回并用原 all，异步仍等待原 thenable 与每个写入。五个完整查询 AST、插入值和八个消费者保持，原后25份受控记录/431事件相同；这是纯端口验证，真实数据库行为待新SHA托管。
+> Intent 两处 SKILL.md 渲染复用现有共享函数，原共享运行体及文件写入逻辑保持；旧四例和新增三例7/96通过。Mint新三例3/110及三个指定负控通过；初版等待检查过早和类型错误均保留原失败，修正后通过，未把辅助脚本失败算产品回归。
+> W46 exact340aee207 Main34402411359终态38 success/2 failure，13后端全过；63选定文件1126/1126实际通过，含本批前36个原功能例新增108次双库执行。另2 sidecar与原18 hook所属例均过，两OS各1960文件恰一次；完整Main未绿。
+> 最终11core完整backend tsc通过；首轮220过/1红的metadata唯一遗漏为W6 writer基线2→1，修正后两相关文件43/76通过，原220个成功结果保持。选定canonical13/55、严格lint/format通过。三个实际导入/owner增长有本批一次性说明，两个writer基线各2→1；200 guard中199整行保持、1行仅源码行数刷新。
+> 新增两纯测试后1962文件，605构库文件/1224调用、无harness567/有harness463保持，T19f688和provider命名59保持。未运行本地实际DB/App/HTTP/进程夹具或全门禁；六项AC及原full性能缺口继续开放。
+
 > **RFC-359 W12 第四十六批（2026-09-10）**：MCP、Skills、Plugins三个旧测试文件分别将6、14、16个原功能例接入默认双库，原预算保持；另25个原例保留native。原36例两OS的72次旧W44执行全过，候选真实行为待新SHA托管。
 > MCP保21原call/40 matcher；Skills保19原call/65 callback matcher，原HTTP helper转为绑定当前夹具的同一函数；Plugins保21声明/81 callback matcher，只有第二次seed多一个await。种子的原id/时间/INSERT构造共用，native仍同步返回id，provider等待原write后返回，不改原数据或生产owner。
 > W45 exact29b6a3134 Main34398511514终态38 success/2 failure，13后端全过；原8装配用例两OS16次全过，W44四次旧锁失败对应4/4恢复。选定主集1018/1018实际通过、另2 sidecar及原18 hook所属例均过，两OS各1960文件恰一次；完整Main未绿。原W44结果不回写为绿，新SHA仍须独立验证。
