@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十四批（2026-09-09）**：三个旧套件保留17原声明/55完整callback matcher，9原DB例/30 matcher默认双库，8原single/25 matcher继续单跑；均为部分迁移，候选累计242完整/10混合。原后9例/30 expect通过；生产源码保持。
+> Revision/pending原后105快照、101重复行/2406字段/148原JSON保持；209 SQL中203全同，6处显式补原物理谱系并保留changes2→1差量，17完整返回与3void保持、1丢弃write返回差量单列。8次实际COMMIT后通知保持。WS首producer原后26 SQL、完整行、4返回及3次实际commit后广播保持；其他两native原样。
+> W33 exact13b0e3b3f Main34311234467终态37success/3failure、13后端12过1红；两OS各1950文件恰一次。31文件是本批计划；上批28选定文件467执行466过，唯一PG fan-out返回failed，原详情未打印。新增16 PG及六MCP HTTP均过；RFC223源码检查两OS过，RFC314本次观察/清理过不等于历史机制修复。
+> RFC185本批仅给原kind断言增加实际完整结果诊断，预期、脚本、断言和预算保持；不是根因修复。仓库facet聚合实验虽小库2/30对拍过，但破坏原Count快速路径与选择性索引计划，候选已拒绝，生产未改，无性能改善结论。
+> 当前1950文件、605构库文件/1233调用、582无harness/445有harness；T19f三行退9调用、688条保持，原生兼容4文件/7调用。五core一次最终tsc、211/433功能metadata、13/55canonical和严格lint/format通过；2576生产输入、8份canonical与parent status字节保持，仅四份provenance推进。新SHA真实PG、诊断结果与完整CI待验，六项AC及原full性能判据继续开放。
+
 > **RFC-359 W12 第三十三批（2026-09-09）**：三个旧套件保留25原声明，其中16个DB例/90个完整callback matcher接默认双库，9原single继续单跑；本批均为部分迁移，候选累计242完整/7混合。workflow与intent原后各5例通过，MCP六HTTP经真实完整应用/harness等待托管；生产源码保持。
 > Workflow原后59 SQL、完整行/JSON、14返回及8次实际commit后通知保持。Intent在同9个原nonce输入下，253 callback记录与53快照/210重复行/3232字段/312 JSON、24返回保持；原5个setup binding和5个readback差量完整保留，不称整份capture相同。MCP补齐必需appHome与自有目录清理，原四应用选项不变。
 > W32 exact0449e91ee Main34307322957终态36success/4failure、13后端11过2红；两OS各1950文件恰一次。25选定文件401执行399过，两红均RFC223后继旧no-await机械断言；原两mission PG和旧十HTTP PG均过。RFC314本次11观察与清理通过，不据此称历史checkpoint机制已修复。

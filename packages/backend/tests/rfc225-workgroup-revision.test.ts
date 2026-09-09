@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-225 T1-T3 — workgroup saves are exact version-fenced document writes.
 
 import {
@@ -38,7 +40,10 @@ function actorPrincipal(id: string): WorkgroupWritePrincipal {
   }
 }
 
-async function createFixture(db: DbClient, name = 'revision-team'): Promise<WorkgroupDetail> {
+async function createFixture(
+  db: ProviderNeutralDatabase,
+  name = 'revision-team',
+): Promise<WorkgroupDetail> {
   const agent = await createAgent(db, {
     name: 'revision-agent',
     description: '',
@@ -96,7 +101,7 @@ async function createEmptyFixture(
 }
 
 function save(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   current: WorkgroupDetail,
   snapshot: WorkgroupDraftSnapshot,
   opts: { expectedVersion?: number; mutationId?: string } = {},
@@ -118,80 +123,82 @@ function codeOf(reason: unknown): string | undefined {
 }
 
 describe('RFC-225 workgroup revision fencing', () => {
-  test('create returns v1 detail with a canonical hash', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const group = await createFixture(db)
-    expect(group.version).toBe(1)
-    expect(group.snapshotHash).toBe(workgroupSnapshotHashOf(workgroupDraftSnapshotOf(group)))
-    expect(group.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
-  })
-
-  test('config-only save preserves member ids; exact replay is a physical no-op', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const group = await createFixture(db)
-    const memberIds = group.members.map((member) => member.id)
-    const mutationId = ulid()
-    const snapshot = { ...workgroupDraftSnapshotOf(group), instructions: 'changed' }
-
-    const committed = await save(db, group, snapshot, { mutationId })
-    expect(committed.outcome).toBe('committed')
-    expect(committed.revision.version).toBe(2)
-    expect(committed.workgroup.members.map((member) => member.id)).toEqual(memberIds)
-
-    const replay = await save(db, group, snapshot, {
-      expectedVersion: 1,
-      mutationId,
+  describeEachProvider('workgroup revision persistence', (harness) => {
+    test('create returns v1 detail with a canonical hash', async () => {
+      const db = harness.db
+      const group = await createFixture(db)
+      expect(group.version).toBe(1)
+      expect(group.snapshotHash).toBe(workgroupSnapshotHashOf(workgroupDraftSnapshotOf(group)))
+      expect(group.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
     })
-    expect(replay.outcome).toBe('already-current')
-    expect(replay.revision).toEqual(committed.revision)
-    expect(replay.workgroup.members.map((member) => member.id)).toEqual(memberIds)
-  })
 
-  test('roster change replaces member rows atomically', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const group = await createFixture(db)
-    const oldId = group.members[0]!.id
-    const receipt = await save(db, group, {
-      ...workgroupDraftSnapshotOf(group),
-      leaderDisplayName: 'lead',
-      members: [
-        {
-          memberType: 'agent',
-          agentId: group.members[0]!.agentId!,
-          displayName: 'lead',
-          roleDesc: 'updated role',
-        },
-      ],
+    test('config-only save preserves member ids; exact replay is a physical no-op', async () => {
+      const db = harness.db
+      const group = await createFixture(db)
+      const memberIds = group.members.map((member) => member.id)
+      const mutationId = ulid()
+      const snapshot = { ...workgroupDraftSnapshotOf(group), instructions: 'changed' }
+
+      const committed = await save(db, group, snapshot, { mutationId })
+      expect(committed.outcome).toBe('committed')
+      expect(committed.revision.version).toBe(2)
+      expect(committed.workgroup.members.map((member) => member.id)).toEqual(memberIds)
+
+      const replay = await save(db, group, snapshot, {
+        expectedVersion: 1,
+        mutationId,
+      })
+      expect(replay.outcome).toBe('already-current')
+      expect(replay.revision).toEqual(committed.revision)
+      expect(replay.workgroup.members.map((member) => member.id)).toEqual(memberIds)
     })
-    expect(receipt.workgroup.members[0]!.id).not.toBe(oldId)
-    expect(receipt.workgroup.members[0]!.roleDesc).toBe('updated role')
-  })
 
-  test('two different writers from v1 cannot both commit', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const group = await createFixture(db)
-    const base = workgroupDraftSnapshotOf(group)
-    const first = await save(db, group, { ...base, description: 'first' })
-    expect(first.revision.version).toBe(2)
+    test('roster change replaces member rows atomically', async () => {
+      const db = harness.db
+      const group = await createFixture(db)
+      const oldId = group.members[0]!.id
+      const receipt = await save(db, group, {
+        ...workgroupDraftSnapshotOf(group),
+        leaderDisplayName: 'lead',
+        members: [
+          {
+            memberType: 'agent',
+            agentId: group.members[0]!.agentId!,
+            displayName: 'lead',
+            roleDesc: 'updated role',
+          },
+        ],
+      })
+      expect(receipt.workgroup.members[0]!.id).not.toBe(oldId)
+      expect(receipt.workgroup.members[0]!.roleDesc).toBe('updated role')
+    })
 
-    try {
-      await save(db, group, { ...base, description: 'second' }, { expectedVersion: 1 })
-      throw new Error('expected version conflict')
-    } catch (error) {
-      expect(codeOf(error)).toBe('resource-operation-stale')
-    }
-    const latest = await getWorkgroupById(db, group.id)
-    expect(latest?.description).toBe('first')
-    expect(latest?.version).toBe(2)
-  })
+    test('two different writers from v1 cannot both commit', async () => {
+      const db = harness.db
+      const group = await createFixture(db)
+      const base = workgroupDraftSnapshotOf(group)
+      const first = await save(db, group, { ...base, description: 'first' })
+      expect(first.revision.version).toBe(2)
 
-  test('current-version semantic no-op does not mint a revision', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const group = await createFixture(db)
-    const receipt = await save(db, group, workgroupDraftSnapshotOf(group))
-    expect(receipt.outcome).toBe('already-current')
-    expect(receipt.revision.version).toBe(1)
-    expect((await getWorkgroupById(db, group.id))?.version).toBe(1)
+      try {
+        await save(db, group, { ...base, description: 'second' }, { expectedVersion: 1 })
+        throw new Error('expected version conflict')
+      } catch (error) {
+        expect(codeOf(error)).toBe('resource-operation-stale')
+      }
+      const latest = await getWorkgroupById(db, group.id)
+      expect(latest?.description).toBe('first')
+      expect(latest?.version).toBe(2)
+    })
+
+    test('current-version semantic no-op does not mint a revision', async () => {
+      const db = harness.db
+      const group = await createFixture(db)
+      const receipt = await save(db, group, workgroupDraftSnapshotOf(group))
+      expect(receipt.outcome).toBe('already-current')
+      expect(receipt.revision.version).toBe(1)
+      expect((await getWorkgroupById(db, group.id))?.version).toBe(1)
+    })
   })
 
   test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {

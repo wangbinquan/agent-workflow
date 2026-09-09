@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W34继续适配原测试的夹具边界：revision五例、pending三例与WS首producer一例接默认双库，
+  八个原single完整注册保持。Pending只在选定种子路径显式提供原物理行已有的两个谱系值，
+  原26个绑定前缀与非选定native默认分支保持；底层changes差量原样记录，未改生产触发器或规则。
+  WS仍调用原create/save/delete与进程内broadcaster；此处不创建socket或服务器。
+  RFC185只给原kind断言追加实际完整返回诊断，等待原托管失败链证据，不改预期、脚本或预算。
+  仓库facet合并扫描候选因损失原SQLite Count快速路径和选择性索引计划而拒绝，生产保持。
+
 - W33只适配三个旧测试的夹具边界：16个原DB例使用默认双库harness，9个原single保留，
   全部25原注册相对顺序、原输入/预期与预算保持。Intent的原生setup只作用于两个原single，
   中立组直接使用harness.db，避免在PG运行前额外创建无用SQLite；共享种子helper仍同步返回原run结果。

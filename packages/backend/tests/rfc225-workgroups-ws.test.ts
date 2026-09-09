@@ -22,6 +22,7 @@ import {
   type WorkgroupDeletedAudienceContext,
 } from '../src/ws/broadcaster'
 import { WS_CHANNELS } from '../src/ws/registry'
+import { describeEachProvider } from './helpers/eachProvider'
 import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -36,9 +37,9 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 beforeEach(() => resetBroadcastersForTests())
 afterEach(() => resetBroadcastersForTests())
 
-describe('RFC-225 workgroup broadcaster producers', () => {
+describeEachProvider('RFC-225 workgroup broadcaster producers', (harness) => {
   test('create/commit/delete emit exact frames; semantic replay emits nothing', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     const frames: WorkgroupsWsMessage[] = []
     const contexts: unknown[] = []
     workgroupsBroadcaster.subscribe(WORKGROUPS_CHANNEL, (message, context) => {

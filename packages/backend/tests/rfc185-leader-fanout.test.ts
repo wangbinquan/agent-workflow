@@ -527,7 +527,7 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
     })
 
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
-    expect(result.kind).toBe('ok')
+    expect(result.kind, JSON.stringify(result)).toBe('ok')
 
     // run shape: leader, 3 member instances (any interleaving), leader again
     expect(requests.map((r) => r.nodeId)).toEqual([

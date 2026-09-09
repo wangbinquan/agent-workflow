@@ -1,3 +1,5 @@
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-329 PR-B —— `pendingRows` 与 `pendingCount` 是同一个判定（AC-8）。
 //
 // 起因：`list_pending_gates` 要列出「在等人的工作组任务」，而 REST 上只有一个 badge 计数
@@ -20,7 +22,7 @@ import { composeTestWorkgroupTaskRoom, roomDocument } from './helpers/workgroupT
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_278_400_000
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -100,7 +102,11 @@ interface TaskSpec {
   readonly cardsForAlice: number
 }
 
-async function seed(db: Db, specs: ReadonlyArray<TaskSpec>): Promise<void> {
+async function seed(
+  db: Db,
+  specs: ReadonlyArray<TaskSpec>,
+  explicitLineage = false,
+): Promise<void> {
   await db.insert(users).values(
     ['alice', 'bob', 'admin'].map((id) => ({
       id,
@@ -114,6 +120,14 @@ async function seed(db: Db, specs: ReadonlyArray<TaskSpec>): Promise<void> {
   await db.insert(workflows).values({ id: 'wf1', name: 'wf', definition: '{}' })
   for (const spec of specs) {
     await db.insert(tasks).values({
+      ...(explicitLineage
+        ? {
+            executionLineageId: spec.id,
+            lineageSlotPathJson: JSON.stringify([
+              { stableNodeKey: 'task-root', frozenOccurrenceKey: spec.id, workflowRevision: null },
+            ]),
+          }
+        : {}),
       id: spec.id,
       name: `task ${spec.id}`,
       workflowId: 'wf1',
@@ -178,37 +192,43 @@ function foldRows(rows: Awaited<ReturnType<ReturnType<typeof reads>['pendingRows
 }
 
 describe('RFC-329 AC-8 — the badge is a fold of the rows, for every actor', () => {
-  test('gate only, deliveries only, and both at once all fold correctly', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, [
-      // Parked on a confirmation gate, nothing dispatched to alice.
-      {
-        id: 'gate-only',
-        status: 'awaiting_review',
-        gateStatus: 'awaiting_confirmation',
-        cardsForAlice: 0,
-      },
-      // Cards waiting for alice, no gate.
-      { id: 'cards-only', status: 'running', gateStatus: null, cardsForAlice: 2 },
-      // BOTH — the row a "pick one" implementation would undercount.
-      {
-        id: 'both',
-        status: 'awaiting_review',
-        gateStatus: 'awaiting_confirmation',
-        cardsForAlice: 1,
-      },
-    ])
-    const { pendingRows, pendingCount } = reads(db)
+  describeEachProvider('pending fold', (harness) => {
+    test('gate only, deliveries only, and both at once all fold correctly', async () => {
+      const db = harness.db
+      await seed(
+        db,
+        [
+          // Parked on a confirmation gate, nothing dispatched to alice.
+          {
+            id: 'gate-only',
+            status: 'awaiting_review',
+            gateStatus: 'awaiting_confirmation',
+            cardsForAlice: 0,
+          },
+          // Cards waiting for alice, no gate.
+          { id: 'cards-only', status: 'running', gateStatus: null, cardsForAlice: 2 },
+          // BOTH — the row a "pick one" implementation would undercount.
+          {
+            id: 'both',
+            status: 'awaiting_review',
+            gateStatus: 'awaiting_confirmation',
+            cardsForAlice: 1,
+          },
+        ],
+        true,
+      )
+      const { pendingRows, pendingCount } = reads(db)
 
-    const rows = await pendingRows(actor('alice'))
-    const count = await pendingCount(actor('alice'))
+      const rows = await pendingRows(actor('alice'))
+      const count = await pendingCount(actor('alice'))
 
-    expect(foldRows(rows)).toEqual(count)
-    expect(count).toEqual({ deliveries: 3, gates: 2, total: 5 })
+      expect(foldRows(rows)).toEqual(count)
+      expect(count).toEqual({ deliveries: 3, gates: 2, total: 5 })
 
-    const both = rows.find((row) => row.taskId === 'both')
-    expect(both?.awaitingConfirmation).toBe(true)
-    expect(both?.pendingDeliveries).toBe(1)
+      const both = rows.find((row) => row.taskId === 'both')
+      expect(both?.awaitingConfirmation).toBe(true)
+      expect(both?.pendingDeliveries).toBe(1)
+    })
   })
 
   test('the identity holds for owner, stranger and admin alike', async () => {
@@ -267,59 +287,73 @@ describe('RFC-329 AC-8 — the badge is a fold of the rows, for every actor', ()
     expect(await pendingCount(actor('alice')).then((c) => c.total)).toBe(0)
   })
 
-  test('malformed workgroup config is skipped, not thrown on', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, [
-      {
-        id: 'ok',
+  describeEachProvider('pending document reads', (harness) => {
+    test('malformed workgroup config is skipped, not thrown on', async () => {
+      const db = harness.db
+      await seed(
+        db,
+        [
+          {
+            id: 'ok',
+            status: 'awaiting_review',
+            gateStatus: 'awaiting_confirmation',
+            cardsForAlice: 0,
+          },
+        ],
+        true,
+      )
+      await db.insert(tasks).values({
+        executionLineageId: 'broken',
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: 'broken', workflowRevision: null },
+        ]),
+        id: 'broken',
+        name: 'broken',
+        workflowId: 'wf1',
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/never-read',
+        worktreePath: '/tmp/never-read',
+        baseBranch: 'main',
+        branch: 'agent-workflow/broken',
         status: 'awaiting_review',
-        gateStatus: 'awaiting_confirmation',
-        cardsForAlice: 0,
-      },
-    ])
-    await db.insert(tasks).values({
-      id: 'broken',
-      name: 'broken',
-      workflowId: 'wf1',
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/never-read',
-      worktreePath: '/tmp/never-read',
-      baseBranch: 'main',
-      branch: 'agent-workflow/broken',
-      status: 'awaiting_review',
-      inputs: '{}',
-      startedAt: NOW,
-      runningMs: 0,
-      ownerUserId: 'alice',
-      launchOrigin: 'manual',
-      workgroupId: 'wg1',
-      workgroupConfigJson: '{not json',
+        inputs: '{}',
+        startedAt: NOW,
+        runningMs: 0,
+        ownerUserId: 'alice',
+        launchOrigin: 'manual',
+        workgroupId: 'wg1',
+        workgroupConfigJson: '{not json',
+      })
+      const { pendingRows, pendingCount } = reads(db)
+
+      const rows = await pendingRows(actor('alice'))
+      expect(rows.map((row) => row.taskId)).toEqual(['ok'])
+      expect(foldRows(rows)).toEqual(await pendingCount(actor('alice')))
     })
-    const { pendingRows, pendingCount } = reads(db)
 
-    const rows = await pendingRows(actor('alice'))
-    expect(rows.map((row) => row.taskId)).toEqual(['ok'])
-    expect(foldRows(rows)).toEqual(await pendingCount(actor('alice')))
-  })
-
-  test('rows carry what a caller needs to act, not just an id', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, [
-      {
-        id: 'gate-only',
+    test('rows carry what a caller needs to act, not just an id', async () => {
+      const db = harness.db
+      await seed(
+        db,
+        [
+          {
+            id: 'gate-only',
+            status: 'awaiting_review',
+            gateStatus: 'awaiting_confirmation',
+            cardsForAlice: 0,
+          },
+        ],
+        true,
+      )
+      const rows = await reads(db).pendingRows(actor('alice'))
+      expect(rows[0]).toEqual({
+        taskId: 'gate-only',
+        name: 'task gate-only',
         status: 'awaiting_review',
         gateStatus: 'awaiting_confirmation',
-        cardsForAlice: 0,
-      },
-    ])
-    const rows = await reads(db).pendingRows(actor('alice'))
-    expect(rows[0]).toEqual({
-      taskId: 'gate-only',
-      name: 'task gate-only',
-      status: 'awaiting_review',
-      gateStatus: 'awaiting_confirmation',
-      awaitingConfirmation: true,
-      pendingDeliveries: 0,
+        awaitingConfirmation: true,
+        pendingDeliveries: 0,
+      })
     })
   })
 })
