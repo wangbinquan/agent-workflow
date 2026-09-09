@@ -1,11 +1,10 @@
+import { describeEachProvider } from './helpers/eachProvider'
 // RFC-303 runtime ownership locks: a durable terminal fact must stop the exact
 // attached driver, wait for its finally/reap receipt, and reject forged effect
 // capabilities. These are the process-local halves of the row/owner race.
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import { nodeRuns, tasks, webhookMrLaunchGuards, webhookMrStreamStates } from '@/db/schema'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { InMemoryWebhookLaunchSupervisor } from '@/modules/integration/infrastructure/inMemoryWebhookLaunchSupervisor'
@@ -30,7 +29,6 @@ const cause = {
   deliveryId: 'delivery-1',
   streamRevision: 7,
 } as const
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function runtimeFixture(taskId: string) {
   const gate = new TaskClaimGate('rfc303-runtime-test')
@@ -170,86 +168,93 @@ describe('RFC-303 source termination capability', () => {
     )
   })
 
-  test('terminal effect atomically cancels live node rows before the owner loses write authority', async () => {
-    // Regression: source termination revoked the durable owner in the task
-    // transaction but left its running node row untouched. The stale driver's
-    // later cancellation callback correctly lost the owner fence, so the row
-    // stayed `running` forever even though the task and process were canceled.
-    const db = createInMemoryDb(MIGRATIONS)
-    await db.insert(tasks).values({
-      id: 'task-source-node-projection',
-      name: 'source node projection',
-      workflowId: 'workflow-rfc303',
-      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      workflowVersion: 1,
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/worktree',
-      baseBranch: 'main',
-      branch: 'agent-workflow/task-source-node-projection',
-      status: 'running',
-      inputs: '{}',
-      startedAt: 1,
-      sourceTerminationBinding: input.binding,
-      sourceTerminationLaunchRev: 1,
-    })
-    await db.insert(nodeRuns).values([
-      {
-        id: 'run-source-live',
-        taskId: 'task-source-node-projection',
-        nodeId: 'runtime',
-        iteration: 0,
-        retryIndex: 0,
+  describeEachProvider('persisted source termination', (harness) => {
+    test('terminal effect atomically cancels live node rows before the owner loses write authority', async () => {
+      // Regression: source termination revoked the durable owner in the task
+      // transaction but left its running node row untouched. The stale driver's
+      // later cancellation callback correctly lost the owner fence, so the row
+      // stayed `running` forever even though the task and process were canceled.
+      const db = harness.db
+      await db.insert(tasks).values({
+        id: 'task-source-node-projection',
+        executionLineageId: 'task-source-node-projection',
+        lineageSlotPathJson:
+          '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-source-node-projection","workflowRevision":1}]',
+        name: 'source node projection',
+        workflowId: 'workflow-rfc303',
+        workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+        workflowVersion: 1,
+        repoPath: '/tmp/repo',
+        worktreePath: '/tmp/worktree',
+        baseBranch: 'main',
+        branch: 'agent-workflow/task-source-node-projection',
         status: 'running',
-        startedAt: 2,
-      },
-      {
-        id: 'run-source-done',
-        taskId: 'task-source-node-projection',
-        nodeId: 'already-done',
-        iteration: 0,
-        retryIndex: 0,
-        status: 'done',
-        startedAt: 2,
-        finishedAt: 3,
-      },
-    ])
+        inputs: '{}',
+        startedAt: 1,
+        sourceTerminationBinding: input.binding,
+        sourceTerminationLaunchRev: 1,
+      })
+      await db.insert(nodeRuns).values([
+        {
+          id: 'run-source-live',
+          taskId: 'task-source-node-projection',
+          nodeId: 'runtime',
+          iteration: 0,
+          retryIndex: 0,
+          status: 'running',
+          startedAt: 2,
+        },
+        {
+          id: 'run-source-done',
+          taskId: 'task-source-node-projection',
+          nodeId: 'already-done',
+          iteration: 0,
+          retryIndex: 0,
+          status: 'done',
+          startedAt: 2,
+          finishedAt: 3,
+        },
+      ])
 
-    const receipts = await createTaskSourceTerminationParticipant(db).apply(
-      mintSourceTerminationEffectCapability(input),
-      input,
-    )
+      const receipts = await createTaskSourceTerminationParticipant(db).apply(
+        mintSourceTerminationEffectCapability(input),
+        input,
+      )
 
-    expect(receipts).toEqual([
-      expect.objectContaining({
-        taskId: 'task-source-node-projection',
-        cancelOutcome: 'canceled',
-        releaseOutcome: 'no-active-owner',
-      }),
-    ])
-    expect(
-      db
-        .select({ id: nodeRuns.id, status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, 'task-source-node-projection'))
-        .orderBy(nodeRuns.id)
-        .all(),
-    ).toEqual([
-      { id: 'run-source-done', status: 'done' },
-      { id: 'run-source-live', status: 'canceled' },
-    ])
-    expect(
-      db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, 'task-source-node-projection'))
-        .get()?.status,
-    ).toBe('canceled')
+      expect(receipts).toEqual([
+        expect.objectContaining({
+          taskId: 'task-source-node-projection',
+          cancelOutcome: 'canceled',
+          releaseOutcome: 'no-active-owner',
+        }),
+      ])
+      expect(
+        await db
+          .select({ id: nodeRuns.id, status: nodeRuns.status })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, 'task-source-node-projection'))
+          .orderBy(nodeRuns.id)
+          .all(),
+      ).toEqual([
+        { id: 'run-source-done', status: 'done' },
+        { id: 'run-source-live', status: 'canceled' },
+      ])
+      expect(
+        (
+          await db
+            .select({ status: tasks.status })
+            .from(tasks)
+            .where(eq(tasks.id, 'task-source-node-projection'))
+            .get()
+        )?.status,
+      ).toBe('canceled')
+    })
   })
 })
 
-describe('RFC-303 protected launch guard', () => {
+describeEachProvider('RFC-303 protected launch guard', (harness) => {
   test('terminal revision revokes the pre-task owner and both admission gates fail closed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await db.insert(webhookMrStreamStates).values({
       endpointId: 'endpoint-1',
       streamKey: 'gitlab:77:9',
@@ -303,7 +308,7 @@ describe('RFC-303 protected launch guard', () => {
   })
 
   test('reservation after a terminal fact is rejected before an owner is registered', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = harness.db
     await db.insert(webhookMrStreamStates).values({
       endpointId: 'endpoint-1',
       streamKey: 'gitlab:77:9',

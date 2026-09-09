@@ -1,7 +1,7 @@
 // RFC-359 W12: SQLite host for the shared source-termination atom. Publish
 // and requestStop retain their review-lock timing; no-driver finalization
 // remains the existing inline fast path after commit and runtime settlement.
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { finalizeCanceledTaskWithoutDriver } from '@/services/task'
@@ -18,7 +18,7 @@ import { applySourceTerminationTarget } from './sourceTerminationTarget'
 import { listSourceTerminationTargets } from './sourceTerminationTargets'
 
 export function createTaskSourceTerminationParticipant(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): TaskSourceTerminationParticipant {
   return {
     async apply(

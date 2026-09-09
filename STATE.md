@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第三十批（2026-09-09）**：四份旧套件15个DB例默认双库，8个pure/native例保持单跑；候选累计236份完整套件完成参数化，另保W28一份和W30两份混合套件。原180组分页组合、完整断言/预算保持，HTTP7例待新SHA。
+> source termination七处参数类型接受中立DB，三生产文件完整Bun/TypeScript运行JS逐字不变；协作与终态原物理行、JSON和SQL对拍保持。原SQLite触发器已有谱系值按真实观察显式播种，其余NULL保持。
+> W29 exactff67b9eeb Main34293982365终态36success/4failure，13后端任务12过；两平台1947文件各恰一次，39官方blob/33发布路径已核。选定Ubuntu74执行71过/3个PG HTTP入口失败，macOS53全过；四处旧功能夹具修复已过。
+> 原三个PG HTTP例尚未到达业务断言，根因未证明；保留原判据与完整装配。已定位的server两处Promise lint以显式void修复，原ready/错误链不变，原8/46纯控制保持。
+> 当前1947测试文件、611构库文件/1266调用、595无harness/430有harness；T19f694，provider命名60，canonical1740/272/983/5329/4796/25057，owner整行原字节保持。
+> 本批一次backend tsc通过，10候选hash不变；211/433功能metadata、13/55canonical及独立代码/证据/metadata复核通过。未运行本地HTTP/PG/daemon/E2E/规模库/全门禁，新SHA托管待验。
+> 原full360样本仍仅归exact6f3be930c：PG三任务页达原判据，其余六端点较慢，SQLite任务首页199.07ms超150ms。原W20约束、六项剩余AC与RFC保持开放。
+
 > **RFC-359 W12 第二十九批（2026-09-09）**：旧daemon/sync与测试复用同一完整应用装配；测试专用unstarted包装及生命周期归helper，有限初始化真实完成，不启动后台。每例真实MCP支持不经start的dispose，14/109纯控制与8/46装配控制通过。
 > RFC311三个旧HTTP例和RFC341两个旧DB例接入默认双库，原pure例与断言/预算保持；协作原后4/21、真实错误负控及整行/SQL证据已核。候选累计234完整旧套件，另保留W28部分套件；本批HTTP/PG等待托管。
 > W28 exact6f3be930c Main34288246161终态33success/7failure，两平台各1944文件恰一次；113选定Ubuntu执行112过/1机制观察红。本批精确修复四功能测试的预算绑定、升级链/226计数及PG唯一机制SELECT观察，原判据保持。

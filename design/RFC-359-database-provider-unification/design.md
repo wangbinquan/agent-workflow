@@ -20,6 +20,11 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W30 source termination的七处数据库参数接受中立类型，三个生产文件完整运行JS保持；
+  测试借用原harness与实际完整应用。原SQLite专属机制例继续独立执行，旧业务例默认双库。
+  原播种若依赖SQLite触发器，本批只显式填入从原真实行观察到的等值谱系字段，保留其它NULL。
+  ready登记调用的显式void只表达已交给原scope管理，原等待、失败传播与dispose顺序保持。
+
 - W29生产只导出同时由原daemon/sync入口真实调用的完整共享composer。未启动应用
   的薄包装和生命周期协调归`tests/helpers/providerHttpApplication.ts`；两引擎使用原
   完整route graph、实际selected client和同一个recorded pool，不复制路由或模块装配。

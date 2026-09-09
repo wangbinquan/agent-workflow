@@ -8,25 +8,30 @@
 // C7(proposal §5):无参 GET 保持旧 `{items}` 全量形状;带任一参数才切分页
 // 封套——两种形状都在 HTTP 层锁死。
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { CachedRepo } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { cachedRepos, scheduledTasks, taskRepos, tasks, users, workflows } from '../src/db/schema'
 import {
   invalidateRepoFacetsCache,
   listCachedRepos,
   listCachedReposPage,
 } from '../src/services/gitRepoCache'
-import { createApp } from '../src/server'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 import { ValidationError } from '../src/util/errors'
 import {
-  composeSqliteRepositoryWorkspaceStore,
+  composeRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '../src/modules/source-control/composition'
 
@@ -46,7 +51,7 @@ interface RepoSeed {
   lastSubmoduleSyncOk: boolean | null
 }
 
-function seed(db: DbClient): RepoSeed[] {
+async function seed(db: ProviderNeutralDatabase): Promise<RepoSeed[]> {
   // 12 仓覆盖:submodule true/false/null × sync ok/fail × autoRefresh 有/无 ×
   // q 命中面(urlRedacted/localPath/defaultBranch)× lastFetchedAt tie。
   const repos: RepoSeed[] = [
@@ -92,7 +97,8 @@ function seed(db: DbClient): RepoSeed[] {
     r('r12', 'git@github.com:acme/never-fetched.git', '/repos/a12', 'main', 0, null, null, null),
   ]
   for (const row of repos) {
-    db.insert(cachedRepos)
+    await db
+      .insert(cachedRepos)
       .values({
         id: row.id,
         urlHash: row.id.padEnd(8, '0'),
@@ -115,7 +121,8 @@ function seed(db: DbClient): RepoSeed[] {
   //   r08 ← 仅 scheduled payload 提及(计 1)
   //   r02 ← tasks.cachedRepoId 但该 task 有 task_repos 行(指向 r01)→ tasks 腿
   //         不计(锁 NOT EXISTS 细节),r02 保持 unused。
-  db.insert(users)
+  await db
+    .insert(users)
     .values({
       id: 'u1',
       username: 'u1',
@@ -125,11 +132,13 @@ function seed(db: DbClient): RepoSeed[] {
       updatedAt: T0,
     })
     .run()
-  db.insert(workflows)
+  await db
+    .insert(workflows)
     .values({ id: 'wf1', name: 'wf', definition: '{"nodes":[],"edges":[],"inputs":[]}' })
     .run()
-  const mkTask = (id: string, cachedRepoId: string | null): void => {
-    db.insert(tasks)
+  const mkTask = async (id: string, cachedRepoId: string | null): Promise<void> => {
+    await db
+      .insert(tasks)
       .values({
         id,
         name: id,
@@ -147,15 +156,21 @@ function seed(db: DbClient): RepoSeed[] {
         ownerUserId: 'u1',
         launchOrigin: 'manual',
         cachedRepoId,
+        // Preserve the original SQLite trigger's physical values on both providers.
+        executionLineageId: id,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+        ]),
       })
       .run()
   }
-  mkTask('tA', null)
-  mkTask('tB', null)
-  mkTask('tC', 'r05')
-  mkTask('tD', 'r02')
-  const mkTaskRepo = (taskId: string, cachedRepoId: string): void => {
-    db.insert(taskRepos)
+  await mkTask('tA', null)
+  await mkTask('tB', null)
+  await mkTask('tC', 'r05')
+  await mkTask('tD', 'r02')
+  const mkTaskRepo = async (taskId: string, cachedRepoId: string): Promise<void> => {
+    await db
+      .insert(taskRepos)
       .values({
         taskId,
         repoIndex: 0,
@@ -166,10 +181,11 @@ function seed(db: DbClient): RepoSeed[] {
       })
       .run()
   }
-  mkTaskRepo('tA', 'r01')
-  mkTaskRepo('tB', 'r01')
-  mkTaskRepo('tD', 'r01')
-  db.insert(scheduledTasks)
+  await mkTaskRepo('tA', 'r01')
+  await mkTaskRepo('tB', 'r01')
+  await mkTaskRepo('tD', 'r01')
+  await db
+    .insert(scheduledTasks)
     .values({
       id: ulid(),
       name: 'sched-1',
@@ -244,13 +260,11 @@ function jsFilter(
   })
 }
 
-describe('RFC-311 T28 — listCachedReposPage oracle', () => {
-  let db: DbClient
+describeEachProvider('RFC-311 T28 — listCachedReposPage oracle', (harness) => {
   let store: RepositoryWorkspaceStore
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-    store = composeSqliteRepositoryWorkspaceStore(db)
-    seed(db)
+  beforeEach(async () => {
+    store = composeRepositoryWorkspaceStore(harness.db)
+    await seed(harness.db)
   })
 
   test('every filter combination pages to the same ids/counts as the legacy JS pipeline', async () => {
@@ -325,6 +339,18 @@ describe('RFC-311 T28 — listCachedReposPage oracle', () => {
     )
     await expect(listCachedReposPage(store, { cursor: '12.' })).rejects.toThrow(ValidationError)
   })
+})
+
+// These two original assertions exercise SQLite's native EXPLAIN mechanism.
+describe('RFC-311 T28 — listCachedReposPage oracle (SQLite query plans)', () => {
+  let db: DbClient
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    await seed(db)
+  })
+  afterEach(() => {
+    db.$client.close()
+  })
 
   // 实现门 P2-4:断点必须是行值比较——展开式在**绑定参数**下会退化成
   // MULTI-INDEX OR + TEMP B-TREE 全排序(字面量 EXPLAIN 看不出来,必须用 ?)。
@@ -373,134 +399,158 @@ describe('RFC-311 T28 — listCachedReposPage oracle', () => {
   })
 })
 
-describe('RFC-311 T28 — /api/cached-repos C7 双形状', () => {
-  let db: DbClient
-  let app: Hono
-  beforeEach(() => {
-    const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc311-repos-'))
-    const appHome = join(tmp, 'home')
-    mkdirSync(appHome, { recursive: true })
-    process.env.AGENT_WORKFLOW_HOME = appHome
-    db = createInMemoryDb(MIGRATIONS)
-    seed(db)
-    app = createApp({
-      token: TOKEN,
-      configPath: join(tmp, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 17,
-      db,
+describeEachProvider('RFC-311 T28 — /api/cached-repos C7 双形状', (harness) => {
+  // Dispose this complete application before the outer harness resets its database.
+  describe('complete application lifetime', () => {
+    let db: ProviderNeutralDatabase
+    let app: Hono
+    let application: ProviderHttpApplication | undefined
+    let tmp: string | undefined
+    let previousAppHome: string | undefined
+    beforeEach(async () => {
+      previousAppHome = process.env.AGENT_WORKFLOW_HOME
+      application = undefined
+      tmp = mkdtempSync(join(tmpdir(), 'aw-rfc311-repos-'))
+      const appHome = join(tmp, 'home')
+      mkdirSync(appHome, { recursive: true })
+      process.env.AGENT_WORKFLOW_HOME = appHome
+      db = harness.db
+      await seed(db)
+      application = await createProviderHttpApplication(harness, {
+        token: TOKEN,
+        configPath: join(tmp, 'config.json'),
+        opencodeVersion: '1.14.25',
+        dbVersion: 17,
+        appHome,
+      })
+      app = application.app
     })
-  })
+    afterEach(async () => {
+      try {
+        await application?.dispose()
+      } finally {
+        if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+        else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+        if (tmp !== undefined) rmSync(tmp, { recursive: true, force: true })
+      }
+    })
 
-  async function get(path: string): Promise<Response> {
-    return app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
-  }
-
-  test('no-arg call keeps the legacy full `{items}` shape (C7)', async () => {
-    const res = await get('/api/cached-repos')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
-    expect(Array.isArray(body.items)).toBe(true)
-    expect((body.items as unknown[]).length).toBe(12)
-    expect('nextCursor' in body).toBe(false)
-    expect('facets' in body).toBe(false)
-  })
-
-  test('any paging param switches to the `{items, nextCursor, facets}` envelope', async () => {
-    const res = await get('/api/cached-repos?limit=5')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      items: Array<{ id: string }>
-      nextCursor: string | null
-      facets: Record<string, number>
+    async function get(path: string): Promise<Response> {
+      return app.request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
     }
-    expect(body.items.length).toBe(5)
-    expect(typeof body.nextCursor).toBe('string')
-    expect(body.facets.all).toBe(12)
-    const res2 = await get(
-      `/api/cached-repos?limit=5&cursor=${encodeURIComponent(body.nextCursor!)}`,
-    )
-    const body2 = (await res2.json()) as { items: Array<{ id: string }> }
-    expect(body2.items[0]?.id).not.toBe(body.items[0]?.id)
-  })
 
-  test('empty-string params are treated as absent (C7 stays intact for `?q=`)', async () => {
-    // 外部脚本拼出的空值不得把全量兼容面悄悄换成分页首页。
-    const res = await get('/api/cached-repos?q=&limit=')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
-    expect((body.items as unknown[]).length).toBe(12)
-    expect('nextCursor' in body).toBe(false)
-  })
+    test('no-arg call keeps the legacy full `{items}` shape (C7)', async () => {
+      const res = await get('/api/cached-repos')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(Array.isArray(body.items)).toBe(true)
+      expect((body.items as unknown[]).length).toBe(12)
+      expect('nextCursor' in body).toBe(false)
+      expect('facets' in body).toBe(false)
+    })
 
-  // 实现门 P0-3(变异 #17:路由把 ?submodules / ?auto_refresh 原地丢弃,25 个
-  // 用例全绿)——180 组 oracle 打的是 service 函数,HTTP 层的参数接线此前只锁了
-  // limit/cursor/view。过滤已全部下推服务端,这里漏一个就等于「用户点了筛选、
-  // 后端当没看见」。
-  test('every filter parameter is actually wired through the route', async () => {
-    const all = (await (await get('/api/cached-repos?limit=100')).json()) as {
-      items: Array<{ id: string }>
-    }
-    expect(all.items).toHaveLength(12)
+    test('any paging param switches to the `{items, nextCursor, facets}` envelope', async () => {
+      const res = await get('/api/cached-repos?limit=5')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        items: Array<{ id: string }>
+        nextCursor: string | null
+        facets: Record<string, number>
+      }
+      expect(body.items.length).toBe(5)
+      expect(typeof body.nextCursor).toBe('string')
+      expect(body.facets.all).toBe(12)
+      const res2 = await get(
+        `/api/cached-repos?limit=5&cursor=${encodeURIComponent(body.nextCursor!)}`,
+      )
+      const body2 = (await res2.json()) as { items: Array<{ id: string }> }
+      expect(body2.items[0]?.id).not.toBe(body.items[0]?.id)
+    })
 
-    const withSubs = (await (await get('/api/cached-repos?limit=100&submodules=with')).json()) as {
-      items: Array<{ id: string; hasSubmodules: boolean | null }>
-    }
-    expect(withSubs.items.length).toBeGreaterThan(0)
-    expect(withSubs.items.length).toBeLessThan(12)
-    expect(withSubs.items.every((r) => r.hasSubmodules === true)).toBe(true)
+    test('empty-string params are treated as absent (C7 stays intact for `?q=`)', async () => {
+      // 外部脚本拼出的空值不得把全量兼容面悄悄换成分页首页。
+      const res = await get('/api/cached-repos?q=&limit=')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect((body.items as unknown[]).length).toBe(12)
+      expect('nextCursor' in body).toBe(false)
+    })
 
-    const never = (await (await get('/api/cached-repos?limit=100&auto_refresh=never')).json()) as {
-      items: Array<{ lastAutoRefreshAt: string | null }>
-    }
-    expect(never.items.length).toBeGreaterThan(0)
-    expect(never.items.length).toBeLessThan(12)
-    expect(never.items.every((r) => r.lastAutoRefreshAt === null)).toBe(true)
+    // 实现门 P0-3(变异 #17:路由把 ?submodules / ?auto_refresh 原地丢弃,25 个
+    // 用例全绿)——180 组 oracle 打的是 service 函数,HTTP 层的参数接线此前只锁了
+    // limit/cursor/view。过滤已全部下推服务端,这里漏一个就等于「用户点了筛选、
+    // 后端当没看见」。
+    test('every filter parameter is actually wired through the route', async () => {
+      const all = (await (await get('/api/cached-repos?limit=100')).json()) as {
+        items: Array<{ id: string }>
+      }
+      expect(all.items).toHaveLength(12)
 
-    const searched = (await (await get('/api/cached-repos?limit=100&q=gamma')).json()) as {
-      items: Array<{ id: string }>
-    }
-    expect(searched.items.map((r) => r.id).sort()).toEqual(['r01', 'r08'])
+      const withSubs = (await (
+        await get('/api/cached-repos?limit=100&submodules=with')
+      ).json()) as {
+        items: Array<{ id: string; hasSubmodules: boolean | null }>
+      }
+      expect(withSubs.items.length).toBeGreaterThan(0)
+      expect(withSubs.items.length).toBeLessThan(12)
+      expect(withSubs.items.every((r) => r.hasSubmodules === true)).toBe(true)
 
-    const attention = (await (await get('/api/cached-repos?limit=100&view=attention')).json()) as {
-      items: Array<{ id: string }>
-    }
-    expect(attention.items.length).toBeGreaterThan(0)
-    expect(attention.items.length).toBeLessThan(12)
-  })
+      const never = (await (
+        await get('/api/cached-repos?limit=100&auto_refresh=never')
+      ).json()) as {
+        items: Array<{ lastAutoRefreshAt: string | null }>
+      }
+      expect(never.items.length).toBeGreaterThan(0)
+      expect(never.items.length).toBeLessThan(12)
+      expect(never.items.every((r) => r.lastAutoRefreshAt === null)).toBe(true)
 
-  test('invalid enum values are rejected with 422', async () => {
-    expect((await get('/api/cached-repos?view=bogus')).status).toBe(422)
-    expect((await get('/api/cached-repos?limit=0')).status).toBe(422)
-    expect((await get('/api/cached-repos?limit=999')).status).toBe(422)
-    expect((await get('/api/cached-repos?cursor=broken')).status).toBe(422)
-  })
+      const searched = (await (await get('/api/cached-repos?limit=100&q=gamma')).json()) as {
+        items: Array<{ id: string }>
+      }
+      expect(searched.items.map((r) => r.id).sort()).toEqual(['r01', 'r08'])
 
-  // RFC-311 G4 —— facets 与 scheduled 引用集是**每页都要付的全量成本**(前者三条
-  // count、其中 referenced 每行两次 EXISTS;后者全表扫 scheduled_tasks 并对 JSON
-  // 跑正则),而两者都与过滤无关、恒为全量视角。加了短 TTL 缓存后,这条锁两件事:
-  // ①TTL 内确实走缓存(否则加了等于没加);②写路径显式失效,本进程自己的写不会被
-  // 自己的缓存挡住(否则用户删了仓、计数还挂着旧值,像"没删掉")。
-  test('facets are served from a short-TTL cache that write paths invalidate', async () => {
-    const first = (await (await get('/api/cached-repos?limit=1')).json()) as {
-      facets: { all: number }
-    }
-    expect(first.facets.all).toBe(12)
+      const attention = (await (
+        await get('/api/cached-repos?limit=100&view=attention')
+      ).json()) as {
+        items: Array<{ id: string }>
+      }
+      expect(attention.items.length).toBeGreaterThan(0)
+      expect(attention.items.length).toBeLessThan(12)
+    })
 
-    // 绕过写路径(不触发失效)直接插一行:TTL 内应仍看到旧计数。
-    db.run(
-      sql.raw(`INSERT INTO cached_repos (id, url_hash, url_redacted, local_path, last_fetched_at, created_at)
+    test('invalid enum values are rejected with 422', async () => {
+      expect((await get('/api/cached-repos?view=bogus')).status).toBe(422)
+      expect((await get('/api/cached-repos?limit=0')).status).toBe(422)
+      expect((await get('/api/cached-repos?limit=999')).status).toBe(422)
+      expect((await get('/api/cached-repos?cursor=broken')).status).toBe(422)
+    })
+
+    // RFC-311 G4 —— facets 与 scheduled 引用集是**每页都要付的全量成本**(前者三条
+    // count、其中 referenced 每行两次 EXISTS;后者全表扫 scheduled_tasks 并对 JSON
+    // 跑正则),而两者都与过滤无关、恒为全量视角。加了短 TTL 缓存后,这条锁两件事:
+    // ①TTL 内确实走缓存(否则加了等于没加);②写路径显式失效,本进程自己的写不会被
+    // 自己的缓存挡住(否则用户删了仓、计数还挂着旧值,像"没删掉")。
+    test('facets are served from a short-TTL cache that write paths invalidate', async () => {
+      const first = (await (await get('/api/cached-repos?limit=1')).json()) as {
+        facets: { all: number }
+      }
+      expect(first.facets.all).toBe(12)
+
+      // 绕过写路径(不触发失效)直接插一行:TTL 内应仍看到旧计数。
+      await db.run(
+        sql.raw(`INSERT INTO cached_repos (id, url_hash, url_redacted, local_path, last_fetched_at, created_at)
                VALUES ('r99', 'hash-r99', 'git@github.com:acme/late.git', '/repos/late', ${T0}, ${T0})`),
-    )
-    const cached = (await (await get('/api/cached-repos?limit=1')).json()) as {
-      facets: { all: number }
-    }
-    expect(cached.facets.all, 'TTL 内应命中缓存').toBe(12)
+      )
+      const cached = (await (await get('/api/cached-repos?limit=1')).json()) as {
+        facets: { all: number }
+      }
+      expect(cached.facets.all, 'TTL 内应命中缓存').toBe(12)
 
-    invalidateRepoFacetsCache()
-    const fresh = (await (await get('/api/cached-repos?limit=1')).json()) as {
-      facets: { all: number }
-    }
-    expect(fresh.facets.all, '失效后必须重算').toBe(13)
+      invalidateRepoFacetsCache()
+      const fresh = (await (await get('/api/cached-repos?limit=1')).json()) as {
+        facets: { all: number }
+      }
+      expect(fresh.facets.all, '失效后必须重算').toBe(13)
+    })
   })
 })

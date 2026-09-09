@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第二十九批：W29复用真实生产完整装配，测试专用未启动入口及生命周期归测试层；每例真实MCP实例可不经start释放，旧daemon/sync行为保持。再接入RFC311三HTTP例和RFC341两DB例，原pure例保持；候选累计234完整套件另有W28部分套件，真PG待新SHA。1947测试文件、426文件harness，仍599构库文件无harness。W28 exact6f3be930c Main33success/7failure，1944文件两平台各恰一次；本批修四功能测试文件的精确参数/版本/机制观察。原full360样本中PG三任务页83.83/56.64/50.27ms均达标且较SQLite快，六项仍较慢，SQLite任务首页199.07ms仍超预算。最终backend tsc及211功能/13canonical通过；RFC和严格AC11继续开放。
+- W12 第三十批：W30将四份旧套件的15个数据库例接入默认双库，保留8个原pure/native例；候选累计236份完整套件完成参数化，另有W28一份及W30两份混合套件。source termination七处参数类型中立化，三生产文件完整运行JS不变；原行/JSON/SQL和预算保持。1947测试文件、430文件harness，仍595构库文件无harness；T19f694。W29 exactff67b9eeb Main36success/4failure，13后端任务12过；两平台1947文件各恰一次，选定Ubuntu74执行71过/3个PG HTTP入口失败，macOS53过。本批修两处已登记ready的Promise lint，HTTP失败根因尚未证明。一次backend tsc、211功能metadata/433 expect及13canonical/55 expect通过，新SHA托管待验。原full仍归exact6f3，六端点PG较慢及SQLite任务首页超原预算未闭合；RFC和六项剩余AC保持开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

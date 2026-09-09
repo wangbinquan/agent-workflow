@@ -3263,8 +3263,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#transaction:271",
-      "line": 271,
+      "id": "tx:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#transaction:272",
+      "line": 272,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#resumeWorkspaceGcClaim",
       "status": "clear",
       "symbol": "resumeWorkspaceGcClaim",
@@ -3335,7 +3335,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:46dee16b9546e68588e63fd10f203bb65fa83b2688ea3ea6e995a740de0390c9",
+  "sourceDigest": "sha256:5bcbb754fd979c65885e6074c492fe55de3796905e6f9eca2315d109b9e39063",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

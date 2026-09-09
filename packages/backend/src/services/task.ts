@@ -464,7 +464,7 @@ export function markTaskExecutionShutdownSurvivor(
  * scheduler owner (pending/waiting or recovered row). In that case there is no
  * driver `finally` to complete RFC-300's already-claimed workspace prune. */
 export async function finalizeCanceledTaskWithoutDriver(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   taskId: string,
 ): Promise<void> {
   await finishClaimedWebhookWorkspacePrune(db, taskId)

@@ -112,8 +112,12 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
               }
             } else if (
               ts.isExpressionStatement(statement) &&
-              ts.isCallExpression(statement.expression) &&
-              compact(statement.expression.expression, source) === 'unstarted?.trackReady'
+              ((ts.isCallExpression(statement.expression) &&
+                compact(statement.expression.expression, source) === 'unstarted?.trackReady') ||
+                (ts.isVoidExpression(statement.expression) &&
+                  ts.isCallExpression(statement.expression.expression) &&
+                  compact(statement.expression.expression.expression, source) ===
+                    'unstarted?.trackReady'))
             ) {
               // New unstarted-only readiness capture, absent from old sync entry.
             } else {

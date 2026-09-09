@@ -35,6 +35,7 @@ import { join } from 'node:path'
 import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { Config, TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
@@ -124,7 +125,7 @@ function parseWorkspaceGcCleanupPlan(value: string): WorkspaceGcCleanupPlanV1 | 
 }
 
 async function ensureWorkspaceGcClaim(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   plan: WorkspaceGcCleanupPlanV1,
   now: number,
 ): Promise<RecoverableTerminalMaintenanceClaim> {
@@ -169,7 +170,7 @@ async function ensureWorkspaceGcClaim(
   }
 }
 
-async function removeOwnedWorkspace(db: DbClient, taskId: string): Promise<boolean> {
+async function removeOwnedWorkspace(db: ProviderNeutralDatabase, taskId: string): Promise<boolean> {
   const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (t === undefined) {
     throw new TaskExecutionError(
@@ -217,7 +218,7 @@ async function removeOwnedWorkspace(db: DbClient, taskId: string): Promise<boole
 }
 
 async function resumeWorkspaceGcClaim(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   item: RecoverableTerminalMaintenanceClaim,
   now: number,
 ): Promise<{ removed: boolean }> {
@@ -365,7 +366,7 @@ async function claimWorkspacePrune(db: DbClient, taskId: string, now: number): P
  * can resume after the lease; task history is never deleted.
  */
 export async function finishClaimedWorkspacePrune(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   now: number = Date.now(),
 ): Promise<ClaimedWorkspacePruneOutcome> {
@@ -448,7 +449,7 @@ export async function recoverInterruptedWorkspaceGc(
  * task-driver release. It refuses every non-Webhook/non-owning/non-target row
  * before entering the generic RFC-165 delete primitive. */
 export async function finishClaimedWebhookWorkspacePrune(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   now: number = Date.now(),
 ): Promise<ClaimedWorkspacePruneOutcome> {

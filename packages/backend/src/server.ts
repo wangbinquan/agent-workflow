@@ -1576,7 +1576,7 @@ function composeApplicationEventCenter(
       },
     },
   })
-  unstarted?.trackReady(initialization)
+  void unstarted?.trackReady(initialization)
   return deferEventCenterModule(initialization)
 }
 
@@ -2507,7 +2507,7 @@ function composeSqliteApiRouteMounts(
       }),
     },
   })
-  unstarted?.trackReady(digitalEmployee.maintenance.ready())
+  void unstarted?.trackReady(digitalEmployee.maintenance.ready())
   const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
     async launch(input) {
       const result = await digitalEmployee.runtime.commands.launchWork({
