@@ -1520,6 +1520,7 @@ function composeSqliteDevelopmentConfigAclRoutes(
 function composeApplicationEventCenter(
   deps: SqliteAppDeps,
   developmentDeliveryProvider: DevelopmentDeliveryProvider,
+  unstarted?: UnstartedApplicationScope,
 ): EventCenterModule {
   const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
   const missionContinuation = createMissionCodeHostEventContinuation(deps.db)
@@ -1532,51 +1533,51 @@ function composeApplicationEventCenter(
     deps.webhookDispatcher !== undefined && supportsEventCenterWorkStart(deps.webhookDispatcher)
       ? deps.webhookDispatcher
       : null
-  return deferEventCenterModule(
-    composeEventCenter({
-      db: deps.db,
-      typePackageDescriptorJsons: [
-        developmentEmployeeTypePackage.descriptorJson,
-        codeHostEventCatalogJson,
-        taskLifecycleEventCatalogJson,
-        digitalEmployeeLifecycleEventCatalogJson,
-      ],
-      observer: composeDevelopmentEmployeeEventObserver({
-        codeHost: composeDevelopmentCodeHostEventObserver({
-          binding: (repositoryId) =>
-            resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
-        }),
-        approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
+  const initialization = composeEventCenter({
+    db: deps.db,
+    typePackageDescriptorJsons: [
+      developmentEmployeeTypePackage.descriptorJson,
+      codeHostEventCatalogJson,
+      taskLifecycleEventCatalogJson,
+      digitalEmployeeLifecycleEventCatalogJson,
+    ],
+    observer: composeDevelopmentEmployeeEventObserver({
+      codeHost: composeDevelopmentCodeHostEventObserver({
+        binding: (repositoryId) =>
+          resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
       }),
-      routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
-      ...(eventWorkStarter === null
-        ? {}
-        : {
-            automationWorkStart: {
-              launch: (input) => eventWorkStarter.dispatchEventTarget(input),
-            },
-          }),
-      deliveryConsumers:
-        codeHostDeliveryDispatcher === null
-          ? []
-          : [
-              createCodeHostWebhookDeliveryConsumer(
-                deps.db,
-                codeHostDeliveryDispatcher,
-                missionContinuation,
-              ),
-            ],
-      deliveryRetryLimits: {
-        current() {
-          const config = loadConfig(deps.configPath)
-          return {
-            defaultNodeRetries: config.defaultNodeRetries,
-            sessionRestartBudget: config.sessionRestartBudget,
-          }
-        },
-      },
+      approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
     }),
-  )
+    routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
+    ...(eventWorkStarter === null
+      ? {}
+      : {
+          automationWorkStart: {
+            launch: (input) => eventWorkStarter.dispatchEventTarget(input),
+          },
+        }),
+    deliveryConsumers:
+      codeHostDeliveryDispatcher === null
+        ? []
+        : [
+            createCodeHostWebhookDeliveryConsumer(
+              deps.db,
+              codeHostDeliveryDispatcher,
+              missionContinuation,
+            ),
+          ],
+    deliveryRetryLimits: {
+      current() {
+        const config = loadConfig(deps.configPath)
+        return {
+          defaultNodeRetries: config.defaultNodeRetries,
+          sessionRestartBudget: config.sessionRestartBudget,
+        }
+      },
+    },
+  })
+  unstarted?.trackReady(initialization)
+  return deferEventCenterModule(initialization)
 }
 
 /**
@@ -1768,11 +1769,26 @@ function composeFallbackDevelopmentAutomation(
   return automation
 }
 
+/** Owned finite initialization and runtime-test lifetime for one unstarted application. */
+export interface UnstartedApplicationScope {
+  readonly trackReady: <T>(ready: Promise<T>) => Promise<T>
+  readonly createMcpRuntimeTests: (
+    deps: ConstructorParameters<typeof McpRuntimeTestService>[0],
+  ) => McpRuntimeTestService
+}
+
 export function composeSqliteAppDeps(
   deps: AppDeps & { readonly providerCore: SelectedDaemonProviderCore<'sqlite'> },
 ): SqliteAppComposition<SelectedDaemonProviderCore<'sqlite'>>
 export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition
 export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
+  return composeSqliteApplicationDeps(deps)
+}
+
+export function composeSqliteApplicationDeps(
+  deps: AppDeps,
+  unstarted?: UnstartedApplicationScope,
+): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
   const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
   const identityAccess = withIntegrationTriggerResources(
@@ -1894,6 +1910,7 @@ export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
           digitalEmployeeEventCenter: composeApplicationEventCenter(
             deps,
             repositoryBootstrap.developmentDeliveryProvider,
+            unstarted,
           ),
         }
       : deps),
@@ -1974,7 +1991,7 @@ export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
 
   const userRuntimeTests =
     effectiveDeps.mcpRuntimeTests ??
-    getMcpRuntimeTestService({
+    (unstarted?.createMcpRuntimeTests ?? getMcpRuntimeTestService)({
       ...composeMcpRuntimeTestProvider(effectiveDeps.db),
       // RFC-359 W11：运行时测试要查 MCP、MCP 目录的删除 / 对账又要运行时测试——环打在词法
       // 作用域上，`mcpCatalog` 是同一作用域里的 `const`（下面几十行），两边都只在运行期取值。
@@ -2112,6 +2129,7 @@ export function composeSqliteAppDeps(deps: AppDeps): SqliteAppComposition {
     overviewQuery,
     intentApply,
     taskExecutionPersistence,
+    unstarted,
   )
   const application = freezeComposedAppDeps({
     token: effectiveDeps.token,
@@ -2321,6 +2339,7 @@ function composeSqliteApiRouteMounts(
   overviewQuery: OverviewRouteQuery,
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createSqliteTaskExecutionPersistence>,
+  unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -2419,7 +2438,7 @@ function composeSqliteApiRouteMounts(
   const executionContracts = deps.executionContracts
   const eventCenter =
     deps.digitalEmployeeEventCenter ??
-    composeApplicationEventCenter(deps, deps.developmentDeliveryProvider)
+    composeApplicationEventCenter(deps, deps.developmentDeliveryProvider, unstarted)
   const digitalEmployeeAgentTemplates =
     deps.digitalEmployeeAgentTemplates ??
     composeDigitalEmployeeAgentTemplateCatalogFor(
@@ -2488,6 +2507,7 @@ function composeSqliteApiRouteMounts(
       }),
     },
   })
+  unstarted?.trackReady(digitalEmployee.maintenance.ready())
   const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
     async launch(input) {
       const result = await digitalEmployee.runtime.commands.launchWork({

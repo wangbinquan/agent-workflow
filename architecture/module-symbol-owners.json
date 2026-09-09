@@ -6,7 +6,7 @@
     "moduleFiles": 1191,
     "productionFiles": 2574,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25052
+    "symbolsIncludingFileRoots": 25057
   },
   "entries": [
     {
@@ -4347,6 +4347,18 @@
       "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "composePostgresqlApplication",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlDaemonApplication",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -4375,6 +4387,30 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "log",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#PostgresqlApplicationInput",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "PostgresqlApplicationInput",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#PostgresqlApplicationPhase",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "PostgresqlApplicationPhase",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -160183,6 +160219,18 @@
       "currentLayer": "server.ts",
       "exported": true,
       "file": "packages/backend/src/server.ts",
+      "id": "owner:packages/backend/src/server.ts#composeSqliteApplicationDeps",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "composeSqliteApplicationDeps",
+      "targetContext": "bootstrap",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "server.ts",
+      "exported": true,
+      "file": "packages/backend/src/server.ts",
       "id": "owner:packages/backend/src/server.ts#composeSqliteDaemonProviderCore",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -160705,6 +160753,18 @@
       "symbol": "SqliteComposedAppDeps",
       "targetContext": "bootstrap",
       "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "server.ts",
+      "exported": true,
+      "file": "packages/backend/src/server.ts",
+      "id": "owner:packages/backend/src/server.ts#UnstartedApplicationScope",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "UnstartedApplicationScope",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
     },
     {
       "currentContext": "legacy",
@@ -301326,5 +301386,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c4b5a22522a8f36ccc397a501055c49a8b1bac96fa6dea37575de92144498a6e"
+  "sourceDigest": "sha256:46dee16b9546e68588e63fd10f203bb65fa83b2688ea3ea6e995a740de0390c9"
 }

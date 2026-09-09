@@ -20,6 +20,13 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W29生产只导出同时由原daemon/sync入口真实调用的完整共享composer。未启动应用
+  的薄包装和生命周期协调归`tests/helpers/providerHttpApplication.ts`；两引擎使用原
+  完整route graph、实际selected client和同一个recorded pool，不复制路由或模块装配。
+  有限event-center初始化和digital-employee ready确实执行并等待；不称零写入图。
+  测试每例拥有新的真实MCP服务，dispose不启动未启动实例，并等待已启动工作排空。
+  原daemon阶段的恢复/播种/顺序以及旧同步createApp保持；DB及借入参与者仍归调用者。
+
 - W28原cutover CAS整体进入shared transaction program，同步公开边界保持，异步入口
   驱动同一算法；原四谓词、SET对象、affected-row判断及readback顺序原样。
   Workgroup三调用点共享完整快照构造，保留各调用者的解码、成员顺序及switches引用差异。

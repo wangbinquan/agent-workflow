@@ -20,7 +20,8 @@ import { randomUUID } from 'node:crypto'
 import { getTableName, isTable } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/sqlite-core'
 
-import { createInMemoryDb } from '@/db/client'
+import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { DatabaseConfig } from '@agent-workflow/shared'
 import * as schema from '@/db/schema'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -36,6 +37,7 @@ import {
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
 import {
   createPostgresqlDatabaseRuntime,
+  type InstrumentedPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
 import { MIGRATIONS } from '../migration-freeze'
@@ -84,11 +86,23 @@ export function resolvePostgresqlTestUrlEnv(
   return POSTGRESQL_URL_ENVS.find((name) => (env[name] ?? '').length > 0)
 }
 
+/** Application composition receives the actual selected mechanism, never a cast of the ORM client. */
+export type ProviderApplicationBinding =
+  | Readonly<{ provider: 'sqlite'; db: DbClient }>
+  | Readonly<{
+      provider: 'postgresql'
+      db: PostgresqlDatabaseClient
+      runtime: InstrumentedPostgresqlDatabaseRuntime
+      databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
+    }>
+
 export interface ProviderDatabaseHarness {
   /** provider-中立客户端：两个引擎上是同一套 drizzle query builder。 */
   readonly db: ProviderNeutralDatabase
   readonly session: DatabaseSession
   readonly capabilities: EngineCapabilities
+  /** Bootstrap-only test composition; the runtime and client share the original recorded pool. */
+  readonly applicationBinding: ProviderApplicationBinding
   /** 仅测试夹具的 DDL：经本库 native/runtime 执行，不走业务客户端的 SQL 编译器。 */
   executeFixtureDdl(statement: string): Promise<void>
   /**
@@ -123,6 +137,7 @@ export interface DescribeEachProviderOptions {
 
 interface HarnessState {
   db?: ProviderNeutralDatabase
+  applicationBinding?: ProviderApplicationBinding
   session?: DatabaseSession
   record?: () => StatementRecording
   explain?: (statement: RecordedStatement) => Promise<string>
@@ -147,6 +162,9 @@ function databaseView(state: HarnessState): ProviderDatabaseHarness {
     get capabilities() {
       return current('session').engine
     },
+    get applicationBinding() {
+      return current('applicationBinding')
+    },
     recordStatements: () => current('record')(),
     explain: async (statement: RecordedStatement) => await current('explain')(statement),
     executeFixtureDdl: async (statement: string) => await current('fixtureDdl')(statement),
@@ -166,6 +184,9 @@ function harnessView(states: readonly HarnessState[]): ProviderHarness {
     get capabilities() {
       return primary.capabilities
     },
+    get applicationBinding() {
+      return primary.applicationBinding
+    },
     recordStatements: () => primary.recordStatements(),
     explain: async (statement: RecordedStatement) => await primary.explain(statement),
     executeFixtureDdl: async (statement: string) => await primary.executeFixtureDdl(statement),
@@ -180,6 +201,7 @@ function harnessView(states: readonly HarnessState[]): ProviderHarness {
 
 function clearState(state: HarnessState): void {
   state.db = undefined
+  state.applicationBinding = undefined
   state.session = undefined
   state.record = undefined
   state.explain = undefined
@@ -248,6 +270,7 @@ function registerSqlite(
           options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
         )
         state.db = db
+        state.applicationBinding = Object.freeze({ provider: 'sqlite', db })
         state.session = databaseSessionFor(db)
         state.record = () => recordSqliteStatements((db as unknown as { $client: never }).$client)
         state.explain = async (statement) => sqliteExplain(db, statement)
@@ -416,9 +439,9 @@ async function postgresqlExplain(raw: RawQuery, statement: RecordedStatement): P
  * 所以 query builder 与裸 SQL 两条路都抓得到——与 SQLite 侧 `recordStatements` 同一层。
  */
 function recordingRuntime(
-  runtime: PostgresqlDatabaseRuntime,
+  runtime: InstrumentedPostgresqlDatabaseRuntime,
   sinks: ReadonlySet<RecordedStatement[]>,
-): PostgresqlDatabaseRuntime {
+): InstrumentedPostgresqlDatabaseRuntime {
   const pool = runtime.providerPool()
   const wrap =
     (original: (query: string, parameters?: readonly unknown[]) => never) =>
@@ -463,11 +486,12 @@ function recordingRuntime(
     },
     close: (closeOptions?: { readonly timeout?: number }) => pool.close(closeOptions),
   }
-  return { ...runtime, providerPool: () => recordingPool } as PostgresqlDatabaseRuntime
+  return { ...runtime, providerPool: () => recordingPool } as InstrumentedPostgresqlDatabaseRuntime
 }
 
 interface PostgresqlHarnessDatabase {
   readonly runtime: PostgresqlDatabaseRuntime
+  readonly applicationBinding: Extract<ProviderApplicationBinding, { provider: 'postgresql' }>
   readonly client: PostgresqlDatabaseClient
   readonly raw: RawQuery
   readonly snapshot: PostgresqlSchemaSnapshot
@@ -483,25 +507,26 @@ async function createPostgresqlHarnessDatabase(
 ): Promise<PostgresqlHarnessDatabase> {
   const sinks = new Set<RecordedStatement[]>()
   const sourceUrl = (env ?? process.env)[urlEnv]
+  const databaseConfig = {
+    provider: 'postgresql',
+    urlEnv,
+    // RFC-359 W6-T27 实撞：**并发扇出宽于 poolMax 时，排队的那条查询会挂死**。
+    // 现场（本文件此前用 poolMax: 4）：`/api/overview` 的 `Promise.all` 一次发 13 条
+    // count（9 条资源计数 + 内层 4 条任务状态计数），其中一条永远拿不到连接，一直挂到
+    // 连接池的 idle timeout 才以 `ERR_POSTGRES_IDLE_TIMEOUT` 抛出——把 idleTimeoutMs
+    // 从 30s 调到 10min，挂死时间就跟着变成 10min（错误文案里的时长是**设置值**，不是
+    // 真实空闲时长）。同一段代码在 poolMax=16 下 12 轮全绿、每轮 4ms。
+    // 这里取 16 —— 与生产默认（`shared/src/schemas/config.ts` 的 `poolMax.default(16)`）
+    // 一致，harness 因此也更像生产。**注意这只是把 harness 挪出雷区，不是修复**：
+    // 平台侧没有任何「取连接超时」上界，poolMax 被配小（schema 允许到 1）或将来出现更宽的
+    // 扇出，生产上就会复现同一个挂死。
+    poolMax: 16,
+    connectTimeoutMs: 10_000,
+    statementTimeoutMs: 60_000,
+    idleTimeoutMs: 30_000,
+  } satisfies Extract<DatabaseConfig, { provider: 'postgresql' }>
   const runtime = createPostgresqlDatabaseRuntime({
-    config: {
-      provider: 'postgresql',
-      urlEnv,
-      // RFC-359 W6-T27 实撞：**并发扇出宽于 poolMax 时，排队的那条查询会挂死**。
-      // 现场（本文件此前用 poolMax: 4）：`/api/overview` 的 `Promise.all` 一次发 13 条
-      // count（9 条资源计数 + 内层 4 条任务状态计数），其中一条永远拿不到连接，一直挂到
-      // 连接池的 idle timeout 才以 `ERR_POSTGRES_IDLE_TIMEOUT` 抛出——把 idleTimeoutMs
-      // 从 30s 调到 10min，挂死时间就跟着变成 10min（错误文案里的时长是**设置值**，不是
-      // 真实空闲时长）。同一段代码在 poolMax=16 下 12 轮全绿、每轮 4ms。
-      // 这里取 16 —— 与生产默认（`shared/src/schemas/config.ts` 的 `poolMax.default(16)`）
-      // 一致，harness 因此也更像生产。**注意这只是把 harness 挪出雷区，不是修复**：
-      // 平台侧没有任何「取连接超时」上界，poolMax 被配小（schema 允许到 1）或将来出现更宽的
-      // 扇出，生产上就会复现同一个挂死。
-      poolMax: 16,
-      connectTimeoutMs: 10_000,
-      statementTimeoutMs: 60_000,
-      idleTimeoutMs: 30_000,
-    },
+    config: databaseConfig,
     generationId: GENERATION_ID,
     ...(env === undefined ? {} : { env }),
   })
@@ -527,7 +552,8 @@ async function createPostgresqlHarnessDatabase(
     // createPostgresqlDatabaseClient 会把进程级投影切到 postgresql 且不还原；afterAll 统一还原。
     // 客户端拿到的是**带录制的**连接池：连接池对象是冻结的（Proxy 无法为不可写属性返回
     // 别的值），所以走对象字面量重建，而不是 Proxy。
-    const client = createPostgresqlDatabaseClient(recordingRuntime(runtime, sinks))
+    const applicationRuntime = recordingRuntime(runtime, sinks)
+    const client = createPostgresqlDatabaseClient(applicationRuntime)
     // PostgreSQL 的迁移器只投影 DDL；迁移脚本里 INSERT 的种子行（committed_event_family_cutovers、
     // auth_login_policy、框架内置资源……）在生产上是随 RFC-349 逻辑复制从 SQLite 带过来的。
     // 这里做同一件事：把一个刚迁移完的 SQLite 内存库整表复制进来，两个引擎的「起点」才是同一个。
@@ -535,6 +561,12 @@ async function createPostgresqlHarnessDatabase(
     const snapshot = await snapshotSchema(query)
     return {
       runtime,
+      applicationBinding: Object.freeze({
+        provider: 'postgresql',
+        db: client,
+        runtime: applicationRuntime,
+        databaseConfig,
+      }),
       client,
       raw: query,
       snapshot,
@@ -875,6 +907,7 @@ function registerPostgresql(
         const state = states[index]!
         const query = raw
         state.db = client
+        state.applicationBinding = database.applicationBinding
         state.session = databaseSessionFor(client)
         state.record = () => {
           const statements: RecordedStatement[] = []

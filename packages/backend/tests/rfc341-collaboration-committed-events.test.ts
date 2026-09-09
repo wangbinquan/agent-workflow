@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   collaborationGateOperations,
   committedEventDeliveries,
@@ -10,7 +10,6 @@ import {
   taskQuestions,
   tasks,
 } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
 import {
   collaborationCommittedEventCodec,
@@ -21,9 +20,9 @@ import {
   decodeCollaborationCommittedEvent,
 } from '@/modules/collaboration/domain/collaborationCommittedEvent'
 import {
-  appendHumanGateOpenedCommittedEventTx,
-  appendReviewSelectionChangedCommittedEventTx,
-} from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+  appendHumanGateOpenedCommittedEvent,
+  appendReviewSelectionChangedCommittedEvent,
+} from '@/modules/collaboration/infrastructure/collaborationCommittedEvents'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
@@ -38,12 +37,14 @@ import {
   type CommittedEventEnvelopeV1,
   type CommittedEventRef,
 } from '@/platform/events/committed/types'
-import { MIGRATIONS } from './migration-freeze'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_001_734_000
 
-function dispatchCollaboration(db: DbClient): void {
-  db.update(committedEventFamilyCutovers)
+async function dispatchCollaboration(db: ProviderNeutralDatabase): Promise<void> {
+  await db
+    .update(committedEventFamilyCutovers)
     .set({ mode: 'dispatchable', epoch: 2, changedAt: NOW, changeRef: 'rfc341-test' })
     .where(
       and(
@@ -82,13 +83,13 @@ function reviewEnvelope(): CommittedEventEnvelopeV1 {
   }
 }
 
-function appendReviewOpen(input: {
-  db: DbClient
+async function appendReviewOpen(input: {
+  db: ProviderNeutralDatabase
   operationRef: string
   ordinal?: number
-}): CommittedEventRef {
-  const eventRef = dbTxSync(input.db, (tx) =>
-    appendHumanGateOpenedCommittedEventTx(tx, {
+}): Promise<CommittedEventRef> {
+  const eventRef = await databaseSessionFor(input.db).transaction((tx) =>
+    appendHumanGateOpenedCommittedEvent(tx, {
       family: 'review',
       gate: {
         taskId: 'task-review',
@@ -166,11 +167,14 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       new Set(COLLABORATION_COMMITTED_EVENT_TYPES),
     )
   })
+})
 
+describeEachProvider('RFC-341 collaboration committed-event contracts', (harness) => {
   test('domain write, operation and event all roll back when event insertion fails', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    dispatchCollaboration(db)
-    db.insert(tasks)
+    const db = harness.db
+    await dispatchCollaboration(db)
+    await db
+      .insert(tasks)
       .values({
         id: 'task-question-rollback',
         name: 'task-question-rollback',
@@ -183,13 +187,32 @@ describe('RFC-341 collaboration committed-event contracts', () => {
         status: 'running',
         inputs: '{}',
         startedAt: NOW,
+        executionLineageId: 'task-question-rollback',
+        lineageSlotPathJson:
+          '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-question-rollback","workflowRevision":null}]',
       })
       .run()
-    db.run(sql`
+    if (harness.capabilities.isolation === 'exclusive') {
+      await harness.executeFixtureDdl(`
       CREATE TRIGGER rfc341_fail_collaboration_event
       BEFORE INSERT ON committed_events
       BEGIN SELECT RAISE(ABORT, 'rfc341-collaboration-event-fault'); END
     `)
+    } else {
+      await harness.executeFixtureDdl(`
+        CREATE FUNCTION "agent_workflow"."rfc341_fail_collaboration_event_fn"() RETURNS trigger
+        LANGUAGE plpgsql AS $rfc341_fault$
+        BEGIN
+          RAISE EXCEPTION USING MESSAGE = 'rfc341-collaboration-event-fault', ERRCODE = 'P0001';
+        END;
+        $rfc341_fault$;
+      `)
+      await harness.executeFixtureDdl(`
+        CREATE TRIGGER rfc341_fail_collaboration_event
+        BEFORE INSERT ON "agent_workflow"."committed_events"
+        FOR EACH ROW EXECUTE FUNCTION "agent_workflow"."rfc341_fail_collaboration_event_fn"();
+      `)
+    }
 
     await expect(
       createManualQuestionOpen(createCollaborationCommandContext({ db }), {
@@ -201,17 +224,17 @@ describe('RFC-341 collaboration committed-event contracts', () => {
         now: NOW + 1,
       }),
     ).rejects.toThrow()
-    expect(db.select().from(taskQuestions).all()).toEqual([])
-    expect(db.select().from(collaborationGateOperations).all()).toEqual([])
-    expect(db.select().from(committedEvents).all()).toEqual([])
+    expect(await db.select().from(taskQuestions).all()).toEqual([])
+    expect(await db.select().from(collaborationGateOperations).all()).toEqual([])
+    expect(await db.select().from(committedEvents).all()).toEqual([])
   })
 
   test('immediate pump orders a group, dedupes it, and dispatcher recovers an unpumped event', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    dispatchCollaboration(db)
-    const first = appendReviewOpen({ db, operationRef: 'review-group', ordinal: 0 })
-    const second = dbTxSync(db, (tx) => {
-      const eventRef = appendReviewSelectionChangedCommittedEventTx(tx, {
+    const db = harness.db
+    await dispatchCollaboration(db)
+    const first = await appendReviewOpen({ db, operationRef: 'review-group', ordinal: 0 })
+    const second = await harness.session.transaction(async (tx) => {
+      const eventRef = await appendReviewSelectionChangedCommittedEvent(tx, {
         gate: {
           taskId: 'task-review',
           nodeRunId: 'review-run-1',
@@ -329,16 +352,18 @@ describe('RFC-341 collaboration committed-event contracts', () => {
     await dispatcher.drain(32)
     expect(projected).toHaveLength(2)
 
-    appendReviewOpen({ db, operationRef: 'review-unpumped' })
+    await appendReviewOpen({ db, operationRef: 'review-unpumped' })
     await dispatcher.drain(32)
     expect(projected.at(-1)).toBe('0:collaboration.human-gate-opened.v1')
     expect(projected).toHaveLength(3)
     expect(
-      db
-        .select()
-        .from(committedEventDeliveries)
-        .where(eq(committedEventDeliveries.state, 'accepted'))
-        .all().length,
+      (
+        await db
+          .select()
+          .from(committedEventDeliveries)
+          .where(eq(committedEventDeliveries.state, 'accepted'))
+          .all()
+      ).length,
     ).toBeGreaterThan(0)
   })
 })

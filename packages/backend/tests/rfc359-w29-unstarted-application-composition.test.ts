@@ -1,0 +1,463 @@
+import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import ts from 'typescript'
+
+// No application or service is started here. Whole-body AST inverses pin the
+// original complete graph; the pure controls execute the actual lifetime helper.
+const sourceRoot = process.env.AW_RFC359_COMPOSITION_SOURCE_ROOT ?? resolve(import.meta.dir, '..')
+const pgPath = 'src/cli/postgresqlDaemonApplication.ts'
+const serverPath = 'src/server.ts'
+const parse = (path: string) =>
+  ts.createSourceFile(
+    path,
+    readFileSync(resolve(sourceRoot, path), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+const pg = parse(pgPath)
+const server = parse(serverPath)
+const applicationHelper = ts.createSourceFile(
+  'providerHttpApplication.ts',
+  readFileSync(
+    process.env.AW_RFC359_LIFETIME_SOURCE_PATH ??
+      resolve(import.meta.dir, 'helpers/providerHttpApplication.ts'),
+    'utf8',
+  ),
+  ts.ScriptTarget.Latest,
+  true,
+)
+const printer = ts.createPrinter({ removeComments: true })
+
+function declaration(source: ts.SourceFile, name: string): ts.FunctionDeclaration {
+  const node = source.statements.find(
+    (item): item is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(item) && item.name?.text === name && item.body !== undefined,
+  )
+  if (node === undefined) throw new Error(`missing composition function: ${name}`)
+  return node
+}
+
+function functionBody(source: ts.SourceFile, name: string): ts.Block {
+  const body = declaration(source, name).body
+  if (body === undefined) throw new Error(`missing composition body: ${name}`)
+  return body
+}
+
+function compact(node: ts.Node, source: ts.SourceFile): string {
+  return node.getText(source).replace(/\s/g, '')
+}
+
+function isDaemonChoice(node: ts.Node, source: ts.SourceFile): node is ts.ConditionalExpression {
+  return (
+    ts.isConditionalExpression(node) && compact(node.condition, source) === "phase.kind==='daemon'"
+  )
+}
+
+function isRuntimeFactoryChoice(node: ts.Node, source: ts.SourceFile): node is ts.BinaryExpression {
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+    compact(node.left, source) === 'unstarted?.createMcpRuntimeTests'
+  )
+}
+
+/** Only the approved composition seams are removed; every original subtree remains. */
+function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
+  const original = functionBody(source, name)
+  const transformed = ts.transform(original, [
+    (context) => {
+      const visit: ts.Visitor = (node) => {
+        if (
+          ts.isParenthesizedExpression(node) &&
+          (isDaemonChoice(node.expression, source) ||
+            isRuntimeFactoryChoice(node.expression, source))
+        ) {
+          return ts.visitNode(node.expression, visit)
+        }
+        if (isDaemonChoice(node, source)) return ts.visitNode(node.whenTrue, visit)
+        if (
+          ts.isObjectLiteralExpression(node) &&
+          node.properties.some(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              property.name.getText(source) === 'opencodeVersion' &&
+              isDaemonChoice(property.initializer, source),
+          )
+        ) {
+          // The optional fixture value expanded this formerly inline record.
+          return ts.factory.createObjectLiteralExpression(
+            node.properties.map((property) => {
+              const restored = ts.visitNode(property, visit, ts.isObjectLiteralElementLike)!
+              return ts.isPropertyAssignment(restored)
+                ? ts.factory.createPropertyAssignment(restored.name, restored.initializer)
+                : restored
+            }),
+            false,
+          )
+        }
+        if (isRuntimeFactoryChoice(node, source)) return ts.visitNode(node.right, visit)
+        if (ts.isBlock(node)) {
+          const statements: ts.Statement[] = []
+          for (const statement of node.statements) {
+            if (
+              ts.isIfStatement(statement) &&
+              compact(statement.expression, source) === "phase.kind==='daemon'"
+            ) {
+              if (!ts.isBlock(statement.thenStatement))
+                throw new Error('daemon phase must be a block')
+              for (const child of statement.thenStatement.statements) {
+                statements.push(ts.visitNode(child, visit, ts.isStatement)!)
+              }
+            } else if (
+              ts.isExpressionStatement(statement) &&
+              ts.isCallExpression(statement.expression) &&
+              compact(statement.expression.expression, source) === 'unstarted?.trackReady'
+            ) {
+              // New unstarted-only readiness capture, absent from old sync entry.
+            } else {
+              statements.push(ts.visitNode(statement, visit, ts.isStatement)!)
+            }
+          }
+          return ts.factory.updateBlock(node, statements)
+        }
+        if (
+          ts.isCallExpression(node) &&
+          ['composeApplicationEventCenter', 'composeSqliteApiRouteMounts'].includes(
+            node.expression.getText(source),
+          ) &&
+          node.arguments.at(-1)?.getText(source) === 'unstarted'
+        ) {
+          return ts.factory.updateCallExpression(
+            node,
+            node.expression,
+            node.typeArguments,
+            node.arguments
+              .slice(0, -1)
+              .map((argument) => ts.visitNode(argument, visit, ts.isExpression)!),
+          )
+        }
+        return ts.visitEachChild(node, visit, context)
+      }
+      return (node) => ts.visitNode(node, visit, ts.isBlock)!
+    },
+  ])
+  const result = transformed.transformed[0]
+  if (result === undefined) throw new Error('missing normalized composition body')
+  transformed.dispose()
+  return result
+}
+
+function oldEventCenterBody(): ts.Block {
+  const body = functionBody(server, 'composeApplicationEventCenter')
+  const initialization = body.statements.find(
+    (node): node is ts.VariableStatement =>
+      ts.isVariableStatement(node) &&
+      node.declarationList.declarations.some(
+        (item) => item.name.getText(server) === 'initialization',
+      ),
+  )
+  const initializer = initialization?.declarationList.declarations[0]?.initializer
+  if (initialization === undefined || initializer === undefined) return body
+  const at = body.statements.indexOf(initialization)
+  return ts.factory.updateBlock(body, [
+    ...body.statements.slice(0, at),
+    ts.factory.createReturnStatement(
+      ts.factory.createCallExpression(
+        ts.factory.createIdentifier('deferEventCenterModule'),
+        undefined,
+        [initializer],
+      ),
+    ),
+  ])
+}
+
+function digest(body: ts.Block, source: ts.SourceFile): string {
+  return createHash('sha256')
+    .update(printer.printNode(ts.EmitHint.Unspecified, body, source))
+    .digest('hex')
+}
+
+function descendants(node: ts.Node, predicate: (node: ts.Node) => boolean): ts.Node[] {
+  const found: ts.Node[] = []
+  const visit = (current: ts.Node): void => {
+    if (predicate(current)) found.push(current)
+    ts.forEachChild(current, visit)
+  }
+  visit(node)
+  return found
+}
+
+function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.CallExpression[] {
+  return descendants(
+    node,
+    (candidate) => ts.isCallExpression(candidate) && candidate.expression.getText(source) === name,
+  ).filter(ts.isCallExpression)
+}
+
+describe('RFC-359 W29 complete unstarted application composition', () => {
+  test('exports both full unstarted entries while retaining the original daemon and sync entries', () => {
+    const names = (source: ts.SourceFile) =>
+      source.statements
+        .filter(ts.isFunctionDeclaration)
+        .filter((node) => node.modifiers?.some((item) => item.kind === ts.SyntaxKind.ExportKeyword))
+        .map((node) => node.name?.text)
+    expect(names(applicationHelper)).toContain('composePostgresqlUnstartedApplication')
+    expect(names(pg)).toContain('composePostgresqlDaemonApplication')
+    expect(names(applicationHelper)).toContain('composeSqliteUnstartedApplication')
+    expect(names(server)).toContain('composeSqliteAppDeps')
+    expect(names(server)).toContain('createApp')
+    expect(names(pg)).toContain('composePostgresqlApplication')
+    expect(names(server)).toContain('composeSqliteApplicationDeps')
+    expect(names(pg)).not.toContain('composePostgresqlUnstartedApplication')
+    expect(names(server)).not.toContain('composeSqliteUnstartedApplication')
+    expect(compact(functionBody(pg, 'composePostgresqlDaemonApplication'), pg)).toBe(
+      "{returncomposePostgresqlApplication(input,{kind:'daemon'})}",
+    )
+    expect(compact(functionBody(server, 'composeSqliteAppDeps'), server)).toBe(
+      '{returncomposeSqliteApplicationDeps(deps)}',
+    )
+  })
+
+  test('daemon phase retains the complete original 162-statement graph and ordered effects', () => {
+    const body = functionBody(pg, 'composePostgresqlApplication')
+    const phaseBlocks = body.statements.filter(
+      (node): node is ts.IfStatement =>
+        ts.isIfStatement(node) && compact(node.expression, pg) === "phase.kind==='daemon'",
+    )
+    expect(phaseBlocks).toHaveLength(8)
+    const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
+    expect(restored.statements).toHaveLength(162)
+    expect(digest(restored, pg)).toBe(
+      '80c3bc4a21d2f4d390e4b09ccf14449921ec9abd49c0e4f25a296916c241f421',
+    )
+    expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
+    expect(
+      compact(phaseBlocks.find((node) => node.elseStatement !== undefined)!.elseStatement!, pg),
+    ).toBe('{awaitphase.scope.trackReady(digitalEmployee.maintenance.ready())}')
+  })
+
+  test('SQLite phase preserves complete original composition and captures the real initialization', () => {
+    expect(digest(oldPhaseBody(server, 'composeSqliteApplicationDeps'), server)).toBe(
+      'f7bd7f69a83b2905bd58b97bf43ac3cf863ae160d29d460e2746abef79847dad',
+    )
+    expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
+      '33f19a2d7f6a8afa43b71a369328466b6360fcefd6e30274c0dd804108d0cef8',
+    )
+    expect(digest(oldEventCenterBody(), server)).toBe(
+      '3e6131c32a868090e7236eb8e554605e8b46a5df15a149671acd396c0a072194',
+    )
+    const eventBody = functionBody(server, 'composeApplicationEventCenter')
+    expect(namedCalls(eventBody, server, 'composeEventCenter')).toHaveLength(1)
+    expect(
+      namedCalls(eventBody, server, 'unstarted?.trackReady').map((node) => compact(node, server)),
+    ).toEqual(['unstarted?.trackReady(initialization)'])
+    expect(
+      namedCalls(
+        functionBody(server, 'composeSqliteApiRouteMounts'),
+        server,
+        'unstarted?.trackReady',
+      ).map((node) => compact(node, server)),
+    ).toEqual(['unstarted?.trackReady(digitalEmployee.maintenance.ready())'])
+  })
+
+  test('uses the unchanged complete mounts once and forwards original workflow runtime and health values', () => {
+    const expected = {
+      composeProviderAppDeps: 'bda8a20e8e4f382e244eb75252ff390d066b680fcc82a99ff0b7bfb1f77da8cb',
+      composePostgresqlAppDeps: '2ebbeeef1bc8fecbda4f4c93cf8603afc3eec78fe6d4739403d407c2fb185c5b',
+      mountApiRoutes: '266aea41bba47101eab057e8e5b9c981f20c8e40063be12b09bf299e1f5391bd',
+      createComposedApp: 'a632acc2c6534ecb769e1bd0e64e4f4d8c423d1be8aee049101837c9847b9e62',
+      createApp: '628edbc2da66884bfba5d159423fa972ea9a8d4aca3ecb37ed8e3ed98e18aefa',
+    }
+    for (const [name, hash] of Object.entries(expected)) {
+      expect(digest(functionBody(server, name), server)).toBe(hash)
+    }
+    const pgBody = functionBody(pg, 'composePostgresqlApplication')
+    expect(namedCalls(pgBody, pg, 'createComposedApp').map((node) => compact(node, pg))).toEqual([
+      'createComposedApp(composePostgresqlAppDeps(composition))',
+    ])
+    expect(
+      namedCalls(
+        functionBody(applicationHelper, 'composeSqliteUnstartedApplication'),
+        applicationHelper,
+        'createComposedApp',
+      ).map((node) => compact(node, applicationHelper)),
+    ).toEqual(['createComposedApp(composeSqliteApplicationDeps(deps,scope))'])
+    const alternatives = descendants(pgBody, (node) => isDaemonChoice(node, pg))
+      .filter(ts.isConditionalExpression)
+      .map((node) => compact(node.whenFalse, pg))
+    expect(alternatives).toEqual([
+      'phase.scope.createMcpRuntimeTests',
+      '(input.opencodeVersion??null)',
+      '(input.workflowRuntime??Object.freeze({}))',
+    ])
+  })
+})
+
+interface ControlledMcpInput {
+  readonly name: string
+  readonly dispose: () => Promise<void>
+}
+class ControlledMcpService {
+  constructor(readonly input: ControlledMcpInput) {}
+  dispose(): Promise<void> {
+    return this.input.dispose()
+  }
+}
+interface ControlledScope {
+  trackReady<T>(ready: Promise<T>): Promise<T>
+  createMcpRuntimeTests(input: ControlledMcpInput): ControlledMcpService
+}
+type ComposeControlledScope = <T extends object>(
+  compose: (scope: ControlledScope) => T | Promise<T>,
+) => Promise<T & { readonly dispose: () => Promise<void> }>
+
+function actualLifetimeHelper(): ComposeControlledScope {
+  const actual = declaration(applicationHelper, 'composeUnstartedApplication').getText(
+    applicationHelper,
+  )
+  const code = ts.transpileModule(actual.replace(/^export\s+/, ''), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText
+  // Only this actual pure lifetime function is evaluated. The constructor is a
+  // controlled lifecycle collaborator; no application, database, or rows are faked.
+  return new Function('McpRuntimeTestService', `${code}\nreturn composeUnstartedApplication`)(
+    ControlledMcpService,
+  ) as ComposeControlledScope
+}
+
+function deferred<T>() {
+  let resolvePromise!: (value: T | PromiseLike<T>) => void
+  let rejectPromise!: (error: unknown) => void
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve
+    rejectPromise = reject
+  })
+  return { promise, resolve: resolvePromise, reject: rejectPromise }
+}
+
+describe('RFC-359 W29 actual application lifetime helper with controlled lifecycle collaborators', () => {
+  test('waits for every real readiness promise and preserves the same owned instance', async () => {
+    const compose = actualLifetimeHelper()
+    const first = deferred<string>()
+    const second = deferred<void>()
+    const created = deferred<void>()
+    let returned = false
+    const log: string[] = []
+    const pending = compose((scope) => {
+      expect(scope.trackReady(first.promise)).toBe(first.promise)
+      scope.trackReady(second.promise)
+      const service = scope.createMcpRuntimeTests({
+        name: 'first',
+        dispose: async () => {
+          log.push('dispose')
+        },
+      })
+      created.resolve()
+      return { service }
+    }).then((application) => {
+      returned = true
+      return application
+    })
+    await created.promise
+    first.resolve('ready')
+    await first.promise
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    try {
+      expect(returned).toBe(false)
+    } finally {
+      second.resolve()
+    }
+    const application = await pending
+    expect(application.service.input.name).toBe('first')
+    expect(log).toEqual([])
+    expect(Object.isFrozen(application)).toBe(true)
+    const a = application.dispose()
+    const b = application.dispose()
+    expect(a).toBe(b)
+    await a
+    expect(log).toEqual(['dispose'])
+  })
+
+  test('finishes pending initialization before cleanup after construction failure', async () => {
+    const compose = actualLifetimeHelper()
+    const initialization = deferred<void>()
+    const constructing = deferred<void>()
+    const failure = new Error('construction failed')
+    const log: string[] = []
+    const pending = compose((scope) => {
+      scope.trackReady(initialization.promise)
+      scope.createMcpRuntimeTests({
+        name: 'failed',
+        dispose: async () => {
+          log.push('dispose')
+        },
+      })
+      constructing.resolve()
+      throw failure
+    })
+    const outcome = pending.then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+    await constructing.promise
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(log).toEqual([])
+    log.push('initialization finished')
+    initialization.resolve()
+    expect(await outcome).toBe(failure)
+    expect(log).toEqual(['initialization finished', 'dispose'])
+  })
+
+  test('keeps initialization failure and closes every service even when cleanup also fails', async () => {
+    const compose = actualLifetimeHelper()
+    const failure = new Error('module initialization failed')
+    const cleanup = new Error('owned service disposal failed')
+    const log: string[] = []
+    const outcome = await compose((scope) => {
+      scope.trackReady(Promise.reject(failure))
+      scope.createMcpRuntimeTests({
+        name: 'first',
+        dispose: async () => {
+          log.push('first')
+          throw cleanup
+        },
+      })
+      scope.createMcpRuntimeTests({
+        name: 'second',
+        dispose: async () => {
+          log.push('second')
+        },
+      })
+      return { marker: 'constructed' }
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    )
+    expect(outcome).toBeInstanceOf(AggregateError)
+    if (!(outcome instanceof AggregateError)) throw new Error('missing combined lifecycle failure')
+    expect(outcome.errors).toEqual([failure, cleanup])
+    expect(log).toEqual(['first', 'second'])
+  })
+
+  test('gives consecutive app scopes separate instances and preserves each cleanup failure identity', async () => {
+    const compose = actualLifetimeHelper()
+    const cleanup = new Error('first disposal failed')
+    const first = await compose((scope) => ({
+      service: scope.createMcpRuntimeTests({
+        name: 'first',
+        dispose: async () => {
+          throw cleanup
+        },
+      }),
+    }))
+    const second = await compose((scope) => ({
+      service: scope.createMcpRuntimeTests({ name: 'second', dispose: async () => {} }),
+    }))
+    expect(first.service).not.toBe(second.service)
+    await expect(first.dispose()).rejects.toBe(cleanup)
+    await second.dispose()
+    await expect(first.dispose()).rejects.toBe(cleanup)
+  })
+})

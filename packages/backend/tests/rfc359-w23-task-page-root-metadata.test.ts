@@ -110,6 +110,8 @@ function originalRootBindings(
   const offset = [...before.matchAll(/\?|\$\d+/g)].length
   const added = [
     parsed.limit + 1,
+    // W28 emits the same budget again for the physical-prefix LIMIT.
+    parsed.limit + 1,
     ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
   ]
   expect(values.slice(offset, offset + added.length)).toEqual(added)

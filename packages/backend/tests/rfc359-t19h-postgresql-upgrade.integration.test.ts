@@ -291,13 +291,13 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
       }, 120_000)
     }
 
-    test('a real two-step upgrade transaction converges with a fresh install without ordering receipts by time', async () => {
+    test('a real multi-step upgrade transaction converges with a fresh install without ordering receipts by time', async () => {
       const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
       if (urlEnv === undefined)
         throw new Error('selected PostgreSQL upgrade case requires the real harness PostgreSQL URL')
       const committed = await loadPostgresqlMigrationHistory()
       // A future index is test data for the multi-edge engine. The published
-      // 0001 and immutable root are still the exact committed artifacts.
+      // upgrades and immutable root are still the exact committed artifacts.
       const fixtureIndex = {
         name: 'idx_t19h_next',
         columns: ['status', 'id'],
@@ -329,14 +329,18 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         sqliteMigrations,
         sqliteMigration: postgresqlSqliteMigrationIdentity(sqliteMigrations),
       }
-      const second = createPostgresqlIndexUpgrade({
+      const nextSequence = committed.steps.length + 1
+      const futureStep = createPostgresqlIndexUpgrade({
         from: committed.head,
         to: next,
-        sequence: 2,
-        id: '0002_t19h_fixture',
-        previousEntryDigest: committed.steps[0]!.digest,
+        sequence: nextSequence,
+        id: `${String(nextSequence).padStart(4, '0')}_t19h_fixture`,
+        previousEntryDigest: committed.steps[committed.steps.length - 1]!.digest,
       })
-      const history = replayPostgresqlMigrationHistory(committed.root, [...committed.steps, second])
+      const history = replayPostgresqlMigrationHistory(committed.root, [
+        ...committed.steps,
+        futureStep,
+      ])
       const runtime = createPostgresqlDatabaseRuntime({
         generationId: 'dbg_t19h_multistep',
         config: {
@@ -375,7 +379,7 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         })
         expect(
           await pool.unsafe(
-            "SELECT indexname FROM pg_indexes WHERE schemaname = 'agent_workflow' AND indexname IN ('idx_tasks_cached_repo_task', 'idx_tasks_overview_counts')",
+            "SELECT indexname FROM pg_indexes WHERE schemaname = 'agent_workflow' AND indexname IN ('idx_tasks_cached_repo_task', 'idx_tasks_overview_counts', 'idx_tasks_list_facets_cover')",
           ),
         ).toEqual([])
         expect(await pool.unsafe('SELECT * FROM agent_workflow_meta.schema_migrations')).toEqual(
@@ -395,7 +399,7 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         const receipts = await pool.unsafe(
           'SELECT baseline_id, contract_digest, plan_digest, applied_at FROM agent_workflow_meta.schema_migrations ORDER BY baseline_id',
         )
-        expect(receipts).toHaveLength(3)
+        expect(receipts).toHaveLength(history.steps.length + 1)
         expect(receipts[0]).toEqual(baseline[0])
         for (const step of history.steps) {
           const receipt = postgresqlUpgradeReceipt(step)

@@ -431,6 +431,9 @@ export class McpRuntimeTestService {
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   private reconcileTimer: ReturnType<typeof setInterval> | null = null
   private startPromise: Promise<void> | null = null
+  private hasStarted = false
+  private disposed = false
+  private disposePromise: Promise<void> | null = null
   private accepting = true
   private paused = false
   private shuttingDown = false
@@ -443,17 +446,64 @@ export class McpRuntimeTestService {
   }
 
   start(): Promise<void> {
+    if (this.disposed)
+      return Promise.reject(
+        new ConflictError('mcp-test-service-disposed', 'the MCP runtime test service is disposed'),
+      )
     if (this.startPromise !== null) return this.startPromise
-    const attempt = (async () => {
-      await this.bootRecover()
-      await this.reconcileCore()
-      this.installReconcileTimer()
-    })()
+    this.hasStarted = true
+    let resolveAttempt!: () => void
+    let rejectAttempt!: (error: unknown) => void
+    const attempt = new Promise<void>((resolve, reject) => {
+      resolveAttempt = resolve
+      rejectAttempt = reject
+    })
     this.startPromise = attempt.catch((error: unknown) => {
       this.startPromise = null
       throw error
     })
+    // Publish the promise before a synchronous persistence callback can dispose
+    // this instance. The original boot sequence still starts immediately.
+    void (async () => {
+      await this.bootRecover()
+      await this.reconcileCore()
+      this.installReconcileTimer()
+    })().then(resolveAttempt, rejectAttempt)
     return this.startPromise
+  }
+
+  /** Permanently close an application-owned instance without starting a cold one. */
+  async dispose(budgetMs = 30_000): Promise<void> {
+    if (this.disposePromise !== null) return this.disposePromise
+    const starting = this.startPromise
+    this.disposed = true
+    this.shuttingDown = true
+    this.paused = true
+    this.accepting = false
+    this.clearBackgroundTimers()
+    this.queue.splice(0)
+    this.queued.clear()
+    this.disposePromise = (async () => {
+      if (!this.hasStarted) return
+      const errors: unknown[] = []
+      try {
+        await starting
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
+        await this.drainRunningTurns(budgetMs)
+      } catch (error) {
+        errors.push(error)
+      } finally {
+        this.clearBackgroundTimers()
+        this.queue.splice(0)
+        this.queued.clear()
+      }
+      if (errors.length === 1) throw errors[0]
+      if (errors.length > 1) throw new AggregateError(errors, 'MCP runtime test disposal failed')
+    })()
+    return this.disposePromise
   }
 
   async shutdown(budgetMs = 30_000): Promise<void> {
@@ -1221,6 +1271,7 @@ export class McpRuntimeTestService {
   }
 
   private enqueue(item: QueueItem): void {
+    if (this.disposed) return
     if (this.queued.has(item.turnId) || this.turnPromises.has(item.turnId)) return
     this.queued.add(item.turnId)
     this.queue.push(item)

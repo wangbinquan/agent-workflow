@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第二十九批（2026-09-09）**：旧daemon/sync与测试复用同一完整应用装配；测试专用unstarted包装及生命周期归helper，有限初始化真实完成，不启动后台。每例真实MCP支持不经start的dispose，14/109纯控制与8/46装配控制通过。
+> RFC311三个旧HTTP例和RFC341两个旧DB例接入默认双库，原pure例与断言/预算保持；协作原后4/21、真实错误负控及整行/SQL证据已核。候选累计234完整旧套件，另保留W28部分套件；本批HTTP/PG等待托管。
+> W28 exact6f3be930c Main34288246161终态33success/7failure，两平台各1944文件恰一次；113选定Ubuntu执行112过/1机制观察红。本批精确修复四功能测试的预算绑定、升级链/226计数及PG唯一机制SELECT观察，原判据保持。
+> W28原full34288325222的360raw/六五表receipt/13官方源已独立核验：PG三任务页83.83/56.64/50.27ms均达标且较SQLite快；六其他端点仍较慢，SQLite任务首页199.07ms未过150ms。九稳定wire相同，overview末次完整body摘要不同但无raw body，原因不推断。
+> 当前1947测试文件、613构库文件/1271调用、599无harness/426有harness；T19f696、provider命名60；canonical1740/272/983/5329/4796/25057，新增五个有真实生产消费者的共享装配身份，无新增dead-adapter豁免。
+> 初版入口归属使metadata210过/1红，调整后211/433及canonical13/55通过。统一tsc仅两个新测试类型标注报错，完整emittedJS不变的修正后通过，15候选hash保持；独立代码/metadata/原full复核完成。
+> 原三生成文档的直接Prettier差异不属于实际Main Format范围，未修改生成器/ignore/CI。无本地PG/应用HTTP/服务/E2E/规模库/全门禁；新SHA托管待验，原W20限制、六项剩余AC和RFC保持开放。
+
 > **RFC-359 W12 第二十八批（2026-09-09）**：Workgroup三入口共用完整快照构造，原后32/466；唯一cutover CAS共享到同步/异步事务，RFC341原2个DB例默认双库、其余3例保持，25/138本地通过。
 > 新任务facet覆盖索引与SQLite0226/PG0002增量历史由原生成器产生；原历史保持。physical_prefix直接CAST绑定原同值预算，原25/527→25/541，结合索引6/200过，完整行/SQL及错误预算负控已核。
 > W27 exact69a22bdc4 Main34281654403终态33success/7failure；1941文件恰一次，74选定执行72过/2PG raw BIGINT断言红。本批修原始值预期、task观察行、真实diagnostic导出源锁和第二Webhook投递等待，原断言/预算不减。

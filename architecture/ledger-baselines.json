@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 698,
+      "baseline": 696,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -867,15 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25052,
+      "baseline": 25057,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W28 adds one shared workgroupSnapshotValues function plus the shared cutover generator and its real asynchronous public adapter. The unchanged affected-row helper moves between existing files, so the symbol inventory has four added identities and one removed identity, a net growth of three. No provider exemption or second cutover algorithm is introduced."
+        "why": "RFC-359 W29 adds five application-composition identities: the PostgreSQL shared input and phase types, the actual shared PostgreSQL and SQLite composers called by existing production entries, and their lifecycle scope interface. All existing owner identities remain exact. Test-only unstarted wrappers and their lifetime helper live in tests/helpers; no dead-adapter exemption or duplicated route graph is introduced."
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c4b5a22522a8f36ccc397a501055c49a8b1bac96fa6dea37575de92144498a6e",
+    "sourceDigest": "sha256:46dee16b9546e68588e63fd10f203bb65fa83b2688ea3ea6e995a740de0390c9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -888,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "69a22bdc49b7e88219e4b4499ee45333273d7689",
-    "contentDigest": "sha256:37b8d78bbc50cbc2e26f920712fb9c4e64d7b95cb449126e53500c2c4f202992",
+    "currentSnapshotSha": "6f3be930c57e34ca01ebc14642e415a586344fac",
+    "contentDigest": "sha256:9dae4554d96feb37f08586ebcf83570d77a3b2e90e6ae9e71eb769e0056c82ca",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

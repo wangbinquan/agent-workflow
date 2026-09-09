@@ -233,7 +233,23 @@ describeEachProvider('RFC-359 W28 committed cutover transaction', (harness) => {
     ).finally(() => recording.stop())
     expect(error.message).toBe('committed event cutover changed concurrently: collaboration/review')
     expect(cutoverSql(recording.statements)).toHaveLength(1)
-    expect(recording.selects()).toEqual([])
+    const binding = harness.applicationBinding
+    // The real PG client checks its active generation before the zero-row UPDATE.
+    // Keep the complete SELECT list exact so any business readback still fails.
+    expect(recording.selects()).toEqual(
+      binding.provider === 'sqlite'
+        ? []
+        : [
+            {
+              sql:
+                'SELECT generation_id FROM "agent_workflow_meta"."database_generations" ' +
+                "WHERE generation_id = $1 AND state = 'active'",
+              params: 1,
+              rows: 1,
+              values: [binding.runtime.generationId],
+            },
+          ],
+    )
     expect(await rows(harness)).toEqual(before)
   })
 
