@@ -504,13 +504,20 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *     ⚠️ **这个数字在缩**：该文件正被同步面退役那一刀改动（落账当天从 6 掉到 5），红了先看是不是
  *     同步面又退了一处——那是收敛，把数字改小即可。
  *     removeWhen —— 随同步面退役（`rfc359-sync-transaction-highwater` 归零）整份消失。
- *   modules/task-execution/infrastructure/taskContinuationAdmission.ts: 1
- *     :147 taskExecutionIntents（部分唯一索引 `idx_task_execution_intents_pending_task`）。
- *     why —— **已实测不可达**：唯一的生产入口把它塞进 `withPostgresqlSerializableTaskExecution` /
- *       `.serializable()`，且同一笔事务里更早还有一次 task 行 CAS（status + lifecycleEventRevision）
- *       把输家先挡掉。两个引擎并发提交 240/240 都是 `task-continuation-conflict`；把 opener 降成
- *       `.transaction()`，PG 立刻 120/120 全红。
- *     removeWhen —— opener 降级时必须补锁。
+ *   （已销账，RFC-359 W57）modules/task-execution/infrastructure/taskContinuationAdmission.ts
+ *     开账时记的是 1（:147 taskExecutionIntents，部分唯一索引
+ *     `idx_task_execution_intents_pending_task`），why 写的是「**已实测不可达**」——理由是
+ *     唯一的生产入口把它塞进 `.serializable()`，且同一笔事务里更早还有一次 task 行 CAS
+ *     把输家先挡掉；两个引擎并发提交 240/240 都是 `task-continuation-conflict`。
+ *     **那个判断少看了一条路**：`rfc359-w8-t29-unique-insert-conflict` 的对拍**直接打端口**
+ *     （它的注释自己写着「测的是最里面那道判据」），绕开了调用方那次 CAS。2026-09-10 CI 上
+ *     ubuntu 分片 1/8 因此红过一次——SSI 没先冒 40001，部分唯一索引先抛 23505，而 23505
+ *     既不是序列化失败（`serializable` 的重试不接）、当时也没有映射，驱动错误原样漏给了调用方
+ *     （用户侧就是 500 而不是 409）。
+ *     处置：`taskContinuationAdmission.ts` 现在自带 `admitWithPendingIntentConflict`，把那条
+ *     唯一冲突翻成 `task-continuation-conflict`；端口的错误合同不再依赖调用方有没有先做 CAS。
+ *     判据见 `rfc359-w57-pending-intent-conflict-mapping.test.ts`（双引擎，含两个引擎各自的
+ *     冲突目标写法与「不相干的唯一冲突不得被误翻」）。
  *   modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1
  *     :80 taskExecutionEffects。why —— 接过句柄的助手，调用方是 task-execution 的 SERIALIZABLE
  *       事务面。removeWhen —— 调用方降级时重判。
@@ -552,7 +559,6 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // `effectQuiescence.ts` 那一份中立实现）随本波删除，它体内那两处「先查存在、再插入唯一键表」
   // 一并消失。
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 3',
-  'modules/task-execution/infrastructure/taskContinuationAdmission.ts: 1',
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
   'platform/events/committed/appendProgram.ts: 2',
   'platform/persistence/sqlite/legacyResourcePackageBundleApply.ts: 1',

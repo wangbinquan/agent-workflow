@@ -26,9 +26,7 @@ import {
   workgroupTaskState,
 } from '@/db/schema'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
-import {
-  FrozenWorkgroupGroupSchema,
-} from '@/modules/task-execution/infrastructure/legacyCallClosure'
+import { FrozenWorkgroupGroupSchema } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'

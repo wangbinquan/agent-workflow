@@ -35,6 +35,53 @@ import {
 
 const MAX_INTENT_PAYLOAD_BYTES = 64 * 1024
 
+/**
+ * 「每个任务至多一个 pending intent」这条**部分唯一索引**冲突时，两个引擎各自的冲突目标写法。
+ *
+ * · PostgreSQL —— 约束名：`idx_task_execution_intents_pending_task`
+ * · SQLite —— `UNIQUE constraint failed:` 之后的列清单：`task_execution_intents.task_id`
+ *
+ * （两侧的索引同名，见 `db/migrations/0213_rfc333_gate_continuation_handoff.sql` 与
+ * `db/postgresql-migrations/0000_rfc349_baseline.sql`；驱动报的**形状**不同，判据两边都认。）
+ */
+const PENDING_INTENT_UNIQUE_TARGET =
+  /idx_task_execution_intents_pending_task|task_execution_intents\.task_id/
+
+/** 这条驱动错误是不是「已有活跃 continuation」撞上了那条部分唯一索引。 */
+export function isPendingIntentUniqueConflict(target: string | undefined): boolean {
+  return target !== undefined && PENDING_INTENT_UNIQUE_TARGET.test(target)
+}
+
+/**
+ * 把那条唯一索引冲突翻成**领域错误**。
+ *
+ * 为什么需要它（2026-09-10 CI 实撞）：准入是「先读活跃 intent、再插一行 pending」，整笔在
+ * SERIALIZABLE 里。两个并发续跑都读到「没有活跃 intent」时，输家的收场有**两种**，谁先冒是
+ * 随机的（`rfc359-w8-t29-unique-insert-conflict` 的头注就写着这件事）：
+ *   · SSI 先判 —— 40001，`databaseSessionFor(db).serializable` 会重试，重放时读到赢家那行、
+ *     走 `task-continuation-conflict`；✓
+ *   · 部分唯一索引先抛 —— **23505**，既不是序列化失败（重试不接）、此前也没有映射，
+ *     于是**驱动错误原样漏给调用方**。用户看到的是 500，而不是 409 冲突。✗
+ * 第二条路少见但真实：CI 上 40 轮的那条对拍偶发地这样红过。
+ */
+export async function admitWithPendingIntentConflict<T>(
+  uniqueViolationTarget: (error: unknown) => string | undefined,
+  taskId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (isPendingIntentUniqueConflict(uniqueViolationTarget(error))) {
+      throw new TaskExecutionError(
+        'task-continuation-conflict',
+        `task '${taskId}' already has an active continuation`,
+      )
+    }
+    throw error
+  }
+}
+
 function encodedIntentPayload(payload: unknown): string {
   const encoded = canonicalJson(payload)
   if (Buffer.byteLength(encoded) > MAX_INTENT_PAYLOAD_BYTES) {

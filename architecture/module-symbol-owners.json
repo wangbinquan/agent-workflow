@@ -6,7 +6,7 @@
     "moduleFiles": 1199,
     "productionFiles": 2580,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25040
+    "symbolsIncludingFileRoots": 25043
   },
   "entries": [
     {
@@ -133373,6 +133373,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#admitWithPendingIntentConflict",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "admitWithPendingIntentConflict",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#encodedIntentPayload",
@@ -133385,12 +133397,36 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#isPendingIntentUniqueConflict",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isPendingIntentUniqueConflict",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#MAX_INTENT_PAYLOAD_BYTES",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "MAX_INTENT_PAYLOAD_BYTES",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#PENDING_INTENT_UNIQUE_TARGET",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PENDING_INTENT_UNIQUE_TARGET",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -301182,5 +301218,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f370436c7b0af676b4fb244a59fb86e248345e5b7dd280fed362fd348e239a58"
+  "sourceDigest": "sha256:04e49abc5556af31b3a7d668cf0321a927646fa5baf40ca7e5d85ef72493f404"
 }
