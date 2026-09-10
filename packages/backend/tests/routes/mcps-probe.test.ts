@@ -11,12 +11,20 @@
 //   - Auth: requests without bearer return 401 (same as RFC-028 routes).
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import type { Hono } from 'hono'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { __setProbeOptionsForTesting } from '../../src/routes/mcps'
 import type { OpenClientFn, ProbedMcpClient } from '../../src/services/mcpProbe'
 import { createApp } from '../../src/server'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
+import { describeEachProvider } from '../helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from '../helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 const TOKEN = 'rfc030-token-fixture'
@@ -84,7 +92,7 @@ afterEach(() => {
   __setProbeOptionsForTesting(undefined)
 })
 
-describe('GET /api/mcps/probes (static route precedence)', () => {
+registerProviderApplication('GET /api/mcps/probes (static route precedence)', (buildHarness) => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
@@ -115,7 +123,7 @@ describe('GET /api/mcps/probes (static route precedence)', () => {
   })
 })
 
-describe('GET /api/mcps/:id/probe', () => {
+registerProviderApplication('GET /api/mcps/:id/probe', (buildHarness) => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
@@ -156,7 +164,7 @@ describe('GET /api/mcps/:id/probe', () => {
   })
 })
 
-describe('POST /api/mcps/:id/probe', () => {
+registerProviderApplication('POST /api/mcps/:id/probe', (buildHarness) => {
   let app: Hono
   beforeEach(() => {
     ;({ app } = buildHarness())
@@ -248,3 +256,45 @@ describe('auth', () => {
     expect(r.status).toBe(401)
   })
 })
+
+// RFC359 W50: borrow the selected provider database and await the complete app lifetime.
+function registerProviderApplication(
+  name: string,
+  register: (buildHarness: () => { db: ProviderNeutralDatabase; app: Hono }) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let appHome: string | undefined
+      let restoreHome: (() => void) | undefined
+      beforeEach(async () => {
+        application = undefined
+        appHome = undefined
+        restoreHome = undefined
+        const previousHome = process.env.AGENT_WORKFLOW_HOME
+        appHome = mkdtempSync(join(tmpdir(), 'rfc359-w50-http-'))
+        restoreHome = () => {
+          if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousHome
+        }
+        process.env.AGENT_WORKFLOW_HOME = appHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: join(appHome, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+      })
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          restoreHome?.()
+          if (appHome !== undefined) rmSync(appHome, { recursive: true, force: true })
+        }
+      })
+      register(() => ({ db: harness.db, app: application!.app }))
+    })
+  })
+}

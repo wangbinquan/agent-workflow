@@ -5,7 +5,7 @@
 // Locks: list shape, write happy paths, cross-task entry → 404, missing task →
 // 404, missing targetNodeId → 422.
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -22,6 +22,15 @@ import {
 } from '../src/db/schema'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -51,7 +60,11 @@ function makeApp(db: DbClient): Hono {
   })
 }
 
-async function seedTask(db: DbClient, taskId: string) {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  lineage?: typeof providerTaskLineage,
+) {
   await db.insert(workflows).values({
     id: `wf-${taskId}`,
     name: 'wf',
@@ -73,10 +86,18 @@ async function seedTask(db: DbClient, taskId: string) {
     status: 'awaiting_human',
     inputs: '{}',
     startedAt: Date.now(),
+
+    ...(lineage?.(taskId) ?? {}),
   })
 }
 
-async function seedRun(db: DbClient, taskId: string, id: string, nodeId: string, cause?: string) {
+async function seedRun(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  id: string,
+  nodeId: string,
+  cause?: string,
+) {
   await db
     .insert(nodeRuns)
     .values({ id, taskId, nodeId, status: 'done', rerunCause: cause ?? null, iteration: 0 })
@@ -84,7 +105,7 @@ async function seedRun(db: DbClient, taskId: string, id: string, nodeId: string,
     await db.insert(nodeRunOutputs).values({ nodeRunId: id, portName: 'result', content: 'x' })
 }
 
-async function seedSelfAnswered(db: DbClient, taskId: string) {
+async function seedSelfAnswered(db: ProviderNeutralDatabase, taskId: string) {
   await seedRun(db, taskId, `${taskId}-ask`, 'designer')
   await seedRun(db, taskId, `${taskId}-int`, 'clar')
   await seedRun(db, taskId, `${taskId}-h`, 'designer', 'clarify-answer')
@@ -119,99 +140,103 @@ async function seedSelfAnswered(db: DbClient, taskId: string) {
 }
 
 describe('RFC-120 /api/tasks/:id/questions routes', () => {
-  test('GET list returns entries; confirm flips to done', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = makeApp(db)
-    await seedTask(db, 'task-a')
-    await seedSelfAnswered(db, 'task-a')
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('GET list returns entries; confirm flips to done', async () => {
+      const db = harness.db
+      const app = await makeApp(db)
+      await seedTask(db, 'task-a')
+      await seedSelfAnswered(db, 'task-a')
 
-    const listRes = await app.request('/api/tasks/task-a/questions', { headers: AUTH })
-    expect(listRes.status).toBe(200)
-    const list = (await listRes.json()) as Array<{ id: string; phase: string }>
-    expect(list).toHaveLength(1)
-    expect(list[0]!.phase).toBe('awaiting_confirm')
+      const listRes = await app.request('/api/tasks/task-a/questions', { headers: AUTH })
+      expect(listRes.status).toBe(200)
+      const list = (await listRes.json()) as Array<{ id: string; phase: string }>
+      expect(list).toHaveLength(1)
+      expect(list[0]!.phase).toBe('awaiting_confirm')
 
-    const confirmRes = await app.request(`/api/tasks/task-a/questions/${list[0]!.id}/confirm`, {
-      method: 'POST',
-      headers: AUTH,
+      const confirmRes = await app.request(`/api/tasks/task-a/questions/${list[0]!.id}/confirm`, {
+        method: 'POST',
+        headers: AUTH,
+      })
+      expect(confirmRes.status).toBe(200)
+      const after = (await (
+        await app.request('/api/tasks/task-a/questions', { headers: AUTH })
+      ).json()) as Array<{ phase: string }>
+      expect(after[0]!.phase).toBe('done')
     })
-    expect(confirmRes.status).toBe(200)
-    const after = (await (
-      await app.request('/api/tasks/task-a/questions', { headers: AUTH })
-    ).json()) as Array<{ phase: string }>
-    expect(after[0]!.phase).toBe('done')
   })
 
   // RFC-162: a cross round reconciles to ONE questioner entry (designer-by-default deleted).
   // Reassigning the asker UPSTREAM ADDS a `designer` handler row (route returns action
   // 'added-designer'); reassigning it again re-targets that handler. The 422 (missing targetNodeId)
   // is checked before the service runs, so it fires on any entry.
-  test('reassign requires targetNodeId (422); reassign-to-upstream adds + re-targets a designer handler', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = makeApp(db)
-    await seedTask(db, 'task-b')
-    await seedRun(db, 'task-b', 'task-b-ask', 'auditor')
-    await seedRun(db, 'task-b', 'task-b-int', 'clar')
-    await db.insert(clarifyRounds).values({
-      id: 'task-b-r',
-      taskId: 'task-b',
-      kind: 'cross',
-      askingNodeId: 'auditor',
-      askingNodeRunId: 'task-b-ask',
-      targetConsumerNodeId: 'coder',
-      intermediaryNodeId: 'clar',
-      intermediaryNodeRunId: 'task-b-int',
-      questionsJson: JSON.stringify([
-        {
-          id: 'q1',
-          title: 't',
-          kind: 'single',
-          recommended: false,
-          options: [
-            { label: 'A', description: '', recommended: false, recommendationReason: '' },
-            { label: 'B', description: '', recommended: false, recommendationReason: '' },
-          ],
-        },
-      ]),
-      status: 'answered',
-    })
-    const list = (await (
-      await app.request('/api/tasks/task-b/questions', { headers: AUTH })
-    ).json()) as Array<{ id: string; roleKind: string }>
-    const questioner = list.find((e) => e.roleKind === 'questioner')!
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('reassign requires targetNodeId (422); reassign-to-upstream adds + re-targets a designer handler', async () => {
+      const db = harness.db
+      const app = await makeApp(db)
+      await seedTask(db, 'task-b')
+      await seedRun(db, 'task-b', 'task-b-ask', 'auditor')
+      await seedRun(db, 'task-b', 'task-b-int', 'clar')
+      await db.insert(clarifyRounds).values({
+        id: 'task-b-r',
+        taskId: 'task-b',
+        kind: 'cross',
+        askingNodeId: 'auditor',
+        askingNodeRunId: 'task-b-ask',
+        targetConsumerNodeId: 'coder',
+        intermediaryNodeId: 'clar',
+        intermediaryNodeRunId: 'task-b-int',
+        questionsJson: JSON.stringify([
+          {
+            id: 'q1',
+            title: 't',
+            kind: 'single',
+            recommended: false,
+            options: [
+              { label: 'A', description: '', recommended: false, recommendationReason: '' },
+              { label: 'B', description: '', recommended: false, recommendationReason: '' },
+            ],
+          },
+        ]),
+        status: 'answered',
+      })
+      const list = (await (
+        await app.request('/api/tasks/task-b/questions', { headers: AUTH })
+      ).json()) as Array<{ id: string; roleKind: string }>
+      const questioner = list.find((e) => e.roleKind === 'questioner')!
 
-    const bad = await app.request(`/api/tasks/task-b/questions/${questioner.id}/reassign`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    })
-    expect(bad.status).toBe(422)
+      const bad = await app.request(`/api/tasks/task-b/questions/${questioner.id}/reassign`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      expect(bad.status).toBe(422)
 
-    // reassign the asker UPSTREAM to 'coder' → ADDS a designer handler; the route returns the action.
-    const ok = await app.request(`/api/tasks/task-b/questions/${questioner.id}/reassign`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ targetNodeId: 'coder' }),
-    })
-    expect(ok.status).toBe(200)
-    expect(((await ok.json()) as { action: string }).action).toBe('added-designer')
-    const after = (await (
-      await app.request('/api/tasks/task-b/questions', { headers: AUTH })
-    ).json()) as Array<{ roleKind: string; effectiveTargetNodeId: string }>
-    expect(after.find((e) => e.roleKind === 'designer')!.effectiveTargetNodeId).toBe('coder')
+      // reassign the asker UPSTREAM to 'coder' → ADDS a designer handler; the route returns the action.
+      const ok = await app.request(`/api/tasks/task-b/questions/${questioner.id}/reassign`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ targetNodeId: 'coder' }),
+      })
+      expect(ok.status).toBe(200)
+      expect(((await ok.json()) as { action: string }).action).toBe('added-designer')
+      const after = (await (
+        await app.request('/api/tasks/task-b/questions', { headers: AUTH })
+      ).json()) as Array<{ roleKind: string; effectiveTargetNodeId: string }>
+      expect(after.find((e) => e.roleKind === 'designer')!.effectiveTargetNodeId).toBe('coder')
 
-    // reassign the asker again → re-targets the SAME (undispatched) designer handler to 'fixer'.
-    const move = await app.request(`/api/tasks/task-b/questions/${questioner.id}/reassign`, {
-      method: 'POST',
-      headers: { ...AUTH, 'content-type': 'application/json' },
-      body: JSON.stringify({ targetNodeId: 'fixer' }),
+      // reassign the asker again → re-targets the SAME (undispatched) designer handler to 'fixer'.
+      const move = await app.request(`/api/tasks/task-b/questions/${questioner.id}/reassign`, {
+        method: 'POST',
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ targetNodeId: 'fixer' }),
+      })
+      expect(move.status).toBe(200)
+      const moved = (await (
+        await app.request('/api/tasks/task-b/questions', { headers: AUTH })
+      ).json()) as Array<{ roleKind: string; effectiveTargetNodeId: string }>
+      expect(moved.filter((e) => e.roleKind === 'designer')).toHaveLength(1)
+      expect(moved.find((e) => e.roleKind === 'designer')!.effectiveTargetNodeId).toBe('fixer')
     })
-    expect(move.status).toBe(200)
-    const moved = (await (
-      await app.request('/api/tasks/task-b/questions', { headers: AUTH })
-    ).json()) as Array<{ roleKind: string; effectiveTargetNodeId: string }>
-    expect(moved.filter((e) => e.roleKind === 'designer')).toHaveLength(1)
-    expect(moved.find((e) => e.roleKind === 'designer')!.effectiveTargetNodeId).toBe('fixer')
   })
 
   test('stage toggles; cross-task entry → 404; missing task → 404', async () => {
@@ -257,3 +282,69 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
     expect(missingTask.status).toBe(404)
   })
 })
+
+// RFC-359 W50: keep native registrations while the selected calls use the complete provider application.
+function registerProviderApplication(
+  register: (
+    harness: ProviderHarness,
+    makeApp: (db: ProviderNeutralDatabase) => Promise<Hono>,
+    seedTaskFixture: typeof seedTask,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let ownedConfigDirectory: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function makeApp(db: ProviderNeutralDatabase): Promise<Hono> {
+        if (db !== harness.db) throw new Error('provider fixture database mismatch')
+        ownedHome = createFixtureDirectory(joinFixturePath(fixtureTmpDirectory(), 'aw-tq-home-'))
+        previousHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = ownedHome
+        homeAssigned = true
+        ownedConfigDirectory = createFixtureDirectory(
+          joinFixturePath(fixtureTmpDirectory(), 'aw-tq-cfg-'),
+        )
+        const appHome = ownedHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: joinFixturePath(ownedConfigDirectory, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+        return application.app
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedConfigDirectory !== undefined)
+            removeFixtureDirectory(ownedConfigDirectory, { recursive: true, force: true })
+          ownedConfigDirectory = undefined
+          if (ownedHome !== undefined)
+            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register(harness, makeApp, (db, taskId) => seedTask(db, taskId, providerTaskLineage))
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第五十批（2026-09-10）**：13个旧测试文件的68个原功能声明（原循环展开72例）接默认双库；98个原声明与273个完整matcher保留，未选30例/75 matcher保持原调用，选定68例保留198个matcher和原预算。
+> catalog私有字符串数组decoder复用既有parser，原caller及已有十个展开纯例不变，生产净减6行；新增纯例原/后各1 pass/35 expect、16条完整观测同字节，三个有效负控失败。
+> 16个core一次完整backend tsc通过；其后仅补回原9行注释，完整Bun/TypeScript输出同字节，复用编译结果。功能metadata先发现账本基线688未随源码685下降，精确修正后221 pass/452 expect；canonical 13 pass/55 expect及严格lint/format通过。1962测试文件、602构库文件/1182调用，无harness545→532、有harness485→498；T19f对应三文件归零退役，账本688→685。
+> W49 exactbb2127ad Main34417055489终态38 success/2 failure，13个后端与普通lint全部通过；主1580/1580、新增241/241、独立2/2及原hook18/18全部实过，两个OS各1962原生文件无遗漏/重复。完整Main仍未绿，两个非后端失败只记录任务元数据。
+> W49同SHA原full34417550874仅派发一次，仍在运行；最近已完成的原full仍为W39，六个PG端点较慢、overview13.222187ms超10ms。
+> 本批未运行本地真实业务DB/App/HTTP/PG/进程或Git夹具及完整门禁；受控端口记录不代替新SHA托管行为。AC-1/6/8/9/11/12继续开放。
+
 > **RFC-359 W12 第四十九批（2026-09-10）**：11个旧测试文件中75个原功能声明（原循环展开77例）接默认双库；130原声明、398 callback matcher及3个共享helper matcher保留，另55个原例保持native完整call与预算。
 > 两处字符串数组decoder复用原共享parser，五个调用及两个完整调用者保持，生产净减12行；原后各2 pass/172 expect、80条完整受控记录相同，旧8个graph例未在本地运行。
 > 只给原comparison落盘后的两个profile worker加CPU采样；正式测量、语料、20轮与严格P95判据保持。纯比较33 pass/101 expect，8组实际run函数受控对照和本地Bun1.3.13算术CLI落盘通过；实际托管Bun1.4采样待新SHA，不能据此宣称性能改善。

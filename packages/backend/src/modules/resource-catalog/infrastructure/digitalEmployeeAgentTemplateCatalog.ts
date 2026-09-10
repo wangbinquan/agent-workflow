@@ -12,6 +12,7 @@ import type {
   DigitalEmployeeAgentTemplateRepository,
 } from '../application/agents/digitalEmployeeAgentTemplateCatalog'
 import { PLUGIN_DISABLED_ERROR_CODE } from '../public/types'
+import { parseAgentDependencyIds } from './agentDependencyJson'
 import {
   agentFromPersistenceRow,
   createAgentPersistenceValues,
@@ -176,14 +177,7 @@ async function assertAgentResourceRows(input: {
 }
 
 function stringArray(raw: string): string[] {
-  try {
-    const decoded: unknown = JSON.parse(raw)
-    return Array.isArray(decoded)
-      ? decoded.filter((value): value is string => typeof value === 'string')
-      : []
-  } catch {
-    return []
-  }
+  return parseAgentDependencyIds(() => JSON.parse(raw))
 }
 
 async function assertAgentDependencyGraph(

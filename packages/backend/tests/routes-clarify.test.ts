@@ -26,6 +26,15 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -61,12 +70,13 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
 }
 
 async function seedSession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: {
     taskId?: string
     sourceShardKey?: string | null
     iterationIndex?: number
   } = {},
+  lineage?: typeof providerTaskLineage,
 ): Promise<{ taskId: string; intermediaryNodeRunId: string; sessionId: string }> {
   const taskId = opts.taskId ?? `task_${ulid()}`
   const def: WorkflowDefinition = {
@@ -107,6 +117,8 @@ async function seedSession(
       status: 'awaiting_human',
       inputs: '{}',
       startedAt: Date.now(),
+
+      ...(lineage?.(taskId) ?? {}),
     })
     .onConflictDoNothing()
   const sourceRunId = ulid()
@@ -141,63 +153,73 @@ afterEach(() => {
 })
 
 describe('GET /api/clarify', () => {
-  test('returns awaiting_human sessions by default and supports task filter', async () => {
-    const { db, app } = buildApp()
-    const a = await seedSession(db)
-    const b = await seedSession(db)
-    const res = await req(app, '/api/clarify')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as ClarifySessionSummary[]
-    expect(body.map((s) => s.taskId).sort()).toEqual([a.taskId, b.taskId].sort())
+  registerProviderApplication((buildApp, seedSession) => {
+    test('returns awaiting_human sessions by default and supports task filter', async () => {
+      const { db, app } = await buildApp()
+      const a = await seedSession(db)
+      const b = await seedSession(db)
+      const res = await req(app, '/api/clarify')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as ClarifySessionSummary[]
+      expect(body.map((s) => s.taskId).sort()).toEqual([a.taskId, b.taskId].sort())
 
-    const filtered = await req(app, `/api/clarify?taskId=${a.taskId}`)
-    const filteredBody = (await filtered.json()) as ClarifySessionSummary[]
-    expect(filteredBody.length).toBe(1)
-    expect(filteredBody[0]?.taskId).toBe(a.taskId)
+      const filtered = await req(app, `/api/clarify?taskId=${a.taskId}`)
+      const filteredBody = (await filtered.json()) as ClarifySessionSummary[]
+      expect(filteredBody.length).toBe(1)
+      expect(filteredBody[0]?.taskId).toBe(a.taskId)
+    })
   })
 
-  test('summary payload carries askingShardKey for agent-multi grouping', async () => {
-    // RFC-058 T14: response shape switched to ClarifyRoundSummary —
-    // legacy field `sourceShardKey` is now exposed as `askingShardKey`.
-    const { db, app } = buildApp()
-    const taskId = `task_${ulid()}`
-    await seedSession(db, { taskId, sourceShardKey: 'shard-A' })
-    await seedSession(db, { taskId, sourceShardKey: 'shard-B' })
-    const res = await req(app, `/api/clarify?taskId=${taskId}`)
-    const body = (await res.json()) as Array<{ askingShardKey: string | null }>
-    expect(body.length).toBe(2)
-    const shardKeys = body.map((s) => s.askingShardKey).sort()
-    expect(shardKeys).toEqual(['shard-A', 'shard-B'])
+  registerProviderApplication((buildApp, seedSession) => {
+    test('summary payload carries askingShardKey for agent-multi grouping', async () => {
+      // RFC-058 T14: response shape switched to ClarifyRoundSummary —
+      // legacy field `sourceShardKey` is now exposed as `askingShardKey`.
+      const { db, app } = await buildApp()
+      const taskId = `task_${ulid()}`
+      await seedSession(db, { taskId, sourceShardKey: 'shard-A' })
+      await seedSession(db, { taskId, sourceShardKey: 'shard-B' })
+      const res = await req(app, `/api/clarify?taskId=${taskId}`)
+      const body = (await res.json()) as Array<{ askingShardKey: string | null }>
+      expect(body.length).toBe(2)
+      const shardKeys = body.map((s) => s.askingShardKey).sort()
+      expect(shardKeys).toEqual(['shard-A', 'shard-B'])
+    })
   })
 })
 
 describe('GET /api/clarify/pending-count', () => {
-  test('returns the count of awaiting_human sessions', async () => {
-    const { db, app } = buildApp()
-    await seedSession(db)
-    await seedSession(db)
-    const res = await req(app, '/api/clarify/pending-count')
-    const body = (await res.json()) as { count: number }
-    expect(body.count).toBe(2)
+  registerProviderApplication((buildApp, seedSession) => {
+    test('returns the count of awaiting_human sessions', async () => {
+      const { db, app } = await buildApp()
+      await seedSession(db)
+      await seedSession(db)
+      const res = await req(app, '/api/clarify/pending-count')
+      const body = (await res.json()) as { count: number }
+      expect(body.count).toBe(2)
+    })
   })
 })
 
 describe('GET /api/clarify/:nodeRunId', () => {
-  test('returns full session payload (questions + null answers + status)', async () => {
-    const { db, app } = buildApp()
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
-    const res = await req(app, `/api/clarify/${clarifyNodeRunId}`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as ClarifySession
-    expect(body.status).toBe('awaiting_human')
-    expect(body.questions).toHaveLength(1)
-    expect(body.answers).toBeUndefined()
+  registerProviderApplication((buildApp, seedSession) => {
+    test('returns full session payload (questions + null answers + status)', async () => {
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSession(db)
+      const res = await req(app, `/api/clarify/${clarifyNodeRunId}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as ClarifySession
+      expect(body.status).toBe('awaiting_human')
+      expect(body.questions).toHaveLength(1)
+      expect(body.answers).toBeUndefined()
+    })
   })
 
-  test('404 when nodeRunId is unknown', async () => {
-    const { app } = buildApp()
-    const res = await req(app, '/api/clarify/no-such-id')
-    expect(res.status).toBe(404)
+  registerProviderApplication((buildApp) => {
+    test('404 when nodeRunId is unknown', async () => {
+      const { app } = await buildApp()
+      const res = await req(app, '/api/clarify/no-such-id')
+      expect(res.status).toBe(404)
+    })
   })
 })
 
@@ -371,3 +393,62 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
     })
   })
 })
+
+// RFC-359 W50: keep native registrations while the selected calls use the complete provider application.
+function registerProviderApplication(
+  register: (
+    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    seedSessionFixture: typeof seedSession,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function buildApp() {
+        ownedHome = createFixtureDirectory(
+          joinFixturePath(fixtureTmpDirectory(), 'rfc359-w50-routes-clarify-'),
+        )
+        previousHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = ownedHome
+        homeAssigned = true
+        const appHome = ownedHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: joinFixturePath(appHome, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+        return { db: harness.db, app: application.app }
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedHome !== undefined)
+            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register(buildApp, (db, opts) => seedSession(db, opts, providerTaskLineage))
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

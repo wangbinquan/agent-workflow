@@ -10,18 +10,23 @@
 // persistence, non-asking-node → 422, invalid directive → 422, missing task → 404,
 // contract-registry registration.
 
-import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { Hono } from 'hono'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { getNodeClarifyDirective } from '../src/services/taskClarifyDirective'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const AUTH = { Authorization: `Bearer ${TOKEN}` }
 
 // selfAgent has a self-clarify channel; questioner feeds a cross node; clar / cc1
@@ -51,18 +56,11 @@ const SNAPSHOT = JSON.stringify({
   outputs: [],
 })
 
-function makeApp(db: DbClient): Hono {
-  process.env.AGENT_WORKFLOW_HOME = mkdtempSync(join(tmpdir(), 'aw-cd-home-'))
-  return createApp({
-    token: TOKEN,
-    configPath: join(mkdtempSync(join(tmpdir(), 'aw-cd-cfg-')), 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-}
-
-async function seedTask(db: DbClient, taskId: string): Promise<void> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  lineage?: typeof providerTaskLineage,
+): Promise<void> {
   await db.insert(workflows).values({
     id: `wf-${taskId}`,
     name: 'wf',
@@ -84,6 +82,8 @@ async function seedTask(db: DbClient, taskId: string): Promise<void> {
     status: 'awaiting_human',
     inputs: '{}',
     startedAt: Date.now(),
+
+    ...(lineage?.(taskId) ?? {}),
   })
 }
 
@@ -96,70 +96,82 @@ function post(app: Hono, taskId: string, nodeId: string, body: unknown) {
 }
 
 describe('RFC-122 clarify-directive route', () => {
-  test('GET returns {} for a fresh task; POST stop persists; GET reflects it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'task1')
-    const app = makeApp(db)
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('GET returns {} for a fresh task; POST stop persists; GET reflects it', async () => {
+      const db = harness.db
+      await seedTask(db, 'task1')
+      const app = await makeApp(db)
 
-    const empty = await app.request('/api/tasks/task1/clarify-directives', { headers: AUTH })
-    expect(empty.status).toBe(200)
-    expect(await empty.json()).toEqual({})
+      const empty = await app.request('/api/tasks/task1/clarify-directives', { headers: AUTH })
+      expect(empty.status).toBe(200)
+      expect(await empty.json()).toEqual({})
 
-    const set = await post(app, 'task1', 'selfAgent', { directive: 'stop' })
-    expect(set.status).toBe(200)
-    expect(await set.json()).toEqual({ ok: true, nodeId: 'selfAgent', directive: 'stop' })
-    expect(await getNodeClarifyDirective(db, 'task1', 'selfAgent')).toBe('stop')
+      const set = await post(app, 'task1', 'selfAgent', { directive: 'stop' })
+      expect(set.status).toBe(200)
+      expect(await set.json()).toEqual({ ok: true, nodeId: 'selfAgent', directive: 'stop' })
+      expect(await getNodeClarifyDirective(db, 'task1', 'selfAgent')).toBe('stop')
 
-    const after = await app.request('/api/tasks/task1/clarify-directives', { headers: AUTH })
-    expect(await after.json()).toEqual({ selfAgent: 'stop' })
+      const after = await app.request('/api/tasks/task1/clarify-directives', { headers: AUTH })
+      expect(await after.json()).toEqual({ selfAgent: 'stop' })
+    })
   })
 
-  test('POST continue flips an existing stop back', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'task2')
-    const app = makeApp(db)
-    await post(app, 'task2', 'questioner', { directive: 'stop' })
-    expect(await getNodeClarifyDirective(db, 'task2', 'questioner')).toBe('stop')
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('POST continue flips an existing stop back', async () => {
+      const db = harness.db
+      await seedTask(db, 'task2')
+      const app = await makeApp(db)
+      await post(app, 'task2', 'questioner', { directive: 'stop' })
+      expect(await getNodeClarifyDirective(db, 'task2', 'questioner')).toBe('stop')
 
-    const flip = await post(app, 'task2', 'questioner', { directive: 'continue' })
-    expect(flip.status).toBe(200)
-    expect(await getNodeClarifyDirective(db, 'task2', 'questioner')).toBe('continue')
+      const flip = await post(app, 'task2', 'questioner', { directive: 'continue' })
+      expect(flip.status).toBe(200)
+      expect(await getNodeClarifyDirective(db, 'task2', 'questioner')).toBe('continue')
+    })
   })
 
-  test('cross-questioner is a valid asking node', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'task3')
-    const app = makeApp(db)
-    const res = await post(app, 'task3', 'questioner', { directive: 'stop' })
-    expect(res.status).toBe(200)
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('cross-questioner is a valid asking node', async () => {
+      const db = harness.db
+      await seedTask(db, 'task3')
+      const app = await makeApp(db)
+      const res = await post(app, 'task3', 'questioner', { directive: 'stop' })
+      expect(res.status).toBe(200)
+    })
   })
 
-  test('422 on a channel node / plain agent (not an asking node)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'task4')
-    const app = makeApp(db)
-    for (const nodeId of ['clar', 'cc1', 'plain', 'nope']) {
-      const res = await post(app, 'task4', nodeId, { directive: 'stop' })
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('422 on a channel node / plain agent (not an asking node)', async () => {
+      const db = harness.db
+      await seedTask(db, 'task4')
+      const app = await makeApp(db)
+      for (const nodeId of ['clar', 'cc1', 'plain', 'nope']) {
+        const res = await post(app, 'task4', nodeId, { directive: 'stop' })
+        expect(res.status).toBe(422)
+        expect(((await res.json()) as { code?: string }).code).toBe('not-asking-node')
+      }
+      expect(await getNodeClarifyDirective(db, 'task4', 'plain')).toBeUndefined()
+    })
+  })
+
+  registerProviderApplication((harness, makeApp, seedTask) => {
+    test('422 on an invalid directive value', async () => {
+      const db = harness.db
+      await seedTask(db, 'task5')
+      const app = await makeApp(db)
+      const res = await post(app, 'task5', 'selfAgent', { directive: 'halt' })
       expect(res.status).toBe(422)
-      expect(((await res.json()) as { code?: string }).code).toBe('not-asking-node')
-    }
-    expect(await getNodeClarifyDirective(db, 'task4', 'plain')).toBeUndefined()
+      expect(((await res.json()) as { code?: string }).code).toBe('clarify-directive-invalid')
+    })
   })
 
-  test('422 on an invalid directive value', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedTask(db, 'task5')
-    const app = makeApp(db)
-    const res = await post(app, 'task5', 'selfAgent', { directive: 'halt' })
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code?: string }).code).toBe('clarify-directive-invalid')
-  })
-
-  test('404 on a missing task', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = makeApp(db)
-    const res = await post(app, 'ghost', 'selfAgent', { directive: 'stop' })
-    expect(res.status).toBe(404)
+  registerProviderApplication((harness, makeApp) => {
+    test('404 on a missing task', async () => {
+      const db = harness.db
+      const app = await makeApp(db)
+      const res = await post(app, 'ghost', 'selfAgent', { directive: 'stop' })
+      expect(res.status).toBe(404)
+    })
   })
 
   test('write path is member-gated + registered in the contract registry', () => {
@@ -173,3 +185,69 @@ describe('RFC-122 clarify-directive route', () => {
     expect(registry).toContain("path: '/api/tasks/:id/nodes/:nodeId/clarify-directive'")
   })
 })
+
+// RFC-359 W50: keep native registrations while the selected calls use the complete provider application.
+function registerProviderApplication(
+  register: (
+    harness: ProviderHarness,
+    makeApp: (db: ProviderNeutralDatabase) => Promise<Hono>,
+    seedTaskFixture: typeof seedTask,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let ownedConfigDirectory: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function makeApp(db: ProviderNeutralDatabase): Promise<Hono> {
+        if (db !== harness.db) throw new Error('provider fixture database mismatch')
+        ownedHome = createFixtureDirectory(joinFixturePath(fixtureTmpDirectory(), 'aw-cd-home-'))
+        previousHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = ownedHome
+        homeAssigned = true
+        ownedConfigDirectory = createFixtureDirectory(
+          joinFixturePath(fixtureTmpDirectory(), 'aw-cd-cfg-'),
+        )
+        const appHome = ownedHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: joinFixturePath(ownedConfigDirectory, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+        return application.app
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedConfigDirectory !== undefined)
+            removeFixtureDirectory(ownedConfigDirectory, { recursive: true, force: true })
+          ownedConfigDirectory = undefined
+          if (ownedHome !== undefined)
+            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register(harness, makeApp, (db, taskId) => seedTask(db, taskId, providerTaskLineage))
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

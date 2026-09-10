@@ -11,6 +11,12 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks } from '../src/db/schema'
 import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -23,79 +29,121 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const worktree = mkdtempSync(join(tmpdir(), 'aw-wt-'))
-  const outside = mkdtempSync(join(tmpdir(), 'aw-outside-'))
-  // Seed an outside-of-worktree secret to test traversal attempts read it.
-  writeFileSync(join(outside, 'secrets.txt'), 'TOP SECRET')
-  // Seed worktree content.
-  mkdirSync(join(worktree, 'design', 'img'), { recursive: true })
-  writeFileSync(join(worktree, 'design', 'img', 'diagram.png'), 'BINARY_PNG_BYTES')
-  writeFileSync(join(worktree, 'design', 'spec.md'), '# Spec\nbody')
+type HarnessApplicationInput<TDb extends ProviderNeutralDatabase> = {
+  db: TDb
+  token: string
+  configPath: string
+  opencodeVersion: string
+  dbVersion: number
+}
 
-  const taskId = ulid()
-  // Pre-create a workflow row (foreign key target).
-  const workflowId = ulid()
-  await db.insert((await import('../src/db/schema')).workflows).values({
-    id: workflowId,
-    name: 'wf',
-    description: '',
-    definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
-    version: 1,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  })
+// Keep one original fixture/seed program for the native and selected provider registrations.
+function createHarnessBuilder<TDb extends ProviderNeutralDatabase>(
+  createDatabase: () => TDb,
+  createApplication: (
+    input: HarnessApplicationInput<TDb>,
+  ) => Harness['app'] | Promise<Harness['app']>,
+  providerTaskLineage = false,
+  onDirectory?: (directory: string) => void,
+) {
+  return async function buildHarness(): Promise<Omit<Harness, 'db'> & { db: TDb }> {
+    const db = createDatabase()
+    const worktree = mkdtempSync(join(tmpdir(), 'aw-wt-'))
+    onDirectory?.(worktree)
+    const outside = mkdtempSync(join(tmpdir(), 'aw-outside-'))
+    onDirectory?.(outside)
+    // Seed an outside-of-worktree secret to test traversal attempts read it.
+    writeFileSync(join(outside, 'secrets.txt'), 'TOP SECRET')
+    // Seed worktree content.
+    mkdirSync(join(worktree, 'design', 'img'), { recursive: true })
+    writeFileSync(join(worktree, 'design', 'img', 'diagram.png'), 'BINARY_PNG_BYTES')
+    writeFileSync(join(worktree, 'design', 'spec.md'), '# Spec\nbody')
 
-  await db.insert(tasks).values({
-    name: 'fixture-task',
+    const taskId = ulid()
+    // Pre-create a workflow row (foreign key target).
+    const workflowId = ulid()
+    await db.insert((await import('../src/db/schema')).workflows).values({
+      id: workflowId,
+      name: 'wf',
+      description: '',
+      definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
+      version: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
 
-    id: taskId,
-    workflowId,
-    workflowSnapshot: '{}',
-    repoPath: '/repo',
-    worktreePath: worktree,
-    baseBranch: 'main',
-    branch: 'agent-workflow/' + taskId,
-    baseCommit: null,
-    status: 'done',
-    inputs: '{}',
-    maxDurationMs: null,
-    maxTotalTokens: null,
-    startedAt: Date.now(),
-    finishedAt: Date.now(),
-  })
+    await db.insert(tasks).values({
+      name: 'fixture-task',
 
-  const app = createApp({
-    token: 'tok',
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+      id: taskId,
+      workflowId,
+      workflowSnapshot: '{}',
+      repoPath: '/repo',
+      worktreePath: worktree,
+      baseBranch: 'main',
+      branch: 'agent-workflow/' + taskId,
+      baseCommit: null,
+      status: 'done',
+      inputs: '{}',
+      maxDurationMs: null,
+      maxTotalTokens: null,
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+      ...(providerTaskLineage
+        ? {
+            executionLineageId: taskId,
+            lineageSlotPathJson: JSON.stringify([
+              { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+            ]),
+          }
+        : {}),
+    })
 
-  return {
-    db,
-    worktree,
-    outside,
-    taskId,
-    app,
-    cleanup: () => {
-      rmSync(worktree, { recursive: true, force: true })
-      rmSync(outside, { recursive: true, force: true })
-    },
+    const app = await createApplication({
+      token: 'tok',
+      configPath: '',
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      db,
+    })
+
+    return {
+      db,
+      worktree,
+      outside,
+      taskId,
+      app,
+      cleanup: () => {
+        rmSync(worktree, { recursive: true, force: true })
+        rmSync(outside, { recursive: true, force: true })
+      },
+    }
   }
 }
 
+const buildHarness = createHarnessBuilder(
+  () => createInMemoryDb(MIGRATIONS),
+  (input) => createApp(input),
+)
+
 const HEADERS = { Authorization: 'Bearer tok' }
 
-describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
+let h: Harness
+function registerNativeHarnessCases(name: string, register: () => void): void {
+  describe(name, () => {
+    beforeEach(async () => {
+      h = await buildHarness()
+    })
+    afterEach(() => h.cleanup())
+    register()
   })
-  afterEach(() => h.cleanup())
+}
 
+registerProviderHarnessCases('GET /api/worktree-files/:taskId/* — RFC-005 T13', (getHarness) => {
+  let h: Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }
+  beforeEach(() => {
+    h = getHarness()
+  })
   test('returns file content with correct mime type for known extensions', async () => {
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}/design/img/diagram.png`, {
@@ -117,7 +165,9 @@ describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
     expect(res.headers.get('content-type')).toContain('text/markdown')
     expect(await res.text()).toContain('# Spec')
   })
+})
 
+registerNativeHarnessCases('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
   // The attack cases below assert the specific rejection `code`, not just "some
   // 4xx". A range check passes no matter WHICH branch fired — and tightening
   // these three revealed that two of them were not testing what their names
@@ -194,7 +244,13 @@ describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
       code: 'worktree-file-invalid-encoding',
     })
   })
+})
 
+registerProviderHarnessCases('GET /api/worktree-files/:taskId/* — RFC-005 T13', (getHarness) => {
+  let h: Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }
+  beforeEach(() => {
+    h = getHarness()
+  })
   test('missing file → 404', async () => {
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}/no/such/path.png`, {
@@ -227,14 +283,22 @@ describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
     )
     expect(res.status).toBe(404)
   })
+})
 
+registerNativeHarnessCases('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
   test('no auth → 401', async () => {
     const res = await h.app.fetch(
       new Request(`http://localhost/api/worktree-files/${h.taskId}/design/spec.md`),
     )
     expect(res.status).toBe(401)
   })
+})
 
+registerProviderHarnessCases('GET /api/worktree-files/:taskId/* — RFC-005 T13', (getHarness) => {
+  let h: Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }
+  beforeEach(() => {
+    h = getHarness()
+  })
   test('unknown extension → octet-stream (no auto-render of exotic types)', async () => {
     writeFileSync(join(h.worktree, 'data.xyz'), 'opaque')
     const res = await h.app.fetch(
@@ -244,3 +308,62 @@ describe('GET /api/worktree-files/:taskId/* — RFC-005 T13', () => {
     expect(res.headers.get('content-type')).toBe('application/octet-stream')
   })
 })
+
+function registerProviderHarnessCases(
+  name: string,
+  register: (getHarness: () => Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('application lifetime', () => {
+      let current: (Omit<Harness, 'db'> & { db: ProviderNeutralDatabase }) | undefined
+      let application: ProviderHttpApplication | undefined
+      let appHome: string | undefined
+      let restoreHome: (() => void) | undefined
+      let ownedDirectories: string[] = []
+      beforeEach(async () => {
+        current = undefined
+        application = undefined
+        appHome = undefined
+        restoreHome = undefined
+        ownedDirectories = []
+        const previousHome = process.env.AGENT_WORKFLOW_HOME
+        appHome = mkdtempSync(join(tmpdir(), 'rfc359-w50-proxy-'))
+        restoreHome = () => {
+          if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousHome
+        }
+        process.env.AGENT_WORKFLOW_HOME = appHome
+        current = await createHarnessBuilder(
+          () => harness.db,
+          async (input) => {
+            application = await createProviderHttpApplication(harness, {
+              token: input.token,
+              configPath: join(appHome!, 'config.json'),
+              opencodeVersion: input.opencodeVersion,
+              dbVersion: input.dbVersion,
+              appHome: appHome!,
+            })
+            return application.app
+          },
+          true,
+          (directory) => ownedDirectories.push(directory),
+        )()
+      })
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          try {
+            current?.cleanup()
+          } finally {
+            for (const directory of ownedDirectories)
+              rmSync(directory, { recursive: true, force: true })
+            restoreHome?.()
+            if (appHome !== undefined) rmSync(appHome, { recursive: true, force: true })
+          }
+        }
+      })
+      register(() => current!)
+    })
+  })
+}

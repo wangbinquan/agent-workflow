@@ -10,28 +10,21 @@
 //   3. closure / closure-preview stopped appending placeholder `missing:true`
 //      rows for dangling dependsOn references.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { createAgent } from '../src/services/agent'
 import type { Agent } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-function buildHarness(): { db: DbClient; app: Hono } {
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  return { db, app }
-}
 
 async function req(app: Hono, path: string, init?: RequestInit): Promise<Response> {
   return app.request(path, {
@@ -41,7 +34,7 @@ async function req(app: Hono, path: string, init?: RequestInit): Promise<Respons
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   opts: {
     dependsOn?: string[]
@@ -67,8 +60,8 @@ async function seedAgent(
   })
 }
 
-describe('GET /api/agents/:id/closure', () => {
-  let db: DbClient
+registerProviderApplication('GET /api/agents/:id/closure', (buildHarness) => {
+  let db: ProviderNeutralDatabase
   let app: Hono
   beforeEach(() => {
     ;({ db, app } = buildHarness())
@@ -161,8 +154,8 @@ describe('GET /api/agents/:id/closure', () => {
   })
 })
 
-describe('POST /api/agents/closure-preview', () => {
-  let db: DbClient
+registerProviderApplication('POST /api/agents/closure-preview', (buildHarness) => {
+  let db: ProviderNeutralDatabase
   let app: Hono
   beforeEach(() => {
     ;({ db, app } = buildHarness())
@@ -229,3 +222,45 @@ describe('POST /api/agents/closure-preview', () => {
     expect(body.details.cyclePath.length).toBeGreaterThanOrEqual(3)
   })
 })
+
+// RFC359 W50: borrow the selected provider database and await the complete app lifetime.
+function registerProviderApplication(
+  name: string,
+  register: (buildHarness: () => { db: ProviderNeutralDatabase; app: Hono }) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let appHome: string | undefined
+      let restoreHome: (() => void) | undefined
+      beforeEach(async () => {
+        application = undefined
+        appHome = undefined
+        restoreHome = undefined
+        const previousHome = process.env.AGENT_WORKFLOW_HOME
+        appHome = mkdtempSync(join(tmpdir(), 'rfc359-w50-http-'))
+        restoreHome = () => {
+          if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousHome
+        }
+        process.env.AGENT_WORKFLOW_HOME = appHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: join(appHome, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+      })
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          restoreHome?.()
+          if (appHome !== undefined) rmSync(appHome, { recursive: true, force: true })
+        }
+      })
+      register(() => ({ db: harness.db, app: application!.app }))
+    })
+  })
+}

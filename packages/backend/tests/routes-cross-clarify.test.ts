@@ -30,6 +30,15 @@ import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -89,7 +98,11 @@ function defaultDef(): WorkflowDefinition {
   }
 }
 
-async function seedTask(db: DbClient, opts: { taskId?: string } = {}): Promise<{ taskId: string }> {
+async function seedTask(
+  db: ProviderNeutralDatabase,
+  opts: { taskId?: string } = {},
+  lineage?: typeof providerTaskLineage,
+): Promise<{ taskId: string }> {
   const taskId = opts.taskId ?? `task_${ulid()}`
   const def = defaultDef()
   const workflowId = `wf_${taskId}`
@@ -118,16 +131,19 @@ async function seedTask(db: DbClient, opts: { taskId?: string } = {}): Promise<{
       status: 'awaiting_human',
       inputs: '{}',
       startedAt: Date.now(),
+
+      ...(lineage?.(taskId) ?? {}),
     })
     .onConflictDoNothing()
   return { taskId }
 }
 
 async function seedCrossClarifySession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { taskId?: string } = {},
+  lineage?: typeof providerTaskLineage,
 ): Promise<{ taskId: string; intermediaryNodeRunId: string; sessionId: string }> {
-  const { taskId } = await seedTask(db, opts.taskId ? { taskId: opts.taskId } : {})
+  const { taskId } = await seedTask(db, opts.taskId ? { taskId: opts.taskId } : {}, lineage)
   const questionerRunId = ulid()
   // Seed prior designer + questioner node_runs so the answer's auto-dispatch has
   // runs to inherit when the test submits with directive='continue'.
@@ -171,93 +187,97 @@ afterEach(() => {
 })
 
 describe('GET /api/clarify — mixed self + cross with kind chip', () => {
-  test('list mixes self-clarify and cross-clarify sessions and tags each with kind', async () => {
-    const { db, app } = buildApp()
-    // Self-clarify session
-    const taskA = `task_${ulid()}`
-    const def: WorkflowDefinition = {
-      $schema_version: 3,
-      inputs: [],
-      nodes: [
-        { id: 'designer', kind: 'agent-single', agentName: 'designer' },
-        { id: 'c1', kind: 'clarify', title: 'self-clarify' },
-      ],
-      edges: [],
-      outputs: [],
-    }
-    await db.insert(workflows).values({
-      id: `wf_${taskA}`,
-      name: 'wf',
-      description: '',
-      definition: JSON.stringify(def),
-      version: 1,
-      schemaVersion: 3,
-    })
-    await db.insert(tasks).values({
-      id: taskA,
-      name: 't',
-      workflowId: `wf_${taskA}`,
-      workflowSnapshot: JSON.stringify(def),
-      repoPath: '/tmp',
-      worktreePath: '',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskA}`,
-      status: 'awaiting_human',
-      inputs: '{}',
-      startedAt: Date.now() - 100, // earlier
-    })
-    const sourceRunId = ulid()
-    await db.insert(nodeRuns).values({
-      id: sourceRunId,
-      taskId: taskA,
-      nodeId: 'designer',
-      status: 'done',
-      retryIndex: 0,
-      iteration: 0,
-    })
-    await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId: taskA,
-      askingNodeId: 'designer',
-      askingNodeRunId: sourceRunId,
-      askingShardKey: null,
-      intermediaryNodeId: 'c1',
-      iteration: 0,
-      questions: [Q1],
-    })
+  registerProviderApplication((buildApp, seedTask, seedCrossClarifySession) => {
+    test('list mixes self-clarify and cross-clarify sessions and tags each with kind', async () => {
+      const { db, app } = await buildApp()
+      // Self-clarify session
+      const taskA = `task_${ulid()}`
+      const def: WorkflowDefinition = {
+        $schema_version: 3,
+        inputs: [],
+        nodes: [
+          { id: 'designer', kind: 'agent-single', agentName: 'designer' },
+          { id: 'c1', kind: 'clarify', title: 'self-clarify' },
+        ],
+        edges: [],
+        outputs: [],
+      }
+      await db.insert(workflows).values({
+        id: `wf_${taskA}`,
+        name: 'wf',
+        description: '',
+        definition: JSON.stringify(def),
+        version: 1,
+        schemaVersion: 3,
+      })
+      await db.insert(tasks).values({
+        id: taskA,
+        name: 't',
+        workflowId: `wf_${taskA}`,
+        workflowSnapshot: JSON.stringify(def),
+        repoPath: '/tmp',
+        worktreePath: '',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskA}`,
+        status: 'awaiting_human',
+        inputs: '{}',
+        startedAt: Date.now() - 100, // earlier
+      })
+      const sourceRunId = ulid()
+      await db.insert(nodeRuns).values({
+        id: sourceRunId,
+        taskId: taskA,
+        nodeId: 'designer',
+        status: 'done',
+        retryIndex: 0,
+        iteration: 0,
+      })
+      await createClarifyRound({
+        kind: 'self',
+        db,
+        taskId: taskA,
+        askingNodeId: 'designer',
+        askingNodeRunId: sourceRunId,
+        askingShardKey: null,
+        intermediaryNodeId: 'c1',
+        iteration: 0,
+        questions: [Q1],
+      })
 
-    await seedCrossClarifySession(db)
+      await seedCrossClarifySession(db)
 
-    const res = await req(app, '/api/clarify')
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Array<{ kind: 'self' | 'cross' }>
-    const kinds = new Set(body.map((b) => b.kind))
-    expect(kinds.has('self')).toBe(true)
-    expect(kinds.has('cross')).toBe(true)
+      const res = await req(app, '/api/clarify')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Array<{ kind: 'self' | 'cross' }>
+      const kinds = new Set(body.map((b) => b.kind))
+      expect(kinds.has('self')).toBe(true)
+      expect(kinds.has('cross')).toBe(true)
+    })
   })
 })
 
 describe('GET /api/clarify/:nodeRunId — branches by node kind', () => {
-  test('returns ClarifyRound (with kind="cross" + intermediaryNodeId) for cross-clarify node_run', async () => {
-    // RFC-058 T14: detail endpoint now emits a single ClarifyRound shape;
-    // cross-clarify rows surface as `kind: 'cross'` + `intermediaryNodeId`
-    // (formerly `crossClarifyNodeId`).
-    const { db, app } = buildApp()
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await seedCrossClarifySession(db)
+  registerProviderApplication((buildApp, seedTask, seedCrossClarifySession) => {
+    test('returns ClarifyRound (with kind="cross" + intermediaryNodeId) for cross-clarify node_run', async () => {
+      // RFC-058 T14: detail endpoint now emits a single ClarifyRound shape;
+      // cross-clarify rows surface as `kind: 'cross'` + `intermediaryNodeId`
+      // (formerly `crossClarifyNodeId`).
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await seedCrossClarifySession(db)
 
-    const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      kind: 'self' | 'cross'
-      status: string
-      questions: unknown[]
-      intermediaryNodeId: string
-    }
-    expect(body.kind).toBe('cross')
-    expect(body.status).toBe('awaiting_human')
-    expect(body.questions.length).toBe(1)
-    expect(body.intermediaryNodeId).toBe('cross1')
+      const res = await req(app, `/api/clarify/${crossClarifyNodeRunId}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        kind: 'self' | 'cross'
+        status: string
+        questions: unknown[]
+        intermediaryNodeId: string
+      }
+      expect(body.kind).toBe('cross')
+      expect(body.status).toBe('awaiting_human')
+      expect(body.questions.length).toBe(1)
+      expect(body.intermediaryNodeId).toBe('cross1')
+    })
   })
 })
 
@@ -378,3 +398,67 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
 // detail response no longer surfaces `questionScopes`, and there is no more
 // `cross-clarify-question-scopes-malformed` 422. The surviving directive coverage (a 'continue'
 // cross answer reruns the questioner, no designer) lives in the directive-branch block above.
+
+// RFC-359 W50: keep native registrations while the selected calls use the complete provider application.
+function registerProviderApplication(
+  register: (
+    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    seedTaskFixture: typeof seedTask,
+    seedCrossClarifySessionFixture: typeof seedCrossClarifySession,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function buildApp() {
+        ownedHome = createFixtureDirectory(
+          joinFixturePath(fixtureTmpDirectory(), 'rfc359-w50-routes-cross-clarify-'),
+        )
+        previousHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = ownedHome
+        homeAssigned = true
+        const appHome = ownedHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: joinFixturePath(appHome, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+          appHome,
+        })
+        return { db: harness.db, app: application.app }
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedHome !== undefined)
+            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register(
+        buildApp,
+        (db, opts) => seedTask(db, opts, providerTaskLineage),
+        (db, opts) => seedCrossClarifySession(db, opts, providerTaskLineage),
+      )
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

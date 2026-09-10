@@ -26,6 +26,15 @@ import {
   TASKS_LIST_CHANNEL,
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
+import { tmpdir as fixtureTmpDirectory } from 'node:os'
+import { join as joinFixturePath } from 'node:path'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -59,9 +68,10 @@ async function diagnose(
 }
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskStatus: 'awaiting_review' | 'done' | 'running',
   nodes: WorkflowNode[],
+  lineage?: typeof providerTaskLineage,
 ): Promise<string> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
@@ -83,6 +93,8 @@ async function seedTask(
     status: taskStatus,
     inputs: '{}',
     startedAt: Date.now(),
+
+    ...(lineage?.(taskId) ?? {}),
   })
   return taskId
 }
@@ -97,108 +109,114 @@ describe('POST /api/tasks/:id/diagnose — auth gate', () => {
 })
 
 describe('POST /api/tasks/:id/diagnose — clean task', () => {
-  test('returns scanned=1, openAlerts=[] for a healthy task', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, 'running', [])
-    const res = await diagnose(app, taskId)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { scanned: number; openAlerts: unknown[] }
-    expect(body.scanned).toBe(1)
-    expect(body.openAlerts).toEqual([])
+  registerProviderApplication((buildApp, seedTask) => {
+    test('returns scanned=1, openAlerts=[] for a healthy task', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db, 'running', [])
+      const res = await diagnose(app, taskId)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { scanned: number; openAlerts: unknown[] }
+      expect(body.scanned).toBe(1)
+      expect(body.openAlerts).toEqual([])
+    })
   })
 })
 
 describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
-  test('returns 200 + R1 alert for the canonical stuck-review shape', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, 'awaiting_review', [
-      { id: 'rev_1', kind: 'review' } as WorkflowNode,
-    ])
-    const runId = ulid()
-    await db.insert(nodeRuns).values({
-      id: runId,
-      taskId,
-      nodeId: 'rev_1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_review',
-      startedAt: Date.now(),
-    })
-    await db.insert(docVersions).values({
-      id: ulid(),
-      taskId,
-      reviewNodeId: 'rev_1',
-      reviewNodeRunId: runId,
-      sourceNodeId: 'doc',
-      sourcePortName: 'docpath',
-      versionIndex: 1,
-      reviewIteration: 0,
-      bodyPath: 'dv/v1.md',
-      decision: 'approved',
-      decidedAt: Date.now(),
-    })
-    const res = await diagnose(app, taskId)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      scanned: number
-      newAlerts: number
-      openAlerts: Array<{ rule: string; severity: string }>
-    }
-    expect(body.scanned).toBe(1)
-    expect(body.newAlerts).toBe(1)
-    const r1 = body.openAlerts.filter((a) => a.rule === 'R1')
-    expect(r1).toHaveLength(1)
-    expect(r1[0]!.severity).toBe('warning')
-  })
-
-  test('broadcasts lifecycle.alert on tasks-list channel for the new finding', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, 'awaiting_review', [
-      { id: 'rev_1', kind: 'review' } as WorkflowNode,
-    ])
-    const runId = ulid()
-    await db.insert(nodeRuns).values({
-      id: runId,
-      taskId,
-      nodeId: 'rev_1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_review',
-      startedAt: Date.now(),
-    })
-    await db.insert(docVersions).values({
-      id: ulid(),
-      taskId,
-      reviewNodeId: 'rev_1',
-      reviewNodeRunId: runId,
-      sourceNodeId: 'doc',
-      sourcePortName: 'docpath',
-      versionIndex: 1,
-      reviewIteration: 0,
-      bodyPath: 'dv/v1.md',
-      decision: 'approved',
-      decidedAt: Date.now(),
-    })
-    const messages: TasksListWsMessage[] = []
-    const unsub = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (m) => {
-      messages.push(m)
-    })
-    try {
+  registerProviderApplication((buildApp, seedTask) => {
+    test('returns 200 + R1 alert for the canonical stuck-review shape', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db, 'awaiting_review', [
+        { id: 'rev_1', kind: 'review' } as WorkflowNode,
+      ])
+      const runId = ulid()
+      await db.insert(nodeRuns).values({
+        id: runId,
+        taskId,
+        nodeId: 'rev_1',
+        iteration: 0,
+        retryIndex: 0,
+        reviewIteration: 0,
+        status: 'awaiting_review',
+        startedAt: Date.now(),
+      })
+      await db.insert(docVersions).values({
+        id: ulid(),
+        taskId,
+        reviewNodeId: 'rev_1',
+        reviewNodeRunId: runId,
+        sourceNodeId: 'doc',
+        sourcePortName: 'docpath',
+        versionIndex: 1,
+        reviewIteration: 0,
+        bodyPath: 'dv/v1.md',
+        decision: 'approved',
+        decidedAt: Date.now(),
+      })
       const res = await diagnose(app, taskId)
       expect(res.status).toBe(200)
-    } finally {
-      unsub()
-    }
-    const lifecycle = messages.filter((m) => m.type === 'lifecycle.alert')
-    expect(lifecycle).toHaveLength(1)
-    expect(lifecycle[0]).toMatchObject({
-      type: 'lifecycle.alert',
-      taskId,
-      rule: 'R1',
-      severity: 'warning',
-      transition: 'new',
+      const body = (await res.json()) as {
+        scanned: number
+        newAlerts: number
+        openAlerts: Array<{ rule: string; severity: string }>
+      }
+      expect(body.scanned).toBe(1)
+      expect(body.newAlerts).toBe(1)
+      const r1 = body.openAlerts.filter((a) => a.rule === 'R1')
+      expect(r1).toHaveLength(1)
+      expect(r1[0]!.severity).toBe('warning')
+    })
+  })
+
+  registerProviderApplication((buildApp, seedTask) => {
+    test('broadcasts lifecycle.alert on tasks-list channel for the new finding', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db, 'awaiting_review', [
+        { id: 'rev_1', kind: 'review' } as WorkflowNode,
+      ])
+      const runId = ulid()
+      await db.insert(nodeRuns).values({
+        id: runId,
+        taskId,
+        nodeId: 'rev_1',
+        iteration: 0,
+        retryIndex: 0,
+        reviewIteration: 0,
+        status: 'awaiting_review',
+        startedAt: Date.now(),
+      })
+      await db.insert(docVersions).values({
+        id: ulid(),
+        taskId,
+        reviewNodeId: 'rev_1',
+        reviewNodeRunId: runId,
+        sourceNodeId: 'doc',
+        sourcePortName: 'docpath',
+        versionIndex: 1,
+        reviewIteration: 0,
+        bodyPath: 'dv/v1.md',
+        decision: 'approved',
+        decidedAt: Date.now(),
+      })
+      const messages: TasksListWsMessage[] = []
+      const unsub = tasksListBroadcaster.subscribe(TASKS_LIST_CHANNEL, (m) => {
+        messages.push(m)
+      })
+      try {
+        const res = await diagnose(app, taskId)
+        expect(res.status).toBe(200)
+      } finally {
+        unsub()
+      }
+      const lifecycle = messages.filter((m) => m.type === 'lifecycle.alert')
+      expect(lifecycle).toHaveLength(1)
+      expect(lifecycle[0]).toMatchObject({
+        type: 'lifecycle.alert',
+        taskId,
+        rule: 'R1',
+        severity: 'warning',
+        transition: 'new',
+      })
     })
   })
 })
@@ -221,71 +239,136 @@ describe('POST /api/tasks/:id/diagnose — unknown task id', () => {
 // invariant scan). Locked here so a refactor of the route can't silently
 // drop the merge.
 describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
-  test('openAlerts includes pre-existing stuck-rule (S3) row even though the live scan does not produce one', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, 'running', [])
-    // Plant a fresh S3 row directly — mimicking what the periodic
-    // stuck-task scan would have written once the 30-min threshold
-    // elapsed. The /diagnose handler runs only the invariant scan so
-    // it never inserts S3/S4 itself; merging from the table is the
-    // only path that surfaces them.
-    const { lifecycleAlerts } = await import('../src/db/schema')
-    await db.insert(lifecycleAlerts).values({
-      id: 'al_s3_test',
-      taskId,
-      rule: 'S3',
-      severity: 'warning',
-      detail: JSON.stringify({ rule: 'S3', repairHint: { kind: 'review', nodeRunId: 'nr_x' } }),
-      detectedAt: Date.now(),
-      resolvedAt: null,
-    })
+  registerProviderApplication((buildApp, seedTask) => {
+    test('openAlerts includes pre-existing stuck-rule (S3) row even though the live scan does not produce one', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db, 'running', [])
+      // Plant a fresh S3 row directly — mimicking what the periodic
+      // stuck-task scan would have written once the 30-min threshold
+      // elapsed. The /diagnose handler runs only the invariant scan so
+      // it never inserts S3/S4 itself; merging from the table is the
+      // only path that surfaces them.
+      const { lifecycleAlerts } = await import('../src/db/schema')
+      await db.insert(lifecycleAlerts).values({
+        id: 'al_s3_test',
+        taskId,
+        rule: 'S3',
+        severity: 'warning',
+        detail: JSON.stringify({ rule: 'S3', repairHint: { kind: 'review', nodeRunId: 'nr_x' } }),
+        detectedAt: Date.now(),
+        resolvedAt: null,
+      })
 
-    const res = await diagnose(app, taskId)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      openAlerts: Array<{ id: string; rule: string; severity: string }>
-    }
-    const s3 = body.openAlerts.filter((a) => a.rule === 'S3')
-    expect(s3).toHaveLength(1)
-    expect(s3[0]!.id).toBe('al_s3_test')
+      const res = await diagnose(app, taskId)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        openAlerts: Array<{ id: string; rule: string; severity: string }>
+      }
+      const s3 = body.openAlerts.filter((a) => a.rule === 'S3')
+      expect(s3).toHaveLength(1)
+      expect(s3[0]!.id).toBe('al_s3_test')
+    })
   })
 
-  test('does not duplicate an alert that the invariant scan also returns', async () => {
-    const { db, app } = buildApp()
-    const taskId = await seedTask(db, 'awaiting_review', [
-      { id: 'rev_1', kind: 'review' } as WorkflowNode,
-    ])
-    const runId = ulid()
-    await db.insert(nodeRuns).values({
-      id: runId,
-      taskId,
-      nodeId: 'rev_1',
-      iteration: 0,
-      retryIndex: 0,
-      reviewIteration: 0,
-      status: 'awaiting_review',
-      startedAt: Date.now(),
+  registerProviderApplication((buildApp, seedTask) => {
+    test('does not duplicate an alert that the invariant scan also returns', async () => {
+      const { db, app } = await buildApp()
+      const taskId = await seedTask(db, 'awaiting_review', [
+        { id: 'rev_1', kind: 'review' } as WorkflowNode,
+      ])
+      const runId = ulid()
+      await db.insert(nodeRuns).values({
+        id: runId,
+        taskId,
+        nodeId: 'rev_1',
+        iteration: 0,
+        retryIndex: 0,
+        reviewIteration: 0,
+        status: 'awaiting_review',
+        startedAt: Date.now(),
+      })
+      await db.insert(docVersions).values({
+        id: ulid(),
+        taskId,
+        reviewNodeId: 'rev_1',
+        reviewNodeRunId: runId,
+        sourceNodeId: 'doc',
+        sourcePortName: 'docpath',
+        versionIndex: 1,
+        reviewIteration: 0,
+        bodyPath: 'dv/v1.md',
+        decision: 'approved',
+        decidedAt: Date.now(),
+      })
+      // First call: invariant scan inserts the R1 row.
+      await diagnose(app, taskId)
+      // Second call: the merge path also reads the table; ensure the row
+      // appears exactly once (not duplicated by the merge).
+      const res = await diagnose(app, taskId)
+      const body = (await res.json()) as { openAlerts: Array<{ id: string; rule: string }> }
+      const r1 = body.openAlerts.filter((a) => a.rule === 'R1')
+      expect(r1).toHaveLength(1)
     })
-    await db.insert(docVersions).values({
-      id: ulid(),
-      taskId,
-      reviewNodeId: 'rev_1',
-      reviewNodeRunId: runId,
-      sourceNodeId: 'doc',
-      sourcePortName: 'docpath',
-      versionIndex: 1,
-      reviewIteration: 0,
-      bodyPath: 'dv/v1.md',
-      decision: 'approved',
-      decidedAt: Date.now(),
-    })
-    // First call: invariant scan inserts the R1 row.
-    await diagnose(app, taskId)
-    // Second call: the merge path also reads the table; ensure the row
-    // appears exactly once (not duplicated by the merge).
-    const res = await diagnose(app, taskId)
-    const body = (await res.json()) as { openAlerts: Array<{ id: string; rule: string }> }
-    const r1 = body.openAlerts.filter((a) => a.rule === 'R1')
-    expect(r1).toHaveLength(1)
   })
 })
+
+// RFC-359 W50: keep native registrations while the selected calls use the complete provider application.
+function registerProviderApplication(
+  register: (
+    buildApp: () => Promise<{ db: ProviderNeutralDatabase; app: Hono }>,
+    seedTaskFixture: typeof seedTask,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function buildApp() {
+        ownedHome = createFixtureDirectory(
+          joinFixturePath(fixtureTmpDirectory(), 'rfc359-w50-api-tasks-diagnose-'),
+        )
+        previousHome = process.env.AGENT_WORKFLOW_HOME
+        process.env.AGENT_WORKFLOW_HOME = ownedHome
+        homeAssigned = true
+        const appHome = ownedHome
+        application = await createProviderHttpApplication(harness, {
+          token: TOKEN,
+          configPath: joinFixturePath(appHome, 'config.json'),
+          opencodeVersion: '1.15.0',
+          dbVersion: 1,
+          appHome,
+        })
+        return { db: harness.db, app: application.app }
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedHome !== undefined)
+            removeFixtureDirectory(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register(buildApp, (db, taskStatus, nodes) =>
+        seedTask(db, taskStatus, nodes, providerTaskLineage),
+      )
+    })
+  })
+}
+
+function providerTaskLineage(id: string) {
+  return {
+    executionLineageId: id,
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+    ]),
+  }
+}

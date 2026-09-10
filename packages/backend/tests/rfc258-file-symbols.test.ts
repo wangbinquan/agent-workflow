@@ -19,10 +19,12 @@ import {
   type FileSymbolsQuery,
 } from '../src/services/codeIntel/fileSymbols'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-const getTaskFileSymbols = (db: DbClient, taskId: string, query: FileSymbolsQuery) =>
+const getTaskFileSymbols = (db: ProviderNeutralDatabase, taskId: string, query: FileSymbolsQuery) =>
   getTaskFileSymbolsWithPort(createCodeWorkspaceRead(db), taskId, query)
 
 const dirs: string[] = []
@@ -56,8 +58,9 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
 }
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
+  providerTaskLineage = false,
 ): Promise<string> {
   const taskId = `01FS${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
@@ -81,9 +84,19 @@ async function seedTask(
     startedAt: Date.now(),
     baseCommit: opts.baseCommit,
     repoCount: opts.repoCount ?? 1,
+    ...(providerTaskLineage
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
+
+const seedTaskForProvider: typeof seedTask = (db, opts) => seedTask(db, opts, true)
 
 function db(): DbClient {
   return createInMemoryDb(MIGRATIONS)
@@ -97,39 +110,43 @@ export function topLevel(): number { return 1 }
 `
 
 describe('getTaskFileSymbols — worktree side', () => {
-  test('typescript file yields class + methods + top-level function with 1-based ranges', async () => {
-    const d = db()
-    const repo = await makeRepo({ 'src/svc.ts': TS_SOURCE })
-    const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
-    const res = await getTaskFileSymbols(d, taskId, { path: 'src/svc.ts', side: 'worktree' })
-    expect(res.lang).toBe('typescript')
-    expect(res.status).toBe('ok')
-    const names = res.symbols.map((s) => s.qualifiedName)
-    expect(names).toContain('OrderService')
-    expect(names).toContain('OrderService.charge')
-    expect(names).toContain('topLevel')
-    const cls = res.symbols.find((s) => s.qualifiedName === 'OrderService')
-    expect(cls?.range.startLine).toBe(1)
-  })
+  describeEachProvider('provider cases 1', (harness) => {
+    const db = () => harness.db
+    const seedTask = seedTaskForProvider
+    test('typescript file yields class + methods + top-level function with 1-based ranges', async () => {
+      const d = db()
+      const repo = await makeRepo({ 'src/svc.ts': TS_SOURCE })
+      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+      const res = await getTaskFileSymbols(d, taskId, { path: 'src/svc.ts', side: 'worktree' })
+      expect(res.lang).toBe('typescript')
+      expect(res.status).toBe('ok')
+      const names = res.symbols.map((s) => s.qualifiedName)
+      expect(names).toContain('OrderService')
+      expect(names).toContain('OrderService.charge')
+      expect(names).toContain('topLevel')
+      const cls = res.symbols.find((s) => s.qualifiedName === 'OrderService')
+      expect(cls?.range.startLine).toBe(1)
+    })
 
-  test('unsupported language and binary content are honest 200 states (F-09)', async () => {
-    const d = db()
-    const repo = await makeRepo({ 'notes.txt': 'hello\n', 'bin.dat': 'x\x00y' })
-    const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
-    const txt = await getTaskFileSymbols(d, taskId, { path: 'notes.txt', side: 'worktree' })
-    expect(txt).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
-    const bin = await getTaskFileSymbols(d, taskId, { path: 'bin.dat', side: 'worktree' })
-    expect(bin).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
-  })
+    test('unsupported language and binary content are honest 200 states (F-09)', async () => {
+      const d = db()
+      const repo = await makeRepo({ 'notes.txt': 'hello\n', 'bin.dat': 'x\x00y' })
+      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+      const txt = await getTaskFileSymbols(d, taskId, { path: 'notes.txt', side: 'worktree' })
+      expect(txt).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
+      const bin = await getTaskFileSymbols(d, taskId, { path: 'bin.dat', side: 'worktree' })
+      expect(bin).toMatchObject({ lang: null, status: 'unsupported', symbols: [] })
+    })
 
-  test('oversized file → 413 file-symbols-oversized', async () => {
-    const d = db()
-    const repo = await makeRepo({ 'a.ts': 'export const x = 1\n' })
-    writeFileSync(join(repo.dir, 'big.ts'), `// ${'x'.repeat(1_600_000)}\n`)
-    const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
-    await expect(
-      getTaskFileSymbols(d, taskId, { path: 'big.ts', side: 'worktree' }),
-    ).rejects.toThrow(/analyzable limit/)
+    test('oversized file → 413 file-symbols-oversized', async () => {
+      const d = db()
+      const repo = await makeRepo({ 'a.ts': 'export const x = 1\n' })
+      writeFileSync(join(repo.dir, 'big.ts'), `// ${'x'.repeat(1_600_000)}\n`)
+      const taskId = await seedTask(d, { worktreePath: repo.dir, baseCommit: repo.commit })
+      await expect(
+        getTaskFileSymbols(d, taskId, { path: 'big.ts', side: 'worktree' }),
+      ).rejects.toThrow(/analyzable limit/)
+    })
   })
 
   test('missing path / escaping path / missing file map to the declared error codes', async () => {
@@ -148,7 +165,10 @@ describe('getTaskFileSymbols — worktree side', () => {
   })
 })
 
-describe('getTaskFileSymbols — remaining language matrix (P1-9⑦)', () => {
+describeEachProvider('getTaskFileSymbols — remaining language matrix (P1-9⑦)', (harness) => {
+  const db = () => harness.db
+  const seedTask = seedTaskForProvider
+
   const CASES: Array<[string, string, string]> = [
     ['m.go', 'package m\nfunc GoFn() {}\n', 'GoFn'],
     ['l.rs', 'pub fn rust_fn() {}\n', 'rust_fn'],
@@ -168,7 +188,10 @@ describe('getTaskFileSymbols — remaining language matrix (P1-9⑦)', () => {
   }
 })
 
-describe('getTaskFileSymbols — base side (F-05)', () => {
+describeEachProvider('getTaskFileSymbols — base side (F-05)', (harness) => {
+  const db = () => harness.db
+  const seedTask = seedTaskForProvider
+
   test('reads the base commit blob, not the edited worktree', async () => {
     const d = db()
     const repo = await makeRepo({ 'a.py': 'def old_name():\n    pass\n' })
@@ -196,7 +219,10 @@ describe('getTaskFileSymbols — base side (F-05)', () => {
   })
 })
 
-describe('getTaskFileSymbols — multi-repo wire keys (F-04)', () => {
+describeEachProvider('getTaskFileSymbols — multi-repo wire keys (F-04)', (harness) => {
+  const db = () => harness.db
+  const seedTask = seedTaskForProvider
+
   test("root repo is addressable as '.' and a mounted repo by its mount path", async () => {
     const d = db()
     const root = await makeRepo({ 'root.go': 'package main\nfunc RootFn() {}\n' })

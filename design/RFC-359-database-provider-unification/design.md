@@ -20,6 +20,14 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W50 catalog仅将既有字符串数组decoder委托给共享parser，私有签名、同步返回、
+  parse/filter catch、外部getter的原位置及完整caller不变。
+  13个旧测试文件的选定声明接真实provider；原种子只在provider fixture中显式给出
+  SQLite原任务触发器生成的两项根谱系字段，node_runs原输入保持。
+  RFC120/122的两个临时目录前缀与创建顺序保持，完整应用初始化在原makeApp位置等待；
+  工作区代理使用同一原FS/seed builder，两次原种子后才等待完整应用。
+  内层application dispose先于环境/目录清理及外层harness释放；原业务预算不放宽。
+
 - W49 两个原字符串数组decoder只将JSON.parse/filter/catch交给既有共享parser，
   原私有签名、五个调用及完整调用者保持；row getter仍先于wrapper入口，解析仍同步执行。
   11个旧文件仅将选定75例及其fixture接当前provider；未选55例完整call、原matcher与预算保持。

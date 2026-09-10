@@ -376,3 +376,11 @@ test('RFC-359 W49 Intent decoder preserves ordered values and catch boundaries',
     ['dependsOn'],
   )
 })
+
+test('RFC-359 W50 catalog decoder preserves ordered values and catch boundaries', () => {
+  checkStringDecoder(
+    '../src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts',
+    'stringArray',
+    ['dependsOn'],
+  )
+})

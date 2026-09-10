@@ -10,7 +10,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import {
@@ -19,6 +19,8 @@ import {
   openContainedFile,
 } from '../src/services/worktreeFileContent'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -47,8 +49,9 @@ async function makeRepo(): Promise<{ dir: string; commit: string }> {
 }
 
 async function seedTask(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
+  providerTaskLineage = false,
 ): Promise<string> {
   const taskId = `01FC${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
@@ -72,9 +75,19 @@ async function seedTask(
     startedAt: Date.now(),
     baseCommit: opts.baseCommit,
     repoCount: opts.repoCount ?? 1,
+    ...(providerTaskLineage
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
+
+const seedTaskForProvider: typeof seedTask = (db, opts) => seedTask(db, opts, true)
 
 describe('openContainedFile (handle-first contained read)', () => {
   test('regular file reads; missing path / directory report not-found', () => {
@@ -147,135 +160,138 @@ describe('openContainedFile (handle-first contained read)', () => {
 })
 
 describe('getTaskFileContent', () => {
-  test('worktree + base sides read; missing files answer {exists:false} on BOTH sides', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { dir, commit } = await makeRepo()
-    const taskId = await seedTask(db, { worktreePath: dir, baseCommit: commit })
+  describeEachProvider('provider cases 1', (harness) => {
+    const seedTask = seedTaskForProvider
+    test('worktree + base sides read; missing files answer {exists:false} on BOTH sides', async () => {
+      const db = harness.db
+      const { dir, commit } = await makeRepo()
+      const taskId = await seedTask(db, { worktreePath: dir, baseCommit: commit })
 
-    // worktree side: live edit visible
-    writeFileSync(join(dir, 'doc.md'), 'edited text\n')
-    const wt = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-      path: 'doc.md',
-      side: 'worktree',
-    })
-    expect(wt).toEqual({ exists: true, content: 'edited text\n', size: 12 })
-
-    // base side: original content
-    const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-      path: 'doc.md',
-      side: 'base',
-    })
-    expect(base.content).toBe('original text\n')
-
-    // pure add → no base side; pure delete → no worktree side. Neither errors.
-    writeFileSync(join(dir, 'new.md'), 'brand new\n')
-    expect(
-      await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-        path: 'new.md',
-        side: 'base',
-      }),
-    ).toEqual({
-      exists: false,
-    })
-    rmSync(join(dir, 'README.md'))
-    expect(
-      await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-        path: 'README.md',
+      // worktree side: live edit visible
+      writeFileSync(join(dir, 'doc.md'), 'edited text\n')
+      const wt = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'doc.md',
         side: 'worktree',
-      }),
-    ).toEqual({
-      exists: false,
+      })
+      expect(wt).toEqual({ exists: true, content: 'edited text\n', size: 12 })
+
+      // base side: original content
+      const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'doc.md',
+        side: 'base',
+      })
+      expect(base.content).toBe('original text\n')
+
+      // pure add → no base side; pure delete → no worktree side. Neither errors.
+      writeFileSync(join(dir, 'new.md'), 'brand new\n')
+      expect(
+        await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+          path: 'new.md',
+          side: 'base',
+        }),
+      ).toEqual({
+        exists: false,
+      })
+      rmSync(join(dir, 'README.md'))
+      expect(
+        await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+          path: 'README.md',
+          side: 'worktree',
+        }),
+      ).toEqual({
+        exists: false,
+      })
     })
-  })
 
-  test('P0-2 rename: base side reads via basePath (the old path)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { dir, commit } = await makeRepo()
-    const taskId = await seedTask(db, { worktreePath: dir, baseCommit: commit })
-    renameSync(join(dir, 'doc.md'), join(dir, 'renamed.md'))
+    test('P0-2 rename: base side reads via basePath (the old path)', async () => {
+      const db = harness.db
+      const { dir, commit } = await makeRepo()
+      const taskId = await seedTask(db, { worktreePath: dir, baseCommit: commit })
+      renameSync(join(dir, 'doc.md'), join(dir, 'renamed.md'))
 
-    // without basePath the base side is a miss (file never existed there) …
-    expect(
-      await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+      // without basePath the base side is a miss (file never existed there) …
+      expect(
+        await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+          path: 'renamed.md',
+          side: 'base',
+        }),
+      ).toEqual({
+        exists: false,
+      })
+      // … with basePath (the structural renamedFrom) it reads the old blob.
+      const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
         path: 'renamed.md',
         side: 'base',
-      }),
-    ).toEqual({
-      exists: false,
+        basePath: 'doc.md',
+      })
+      expect(base.content).toBe('original text\n')
     })
-    // … with basePath (the structural renamedFrom) it reads the old blob.
-    const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-      path: 'renamed.md',
-      side: 'base',
-      basePath: 'doc.md',
-    })
-    expect(base.content).toBe('original text\n')
-  })
 
-  test('multi-repo selects the repo by canonical key (RFC-248: = mount_path) and uses ITS base commit', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const primary = await makeRepo()
-    const secondary = await makeRepo()
-    writeFileSync(join(secondary.dir, 'doc.md'), 'secondary v2\n')
-    await runGit(secondary.dir, ['add', '.'])
-    await runGit(secondary.dir, ['commit', '-q', '-m', 'v2'])
-    const secondaryHead = (await runGit(secondary.dir, ['rev-parse', 'HEAD'])).stdout.trim()
+    test('multi-repo selects the repo by canonical key (RFC-248: = mount_path) and uses ITS base commit', async () => {
+      const db = harness.db
+      const primary = await makeRepo()
+      const secondary = await makeRepo()
+      writeFileSync(join(secondary.dir, 'doc.md'), 'secondary v2\n')
+      await runGit(secondary.dir, ['add', '.'])
+      await runGit(secondary.dir, ['commit', '-q', '-m', 'v2'])
+      const secondaryHead = (await runGit(secondary.dir, ['rev-parse', 'HEAD'])).stdout.trim()
 
-    const container = tempDir('aw-fc-multi-')
-    const taskId = await seedTask(db, {
-      worktreePath: container,
-      baseCommit: primary.commit,
-      repoCount: 2,
-    })
-    const repoRow = {
-      taskId,
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-    }
-    await db.insert(taskRepos).values([
-      {
-        ...repoRow,
-        repoIndex: 0,
-        repoPath: primary.dir,
-        worktreePath: primary.dir,
-        worktreeDirName: 'primary',
-        // RFC-248: 规范 key 是 mount_path（不再是 basename）。生产路径 startTask
-        // 永远显式写它；直插 task_repos 的夹具必须自己给，否则拿到列默认 ''。
-        mountPath: 'primary',
+      const container = tempDir('aw-fc-multi-')
+      const taskId = await seedTask(db, {
+        worktreePath: container,
         baseCommit: primary.commit,
-      },
-      {
-        ...repoRow,
-        repoIndex: 1,
-        repoPath: secondary.dir,
-        worktreePath: secondary.dir,
-        worktreeDirName: 'secondary',
-        mountPath: 'secondary',
-        baseCommit: secondaryHead,
-      },
-    ])
+        repoCount: 2,
+      })
+      const repoRow = {
+        taskId,
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+      }
+      await db.insert(taskRepos).values([
+        {
+          ...repoRow,
+          repoIndex: 0,
+          repoPath: primary.dir,
+          worktreePath: primary.dir,
+          worktreeDirName: 'primary',
+          // RFC-248: 规范 key 是 mount_path（不再是 basename）。生产路径 startTask
+          // 永远显式写它；直插 task_repos 的夹具必须自己给，否则拿到列默认 ''。
+          mountPath: 'primary',
+          baseCommit: primary.commit,
+        },
+        {
+          ...repoRow,
+          repoIndex: 1,
+          repoPath: secondary.dir,
+          worktreePath: secondary.dir,
+          worktreeDirName: 'secondary',
+          mountPath: 'secondary',
+          baseCommit: secondaryHead,
+        },
+      ])
 
-    // repo param required for multi-repo
-    await expect(
-      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+      // repo param required for multi-repo
+      await expect(
+        getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+          path: 'doc.md',
+          side: 'base',
+        }),
+      ).rejects.toThrow(/repo query param required/)
+      // the SECONDARY repo's own base commit serves its content (v2, not v1)
+      const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
         path: 'doc.md',
         side: 'base',
-      }),
-    ).rejects.toThrow(/repo query param required/)
-    // the SECONDARY repo's own base commit serves its content (v2, not v1)
-    const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-      path: 'doc.md',
-      side: 'base',
-      repo: 'secondary',
+        repo: 'secondary',
+      })
+      expect(base.content).toBe('secondary v2\n')
+      await expect(
+        getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+          path: 'doc.md',
+          side: 'base',
+          repo: 'nope',
+        }),
+      ).rejects.toThrow(/not found/)
     })
-    expect(base.content).toBe('secondary v2\n')
-    await expect(
-      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
-        path: 'doc.md',
-        side: 'base',
-        repo: 'nope',
-      }),
-    ).rejects.toThrow(/not found/)
   })
 
   test('guards: no base commit → 409 code; escape → validation; oversized/binary → typed errors', async () => {
