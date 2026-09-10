@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5330,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "5328 → 5330。RFC-359 W57：任务可见性判据（`or(owner = 我, id IN 我参与的)`）此前在仓里逐字重复**七处**，其中一处是 provider 专属的（`postgresqlTaskRouteOperations.ts`）——那正是本 RFC 要消灭的形状；而它是**授权判据**，漂一处就是用户看见不该看见的任务、或丢掉本该看见的。七处收敛到 `db/query.ts` 的唯一一份，并新增 `rfc359-w57-task-visibility-single-source` 守卫（AST 判定；在收敛前的 HEAD 上两条判据各抓到 6/6，已验红）。共享那一份要暴露的具名件（`TaskVisibilityRowRef` / `defaultTaskVisibilityRowRef` / `taskCollaboratorTaskIds` / `taskVisibilitySubjectOf` / `visibleTaskIdsFor`）净增 3 个符号，并把 collaboration 的两条边从「模块内部互抄」改成指向 db/query 这条平台词汇线。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4797,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "4795 → 4797。RFC-359 W57：任务可见性判据（`or(owner = 我, id IN 我参与的)`）此前在仓里逐字重复**七处**，其中一处是 provider 专属的（`postgresqlTaskRouteOperations.ts`）——那正是本 RFC 要消灭的形状；而它是**授权判据**，漂一处就是用户看见不该看见的任务、或丢掉本该看见的。七处收敛到 `db/query.ts` 的唯一一份，并新增 `rfc359-w57-task-visibility-single-source` 守卫（AST 判定；在收敛前的 HEAD 上两条判据各抓到 6/6，已验红）。共享那一份要暴露的具名件（`TaskVisibilityRowRef` / `defaultTaskVisibilityRowRef` / `taskCollaboratorTaskIds` / `taskVisibilitySubjectOf` / `visibleTaskIdsFor`）净增 3 个符号，并把 collaboration 的两条边从「模块内部互抄」改成指向 db/query 这条平台词汇线。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -874,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25056,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "25053 → 25056。RFC-359 W57：任务可见性判据（`or(owner = 我, id IN 我参与的)`）此前在仓里逐字重复**七处**，其中一处是 provider 专属的（`postgresqlTaskRouteOperations.ts`）——那正是本 RFC 要消灭的形状；而它是**授权判据**，漂一处就是用户看见不该看见的任务、或丢掉本该看见的。七处收敛到 `db/query.ts` 的唯一一份，并新增 `rfc359-w57-task-visibility-single-source` 守卫（AST 判定；在收敛前的 HEAD 上两条判据各抓到 6/6，已验红）。共享那一份要暴露的具名件（`TaskVisibilityRowRef` / `defaultTaskVisibilityRowRef` / `taskCollaboratorTaskIds` / `taskVisibilitySubjectOf` / `visibleTaskIdsFor`）净增 3 个符号，并把 collaboration 的两条边从「模块内部互抄」改成指向 db/query 这条平台词汇线。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -894,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "53d670270de256057fc0965672ccb0a4ef002394",
-    "contentDigest": "sha256:391005db37a6b155cc3036c715ee2451518b304477403239dd9a92a407299a8c",
+    "currentSnapshotSha": "d1167b50a3a7f6259b59886aa1257588d87b0cb8",
+    "contentDigest": "sha256:1572a21f71f80c913193f6e9262e1debbb6e89adbf4077e54bf2a54d1f2529dc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
