@@ -3860,23 +3860,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file",
-      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0c19c3c81820944d42d3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W4",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationQueries",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
-      "toSymbol": "createTaskAuthorizationQueries",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/integrationTriggerResources.ts#$file",
@@ -68953,6 +68936,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d84934f121e365792972",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "taskVisibilityCondition",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file",
@@ -85405,22 +85405,6 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#SystemOverviewQuery"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file",
-      "id": "import:0c19c3c81820944d42d3",
-      "owner": "collaboration",
-      "removeAfterWave": "W4",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/task-execution/infrastructure/taskAuthorization",
-      "syntax": "static-import",
-      "targetSymbol": "createTaskAuthorizationQueries",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationQueries"
     },
     {
       "edgeKind": "type",
@@ -153775,6 +153759,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file",
+      "id": "import:d84934f121e365792972",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "taskVisibilityCondition",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
@@ -167544,7 +167544,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ac1e14dc358c29622eaf1918f8b06a485c6611041a221229c704839409d7fc2c",
+  "sourceDigest": "sha256:59bb561da62551bd745f7e0716ba386bd3961a09ce94bfb622d669bb5358c3da",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

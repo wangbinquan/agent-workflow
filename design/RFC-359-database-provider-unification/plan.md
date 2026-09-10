@@ -4840,6 +4840,83 @@ W11 实测：**17 处里只有 1 处是可选参数**，其余 16 处是 `let x:
 也盖不住（那个值是属性不是 `let`）。守卫头注释担心的「改个名就逃逸」**在树里已经是现实**。
 凡按**自然语言措辞**取语料的守卫都有这个洞，读它的数字时不要当成全集。
 
+## 5h. AC-11 在**轻端点**上唯一的杠杆是往返数，不是查询本身（W56 / W57 实测）
+
+取证泳道反复给出同一个形状：几个徽标类轻端点在 PostgreSQL 上比 SQLite 慢，而**差值不随行数
+放大**。逐条查下来根因一致——它们不是「一条查询在 PG 上更慢」，而是**发了不止一条语句**：
+每一段在 SQLite 上是进程内调用（~0μs），在 PG 上是一次真实网络 RTT。查询再怎么调，也调不掉
+一次 TCP 往返。
+
+已折叠两条（各带一条**双引擎往返数预算**判据，先在旧实现上验红）：
+
+| 端点 | 折叠前 | 折叠后 | 实测 P95（SQLite / PG） |
+| --- | --- | --- | --- |
+| `GET /api/reviews/pending-count` | 3 条串行往返 + JS 归并计数 | 1 条 `count(*)` | 1.80 / 7.33ms |
+| `GET /api/clarify/pending-count` | `tasks:read:all` 1 条；**其余所有人** 2+ 条（taskId 全捞 → `visibleTaskIds` 再问一次，内部还按 `sqlChunk` 分块） | 两条分支都 1 条 `count(*)` | 1.58 / 3.46ms |
+
+两条的共同点值得单独记：
+
+- **数字一直是对的**，所以既有对拍（`rfc311-badge-counts`）一直绿——它比的是**数字**，比不出
+  **语句数**。RFC-311 那两份文件的头注释至今写着「the 15s inbox badge as ONE indexed count(*)」，
+  对 admin 成立、对普通用户不成立，而没有任何判据看得见这件事。新判据钉的是
+  `recording.statements.length === 1` 且首条含 `count(`，确定性、可进每次 PR。
+- **可见性谓词必须以「片段」形态存在**才折得掉那次往返：`visibleTaskIds` 的姿势是「先把 taskId
+  捞出来、再问一次可见性」。拿到片段的调用方把它 AND 进自己那一条语句即可，且 `visibleTaskIds`
+  自己也调同一个函数，两条路不可能漂。片段的落位判据见 `src/db/query.ts` 头注。
+- **顺带削了一条跨上下文边**：clarify 折叠后不再需要
+  `collaboration → task-execution/infrastructure/taskAuthorization` 的内部 import，
+  `architecture/cross-context-imports.json` 少一条。
+
+### 折叠时发现的一条：孤儿轮次在两个引擎上都不可达
+
+`countAwaitingClarifyRounds` 里有两条按「clarify_rounds 有行、tasks 没有对应行」写的分支
+（`or(isNull(tasks.id), …)` 与受限分支的 `isNotNull(tasks.id)`）。实测
+**两个引擎都强制 `clarify_rounds.task_id → tasks.id` 外键**（SQLite `SQLITE_CONSTRAINT_FOREIGNKEY`
+errno 787 / PG `23503`），所以那个状态根本进不去，两条分支是死代码。
+
+处置：**逐字保留**（折叠往返不顺手改语义），但给「不可达」这个前提补一条双引擎判据——
+外键哪天失效，孤儿状态变可达，那两条分支就从死代码变成活语义，而它们此刻没有任何行为覆盖。
+
+### 还没折的
+
+`GET /api/overview`（7.13 / 12.64ms）**不是往返数问题，是两套实现问题**——见下节。
+
+## 5i. `/api/overview` 是一引擎一份实现（W57 取证，AC-1 / AC-12 的最大一条）
+
+`tests/helpers/productionOverview.ts` 里有一条 `if (isPostgresql(db))` 硬分叉，而
+`rfc311-perf-guards.test.ts` 还用 AST 断言把这条分叉**钉住**（它当时的意图是「性能用例要走各
+provider 的真实生产入口」，合理；但副作用是把分叉写进了守卫）：
+
+- **SQLite** → `platform/persistence/sqlite/systemOverviewReadModel.ts::buildOverview`（`server.ts:2077` 装配）
+- **PostgreSQL** → `modules/system-operations/application/overview.ts::composeSystemOverviewQuery`（`cli/postgresqlDaemonApplication.ts:1795` 装配）
+
+**逐个聚合键对过，两套语义等价**（所以这是纯重复，不是「一好一坏」）：
+
+| 聚合键 | SQLite `buildOverview` | PG `composeSystemOverviewQuery` | 判定 |
+| --- | --- | --- | --- |
+| 六类 ACL 资源计数 | `countAclResource` + `visibleRowsCondition` + builtin 排除 + `<res>:read` 门 | `createResourceCatalogOverviewCountPort.countVisible`——同一个 `visibleRowsCondition`（`resourceVisibility.ts` 唯一一份）、同样的 builtin 排除与权限门 | 等价 |
+| repos | 门控 `countCachedRepositories()` | 同 | 等价 |
+| scheduled | 内联 count，owner ∨ grant 子查询 | `scheduledTaskPersistence.countVisible`——**与内联那段逐字相同** | 等价 |
+| memories | `list({status:'approved'})` + `filterVisible` + `.length` | 同 | 等价 |
+| tasks | `buildTaskStats` | `taskOverviewQuery.load` + 调用方侧 null 门（`load` 内的零值分支从该调用方够不着） | 等价 |
+| generatedAt / in-flight 合流 | 同形 | 同形 | 等价 |
+
+**目标形态**：留 `composeSystemOverviewQuery` 一份，SQLite 侧装同样的五个端口
+（`composePostgresqlResourceCatalogOverviewQuery` 内部早已是中立的——计数端口收
+`ProviderNeutralDatabase`，只有形参类型标注写着 `PostgresqlDatabaseClient`；
+`composeSqliteScheduledTaskRuntime` 也已存在），删 `buildOverview`，
+`runProductionOverview` 的分叉一并删，并把 `rfc311-perf-guards` 那条 AST 断言**从「钉住分叉」
+翻成「断言没有分叉」**。
+
+**已知阻塞（装配顺序）**：`overviewQuery` 在 `composeSqliteApplicationDeps`（server.ts:2077）就要造出来，
+而它需要的 `scheduledTaskRuntime.overview` 要到 `composeSqliteApiRouteMounts`（server.ts:2592）才装配。
+正解是把 overview 的装配挪到依赖齐备的那一层，**不是**留一个后填的槽——按 §5g 的结论，
+组合根占位的正解是词法作用域。
+
+**安全网**：`rfc190-overview-route.test.ts` 的 oracle（逐 actor 断言「概览计数 === 同一 actor 在
+对应列表端点拿到的行数」）目前**只跑 SQLite、且直接调 `buildOverview`**。合一时它必须改成调
+合成后的查询并按 `describeEachProvider` 双引擎跑——这既是本项的安全网，也是 AC-6 的一格。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

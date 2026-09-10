@@ -122,8 +122,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#transaction:602",
-      "line": 602,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#transaction:608",
+      "line": 608,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#saveClarifyDraft",
       "status": "clear",
       "symbol": "saveClarifyDraft",
@@ -3335,7 +3335,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ac1e14dc358c29622eaf1918f8b06a485c6611041a221229c704839409d7fc2c",
+  "sourceDigest": "sha256:59bb561da62551bd745f7e0716ba386bd3961a09ce94bfb622d669bb5358c3da",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

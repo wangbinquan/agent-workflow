@@ -32,8 +32,7 @@ import {
 } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { createTaskAuthorizationQueries } from '@/modules/task-execution/infrastructure/taskAuthorization'
+import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
 import { chunkedAll } from '@/util/sqlChunk'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
@@ -260,35 +259,42 @@ export async function listClarifyRoundSummaries(
  *     (orphans included); otherwise owner/collaborator only, and orphans drop
  *     out, exactly like filterRoundsByTaskVisibility's "look up rows first"
  *     behavior. Locked by the rfc311-badge-counts oracle test.
+ *
+ * RFC-359 AC-11 —— 「ONE indexed count(*)」此前只对 `tasks:read:all` 成立。**其余所有人**
+ * （生产上的绝大多数请求）走的是三段式：把全部 awaiting 轮次的 taskId 捞出来 → 再问一次
+ * `visibleTaskIds`（内部还按 sqlChunk 分块，任务多了不止一条）→ 在 JS 里 reduce 计数。
+ * 数字一直是对的，所以 `rfc311-badge-counts` 的对拍一直绿——它比的是数字，比不出语句数。
+ * 代价只在 PostgreSQL 上显形：每一段在 SQLite 上是进程内调用（~0μs），在 PG 上是一次真实
+ * 网络往返（实测该端点 SQLite P95 1.58ms / PG 3.46ms，差值不随行数放大）。
+ * 现在两条分支都是一条语句：可见性谓词由 `taskVisibilityCondition` 直接 AND 进 WHERE，
+ * 与 `visibleTaskIds` 同一个片段，两条路不可能漂。往返数由
+ * `rfc359-w57-clarify-badge-round-trip-budget` 双引擎钉住。
  */
 export async function countAwaitingClarifyRounds(
   db: ProviderNeutralDatabase,
   actor: Actor,
 ): Promise<number> {
+  const canReadAllTasks = actor.permissions.has('tasks:read:all')
   const conditions: SQL<unknown>[] = [
     eq(clarifyRounds.status, 'awaiting_human'),
     or(isNull(tasks.id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]))!,
   ]
-  if (actor.permissions.has('tasks:read:all')) {
-    const rows = await db
-      .select({ n: count() })
-      .from(clarifyRounds)
-      .leftJoin(tasks, eq(tasks.id, clarifyRounds.taskId))
-      .where(and(...conditions))
-    return rows[0]?.n ?? 0
+  if (!canReadAllTasks) {
+    // 受限用户：孤儿轮次掉出（与旧实现「先把行查出来再判定」同形——查不到的 taskId
+    // 不会进 visible 集合），再 AND 上 owner∨协作者。
+    conditions.push(isNotNull(tasks.id))
+    const visibility = taskVisibilityCondition(db, {
+      userId: actor.user.id,
+      canReadAllTasks: false,
+    })
+    if (visibility !== undefined) conditions.push(visibility)
   }
-  conditions.push(isNotNull(tasks.id))
   const rows = await db
-    .select({ taskId: clarifyRounds.taskId })
+    .select({ n: count() })
     .from(clarifyRounds)
     .leftJoin(tasks, eq(tasks.id, clarifyRounds.taskId))
     .where(and(...conditions))
-  const taskIds = rows.map((row) => row.taskId)
-  const visible = await createTaskAuthorizationQueries(db).visibleTaskIds({
-    subject: { userId: actor.user.id, canReadAllTasks: false },
-    taskIds,
-  })
-  return rows.reduce((total, row) => total + (visible.has(row.taskId) ? 1 : 0), 0)
+  return rows[0]?.n ?? 0
 }
 
 /**
