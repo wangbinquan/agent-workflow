@@ -5830,3 +5830,31 @@ HTTP 边界——用户拿到 **500 而不是 409**。这种漏法本地极难�
 `Failed query: insert into …`，看不出 SQLSTATE、也看不出能力矩阵怎么判的——同一条红了两次、
 第一次还猜错了方向。把 `uniqueViolationTarget` 的三态判决拼进拒因形态
 （`Error[unique:<unnamed>]:…` / `Error[not-unique-violation]:…`），下一次复发就是诊断而不是猜。
+
+## `design/**` 里的**任何**外链都会周期性地把无关提交推红——规范站也一样（2026-09-10，第二次）
+
+`.github/workflows/ci.yml` 的「Markdown link check (design/)」用 lychee 逐条请求 `design/**` 里的
+每个 URL。它的注释里已经记着 2026-08-02 的一次：`w3c.github.io` 重置连接（`os error 104`），
+把一笔只改两个 i18n 文件的 run 推红，手动重试每次都 200。为此加了 `--max-retries 5
+--retry-wait-time 5 --timeout 30`。
+
+**2026-09-10 又来一次**：`drafts.csswg.org` 同样 `Connection reset by peer (os error 104)`，
+**扛过了 5 次重试**，红在一笔只改 backend 源码与账本的提交上。重试不是万能的——连接被重置时
+根本没有 HTTP 状态码，`--accept` 结构上就吸收不了（配置注释自己也这么写着）。
+
+**处置：按 CLAUDE.md 的既有规则把引用改成纯文本**，而不是给主机开 `--exclude`：
+
+```md
+<!-- 会被逐条请求，第三方一抖就红 -->
+[CSS Color Adjustment](https://drafts.csswg.org/css-color-adjust-1/)
+<!-- 纯文本，同样可追溯，且不依赖任何外部站点保持在线 -->
+CSS Color Adjustment（`drafts.csswg.org/css-color-adjust-1/`）
+```
+
+CLAUDE.md 那条规则原本是针对 opencode 源码的 GitHub 外链写的，**理由对任何外链都成立**：
+可追溯性由文本本身提供，而链接把「CI 是否变绿」外包给了第三方站点的当天状态。
+写新 RFC / 评审记录时一律用纯文本形式；踩到红了就顺手把那一份文档里的外链一起转掉
+（本轮把 RFC-206 的 impl-gate 记录里 4 条全转了）。
+
+**别做的事**：不要为此把整个主机加进 `--exclude`——那会让该站所有链接从此不被检查，
+而真正失效的链接（打字错、页面下线）恰恰需要被检查出来。
