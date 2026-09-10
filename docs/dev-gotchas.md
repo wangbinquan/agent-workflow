@@ -2133,8 +2133,22 @@ grep -rlIP '\x00' packages/backend/src packages/backend/tests || echo "clean"
 我在**第二轮**跑过 `eslint --max-warnings 0` 并且是干净的，之后就没再跑；而 `or` 这个 import
 是在**最后一轮搬移**中才变成未使用的。CI 上一条 warning 即红（`--max-warnings 0`），主干因此被我推红。
 
-**规矩**：`git add` 之后、`git commit` 之前，对**暂存区里的全部文件**再跑一次
-prettier + eslint。中途跑过不算数——搬移会让"上一轮还在用"的符号变成死的。
+**规矩（2026-09-10 同日第三次踩后收紧）**：收尾**直接跑 CI 的那四条命令本身**——
+
+```bash
+bun run format:check && bun run lint && bun run typecheck && bun run depcheck
+```
+
+不要再对「本次改动的文件清单」跑逐文件 `prettier --check` / `eslint`。同一天我因此连踩三次：
+
+1. 第一次 —— 中途跑过 eslint 就没再跑，最后一轮搬移让 `or` 变成未使用；
+2. 第二次 —— `bunx eslint <files> --max-warnings 0 | tail` 的退出码被**管道吞掉**了
+   （管道的退出码是 `tail` 的），`&& echo OK` 照样打印，我据此判绿；
+3. 第三次 —— 先跑 prettier、再按 eslint 的提示修剪 import、**只重跑了 eslint**，
+   单元素 import 留成多行形态，CI 的 `format:check` 判红。
+
+三次的共同点都是「**清单/顺序**出了问题」，而四条整仓命令没有清单、也不吃顺序：改完再跑一遍
+就是最终态。代价是几十秒，挡住的是一次全员红 + 一笔补提。
 （本仓 RFC-140 事故同源：一个 unused import 就双 OS 红。）
 
 ## `count(*)` 在 PostgreSQL 上回来是**字符串**——裸 `sql<number>` 没有 mapper（同上）

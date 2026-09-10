@@ -5062,6 +5062,26 @@ candidates` / SQLite `DELETE … WHERE id IN (…)`）W6-T25 时就收进了能�
 现在比的是「同一份实现在两个引擎上删的是不是同一批」——后者才是 `deleteByCandidates` 那条
 方言渲染的真实验收面。它在合一后**一次就绿**（双引擎 10 pass），这也是两份等价的直接证据。
 
+### 顺带修掉的一个真 bug：并发续跑偶发 500 而不是 409
+
+清单第 4 组（`buildWorkgroupRuntimeConfig`）落地那一提的 CI 上，ubuntu 分片 1/8 红了一条
+`rfc359-w8-t29 [postgresql]`——报的是 `Error:Failed query: insert into … task_execution_intents …`，
+即**驱动错误漏到了端口外面**。查下来是真缺陷，不是 flake：
+
+续跑准入是「先读活跃 intent、再插一行 pending」，整笔在 SERIALIZABLE 里。两个并发续跑都读到
+「没有活跃 intent」时，输家有两种收场、谁先冒是随机的：SSI 先判就是 40001（`serializable`
+会重试，重放时读到赢家那行 ⇒ 领域错误 ✓）；部分唯一索引先抛就是 **23505**——它不是序列化失败
+（重试不接），此前**也没有映射**，于是原样漏出去，用户侧就是 500 而不是 409。
+
+修法：`taskContinuationAdmission.ts` 新增 `admitWithPendingIntentConflict`，两个提交入口都包上。
+**端口的错误合同不再依赖调用方有没有先做 CAS**——那正是那条对拍直接打端口要测的东西。
+
+这里有一条给账本用法的教训：`rfc359-w8-unnormalized-unique-insert` 早就把这一处记在账上，
+why 写的是「**已实测不可达**」，依据是「唯一的生产入口更早还有一次 task 行 CAS 挡掉输家」。
+那个判断**少看了一条路**——同一个仓里的对拍就直接打端口、绕开了那次 CAS。
+**账本里的「不可达」是一次断言，不是一条事实**；它和别的断言一样会过期，而过期的表现是
+偶发红、不是编译错。归一之后该条销账（20 → 19）。
+
 ### 给下一刀的话
 
 上表其余各组都还开着。挑的时候注意两件事：
