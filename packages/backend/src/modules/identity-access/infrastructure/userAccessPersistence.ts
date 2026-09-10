@@ -63,6 +63,7 @@ import type {
   UserAccessTransactionRunner,
 } from '../application/ports/userAccessTransaction'
 import { UserAccessError, type ManagedUserStatus } from '../public/types'
+import { storeUserAccessRecord } from './userAccessRecordIndex'
 
 type SynchronousDecision<T> = T extends PromiseLike<unknown> ? never : T
 
@@ -303,7 +304,8 @@ export class BufferedUserAccessTransaction implements UserAccessTransaction {
     private readonly readSet: UserAccessTransactionReadSet,
     state: LoadedUserAccessState,
   ) {
-    for (const user of state.users) this.storeUser(user)
+    for (const user of state.users)
+      storeUserAccessRecord(this.users, this.usernames, this.emails, user)
     for (const grant of state.grants) {
       this.grants.set(grantKey(grant.userId, grant.permission), grant)
     }
@@ -316,17 +318,6 @@ export class BufferedUserAccessTransaction implements UserAccessTransaction {
     if (state.oidcSelectors !== null && readSet.oidcProfileSelectorsProviderId !== undefined) {
       this.selectors.set(readSet.oidcProfileSelectorsProviderId, state.oidcSelectors)
     }
-  }
-
-  private storeUser(user: UserAccessRecord): void {
-    const previous = this.users.get(user.id)
-    if (previous !== undefined) {
-      this.usernames.delete(previous.username)
-      if (previous.email !== null) this.emails.delete(previous.email)
-    }
-    this.users.set(user.id, user)
-    this.usernames.set(user.username, user.id)
-    if (user.email !== null) this.emails.set(user.email, user.id)
   }
 
   private assertRequested(
@@ -417,7 +408,7 @@ export class BufferedUserAccessTransaction implements UserAccessTransaction {
   }
 
   insertUser(record: InsertManagedUserRecord): void {
-    this.storeUser(record)
+    storeUserAccessRecord(this.users, this.usernames, this.emails, record)
     this.touchedUsers.add(record.id)
     this.operations.push({ kind: 'insert-user', record })
   }
@@ -428,7 +419,7 @@ export class BufferedUserAccessTransaction implements UserAccessTransaction {
     if (update.accessChanged && current.accessRevision !== update.expectedAccessRevision) {
       return false
     }
-    this.storeUser({ ...current, ...update.values })
+    storeUserAccessRecord(this.users, this.usernames, this.emails, { ...current, ...update.values })
     this.touchedUsers.add(update.id)
     this.operations.push({ kind: 'update-user', update })
     return true

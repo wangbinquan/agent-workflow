@@ -847,10 +847,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 984,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 W8 一次性豁免：`preparedPackageMutation`（七个类型谓词的冻结对象）进入 resource-catalog 的公共面。合一前 `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts` 与 `platform/persistence/postgresqlResourcePackageAtomicApply.ts` 各揣**整族七个**逐字相同的谓词，差别只有函数名。判据是 `PreparedPackageMutation` 这个可辨识联合的**性质**，不是任一 provider 的性质——往联合里加一种 kind 时漏改一侧，那一侧的应用引擎会静默跳过该类变更，而两条路径各自的用例都还绿着。所以它属于公共合同，`public/types.ts` 是正确落位（该文件本就有运行时导出）。这一条 +1 换来的是同批账本的大幅下降：跨上下文边 5340 → 5328（−12，两个消费者各自的七条 Prepared*PackageMutation type import 变死、只换来一条值 import）、架构例外 −12、符号主 −13。收成一个冻结对象而不是七个具名导出，正是为了让消费者只多一条边。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -870,12 +867,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25017,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25019,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W8 一次性豁免：两对同模块内的重复实现合一，新增两个符号主。① `storeUserAccessRecord`（新文件 `identity-access/infrastructure/userAccessRecordIndex.ts`）——两个事务读集类各揣一份逐字相同的私有 `storeUser`，维护的是同一个不变量：`users` / `usernames` / `emails` 三张表要一起改，换名换邮箱时先摘旧键；漏摘一侧会留下指向旧身份的悬挂索引键，而两处各自的用例都还绿着。② `releaseAttemptFencesTx` 从 `effectQuiescence.ts` 导出（此前是模块私有），`taskExecutionEffectPersistence.ts` 那份逐字相同的私有方法删除——围栏释放的三条判据（attempt + 未释放 + 同 epoch）是清算语义的一部分，漏改一侧会释放掉别的 epoch 的围栏。两对都在**同一个 bounded context 同一层**内合一，零新增跨上下文边；本条 +2 是新导出登记主人的代价，换掉的是两处必然漂移的私有副本。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd",
+    "sourceDigest": "sha256:33dcca3cd7d68b5f03e02020275440ae8562c1c8eddc661bbb561617acfdc75e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -888,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b94f541c04a820b27099fc0295a3012cd7decdd6",
-    "contentDigest": "sha256:b0c1d39406a5f9c931cbd9c96e9e4e87165c1e9e05530fbf7405d71c4a9313a4",
+    "currentSnapshotSha": "4beb7daf3dcbc2b81e912846fe27f4faf5abee65",
+    "contentDigest": "sha256:5c9fb35ccef43b759427546aaff2a55d7c660111a85a2b3ae2502088e6039410",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

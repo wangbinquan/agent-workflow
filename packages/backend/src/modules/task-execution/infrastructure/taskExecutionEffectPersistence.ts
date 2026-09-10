@@ -28,7 +28,7 @@
 // 事务形状沿用两侧原有的最强档：`withTaskExecutionSerializable`（PG = SERIALIZABLE + 40001 重放；
 // SQLite = BEGIN IMMEDIATE，本就全库独占）。事务体只 await 数据库操作。
 
-import { and, asc, desc, eq, inArray, isNull, max } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -64,6 +64,7 @@ import {
   closeOutcomeUnknownAndRelease,
   readUnreapedProcessCode,
   readUnresolvedEffectIds,
+  releaseAttemptFencesTx,
   resolveQuiescedManagedProcesses,
 } from './effectQuiescence'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
@@ -677,7 +678,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     }
     if (input.state === 'retry-authorized') {
       // 授权放行的下一次发送不再需要这一 attempt 的 hold。
-      await this.releaseFences(tx, attempt.id, input.token.epoch, now)
+      await releaseAttemptFencesTx(tx, attempt.id, input.token.epoch, now)
       if (projection !== undefined) await applyCodeHostProjection(tx, projection)
       return
     }
@@ -726,7 +727,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
       if (projection !== undefined) await applyCodeHostProjection(tx, projection)
       return
     }
-    await this.releaseFences(tx, attempt.id, input.token.epoch, now)
+    await releaseAttemptFencesTx(tx, attempt.id, input.token.epoch, now)
     const logicalReceipt = JSON.stringify({
       v: 1,
       appliedAttemptNo: outcome.appliedAttemptNo,
@@ -819,26 +820,6 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
       }
     }
     if (projection !== undefined) await applyCodeHostProjection(tx, projection)
-  }
-
-  /** 只释放这一枚不可变 attempt 在本 epoch 里持有的围栏。 */
-  private async releaseFences(
-    tx: TaskExecutionTransaction,
-    attemptId: string,
-    epoch: number,
-    now: number,
-  ): Promise<void> {
-    await tx
-      .update(taskExecutionEffectFences)
-      .set({ releasedAt: now })
-      .where(
-        and(
-          eq(taskExecutionEffectFences.effectAttemptId, attemptId),
-          isNull(taskExecutionEffectFences.releasedAt),
-          eq(taskExecutionEffectFences.acquiredEpoch, epoch),
-        ),
-      )
-      .run()
   }
 
   async settle(input: TaskEffectAttemptSettlement): Promise<void> {

@@ -182,6 +182,29 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
       `${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`,
     ],
   },
+  {
+    what: 'attempt 围栏的释放：attempt + 未释放 + 同 epoch 三条判据必须一起改',
+    fn: 'releaseAttemptFencesTx',
+    definedIn: `${B}modules/task-execution/infrastructure/effectQuiescence.ts`,
+    consumers: [`${B}modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts`],
+    forkedFrom: [
+      `${B}modules/task-execution/infrastructure/effectQuiescence.ts`,
+      `${B}modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts`,
+    ],
+  },
+  {
+    what: '用户记录的三张索引表（users / usernames / emails）必须一起改，换名换邮箱要先摘旧键',
+    fn: 'storeUserAccessRecord',
+    definedIn: `${B}modules/identity-access/infrastructure/userAccessRecordIndex.ts`,
+    consumers: [
+      `${B}modules/identity-access/infrastructure/oidcIdentityCrossContext.ts`,
+      `${B}modules/identity-access/infrastructure/userAccessPersistence.ts`,
+    ],
+    forkedFrom: [
+      `${B}modules/identity-access/infrastructure/oidcIdentityCrossContext.ts`,
+      `${B}modules/identity-access/infrastructure/userAccessPersistence.ts`,
+    ],
+  },
 ]
 
 /**

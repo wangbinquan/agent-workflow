@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1808,
+    "backendFiles": 1809,
     "frontendFiles": 622,
     "legacyFiles": 604,
-    "moduleFiles": 1204,
-    "productionFiles": 2585,
+    "moduleFiles": 1205,
+    "productionFiles": 2586,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25017
+    "symbolsIncludingFileRoots": 25019
   },
   "entries": [
     {
@@ -55223,6 +55223,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "UserAccessOperation",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/infrastructure/userAccessRecordIndex.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/userAccessRecordIndex.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/infrastructure/userAccessRecordIndex.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/userAccessRecordIndex.ts#storeUserAccessRecord",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "storeUserAccessRecord",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
@@ -127698,7 +127722,7 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#releaseAttemptFencesTx",
       "removeAfterWave": null,
@@ -300908,5 +300932,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd"
+  "sourceDigest": "sha256:33dcca3cd7d68b5f03e02020275440ae8562c1c8eddc661bbb561617acfdc75e"
 }

@@ -1741,7 +1741,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 340
+      "lines": 363
     },
     {
       "id": "rfc359-sync-transaction-highwater",
@@ -2465,14 +2465,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd",
+    "sourceDigest": "sha256:33dcca3cd7d68b5f03e02020275440ae8562c1c8eddc661bbb561617acfdc75e",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "b94f541c04a820b27099fc0295a3012cd7decdd6",
-    "contentDigest": "sha256:2ba475391dfb63cc7b8e69a964c683b8f3e50f192e28b9c94c0945994918bfa5",
+    "currentSnapshotSha": "4beb7daf3dcbc2b81e912846fe27f4faf5abee65",
+    "contentDigest": "sha256:5d5e40e03128f3b820e4a25b49e3e1d4b7edccd154c9962e4731eabf570b4535",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

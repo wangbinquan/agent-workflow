@@ -20,6 +20,7 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError } from '@/util/errors'
+import { storeUserAccessRecord } from './userAccessRecordIndex'
 import { syncOidcProfileTransaction } from '../application/commands/syncOidcProfile'
 import type {
   CreateOidcIdentityInput,
@@ -97,21 +98,11 @@ class OidcTransactionContext implements UserAccessTransaction {
     subject: string,
     private readonly selectors: OidcProfileSelectorRecord | null,
   ) {
-    for (const user of state.users) this.storeUser(user)
+    for (const user of state.users)
+      storeUserAccessRecord(this.users, this.usernames, this.emails, user)
     if (state.identity !== null) {
       this.identities.set(identityKey(providerId, subject), state.identity)
     }
-  }
-
-  private storeUser(user: UserAccessRecord): void {
-    const previous = this.users.get(user.id)
-    if (previous !== undefined) {
-      this.usernames.delete(previous.username)
-      if (previous.email !== null) this.emails.delete(previous.email)
-    }
-    this.users.set(user.id, user)
-    this.usernames.set(user.username, user.id)
-    if (user.email !== null) this.emails.set(user.email, user.id)
   }
 
   findUser(id: string): UserAccessRecord | null {
@@ -172,7 +163,7 @@ class OidcTransactionContext implements UserAccessTransaction {
         'the identity provider email already belongs to another user',
       )
     }
-    this.storeUser(record)
+    storeUserAccessRecord(this.users, this.usernames, this.emails, record)
     this.operations.push({ kind: 'insert-user', record })
   }
 
@@ -182,7 +173,7 @@ class OidcTransactionContext implements UserAccessTransaction {
     if (update.accessChanged && current.accessRevision !== update.expectedAccessRevision) {
       return false
     }
-    this.storeUser({ ...current, ...update.values })
+    storeUserAccessRecord(this.users, this.usernames, this.emails, { ...current, ...update.values })
     this.operations.push({ kind: 'update-user', update })
     return true
   }
@@ -215,7 +206,11 @@ class OidcTransactionContext implements UserAccessTransaction {
     if (current === undefined) {
       throw new UserAccessError('not-found', 'user-not-found', 'OIDC user was not found')
     }
-    this.storeUser({ ...current, status: 'active', updatedAt: now })
+    storeUserAccessRecord(this.users, this.usernames, this.emails, {
+      ...current,
+      status: 'active',
+      updatedAt: now,
+    })
     this.operations.push({ kind: 'activate-user', userId, now })
   }
 

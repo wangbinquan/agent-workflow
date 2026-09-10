@@ -357,7 +357,15 @@ async function upsertWatermarkTx(
   }
 }
 
-async function releaseAttemptFencesTx(
+/**
+ * 只释放这一枚不可变 attempt 在**本 epoch** 里持有的围栏。
+ *
+ * RFC-359 W8：`taskExecutionEffectPersistence.ts` 曾把同一段逐字抄成一个私有方法
+ * （`releaseFences`）。围栏释放的判据（attempt + 未释放 + 同 epoch 三条一起）是清算语义的一部分，
+ * 漏改一侧会让那一侧释放掉**别的 epoch** 的围栏或漏释放本 epoch 的，两边用例都不会红。
+ * 静默清算本就是一份实现（本文件），端口只是委托——围栏释放同理。
+ */
+export async function releaseAttemptFencesTx(
   tx: DatabaseTransaction,
   attemptId: string,
   epoch: number,
