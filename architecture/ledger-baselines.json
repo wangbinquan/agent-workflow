@@ -797,7 +797,7 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 336,
+      "baseline": 335,
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5329,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5330,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "5329 → 5330。RFC-359 W57：`assertRuntimeReference` 此前在 `digitalEmployeeAgentTemplateCatalog.ts` 与 `aggregateAdapters/postgresqlResourcePackageMutationArms.ts` 各存一份**逐字相同**的私有副本（连抛的 `runtime-not-found` / `runtime-disabled` 文案都一样），`assertBranchPortsDeclared` 也在前者有一份私有副本——而 `agentBranchPorts.ts` 明明早就导出了它。三处收进 `agentBranchPorts.ts` 之后，该文件从「纯函数校验」变成要查 `runtimes` 表，于是多出 `@/db/schema` 与 `@/platform/persistence/databaseTransaction` 两条边、同时少一条，净 +1。这是**用户可见的校验错误**，一份实现换三份副本是对的交换。**一次性许可，下一提删除。**"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,12 +870,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25041,
+      "baseline": 25040,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2e27e69a4034027dc436a63e79150f871efc2d7bbfc4ae2238bb0417d32ca99d",
+    "sourceDigest": "sha256:b916fdc3abe4976ad28fe4785437a74af066a9e87aa9b92866b7235edcc556b8",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a2a6fd118f75e475b9c99ea814d26748829b8133",
-    "contentDigest": "sha256:1b5c4a0173f3700cf8745b5ea1a942624205265ddc8383a5e0be4cd69eb2d0ae",
+    "currentSnapshotSha": "7e11a2dd0941209f5cab4f5656d7090eacbbd826",
+    "contentDigest": "sha256:3f32311e5dc314ba5129922969249bc2d33a01ea3e6add4777383b49558fe0da",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

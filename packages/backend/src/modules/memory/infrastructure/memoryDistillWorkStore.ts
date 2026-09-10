@@ -19,6 +19,7 @@ import type {
   MemoryDistillCaptureInput,
   MemoryDistillWorkStore,
 } from '../application/ports/distillWorkStore'
+import { listMemoryDistillJobs } from './memoryDistillReadStore'
 
 export type MemoryDistillSessionCapture = (input: MemoryDistillCaptureInput) => Promise<void>
 
@@ -166,12 +167,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listJobs(status?: string) {
-    const query = this.db.select().from(memoryDistillJobs)
-    return status === undefined
-      ? await query.orderBy(asc(memoryDistillJobs.createdAt))
-      : await query
-          .where(eq(memoryDistillJobs.status, status as 'pending'))
-          .orderBy(asc(memoryDistillJobs.createdAt))
+    return await listMemoryDistillJobs(this.db, status)
   }
 
   async listClarifySources(ids: readonly string[]) {

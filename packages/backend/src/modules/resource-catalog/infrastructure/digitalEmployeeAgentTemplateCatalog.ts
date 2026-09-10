@@ -2,7 +2,7 @@ import type { Agent, AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { agents, mcps, plugins, runtimes, skills } from '@/db/schema'
+import { agents, mcps, plugins, skills } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
@@ -22,6 +22,7 @@ import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
 } from './resourceCatalogTransaction'
+import { assertBranchPortsDeclared, assertRuntimeReference } from './agentBranchPorts'
 
 type AgentRow = typeof agents.$inferSelect
 
@@ -54,45 +55,6 @@ function requireSystemBuiltin(
     throw stale(id)
   }
   return agentFromPersistenceRow(row)
-}
-
-function assertBranchPortsDeclared(agent: Pick<CreateAgent, 'outputs' | 'branchPorts'>): void {
-  if (agent.branchPorts === undefined || agent.branchPorts.length === 0) return
-  const outputs = new Set(agent.outputs)
-  const missing = agent.branchPorts.filter((port) => !outputs.has(port))
-  if (missing.length === 0) return
-  throw new ValidationError(
-    'branch-port-not-declared',
-    `agent branchPorts reference undeclared output port(s): ${missing.join(', ')}`,
-    { notFound: missing },
-  )
-}
-
-async function assertRuntimeReference(input: {
-  readonly transaction: ResourceCatalogTransaction
-  readonly name: string | null | undefined
-  readonly previous?: string
-}): Promise<void> {
-  if (input.name === null || input.name === undefined) return
-  const row = await input.transaction
-    .select({ name: runtimes.name, enabled: runtimes.enabled })
-    .from(runtimes)
-    .where(eq(runtimes.name, input.name))
-    .get()
-  if (row === undefined) {
-    throw new ValidationError(
-      'runtime-not-found',
-      `agent references unknown runtime: ${input.name}`,
-      { notFound: [input.name] },
-    )
-  }
-  if (!row.enabled && input.name !== input.previous) {
-    throw new ValidationError(
-      'runtime-disabled',
-      `agent references disabled runtime: ${input.name}; enable it or pick another`,
-      { disabled: [input.name] },
-    )
-  }
 }
 
 function unique(values: readonly string[]): string[] {

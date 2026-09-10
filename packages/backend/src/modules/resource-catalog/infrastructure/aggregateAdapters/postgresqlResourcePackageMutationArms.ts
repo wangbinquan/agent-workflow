@@ -38,7 +38,6 @@ import {
   agents,
   mcps,
   plugins,
-  runtimes,
   skillVersions,
   skills,
   workflows,
@@ -89,6 +88,7 @@ import type {
   PostgresqlResourcePackageMutationRequestContext,
   PostgresqlResourcePackageTransactionReader,
 } from './postgresqlResourcePackageMutationParticipants'
+import { assertRuntimeReference } from '../agentBranchPorts'
 
 export interface PostgresqlResourcePackagePendingName {
   readonly type: BundleResourceType
@@ -210,33 +210,6 @@ async function resolveAgentSkillReference(input: {
     ...(input.grandfatheredIds === undefined ? {} : { grandfatheredIds: input.grandfatheredIds }),
   })
   return { kind: 'managed', skillId }
-}
-
-async function assertRuntimeReference(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
-  readonly name: string | null | undefined
-  readonly previous?: string
-}): Promise<void> {
-  if (input.name === null || input.name === undefined) return
-  const row = await input.transaction
-    .select({ name: runtimes.name, enabled: runtimes.enabled })
-    .from(runtimes)
-    .where(eq(runtimes.name, input.name))
-    .get()
-  if (row === undefined) {
-    throw new ValidationError(
-      'runtime-not-found',
-      `agent references unknown runtime: ${input.name}`,
-      { notFound: [input.name] },
-    )
-  }
-  if (!row.enabled && input.name !== input.previous) {
-    throw new ValidationError(
-      'runtime-disabled',
-      `agent references disabled runtime: ${input.name}; enable it or pick another`,
-      { disabled: [input.name] },
-    )
-  }
 }
 
 async function assertAgentResourceRows(input: {

@@ -13,6 +13,22 @@ import {
 } from '@/db/schema'
 import type { MemoryDistillReadStore } from '../application/ports/distillReadStore'
 
+/**
+ * 蒸馏作业列表（可选按状态过滤，按创建时间升序）。
+ *
+ * RFC-359 W57：读存储与写存储（`memoryDistillWorkStore.ts`）此前各有一份**逐字相同**的
+ * `listJobs` 方法。它是「蒸馏队列现在有什么」的唯一投影，两份实现意味着两条入口可能在
+ * 排序或状态过滤上漂。
+ */
+export async function listMemoryDistillJobs(db: ProviderNeutralDatabase, status?: string) {
+  const query = db.select().from(memoryDistillJobs)
+  return status === undefined
+    ? await query.orderBy(asc(memoryDistillJobs.createdAt))
+    : await query
+        .where(eq(memoryDistillJobs.status, status as 'pending'))
+        .orderBy(asc(memoryDistillJobs.createdAt))
+}
+
 export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
   constructor(private readonly db: ProviderNeutralDatabase) {}
 
@@ -105,11 +121,6 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
   }
 
   async listJobs(status?: string) {
-    const query = this.db.select().from(memoryDistillJobs)
-    return status === undefined
-      ? await query.orderBy(asc(memoryDistillJobs.createdAt))
-      : await query
-          .where(eq(memoryDistillJobs.status, status as 'pending'))
-          .orderBy(asc(memoryDistillJobs.createdAt))
+    return await listMemoryDistillJobs(this.db, status)
   }
 }

@@ -6,7 +6,7 @@
     "moduleFiles": 1200,
     "productionFiles": 2581,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25041
+    "symbolsIncludingFileRoots": 25040
   },
   "entries": [
     {
@@ -74117,6 +74117,18 @@
     {
       "currentContext": "memory",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillReadStore.ts",
+      "id": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillReadStore.ts#listMemoryDistillJobs",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "listMemoryDistillJobs",
+      "targetContext": "memory",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts",
       "id": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#$file",
@@ -86094,6 +86106,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertRuntimeReference",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertRuntimeReference",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyJson.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentDependencyJson.ts#$file",
@@ -88530,18 +88554,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#assertRuntimeReference",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertRuntimeReference",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#commitPostgresqlAgentPackageMutation",
@@ -89976,30 +89988,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "assertAgentResourceRows",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#assertBranchPortsDeclared",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertBranchPortsDeclared",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertRuntimeReference",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301194,5 +301182,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e27e69a4034027dc436a63e79150f871efc2d7bbfc4ae2238bb0417d32ca99d"
+  "sourceDigest": "sha256:b916fdc3abe4976ad28fe4785437a74af066a9e87aa9b92866b7235edcc556b8"
 }

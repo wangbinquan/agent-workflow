@@ -5453,8 +5453,8 @@
   },
   "denominator": {
     "ambientWiring": 494,
-    "disabled": 9,
-    "entries": 336,
+    "disabled": 8,
+    "entries": 335,
     "executionLocal": 42,
     "longRunning": 76,
     "managed": 11,
@@ -7327,9 +7327,9 @@
       "dependencies": [
         "runtime"
       ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts",
       "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#assertRuntimeReference",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertRuntimeReference",
       "kind": "disabled",
       "lifecycle": {
         "health": false,
@@ -7341,30 +7341,7 @@
       },
       "lifetime": "disabled",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts#assertRuntimeReference",
-      "phase": "unknown",
-      "symbol": "assertRuntimeReference",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [
-        "runtime"
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "disabled",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#assertRuntimeReference",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertRuntimeReference",
       "phase": "unknown",
       "symbol": "assertRuntimeReference",
       "targetContext": "resource-catalog"
@@ -12870,5 +12847,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e27e69a4034027dc436a63e79150f871efc2d7bbfc4ae2238bb0417d32ca99d"
+  "sourceDigest": "sha256:b916fdc3abe4976ad28fe4785437a74af066a9e87aa9b92866b7235edcc556b8"
 }
