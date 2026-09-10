@@ -63,7 +63,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts:580 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:110 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:762 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts:766 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 W10：行号从 3509 挪到 3530——铸行事务从 `dbTxSync` 换成 `withTaskExecutionWrite`
   // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
   'services/task.ts:3531 executionLineageId+ lineageSlotPathJson+ launchOrigin+',

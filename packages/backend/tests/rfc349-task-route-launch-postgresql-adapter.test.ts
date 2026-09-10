@@ -7,9 +7,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AgentSchema, WorkflowDefinitionSchema, WorkgroupSchema } from '@agent-workflow/shared'
+import {
+  AgentSchema,
+  WorkflowDefinitionSchema,
+  WorkgroupSchema,
+  type GitCommitIdentity,
+} from '@agent-workflow/shared'
 
-import { buildActor, type Actor } from '@/auth/actor'
+import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { agentLaunchResourceIntegrityParticipantBrand } from '@/modules/resource-catalog/domain/participantBrands'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
@@ -19,8 +24,11 @@ import type { TaskExecutionResourceAuthority } from '@/modules/task-execution/ap
 import type { AgentLaunchResourceOperations } from '@/modules/task-execution/application/ports/agentLaunchResourceOperations'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import {
+  createPostgresqlRootTaskLaunchKernel,
   createPostgresqlTaskExecutionLaunchParticipant,
   createPostgresqlTaskRouteLaunchOperations,
+  type PostgresqlRootTaskLaunchDependencies,
+  type PostgresqlRootTaskLaunchRequest,
   type PostgresqlTaskRouteLaunchDependencies,
   type PostgresqlTaskRoutePreparedWorkspace,
   type PostgresqlTaskRouteWorkspaceParticipant,
@@ -237,7 +245,10 @@ async function workspaceParticipant(input: {
       input.sourceTerminationSignals.push(request.sourceTerminationSignal)
       const worktreePath = join(root, request.taskId)
       mkdirSync(worktreePath, { recursive: true })
-      writeFileSync(join(worktreePath, '.workspace-prepared'), request.gitCommitIdentity.email)
+      writeFileSync(
+        join(worktreePath, '.workspace-prepared'),
+        request.gitCommitIdentity?.email ?? '',
+      )
       return Object.freeze({
         taskId: request.taskId,
         kind: 'scratch' as const,
@@ -777,5 +788,183 @@ describe('RFC-349 PostgreSQL task route launch operations', () => {
       'guard:failed:launch-failed',
       'guard:release',
     ])
+  })
+})
+
+// RFC-359 W52: system launches reached the human Git metadata lookup in hosted
+// PostgreSQL tests. These cases run the real launch kernel against the existing
+// recorded-SQL connection and a workspace port that performs no filesystem work.
+function gitMetadataHarness(
+  launchActor: Actor,
+  lookup: (userId: string) => Promise<GitCommitIdentity>,
+) {
+  const trace: string[] = []
+  const postgres = postgresqlFixture({ activeUserIds: [launchActor.user.id], trace })
+  const preparations: Array<Parameters<PostgresqlTaskRouteWorkspaceParticipant['prepare']>[0]> = []
+  const resourceAuthority: TaskExecutionResourceAuthority = Object.freeze({
+    actor: launchActor,
+    authority: new AuthorityClaimRegistry().mintLocalAuthority({
+      userId: launchActor.user.id,
+      source: 'system',
+    }),
+    resources: Object.freeze({
+      async loadAuthorized() {
+        throw new Error('root subject is already supplied by this fixture')
+      },
+      async freezeCallClosure() {
+        return null
+      },
+    }),
+  })
+  let sequence = 0
+  const dependencies: PostgresqlRootTaskLaunchDependencies = {
+    db: postgres.db,
+    gitCommitIdentity: { execute: lookup },
+    workspace: {
+      async prepare(request) {
+        preparations.push(request)
+        trace.push('workspace:prepare')
+        return {
+          taskId: request.taskId,
+          kind: 'scratch',
+          spaceKind: 'scratch',
+          repoPath: '/controlled/task-worktree',
+          repoUrl: null,
+          cachedRepoId: null,
+          repoGroupId: null,
+          repoGroupName: null,
+          worktreePath: '/controlled/task-worktree',
+          baseBranch: 'main',
+          branch: `agent-workflow/${request.taskId}`,
+          baseCommit: null,
+          earlyError: null,
+          repositories: [],
+          nodePaths: [],
+          commit() {
+            trace.push('workspace:commit')
+          },
+          async rollback() {
+            trace.push('workspace:rollback')
+            return { taskId: request.taskId, complete: true, failures: [] }
+          },
+        }
+      },
+    },
+    coordinator: {
+      async submit(submission) {
+        trace.push('coordinator')
+        return { kind: 'accepted', taskId: submission.taskId }
+      },
+    },
+    id: () => `git-metadata-${++sequence}`,
+    now: () => 1_700_000_000_000,
+  }
+  const request: PostgresqlRootTaskLaunchRequest = {
+    actor: launchActor,
+    resourceAuthority,
+    invoker: { type: 'user', launchKind: 'direct-json' },
+    task: { workflowId: workflow.id, name: 'Git metadata', inputs: {}, scratch: true },
+    subject: {
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+      workflowVersion: workflow.version,
+      workflowSnapshot: workflow.definition,
+    },
+  }
+  const kernel = createPostgresqlRootTaskLaunchKernel(dependencies)
+  return {
+    launch: () => kernel.launch(request),
+    executions: postgres.executions,
+    preparations,
+    trace,
+  }
+}
+
+function insertedTaskMetadata(executions: ReturnType<typeof postgresqlFixture>['executions']) {
+  const insert = executions.find((execution) =>
+    execution.sql.toLowerCase().startsWith('insert into "agent_workflow"."tasks"'),
+  )
+  if (insert === undefined) throw new Error('task INSERT was not executed')
+  const match = /\(([^)]+)\) values \(([^)]+)\)/i.exec(insert.sql)
+  if (match === null) throw new Error('task INSERT columns and values were not recorded')
+  const columns = match[1]!.split(',').map((column) => column.trim().replace(/^"|"$/g, ''))
+  const values = match[2]!.split(',').map((value) => value.trim())
+  const valueOf = (column: string): unknown => {
+    const index = columns.indexOf(column)
+    if (index === -1) throw new Error(`task INSERT omitted ${column}`)
+    const parameter = /^\$(\d+)$/.exec(values[index] ?? '')
+    if (parameter === null) throw new Error(`task INSERT did not bind ${column}`)
+    return insert.parameters[Number(parameter[1]) - 1]
+  }
+  return {
+    git: { name: valueOf('git_user_name'), email: valueOf('git_user_email') },
+    ownerUserId: valueOf('owner_user_id'),
+  }
+}
+
+describe('RFC-359 W52 task Git metadata', () => {
+  test('system task keeps null Git metadata through workspace, projection and INSERT', async () => {
+    const systemActor: Actor = { ...actor, user: { ...actor.user, id: SYSTEM_USER_ID } }
+    const lookups: string[] = []
+    const fixture = gitMetadataHarness(systemActor, async (userId) => {
+      lookups.push(userId)
+      throw new Error('system task must not query human Git metadata')
+    })
+    const task = await fixture.launch()
+
+    expect(lookups).toEqual([])
+    expect(fixture.preparations).toHaveLength(1)
+    expect(fixture.preparations[0]?.actor).toBe(systemActor)
+    expect(fixture.preparations[0]?.gitCommitIdentity).toBeNull()
+    expect({ name: task.gitUserName, email: task.gitUserEmail }).toEqual({
+      name: null,
+      email: null,
+    })
+    const inserted = insertedTaskMetadata(fixture.executions)
+    expect(inserted.git).toEqual({ name: null, email: null })
+    expect(inserted.ownerUserId).toBe(SYSTEM_USER_ID)
+    expect(fixture.trace.indexOf('db:commit')).toBeLessThan(
+      fixture.trace.indexOf('workspace:commit'),
+    )
+    expect(fixture.trace.at(-1)).toBe('coordinator')
+  })
+
+  test('human task awaits its one original lookup and carries the exact returned pair', async () => {
+    const entered = Promise.withResolvers<void>()
+    const pending = Promise.withResolvers<GitCommitIdentity>()
+    const lookups: string[] = []
+    const identity = { name: 'Human Git name', email: 'human@example.test' }
+    const fixture = gitMetadataHarness(actor, async (userId) => {
+      lookups.push(userId)
+      entered.resolve()
+      return await pending.promise
+    })
+    const launched = fixture.launch()
+    await entered.promise
+    expect(lookups).toEqual([actor.user.id])
+    expect(fixture.preparations).toEqual([])
+    expect(fixture.executions).toEqual([])
+    pending.resolve(identity)
+    const task = await launched
+
+    expect(lookups).toEqual([actor.user.id])
+    expect(fixture.preparations[0]?.actor).toBe(actor)
+    expect(fixture.preparations[0]?.gitCommitIdentity).toBe(identity)
+    expect({ name: task.gitUserName, email: task.gitUserEmail }).toEqual(identity)
+    expect(insertedTaskMetadata(fixture.executions).git).toEqual(identity)
+  })
+
+  test('human lookup rejection remains the same error before workspace preparation', async () => {
+    const error = new Error('ordinary Git metadata lookup failed')
+    const lookups: string[] = []
+    const fixture = gitMetadataHarness(actor, async (userId) => {
+      lookups.push(userId)
+      throw error
+    })
+
+    await expect(fixture.launch()).rejects.toBe(error)
+    expect(lookups).toEqual([actor.user.id])
+    expect(fixture.preparations).toEqual([])
+    expect(fixture.executions).toEqual([])
   })
 })

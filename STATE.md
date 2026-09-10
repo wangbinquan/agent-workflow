@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第五十二批（2026-09-10）**：资源包两处完整 apply 串行队列共用一个工厂，两个原模块各自初始化独立锁域；原 key、回调及事务/FS流程保持，锁切片生产净减14行。原链清理源码锁只改读取位置，保三条原断言。
+> 修正W51暴露的PG系统任务Git元数据null投影，并将原submodule夹具分组后的skipIf站点账目从1改为2；原条件、用例和预算保持，新SHA真实HTTP结果待验。
+> 新增9个纯例，lock/timing/Git分别4 pass/21 expect、2 pass/56 expect、3 pass/21 expect；两原锁函数与共享函数完整观测一致，原源码锁旧红新绿。诊断只补后置请求时间窗，不是新性能改善证据。
+> 实测1964测试文件、596构库文件/1165调用、516无harness/514有harness；本批未迁旧DB文件，T19f仍679。最终10个core backend编译通过；metadata首轮217过/4红，补登记及旧行号后相关四文件62/106通过，canonical13/55按主投影保持复用。最终多一项纯行号guard为11core，未再跑完整编译。
+> W51 exactaac18f56025ed66c8a621fc5fe2803adcc3412ee Main34424041887终态35 success/5 failure，后端10 success/3 failure；主集2131/2140通过，旧1798/1798通过、新增333/342通过，9个PG HTTP失败归于同一系统任务Git元数据合同。两OS各1962原文件无遗漏/重复；另2例与原hook18例通过，旧skip账目失败单列，不计入2140。
+> 最新原full仍为W49：九端点两库绝对预算全过，六个PG端点相对较慢。W52本地未运行真实DB/App/HTTP/PG/Git夹具或完整门禁；发布后真实CI待验，AC-1/6/8/9/11/12继续开放。
+
 > **RFC-359 W12 第五十一批（2026-09-10）**：16个旧测试文件保留186个原声明/549个完整matcher，其中114例/329 matcher接默认双库，72例/220 matcher保留原行为与预算。1962测试文件，直接构库596文件/1165调用，无harness532→516、有harness498→514；T19f及对应账本685→679。
 > 四文件七个DB参数改为既有中立合同，运行代码保持；完整provider应用等待初始化，清理先于harness释放。复核发现multipart与repository两个provider组同层hook次序缺口，改为内层fixture作用域；原断言与预算保持。
 > 21个core完整backend tsc通过；两份测试清理作用域修正后最终backend tsc必要复验通过且候选hash不变。功能metadata 221 pass/452 expect与canonical 13 pass/55 expect通过，生产源/元数据未随后续作用域修复变化，复用该验证。 scoped lint/format与实际提取函数的受控端口核验按各批证据记录；本地未运行真实业务DB/App/HTTP/PG/Git夹具或完整门禁。

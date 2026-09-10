@@ -31,6 +31,7 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { createResourcePackageApplyLock } from '@/platform/persistence/resourcePackageApplyLock'
 import {
   assertActionsAllowed,
   humanMemberKey,
@@ -176,24 +177,7 @@ interface PreparedOperations {
   readonly items: readonly PreparedPackageMutation[]
 }
 
-const applyLocks = new Map<string, Promise<unknown>>()
-
-async function withApplyLock<T>(key: string, run: () => Promise<T>): Promise<T> {
-  const prior = applyLocks.get(key) ?? Promise.resolve()
-  let release: () => void = () => {}
-  const gate = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  const chain = prior.then(() => gate)
-  applyLocks.set(key, chain)
-  await prior.catch(() => {})
-  try {
-    return await run()
-  } finally {
-    release()
-    if (applyLocks.get(key) === chain) applyLocks.delete(key)
-  }
-}
+const withApplyLock = createResourcePackageApplyLock()
 
 function replayOutcome(
   row: typeof resourceBundleApplies.$inferSelect,

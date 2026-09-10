@@ -1936,6 +1936,18 @@
       "lines": 813
     },
     {
+      "id": "rfc359-w52-resource-package-apply-lock",
+      "file": "packages/backend/tests/rfc359-w52-resource-package-apply-lock.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "classified": true,
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "lines": 131
+    },
+    {
       "id": "rfc359-w6-node-run-insert-lineage-completeness",
       "file": "packages/backend/tests/architecture/rfc359-w6-node-run-insert-lineage-completeness.test.ts",
       "runner": "bun",
@@ -2405,14 +2417,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c0fae15d127b993431eb15b01647e027e092227e6962e3eb87773301caa61a72",
+    "sourceDigest": "sha256:f09d5978f2f7e85e079b8cc741b2fe158d8465d55c9042a69969b9164fc258a6",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "50b062d034bfe677b96d206edcbd3593c6a3b590",
-    "contentDigest": "sha256:3401058ed2c1bf47661244bb2a9083ea6f3d3417c1dd367cc5a00f96975c7622",
+    "currentSnapshotSha": "aac18f56025ed66c8a621fc5fe2803adcc3412ee",
+    "contentDigest": "sha256:e87e7c39da39429a64a708674ee5f6b5d2613645ce48d21b0d5c3009064758a0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

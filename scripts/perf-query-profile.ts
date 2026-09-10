@@ -115,11 +115,19 @@ export function createQueryCapture() {
       try {
         const value = await operation()
         const used = process.cpuUsage(cpu)
+        const end = performance.now()
         return {
           value,
-          wallMs: performance.now() - wall,
+          wallMs: end - wall,
           cpuMicros: used.user + used.system,
           statements,
+          // Only diagnostic requests use this capture. Retain their clock
+          // interval to separate CPU samples from later EXPLAIN/receipt work.
+          timing: {
+            timeOriginUnixMs: performance.timeOrigin,
+            startTimeMs: wall,
+            endTimeMs: end,
+          },
         }
       } finally {
         active = null

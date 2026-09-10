@@ -28,6 +28,7 @@ import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { createResourcePackageApplyLock } from '@/platform/persistence/resourcePackageApplyLock'
 
 /**
  * RFC-359 W4-D23 —— 大事务已经改走中立事务原语，但这条捆绑应用链上还有一批**同步**的
@@ -156,29 +157,7 @@ export interface BundleApplyDeps {
 
 // --- I1 串行：按 provider 给的 `serializationKey`，**不是**幂等 namespace ---
 
-const applyLocks = new Map<string, Promise<unknown>>()
-
-async function withApplyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const prior = applyLocks.get(key) ?? Promise.resolve()
-  let release: () => void = () => {}
-  const gate = new Promise<void>((r) => {
-    release = r
-  })
-  // ⚠️ map 里存的是**派生**的 chain，不是 `gate` 本身。清理时必须比较同一个引用：
-  // 拿 `gate` 去比 `applyLocks.get(key)` 恒为 false，于是每个出现过的
-  // serializationKey 都会永久留一项 —— 串行语义仍对，但那是一处内存泄漏，
-  // 而 serializationKey 是按资源实例派生的（基数无上限）。
-  const chain = prior.then(() => gate)
-  applyLocks.set(key, chain)
-  await prior.catch(() => {})
-  try {
-    return await fn()
-  } finally {
-    release()
-    // 只有**最后一个** waiter 能删：中途完成的那些，map 早被后来者覆盖成新 chain。
-    if (applyLocks.get(key) === chain) applyLocks.delete(key)
-  }
-}
+const withApplyLock = createResourcePackageApplyLock()
 
 /** I9：本进程正在跑的 journal，收敛器绝不能把它们当成崩溃残留。 */
 const ACTIVE_BUNDLE_APPLIES = new Set<string>()

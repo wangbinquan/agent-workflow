@@ -20,6 +20,15 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W52 资源包apply的按key串行算法由一个中立工厂提供；legacy与PostgreSQL模块
+  分别在原初始化位置创建一次，保留两个独立Map，不把它们合成一个锁域。
+  原key与完整回调保持，等待前驱、失败后释放及只由最后waiter删除chain的次序保持；
+  不改lower/apply业务、事务、FS或收据。两原函数与新函数用同一组受控Promise对照，
+  这不代替真实资源包两库行为。PG系统任务Git元数据null投影按原launch合同修正，
+  原submodule条件及预算不变，只更新分组后实际skipIf站点数。
+  后置profiling返回请求起止时间及performance时钟原点，EXPLAIN仍在请求capture之后；
+  正式HTTP采样/P95比较未改，CPU时间轴对齐和任何收益均待实际托管证据。
+
 - W51 四文件七个DB参数改接既有ProviderNeutralDatabase合同，三个type import随之调整，
   原完整运行体、SQL、调用顺序及返回保持。16个旧测试文件只将选定114例接当前provider，
   保留全部186个原声明/549 matcher与预算；多库场景显式声明databaseCount。

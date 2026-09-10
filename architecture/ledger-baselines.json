@@ -776,7 +776,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1740,
+      "baseline": 1739,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5332,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5333,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W52: PostgreSQL root task Git metadata reuses the existing SYSTEM_USER_ID constant to preserve the SQLite null snapshot contract; record this exact added value import and its generated legacy edge."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4799,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4800,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W52: PostgreSQL root task Git metadata reuses the existing SYSTEM_USER_ID constant to preserve the SQLite null snapshot contract; record this exact added value import and its generated legacy edge."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -872,7 +878,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c0fae15d127b993431eb15b01647e027e092227e6962e3eb87773301caa61a72",
+    "sourceDigest": "sha256:f09d5978f2f7e85e079b8cc741b2fe158d8465d55c9042a69969b9164fc258a6",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +891,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "50b062d034bfe677b96d206edcbd3593c6a3b590",
-    "contentDigest": "sha256:042a78b26dd5a253060a7d5e2f91cb898186feead82e3aa55e6ac5de8ee5e1d6",
+    "currentSnapshotSha": "aac18f56025ed66c8a621fc5fe2803adcc3412ee",
+    "contentDigest": "sha256:e3cc34e837aa1ea0c65106c4458cb698718bd71189b61e70f7fa1b6fc1e01575",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

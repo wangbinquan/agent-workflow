@@ -87,7 +87,7 @@ describe('P2-6 · withApplyLock 的 map 清理必须比较同一个 Promise', ()
     // `applyLocks.get(key)` 恒为 false ⇒ 每个出现过的 serializationKey 都永久留一项。
     // 串行语义仍对，所以只会表现为内存缓慢增长——而 serializationKey 是按资源实例
     // 派生的，基数无上限。
-    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts')
+    const src = read('src/platform/persistence/resourcePackageApplyLock.ts')
     expect(src).toContain('const chain = prior.then(() => gate)')
     expect(src).toContain('applyLocks.get(key) === chain')
     expect(src).not.toContain('applyLocks.get(key) === gate')

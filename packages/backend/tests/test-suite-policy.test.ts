@@ -115,7 +115,7 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'e2e/rfc319-canvas-editing-ops.spec.ts#skip': 1,
   'e2e/visual-regression.spec.ts#skip': 1,
   'e2e/workflow-editor.spec.ts#skip': 1,
-  'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 1,
+  'packages/backend/tests/git-repo-cache-submodule.test.ts#skipIf': 2,
   'packages/backend/tests/integration-chaos/chaos-scenarios.integration.test.ts#skipIf': 1,
   'packages/backend/tests/integration-opencode/opencode-live.integration.test.ts#skipIf': 1,
   // RFC-281 T1 part3: LIVE workspace-boundary cases against the real opencode

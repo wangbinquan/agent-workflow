@@ -31,7 +31,7 @@ import {
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { Actor } from '@/auth/actor'
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import {
   taskCollaborators,
   taskExecutionIntents,
@@ -261,7 +261,7 @@ export interface PostgresqlTaskRouteWorkspaceParticipant {
       actor: Actor
       taskId: string
       task: StartTask
-      gitCommitIdentity: GitCommitIdentity
+      gitCommitIdentity: GitCommitIdentity | null
       sourceTerminationSignal?: AbortSignal
     }>,
   ): Promise<PostgresqlTaskRoutePreparedWorkspace>
@@ -490,7 +490,7 @@ function taskProjection(input: {
   readonly task: StartTask
   readonly subject: PostgresqlRootTaskLaunchSubject
   readonly workspace: PostgresqlTaskRoutePreparedWorkspace
-  readonly gitCommitIdentity: GitCommitIdentity
+  readonly gitCommitIdentity: GitCommitIdentity | null
   readonly inputs: Readonly<Record<string, string>>
   readonly startedAt: number
   readonly metadata: RootLaunchMetadata
@@ -541,8 +541,8 @@ function taskProjection(input: {
     expiresAt: null,
     deletedAt: null,
     schemaVersion: 1,
-    gitUserName: input.gitCommitIdentity.name,
-    gitUserEmail: input.gitCommitIdentity.email,
+    gitUserName: input.gitCommitIdentity?.name ?? null,
+    gitUserEmail: input.gitCommitIdentity?.email ?? null,
     repoCount: Math.max(1, input.workspace.repositories.length),
     repos,
     spaceNodes,
@@ -675,7 +675,11 @@ function createRootLaunch(
         closureJson: refClosureJson,
         source: triggerSourceFromContext(metadata.triggerContext ?? undefined),
       })
-      const gitCommitIdentity = await dependencies.gitCommitIdentity.execute(input.actor.user.id)
+      // System tasks retain the same empty Git metadata snapshot as SQLite root launches.
+      const gitCommitIdentity =
+        input.actor.user.id === SYSTEM_USER_ID
+          ? null
+          : await dependencies.gitCommitIdentity.execute(input.actor.user.id)
       let bufferedUploads: Awaited<ReturnType<typeof bufferUploadParts>> | undefined
       if (input.uploads !== undefined) {
         bufferedUploads = await bufferUploadParts(input.uploads.parts, input.uploads.definitions)
@@ -783,8 +787,8 @@ function createRootLaunch(
             finishedAt: failed ? startedAt : null,
             errorSummary,
             errorMessage: preparedWorkspace.earlyError,
-            gitUserName: gitCommitIdentity.name,
-            gitUserEmail: gitCommitIdentity.email,
+            gitUserName: gitCommitIdentity?.name ?? null,
+            gitUserEmail: gitCommitIdentity?.email ?? null,
             workingBranch: input.task.workingBranch ?? null,
             autoCommitPush: input.task.autoCommitPush ?? false,
             repoCount: Math.max(1, preparedWorkspace.repositories.length),
