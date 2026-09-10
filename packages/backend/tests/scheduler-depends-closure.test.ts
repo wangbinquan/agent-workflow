@@ -8,18 +8,16 @@
 //   3. Cycle / missing-dep mapping to NodeStepResult 'failed' (does not throw
 //      — scheduler's normal failure path expects a structured result)
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import type { Logger } from '@/util/log'
-import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { skills } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const NOOP_LOG: Logger = {
   debug: () => {},
@@ -30,7 +28,7 @@ const NOOP_LOG: Logger = {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   opts: { dependsOn?: string[]; skills?: string[]; mcp?: string[] } = {},
 ) {
@@ -52,7 +50,7 @@ async function seedAgent(
   })
 }
 
-async function seedManagedSkill(db: DbClient, name: string): Promise<void> {
+async function seedManagedSkill(db: ProviderNeutralDatabase, name: string): Promise<void> {
   // Raw insert keeps the test free of filesystem setup — prepareSkills /
   // resolveSkills only care about the DB row + sourceKind.
   await db.insert(skills).values({
@@ -65,10 +63,10 @@ async function seedManagedSkill(db: DbClient, name: string): Promise<void> {
   })
 }
 
-describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
-  let db: DbClient
+describeEachProvider('RFC-022 scheduler.prepareNodeRunInjection', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('happy path: BFS expands A → B → C, root excluded from dependents', async () => {

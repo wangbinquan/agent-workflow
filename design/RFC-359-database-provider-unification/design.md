@@ -20,6 +20,15 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W53 普通查询与执行拓扑测试通过既有provider合同运行原owner，保留原调用、输入、断言及预算。
+  SQLite继续原完整拓扑；PostgreSQL等待完整应用的有限初始化，沿既有intent/claim/attach取得
+  实际executionContext，等待drive及release与终态收尾，再在外层harness释放前dispose。
+  这些是PG夹具新增的执行准备与清理；原native与纯用例保持单次注册。
+  任务种子只显式补原SQLite INSERT触发器生成的两项谱系字段，
+  其余原字段及求值顺序保持；测试helper的中立类型变更不改变原运行体。
+  纯端口对照不冒充真实数据库行或应用执行；已登记机制保留项与无harness入口清点
+  都不能直接算作待合一业务重复或待迁普通套件。
+
 - W52 资源包apply的按key串行算法由一个中立工厂提供；legacy与PostgreSQL模块
   分别在原初始化位置创建一次，保留两个独立Map，不把它们合成一个锁域。
   原key与完整回调保持，等待前驱、失败后释放及只由最后waiter删除chain的次序保持；

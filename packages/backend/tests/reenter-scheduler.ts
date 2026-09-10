@@ -20,11 +20,11 @@
 
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { tasks } from '../src/db/schema'
 
 /** Flip the task back to `pending` so the next runTask call can claim it
  *  through the RFC-097 entry CAS — the test stand-in for resumeTask. */
-export async function reenterScheduler(db: DbClient, taskId: string): Promise<void> {
+export async function reenterScheduler(db: ProviderNeutralDatabase, taskId: string): Promise<void> {
   await db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
 }

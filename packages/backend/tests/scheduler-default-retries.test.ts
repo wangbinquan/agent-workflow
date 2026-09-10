@@ -18,20 +18,25 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-function makeHarness() {
+function makeHarness(provider?: ProviderHarness) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc042-default-retries-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const argvLog = join(appHome, 'argv.log')
   writeFileSync(argvLog, '')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider?.db ?? createInMemoryDb(MIGRATIONS)
   return {
     db,
     appHome,
@@ -41,7 +46,7 @@ function makeHarness() {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<string> {
+async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
   const id = ulid()
   await db.insert(agents).values({
     id,
@@ -58,7 +63,11 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
   return id
 }
 
-async function seedTask(h: ReturnType<typeof makeHarness>, def: WorkflowDefinition) {
+async function seedTask(
+  h: ReturnType<typeof makeHarness>,
+  def: WorkflowDefinition,
+  postgresql = false,
+) {
   const workflowId = ulid()
   const taskId = ulid()
   await h.db.insert(workflows).values({
@@ -80,6 +89,14 @@ async function seedTask(h: ReturnType<typeof makeHarness>, def: WorkflowDefiniti
     status: 'pending',
     inputs: '{}',
     startedAt: Date.now(),
+    ...(postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -99,10 +116,13 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-async function runScenario(
-  retries: number | undefined,
-  h: ReturnType<typeof makeHarness>,
-): Promise<number> {
+type RuntimeHarness = ReturnType<typeof makeHarness> & {
+  readonly runTask: ProviderTaskExecutionTestTopology['runTask']
+  readonly postgresql: boolean
+}
+
+async function runScenario(retries: number | undefined, h: RuntimeHarness): Promise<number> {
+  const runTask = h.runTask
   const agentId = await seedAgent(h.db, 'agent1')
   const def: WorkflowDefinition = {
     $schema_version: 1,
@@ -117,7 +137,7 @@ async function runScenario(
     ],
     edges: [],
   }
-  const taskId = await seedTask(h, def)
+  const taskId = await seedTask(h, def, h.postgresql)
   await withEnv(
     {
       MOCK_OPENCODE_EXPECT_FOLLOWUP_ARGV: h.argvLog,
@@ -182,6 +202,30 @@ describe('RFC-042 default retries fallback = 3', () => {
     expect(catchBody).toContain('finishedAt: Date.now()')
     expect(catchBody).toContain('broadcastNodeStatus')
   })
+})
+
+function registerRuntimeCases(provider: ProviderHarness) {
+  let h: RuntimeHarness
+  let fixture: ReturnType<typeof makeHarness> | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = makeHarness(provider)
+    execution = await createProviderTaskExecutionTestTopology(provider, fixture.appHome)
+    h = {
+      ...fixture,
+      runTask: execution.runTask,
+      postgresql: provider.applicationBinding.provider === 'postgresql',
+    }
+  })
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test(
     'omitted retries → 4 attempts (1 + 3 retries)',
@@ -218,4 +262,8 @@ describe('RFC-042 default retries fallback = 3', () => {
     },
     2 * BUDGET_PER_ATTEMPT_MS,
   )
+}
+
+describeEachProvider('RFC-042 default retries fallback = 3', (provider) => {
+  describe('runtime fixture', () => registerRuntimeCases(provider))
 })

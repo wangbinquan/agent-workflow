@@ -15,7 +15,9 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { workflows } from '../src/db/schema'
 import { callEdgeKey } from '../src/services/execution/closure'
 import {
@@ -75,7 +77,12 @@ const rootCalling = (target: { name: string; id?: string }) =>
     ],
   })
 
-const seed = async (db: DbClient, id: string, name: string, d: WorkflowDefinition) => {
+const seed = async (
+  db: ProviderNeutralDatabase,
+  id: string,
+  name: string,
+  d: WorkflowDefinition,
+) => {
   await db.insert(workflows).values({ id, name, definition: JSON.stringify(d) })
 }
 
@@ -87,15 +94,17 @@ const errorCodes = (r: { issues: Array<{ code: string; severity?: string }> }) =
   r.issues.filter((i) => (i.severity ?? 'error') === 'error').map((i) => i.code)
 
 describe('① 编辑器 / 保存期：advisory，走 live，不冻结', () => {
-  test('不传冻结闭包 ⇒ 按 live 的名字规则（最老 ULID）解析', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W_TOPIC, 'audit', child('topic'))
-    await seed(db, W_SUBJECT, 'audit', child('subject'))
+  describeEachProvider('RFC-359 W53 workflow validation context', (harness) => {
+    test('不传冻结闭包 ⇒ 按 live 的名字规则（最老 ULID）解析', async () => {
+      const db = harness.db
+      await seed(db, W_TOPIC, 'audit', child('topic'))
+      await seed(db, W_SUBJECT, 'audit', child('subject'))
 
-    const d = rootCalling({ name: 'audit' }) // 无 id hint
-    const r = validateWorkflowDef(d, await loadWorkflowValidationContext(db, { definition: d }))
-    // live 名字规则选中 W_TOPIC（入端口 topic），而边喂的是 subject ⇒ 报错。
-    expect(errorCodes(r)).toContain('call-workflow-input-unwired')
+      const d = rootCalling({ name: 'audit' }) // 无 id hint
+      const r = validateWorkflowDef(d, await loadWorkflowValidationContext(db, { definition: d }))
+      // live 名字规则选中 W_TOPIC（入端口 topic），而边喂的是 subject ⇒ 报错。
+      expect(errorCodes(r)).toContain('call-workflow-input-unwired')
+    })
   })
 
   test('保存者与启动者不同是**允许**的：保存期结果与启动绑定可以不一致，且不报错', async () => {
@@ -132,113 +141,117 @@ describe('① 编辑器 / 保存期：advisory，走 live，不冻结', () => {
 })
 
 describe('② 根启动：解析冻结一次，再用同一份 frozen result 校验', () => {
-  test('冻结里是 W_SUBJECT ⇒ 校验按它通过，即使 live 的名字规则会选中另一行', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // live 里 W_TOPIC 更老，名字规则会选它 —— 如果校验偷偷查了 live 就会报错。
-    await seed(db, W_TOPIC, 'audit', child('topic'))
-    await seed(db, W_SUBJECT, 'audit', child('subject'))
+  describeEachProvider('RFC-359 W53 workflow validation context', (harness) => {
+    test('冻结里是 W_SUBJECT ⇒ 校验按它通过，即使 live 的名字规则会选中另一行', async () => {
+      const db = harness.db
+      // live 里 W_TOPIC 更老，名字规则会选它 —— 如果校验偷偷查了 live 就会报错。
+      await seed(db, W_TOPIC, 'audit', child('topic'))
+      await seed(db, W_SUBJECT, 'audit', child('subject'))
 
-    const d = rootCalling({ name: 'audit', id: W_SUBJECT })
-    const frozen = JSON.stringify({
-      closureVersion: 2,
-      workflows: {
-        [callEdgeKey(ROOT, 'c1')]: { id: W_SUBJECT, version: 1, definition: child('subject') },
-      },
-      workgroups: {},
+      const d = rootCalling({ name: 'audit', id: W_SUBJECT })
+      const frozen = JSON.stringify({
+        closureVersion: 2,
+        workflows: {
+          [callEdgeKey(ROOT, 'c1')]: { id: W_SUBJECT, version: 1, definition: child('subject') },
+        },
+        workgroups: {},
+      })
+      const r = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, {
+          definition: d,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+          frozenClosureJson: frozen,
+        }),
+      )
+      expect(errorCodes(r)).toEqual([])
     })
-    const r = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, {
-        definition: d,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-        frozenClosureJson: frozen,
-      }),
-    )
-    expect(errorCodes(r)).toEqual([])
-  })
 
-  test('对照组：库里被清空，校验仍然通过 —— 证明它真的一次 live 都没查', async () => {
-    const db = createInMemoryDb(MIGRATIONS) // 一行都不 seed
-    const d = rootCalling({ name: 'audit', id: W_SUBJECT })
-    const frozen = JSON.stringify({
-      closureVersion: 2,
-      workflows: {
-        [callEdgeKey(ROOT, 'c1')]: { id: W_SUBJECT, version: 1, definition: child('subject') },
-      },
-      workgroups: {},
+    test('对照组：库里被清空，校验仍然通过 —— 证明它真的一次 live 都没查', async () => {
+      const db = harness.db // 一行都不 seed
+      const d = rootCalling({ name: 'audit', id: W_SUBJECT })
+      const frozen = JSON.stringify({
+        closureVersion: 2,
+        workflows: {
+          [callEdgeKey(ROOT, 'c1')]: { id: W_SUBJECT, version: 1, definition: child('subject') },
+        },
+        workgroups: {},
+      })
+      const r = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, {
+          definition: d,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+          frozenClosureJson: frozen,
+        }),
+      )
+      expect(errorCodes(r)).toEqual([])
     })
-    const r = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, {
-        definition: d,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-        frozenClosureJson: frozen,
-      }),
-    )
-    expect(errorCodes(r)).toEqual([])
   })
 })
 
 describe('③ 子启动：用继承的闭包子集，**禁止**重查 live', () => {
-  test('父冻结了 subject 版，随后 live 行被改成 topic 版 ⇒ 子校验仍看冻结的那份', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    // live 现在是 topic 版（父冻结之后被人改的）。
-    await seed(db, W_SUBJECT, 'audit', child('topic'))
+  describeEachProvider('RFC-359 W53 workflow validation context', (harness) => {
+    test('父冻结了 subject 版，随后 live 行被改成 topic 版 ⇒ 子校验仍看冻结的那份', async () => {
+      const db = harness.db
+      // live 现在是 topic 版（父冻结之后被人改的）。
+      await seed(db, W_SUBJECT, 'audit', child('topic'))
 
-    const d = rootCalling({ name: 'audit', id: W_SUBJECT })
-    const inherited = JSON.stringify({
-      closureVersion: 2,
-      workflows: {
-        [callEdgeKey(ROOT, 'c1')]: { id: W_SUBJECT, version: 1, definition: child('subject') },
-      },
-      workgroups: {},
+      const d = rootCalling({ name: 'audit', id: W_SUBJECT })
+      const inherited = JSON.stringify({
+        closureVersion: 2,
+        workflows: {
+          [callEdgeKey(ROOT, 'c1')]: { id: W_SUBJECT, version: 1, definition: child('subject') },
+        },
+        workgroups: {},
+      })
+      const r = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, {
+          definition: d,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+          frozenClosureJson: inherited,
+        }),
+      )
+      // 重查 live 的话会按 topic 版校验 ⇒ input-unwired。
+      expect(errorCodes(r)).toEqual([])
     })
-    const r = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, {
-        definition: d,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-        frozenClosureJson: inherited,
-      }),
-    )
-    // 重查 live 的话会按 topic 版校验 ⇒ input-unwired。
-    expect(errorCodes(r)).toEqual([])
-  })
 
-  test('冻结闭包里缺这条边 ⇒ 照常报 ref-missing（fail closed，不偷偷回退 live）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W_SUBJECT, 'audit', child('subject')) // live 有，但冻结里没有
+    test('冻结闭包里缺这条边 ⇒ 照常报 ref-missing（fail closed，不偷偷回退 live）', async () => {
+      const db = harness.db
+      await seed(db, W_SUBJECT, 'audit', child('subject')) // live 有，但冻结里没有
 
-    const d = rootCalling({ name: 'audit', id: W_SUBJECT })
-    const empty = JSON.stringify({ closureVersion: 2, workflows: {}, workgroups: {} })
-    const r = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, {
-        definition: d,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-        frozenClosureJson: empty,
-      }),
-    )
-    expect(errorCodes(r)).toContain('call-workflow-ref-missing')
-  })
-
-  test('v1 存量闭包（name-keyed）同样只读它、不查 live', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db, W_SUBJECT, 'audit', child('topic')) // live 已漂移
-
-    const d = rootCalling({ name: 'audit', id: W_SUBJECT })
-    const v1 = JSON.stringify({
-      workflows: { audit: { id: W_SUBJECT, version: 1, definition: child('subject') } },
-      workgroups: {},
+      const d = rootCalling({ name: 'audit', id: W_SUBJECT })
+      const empty = JSON.stringify({ closureVersion: 2, workflows: {}, workgroups: {} })
+      const r = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, {
+          definition: d,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+          frozenClosureJson: empty,
+        }),
+      )
+      expect(errorCodes(r)).toContain('call-workflow-ref-missing')
     })
-    const r = validateWorkflowDef(
-      d,
-      await loadWorkflowValidationContext(db, {
-        definition: d,
-        currentWorkflow: { id: ROOT, name: 'root-wf' },
-        frozenClosureJson: v1,
-      }),
-    )
-    expect(errorCodes(r)).toEqual([])
+
+    test('v1 存量闭包（name-keyed）同样只读它、不查 live', async () => {
+      const db = harness.db
+      await seed(db, W_SUBJECT, 'audit', child('topic')) // live 已漂移
+
+      const d = rootCalling({ name: 'audit', id: W_SUBJECT })
+      const v1 = JSON.stringify({
+        workflows: { audit: { id: W_SUBJECT, version: 1, definition: child('subject') } },
+        workgroups: {},
+      })
+      const r = validateWorkflowDef(
+        d,
+        await loadWorkflowValidationContext(db, {
+          definition: d,
+          currentWorkflow: { id: ROOT, name: 'root-wf' },
+          frozenClosureJson: v1,
+        }),
+      )
+      expect(errorCodes(r)).toEqual([])
+    })
   })
 })

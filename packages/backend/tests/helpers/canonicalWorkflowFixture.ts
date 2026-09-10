@@ -1,5 +1,5 @@
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { agents } from '../../src/db/schema'
 
 /**
@@ -9,7 +9,7 @@ import { agents } from '../../src/db/schema'
  * fail-closed fixtures keep exercising the production guard.
  */
 export async function canonicalizeWorkflowAgentIds(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinition> {
   const rows = await db.select({ id: agents.id, name: agents.name }).from(agents)

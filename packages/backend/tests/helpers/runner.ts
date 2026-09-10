@@ -4,21 +4,21 @@ import {
 } from '../../src/services/runner'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import type { DbClient } from '../../src/db/client'
-import { createSqliteTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
+import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
 
 export * from '../../src/services/runner'
 
 /**
- * SQLite test composition for the production-required memory read participant.
+ * Provider-selected test composition for the production-required memory read participant.
  * Production callers must inject their selected provider explicitly.
  */
 export type RunNodeOptions = Omit<
   ProviderRunNodeOptions,
   'memoryInjectionQueries' | 'runtimeSessionLeases' | 'persistence' | 'runtimeRegistry'
 > &
-  Readonly<{ db: DbClient }> &
+  Readonly<{ db: ProviderNeutralDatabase }> &
   Partial<
     Pick<
       ProviderRunNodeOptions,
@@ -32,7 +32,7 @@ export async function runNode(options: RunNodeOptions) {
     ...providerOptions,
     memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
     runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
-    persistence: options.persistence ?? createSqliteTaskExecutionPersistence(db),
+    persistence: options.persistence ?? createTaskExecutionPersistence(db),
     runtimeRegistry: options.runtimeRegistry ?? composeSqliteRuntimeRegistryOperations(db),
   })
 }

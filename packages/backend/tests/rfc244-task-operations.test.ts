@@ -6,6 +6,8 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { parseTaskOperationsQuery } from '../src/modules/task-execution/infrastructure/taskListPage'
@@ -15,7 +17,7 @@ import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/t
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-type Db = ReturnType<typeof createInMemoryDb>
+type Db = ProviderNeutralDatabase
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -107,41 +109,72 @@ function task(
   }
 }
 
+// RFC-359 W53: retain the two causal fields supplied by the original SQLite INSERT trigger.
+// Original task inputs and native task() consumers remain unchanged.
+function createProviderTask() {
+  const lineageByTaskId = new Map<
+    string,
+    {
+      executionLineageId: string
+      frames: { stableNodeKey: string; frozenOccurrenceKey: string; workflowRevision: null }[]
+    }
+  >()
+  return (...args: Parameters<typeof task>) => {
+    const row = task(...args)
+    const parent =
+      row.parentTaskId === undefined ? undefined : lineageByTaskId.get(row.parentTaskId)
+    const frames = [
+      ...(parent?.frames ?? []),
+      {
+        stableNodeKey: row.parentTaskId === undefined ? 'task-root' : 'child-task',
+        frozenOccurrenceKey: row.id,
+        workflowRevision: null,
+      },
+    ]
+    const executionLineageId = parent?.executionLineageId ?? row.id
+    lineageByTaskId.set(row.id, { executionLineageId, frames })
+    return { ...row, executionLineageId, lineageSlotPathJson: JSON.stringify(frames) }
+  }
+}
+
 describe('RFC-244 task operations query', () => {
-  test('deep search returns context ancestry and branch recency; facets ignore view', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db.insert(tasks).values([
-      task('root-old', 'alice', 'done', { startedAt: 100 }),
-      task('mid', 'alice', 'done', { parentTaskId: 'root-old', startedAt: 200 }),
-      task('leaf-target', 'alice', 'running', {
-        parentTaskId: 'mid',
-        startedAt: 900,
-        name: 'Needle execution',
-      }),
-      task('root-new', 'alice', 'failed', { startedAt: 800 }),
-    ])
+  describeEachProvider('RFC-359 W53 task operations query', (harness) => {
+    test('deep search returns context ancestry and branch recency; facets ignore view', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db.insert(tasks).values([
+        task('root-old', 'alice', 'done', { startedAt: 100 }),
+        task('mid', 'alice', 'done', { parentTaskId: 'root-old', startedAt: 200 }),
+        task('leaf-target', 'alice', 'running', {
+          parentTaskId: 'mid',
+          startedAt: 900,
+          name: 'Needle execution',
+        }),
+        task('root-new', 'alice', 'failed', { startedAt: 800 }),
+      ])
 
-    const searched = await listTaskOperationsPage(db, actor('alice'), {
-      q: ' needle ',
-      view: 'active',
-    })
-    expect(searched.kind).toBe('root')
-    if (searched.kind !== 'root') throw new Error('expected root page')
-    expect(searched.items.map((item) => item.id)).toEqual(['root-old'])
-    expect(searched.items[0]?.listContext).toMatchObject({
-      matchKind: 'context',
-      qualifyingChildCount: 1,
-      matchingDescendantCount: 1,
-      branchStartedAt: 900,
-    })
-    expect(searched.facets).toEqual({ all: 1, active: 1, attention: 0, finished: 0 })
+      const searched = await listTaskOperationsPage(db, actor('alice'), {
+        q: ' needle ',
+        view: 'active',
+      })
+      expect(searched.kind).toBe('root')
+      if (searched.kind !== 'root') throw new Error('expected root page')
+      expect(searched.items.map((item) => item.id)).toEqual(['root-old'])
+      expect(searched.items[0]?.listContext).toMatchObject({
+        matchKind: 'context',
+        qualifyingChildCount: 1,
+        matchingDescendantCount: 1,
+        branchStartedAt: 900,
+      })
+      expect(searched.facets).toEqual({ all: 1, active: 1, attention: 0, finished: 0 })
 
-    const unsearched = await listTaskOperationsPage(db, actor('alice'), { view: 'active' })
-    expect(unsearched.kind).toBe('root')
-    if (unsearched.kind !== 'root') throw new Error('expected root page')
-    expect(unsearched.facets).toEqual({ all: 4, active: 1, attention: 1, finished: 3 })
-    expect(unsearched.items[0]?.id).toBe('root-old')
+      const unsearched = await listTaskOperationsPage(db, actor('alice'), { view: 'active' })
+      expect(unsearched.kind).toBe('root')
+      if (unsearched.kind !== 'root') throw new Error('expected root page')
+      expect(unsearched.facets).toEqual({ all: 4, active: 1, attention: 1, finished: 3 })
+      expect(unsearched.items[0]?.id).toBe('root-old')
+    })
   })
 
   test('ACL boundary promotes visible child to neutral unavailable root', async () => {
@@ -224,29 +257,32 @@ describe('RFC-244 task operations query', () => {
     ).rejects.toMatchObject({ code: 'task-page-cursor-invalid' })
   })
 
-  test('query canonicalization is strict and corrupt frozen JSON degrades to null', async () => {
-    const parsed = parseTaskOperationsQuery(taskListViewerOf(actor('alice')), {
-      statuses: 'running,pending,running',
-      scope: 'all',
-      q: '  hello  ',
-    })
-    expect(parsed.filters.statuses).toEqual(['pending', 'running'])
-    expect(parsed.filters.scope).toBe('mine')
-    expect(parsed.filters.q).toBe('hello')
-    expect(() =>
-      parseTaskOperationsQuery(taskListViewerOf(actor('alice')), { limit: '101' }),
-    ).toThrow()
-    expect(() =>
-      parseTaskOperationsQuery(taskListViewerOf(actor('alice')), { statuses: 'running,' }),
-    ).toThrow()
+  describeEachProvider('RFC-359 W53 task operations query', (harness) => {
+    test('query canonicalization is strict and corrupt frozen JSON degrades to null', async () => {
+      const parsed = parseTaskOperationsQuery(taskListViewerOf(actor('alice')), {
+        statuses: 'running,pending,running',
+        scope: 'all',
+        q: '  hello  ',
+      })
+      expect(parsed.filters.statuses).toEqual(['pending', 'running'])
+      expect(parsed.filters.scope).toBe('mine')
+      expect(parsed.filters.q).toBe('hello')
+      expect(() =>
+        parseTaskOperationsQuery(taskListViewerOf(actor('alice')), { limit: '101' }),
+      ).toThrow()
+      expect(() =>
+        parseTaskOperationsQuery(taskListViewerOf(actor('alice')), { statuses: 'running,' }),
+      ).toThrow()
 
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db
-      .insert(tasks)
-      .values([task('corrupt-json', 'alice', 'done', { workgroupConfigJson: '{broken' })])
-    const page = await listTaskOperationsPage(db, actor('alice'), {})
-    expect(page.items[0]?.workgroupName).toBeNull()
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db
+        .insert(tasks)
+        .values([task('corrupt-json', 'alice', 'done', { workgroupConfigJson: '{broken' })])
+      const page = await listTaskOperationsPage(db, actor('alice'), {})
+      expect(page.items[0]?.workgroupName).toBeNull()
+    })
   })
 
   test('shared scope uses membership for self-match but retains owned parent context', async () => {
@@ -275,94 +311,98 @@ describe('RFC-244 task operations query', () => {
     expect(page.items[0]?.listContext.parentAvailability).toBe('none')
   })
 
-  test('subject and origin filters stay distinct and large launch JSON never reaches the list wire', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    const forbidden = 'RFC244_FORBIDDEN_LARGE_JSON_SENTINEL'
-    await db.insert(tasks).values([
-      task('workflow-manual', 'alice', 'done', { startedAt: 100 }),
-      task('agent-manual', 'alice', 'running', {
-        startedAt: 200,
-        sourceAgentName: 'researcher',
-        sourceAgentId: 'agent-stable-id',
-      }),
-      task('workgroup-manual', 'alice', 'done', {
-        startedAt: 300,
-        workgroupId: 'workgroup-stable-id',
-        workgroupConfigJson: JSON.stringify({
-          workgroupName: 'Frozen response team',
-          privatePayload: forbidden,
+  describeEachProvider('RFC-359 W53 task operations query', (harness) => {
+    test('subject and origin filters stay distinct and large launch JSON never reaches the list wire', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      const forbidden = 'RFC244_FORBIDDEN_LARGE_JSON_SENTINEL'
+      await db.insert(tasks).values([
+        task('workflow-manual', 'alice', 'done', { startedAt: 100 }),
+        task('agent-manual', 'alice', 'running', {
+          startedAt: 200,
+          sourceAgentName: 'researcher',
+          sourceAgentId: 'agent-stable-id',
         }),
-        workflowSnapshot: JSON.stringify({ forbidden }),
-        inputs: JSON.stringify({ forbidden }),
-        refClosureJson: JSON.stringify({ forbidden }),
-      }),
-      task('workflow-scheduled', 'alice', 'pending', {
-        startedAt: 400,
-        scheduledTaskId: 'scheduled-soft-link',
-      }),
-      task('workflow-webhook', 'alice', 'done', {
-        startedAt: 500,
-        launchOrigin: 'webhook',
-      }),
-      task('workflow-event', 'alice', 'done', {
-        startedAt: 550,
-        launchOrigin: 'event',
-      }),
-      task('workflow-api', 'alice', 'done', {
-        startedAt: 600,
-        launchOrigin: 'api',
-      }),
-    ])
+        task('workgroup-manual', 'alice', 'done', {
+          startedAt: 300,
+          workgroupId: 'workgroup-stable-id',
+          workgroupConfigJson: JSON.stringify({
+            workgroupName: 'Frozen response team',
+            privatePayload: forbidden,
+          }),
+          workflowSnapshot: JSON.stringify({ forbidden }),
+          inputs: JSON.stringify({ forbidden }),
+          refClosureJson: JSON.stringify({ forbidden }),
+        }),
+        task('workflow-scheduled', 'alice', 'pending', {
+          startedAt: 400,
+          scheduledTaskId: 'scheduled-soft-link',
+        }),
+        task('workflow-webhook', 'alice', 'done', {
+          startedAt: 500,
+          launchOrigin: 'webhook',
+        }),
+        task('workflow-event', 'alice', 'done', {
+          startedAt: 550,
+          launchOrigin: 'event',
+        }),
+        task('workflow-api', 'alice', 'done', {
+          startedAt: 600,
+          launchOrigin: 'api',
+        }),
+      ])
 
-    const workflow = await listTaskOperationsPage(db, actor('alice'), { subject: 'workflow' })
-    expect(workflow.items.map((row) => row.id)).toEqual([
-      'workflow-api',
-      'workflow-event',
-      'workflow-webhook',
-      'workflow-scheduled',
-      'workflow-manual',
-    ])
-    const agent = await listTaskOperationsPage(db, actor('alice'), { subject: 'agent' })
-    expect(agent.items.map((row) => row.id)).toEqual(['agent-manual'])
-    const workgroup = await listTaskOperationsPage(db, actor('alice'), {
-      subject: 'workgroup',
+      const workflow = await listTaskOperationsPage(db, actor('alice'), { subject: 'workflow' })
+      expect(workflow.items.map((row) => row.id)).toEqual([
+        'workflow-api',
+        'workflow-event',
+        'workflow-webhook',
+        'workflow-scheduled',
+        'workflow-manual',
+      ])
+      const agent = await listTaskOperationsPage(db, actor('alice'), { subject: 'agent' })
+      expect(agent.items.map((row) => row.id)).toEqual(['agent-manual'])
+      const workgroup = await listTaskOperationsPage(db, actor('alice'), {
+        subject: 'workgroup',
+      })
+      expect(workgroup.items.map((row) => row.id)).toEqual(['workgroup-manual'])
+      expect(workgroup.items[0]?.workgroupName).toBe('Frozen response team')
+      expect(JSON.stringify(workgroup)).not.toContain(forbidden)
+
+      const scheduled = await listTaskOperationsPage(db, actor('alice'), {
+        origin: 'scheduled',
+      })
+      expect(scheduled.items.map((row) => row.id)).toEqual(['workflow-scheduled'])
+      const manual = await listTaskOperationsPage(db, actor('alice'), { origin: 'manual' })
+      expect(manual.items.map((row) => row.id)).toEqual([
+        'workgroup-manual',
+        'agent-manual',
+        'workflow-manual',
+      ])
+      const webhook = await listTaskOperationsPage(db, actor('alice'), { origin: 'webhook' })
+      expect(webhook.items.map((row) => row.id)).toEqual(['workflow-webhook'])
+      const event = await listTaskOperationsPage(db, actor('alice'), { origin: 'event' })
+      expect(event.items.map((row) => row.id)).toEqual(['workflow-event', 'workflow-webhook'])
+      const api = await listTaskOperationsPage(db, actor('alice'), { origin: 'api' })
+      expect(api.items.map((row) => row.id)).toEqual(['workflow-api'])
+      expect(JSON.stringify(api)).not.toContain('launchOrigin')
     })
-    expect(workgroup.items.map((row) => row.id)).toEqual(['workgroup-manual'])
-    expect(workgroup.items[0]?.workgroupName).toBe('Frozen response team')
-    expect(JSON.stringify(workgroup)).not.toContain(forbidden)
 
-    const scheduled = await listTaskOperationsPage(db, actor('alice'), {
-      origin: 'scheduled',
+    test('a corrupt parent cycle terminates defensively without inventing a root', async () => {
+      const db = harness.db
+      const task = createProviderTask()
+      await seedBase(db)
+      await db.insert(tasks).values([task('cycle-a', 'alice'), task('cycle-b', 'alice')])
+      await db.update(tasks).set({ parentTaskId: 'cycle-b' }).where(eq(tasks.id, 'cycle-a'))
+      await db.update(tasks).set({ parentTaskId: 'cycle-a' }).where(eq(tasks.id, 'cycle-b'))
+
+      const page = await listTaskOperationsPage(db, actor('alice'), {})
+      expect(page.kind).toBe('root')
+      if (page.kind !== 'root') throw new Error('expected root page')
+      expect(page.items).toEqual([])
+      expect(page.facets).toEqual({ all: 2, active: 0, attention: 0, finished: 2 })
     })
-    expect(scheduled.items.map((row) => row.id)).toEqual(['workflow-scheduled'])
-    const manual = await listTaskOperationsPage(db, actor('alice'), { origin: 'manual' })
-    expect(manual.items.map((row) => row.id)).toEqual([
-      'workgroup-manual',
-      'agent-manual',
-      'workflow-manual',
-    ])
-    const webhook = await listTaskOperationsPage(db, actor('alice'), { origin: 'webhook' })
-    expect(webhook.items.map((row) => row.id)).toEqual(['workflow-webhook'])
-    const event = await listTaskOperationsPage(db, actor('alice'), { origin: 'event' })
-    expect(event.items.map((row) => row.id)).toEqual(['workflow-event', 'workflow-webhook'])
-    const api = await listTaskOperationsPage(db, actor('alice'), { origin: 'api' })
-    expect(api.items.map((row) => row.id)).toEqual(['workflow-api'])
-    expect(JSON.stringify(api)).not.toContain('launchOrigin')
-  })
-
-  test('a corrupt parent cycle terminates defensively without inventing a root', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedBase(db)
-    await db.insert(tasks).values([task('cycle-a', 'alice'), task('cycle-b', 'alice')])
-    await db.update(tasks).set({ parentTaskId: 'cycle-b' }).where(eq(tasks.id, 'cycle-a'))
-    await db.update(tasks).set({ parentTaskId: 'cycle-a' }).where(eq(tasks.id, 'cycle-b'))
-
-    const page = await listTaskOperationsPage(db, actor('alice'), {})
-    expect(page.kind).toBe('root')
-    if (page.kind !== 'root') throw new Error('expected root page')
-    expect(page.items).toEqual([])
-    expect(page.facets).toEqual({ all: 2, active: 0, attention: 0, finished: 2 })
   })
 
   test('registered task source returns its normalized page through the unified catalog', async () => {

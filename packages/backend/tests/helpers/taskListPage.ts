@@ -6,7 +6,7 @@
 // 这里就地组装即可，于是 29 个既有调用点一行都不用改。
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import {
   createDatabaseTaskListPage,
@@ -17,7 +17,7 @@ import {
 import type { TaskOperationsPage } from '@agent-workflow/shared'
 
 export async function listTaskOperationsPage(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: Actor,
   rawQuery: TaskOperationsRawQuery,
   options: TaskOperationsPageOptions = {},

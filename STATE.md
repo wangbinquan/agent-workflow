@@ -2,6 +2,12 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第五十三批（2026-09-10）**：7个旧测试文件保留40个原声明/122个回调matcher及1个原helper matcher，其中21个原DB例/60 matcher接默认双库，19例/62 matcher保持原注册与预算。SQLite旧拓扑保持；PG等待完整应用初始化，经真实intent/claim/attach/drive/release完成执行，并在harness释放前dispose。
+> 实测1964测试文件、593构库文件/1152调用、509无harness/521有harness；T19f及对应账本679→676。两个已覆盖双库的task-catalog文件保持原样；无harness总数是入口清点，不等同剩余普通业务迁移量。
+> 首轮15core编译发现PG夹具缺少必需executionContext；补齐真实执行上下文与终态收尾后，最终backend编译通过且候选不变。四个受影响metadata/guard文件及W29纯装配共71 pass/157 expect，canonical13 pass/55 expect通过；八canonical与RFC294 status原字节保持，四份metadata更新provenance/账本并移除W52两项到期增长标记。
+> W52 exact5ab4ecb83871f27cc86c7231cf0fffbd7f019da2 Main34427299579终态38 success/2 failure，13个后端与普通lint全过；主集2164/2164、另2/2和原hook18/18全部通过，九个旧PG HTTP失败与三条旧guard的两OS六次执行均恢复。
+> 执行拓扑19组/152个Node断言验证实际提取函数与受控端口；本地没有运行真实DB/App/TaskEngine，真实业务与PG认领/执行待新SHA托管。W52原full34427756137已终态并完成360样本核验：SQLite tasks-first P95 150.616ms未低于150ms，PG workgroup-pending max 11.571ms未低于10ms，其余16个绝对项通过；六个PG端点仍相对较慢，不据此推断根因或性能改善；AC-1/6/8/9/11/12继续开放。
+
 > **RFC-359 W12 第五十二批（2026-09-10）**：资源包两处完整 apply 串行队列共用一个工厂，两个原模块各自初始化独立锁域；原 key、回调及事务/FS流程保持，锁切片生产净减14行。原链清理源码锁只改读取位置，保三条原断言。
 > 修正W51暴露的PG系统任务Git元数据null投影，并将原submodule夹具分组后的skipIf站点账目从1改为2；原条件、用例和预算保持，新SHA真实HTTP结果待验。
 > 新增9个纯例，lock/timing/Git分别4 pass/21 expect、2 pass/56 expect、3 pass/21 expect；两原锁函数与共享函数完整观测一致，原源码锁旧红新绿。诊断只补后置请求时间窗，不是新性能改善证据。

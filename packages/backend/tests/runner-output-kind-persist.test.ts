@@ -18,15 +18,15 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -54,11 +54,11 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-runner-kind-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -80,6 +80,14 @@ async function buildHarness(): Promise<Harness> {
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
+    ...(provider.applicationBinding.provider === 'postgresql'
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return {
     db,
@@ -105,10 +113,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('RFC-072 — runNode persists output kind', () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(provider)
   })
   afterEach(() => h.cleanup())
 
@@ -160,4 +168,8 @@ describe('RFC-072 — runNode persists output kind', () => {
     expect(note?.kind).toBeNull()
     expect(note?.content).toBe('just text')
   })
+}
+
+describeEachProvider('RFC-072 — runNode persists output kind', (provider) => {
+  describe('runtime fixture', () => registerCases(provider))
 })

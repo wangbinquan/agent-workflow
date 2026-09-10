@@ -25,6 +25,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 import { agents, resourceGrants, users, workflows } from '../src/db/schema'
 import { resolveImportRefs } from '../src/modules/resource-catalog/infrastructure/legacy/importRefs'
 import { extractWorkflowWorkflowRefs } from '../src/services/resourceRefs'
@@ -40,7 +42,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedUser(db: DbClient, id: string, role: 'admin' | 'user' = 'user') {
+async function seedUser(db: ProviderNeutralDatabase, id: string, role: 'admin' | 'user' = 'user') {
   await db.insert(users).values({
     id,
     username: id,
@@ -489,6 +491,19 @@ describe('RFC-243 §5.5 — YAML import resolves / dangles call-workflow names',
       unknown
     >
     expect(node.workflowId).toBe(idB)
+  })
+})
+
+describeEachProvider('RFC-359 W53 import reference resolution', (harness) => {
+  let db: ProviderNeutralDatabase
+
+  const viewer = actor('viewer')
+
+  beforeEach(async () => {
+    db = harness.db
+    await seedUser(db, 'owner-a')
+    await seedUser(db, 'owner-b')
+    await seedUser(db, 'viewer')
   })
 
   test('resolveImportRefs: workflow selectors skip on zero candidates while agent selectors still fail closed', async () => {

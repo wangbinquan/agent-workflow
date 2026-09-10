@@ -10,6 +10,8 @@ import {
 import { invalidateReadConfigCache, loadConfig, saveConfigRaw } from '@/config'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/composition'
+import type { SelectedPostgresqlTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
+import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
 import {
   composeSqliteApplicationDeps,
   createComposedApp,
@@ -27,6 +29,13 @@ export type ProviderHttpApplicationInput = Pick<
 export interface ProviderHttpApplication {
   readonly app: Hono
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
+  readonly taskExecution:
+    | Readonly<{ provider: 'sqlite' }>
+    | Readonly<{
+        provider: 'postgresql'
+        selected: SelectedPostgresqlTaskExecutionProviderRuntime
+        workspace: WorkspaceClaimFinalizationCommand
+      }>
   /** Close application-owned work before the harness resets its borrowed database. */
   dispose(): Promise<void>
 }
@@ -118,6 +127,7 @@ export async function createProviderHttpApplication(
   const originalConfig = existsSync(input.configPath) ? readFileSync(input.configPath) : null
   let application: Pick<ProviderHttpApplication, 'app' | 'dispose'> | undefined
   let repositoryWorkspaceStore: RepositoryWorkspaceStore
+  let taskExecution: ProviderHttpApplication['taskExecution']
   let disposal: Promise<void> | undefined
   const dispose = (): Promise<void> => {
     disposal ??= (async () => {
@@ -162,6 +172,7 @@ export async function createProviderHttpApplication(
       })
       application = sqliteApplication
       repositoryWorkspaceStore = sqliteApplication.repositoryWorkspaceStore
+      taskExecution = Object.freeze({ provider: 'sqlite' })
     } else {
       const selectedConfig = { ...config, database: binding.databaseConfig }
       saveConfigRaw(input.configPath, selectedConfig)
@@ -178,8 +189,13 @@ export async function createProviderHttpApplication(
       })
       application = postgresqlApplication
       repositoryWorkspaceStore = postgresqlApplication.core.repositoryWorkspaceStore
+      taskExecution = Object.freeze({
+        provider: 'postgresql',
+        selected: postgresqlApplication.runtime.taskExecution,
+        workspace: postgresqlApplication.runtime.workspaceMaintenance,
+      })
     }
-    return Object.freeze({ app: application.app, repositoryWorkspaceStore, dispose })
+    return Object.freeze({ app: application.app, repositoryWorkspaceStore, dispose, taskExecution })
   } catch (error) {
     try {
       await dispose()
