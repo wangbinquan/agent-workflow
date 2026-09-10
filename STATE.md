@@ -35,6 +35,12 @@
 >    平移到中立 `DrizzleTaskExecutionIntentPersistence.submit` 后方法与端口声明一并删除，
 >    账本 `SYNC_TRANSACTION_DEBT` **4 → 3 个文件**。**下刀前先对每一笔问「src 侧还有调用方吗」**
 >    ——账本上的数字里有一部分不是技术钉死，只是测试夹具还挂着。
+>    **债 3（`sqliteTaskExecutionEffect.ts`）已试过、撞墙并回退**：它同样是 src 零调用方 +
+>    18 处测试夹具，但其中两处传 `onSettledTx`（把投影写挂进同一笔结算事务），
+>    中立端口**故意**没有这个逃逸口，它把同事务投影表达成**具名变体**（`settleCodeHostNode`）。
+>    所以问题不是「把裸 tx 回调加回来」，而是那两条用例究竟在锁什么：锁产品行为就改用具名变体，
+>    锁 `onSettledTx` 这个钩子本身就随实现一起退役。**改的是既有回归判据的意图，先确认再动**
+>    （plan §5o 有细节）。
 >    **语义变化要先想清楚**：`dbTxSync` 是同步、BEGIN..COMMIT 之间无人能插进来；换成显式边界的
 >    async 事务后有了让渡窗口，护栏见 `databaseTransaction.ts` 头注释三条（尤其「事务体只 await
 >    数据库操作」）。落完之后 `DbClient` 放宽与 AC-6 剩余迁移会**跟着一起塌下来，三件是一件事**。

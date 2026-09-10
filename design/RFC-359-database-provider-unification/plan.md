@@ -5483,6 +5483,33 @@ sqlite/taskLifecycle.ts  setTaskStatus / trySetTaskStatus      ← 根，25 + 2 
 不是「技术钉死」，而是「只有测试夹具还挂着」。下刀前先对每一笔问一句「src 侧还有调用方吗」，
 零调用方的先摘，剩下的才是真要改解释器的。
 
+### 债 3（`sqliteTaskExecutionEffect.ts` 的两笔）**试过了，撞在一处真能力差异上**
+
+按上面那条方法先问「src 侧还有调用方吗」：`prepareAndAcquire` / `settle` 也是零——生产走
+`TaskExecutionPersistence['effects']`，即中立的 `DrizzleTaskExecutionEffectPersistence`
+（`gateContinuationEffectPersistence.ts` 的两处 await 就是它）。挡着的测试夹具实际是
+**18 处 / 2 个文件**（账本注释记的「53 处」同样过期）。两侧入参逐字相同（只少 `db`）、返回结构相同，
+看起来是同一条平移。
+
+**但平移到一半撞墙**：`rfc328-durable-ownership.test.ts` 有两处传了
+`onSettledTx: (tx) => { … }`——把一笔投影写挂在**同一笔结算事务**里。中立端口**没有**这个入口，
+而且是**故意**没有：该端口的契约就是「不让事务作用域逃逸给调用方」
+（`taskOwnershipPersistence.ts` 的端口注释同款措辞），`taskExecutionEffectPersistence.ts` 的头注释
+把 `onSettledTx` 明确记成 SQLite 侧的旧形状。
+
+所以这一笔**不是机械平移**。端口自己其实已经给出了答案的形状：同事务投影在这个端口上是用
+**具名变体**表达的——`settleCodeHostNode({ settlement, … })` 就是「结算 + node_run 投影同事务」
+那一个。也就是说方向不是「把裸 tx 回调加回来」，而是问：那两条用例真正要锁的是什么？
+
+- 若锁的是**产品行为**「投影与结算同生共死」，就该改用已有的具名变体去锁（`settleCodeHostNode`），
+  用例的意图不变、判据反而更贴生产路径；
+- 若锁的是**机制**「`onSettledTx` 这个钩子存在且在同一笔事务里」，那它锁的是即将退役的实现细节，
+  应当随实现一起走。
+
+两种读法对应两种改法，而它改的是**一条既有回归判据的意图**，不是实现细节——按仓规矩
+（测试注释要写清「为什么这条测试存在」）**先确认再动**，本刀因此停在这里并回退。
+`prepareAndAcquire` 那侧单独迁没有意义——账本按**文件**计数，`settle` 留着这一笔就还占一格。
+
 ### 一条必须先想清楚的语义变化
 
 `dbTxSync` 是**同步**的：BEGIN 到 COMMIT 之间没有任何别的上下文能插进来。换成显式边界的
