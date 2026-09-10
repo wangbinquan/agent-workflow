@@ -2,6 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 AC-1 收口进度（2026-09-11）**：成对适配器账本实测已是 **10 对 / 9 对已见证 / 1 对未见证**（proposal §7 里「仍缺 5 对」的历史数字早已过期）。剩的 `platform/persistence/Migrator` **查清了为什么见不了证**：守卫认的是机械判据（`describeEachProvider` + 两侧实现各有一条值 import，即对拍必须真的驱动两个实现），而「驱动 PG 侧」要在测试里重跑 `migratePostgresqlSchema`，它的 schema 名 `agent_workflow` 是写死的——重跑会打到 harness 共用的 schema 上、破坏同集群其他测试文件的库。**卡点是产品侧的可测试性缺口，不是排期**；要收口 AC-1 得先让迁移器能在隔离 schema/库上被驱动，这与 audit-backlog 里 harness 那一刀是同一件事。落档见 plan §5m。
+> 与此同时补上**用户可见契约那一层**的见证：`tests/rfc359-w8-migrator-conformance.test.ts`（双引擎，6 pass）拿 `buildLogicalSchemaContract()` 的花名册去问活库，每张声明的表都发一条不带投影的 `select`（= 选出全部声明列），少一表或少一列当场炸。它挡的是「drizzle 声明与迁移 SQL 两侧各漏一半」这类**没有别的测试会照出来**的漂移。判据自证不空转（整个循环跑在 `recordStatements()` 里，断言查询数 ≥ 花名册长度）+ 负 fixture（查不存在的表必须抛）。**状态位不动**——放宽 `witnessesPair` 去迁就它是错的。
+> 另：`fb1a83a51` 的 CI 红一格 `40P01 deadlock detected`，是 `docs/audit-backlog.md` 已登记的 harness 缺陷（同分片多文件共用一个 PG 库，文件切换处 TRUNCATE 与 SELECT 互锁），非本次改动。
+
 > **RFC-359 W8 补刀之六 —— 两对同模块内的重复实现（2026-09-10）**：① `storeUser`——两个事务读集类（`oidcIdentityCrossContext.ts` / `userAccessPersistence.ts`）各揣一份逐字相同的私有方法，维护同一个不变量：`users`/`usernames`/`emails` 三张表要一起改、换名换邮箱先摘旧键；漏摘一侧会留下指向旧身份的悬挂索引键而两处用例都绿。收进 `userAccessRecordIndex.ts`，传三张表而不是 `this`（私有字段不参与结构化匹配）。② `releaseFences`/`releaseAttemptFencesTx`——围栏释放的三条判据（attempt + 未释放 + 同 epoch）在 `taskExecutionEffectPersistence.ts` 与 `effectQuiescence.ts` 各一份；按该文件既有的「静默清算是一份实现、端口只是委托」方向，导出 quiescence 那份、删私有方法。
 > 两对都在同 context 同层内合一，**零新增跨上下文边**；`rfc294-module-symbol-owners` +2（新导出登记主人，一次性 permit）。`4beb7daf3` 的 CI **42/42 全绿**——今天第一次拿到完整信号。机械重复组 17 → 15。
 

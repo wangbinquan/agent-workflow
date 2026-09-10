@@ -5271,6 +5271,46 @@ trigger 源、durable 行损坏时候选救不回来、读点只花一次往返�
 
 合一前这五条分支里**只有一条**（`trigger-context-invalid`，经 retry 端点）有双引擎覆盖。
 
+## 5m. AC-1 的最后一对：`Migrator` 为什么仍记 unverified（W8 查清，不是「还没做」）
+
+成对适配器账本今天是 **10 对 / 9 对已见证 / 1 对未见证**（proposal §7 里「仍缺 5 对」的历史实测
+早已过期）。剩的那一对是 `platform/persistence/Migrator`。
+
+### 缺的不是意愿，是「迁移器暂时不支持在隔离 schema 上被驱动」
+
+`rfc359-w5-provider-pair-conformance` 认的见证是**机械**判据（`witnessesPair`）：
+`describeEachProvider` + **两侧实现各有一条值 import**——对拍必须真的驱动两个实现，
+不能只观察它们的结果。这条判据是对的，它挡的正是「拿一个不驱动实现的测试冒充对拍」。
+
+对迁移器，「驱动 PG 侧」意味着在测试里再跑一次 `migratePostgresqlSchema`。而它的 schema 名
+（`agent_workflow`）是**写死的**：重跑会打到 harness 共用的那个 schema 上，破坏同集群里其他
+测试文件的库（PG 的 advisory lock 还是**集群级**的，见 `docs/dev-gotchas.md`）。
+所以这一对的见证被卡在一个**产品侧的可测试性缺口**上，而不是排期上。
+
+**要收口 AC-1，先让迁移器能在隔离 schema / 隔离库上被驱动**——这与 `docs/audit-backlog.md`
+记的 harness 那一刀（「每文件一库 vs 每文件一 schema」）是同一件事，应该一起做。
+
+### 与此同时，用户可见契约那一层已经有见证了
+
+新增 `tests/rfc359-w8-migrator-conformance.test.ts`（`describeEachProvider`，两引擎共 6 pass）。
+迁移器对应用的承诺只有一句——**跑完之后，这个库真的实现了应用声明的那份 schema**。
+判据就照这句写：拿 `buildLogicalSchemaContract()`（从 drizzle 声明派生的表 / 列花名册）去
+**问活库**，每张声明的表都发一条 `select().from(table).limit(1)`——不带投影 = 选出全部声明列，
+少一张表或少一列都在这里炸。
+
+它挡的是一类真实且**不会被别的测试照出来**的漂移：`docs/dev-gotchas.md` 记着「PG 的表 / 索引 /
+约束来自 drizzle 声明，不是 SQLite 迁移 SQL——迁移里手写的索引 PG 没有」。反过来同样成立：
+drizzle 里加了一列而 SQLite 的迁移 SQL 没跟，SQLite 侧就少一列。两种漏法在各自引擎的用例里
+都不会红（那些用例只碰自己用到的那几张表），但任何一条读到那张表 / 那一列的生产路径都会在
+运行时炸。
+
+**判据自证不空转**：整个循环跑在 `recordStatements()` 里，断言实际发出的查询数 ≥ 花名册长度
+——只看「失败列表为空」的话，循环若被某个 `continue` 悄悄跳过大半张花名册，测试照样绿。
+另配一条负 fixture：查一张不存在的表必须抛，否则上一条判据对「表根本不存在」是瞎的。
+
+**状态位不动**：这条对拍不满足 `witnessesPair` 的机械判据，所以账本仍记 unverified。
+放宽那条判据去迁就它是错的——它挡的就是这个。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；
