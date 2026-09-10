@@ -2,6 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W8 补刀之三 + 修红（2026-09-10）**：`1d3340a22` 在 CI 上红了一格——`tests/rfc331-task-execution-topology.test.ts` 的 `REGISTERED_PREEXISTING_DEEP_IMPORTS` 账本要登记 `services/task.ts → frozenTaskTriggerPreflight` 这条新的深 import。**漏红的原因是挑测试的方法错了**：我按 `GUARD_FILE_NAME_PATTERN` 的关键词从 `tests/` 根下挑了 99 个守卫跑，而那个文件名里一个关键词都没有（"topology" 不在表里）。已补账本条目 + 一次性 `allowGrowth`（10 → 11），并把正确挑法（按「谁扫源码语料」挑，实测 336 个文件）与「`ledger-baselines.json` 只有 N1 系是 census 复算的、其余基线要手改」两条落 `docs/dev-gotchas.md`。
+> 同批再收一对 provider 孪生：`notSyncable`（`sqlite/postgresqlTaskRouteOperations.ts` 各一份逐字副本，纯投影、不碰 DB）收成 `domain/workflowSyncPreview.ts` 的 `notSyncableWorkflowPreview`，零新增边（domain 只依赖 `@agent-workflow/shared`，而 shared 不计入跨上下文账本——只有 drizzle-orm 计）。机械重复组 19 → 18。
+
 > **RFC-359 W8 补刀之二 —— Intent apply 归属预检（2026-09-10）**：`resolveIntentApplyResourcePreflight` 与它的三个 interface 在 `resource-catalog/infrastructure/aggregateAdapters/` 的两个适配器里各有一份逐字副本，差别只有类型名上的 `Legacy`/`Postgresql` 前缀——**纯命名分叉**（函数体只经 `ResourceCatalogAclIdentityReadPort` 闭合端口取数，零方言）。抽到同目录的 `intentApplyResourcePreflight.ts`：同 bounded context、同层，**零新增跨上下文边**，`rfc294-module-symbol-owners` 反而 25037 → 25033。§5k 点名的两个跨层靶心至此都已收。
 > 新增 `tests/rfc359-w8-intent-apply-preflight.test.ts`（`describeEachProvider`，两引擎共 6 pass）：既有 T14/T15 把语义钉得细但只在 SQLite 上，这条只锁**跨引擎一致性**（占用名大小写归一、copy-only 目标与理由、六类都问过一遍、返回值冻结）。上一提交的三条 `allowGrowth` 已按一次性契约摘除。
 > 顺带一条老规矩再验证：删掉函数体后两个适配器的 `CATALOG_SELECTOR_KINDS` **值**导入变成死的，`--max-warnings 0` 当场红——**删完要重跑 lint**，别凭记忆判断哪些 import 还活着。机械重复组 23 → 19。

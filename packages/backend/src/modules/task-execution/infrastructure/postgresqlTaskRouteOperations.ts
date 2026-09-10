@@ -10,7 +10,6 @@ import {
   allowedFromForTaskEvent,
   clarifyNavKindForRoundStatus,
   diffWorkflowForSync,
-  emptyWorkflowSyncDiff,
   isHumanReviewConclusion,
   isTerminalNodeRunStatus,
   isTerminalTaskStatus,
@@ -157,6 +156,7 @@ import {
   worktreeDiff,
 } from '@/util/git'
 import { Paths } from '@/util/paths'
+import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
 
 const log = createLogger('task-execution.postgresql-task-routes')
 
@@ -1284,21 +1284,6 @@ async function taskDiff(
   return { diff, baseCommit: null, truncated }
 }
 
-function notSyncable(task: Task, reason: WorkflowSyncPreview['reason']): WorkflowSyncPreview {
-  return {
-    syncable: false,
-    reason,
-    workflowId: task.workflowId,
-    workflowName: task.workflowName,
-    currentVersion: task.workflowVersion,
-    latestVersion: null,
-    differs: false,
-    invalid: false,
-    invalidIssues: [],
-    diff: emptyWorkflowSyncDiff(),
-  }
-}
-
 function definitionOf(value: unknown): WorkflowDefinition {
   return migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(value))
 }
@@ -1390,10 +1375,10 @@ async function workflowSyncPreview(
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   if (taskExecutionKind(task) !== 'workflow') {
-    return notSyncable(task, 'workflow-deleted')
+    return notSyncableWorkflowPreview(task, 'workflow-deleted')
   }
   await dependencies.activity.awaitReleasedSettled(taskId)
-  if (dependencies.activity.isActive(taskId)) return notSyncable(task, 'task-active')
+  if (dependencies.activity.isActive(taskId)) return notSyncableWorkflowPreview(task, 'task-active')
   let loaded: Awaited<ReturnType<typeof loadVisibleWorkflow>>
   try {
     loaded = await loadVisibleWorkflow(dependencies, actor, task.workflowId)
@@ -1402,7 +1387,7 @@ async function workflowSyncPreview(
       error !== null && typeof error === 'object' && 'code' in error
         ? Reflect.get(error, 'code')
         : null
-    return notSyncable(
+    return notSyncableWorkflowPreview(
       task,
       typeof code === 'string' && code.includes('forbidden')
         ? 'workflow-not-visible'

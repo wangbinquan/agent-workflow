@@ -748,8 +748,11 @@
       "id": "rfc331-preexisting-deep-imports",
       "file": "packages/backend/tests/rfc331-task-execution-topology.test.ts",
       "symbol": "REGISTERED_PREEXISTING_DEEP_IMPORTS",
-      "baseline": 10,
-      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。"
+      "baseline": 11,
+      "why": "RFC-331：登记在册的存量跨模块深 import（`文件:被深引的模块`）。每一条都是一处绕过 public 合同的内部耦合，只该随 RFC-294 的演进减少。它是判据 C 上线时**新查出来**的一处——13 处人工清单里没有它，此前既不被 A 也不被 B 覆盖。",
+      "allowGrowth": {
+        "why": "RFC-359 W8 一次性豁免：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后，正典落 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`，于是 `services/task.ts` 多一条 legacy → owner infrastructure 的深 import。更省边的落位（`services/execution/triggerPreflight.ts`）被 `rfc349-provider-cutover` 的 `databaseMechanismDependencies` 判据按住——`services/` 面禁止直接拥有 `@/db/*` / drizzle。这条与同文件既有的 `branchTraceSnapshotReader` 同形同命，随 `services/task.ts` 收敛到 owner public/composition 合同（RFC-294 W4-E）一起还清。注：这条守卫的文件名不含 guard/lock/architecture 等关键词，落盘前按关键词挑测试跑会漏掉它——本轮就是这么推红一次的，教训已落 docs/dev-gotchas.md。"
+      }
     },
     {
       "id": "rfc359-w8-name-blind-capability-pairs",
@@ -872,7 +875,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:fc8f8f2debeebc631d6b3b44cc90a79b46e84ddb83609e440c9a1dbd6259a89f",
+    "sourceDigest": "sha256:27bb53c4f28a49a86aa302c541d462b4103a6a60f301ca503b5f7365d5114f9d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1d3340a22d5a3dfdae2514d5e5456e23dacf593b",
-    "contentDigest": "sha256:ce9f955a6bdb9e9bd981ce76e9ea5f9eb2e9aa3662e867a9dc89b144d7accc7e",
+    "currentSnapshotSha": "90dc5d46e2e0845b9c03e55ab29b172961904aa9",
+    "contentDigest": "sha256:d25e6f597e7ffed233271c9f1e3a6c9f455b028ca601a7b708f7e39d31e01796",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

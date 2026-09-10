@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:fc8f8f2debeebc631d6b3b44cc90a79b46e84ddb83609e440c9a1dbd6259a89f`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:27bb53c4f28a49a86aa302c541d462b4103a6a60f301ca503b5f7365d5114f9d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1806 |
+| backend production TS 文件 | 1807 |
 | `services/` 文件 | 322 |
-| `modules/**` 文件 / 非空 context | 1202 / 17 |
+| `modules/**` 文件 / 非空 context | 1203 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -58,7 +58,7 @@
 | resource-catalog / composition | 34 |
 | development-automation / domain | 33 |
 | development-automation / infrastructure | 33 |
-| task-execution / domain | 30 |
+| task-execution / domain | 31 |
 | intent / application | 25 |
 | identity-access / application | 24 |
 | integration / infrastructure | 23 |

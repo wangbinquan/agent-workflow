@@ -1,10 +1,8 @@
 import {
-  emptyWorkflowSyncDiff,
   isTurnEngineWorkgroupTask,
   isWorkgroupTask,
   taskExecutionKind,
   type Task,
-  type WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
@@ -49,6 +47,7 @@ import type { TaskExecutionResourceAuthority } from '../application/ports/taskEx
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type { TaskRouteOperations } from '../public/taskRoutes'
 import { tasks as taskRows, type LegacySqliteTaskDatabase } from './legacySqliteTransportMechanisms'
+import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
 
 export interface SqliteTaskRouteOperationsDependencies {
   readonly db: LegacySqliteTaskDatabase
@@ -74,21 +73,6 @@ async function taskAccessRow(db: LegacySqliteTaskDatabase, taskId: string) {
     .where(eq(taskRows.id, taskId))
     .limit(1)
     .all()[0]
-}
-
-function notSyncable(task: Task, reason: WorkflowSyncPreview['reason']): WorkflowSyncPreview {
-  return {
-    syncable: false,
-    reason,
-    workflowId: task.workflowId,
-    workflowName: task.workflowName,
-    currentVersion: task.workflowVersion,
-    latestVersion: null,
-    differs: false,
-    invalid: false,
-    invalidIssues: [],
-    diff: emptyWorkflowSyncDiff(),
-  }
 }
 
 async function assertManualExecutionAllowed(
@@ -226,9 +210,9 @@ export function createSqliteTaskRouteOperations(
     async workflowSyncPreview(actor, taskId) {
       const task = await requiredTask(db, taskId)
       const workflow = await getWorkflow(db, task.workflowId)
-      if (workflow === null) return notSyncable(task, 'workflow-deleted')
+      if (workflow === null) return notSyncableWorkflowPreview(task, 'workflow-deleted')
       if (!(await canViewResource(db, actor, 'workflow', workflow))) {
-        return notSyncable(task, 'workflow-not-visible')
+        return notSyncableWorkflowPreview(task, 'workflow-not-visible')
       }
       return await computeWorkflowSyncPreview(
         db,

@@ -52,6 +52,11 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/branchTraceSnapshotReader',
+  // RFC-359 W8：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后落在 owner 的
+  // infrastructure（`services/execution/triggerPreflight.ts` 那个更省边的落位被
+  // `rfc349-provider-cutover` 的 databaseMechanismDependencies 判据按住：`services/` 面禁持
+  // `@/db/*` / drizzle）。与上一行的 branchTraceSnapshotReader 同形同命，随 W4-E 一起还清。
+  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight',
 ])
 
 function legacyDeepImports(units: readonly SourceUnit[]): string[] {

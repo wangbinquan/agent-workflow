@@ -1,10 +1,10 @@
 {
   "denominator": {
-    "backendFiles": 1806,
+    "backendFiles": 1807,
     "frontendFiles": 622,
     "legacyFiles": 604,
-    "moduleFiles": 1202,
-    "productionFiles": 2583,
+    "moduleFiles": 1203,
+    "productionFiles": 2584,
     "sharedFiles": 155,
     "symbolsIncludingFileRoots": 25033
   },
@@ -126186,6 +126186,30 @@
       "currentContext": "task-execution",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/workflowSyncPreview.ts#notSyncableWorkflowPreview",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "notSyncableWorkflowPreview",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/domain/wrapperExecution.ts",
       "id": "owner:packages/backend/src/modules/task-execution/domain/wrapperExecution.ts#$file",
       "removeAfterWave": null,
@@ -130975,18 +130999,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#notSyncable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "notSyncable",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#parseJson",
       "removeAfterWave": null,
       "status": "current-module",
@@ -132755,18 +132767,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSqliteTaskRouteOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts#notSyncable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "notSyncable",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -301099,5 +301099,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fc8f8f2debeebc631d6b3b44cc90a79b46e84ddb83609e440c9a1dbd6259a89f"
+  "sourceDigest": "sha256:27bb53c4f28a49a86aa302c541d462b4103a6a60f301ca503b5f7365d5114f9d"
 }

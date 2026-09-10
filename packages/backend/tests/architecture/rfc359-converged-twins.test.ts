@@ -128,6 +128,19 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
       `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,
     ],
   },
+  {
+    what: '「这个任务同步不了」的预览投影：理由是唯一变量，其余字段是该形态的常量',
+    fn: 'notSyncableWorkflowPreview',
+    definedIn: `${B}modules/task-execution/domain/workflowSyncPreview.ts`,
+    consumers: [
+      `${B}modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts`,
+      `${B}modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`,
+    ],
+    forkedFrom: [
+      `${B}modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts`,
+      `${B}modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`,
+    ],
+  },
 ]
 
 /** 函数形状的声明名：`function f` / `const f = () =>` / `const f = function` / 方法 `f() {}`。 */

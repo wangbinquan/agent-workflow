@@ -5757,3 +5757,46 @@ architecture-correct 的落位要 +6 边 / +5 例外 / +2 符号主，外加一�
 
 反过来说，这也意味着 permit 的 `why` 必须写足——它是这次交易的全部凭证。要写清：省边的落位是
 哪个、为什么不能用（点名那条守卫）、这些边随哪一波消失、单一性由谁把守。
+
+## 挑「哪些测试会被源码改动波及」不能按**文件名关键词**挑（2026-09-10 因此推红一次）
+
+已有一条老教训写着「落盘前只跑 `tests/architecture/` 不够，源码锁守卫散在 `tests/` 根下」。本轮
+照做了——按 `GUARD_FILE_NAME_PATTERN` 的关键词
+（`architecture|boundary|ratchet|lock|guard|invariants|preflight|callsite|extinction|interlock`）
+从 `tests/` 根下挑出 99 个文件跑，全绿，推上去仍然红了一格：
+`tests/rfc331-task-execution-topology.test.ts` 的 `REGISTERED_PREEXISTING_DEEP_IMPORTS` 账本。
+
+原因很简单：**那个文件名里一个关键词都没有**（"topology"不在表里）。关键词表是给
+`guard-manifest.json` 的登记面用的，不是「会被源码改动波及的测试」的全集——后者大得多。
+
+可用的挑法（两条并集，实测 336 个文件、跑完约 8 分钟）：
+
+```bash
+cd packages/backend
+# ① 用 census 的语料 API 或自己解析 import 边的
+grep -rl "backendUnits(\|packageSrcUnits(\|importEdges(\|sourceUnit(" tests/*.test.ts | sort > c1
+# ② 自己拼 src/ 路径读文本的
+grep -rl "'\.\.', 'src'" tests/*.test.ts | sort > c2
+cat c1 c2 <(ls tests/architecture/*.test.ts) | sort -u > sweep
+split -l 20 sweep chunk-      # bun test 一次吃 99 个过滤器会全部匹配不上，必须分批
+for f in chunk-*; do bun test --isolate $(cat $f | tr '\n' ' '); done
+```
+
+两条注意：
+- **`--isolate` 必须带**（见本文件另一条）；
+- **分批**：`bun test` 把多个路径当过滤器，一次给上百个会出现「filters did not match any test files」
+  然后一个都不跑——它会 exit 0，看起来像跑过了。
+
+更省事的判据：**新增或移动 `src/` 下的文件**时，波及面按「谁扫源码树」算，不按「谁叫 guard」算。
+新增一条 legacy → 模块内部的 import 尤其要查三处账本：`commons-debt.json` 的 R1、
+`ledger-baselines.json` 的 `rfc294-cross-context-observed-imports`，以及
+`rfc331-preexisting-deep-imports`（**这条藏在 `tests/` 根下**）。
+
+## `ledger-baselines.json` 里只有 N1 系账本是 census 复算的，其余是**手维护种子**（2026-09-10 实撞）
+
+`projectGovernanceArtifacts`（`rfc294Canonical.ts`）只对 `n1LedgerSpecs(artifacts)` 里的条目重算
+`baseline`；不在那张表里的条目（例如 `rfc331-preexisting-deep-imports`）原样穿过。
+
+于是「改了守卫里的账本数组 → 跑一遍 census → 以为基线跟着走了」是错的：census 跑完 `baseline`
+还是旧值，而钉死它的守卫会红。**手改数组的同时要手改 `baseline`**，然后才轮到 `allowGrowth`
+（涨了才写，一次性）。判断某条是不是 N1：跑一次 census，看它的 `baseline` 有没有自己动。
