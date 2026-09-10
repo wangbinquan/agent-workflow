@@ -4429,7 +4429,15 @@ supersede。判据：**同时看 `cancelled`**，并算一下 `completedAt - sta
 
 **已做**：macOS backend 分片 **4 → 6**（`.github/workflows/ci.yml`）。处置方式照该文件自己立的
 规矩：「**add runners** instead of extending it or changing individual test timeouts」。
-六片把最长的一片压回 ~10 分钟量级。
+
+**后验实测**（`4aa21f8d2`，41/41 全绿）：六片耗时 **4.5 / 6.1 / 8.3 / 9.0 / 5.4 / 6.5** 分钟
+——最长的一片从预算的 **102%（被杀）降到 60%**。分片仍不均（4.5 vs 9.0，差一倍），
+但已经离天花板足够远。
+
+⚠️ **改分片数要同时改两条守卫**（2026-09-10 实撞，只改 ci.yml 推红过一次）：
+`root-test-entrypoint > CI matrices cover every declared test shard and supported OS` 与
+`rfc349-postgresql-hosted-evidence > every deleted regression lane still has its coverage owner`
+都按 exact 矩阵钉着分片数。
 
 **仍未处置**：套件还在长，这只是买了余量不是解决。真正的问题是**分片不均**——
 按文件路径切，慢文件（起真 daemon、跑真子进程的那些）会成堆落在同一片。
