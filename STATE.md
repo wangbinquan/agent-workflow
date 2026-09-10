@@ -2,6 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **修 `f2b31a4b3` 的红：hook 里做真 I/O 必须显式给超时（2026-09-11）**：新写的 PG 测试在 `beforeAll` 里建两个库（terminate + drop + create ×2），本机 ~1.7s 全绿，CI 的 ubuntu 分片报一条 **`(unnamed)`** 失败、耗时 **5007.19ms**——恰好是 bun 的默认 hook 预算 5s，冷容器上建库慢得多。已给两个 hook 显式 60s（与本文件用例的 120s 同量级）。
+> 教训落 `docs/dev-gotchas.md`（本仓已有「扫全源码树的守卫要给超时」，hook 是同一类且更易漏，因为 `beforeAll(fn, timeout)` 的第二参数常被忘）。两个识别点：失败名是 **`(unnamed)`**（hook 超时没有用例名）、耗时**贴着 5000ms**。看到这个形状先查 hook，别去翻用例。
+
 > **修 `f6148edf3` 的红：改共享 harness 要按「谁断言 harness」找波及面（2026-09-11）**：加两个生命周期阶段后红在 `rfc359-w39-provider-harness-lifecycle-diagnostics`——它把 harness 的 `registerPostgresql`/`initializeDatabases` **源码抽出来求值**、逐条钉 `calls` 序列。它同时躲过我今天用的另外两条挑法（文件名无守卫关键词、不扫 `src/` 语料）。已给它补 `acquirePostgresqlFileLock` 的记账替身，并把新顺序**显式钉进**三处序列断言：`file.lock` 必须在任何 DDL 之前、`file.unlock` 必须在 `runtime.close` 之后——那个顺序就是这把锁全部的价值。
 > **正确挑法已落 `docs/dev-gotchas.md`**：`grep -rln "helpers/eachProvider" tests/**` 再筛断言 harness 内部符号的，实测 16 文件 / 178 用例（含求值型守卫、清理契约守卫、注册面守卫）；只 import `describeEachProvider` 的普通双引擎测试不在此列——它们消费 harness，不断言 harness。推论：`tests/helpers/**` 是**被测试钉着的生产面**，改它要按改生产代码的规格找波及面。另落一条：PG-only 测试要跟着 `AW_TEST_PROVIDERS` 走，别照抄「缺库即红」（本地 `AW_TEST_PROVIDERS=sqlite` 应当全 skip 零 fail，落盘前跑这一条比等 macOS 分片便宜）。
 

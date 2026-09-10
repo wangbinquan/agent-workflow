@@ -87,6 +87,11 @@ const configured = BASE_URL !== undefined && BASE_URL.length > 0
 const suite = postgresqlSelected ? describe : describe.skip
 
 suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
+  // hook 里是真 I/O（建两个库 + 踢连接），bun 的默认 hook 预算是 **5s**——CI 的冷容器上不够，
+  // 实撞：`f2b31a4b3` 的 ubuntu 分片 3/8 报一条 `(unnamed)` 失败、耗时恰好 5007ms。
+  // 与本文件各用例的 120s 同一量级，给 60s。
+  const HOOK_TIMEOUT_MS = 60_000
+
   beforeAll(async () => {
     if (!configured) return
     await admin(async (sql) => {
@@ -102,7 +107,7 @@ suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
         await sql.unsafe(`create database ${name}`)
       }
     })
-  })
+  }, HOOK_TIMEOUT_MS)
 
   afterAll(async () => {
     if (!configured) return
@@ -116,7 +121,7 @@ suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
         await sql.unsafe(`drop database if exists ${name}`)
       }
     })
-  })
+  }, HOOK_TIMEOUT_MS)
 
   // 设计上的硬判据：缺库即红，不是 skip（与 `describeEachProvider` 同一条纪律）。
   test('PostgreSQL 未配置——本条锁的是 PG 专属机制，缺库即红', () => {

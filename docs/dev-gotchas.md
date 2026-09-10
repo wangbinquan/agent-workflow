@@ -5923,3 +5923,22 @@ const suite = postgresqlSelected ? describe : describe.skip
 
 判据：本地 `AW_TEST_PROVIDERS=sqlite bun test <file>` 应当是「全 skip、零 fail」，
 而不是报缺库。落盘前跑这一条，比等 macOS 分片告诉你便宜得多。
+
+## `beforeAll` / `afterAll` 里做真 I/O 必须显式给超时——bun 的默认 hook 预算是 **5s**（2026-09-11 推红一格）
+
+本文件已有一条「扫全源码树的守卫用例要显式给超时」；**hook 是同一类，而且更容易漏**，因为
+`test(..., timeout)` 的写法人人记得，`beforeAll(fn, timeout)` 的第二参数常被忘掉。
+
+实撞：新写的 PG 测试在 `beforeAll` 里建两个库（`pg_terminate_backend` + `drop` + `create` ×2），
+本机 ~1.7s 全绿，CI 的 ubuntu 分片报一条 **`(unnamed)`** 失败、耗时 **5007.19ms**——
+恰好是 bun 的默认 hook 预算。冷容器上建库比本机慢得多。
+
+两个识别点：
+
+- 失败名是 **`(unnamed)`**：hook 超时没有用例名，只有 describe 名 + `(unnamed)`。看到这个形状
+  先查 hook，别去翻用例。
+- 耗时**贴着 5000ms**（5007 / 5003 …）：那不是巧合，是默认预算。
+
+**规矩**：hook 里只要有网络 / 建库 / 起进程 / 落盘，一律显式给预算，量级与本文件用例的
+`timeout` 对齐（例如用例 120s，hook 给 60s）。本机跑得快**不构成**不给的理由——
+CI 的冷容器与共享 runner 就是慢那一档。
