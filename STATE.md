@@ -2,6 +2,30 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ## 🔜 RFC-359 下一刀该做什么（2026-09-11 交接，按「先做哪个」排序）
+>
+> 干净基线：**`ca0c200fe` CI 42/42 全绿、零失败**。40P01 死锁已由文件级 advisory lock 止住。
+> 下面四件都是**结构性一刀**（各自一个批次），不要混在一次提交里：
+>
+> 1. **harness 每文件一库**（同时解锁 AC-1 最后一对）。选型与成本已量完（`docs/audit-backlog.md`：
+>    迁移开销不是增量、`CREATE DATABASE` ~83ms、锁按库隔离）。要动的是
+>    `closePostgresqlHarnessDatabases` 的契约——清理现在是「用主库连接 drop 附加库」，主库变成
+>    一次性库后要改成用 base URL 开管理连接；那条契约由整个 `rfc359-w12-provider-cleanup.test.ts`
+>    钉着。**做完 AC-1 就能收口**（迁移器要在隔离库上被驱动才能拿到对拍见证，见 plan §5m）。
+> 2. **AC-12 provider 命名债**：账本 `PROVIDER_NAMED_FILE_DEBT` 现 59 条，其中 40 条无孪生。
+>    但「无孪生」≠「命名债」——登记在册的机制分叉要**保留** provider 名（AC-12 修订条款）。
+>    需要逐条判定：死代码删、命名债改名、登记分叉留。改名是高 churn（路径钉死的守卫多），
+>    建议一次只动一个 context。
+> 3. **AC-6 双库覆盖迁移**：仍有大量行为用例直接建 SQLite 内存库。这是最大的一块。
+> 4. **重复 burn-down 剩 15 组**（机械扫描器见 plan §5k）。下一个靶心是
+>    `services/capabilityTemplates.ts`（506 行）↔ `code-capability/application/capabilityTemplateOperations.ts`
+>    （388 行）——**同一域的两套实现**，共享 `rowFromInput` / `mergeableSnapshot` / `digest` 等一批
+>    重复助手，legacy 只有一个消费者（`services/bundle/legacyResourcePackageMutationDependencies.ts`）。
+>    正解是把那个消费者迁到模块 API 再删 legacy，不是逐个收助手。
+>
+> **动手前先读 `docs/dev-gotchas.md` 的三条波及面挑法**（改 src / 改 tests/helpers / 新增测试文件，
+> 三条互不覆盖）——本轮连推四次红全是因为挑法不覆盖下一批。
+
 > **修 `23b19d46b` 的红：新增测试文件撞上「枚举测试文件」的政策守卫（2026-09-11）**：`describe.skip` 触发 `test-suite-policy` 的「每一处 skip 都必须登记」，连带 `test-suite-allowed-skips` 计数 44 → 45（手维护基线，已手改 + 一次性 permit）。已按既有先例 `rfc359-w6-t26-postgresql-plan-audit.test.ts#skip` 同形登记并写清理由。
 > **第三条挑法落档**：本仓现在有三条互不覆盖的波及面挑法——改 `src/` 按「谁扫源码语料」、改 `tests/helpers/**` 按「谁断言 harness」、**新增测试文件按「谁枚举 tests/」**（实测 21 文件 / 453 用例，含 skip 政策、守卫清单两向钉死、语料下限、负 fixture）。本轮连推三次红正是因为新文件同时命中三批。三条 grep 都已写进 `docs/dev-gotchas.md`，新增测试文件后并起来跑一遍即可。
 
