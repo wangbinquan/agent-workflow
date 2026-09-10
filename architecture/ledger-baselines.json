@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5335,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-11：评审徽标原本打三次串行往返（主 join → 查可见性 → 查指派），在 PostgreSQL 上每段都是真实 RTT（实测 SQLite 1.80ms / PG 7.33ms，差值 ≈ 3×RTT 且不随行数放大）。折成一条语句需要一个被两处调用的共享可见性片段，落在 `db/query.ts` 这条平台词汇线上；两个消费方的 `import type` 因此变成**值 import**，加上 `db/query → db/schema` 的值边，共 +2 条 import 边与 +3 个符号所有者。这是**新增共享函数的固有增长**，不是新的耦合面：可见性规则的唯一定义仍是这一个函数，`taskAuthorization.visibleIds` 也调它。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -836,10 +833,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4802,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-11：评审徽标原本打三次串行往返（主 join → 查可见性 → 查指派），在 PostgreSQL 上每段都是真实 RTT（实测 SQLite 1.80ms / PG 7.33ms，差值 ≈ 3×RTT 且不随行数放大）。折成一条语句需要一个被两处调用的共享可见性片段，落在 `db/query.ts` 这条平台词汇线上；两个消费方的 `import type` 因此变成**值 import**，加上 `db/query → db/schema` 的值边，共 +2 条 import 边与 +3 个符号所有者。这是**新增共享函数的固有增长**，不是新的耦合面：可见性规则的唯一定义仍是这一个函数，`taskAuthorization.visibleIds` 也调它。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -874,10 +868,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25067,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-359 AC-11：评审徽标原本打三次串行往返（主 join → 查可见性 → 查指派），在 PostgreSQL 上每段都是真实 RTT（实测 SQLite 1.80ms / PG 7.33ms，差值 ≈ 3×RTT 且不随行数放大）。折成一条语句需要一个被两处调用的共享可见性片段，落在 `db/query.ts` 这条平台词汇线上；两个消费方的 `import type` 因此变成**值 import**，加上 `db/query → db/schema` 的值边，共 +2 条 import 边与 +3 个符号所有者。这是**新增共享函数的固有增长**，不是新的耦合面：可见性规则的唯一定义仍是这一个函数，`taskAuthorization.visibleIds` 也调它。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -894,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a0156abcce655b1602165a51d877af5038e54cb6",
-    "contentDigest": "sha256:fbd69f6362b07d35c66578129b8e2661eb25b218850f65856afecd0b523ec53d",
+    "currentSnapshotSha": "5385c4a12eaa10a26afcab367e4fe3a2770756e7",
+    "contentDigest": "sha256:92399a6ec30227772d7a4c7933d7ff85f0a909556edc5f31ce7832d89c8386c4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
