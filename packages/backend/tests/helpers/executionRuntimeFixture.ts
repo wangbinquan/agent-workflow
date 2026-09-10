@@ -1,4 +1,4 @@
-import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
 
 export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
@@ -9,7 +9,7 @@ export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
  * `runtime ?? defaultRuntime ?? "opencode"` path while making that default
  * product-valid.
  */
-export async function seedTestDefaultOpencodeRuntime(db: DbClient): Promise<void> {
+export async function seedTestDefaultOpencodeRuntime(db: ProviderNeutralDatabase): Promise<void> {
   const runtimeRegistry = composeSqliteRuntimeRegistryOperations(db)
   const existing = await runtimeRegistry.getRuntime('opencode')
   if (existing === null) {

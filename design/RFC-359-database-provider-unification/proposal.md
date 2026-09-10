@@ -1,7 +1,7 @@
 # RFC-359 — 数据库 provider 统一抽象：一份实现，provider 只存在于客户端
 
 - 状态：**In Progress（2026-09-04 已批准；2026-09-08 W12 接续）**
-- W12 第五十批：13个旧测试文件的68个原功能声明（原循环展开72例）接默认双库；98个原声明与273个完整matcher保留，未选30例/75 matcher保持原调用，选定68例保留198个matcher和原预算。catalog decoder共享，生产净减6行；原/后纯例各1/35、16完整观测一致，原十个展开例保持。16个core一次完整backend tsc通过；其后仅补回原9行注释，完整Bun/TypeScript输出同字节，复用编译结果。功能metadata先发现账本基线688未随源码685下降，精确修正后221 pass/452 expect；canonical 13 pass/55 expect及严格lint/format通过。1962测试文件、602构库文件/1182调用，无harness545→532、有harness485→498；T19f对应三文件归零退役，账本688→685。W49 exactbb2127ad Main34417055489终态38 success/2 failure，13个后端与普通lint全部通过；主1580/1580、新增241/241、独立2/2及原hook18/18全部实过，两个OS各1962原生文件无遗漏/重复。完整Main仍未绿，两个非后端失败只记录任务元数据。W49同SHA原full34417550874仅派发一次，仍在运行；最近已完成的原full仍为W39，六个PG端点较慢、overview13.222187ms超10ms。AC-1/6/8/9/11/12继续开放。
+- W12 第五十一批：16个旧测试文件保留186个原声明/549个完整matcher，其中114例/329 matcher接默认双库，72例/220 matcher保留原行为与预算。1962测试文件，直接构库596文件/1165调用，无harness532→516、有harness498→514；T19f及对应账本685→679。W50 exact50b062d034bfe677b96d206edcbd3593c6a3b590 Main34420342896终态38 success/2 failure，13个后端与普通lint全部通过；重点1798/1798、本批新增218/218、另2/2与原hook18/18通过。两OS各1962原生文件无遗漏/重复；完整Main仍未绿，两个非后端失败仅记录任务元数据。W49 exactbb2127ad07e5c227b13f776e41e75cc1d0c6dd08 原full34417550874已终态失败：九端点两库均满足原绝对预算，六端点PG仍较慢。overview SQLite/PG为5.676210/8.656728ms，PG已满足原10ms绝对预算；严格相对P95条件尚未满足。 W51清理作用域修复及最终backend编译通过，新SHA真实行为待托管。AC-1/6/8/9/11/12继续开放。
 - 立项事实快照：`01e4b1b7b`；当前逐项验收与发布证据见 `plan.md` §0b/§0c
 - 前置事实源：[`design/dual-provider-parity-audit-2026-09-04.md`](../dual-provider-parity-audit-2026-09-04.md)（153 对配对适配器 + 163 个无配对 PG 面文件的全量对账）
 - 依赖：RFC-093（`dbTxSync` 原语）、RFC-349（provider 抽象与 schema contract 地基）、RFC-351（SQLite 写事务一律预占 writer）、RFC-357（读面归一的可行性证明）

@@ -11,12 +11,14 @@
 //   K3 lossy collision is NOT adopted: a row whose legacy key matches but
 //      whose url is a DIFFERENT repo under the new canonicalization stays
 //      untouched; the request cold-clones its own mirror.
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readdirSync } from 'node:fs'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { eq } from 'drizzle-orm'
 import {
@@ -24,18 +26,16 @@ import {
   gitUrlLegacyFileCacheKeyWith,
   parseGitUrl,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { runGit } from '../src/util/git'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const sha1 = (s: string) => createHash('sha1').update(s).digest('hex')
 const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 19))
 
-let db: DbClient
 let tmp: string
 let appHome: string
 
@@ -61,7 +61,6 @@ setDefaultTimeout(60_000)
 
 describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
     // The fixture prefix MUST contain an uppercase letter: when the repo path
     // happens to be all-lowercase (a ~4% all-[a-z0-9] mkdtemp suffix draw on
     // /tmp), the NEW canonicalization equals the LEGACY one for a `.git`-less
@@ -85,6 +84,22 @@ describe('RFC-165 T4 — file cache key v2 + verified lazy re-key', () => {
     expect(gitUrlLegacyFileCacheKeyWith(c, sha1)!.hash).toBe(la)
     // Non-file URLs have no legacy form.
     expect(gitUrlLegacyFileCacheKeyWith(parseGitUrl('https://x/a.git')!, sha1)).toBe(null)
+  })
+})
+
+describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', (harness) => {
+  let db: ProviderNeutralDatabase
+
+  beforeEach(() => {
+    db = harness.db
+    // The fixture prefix MUST contain an uppercase letter: when the repo path
+    // happens to be all-lowercase (a ~4% all-[a-z0-9] mkdtemp suffix draw on
+    // /tmp), the NEW canonicalization equals the LEGACY one for a `.git`-less
+    // name, the two hashes collapse, and K2's distinct-hash premise / K3's
+    // downgraded-row setup silently break (2026-07-11 CI: K2 then K3 red on
+    // ubuntu, unreproducible locally). Uppercase in the path pins new ≠ legacy.
+    tmp = mkdtempSync(join(tmpdir(), 'aw-RFC165-Key-'))
+    appHome = mkdtempSync(join(tmpdir(), 'aw-RFC165-KeyHome-'))
   })
 
   test('K2 pre-165 row is verified + re-keyed in place — no second clone', async () => {

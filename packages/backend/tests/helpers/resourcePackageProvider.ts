@@ -1,4 +1,5 @@
 import type { DbClient } from '../../src/db/client'
+import type { ProviderNeutralDatabase } from '../../src/db/query'
 import type { SecretBox } from '../../src/auth/secretBox'
 import {
   composeResourcePackageOperations,
@@ -37,7 +38,7 @@ export function composeSqliteResourcePackageCatalogForTest(input: {
 
 /** Test-only SQLite binding for the provider-neutral package closure. */
 export function walkExportClosure(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: ClosureParameters[1],
   root: ClosureParameters[2],
 ): ReturnType<typeof walkExportClosureFromReadPort> {
@@ -46,7 +47,7 @@ export function walkExportClosure(
 
 /** Test-only SQLite binding for provider-neutral package preview. */
 export function buildPackagePreview(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: PreviewParameters[1],
   pkg: PreviewParameters[2],
   options: PreviewParameters[3],
@@ -56,7 +57,7 @@ export function buildPackagePreview(
 
 /** Test-only SQLite/filesystem binding for provider-neutral package export. */
 export function exportResourcePackage(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   actor: ExportParameters[2],
   root: ExportParameters[3],
   options: ExportParameters[4] & Readonly<{ appHome: string }>,

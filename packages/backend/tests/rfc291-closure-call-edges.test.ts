@@ -21,12 +21,11 @@ import { agents, users, workflows, workgroups, workgroupMembers } from '../src/d
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { freezeCallClosure, parseCallClosure } from '../src/services/execution/closure'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291d_000000'
-
-let db: DbClient
-let appHome: string
 
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
@@ -34,71 +33,7 @@ const actor: Actor = {
   permissions: new Set(['resource-acl:private']),
 }
 
-async function seedAgent(name: string): Promise<string> {
-  const id = ulid()
-  const now = Date.now()
-  await db.insert(agents).values({
-    id,
-    name,
-    description: name,
-    outputs: JSON.stringify(['out']),
-    ownerUserId: OWNER,
-    visibility: 'private',
-    createdAt: now,
-    updatedAt: now,
-  } as typeof agents.$inferInsert)
-  return id
-}
-
 /** A workflow row; `id` can be forced so ULID ordering (= age) is testable. */
-async function seedWorkflow(
-  name: string,
-  definition: Record<string, unknown>,
-  forcedId?: string,
-): Promise<string> {
-  const id = forcedId ?? ulid()
-  const now = Date.now()
-  await db.insert(workflows).values({
-    id,
-    name,
-    description: '',
-    definition: JSON.stringify(definition),
-    version: 1,
-    ownerUserId: OWNER,
-    visibility: 'private',
-    createdAt: now,
-    updatedAt: now,
-  } as typeof workflows.$inferInsert)
-  return id
-}
-
-async function seedWorkgroup(name: string, agentId: string): Promise<string> {
-  const id = ulid()
-  const now = Date.now()
-  await db.insert(workgroups).values({
-    id,
-    name,
-    description: '',
-    instructions: 'work',
-    mode: 'leader_worker',
-    version: 1,
-    ownerUserId: OWNER,
-    visibility: 'private',
-    createdAt: now,
-    updatedAt: now,
-  } as typeof workgroups.$inferInsert)
-  await db.insert(workgroupMembers).values({
-    id: ulid(),
-    workgroupId: id,
-    memberType: 'agent',
-    agentId,
-    displayName: 'lead',
-    roleDesc: '',
-    position: 0,
-    createdAt: now,
-  } as typeof workgroupMembers.$inferInsert)
-  return id
-}
 
 const agentNode = (nodeId: string, agentId: string) => ({
   id: nodeId,
@@ -120,12 +55,13 @@ const callWorkgroupNode = (nodeId: string, workgroupName: string) => ({
 })
 const defOf = (nodes: unknown[]) => ({ $schema_version: 4, inputs: [], nodes, edges: [] })
 
-const dumpMounting = (resourceType: 'workflow', resourceId: string) =>
-  buildIntentDump({ db, actor, appHome, mounts: [{ resourceType, resourceId }] })
-
-beforeEach(async () => {
-  appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-d-'))
-  db = createInMemoryDb(MIGRATIONS)
+async function createFixture<TDb extends ProviderNeutralDatabase>(
+  createDatabase: () => TDb,
+  onHome?: (appHome: string) => void,
+) {
+  const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc291-d-'))
+  onHome?.(appHome)
+  const db = createDatabase()
   await db.insert(users).values({
     id: OWNER,
     username: 'owner',
@@ -135,12 +71,141 @@ beforeEach(async () => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   } as typeof users.$inferInsert)
-})
-afterEach(() => {
-  rmSync(appHome, { recursive: true, force: true })
-})
 
-describe('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', () => {
+  async function seedAgent(name: string): Promise<string> {
+    const id = ulid()
+    const now = Date.now()
+    await db.insert(agents).values({
+      id,
+      name,
+      description: name,
+      outputs: JSON.stringify(['out']),
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: now,
+      updatedAt: now,
+    } as typeof agents.$inferInsert)
+    return id
+  }
+
+  async function seedWorkflow(
+    name: string,
+    definition: Record<string, unknown>,
+    forcedId?: string,
+  ): Promise<string> {
+    const id = forcedId ?? ulid()
+    const now = Date.now()
+    await db.insert(workflows).values({
+      id,
+      name,
+      description: '',
+      definition: JSON.stringify(definition),
+      version: 1,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: now,
+      updatedAt: now,
+    } as typeof workflows.$inferInsert)
+    return id
+  }
+
+  async function seedWorkgroup(name: string, agentId: string): Promise<string> {
+    const id = ulid()
+    const now = Date.now()
+    await db.insert(workgroups).values({
+      id,
+      name,
+      description: '',
+      instructions: 'work',
+      mode: 'leader_worker',
+      version: 1,
+      ownerUserId: OWNER,
+      visibility: 'private',
+      createdAt: now,
+      updatedAt: now,
+    } as typeof workgroups.$inferInsert)
+    await db.insert(workgroupMembers).values({
+      id: ulid(),
+      workgroupId: id,
+      memberType: 'agent',
+      agentId,
+      displayName: 'lead',
+      roleDesc: '',
+      position: 0,
+      createdAt: now,
+    } as typeof workgroupMembers.$inferInsert)
+    return id
+  }
+
+  const dumpMounting = (resourceType: 'workflow', resourceId: string) =>
+    buildIntentDump({ db, actor, appHome, mounts: [{ resourceType, resourceId }] })
+
+  return { db, appHome, seedAgent, seedWorkflow, seedWorkgroup, dumpMounting }
+}
+
+type Fixture<TDb extends ProviderNeutralDatabase> = Awaited<ReturnType<typeof createFixture<TDb>>>
+
+let db: Fixture<DbClient>['db']
+let appHome: Fixture<DbClient>['appHome']
+let seedWorkflow: Fixture<DbClient>['seedWorkflow']
+let dumpMounting: Fixture<DbClient>['dumpMounting']
+
+function registerNativeCases(name: string, register: () => void): void {
+  describe(name, () => {
+    beforeEach(async () => {
+      const fixture = await createFixture(
+        () => {
+          db = createInMemoryDb(MIGRATIONS)
+          return db
+        },
+        (home) => {
+          appHome = home
+        },
+      )
+      ;({ db, appHome, seedWorkflow, dumpMounting } = fixture)
+    })
+    afterEach(() => {
+      rmSync(appHome, { recursive: true, force: true })
+    })
+    register()
+  })
+}
+
+function registerProviderCases(
+  name: string,
+  register: (useFixture: () => Fixture<ProviderNeutralDatabase>) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('fixture lifetime', () => {
+      let fixture: Fixture<ProviderNeutralDatabase> | undefined
+      const homes: string[] = []
+      beforeEach(async () => {
+        fixture = await createFixture(
+          () => harness.db,
+          (home) => homes.push(home),
+        )
+      })
+      afterEach(() => {
+        fixture = undefined
+        for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
+      })
+      register(() => {
+        if (fixture === undefined) throw new Error('provider fixture not initialized')
+        return fixture
+      })
+    })
+  })
+}
+
+registerProviderCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', (useFixture) => {
+  let seedAgent: Fixture<ProviderNeutralDatabase>['seedAgent']
+  let seedWorkflow: Fixture<ProviderNeutralDatabase>['seedWorkflow']
+  let seedWorkgroup: Fixture<ProviderNeutralDatabase>['seedWorkgroup']
+  let dumpMounting: Fixture<ProviderNeutralDatabase>['dumpMounting']
+  beforeEach(() => {
+    ;({ seedAgent, seedWorkflow, seedWorkgroup, dumpMounting } = useFixture())
+  })
+
   test('父工作流 call 子工作流 → 子工作流进 mounted/ 详情，可作 update 目标', async () => {
     const childAgent = await seedAgent('child-agent')
     const child = await seedWorkflow('child-flow', defOf([agentNode('n1', childAgent)]))
@@ -188,7 +253,9 @@ describe('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', () =>
     expect(dump.manifest.find((e) => e.resourceId === b)?.detail).toBe(true)
     expect(dump.manifest.filter((e) => e.resourceId === a)).toHaveLength(1)
   })
+})
 
+registerNativeCases('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', () => {
   test('call 目标不存在 → 计入 hiddenDependencies，不抛错、不泄漏名字（AC-15）', async () => {
     const parent = await seedWorkflow('parent-flow', defOf([callWorkflowNode('c1', 'ghost-flow')]))
     const dump = await dumpMounting('workflow', parent)
@@ -198,7 +265,7 @@ describe('call-workflow / call-workgroup 进入闭包（AC-12 / AC-13）', () =>
   })
 })
 
-describe('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）', () => {
+registerNativeCases('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）', () => {
   test('同名两行 + id 缓存指向较新那个 → 两侧选出同一行', async () => {
     // 名字不唯一是合法状态；缓存记录了用户在下拉里的选择。
     // 较老的那行只需存在（制造同名歧义），测试断言的是「没被选中」
@@ -247,7 +314,14 @@ describe('freeze / dump 同解（AC-14，同一份 DB 夹具对拍）', () => {
   })
 })
 
-describe('复杂度与收口（AC-16 / 设计门 P2-c）', () => {
+registerProviderCases('复杂度与收口（AC-16 / 设计门 P2-c）', (useFixture) => {
+  let db: Fixture<ProviderNeutralDatabase>['db']
+  let appHome: Fixture<ProviderNeutralDatabase>['appHome']
+  let seedWorkflow: Fixture<ProviderNeutralDatabase>['seedWorkflow']
+  beforeEach(() => {
+    ;({ db, appHome, seedWorkflow } = useFixture())
+  })
+
   test('多根共享同一子图：邻接展开被 memo 复用，结果仍正确', async () => {
     const shared = await seedWorkflow('shared-flow', defOf([]))
     const roots: string[] = []
@@ -268,7 +342,9 @@ describe('复杂度与收口（AC-16 / 设计门 P2-c）', () => {
       expect(dump.manifest.find((e) => e.resourceId === r)?.root).toBe(true)
     }
   })
+})
 
+registerNativeCases('复杂度与收口（AC-16 / 设计门 P2-c）', () => {
   test('闭包展开不再手写 agent 节点 walker（AC-16 口径已收窄）', () => {
     const src = readFileSync(
       join(import.meta.dir, '..', 'src', 'modules', 'intent', 'application', 'dumpBuilder.ts'),

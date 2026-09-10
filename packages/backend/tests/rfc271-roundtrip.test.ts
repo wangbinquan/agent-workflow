@@ -21,7 +21,7 @@
 // 覆盖验收条款：AC-5（技能带整棵文件树）/ AC-9（builtin 不入 resources，只入 builtins 声明）/ AC-19（工作组人类席位逐个显式映射，无按 username 自动绑定）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,6 +49,8 @@ import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
@@ -66,9 +68,13 @@ const actorOf = (id: string, permissions: readonly string[] = SESSION_PERMISSION
   }) as unknown as Actor
 
 /** 一个「实例」= 一个 DB + 一个 app home。往返要跨两个实例才有意义。 */
-async function makeInstance(): Promise<{ db: DbClient; appHome: string }> {
-  const db = createInMemoryDb(MIGRATIONS)
+async function createInstance<TDb extends ProviderNeutralDatabase>(
+  createDatabase: () => TDb,
+  onHome?: (appHome: string) => void,
+): Promise<{ db: TDb; appHome: string }> {
+  const db = createDatabase()
   const appHome = mkdtempSync(join(tmpdir(), 'rfc271-rt-'))
+  onHome?.(appHome)
   await db.insert(users).values({
     id: 'u1',
     username: 'alice',
@@ -82,10 +88,17 @@ async function makeInstance(): Promise<{ db: DbClient; appHome: string }> {
   return { db, appHome }
 }
 
+async function makeInstance(): Promise<{ db: DbClient; appHome: string }> {
+  return createInstance(() => createInMemoryDb(MIGRATIONS))
+}
+
 // 二进制辅助文件：utf-8 解码会破坏它，所以它同时锁住「字节原样」。
 const BINARY = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x01])
 
-async function seedSource(db: DbClient, appHome: string): Promise<{ skillId: string; wg: string }> {
+async function seedSource(
+  db: ProviderNeutralDatabase,
+  appHome: string,
+): Promise<{ skillId: string; wg: string }> {
   const skill = await createManagedSkillWithFiles(
     db,
     { appHome },
@@ -196,6 +209,35 @@ async function seedSource(db: DbClient, appHome: string): Promise<{ skillId: str
   ] as never)
 
   return { skillId: skill.id, wg }
+}
+
+function registerProviderInstanceCase(
+  name: string,
+  databaseCount: number,
+  register: (makeInstance: () => Promise<{ db: ProviderNeutralDatabase; appHome: string }>) => void,
+): void {
+  describeEachProvider(
+    name,
+    (harness) => {
+      describe('instance lifetime', () => {
+        let nextDatabase = 0
+        const homes: string[] = []
+        beforeEach(() => {
+          nextDatabase = 0
+        })
+        afterEach(() => {
+          for (const home of homes.splice(0)) removeTempDirSync(home)
+        })
+        register(() =>
+          createInstance(
+            () => harness.database(nextDatabase++).db,
+            (home) => homes.push(home),
+          ),
+        )
+      })
+    },
+    { databaseCount },
+  )
 }
 
 describe('R0 · 真 DB 往返：导出 → 导入，内容必须对得上', () => {
@@ -445,77 +487,67 @@ describe('R0 · 写权限（用户规则：令牌有写权限才能导入，和�
 })
 
 describe('R0 · 导出产物与源系统 id 无关（导入后由新实例重建 id）', () => {
-  test('完整闭包导出：bundle.json 里既无 `external:` 也无任何源 ULID', async () => {
-    // 这是包能跨实例搬运的**前提**：包内身份只用 `local:<slug>`，源库的 ULID 在另一
-    // 台机器上没有任何意义。
-    //
-    // ⚠️ 守的是一条**静默**失败：`refWire` 在「引用不在闭包里」时会退回
-    // `external:<源 id>`（serialize.ts）。闭包完整时它永远走不到，可一旦
-    // `directRefsOf` 将来漏掉某类引用出边，导出就会**不报错地**产出一个带源库 id
-    // 的包——导入侧解析那个 id 要么失败、要么撞上同 id 的无关资源。
-    const src = await makeInstance()
-    const { skillId, wg } = await seedSource(src.db, src.appHome)
-    try {
-      const agentRow = src.db.select().from(agents).where(eq(agents.name, 'auditor')).get()
-      const wfRow = { id: wg } // workgroup 也走同一条断言
-      for (const root of [
-        { type: 'agent' as const, id: agentRow!.id },
-        { type: 'skill' as const, id: skillId },
-        { type: 'workgroup' as const, id: wfRow.id },
-      ]) {
-        const pkg = await exportResourcePackage(src.db, actorOf('u1'), root, {
-          appHome: src.appHome,
-        })
-        // ⚠️ 扫**整个 zip**，不是只扫 bundle.json。第一版只查 bundle.json，于是
-        // `manifest.danglingCallRefs[].from` 里泄漏的源 ULID 完全没被发现。
-        const whole = decodeZip(pkg.zip)
-          .map((e) => `${e.path}\n${new TextDecoder().decode(e.bytes())}`)
-          .join('\n')
-        expect({ root: root.type, hasExternal: whole.includes('external:') }).toEqual({
-          root: root.type,
-          hasExternal: false,
-        })
-        // ⚠️ 枚举**六类**资源的源 id，不是只枚举 agents。第一版只查 agents 表，
-        // 工作流 / 技能 / MCP / 工作组的 id 泄漏一律看不见。
-        const sourceIds = [
-          ...src.db
+  registerProviderInstanceCase(
+    '完整闭包导出：bundle.json 里既无 `external:` 也无任何源 ULID',
+    1,
+    (makeInstance) => {
+      test('完整闭包导出：bundle.json 里既无 `external:` 也无任何源 ULID', async () => {
+        // 这是包能跨实例搬运的**前提**：包内身份只用 `local:<slug>`，源库的 ULID 在另一
+        // 台机器上没有任何意义。
+        //
+        // ⚠️ 守的是一条**静默**失败：`refWire` 在「引用不在闭包里」时会退回
+        // `external:<源 id>`（serialize.ts）。闭包完整时它永远走不到，可一旦
+        // `directRefsOf` 将来漏掉某类引用出边，导出就会**不报错地**产出一个带源库 id
+        // 的包——导入侧解析那个 id 要么失败、要么撞上同 id 的无关资源。
+        const src = await makeInstance()
+        const { skillId, wg } = await seedSource(src.db, src.appHome)
+        try {
+          const agentRow = await src.db
             .select()
             .from(agents)
-            .all()
-            .map((r) => r.id),
-          ...src.db
-            .select()
-            .from(workflows)
-            .all()
-            .map((r) => r.id),
-          ...src.db
-            .select()
-            .from(skills)
-            .all()
-            .map((r) => r.id),
-          ...src.db
-            .select()
-            .from(mcps)
-            .all()
-            .map((r) => r.id),
-          ...src.db
-            .select()
-            .from(workgroups)
-            .all()
-            .map((r) => r.id),
-        ]
-        for (const id of sourceIds) {
-          expect({ root: root.type, id, leaked: whole.includes(id) }).toEqual({
-            root: root.type,
-            id,
-            leaked: false,
-          })
+            .where(eq(agents.name, 'auditor'))
+            .get()
+          const wfRow = { id: wg } // workgroup 也走同一条断言
+          for (const root of [
+            { type: 'agent' as const, id: agentRow!.id },
+            { type: 'skill' as const, id: skillId },
+            { type: 'workgroup' as const, id: wfRow.id },
+          ]) {
+            const pkg = await exportResourcePackage(src.db, actorOf('u1'), root, {
+              appHome: src.appHome,
+            })
+            // ⚠️ 扫**整个 zip**，不是只扫 bundle.json。第一版只查 bundle.json，于是
+            // `manifest.danglingCallRefs[].from` 里泄漏的源 ULID 完全没被发现。
+            const whole = decodeZip(pkg.zip)
+              .map((e) => `${e.path}\n${new TextDecoder().decode(e.bytes())}`)
+              .join('\n')
+            expect({ root: root.type, hasExternal: whole.includes('external:') }).toEqual({
+              root: root.type,
+              hasExternal: false,
+            })
+            // ⚠️ 枚举**六类**资源的源 id，不是只枚举 agents。第一版只查 agents 表，
+            // 工作流 / 技能 / MCP / 工作组的 id 泄漏一律看不见。
+            const sourceIds = [
+              ...(await src.db.select().from(agents).all()).map((r) => r.id),
+              ...(await src.db.select().from(workflows).all()).map((r) => r.id),
+              ...(await src.db.select().from(skills).all()).map((r) => r.id),
+              ...(await src.db.select().from(mcps).all()).map((r) => r.id),
+              ...(await src.db.select().from(workgroups).all()).map((r) => r.id),
+            ]
+            for (const id of sourceIds) {
+              expect({ root: root.type, id, leaked: whole.includes(id) }).toEqual({
+                root: root.type,
+                id,
+                leaked: false,
+              })
+            }
+          }
+        } finally {
+          removeTempDirSync(src.appHome)
         }
-      }
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
+      })
+    },
+  )
   test('dangling call 目标：manifest 的 `from` 写包内 slug，不泄漏源 ULID', async () => {
     // 这是实现门实测到的泄漏点：`manifest.danglingCallRefs[].from` 直接写了
     // `callRefs.fromId`（源库 ULID）。而上面那条守卫的第一版只扫 bundle.json，
@@ -565,7 +597,7 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
   // 用户拍板的语义。反面是**复制一份**：对端会多出一个 owner 是导入者、
   // `builtin=false` 的同名副本，而真正的 built-in 仍在那儿 —— 两个同名资源共存，
   // 正好撞上运行时「执行闭包内不得同名」那条约束。
-  const seedBuiltin = async (db: DbClient): Promise<void> => {
+  const seedBuiltin = async (db: ProviderNeutralDatabase): Promise<void> => {
     await db.insert(agents).values({
       id: 'BUILTIN_AGENT',
       name: '__skill_merger__',
@@ -586,56 +618,62 @@ describe('Q6 · 框架 built-in：照常导出、标记出来、导入时自动�
     } as never)
   }
 
-  test('导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:', async () => {
-    const src = await makeInstance()
-    await seedBuiltin(src.db)
-    await src.db.insert(workflows).values({
-      id: 'WF',
-      name: 'mine',
-      description: '',
-      definition: JSON.stringify({
-        $schema_version: 4,
-        inputs: [],
-        edges: [],
-        nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'BUILTIN_AGENT' }],
-      }),
-      ownerUserId: 'u1',
-      visibility: 'private',
-      createdAt: 1,
-      updatedAt: 1,
-    } as never)
-    try {
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: 'WF' },
-        { appHome: src.appHome },
-      )
-      const entry = (p: string): string =>
-        new TextDecoder().decode(
-          decodeZip(pkg.zip)
-            .find((e) => e.path === p)!
-            .bytes(),
-        )
-      const bundle = entry('bundle.json')
-      const manifest = entry('manifest.yaml')
+  registerProviderInstanceCase(
+    '导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:',
+    1,
+    (makeInstance) => {
+      test('导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:', async () => {
+        const src = await makeInstance()
+        await seedBuiltin(src.db)
+        await src.db.insert(workflows).values({
+          id: 'WF',
+          name: 'mine',
+          description: '',
+          definition: JSON.stringify({
+            $schema_version: 4,
+            inputs: [],
+            edges: [],
+            nodes: [{ id: 'n1', kind: 'agent-single', agentId: 'BUILTIN_AGENT' }],
+          }),
+          ownerUserId: 'u1',
+          visibility: 'private',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+        try {
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: 'WF' },
+            { appHome: src.appHome },
+          )
+          const entry = (p: string): string =>
+            new TextDecoder().decode(
+              decodeZip(pkg.zip)
+                .find((e) => e.path === p)!
+                .bytes(),
+            )
+          const bundle = entry('bundle.json')
+          const manifest = entry('manifest.yaml')
 
-      // built-in 没有 create op —— 导入侧因此「自动忽略」它。
-      expect(bundle).not.toContain('agent-create')
-      // 引用改写成按名字，而不是 local:（会复制）或 external:<源 id>（对端无意义）。
-      expect(bundle).toContain('builtin:agent/__skill_merger__')
-      expect(bundle).not.toContain('BUILTIN_AGENT')
-      // manifest：不在 resources、在 builtins。
-      expect(manifest).toContain('builtins')
-      const resourcesSection = manifest.slice(
-        manifest.indexOf('resources:'),
-        manifest.indexOf('builtins:'),
-      )
-      expect(resourcesSection).not.toContain('__skill_merger__')
-    } finally {
-      removeTempDirSync(src.appHome)
-    }
-  })
+          // built-in 没有 create op —— 导入侧因此「自动忽略」它。
+          expect(bundle).not.toContain('agent-create')
+          // 引用改写成按名字，而不是 local:（会复制）或 external:<源 id>（对端无意义）。
+          expect(bundle).toContain('builtin:agent/__skill_merger__')
+          expect(bundle).not.toContain('BUILTIN_AGENT')
+          // manifest：不在 resources、在 builtins。
+          expect(manifest).toContain('builtins')
+          const resourcesSection = manifest.slice(
+            manifest.indexOf('resources:'),
+            manifest.indexOf('builtins:'),
+          )
+          expect(resourcesSection).not.toContain('__skill_merger__')
+        } finally {
+          removeTempDirSync(src.appHome)
+        }
+      })
+    },
+  )
 
   test('导入：绑到对端自己 seed 的 built-in，不新建副本', async () => {
     const src = await makeInstance()
@@ -858,7 +896,7 @@ describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**�
   // 只有升级/修复对端实例，在这个包里改什么都没用。所以它必须出现在「要不要导入」这个
   // 决策之前，而不是决策之后。
   const exportPkgUsingBuiltin = async (src: {
-    db: DbClient
+    db: ProviderNeutralDatabase
     appHome: string
   }): Promise<Uint8Array> => {
     const builtinId = ulid()
@@ -905,25 +943,31 @@ describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**�
     return pkg.zip
   }
 
-  test('对端没有该 built-in ⇒ preview 即 422，并点名缺了哪一个', async () => {
-    const src = await makeInstance()
-    const dst = await makeInstance() // 目标实例**没有** seed 任何 built-in
-    try {
-      const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
-      const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-        box,
-        importId: ulid(),
-      }).then(
-        () => null,
-        (e: unknown) => e as { code?: string; message?: string },
-      )
-      expect(err?.code).toBe('package-builtin-missing')
-      expect(err?.message).toContain('agent/aw-skill-merger')
-    } finally {
-      removeTempDirSync(dst.appHome)
-      removeTempDirSync(src.appHome)
-    }
-  })
+  registerProviderInstanceCase(
+    '对端没有该 built-in ⇒ preview 即 422，并点名缺了哪一个',
+    2,
+    (makeInstance) => {
+      test('对端没有该 built-in ⇒ preview 即 422，并点名缺了哪一个', async () => {
+        const src = await makeInstance()
+        const dst = await makeInstance() // 目标实例**没有** seed 任何 built-in
+        try {
+          const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
+          const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+            box,
+            importId: ulid(),
+          }).then(
+            () => null,
+            (e: unknown) => e as { code?: string; message?: string },
+          )
+          expect(err?.code).toBe('package-builtin-missing')
+          expect(err?.message).toContain('agent/aw-skill-merger')
+        } finally {
+          removeTempDirSync(dst.appHome)
+          removeTempDirSync(src.appHome)
+        }
+      })
+    },
+  )
 
   test('同名但 **builtin=false** 的用户自建资源不算数（否则等于把别人的资源当框架件）', async () => {
     // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 + builtin=true。
@@ -965,40 +1009,46 @@ describe('AC-9 · 包声明的 built-in，本实例缺失时必须在**预检**�
     }
   })
 
-  test('对端有该 built-in ⇒ preview 正常通过（不误伤）', async () => {
-    const src = await makeInstance()
-    const dst = await makeInstance()
-    try {
-      await dst.db.insert(agents).values({
-        id: ulid(),
-        name: 'aw-skill-merger',
-        description: '',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
+  registerProviderInstanceCase(
+    '对端有该 built-in ⇒ preview 正常通过（不误伤）',
+    2,
+    (makeInstance) => {
+      test('对端有该 built-in ⇒ preview 正常通过（不误伤）', async () => {
+        const src = await makeInstance()
+        const dst = await makeInstance()
+        try {
+          await dst.db.insert(agents).values({
+            id: ulid(),
+            name: 'aw-skill-merger',
+            description: '',
+            outputs: '[]',
+            permission: '{}',
+            skills: '[]',
+            dependsOn: '[]',
+            mcp: '[]',
+            plugins: '[]',
+            frontmatterExtra: '{}',
+            bodyMd: '',
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
 
-      const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
-      const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-        box,
-        importId: ulid(),
+          const parsed = await parseResourcePackage(await exportPkgUsingBuiltin(src))
+          const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+            box,
+            importId: ulid(),
+          })
+          expect(preview.entries.map((e) => e.name)).toEqual(['needs-builtin'])
+        } finally {
+          removeTempDirSync(dst.appHome)
+          removeTempDirSync(src.appHome)
+        }
       })
-      expect(preview.entries.map((e) => e.name)).toEqual(['needs-builtin'])
-    } finally {
-      removeTempDirSync(dst.appHome)
-      removeTempDirSync(src.appHome)
-    }
-  })
+    },
+  )
 })
 
 describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () => {
@@ -1143,55 +1193,61 @@ describe('AC-9 · **交集**：built-in 根 + 它自己的 built-in 依赖', () 
     }
   })
 
-  test('对端**缺少这个 built-in 根** ⇒ 预检即报错（rootRef 必须进 builtins 声明）', async () => {
-    // 这条锁的是 collector 里 `rootRef` 那一支的**真正价值**。
-    //
-    // 反向验证时发现：去掉那一支，manifest 与 parse 对账**仍然相等**——因为两边现在同源，
-    // 会一致地少算根。对账查不出来，但后果在别处：`manifest.builtins` 是预检
-    // (`findMissingBuiltins`) 判断「对端缺什么」的唯一输入，根不在里面，一个对端根本
-    // 没有该 built-in 的包就会一路放行到 commit 才炸。
-    //
-    // 教训：一个字段被两处消费时，只测「产出与校验对得上」是不够的——那可能只是**同一个
-    // 函数跟自己比**。要测的是**下游真正拿它做的判断**。
-    const src = await makeInstance()
-    const dst = await makeInstance() // 目标实例**没有**任何 built-in
-    try {
-      const srcWf = ulid()
-      await src.db.insert(workflows).values({
-        id: srcWf,
-        name: 'aw-skill-fusion',
-        description: '',
-        definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
-        ownerUserId: '__system__',
-        visibility: 'public',
-        builtin: true,
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
+  registerProviderInstanceCase(
+    '对端**缺少这个 built-in 根** ⇒ 预检即报错（rootRef 必须进 builtins 声明）',
+    2,
+    (makeInstance) => {
+      test('对端**缺少这个 built-in 根** ⇒ 预检即报错（rootRef 必须进 builtins 声明）', async () => {
+        // 这条锁的是 collector 里 `rootRef` 那一支的**真正价值**。
+        //
+        // 反向验证时发现：去掉那一支，manifest 与 parse 对账**仍然相等**——因为两边现在同源，
+        // 会一致地少算根。对账查不出来，但后果在别处：`manifest.builtins` 是预检
+        // (`findMissingBuiltins`) 判断「对端缺什么」的唯一输入，根不在里面，一个对端根本
+        // 没有该 built-in 的包就会一路放行到 commit 才炸。
+        //
+        // 教训：一个字段被两处消费时，只测「产出与校验对得上」是不够的——那可能只是**同一个
+        // 函数跟自己比**。要测的是**下游真正拿它做的判断**。
+        const src = await makeInstance()
+        const dst = await makeInstance() // 目标实例**没有**任何 built-in
+        try {
+          const srcWf = ulid()
+          await src.db.insert(workflows).values({
+            id: srcWf,
+            name: 'aw-skill-fusion',
+            description: '',
+            definition: JSON.stringify({ $schema_version: 4, inputs: [], edges: [], nodes: [] }),
+            ownerUserId: '__system__',
+            visibility: 'public',
+            builtin: true,
+            createdAt: 1,
+            updatedAt: 1,
+          } as never)
 
-      const pkg = await exportResourcePackage(
-        src.db,
-        actorOf('u1'),
-        { type: 'workflow', id: srcWf },
-        { appHome: src.appHome },
-      )
-      const parsed = await parseResourcePackage(pkg.zip)
-      expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-skill-fusion' }])
+          const pkg = await exportResourcePackage(
+            src.db,
+            actorOf('u1'),
+            { type: 'workflow', id: srcWf },
+            { appHome: src.appHome },
+          )
+          const parsed = await parseResourcePackage(pkg.zip)
+          expect(parsed.manifest.builtins).toEqual([{ type: 'workflow', name: 'aw-skill-fusion' }])
 
-      const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
-        box,
-        importId: ulid(),
-      }).then(
-        () => null,
-        (e: unknown) => e as { code?: string; message?: string },
-      )
-      expect(err?.code).toBe('package-builtin-missing')
-      expect(err?.message).toContain('workflow/aw-skill-fusion')
-    } finally {
-      removeTempDirSync(dst.appHome)
-      removeTempDirSync(src.appHome)
-    }
-  })
+          const err = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
+            box,
+            importId: ulid(),
+          }).then(
+            () => null,
+            (e: unknown) => e as { code?: string; message?: string },
+          )
+          expect(err?.code).toBe('package-builtin-missing')
+          expect(err?.message).toContain('workflow/aw-skill-fusion')
+        } finally {
+          removeTempDirSync(dst.appHome)
+          removeTempDirSync(src.appHome)
+        }
+      })
+    },
+  )
 })
 
 describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮 P2-3：串行 N+1）', () => {
@@ -1204,9 +1260,9 @@ describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮
   // 教训），而且它测的是机器而不是算法。测的是**查询次数与 built-in 数量无关**：
   // 数量翻十倍，查询次数不变。
   const countSelects = (
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     tables: readonly unknown[],
-  ): { db: DbClient; n: () => number } => {
+  ): { db: ProviderNeutralDatabase; n: () => number } => {
     let n = 0
     const proxied = new Proxy(db as object, {
       get(target, property, receiver) {
@@ -1230,7 +1286,7 @@ describe('AC-9 · 预检的 built-in 校验必须**与数量无关**（第四轮
           })
         }
       },
-    }) as unknown as DbClient
+    }) as unknown as ProviderNeutralDatabase
     return { db: proxied, n: () => n }
   }
 

@@ -6,17 +6,22 @@ import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let baseTmp: string
 let repoPath: string
-let db: DbClient
 let app: Hono
 
 beforeAll(() => {
@@ -27,7 +32,10 @@ afterAll(() => {
   rmSync(baseTmp, { recursive: true, force: true })
 })
 
-beforeEach(async () => {
+async function prepareFixture<TDatabase extends ProviderNeutralDatabase>(
+  database: () => TDatabase,
+  compose: (db: TDatabase) => Hono | Promise<Hono>,
+): Promise<void> {
   repoPath = mkdtempSync(join(baseTmp, 'repo-'))
   await runGit(repoPath, ['init', '-q', '-b', 'main'])
   await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
@@ -38,14 +46,8 @@ beforeEach(async () => {
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
   await runGit(repoPath, ['tag', 'v1.0'])
 
-  db = createInMemoryDb(MIGRATIONS)
-  app = createApp({
-    token: TOKEN,
-    configPath: '/tmp/aw-test-config-never-used.json',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const db = database()
+  app = await compose(db)
   // RFC-099 (bda0d4fb): refs/files reject paths outside cached_repos mirrors.
   // Register the suite's temp root once so every per-test dir below (repo-*,
   // emptyrepo-*, notrepo-*) passes the allowlist gate and the assertions keep
@@ -59,7 +61,7 @@ beforeEach(async () => {
     lastFetchedAt: Date.now(),
     createdAt: Date.now(),
   })
-})
+}
 
 afterEach(() => {
   rmSync(repoPath, { recursive: true, force: true })
@@ -87,82 +89,150 @@ describe('repo HTTP routes', () => {
   // RFC-165: the /api/repos/recent endpoints are gone with path-mode
   // launches; only refs/files (RFC-110 dependents) remain below.
 
-  test('GET /api/repos/refs returns branches/tags/commits/currentBranch', async () => {
-    const res = await req(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
-      branches: string[]
-      tags: string[]
-      recentCommits: Array<{ sha: string; subject: string }>
-      currentBranch: string | null
-      defaultBranch: string | null
-      hasCommits: boolean
-    }
-    expect(body.branches).toContain('main')
-    expect(body.tags).toEqual(['v1.0'])
-    expect(body.recentCommits.length).toBe(1)
-    expect(body.recentCommits[0]?.subject).toBe('init')
-    expect(body.currentBranch).toBe('main')
-    expect(body.defaultBranch).toBe('main')
-    expect(body.hasCommits).toBe(true)
-  })
-
-  // Regression: `git init -b main` alone leaves the unborn `main`
-  // unresolvable, but the API used to pretend the repo was launchable
-  // (returned an empty branches list, no other signal). The launcher
-  // then queued a task that died at `git worktree add` with
-  // `cannot resolve base ref 'main'`. /api/repos/refs must surface
-  // `hasCommits: false` so the launcher can refuse the launch up front.
-  test('GET /api/repos/refs on a freshly-init repo with no commits reports hasCommits=false', async () => {
-    const empty = mkdtempSync(join(baseTmp, 'emptyrepo-'))
-    try {
-      await runGit(empty, ['init', '-q', '-b', 'main'])
-      const res = await req(`/api/repos/refs?path=${encodeURIComponent(empty)}`)
+  registerProviderApplication(() => {
+    test('GET /api/repos/refs returns branches/tags/commits/currentBranch', async () => {
+      const res = await req(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)
       expect(res.status).toBe(200)
       const body = (await res.json()) as {
         branches: string[]
-        recentCommits: unknown[]
-        hasCommits: boolean
+        tags: string[]
+        recentCommits: Array<{ sha: string; subject: string }>
         currentBranch: string | null
         defaultBranch: string | null
+        hasCommits: boolean
       }
-      expect(body.hasCommits).toBe(false)
-      expect(body.branches).toEqual([])
-      expect(body.recentCommits).toEqual([])
-      // currentBranch + defaultBranch are best-effort — we don't pin
-      // their values here, only the launch-blocking signal.
-    } finally {
-      rmSync(empty, { recursive: true, force: true })
-    }
-  })
+      expect(body.branches).toContain('main')
+      expect(body.tags).toEqual(['v1.0'])
+      expect(body.recentCommits.length).toBe(1)
+      expect(body.recentCommits[0]?.subject).toBe('init')
+      expect(body.currentBranch).toBe('main')
+      expect(body.defaultBranch).toBe('main')
+      expect(body.hasCommits).toBe(true)
+    })
 
-  test('GET /api/repos/refs requires ?path=', async () => {
-    const res = await req('/api/repos/refs')
-    expect(res.status).toBe(422)
-    expect(((await res.json()) as { code: string }).code).toBe('path-required')
-  })
+    // Regression: `git init -b main` alone leaves the unborn `main`
+    // unresolvable, but the API used to pretend the repo was launchable
+    // (returned an empty branches list, no other signal). The launcher
+    // then queued a task that died at `git worktree add` with
+    // `cannot resolve base ref 'main'`. /api/repos/refs must surface
+    // `hasCommits: false` so the launcher can refuse the launch up front.
+    test('GET /api/repos/refs on a freshly-init repo with no commits reports hasCommits=false', async () => {
+      const empty = mkdtempSync(join(baseTmp, 'emptyrepo-'))
+      try {
+        await runGit(empty, ['init', '-q', '-b', 'main'])
+        const res = await req(`/api/repos/refs?path=${encodeURIComponent(empty)}`)
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as {
+          branches: string[]
+          recentCommits: unknown[]
+          hasCommits: boolean
+          currentBranch: string | null
+          defaultBranch: string | null
+        }
+        expect(body.hasCommits).toBe(false)
+        expect(body.branches).toEqual([])
+        expect(body.recentCommits).toEqual([])
+        // currentBranch + defaultBranch are best-effort — we don't pin
+        // their values here, only the launch-blocking signal.
+      } finally {
+        rmSync(empty, { recursive: true, force: true })
+      }
+    })
 
-  test('GET /api/repos/files returns git ls-files output', async () => {
-    const res = await req(`/api/repos/files?path=${encodeURIComponent(repoPath)}`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { files: string[] }
-    expect(body.files.sort()).toEqual(['README.md', 'src.go'])
-  })
-
-  test('GET /api/repos/files rejects non-git path', async () => {
-    const notRepo = mkdtempSync(join(baseTmp, 'notrepo-'))
-    try {
-      const res = await req(`/api/repos/files?path=${encodeURIComponent(notRepo)}`)
+    test('GET /api/repos/refs requires ?path=', async () => {
+      const res = await req('/api/repos/refs')
       expect(res.status).toBe(422)
-      expect(((await res.json()) as { code: string }).code).toBe('repo-not-git')
-    } finally {
-      rmSync(notRepo, { recursive: true, force: true })
-    }
+      expect(((await res.json()) as { code: string }).code).toBe('path-required')
+    })
+
+    test('GET /api/repos/files returns git ls-files output', async () => {
+      const res = await req(`/api/repos/files?path=${encodeURIComponent(repoPath)}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { files: string[] }
+      expect(body.files.sort()).toEqual(['README.md', 'src.go'])
+    })
+
+    test('GET /api/repos/files rejects non-git path', async () => {
+      const notRepo = mkdtempSync(join(baseTmp, 'notrepo-'))
+      try {
+        const res = await req(`/api/repos/files?path=${encodeURIComponent(notRepo)}`)
+        expect(res.status).toBe(422)
+        expect(((await res.json()) as { code: string }).code).toBe('repo-not-git')
+      } finally {
+        rmSync(notRepo, { recursive: true, force: true })
+      }
+    })
   })
 
-  test('all /api/repos/* require token', async () => {
-    expect((await app.request(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)).status).toBe(
-      401,
-    )
+  registerNativeApplication(() => {
+    test('all /api/repos/* require token', async () => {
+      expect(
+        (await app.request(`/api/repos/refs?path=${encodeURIComponent(repoPath)}`)).status,
+      ).toBe(401)
+    })
   })
 })
+
+function registerNativeApplication(register: () => void): void {
+  describe('native application', () => {
+    beforeEach(() =>
+      prepareFixture(
+        () => createInMemoryDb(MIGRATIONS),
+        (db) =>
+          createApp({
+            token: TOKEN,
+            configPath: '/tmp/aw-test-config-never-used.json',
+            opencodeVersion: '1.14.25',
+            dbVersion: 1,
+            db,
+          }),
+      ),
+    )
+    register()
+  })
+}
+
+function registerProviderApplication(register: () => void): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let ownedHome: string | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      beforeEach(() =>
+        prepareFixture(
+          () => harness.db,
+          async () => {
+            ownedHome = mkdtempSync(join(tmpdir(), 'rfc359-w51-repos-'))
+            previousHome = process.env.AGENT_WORKFLOW_HOME
+            process.env.AGENT_WORKFLOW_HOME = ownedHome
+            homeAssigned = true
+            application = await createProviderHttpApplication(harness, {
+              token: TOKEN,
+              configPath: join(ownedHome, 'config.json'),
+              opencodeVersion: '1.14.25',
+              dbVersion: 1,
+              appHome: ownedHome,
+            })
+            return application.app
+          },
+        ),
+      )
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+          if (ownedHome !== undefined) rmSync(ownedHome, { recursive: true, force: true })
+          ownedHome = undefined
+        }
+      })
+      register()
+    })
+  })
+}

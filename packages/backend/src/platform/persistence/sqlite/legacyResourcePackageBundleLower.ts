@@ -15,7 +15,7 @@ import type {
   BundleResourceType,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { loadAclResourceNamesByIds } from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 import { ValidationError } from '@/util/errors'
 import {
@@ -46,7 +46,7 @@ export interface LoweredOp {
 }
 
 export async function lowerBundlePayloads<TTransaction>(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   ops: readonly BundleOp[],
   provider: BundleApplyProvider<TTransaction>,
 ): Promise<LoweredOp[]> {
@@ -104,7 +104,7 @@ export async function lowerBundlePayloads<TTransaction>(
 
 /** 把所有 external 目标与 external 引用指向的行的名字读进来（每类一次查询）。 */
 async function loadExistingNames(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   ops: readonly BundleOp[],
   targetIdOfOp: Map<string, string>,
   into: Map<string, string>,

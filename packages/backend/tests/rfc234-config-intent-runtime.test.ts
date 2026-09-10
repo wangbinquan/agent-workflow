@@ -15,6 +15,12 @@ import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveIntentTurnConfig } from '@/modules/intent/application/turnEngine'
 import { intentTurnRuntimeResolverForTest } from './helpers/intentResourceCatalogBinding'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'c'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -29,23 +35,38 @@ async function makeApp(): Promise<{
   configPath: string
   db: DbClient
 }> {
+  return buildApplication(
+    () => createInMemoryDb(MIGRATIONS),
+    (db, _root, configPath) =>
+      createApp({
+        token: TOKEN,
+        configPath,
+        opencodeVersion: null,
+        dbVersion: 1,
+        db,
+      }),
+  )
+}
+
+async function buildApplication<TDatabase extends ProviderNeutralDatabase>(
+  database: () => TDatabase,
+  compose: (
+    db: TDatabase,
+    root: string,
+    configPath: string,
+  ) => ReturnType<typeof createApp> | Promise<ReturnType<typeof createApp>>,
+): Promise<{ app: ReturnType<typeof createApp>; configPath: string; db: TDatabase }> {
   const root = mkdtempSync(join(tmpdir(), 'rfc234-intent-runtime-'))
   roots.push(root)
   const configPath = join(root, 'config.json')
   loadConfig(configPath)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = database()
   await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
   await updateRuntime(runtimeRegistryPersistence(db), 'claude-code', {
     model: 'anthropic/claude-sonnet-5',
   })
-  const app = createApp({
-    token: TOKEN,
-    configPath,
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-  })
+  const app = await compose(db, root, configPath)
   return { app, configPath, db }
 }
 
@@ -61,38 +82,40 @@ async function putConfig(
 }
 
 describe('RFC-276 natural intentBuilderRuntime admission', () => {
-  test('claude-code is accepted and persisted', async () => {
-    const { app, configPath } = await makeApp()
-    const res = await putConfig(app, { intentBuilderRuntime: 'claude-code' })
-    expect(res.status).toBe(200)
-    expect(loadConfig(configPath).intentBuilderRuntime).toBe('claude-code')
-  })
+  registerProviderApplication((makeApp) => {
+    test('claude-code is accepted and persisted', async () => {
+      const { app, configPath } = await makeApp()
+      const res = await putConfig(app, { intentBuilderRuntime: 'claude-code' })
+      expect(res.status).toBe(200)
+      expect(loadConfig(configPath).intentBuilderRuntime).toBe('claude-code')
+    })
 
-  test('an opencode runtime is accepted and persisted', async () => {
-    const { app, configPath } = await makeApp()
-    const res = await putConfig(app, { intentBuilderRuntime: 'opencode' })
-    expect(res.status).toBe(200)
-    expect(loadConfig(configPath).intentBuilderRuntime).toBe('opencode')
-    // Clearing back to inherit works via the null-in-patch contract.
-    const cleared = await putConfig(app, { intentBuilderRuntime: null })
-    expect(cleared.status).toBe(200)
-    expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
-  })
+    test('an opencode runtime is accepted and persisted', async () => {
+      const { app, configPath } = await makeApp()
+      const res = await putConfig(app, { intentBuilderRuntime: 'opencode' })
+      expect(res.status).toBe(200)
+      expect(loadConfig(configPath).intentBuilderRuntime).toBe('opencode')
+      // Clearing back to inherit works via the null-in-patch contract.
+      const cleared = await putConfig(app, { intentBuilderRuntime: null })
+      expect(cleared.status).toBe(200)
+      expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
+    })
 
-  test('switching defaultRuntime with intent unset preserves natural inheritance', async () => {
-    const { app, configPath } = await makeApp()
-    const res = await putConfig(app, { defaultRuntime: 'claude-code' })
-    expect(res.status).toBe(200)
-    expect(loadConfig(configPath).defaultRuntime).toBe('claude-code')
-    expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
-  })
+    test('switching defaultRuntime with intent unset preserves natural inheritance', async () => {
+      const { app, configPath } = await makeApp()
+      const res = await putConfig(app, { defaultRuntime: 'claude-code' })
+      expect(res.status).toBe(200)
+      expect(loadConfig(configPath).defaultRuntime).toBe('claude-code')
+      expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
+    })
 
-  test('clearing the override returns to the inherited runtime', async () => {
-    const { app, configPath } = await makeApp()
-    expect((await putConfig(app, { intentBuilderRuntime: 'claude-code' })).status).toBe(200)
-    const cleared = await putConfig(app, { intentBuilderRuntime: null })
-    expect(cleared.status).toBe(200)
-    expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
+    test('clearing the override returns to the inherited runtime', async () => {
+      const { app, configPath } = await makeApp()
+      expect((await putConfig(app, { intentBuilderRuntime: 'claude-code' })).status).toBe(200)
+      const cleared = await putConfig(app, { intentBuilderRuntime: null })
+      expect(cleared.status).toBe(200)
+      expect(loadConfig(configPath).intentBuilderRuntime).toBeUndefined()
+    })
   })
 
   test('resolveIntentTurnConfig admits a claude-code selection naturally', async () => {
@@ -120,3 +143,52 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
     }
   })
 })
+
+function registerProviderApplication(
+  register: (
+    makeApp: () => Promise<{
+      app: ReturnType<typeof createApp>
+      configPath: string
+      db: ProviderNeutralDatabase
+    }>,
+  ) => void,
+): void {
+  describeEachProvider('provider', (harness) => {
+    describe('application lifetime', () => {
+      let application: ProviderHttpApplication | undefined
+      let previousHome: string | undefined
+      let homeAssigned = false
+      async function makeProviderApp() {
+        return buildApplication(
+          () => harness.db,
+          async (_db, root, configPath) => {
+            previousHome = process.env.AGENT_WORKFLOW_HOME
+            process.env.AGENT_WORKFLOW_HOME = root
+            homeAssigned = true
+            application = await createProviderHttpApplication(harness, {
+              token: TOKEN,
+              configPath,
+              opencodeVersion: null,
+              dbVersion: 1,
+              appHome: root,
+            })
+            return application.app
+          },
+        )
+      }
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          if (homeAssigned) {
+            if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+            else process.env.AGENT_WORKFLOW_HOME = previousHome
+          }
+          homeAssigned = false
+        }
+      })
+      register(makeProviderApp)
+    })
+  })
+}

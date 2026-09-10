@@ -14,7 +14,7 @@
 //     agentId, dedupes repeated agentIds, and never contains a user id.
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import {
   renderAgentCapabilityCard,
   type CreateAgent,
@@ -22,10 +22,11 @@ import {
 } from '@agent-workflow/shared'
 import { renderRosterBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import { buildRosterAgentCards } from '../src/services/workgroup/state'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { createAgent } from '../src/services/agent'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+
 const PLANNER_ID = 'agent-planner'
 const CODER_ID = 'agent-coder'
 const VERBOSE_ID = 'agent-verbose'
@@ -150,7 +151,7 @@ describe('renderRosterBlock — RFC-166 capability card injection (pure)', () =>
 })
 
 describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
-  async function seed(db: DbClient) {
+  async function seed(db: ProviderNeutralDatabase) {
     await createAgent(db, agentPayload('planner', { description: 'plans the work' }), {
       id: PLANNER_ID,
     })
@@ -159,111 +160,131 @@ describe('buildRosterAgentCards — RFC-166 preload (DB)', () => {
     })
   }
 
-  test('one card per agent member; human skipped; content present; no user id', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const cards = await buildRosterAgentCards(db, cfg())
-    expect(cards.has('m-lead')).toBe(true)
-    expect(cards.has('m-coder')).toBe(true)
-    expect(cards.has('m-pm')).toBe(false) // human never carries a card
-    expect(cards.get('m-coder')).toContain('writes the patch')
-    expect(cards.get('m-coder')).toContain('- outputs: patch (string)')
-    // prompt isolation: no user id anywhere in the rendered cards
-    for (const card of cards.values()) {
-      expect(card).not.toContain('u-pm-SECRET')
-      expect(card).not.toContain('ownerUserId')
-    }
-  })
+  describeEachProvider(
+    'one card per agent member; human skipped; content present; no user id',
+    (harness) => {
+      test('one card per agent member; human skipped; content present; no user id', async () => {
+        const db = harness.db
+        await seed(db)
+        const cards = await buildRosterAgentCards(db, cfg())
+        expect(cards.has('m-lead')).toBe(true)
+        expect(cards.has('m-coder')).toBe(true)
+        expect(cards.has('m-pm')).toBe(false) // human never carries a card
+        expect(cards.get('m-coder')).toContain('writes the patch')
+        expect(cards.get('m-coder')).toContain('- outputs: patch (string)')
+        // prompt isolation: no user id anywhere in the rendered cards
+        for (const card of cards.values()) {
+          expect(card).not.toContain('u-pm-SECRET')
+          expect(card).not.toContain('ownerUserId')
+        }
+      })
+    },
+  )
 
-  test('dangling agentId (deleted agent) yields no card', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const c = cfg({
-      members: [
-        {
-          id: 'm-x',
-          memberType: 'agent',
-          agentId: 'agent-missing',
-          agentName: 'ghost',
-          userId: null,
-          displayName: 'x',
-          roleDesc: '',
-        },
-      ],
-      leaderMemberId: 'm-x',
-    })
-    const cards = await buildRosterAgentCards(db, c)
-    expect(cards.has('m-x')).toBe(false)
-  })
-
-  test('repeated agentId is de-duped (one DB read, both members carded)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seed(db)
-    const c = cfg({
-      members: [
-        {
-          id: 'm-a',
-          memberType: 'agent',
-          agentId: CODER_ID,
-          agentName: 'coder-a',
-          userId: null,
-          displayName: 'a',
-          roleDesc: '',
-        },
-        {
-          id: 'm-b',
-          memberType: 'agent',
-          agentId: CODER_ID,
-          agentName: 'coder-a',
-          userId: null,
-          displayName: 'b',
-          roleDesc: '',
-        },
-      ],
-      leaderMemberId: 'm-a',
-    })
-    const cards = await buildRosterAgentCards(db, c)
-    expect(cards.get('m-a')).toBe(cards.get('m-b'))
-    expect(cards.get('m-a')).toContain('writes the patch')
-  })
-
-  test('64 members keep every card while input-description additions stay within 2,400 chars', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await createAgent(
-      db,
-      agentPayload('verbose-agent', {
-        inputs: [
+  describeEachProvider('dangling agentId (deleted agent) yields no card', (harness) => {
+    test('dangling agentId (deleted agent) yields no card', async () => {
+      const db = harness.db
+      await seed(db)
+      const c = cfg({
+        members: [
           {
-            name: 'diff',
-            kind: 'string',
-            required: true,
-            description: 'description '.repeat(120),
+            id: 'm-x',
+            memberType: 'agent',
+            agentId: 'agent-missing',
+            agentName: 'ghost',
+            userId: null,
+            displayName: 'x',
+            roleDesc: '',
           },
         ],
-      }),
-      { id: VERBOSE_ID },
-    )
-    const members = Array.from({ length: 64 }, (_, index) => ({
-      id: `m-${index}`,
-      memberType: 'agent' as const,
-      agentId: VERBOSE_ID,
-      agentName: 'verbose-agent',
-      userId: null,
-      displayName: `worker-${index}`,
-      roleDesc: '',
-    }))
-    const cards = await buildRosterAgentCards(db, cfg({ members, leaderMemberId: members[0]!.id }))
-
-    expect(cards.size).toBe(64)
-    let addedDescriptionChars = 0
-    const baseInputLine = '- inputs: diff (string, required)'
-    for (const card of cards.values()) {
-      const inputLine = card.split('\n').find((line) => line.startsWith('- inputs:')) ?? ''
-      expect(card).toContain('### verbose-agent')
-      expect(inputLine.startsWith(baseInputLine)).toBe(true)
-      expect(inputLine).toContain(' — ')
-      addedDescriptionChars += inputLine.length - baseInputLine.length
-    }
-    expect(addedDescriptionChars).toBeLessThanOrEqual(2_400)
+        leaderMemberId: 'm-x',
+      })
+      const cards = await buildRosterAgentCards(db, c)
+      expect(cards.has('m-x')).toBe(false)
+    })
   })
+
+  describeEachProvider(
+    'repeated agentId is de-duped (one DB read, both members carded)',
+    (harness) => {
+      test('repeated agentId is de-duped (one DB read, both members carded)', async () => {
+        const db = harness.db
+        await seed(db)
+        const c = cfg({
+          members: [
+            {
+              id: 'm-a',
+              memberType: 'agent',
+              agentId: CODER_ID,
+              agentName: 'coder-a',
+              userId: null,
+              displayName: 'a',
+              roleDesc: '',
+            },
+            {
+              id: 'm-b',
+              memberType: 'agent',
+              agentId: CODER_ID,
+              agentName: 'coder-a',
+              userId: null,
+              displayName: 'b',
+              roleDesc: '',
+            },
+          ],
+          leaderMemberId: 'm-a',
+        })
+        const cards = await buildRosterAgentCards(db, c)
+        expect(cards.get('m-a')).toBe(cards.get('m-b'))
+        expect(cards.get('m-a')).toContain('writes the patch')
+      })
+    },
+  )
+
+  describeEachProvider(
+    '64 members keep every card while input-description additions stay within 2,400 chars',
+    (harness) => {
+      test('64 members keep every card while input-description additions stay within 2,400 chars', async () => {
+        const db = harness.db
+        await createAgent(
+          db,
+          agentPayload('verbose-agent', {
+            inputs: [
+              {
+                name: 'diff',
+                kind: 'string',
+                required: true,
+                description: 'description '.repeat(120),
+              },
+            ],
+          }),
+          { id: VERBOSE_ID },
+        )
+        const members = Array.from({ length: 64 }, (_, index) => ({
+          id: `m-${index}`,
+          memberType: 'agent' as const,
+          agentId: VERBOSE_ID,
+          agentName: 'verbose-agent',
+          userId: null,
+          displayName: `worker-${index}`,
+          roleDesc: '',
+        }))
+        const cards = await buildRosterAgentCards(
+          db,
+          cfg({ members, leaderMemberId: members[0]!.id }),
+        )
+
+        expect(cards.size).toBe(64)
+        let addedDescriptionChars = 0
+        const baseInputLine = '- inputs: diff (string, required)'
+        for (const card of cards.values()) {
+          const inputLine = card.split('\n').find((line) => line.startsWith('- inputs:')) ?? ''
+          expect(card).toContain('### verbose-agent')
+          expect(inputLine.startsWith(baseInputLine)).toBe(true)
+          expect(inputLine).toContain(' — ')
+          addedDescriptionChars += inputLine.length - baseInputLine.length
+        }
+        expect(addedDescriptionChars).toBeLessThanOrEqual(2_400)
+      })
+    },
+  )
 })

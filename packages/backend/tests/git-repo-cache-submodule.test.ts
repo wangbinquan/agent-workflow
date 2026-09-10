@@ -10,17 +10,17 @@
 //     update --init --recursive` and surface submoduleSyncOk/Error
 //   - never blanks when submoduleMode='never' (escape-hatch parity)
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
 import { beforeAll, describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { cachedRepos } from '../src/db/schema'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // RUN_GIT_NETWORK gate (P0 test-tier fortification): this suite cold-clones a
 // real bare repo with `--recurse-submodules` over `file://` URLs (and recurses
@@ -99,14 +99,12 @@ beforeAll(async () => {
 })
 
 describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', () => {
-  let db: DbClient
   let appHome: string
   let fix: { root: string; parentUrl: string; childBare: string }
   let savedGlobal: string | undefined
   let configHome: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
     appHome = mkdtempSync(join(tmpdir(), 'aw-grc-sub-home-'))
     // Lift git's CVE-2022-39253 lock for the duration of these tests so the
     // fixture (which uses file:// URLs for both parent and child remotes) can
@@ -142,101 +140,6 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
     }
   })
 
-  test('cold clone with submoduleMode=auto populates child working dir', async () => {
-    const result = await resolveCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'auto',
-        submoduleJobs: 4,
-      },
-      { url: fix.parentUrl },
-    )
-
-    expect(result.cold).toBe(true)
-    expect(result.hasSubmodules).toBe(true)
-    expect(result.submoduleSyncOk).toBe(true)
-    // Cache dir should contain the child's CHILD.md file because
-    // --recurse-submodules ran during clone.
-    expect(existsSync(join(result.cached.localPath, 'sub', 'CHILD.md'))).toBe(true)
-
-    // DB row reflects telemetry.
-    const row = db.select().from(cachedRepos).all()[0]
-    expect(row?.hasSubmodules).toBe(true)
-    expect(row?.lastSubmoduleSyncOk).toBe(true)
-  })
-
-  test('cold clone with submoduleMode=never leaves submodule dir empty', async () => {
-    const result = await resolveCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'never',
-        submoduleJobs: 4,
-      },
-      { url: fix.parentUrl },
-    )
-    expect(result.cold).toBe(true)
-    // hasSubmodules reflects "we did not probe" → false per design.
-    expect(result.hasSubmodules).toBe(false)
-    // The sub directory exists but is empty (gitlink, no content).
-    const subDir = join(result.cached.localPath, 'sub')
-    expect(existsSync(subDir)).toBe(true)
-    expect(existsSync(join(subDir, 'CHILD.md'))).toBe(false)
-  })
-
-  test('warm hit re-runs submodule sync + update', async () => {
-    // First call: cold clone populates everything.
-    await resolveCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'auto',
-        submoduleJobs: 1,
-      },
-      { url: fix.parentUrl },
-    )
-    // Second call: warm hit. Should re-run sync/update without erroring.
-    const second = await resolveCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'auto',
-        submoduleJobs: 1,
-        fetchOnReuse: false,
-      },
-      { url: fix.parentUrl },
-    )
-    expect(second.cold).toBe(false)
-    expect(second.hasSubmodules).toBe(true)
-    expect(second.submoduleSyncOk).toBe(true)
-    expect(existsSync(join(second.cached.localPath, 'sub', 'CHILD.md'))).toBe(true)
-  })
-
-  test('refreshCachedRepo re-runs submodule sync and updates DB telemetry', async () => {
-    const first = await resolveCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'auto',
-        submoduleJobs: 2,
-      },
-      { url: fix.parentUrl },
-    )
-    const refresh = await refreshCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'auto',
-        submoduleJobs: 2,
-      },
-      first.cached.id,
-    )
-    expect(refresh.submoduleSyncOk).toBe(true)
-    expect(refresh.hasSubmodules).toBe(true)
-    expect(refresh.item.lastSubmoduleSyncOk).toBe(true)
-  })
-
   test('cold clone command line contains --recurse-submodules when mode != never', async () => {
     // Inspect what we actually shipped by reading the source — we can't easily
     // observe argv inside the live Bun.spawn flow, so we anchor the contract
@@ -248,22 +151,164 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
     expect(src).toContain("'--recurse-submodules'")
     expect(src).toContain('submoduleMode')
   })
+})
 
-  test('repo without .gitmodules: hasSubmodules=false, submoduleSyncOk=true', async () => {
-    // Reuse the child as a parent — it has no submodules of its own.
-    const childUrl = `file://${fix.childBare}`
-    const result = await resolveCachedRepo(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(db),
-        appHome,
-        submoduleMode: 'auto',
-        submoduleJobs: 4,
-      },
-      { url: childUrl },
-    )
-    expect(result.hasSubmodules).toBe(false)
-    expect(result.submoduleSyncOk).toBe(true)
-    expect(result.submoduleSyncError).toBeNull()
+describeEachProvider('RFC-359 submodule repository store', (harness) => {
+  describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', () => {
+    let db: ProviderNeutralDatabase
+    let appHome: string
+    let fix: { root: string; parentUrl: string; childBare: string }
+    let savedGlobal: string | undefined
+    let configHome: string
+
+    beforeEach(async () => {
+      db = harness.db
+      appHome = mkdtempSync(join(tmpdir(), 'aw-grc-sub-home-'))
+      // Lift git's CVE-2022-39253 lock for the duration of these tests so the
+      // fixture (which uses file:// URLs for both parent and child remotes) can
+      // recurse into submodules. We point GIT_CONFIG_GLOBAL at a per-test
+      // gitconfig granting `protocol.file.allow=always`; this propagates to
+      // every git child process (incl. the internal `submodule update` shells)
+      // without touching the user's real ~/.gitconfig.
+      configHome = mkdtempSync(join(tmpdir(), 'aw-grc-sub-cfg-'))
+      const gitconfig = join(configHome, '.gitconfig')
+      writeFileSync(gitconfig, '[protocol "file"]\n  allow = always\n', 'utf-8')
+      savedGlobal = process.env.GIT_CONFIG_GLOBAL
+      process.env.GIT_CONFIG_GLOBAL = gitconfig
+      fix = await buildFixture()
+    })
+
+    afterEach(() => {
+      if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
+      else process.env.GIT_CONFIG_GLOBAL = savedGlobal
+      try {
+        rmSync(configHome, { recursive: true, force: true })
+      } catch {
+        /* noop */
+      }
+      try {
+        rmSync(appHome, { recursive: true, force: true })
+      } catch {
+        /* noop */
+      }
+      try {
+        rmSync(fix.root, { recursive: true, force: true })
+      } catch {
+        /* noop */
+      }
+    })
+
+    test('cold clone with submoduleMode=auto populates child working dir', async () => {
+      const result = await resolveCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'auto',
+          submoduleJobs: 4,
+        },
+        { url: fix.parentUrl },
+      )
+
+      expect(result.cold).toBe(true)
+      expect(result.hasSubmodules).toBe(true)
+      expect(result.submoduleSyncOk).toBe(true)
+      // Cache dir should contain the child's CHILD.md file because
+      // --recurse-submodules ran during clone.
+      expect(existsSync(join(result.cached.localPath, 'sub', 'CHILD.md'))).toBe(true)
+
+      // DB row reflects telemetry.
+      const row = (await db.select().from(cachedRepos).all())[0]
+      expect(row?.hasSubmodules).toBe(true)
+      expect(row?.lastSubmoduleSyncOk).toBe(true)
+    })
+
+    test('cold clone with submoduleMode=never leaves submodule dir empty', async () => {
+      const result = await resolveCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'never',
+          submoduleJobs: 4,
+        },
+        { url: fix.parentUrl },
+      )
+      expect(result.cold).toBe(true)
+      // hasSubmodules reflects "we did not probe" → false per design.
+      expect(result.hasSubmodules).toBe(false)
+      // The sub directory exists but is empty (gitlink, no content).
+      const subDir = join(result.cached.localPath, 'sub')
+      expect(existsSync(subDir)).toBe(true)
+      expect(existsSync(join(subDir, 'CHILD.md'))).toBe(false)
+    })
+
+    test('warm hit re-runs submodule sync + update', async () => {
+      // First call: cold clone populates everything.
+      await resolveCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'auto',
+          submoduleJobs: 1,
+        },
+        { url: fix.parentUrl },
+      )
+      // Second call: warm hit. Should re-run sync/update without erroring.
+      const second = await resolveCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'auto',
+          submoduleJobs: 1,
+          fetchOnReuse: false,
+        },
+        { url: fix.parentUrl },
+      )
+      expect(second.cold).toBe(false)
+      expect(second.hasSubmodules).toBe(true)
+      expect(second.submoduleSyncOk).toBe(true)
+      expect(existsSync(join(second.cached.localPath, 'sub', 'CHILD.md'))).toBe(true)
+    })
+
+    test('refreshCachedRepo re-runs submodule sync and updates DB telemetry', async () => {
+      const first = await resolveCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'auto',
+          submoduleJobs: 2,
+        },
+        { url: fix.parentUrl },
+      )
+      const refresh = await refreshCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'auto',
+          submoduleJobs: 2,
+        },
+        first.cached.id,
+      )
+      expect(refresh.submoduleSyncOk).toBe(true)
+      expect(refresh.hasSubmodules).toBe(true)
+      expect(refresh.item.lastSubmoduleSyncOk).toBe(true)
+    })
+
+    test('repo without .gitmodules: hasSubmodules=false, submoduleSyncOk=true', async () => {
+      // Reuse the child as a parent — it has no submodules of its own.
+      const childUrl = `file://${fix.childBare}`
+      const result = await resolveCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db),
+          appHome,
+          submoduleMode: 'auto',
+          submoduleJobs: 4,
+        },
+        { url: childUrl },
+      )
+      expect(result.hasSubmodules).toBe(false)
+      expect(result.submoduleSyncOk).toBe(true)
+      expect(result.submoduleSyncError).toBeNull()
+    })
   })
 })
 

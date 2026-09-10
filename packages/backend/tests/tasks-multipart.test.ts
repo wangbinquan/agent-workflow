@@ -19,411 +19,442 @@ import { execFileSync } from 'node:child_process'
 import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { createApp } from '../src/server'
+
 import { createAgent } from '../src/services/agent'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
-const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const GIT_TIMEOUT_MS = 10_000
-const NODE_TIMEOUT_MS = 10_000
-const FLOW_TIMEOUT_MS = 20_000
-const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
+describeEachProvider('RFC-359 W51 multipart database', (databaseHarness) => {
+  describe('multipart application lifetime', () => {
+    const TOKEN = 'a'.repeat(64)
 
-let cleanupDirs: string[] = []
-let previousAppHome: string | undefined
-let watchdog: ReturnType<typeof setTimeout> | undefined
+    const GIT_TIMEOUT_MS = 10_000
+    const NODE_TIMEOUT_MS = 10_000
+    const FLOW_TIMEOUT_MS = 20_000
+    const ACTIVE_TASK_SETTLE_TIMEOUT_MS = 5_000
 
-setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
+    let cleanupDirs: string[] = []
+    let applications: ProviderHttpApplication[] = []
+    let previousAppHome: string | undefined
+    let watchdog: ReturnType<typeof setTimeout> | undefined
 
-beforeEach(() => {
-  cleanupDirs = []
-  previousAppHome = process.env.AGENT_WORKFLOW_HOME
-  watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
-})
+    setDefaultTimeout(FLOW_TIMEOUT_MS + ACTIVE_TASK_SETTLE_TIMEOUT_MS + 5_000)
 
-afterEach(async () => {
-  if (watchdog !== undefined) clearTimeout(watchdog)
-  try {
-    await abortActiveTasksAndWait('test-cleanup')
-  } finally {
-    for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
-    if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-    else process.env.AGENT_WORKFLOW_HOME = previousAppHome
-  }
-})
+    beforeEach(() => {
+      cleanupDirs = []
+      applications = []
+      previousAppHome = process.env.AGENT_WORKFLOW_HOME
+      watchdog = setTimeout(() => abortAllActiveTasks('test-timeout'), FLOW_TIMEOUT_MS)
+    })
 
-function makeTempDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix))
-  cleanupDirs.push(dir)
-  return dir
-}
+    afterEach(async () => {
+      if (watchdog !== undefined) clearTimeout(watchdog)
+      try {
+        await abortActiveTasksAndWait('test-cleanup')
+      } finally {
+        try {
+          await disposeProviderApplications()
+        } finally {
+          for (const dir of cleanupDirs.reverse()) rmSync(dir, { recursive: true, force: true })
+          if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
+          else process.env.AGENT_WORKFLOW_HOME = previousAppHome
+        }
+      }
+    })
 
-async function abortActiveTasksAndWait(reason: string): Promise<void> {
-  const taskIds = abortAllActiveTasks(reason)
-  const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
-  while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
-    await Bun.sleep(20)
-  }
-  const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
-  if (stuck.length > 0) throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
-}
-
-function git(...args: string[]): void {
-  execFileSync('git', args, {
-    stdio: 'ignore',
-    timeout: GIT_TIMEOUT_MS,
-    env: nonInteractiveGitEnv(),
-  })
-}
-
-// RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts
-// for why the bash fake binary had to go — Windows EFTYPE).
-function makeStubOpencode(dir: string): string[] {
-  return makeVersionedStubOpencode(dir, { v1: 'ok', port: 'out' })
-}
-
-interface Harness {
-  db: DbClient
-  app: Hono
-  repoPath: string
-  workflowId: string
-}
-
-async function buildHarness(uploadKey = 'refs'): Promise<Harness> {
-  const tmp = makeTempDir('aw-multipart-')
-  // Pin app home so worktrees / config land under tmp, not the real user dir.
-  process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
-  const repoPath = join(tmp, 'repo')
-  git('init', '-b', 'main', repoPath)
-  git('-C', repoPath, 'config', 'user.email', 't@t.test')
-  git('-C', repoPath, 'config', 'user.name', 't')
-  writeFileSync(join(repoPath, 'README.md'), '# repo\n')
-  git('-C', repoPath, 'add', '.')
-  git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
-
-  const stubOpencode = makeStubOpencode(tmp)
-
-  const db = createInMemoryDb(MIGRATIONS)
-  await seedTestDefaultOpencodeRuntime(db)
-
-  const reader = await createAgent(db, {
-    name: 'reader',
-    description: '',
-    outputs: ['out'],
-    outputKinds: { out: 'string' },
-    syncOutputsOnIterate: true,
-    permission: {},
-    skills: [],
-    dependsOn: [],
-    mcp: [],
-    plugins: [],
-    frontmatterExtra: {},
-    bodyMd: '',
-  })
-
-  const wf = await createWorkflow(db, {
-    name: 'with-upload',
-    description: '',
-    definition: {
-      $schema_version: 2,
-      inputs: [
-        { kind: 'text', key: 'topic', label: 'topic' },
-        {
-          kind: 'upload',
-          key: uploadKey,
-          label: 'Reference materials',
-          targetDir: 'inputs/refs',
-          minCount: 0,
-          maxCount: 5,
-        },
-      ],
-      nodes: [
-        { id: 'in_topic', kind: 'input', inputKey: 'topic' },
-        { id: 'in_refs', kind: 'input', inputKey: uploadKey },
-        {
-          id: 'reader',
-          kind: 'agent-single',
-          agentId: reader.id,
-          agentName: 'reader',
-          promptTemplate: '{{topic}} / {{refs}}',
-        },
-      ],
-      edges: [
-        {
-          id: 'e1',
-          source: { nodeId: 'in_topic', portName: 'topic' },
-          target: { nodeId: 'reader', portName: 'topic' },
-        },
-        {
-          id: 'e2',
-          source: { nodeId: 'in_refs', portName: uploadKey },
-          target: { nodeId: 'reader', portName: 'refs' },
-        },
-      ],
-    },
-  })
-
-  const app = createApp({
-    token: TOKEN,
-    configPath: join(tmp, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
-  // Pin opencode binary for the route handler.
-  writeFileSync(
-    join(tmp, 'config.json'),
-    JSON.stringify({
-      $schema_version: 1,
-      opencodePath: stubOpencode,
-      defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
-      defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-    }),
-  )
-  return { db, app, repoPath, workflowId: wf.id }
-}
-
-function buildFormData(payload: object, files: Array<[string, string, string]>): FormData {
-  const fd = new FormData()
-  fd.set('payload', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
-  for (const [inputKey, filename, body] of files) {
-    fd.append(`files[${inputKey}][]`, new Blob([body]), filename)
-  }
-  return fd
-}
-
-async function postMultipart(app: Hono, url: string, fd: FormData): Promise<Response> {
-  return app.request(url, {
-    method: 'POST',
-    body: fd,
-    headers: { Authorization: `Bearer ${TOKEN}` },
-  })
-}
-
-// RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
-beforeAll(async () => {
-  await startGitHttpRemote()
-})
-
-describe('POST /api/tasks multipart (RFC-020)', () => {
-  test('happy path: upload 2 files → task created, files in worktree, paths packed', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'orders', refs: '' },
-      },
-      [
-        ['refs', 'a.txt', 'alpha'],
-        ['refs', 'b.txt', 'beta'],
-      ],
-    )
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as {
-      id: string
-      worktreePath: string
-      inputs: Record<string, string>
+    async function disposeProviderApplications(): Promise<void> {
+      const outcomes = await Promise.allSettled(
+        applications.map((application) => application.dispose()),
+      )
+      const failures = outcomes.flatMap((outcome) =>
+        outcome.status === 'rejected' ? [outcome.reason] : [],
+      )
+      if (failures.length > 0) throw new AggregateError(failures, 'application disposal failed')
     }
-    expect(body.worktreePath).not.toBe('')
-    expect(existsSync(join(body.worktreePath, 'inputs/refs/a.txt'))).toBe(true)
-    expect(existsSync(join(body.worktreePath, 'inputs/refs/b.txt'))).toBe(true)
-    expect(readFileSync(join(body.worktreePath, 'inputs/refs/a.txt'), 'utf8')).toBe('alpha')
-    expect(body.inputs.refs).toBe('inputs/refs/a.txt\ninputs/refs/b.txt')
-    expect(body.inputs.topic).toBe('orders')
-  })
 
-  test('Unicode input key survives multipart launch and upload materialization', async () => {
-    const inputKey = 'function设计文档'
-    const h = await buildHarness(inputKey)
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'unicode-input-key',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'orders', [inputKey]: '' },
-      },
-      [[inputKey, '设计.md', '# 设计']],
-    )
-
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as {
-      worktreePath: string
-      inputs: Record<string, string>
+    function makeTempDir(prefix: string): string {
+      const dir = mkdtempSync(join(tmpdir(), prefix))
+      cleanupDirs.push(dir)
+      return dir
     }
-    expect(body.inputs[inputKey]).toBe('inputs/refs/设计.md')
-    expect(readFileSync(join(body.worktreePath, 'inputs/refs/设计.md'), 'utf8')).toBe('# 设计')
-  })
 
-  // Regression: a file part with an empty filename ("filename=\"\"" in the
-  // multipart Content-Disposition — e.g. a drag-dropped Blob the browser never
-  // named) is parsed by bun as a File whose `.name` is `undefined`, not ''. The
-  // route's `value.name === '' ? ...` guard missed that, so `filename` landed as
-  // `undefined` and `sanitizeUploadFilename` crashed with "undefined is not an object
-  // (evaluating 'e.replace')", surfacing to the user as task-upload-failed:
-  // "failed to land uploads into worktree". Must succeed under a fallback name.
-  test('upload with empty filename → 201, file lands under fallback name', async () => {
-    const h = await buildHarness()
-    const fd = new FormData()
-    fd.set(
-      'payload',
-      new Blob(
-        [
-          JSON.stringify({
+    async function abortActiveTasksAndWait(reason: string): Promise<void> {
+      const taskIds = abortAllActiveTasks(reason)
+      const deadline = Date.now() + ACTIVE_TASK_SETTLE_TIMEOUT_MS
+      while (taskIds.some((taskId) => isTaskActive(taskId)) && Date.now() < deadline) {
+        await Bun.sleep(20)
+      }
+      const stuck = taskIds.filter((taskId) => isTaskActive(taskId))
+      if (stuck.length > 0)
+        throw new Error(`active test tasks failed to settle: ${stuck.join(', ')}`)
+    }
+
+    function git(...args: string[]): void {
+      execFileSync('git', args, {
+        stdio: 'ignore',
+        timeout: GIT_TIMEOUT_MS,
+        env: nonInteractiveGitEnv(),
+      })
+    }
+
+    // RFC-254 T32: shared command-array stub (see fixtures/versionedStubOpencode.ts
+    // for why the bash fake binary had to go — Windows EFTYPE).
+    function makeStubOpencode(dir: string): string[] {
+      return makeVersionedStubOpencode(dir, { v1: 'ok', port: 'out' })
+    }
+
+    interface Harness {
+      db: ProviderNeutralDatabase
+      app: Hono
+      repoPath: string
+      workflowId: string
+    }
+
+    async function buildHarness(uploadKey = 'refs'): Promise<Harness> {
+      const tmp = makeTempDir('aw-multipart-')
+      // Pin app home so worktrees / config land under tmp, not the real user dir.
+      process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
+      const repoPath = join(tmp, 'repo')
+      git('init', '-b', 'main', repoPath)
+      git('-C', repoPath, 'config', 'user.email', 't@t.test')
+      git('-C', repoPath, 'config', 'user.name', 't')
+      writeFileSync(join(repoPath, 'README.md'), '# repo\n')
+      git('-C', repoPath, 'add', '.')
+      git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
+
+      const stubOpencode = makeStubOpencode(tmp)
+
+      const db = databaseHarness.db
+      await seedTestDefaultOpencodeRuntime(db)
+
+      const reader = await createAgent(db, {
+        name: 'reader',
+        description: '',
+        outputs: ['out'],
+        outputKinds: { out: 'string' },
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: '',
+      })
+
+      const wf = await createWorkflow(db, {
+        name: 'with-upload',
+        description: '',
+        definition: {
+          $schema_version: 2,
+          inputs: [
+            { kind: 'text', key: 'topic', label: 'topic' },
+            {
+              kind: 'upload',
+              key: uploadKey,
+              label: 'Reference materials',
+              targetDir: 'inputs/refs',
+              minCount: 0,
+              maxCount: 5,
+            },
+          ],
+          nodes: [
+            { id: 'in_topic', kind: 'input', inputKey: 'topic' },
+            { id: 'in_refs', kind: 'input', inputKey: uploadKey },
+            {
+              id: 'reader',
+              kind: 'agent-single',
+              agentId: reader.id,
+              agentName: 'reader',
+              promptTemplate: '{{topic}} / {{refs}}',
+            },
+          ],
+          edges: [
+            {
+              id: 'e1',
+              source: { nodeId: 'in_topic', portName: 'topic' },
+              target: { nodeId: 'reader', portName: 'topic' },
+            },
+            {
+              id: 'e2',
+              source: { nodeId: 'in_refs', portName: uploadKey },
+              target: { nodeId: 'reader', portName: 'refs' },
+            },
+          ],
+        },
+      })
+
+      const application = await createProviderHttpApplication(databaseHarness, {
+        token: TOKEN,
+        configPath: join(tmp, 'config.json'),
+        opencodeVersion: '1.14.25',
+        dbVersion: 1,
+        appHome: join(tmp, 'home'),
+      })
+      applications.push(application)
+      const app = application.app
+      // Pin opencode binary for the route handler.
+      writeFileSync(
+        join(tmp, 'config.json'),
+        JSON.stringify({
+          $schema_version: 1,
+          opencodePath: stubOpencode,
+          defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
+          defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+        }),
+      )
+      return { db, app, repoPath, workflowId: wf.id }
+    }
+
+    function buildFormData(payload: object, files: Array<[string, string, string]>): FormData {
+      const fd = new FormData()
+      fd.set('payload', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+      for (const [inputKey, filename, body] of files) {
+        fd.append(`files[${inputKey}][]`, new Blob([body]), filename)
+      }
+      return fd
+    }
+
+    async function postMultipart(app: Hono, url: string, fd: FormData): Promise<Response> {
+      return app.request(url, {
+        method: 'POST',
+        body: fd,
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      })
+    }
+
+    // RFC-287 T11：夹具仓经真实 git smart-HTTP 远端（file:// 已是非法参数）。
+    beforeAll(async () => {
+      await startGitHttpRemote()
+    })
+
+    describe('POST /api/tasks multipart (RFC-020)', () => {
+      test('happy path: upload 2 files → task created, files in worktree, paths packed', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
             workflowId: h.workflowId,
             name: 'fixture-task',
             repoUrl: remoteUrlFor(h.repoPath),
             ref: 'main',
             inputs: { topic: 'orders', refs: '' },
-          }),
-        ],
-        { type: 'application/json' },
-      ),
-    )
-    // Empty filename — third arg is '' so the serialized part is filename="".
-    fd.append('files[refs][]', new Blob(['alpha']), '')
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { worktreePath: string; inputs: Record<string, string> }
-    expect(body.inputs.refs).toBe('inputs/refs/upload.bin')
-    expect(existsSync(join(body.worktreePath, 'inputs/refs/upload.bin'))).toBe(true)
-    expect(readFileSync(join(body.worktreePath, 'inputs/refs/upload.bin'), 'utf8')).toBe('alpha')
-  })
+          },
+          [
+            ['refs', 'a.txt', 'alpha'],
+            ['refs', 'b.txt', 'beta'],
+          ],
+        )
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(201)
+        const body = (await res.json()) as {
+          id: string
+          worktreePath: string
+          inputs: Record<string, string>
+        }
+        expect(body.worktreePath).not.toBe('')
+        expect(existsSync(join(body.worktreePath, 'inputs/refs/a.txt'))).toBe(true)
+        expect(existsSync(join(body.worktreePath, 'inputs/refs/b.txt'))).toBe(true)
+        expect(readFileSync(join(body.worktreePath, 'inputs/refs/a.txt'), 'utf8')).toBe('alpha')
+        expect(body.inputs.refs).toBe('inputs/refs/a.txt\ninputs/refs/b.txt')
+        expect(body.inputs.topic).toBe('orders')
+      })
 
-  test('missing payload field → 422 and no task row', async () => {
-    const h = await buildHarness()
-    const fd = new FormData()
-    fd.append('files[refs][]', new Blob(['x']), 'x.txt')
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('task-multipart-payload-missing')
-  })
+      test('Unicode input key survives multipart launch and upload materialization', async () => {
+        const inputKey = 'function设计文档'
+        const h = await buildHarness(inputKey)
+        const fd = buildFormData(
+          {
+            workflowId: h.workflowId,
+            name: 'unicode-input-key',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'orders', [inputKey]: '' },
+          },
+          [[inputKey, '设计.md', '# 设计']],
+        )
 
-  test('unknown multipart field → 422', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'x', refs: '' },
-      },
-      [],
-    )
-    fd.append('strayField', 'oops')
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('task-multipart-unknown-field')
-  })
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(201)
+        const body = (await res.json()) as {
+          worktreePath: string
+          inputs: Record<string, string>
+        }
+        expect(body.inputs[inputKey]).toBe('inputs/refs/设计.md')
+        expect(readFileSync(join(body.worktreePath, 'inputs/refs/设计.md'), 'utf8')).toBe('# 设计')
+      })
 
-  test('empty multipart input key remains invalid → 422', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'x', refs: '' },
-      },
-      [],
-    )
-    fd.append('files[][]', new Blob(['x']), 'x.txt')
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('task-multipart-unknown-field')
-  })
+      // Regression: a file part with an empty filename ("filename=\"\"" in the
+      // multipart Content-Disposition — e.g. a drag-dropped Blob the browser never
+      // named) is parsed by bun as a File whose `.name` is `undefined`, not ''. The
+      // route's `value.name === '' ? ...` guard missed that, so `filename` landed as
+      // `undefined` and `sanitizeUploadFilename` crashed with "undefined is not an object
+      // (evaluating 'e.replace')", surfacing to the user as task-upload-failed:
+      // "failed to land uploads into worktree". Must succeed under a fallback name.
+      test('upload with empty filename → 201, file lands under fallback name', async () => {
+        const h = await buildHarness()
+        const fd = new FormData()
+        fd.set(
+          'payload',
+          new Blob(
+            [
+              JSON.stringify({
+                workflowId: h.workflowId,
+                name: 'fixture-task',
+                repoUrl: remoteUrlFor(h.repoPath),
+                ref: 'main',
+                inputs: { topic: 'orders', refs: '' },
+              }),
+            ],
+            { type: 'application/json' },
+          ),
+        )
+        // Empty filename — third arg is '' so the serialized part is filename="".
+        fd.append('files[refs][]', new Blob(['alpha']), '')
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(201)
+        const body = (await res.json()) as { worktreePath: string; inputs: Record<string, string> }
+        expect(body.inputs.refs).toBe('inputs/refs/upload.bin')
+        expect(existsSync(join(body.worktreePath, 'inputs/refs/upload.bin'))).toBe(true)
+        expect(readFileSync(join(body.worktreePath, 'inputs/refs/upload.bin'), 'utf8')).toBe(
+          'alpha',
+        )
+      })
 
-  test('file targets an undeclared input key → 422', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'x', refs: '' },
-      },
-      [['nosuch', 'x.txt', 'x']],
-    )
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(422)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('task-multipart-unknown-input')
-  })
+      test('missing payload field → 422 and no task row', async () => {
+        const h = await buildHarness()
+        const fd = new FormData()
+        fd.append('files[refs][]', new Blob(['x']), 'x.txt')
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(422)
+        const body = (await res.json()) as { code: string }
+        expect(body.code).toBe('task-multipart-payload-missing')
+      })
 
-  test('workflow not found → 404 before uploads are touched', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: 'no-such-id',
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'x', refs: '' },
-      },
-      [['refs', 'a.txt', 'x']],
-    )
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(404)
-  })
+      test('unknown multipart field → 422', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
+            workflowId: h.workflowId,
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'x', refs: '' },
+          },
+          [],
+        )
+        fd.append('strayField', 'oops')
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(422)
+        const body = (await res.json()) as { code: string }
+        expect(body.code).toBe('task-multipart-unknown-field')
+      })
 
-  test('maxCount exceeded → 422 and no files on disk', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'x', refs: '' },
-      },
-      [
-        ['refs', '1.txt', 'a'],
-        ['refs', '2.txt', 'a'],
-        ['refs', '3.txt', 'a'],
-        ['refs', '4.txt', 'a'],
-        ['refs', '5.txt', 'a'],
-        ['refs', '6.txt', 'a'],
-      ],
-    )
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(422)
-  })
+      test('empty multipart input key remains invalid → 422', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
+            workflowId: h.workflowId,
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'x', refs: '' },
+          },
+          [],
+        )
+        fd.append('files[][]', new Blob(['x']), 'x.txt')
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(422)
+        const body = (await res.json()) as { code: string }
+        expect(body.code).toBe('task-multipart-unknown-field')
+      })
 
-  test('empty uploads with minCount=0 still creates the task', async () => {
-    const h = await buildHarness()
-    const fd = buildFormData(
-      {
-        workflowId: h.workflowId,
-        name: 'fixture-task',
-        repoUrl: remoteUrlFor(h.repoPath),
-        ref: 'main',
-        inputs: { topic: 'x', refs: '' },
-      },
-      [],
-    )
-    const res = await postMultipart(h.app, '/api/tasks', fd)
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { inputs: Record<string, string> }
-    expect(body.inputs.refs).toBe('')
+      test('file targets an undeclared input key → 422', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
+            workflowId: h.workflowId,
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'x', refs: '' },
+          },
+          [['nosuch', 'x.txt', 'x']],
+        )
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(422)
+        const body = (await res.json()) as { code: string }
+        expect(body.code).toBe('task-multipart-unknown-input')
+      })
+
+      test('workflow not found → 404 before uploads are touched', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
+            workflowId: 'no-such-id',
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'x', refs: '' },
+          },
+          [['refs', 'a.txt', 'x']],
+        )
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(404)
+      })
+
+      test('maxCount exceeded → 422 and no files on disk', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
+            workflowId: h.workflowId,
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'x', refs: '' },
+          },
+          [
+            ['refs', '1.txt', 'a'],
+            ['refs', '2.txt', 'a'],
+            ['refs', '3.txt', 'a'],
+            ['refs', '4.txt', 'a'],
+            ['refs', '5.txt', 'a'],
+            ['refs', '6.txt', 'a'],
+          ],
+        )
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(422)
+      })
+
+      test('empty uploads with minCount=0 still creates the task', async () => {
+        const h = await buildHarness()
+        const fd = buildFormData(
+          {
+            workflowId: h.workflowId,
+            name: 'fixture-task',
+            repoUrl: remoteUrlFor(h.repoPath),
+            ref: 'main',
+            inputs: { topic: 'x', refs: '' },
+          },
+          [],
+        )
+        const res = await postMultipart(h.app, '/api/tasks', fd)
+        expect(res.status).toBe(201)
+        const body = (await res.json()) as { inputs: Record<string, string> }
+        expect(body.inputs.refs).toBe('')
+      })
+    })
   })
 })

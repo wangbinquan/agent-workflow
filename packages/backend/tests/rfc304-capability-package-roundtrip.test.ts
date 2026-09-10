@@ -19,12 +19,12 @@
 // This drives the whole trip: export from one database, import into another,
 // and check the far end can actually use what arrived.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 import { agents, capabilityTemplates, users } from '../src/db/schema'
 import { lowerBundlePayloads } from '../src/services/bundle/lower'
 import { opSlug, resourceTypeOfOp, type BundleApplyProvider } from '../src/services/bundle/provider'
@@ -33,21 +33,10 @@ import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import { eq } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
-const dbs: DbClient[] = []
-
-afterEach(() => {
-  for (const db of dbs.splice(0)) db.$client.close()
-  for (const dir of tempDirs.splice(0)) removeTempDirSync(dir)
-})
-
-function freshDb(): DbClient {
-  const db = createInMemoryDb(MIGRATIONS)
-  dbs.push(db)
-  return db
-}
 
 function freshHome(): string {
   const dir = mkdtempSync(join(tmpdir(), 'rfc304-pkg-'))
@@ -66,7 +55,7 @@ const ACTOR = {
   ]),
 } as never
 
-async function seedSource(db: DbClient): Promise<{ templateId: string }> {
+async function seedSource(db: ProviderNeutralDatabase): Promise<{ templateId: string }> {
   await db.insert(users).values({
     id: 'u1',
     username: 'u1',
@@ -115,170 +104,221 @@ async function seedSource(db: DbClient): Promise<{ templateId: string }> {
   return { templateId }
 }
 
-const exportOf = async (db: DbClient, type: string, id: string) =>
+const exportOf = async (db: ProviderNeutralDatabase, type: string, id: string) =>
   await exportResourcePackage(db, ACTOR, { type, id } as never, {
     appHome: freshHome(),
     exportedAt: 1,
   })
 
+function registerProviderInstanceCase(
+  name: string,
+  databaseCount: number,
+  register: (freshDb: () => ProviderNeutralDatabase) => void,
+): void {
+  describeEachProvider(
+    name,
+    (harness) => {
+      describe('instance lifetime', () => {
+        let nextDatabase = 0
+        beforeEach(() => {
+          nextDatabase = 0
+        })
+        afterEach(() => {
+          for (const dir of tempDirs.splice(0)) removeTempDirSync(dir)
+        })
+        register(() => harness.database(nextDatabase++).db)
+      })
+    },
+    { databaseCount },
+  )
+}
+
 describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
-  test('a template becomes a package with ONE create op for itself', async () => {
-    // Before the serializer knew this type, the export failed on its own output
-    // check: a root with no create op is a dangling root. RFC-309 makes it one
-    // op instead of two, because a template is one row.
-    const db = freshDb()
-    const { templateId } = await seedSource(db)
+  registerProviderInstanceCase(
+    'a template becomes a package with ONE create op for itself',
+    1,
+    (freshDb) => {
+      test('a template becomes a package with ONE create op for itself', async () => {
+        // Before the serializer knew this type, the export failed on its own output
+        // check: a root with no create op is a dangling root. RFC-309 makes it one
+        // op instead of two, because a template is one row.
+        const db = freshDb()
+        const { templateId } = await seedSource(db)
 
-    const parsed = await parseResourcePackage(
-      (await exportOf(db, 'capability_template', templateId)).zip,
-    )
-    const kinds = parsed.bundle.ops.map((op) => op.kind)
-    expect(kinds).toContain('capability-template-create')
-    // And the pair it replaced is not produced any more: two ways to write the
-    // same row is how the two drift.
-    expect(kinds).not.toContain('capability-framework-create')
-    expect(kinds).not.toContain('capability-binding-create')
-  })
+        const parsed = await parseResourcePackage(
+          (await exportOf(db, 'capability_template', templateId)).zip,
+        )
+        const kinds = parsed.bundle.ops.map((op) => op.kind)
+        expect(kinds).toContain('capability-template-create')
+        // And the pair it replaced is not produced any more: two ways to write the
+        // same row is how the two drift.
+        expect(kinds).not.toContain('capability-framework-create')
+        expect(kinds).not.toContain('capability-binding-create')
+      })
+    },
+  )
 
-  test('the script bodies travel — that is what the far end needs', async () => {
-    // A package that carried the name and dropped them would import a template
-    // that resolves to nothing and fails at round time with "the template's
-    // scripts could not be resolved".
-    const db = freshDb()
-    const { templateId } = await seedSource(db)
+  registerProviderInstanceCase(
+    'the script bodies travel — that is what the far end needs',
+    1,
+    (freshDb) => {
+      test('the script bodies travel — that is what the far end needs', async () => {
+        // A package that carried the name and dropped them would import a template
+        // that resolves to nothing and fails at round time with "the template's
+        // scripts could not be resolved".
+        const db = freshDb()
+        const { templateId } = await seedSource(db)
 
-    const parsed = await parseResourcePackage(
-      (await exportOf(db, 'capability_template', templateId)).zip,
-    )
-    const op = parsed.bundle.ops.find((o) => o.kind === 'capability-template-create')
-    const payload = (op as { payload: Record<string, unknown> }).payload
+        const parsed = await parseResourcePackage(
+          (await exportOf(db, 'capability_template', templateId)).zip,
+        )
+        const op = parsed.bundle.ops.find((o) => o.kind === 'capability-template-create')
+        const payload = (op as { payload: Record<string, unknown> }).payload
 
-    expect(payload.capability).toBe('ci-fix')
-    expect(JSON.stringify(payload.scripts)).toContain('console.log(1)')
-    expect(payload.paramDefaults).toEqual({ maxAttempts: 3 })
-  })
+        expect(payload.capability).toBe('ci-fix')
+        expect(JSON.stringify(payload.scripts)).toContain('console.log(1)')
+        expect(payload.paramDefaults).toEqual({ maxAttempts: 3 })
+      })
+    },
+  )
 
-  test('the agents travel by REFERENCE, not by id', async () => {
-    // A raw id would name a row that exists only on the source instance. The
-    // `frameworkRef` this test used to also check is gone with the merge — the
-    // scripts are in the same payload now, so there is no second row to point
-    // at and no way for that pointer to dangle at the far end.
-    const db = freshDb()
-    const { templateId } = await seedSource(db)
+  registerProviderInstanceCase('the agents travel by REFERENCE, not by id', 1, (freshDb) => {
+    test('the agents travel by REFERENCE, not by id', async () => {
+      // A raw id would name a row that exists only on the source instance. The
+      // `frameworkRef` this test used to also check is gone with the merge — the
+      // scripts are in the same payload now, so there is no second row to point
+      // at and no way for that pointer to dangle at the far end.
+      const db = freshDb()
+      const { templateId } = await seedSource(db)
 
-    const parsed = await parseResourcePackage(
-      (await exportOf(db, 'capability_template', templateId)).zip,
-    )
-    const op = parsed.bundle.ops.find((o) => o.kind === 'capability-template-create')
-    const payload = (op as { payload: Record<string, unknown> }).payload
+      const parsed = await parseResourcePackage(
+        (await exportOf(db, 'capability_template', templateId)).zip,
+      )
+      const op = parsed.bundle.ops.find((o) => o.kind === 'capability-template-create')
+      const payload = (op as { payload: Record<string, unknown> }).payload
 
-    expect(JSON.stringify(payload.agentBySlot)).toMatch(/local:|external:/)
-    expect(JSON.stringify(payload.agentBySlot)).not.toContain('01')
-    // No dangling pointer to another template: the closure has nothing left to
-    // pull in but the agents.
-    expect(payload.frameworkRef).toBeUndefined()
-  })
-
-  test('the whole configuration travels in one payload', async () => {
-    // The half that used to be the binding's — the boundary is not in the
-    // payload any more, it is the `scripts:author` check the import path runs
-    // when the payload actually carries script bodies.
-    const db = freshDb()
-    const { templateId } = await seedSource(db)
-
-    const parsed = await parseResourcePackage(
-      (await exportOf(db, 'capability_template', templateId)).zip,
-    )
-    const op = parsed.bundle.ops.find((o) => o.kind === 'capability-template-create')
-    const payload = (op as { payload: Record<string, unknown> }).payload
-
-    expect(payload.promptBySlot).toEqual({ reviewer: 'be strict' })
-    expect(payload.params).toEqual({ maxAttempts: 2 })
-  })
-
-  test('a reused destination agent is rewritten and lowered into the imported template', async () => {
-    const source = freshDb()
-    const { templateId } = await seedSource(source)
-    const parsed = await parseResourcePackage(
-      (await exportOf(source, 'capability_template', templateId)).zip,
-    )
-    const templateOp = parsed.bundle.ops.find(
-      (op) => resourceTypeOfOp(op) === 'capability_template',
-    )
-    const agentOp = parsed.bundle.ops.find((op) => resourceTypeOfOp(op) === 'agent')
-    const templateSlug = templateOp === undefined ? null : opSlug(templateOp)
-    const agentSlug = agentOp === undefined ? null : opSlug(agentOp)
-    expect(templateSlug).not.toBeNull()
-    expect(agentSlug).not.toBeNull()
-
-    const destinationAgentId = ulid()
-    const translated = translateDecisions(
-      parsed,
-      [
-        { localSlug: templateSlug!, action: 'new', finalName: 'imported ci-fix' },
-        { localSlug: agentSlug!, action: 'reuse', targetId: destinationAgentId },
-      ],
-      new Map(),
-    )
-    const translatedTemplate = translated.ops.find(
-      (op) => resourceTypeOfOp(op) === 'capability_template',
-    )
-    expect((translatedTemplate?.payload as { agentBySlot?: unknown }).agentBySlot).toEqual({
-      reviewer: `external:${destinationAgentId}`,
+      expect(JSON.stringify(payload.agentBySlot)).toMatch(/local:|external:/)
+      expect(JSON.stringify(payload.agentBySlot)).not.toContain('01')
+      // No dangling pointer to another template: the closure has nothing left to
+      // pull in but the agents.
+      expect(payload.frameworkRef).toBeUndefined()
     })
-
-    const destination = freshDb()
-    await destination.insert(agents).values({
-      id: destinationAgentId,
-      name: 'department-reviewer',
-      description: 'destination agent',
-      bodyMd: 'Review it.',
-      outputs: '["findings"]',
-      ownerUserId: null,
-      visibility: 'public',
-      createdAt: 1,
-      updatedAt: 1,
-    } as typeof agents.$inferInsert)
-    const provider: BundleApplyProvider = {
-      idempotencyKey: { scope: 'test', key: ulid() },
-      serializationKey: ulid(),
-      actor: ACTOR,
-      resolveExternal: async (ref, type) => {
-        expect(ref).toBe(`external:${destinationAgentId}`)
-        expect(type).toBe('agent')
-        return destinationAgentId
-      },
-      readSkillFile: () => new Uint8Array(),
-    }
-    const lowered = await lowerBundlePayloads(destination, translated.ops, provider)
-    const loweredTemplate = lowered.find((op) => op.resourceType === 'capability_template')
-    expect(loweredTemplate?.payload.agentBySlot).toEqual({ reviewer: destinationAgentId })
   })
+
+  registerProviderInstanceCase('the whole configuration travels in one payload', 1, (freshDb) => {
+    test('the whole configuration travels in one payload', async () => {
+      // The half that used to be the binding's — the boundary is not in the
+      // payload any more, it is the `scripts:author` check the import path runs
+      // when the payload actually carries script bodies.
+      const db = freshDb()
+      const { templateId } = await seedSource(db)
+
+      const parsed = await parseResourcePackage(
+        (await exportOf(db, 'capability_template', templateId)).zip,
+      )
+      const op = parsed.bundle.ops.find((o) => o.kind === 'capability-template-create')
+      const payload = (op as { payload: Record<string, unknown> }).payload
+
+      expect(payload.promptBySlot).toEqual({ reviewer: 'be strict' })
+      expect(payload.params).toEqual({ maxAttempts: 2 })
+    })
+  })
+
+  registerProviderInstanceCase(
+    'a reused destination agent is rewritten and lowered into the imported template',
+    2,
+    (freshDb) => {
+      test('a reused destination agent is rewritten and lowered into the imported template', async () => {
+        const source = freshDb()
+        const { templateId } = await seedSource(source)
+        const parsed = await parseResourcePackage(
+          (await exportOf(source, 'capability_template', templateId)).zip,
+        )
+        const templateOp = parsed.bundle.ops.find(
+          (op) => resourceTypeOfOp(op) === 'capability_template',
+        )
+        const agentOp = parsed.bundle.ops.find((op) => resourceTypeOfOp(op) === 'agent')
+        const templateSlug = templateOp === undefined ? null : opSlug(templateOp)
+        const agentSlug = agentOp === undefined ? null : opSlug(agentOp)
+        expect(templateSlug).not.toBeNull()
+        expect(agentSlug).not.toBeNull()
+
+        const destinationAgentId = ulid()
+        const translated = translateDecisions(
+          parsed,
+          [
+            { localSlug: templateSlug!, action: 'new', finalName: 'imported ci-fix' },
+            { localSlug: agentSlug!, action: 'reuse', targetId: destinationAgentId },
+          ],
+          new Map(),
+        )
+        const translatedTemplate = translated.ops.find(
+          (op) => resourceTypeOfOp(op) === 'capability_template',
+        )
+        expect((translatedTemplate?.payload as { agentBySlot?: unknown }).agentBySlot).toEqual({
+          reviewer: `external:${destinationAgentId}`,
+        })
+
+        const destination = freshDb()
+        await destination.insert(agents).values({
+          id: destinationAgentId,
+          name: 'department-reviewer',
+          description: 'destination agent',
+          bodyMd: 'Review it.',
+          outputs: '["findings"]',
+          ownerUserId: null,
+          visibility: 'public',
+          createdAt: 1,
+          updatedAt: 1,
+        } as typeof agents.$inferInsert)
+        const provider: BundleApplyProvider = {
+          idempotencyKey: { scope: 'test', key: ulid() },
+          serializationKey: ulid(),
+          actor: ACTOR,
+          resolveExternal: async (ref, type) => {
+            expect(ref).toBe(`external:${destinationAgentId}`)
+            expect(type).toBe('agent')
+            return destinationAgentId
+          },
+          readSkillFile: () => new Uint8Array(),
+        }
+        const lowered = await lowerBundlePayloads(destination, translated.ops, provider)
+        const loweredTemplate = lowered.find((op) => op.resourceType === 'capability_template')
+        expect(loweredTemplate?.payload.agentBySlot).toEqual({ reviewer: destinationAgentId })
+      })
+    },
+  )
 })
 
 describe('RFC-304 T17a — the far end', () => {
-  test('the package parses on a machine that has never seen the source', async () => {
-    // The destination's parser is the same code as the exporter's own final
-    // check, so this is the honest version of "it will import": a package that
-    // parses clean here is one the import path will accept.
-    const source = freshDb()
-    const { templateId } = await seedSource(source)
-    const pkg = await exportOf(source, 'capability_template', templateId)
+  registerProviderInstanceCase(
+    'the package parses on a machine that has never seen the source',
+    1,
+    (freshDb) => {
+      test('the package parses on a machine that has never seen the source', async () => {
+        // The destination's parser is the same code as the exporter's own final
+        // check, so this is the honest version of "it will import": a package that
+        // parses clean here is one the import path will accept.
+        const source = freshDb()
+        const { templateId } = await seedSource(source)
+        const pkg = await exportOf(source, 'capability_template', templateId)
 
-    const parsed = await parseResourcePackage(pkg.zip)
-    expect(parsed.bundle.rootRef).toMatch(/^local:/)
-    // One template resource plus the agent it uses — which is what the import
-    // preview lists for the operator before anything is written. RFC-309: this
-    // used to be two template resources, and the pair could arrive incomplete.
-    const types = parsed.manifest.resources.map((r) => r.type).sort()
-    expect(types).toContain('capability_template')
-    expect(types.filter((t) => t === 'capability_template')).toHaveLength(1)
+        const parsed = await parseResourcePackage(pkg.zip)
+        expect(parsed.bundle.rootRef).toMatch(/^local:/)
+        // One template resource plus the agent it uses — which is what the import
+        // preview lists for the operator before anything is written. RFC-309: this
+        // used to be two template resources, and the pair could arrive incomplete.
+        const types = parsed.manifest.resources.map((r) => r.type).sort()
+        expect(types).toContain('capability_template')
+        expect(types.filter((t) => t === 'capability_template')).toHaveLength(1)
 
-    // And the source row is untouched by having been exported.
-    const [stillThere] = await source
-      .select()
-      .from(capabilityTemplates)
-      .where(eq(capabilityTemplates.id, templateId))
-    expect(stillThere?.name).toBe('team ci-fix')
-  })
+        // And the source row is untouched by having been exported.
+        const [stillThere] = await source
+          .select()
+          .from(capabilityTemplates)
+          .where(eq(capabilityTemplates.id, templateId))
+        expect(stillThere?.name).toBe('team ci-fix')
+      })
+    },
+  )
 })

@@ -317,7 +317,7 @@ const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
  * skipped entirely so no user identity can leak into the prompt.
  */
 export async function buildRosterAgentCards(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   config: WorkgroupRuntimeConfig,
 ): Promise<Map<string, string>> {
   const cards = new Map<string, string>()

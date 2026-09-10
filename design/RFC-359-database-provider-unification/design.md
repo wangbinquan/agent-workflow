@@ -20,6 +20,16 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W51 四文件七个DB参数改接既有ProviderNeutralDatabase合同，三个type import随之调整，
+  原完整运行体、SQL、调用顺序及返回保持。16个旧测试文件只将选定114例接当前provider，
+  保留全部186个原声明/549 matcher与预算；多库场景显式声明databaseCount。
+  应用在原构造位置等待ready，fixture内层先abort活动任务（原有时）、dispose应用、
+  再执行原目录和环境清理，外层harness最后释放。multipart与repository两个provider组
+  通过新增内层describe保证此顺序；同层afterEach按注册顺序执行，不能据手动控制误判release最后。
+  两个纯native组退役已证明无读取/逃逸/关闭消费者的DB分配，原其余Git/FS准备及skip保持。
+  repair仅provider任务种子显式补原SQLite根任务触发器生成的两项谱系字段，nodeRun输入不变。
+  纯端口/源码对照仅证明其覆盖的输入、操作和生命周期，真实HTTP/PG行为等待新SHA托管。
+
 - W50 catalog仅将既有字符串数组decoder委托给共享parser，私有签名、同步返回、
   parse/filter catch、外部getter的原位置及完整caller不变。
   13个旧测试文件的选定声明接真实provider；原种子只在provider fixture中显式给出

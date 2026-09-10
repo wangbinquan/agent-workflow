@@ -28,6 +28,8 @@ import { getSkill } from './helpers/resourceLookup'
 import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecision, SkillZipDecisionMap } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -41,19 +43,23 @@ const ADMIN = actor('admin-1', 'admin')
 const ALICE = actor('alice')
 const BOB = actor('bob')
 
-interface H {
-  db: DbClient
+interface H<TDb extends ProviderNeutralDatabase = DbClient> {
+  db: TDb
   fsOpts: SkillZipFsOptions
   cleanup: () => void
 }
 
-function build(): H {
+function buildWithDatabase<TDb extends ProviderNeutralDatabase>(createDatabase: () => TDb): H<TDb> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-zip-commit-'))
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createDatabase(),
     fsOpts: { appHome },
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
   }
+}
+
+function build(): H {
+  return buildWithDatabase(() => createInMemoryDb(MIGRATIONS))
 }
 
 function buildZip(files: Record<string, Uint8Array | string>): Uint8Array {
@@ -70,7 +76,7 @@ const skillMd = (name: string, desc = 'd') =>
 type OverwriteDecision = Extract<SkillZipDecision, { action: 'overwrite' }>
 
 async function previewOverwrite(
-  h: H,
+  h: H<ProviderNeutralDatabase>,
   actor: Actor,
   buffer: Uint8Array,
   candidateName: string,
@@ -94,255 +100,269 @@ async function previewOverwrite(
   }
 }
 
-describe('commitSkillZipBuffer', () => {
-  let h: H
-  beforeEach(() => {
-    h = build()
-  })
-  afterEach(() => h.cleanup())
-
-  test('all candidates with import decision are created', async () => {
-    const buf = buildZip({
-      'skill-a/SKILL.md': skillMd('skill-a', 'a desc'),
-      'skill-a/extra.md': '# extra',
-      'skill-b/SKILL.md': skillMd('skill-b', 'b desc'),
+describeEachProvider('commitSkillZipBuffer', (harness) => {
+  describe('filesystem lifetime', () => {
+    let h: H<ProviderNeutralDatabase>
+    beforeEach(() => {
+      h = buildWithDatabase(() => harness.db)
     })
-    const decisions: SkillZipDecisionMap = {
-      'skill-a': { action: 'import' },
-      'skill-b': { action: 'import' },
-    }
-    const r = await commitSkillZipBuffer(h.db, h.fsOpts, buf, decisions, { actor: ADMIN })
-    expect(r.created.map((s) => s.name).sort()).toEqual(['skill-a', 'skill-b'])
-    expect(r.updated).toEqual([])
-    expect(r.failed).toEqual([])
-    const skillA = r.created.find((skill) => skill.name === 'skill-a')!
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'extra.md'))).toBe(true)
-  })
+    afterEach(() => h.cleanup())
 
-  test('skip decision leaves DB + FS untouched for that candidate', async () => {
-    const buf = buildZip({ 'skill-x/SKILL.md': skillMd('skill-x') })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-x': { action: 'skip' } },
-      { actor: ADMIN },
-    )
-    expect(r.created).toEqual([])
-    expect(r.skipped.map((s) => s.name)).toEqual(['skill-x'])
-    expect(await getSkill(h.db, 'skill-x')).toBeNull()
-  })
-
-  test('overwrite replaces managed skill content and keeps DB id stable', async () => {
-    const before = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'skill-o',
-      description: 'old desc',
-      bodyMd: 'old body',
-      frontmatterExtra: {},
+    test('all candidates with import decision are created', async () => {
+      const buf = buildZip({
+        'skill-a/SKILL.md': skillMd('skill-a', 'a desc'),
+        'skill-a/extra.md': '# extra',
+        'skill-b/SKILL.md': skillMd('skill-b', 'b desc'),
+      })
+      const decisions: SkillZipDecisionMap = {
+        'skill-a': { action: 'import' },
+        'skill-b': { action: 'import' },
+      }
+      const r = await commitSkillZipBuffer(h.db, h.fsOpts, buf, decisions, { actor: ADMIN })
+      expect(r.created.map((s) => s.name).sort()).toEqual(['skill-a', 'skill-b'])
+      expect(r.updated).toEqual([])
+      expect(r.failed).toEqual([])
+      const skillA = r.created.find((skill) => skill.name === 'skill-a')!
+      expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'SKILL.md'))).toBe(
+        true,
+      )
+      expect(existsSync(join(h.fsOpts.appHome, 'skills', skillA.id, 'files', 'extra.md'))).toBe(
+        true,
+      )
     })
-    // Drop a sentinel file to verify it gets removed by the overwrite step.
-    const sentinelPath = join(h.fsOpts.appHome, 'skills', before.id, 'files', 'sentinel.txt')
-    writeFileSync(sentinelPath, 'remove-me')
 
-    const buf = buildZip({
-      'skill-o/SKILL.md': skillMd('skill-o', 'new desc'),
-      'skill-o/fresh.md': '# fresh',
+    test('skip decision leaves DB + FS untouched for that candidate', async () => {
+      const buf = buildZip({ 'skill-x/SKILL.md': skillMd('skill-x') })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-x': { action: 'skip' } },
+        { actor: ADMIN },
+      )
+      expect(r.created).toEqual([])
+      expect(r.skipped.map((s) => s.name)).toEqual(['skill-x'])
+      expect(await getSkill(h.db, 'skill-x')).toBeNull()
     })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-o': await previewOverwrite(h, ADMIN, buf, 'skill-o') },
-      { actor: ADMIN },
-    )
-    expect(r.updated.map((s) => s.id)).toEqual([before.id])
-    expect(r.updated[0]!.description).toBe('new desc')
 
-    const skillRoot = join(h.fsOpts.appHome, 'skills', before.id, 'files')
-    expect(existsSync(join(skillRoot, 'sentinel.txt'))).toBe(false)
-    expect(existsSync(join(skillRoot, 'fresh.md'))).toBe(true)
-    const md = readFileSync(join(skillRoot, 'SKILL.md'), 'utf-8')
-    expect(md).toContain('description: new desc')
-    expect(md).toContain('name: skill-o')
-  })
-
-  // RFC-170 (ZIP→version funnel): an overwrite now routes through commitSkillVersion
-  // instead of a direct FS+DB write — so it bumps content_version, archives the new
-  // tree as an immutable version snapshot, and (via the funnel) picks up the in-tx
-  // composite/owner fence + op-scoped crash rollback.
-  test('overwrite goes through the version funnel — bumps content_version + snapshots the tree', async () => {
-    const before = await createManagedSkill(h.db, h.fsOpts, {
-      name: 'skill-v',
-      description: 'd',
-      bodyMd: 'b',
-      frontmatterExtra: {},
-    })
-    expect(before.contentVersion).toBe(1)
-    const buf = buildZip({
-      'skill-v/SKILL.md': skillMd('skill-v', 'd2'),
-      'skill-v/x.md': '# x',
-    })
-    await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-v': await previewOverwrite(h, ADMIN, buf, 'skill-v') },
-      { actor: ADMIN },
-    )
-    const after = await getSkill(h.db, 'skill-v')
-    expect(after!.contentVersion).toBe(2) // versioned via commitSkillVersion, not a raw write
-    // The immutable v2 snapshot exists (the funnel archived the overwritten tree).
-    const snap = join(h.fsOpts.appHome, 'skills', before.id, 'versions', 'v2', 'files', 'SKILL.md')
-    expect(existsSync(snap)).toBe(true)
-    expect(readFileSync(snap, 'utf-8')).toContain('description: d2')
-  })
-
-  test('rename re-targets to new name; original skill name stays free', async () => {
-    const buf = buildZip({ 'skill-orig/SKILL.md': skillMd('skill-orig', 'desc') })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-orig': { action: 'rename', newName: 'skill-new' } },
-      { actor: ADMIN },
-    )
-    expect(r.created.map((s) => s.name)).toEqual(['skill-new'])
-    expect(await getSkill(h.db, 'skill-orig')).toBeNull()
-    expect(
-      existsSync(join(h.fsOpts.appHome, 'skills', r.created[0]!.id, 'files', 'SKILL.md')),
-    ).toBe(true)
-  })
-
-  test('rename to a name already in DB fails with skill-rename-conflict', async () => {
-    await createManagedSkill(
-      h.db,
-      h.fsOpts,
-      {
-        name: 'taken',
-        description: '',
-        bodyMd: '',
+    test('overwrite replaces managed skill content and keeps DB id stable', async () => {
+      const before = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'skill-o',
+        description: 'old desc',
+        bodyMd: 'old body',
         frontmatterExtra: {},
-      },
-      { ownerUserId: ADMIN.user.id },
-    )
-    const buf = buildZip({ 'skill-from-zip/SKILL.md': skillMd('skill-from-zip') })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-from-zip': { action: 'rename', newName: 'taken' } },
-      { actor: ADMIN },
-    )
-    expect(r.failed[0]!.code).toBe('skill-rename-conflict')
-  })
+      })
+      // Drop a sentinel file to verify it gets removed by the overwrite step.
+      const sentinelPath = join(h.fsOpts.appHome, 'skills', before.id, 'files', 'sentinel.txt')
+      writeFileSync(sentinelPath, 'remove-me')
 
-  test('two renames to the same target inside one batch — second fails', async () => {
-    const buf = buildZip({
-      'a/SKILL.md': skillMd('a'),
-      'b/SKILL.md': skillMd('b'),
+      const buf = buildZip({
+        'skill-o/SKILL.md': skillMd('skill-o', 'new desc'),
+        'skill-o/fresh.md': '# fresh',
+      })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-o': await previewOverwrite(h, ADMIN, buf, 'skill-o') },
+        { actor: ADMIN },
+      )
+      expect(r.updated.map((s) => s.id)).toEqual([before.id])
+      expect(r.updated[0]!.description).toBe('new desc')
+
+      const skillRoot = join(h.fsOpts.appHome, 'skills', before.id, 'files')
+      expect(existsSync(join(skillRoot, 'sentinel.txt'))).toBe(false)
+      expect(existsSync(join(skillRoot, 'fresh.md'))).toBe(true)
+      const md = readFileSync(join(skillRoot, 'SKILL.md'), 'utf-8')
+      expect(md).toContain('description: new desc')
+      expect(md).toContain('name: skill-o')
     })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      {
-        a: { action: 'rename', newName: 'merged' },
-        b: { action: 'rename', newName: 'merged' },
-      },
-      { actor: ADMIN },
-    )
-    expect(r.created.map((s) => s.name)).toEqual(['merged'])
-    expect(r.failed.map((f) => f.code)).toEqual(['skill-rename-conflict'])
-  })
 
-  test('rename newName fails kebab-case → skill-name-invalid', async () => {
-    const buf = buildZip({ 'skill-r/SKILL.md': skillMd('skill-r') })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-r': { action: 'rename', newName: 'Bad Name' as never } },
-      { actor: ADMIN },
-    )
-    expect(r.failed[0]!.code).toBe('skill-name-invalid')
-    expect(r.created).toEqual([])
-  })
-
-  test('candidate without a decision is reported as skipped', async () => {
-    const buf = buildZip({
-      'a/SKILL.md': skillMd('a'),
-      'b/SKILL.md': skillMd('b'),
-    })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { a: { action: 'import' } },
-      { actor: ADMIN },
-    )
-    expect(r.created.map((s) => s.name)).toEqual(['a'])
-    expect(r.skipped.find((s) => s.name === 'b')).toBeDefined()
-  })
-
-  test('decision targeting a non-existent candidate is reported as skipped', async () => {
-    const buf = buildZip({ 'only/SKILL.md': skillMd('only') })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      {
-        only: { action: 'import' },
-        ghost: { action: 'import' },
-      },
-      { actor: ADMIN },
-    )
-    expect(r.skipped.find((s) => s.name === 'ghost')).toBeDefined()
-  })
-
-  test('parseSkillZipBuffer flags DB conflict on candidate view', async () => {
-    await createManagedSkill(
-      h.db,
-      h.fsOpts,
-      {
-        name: 'dup',
-        description: '',
-        bodyMd: '',
+    // RFC-170 (ZIP→version funnel): an overwrite now routes through commitSkillVersion
+    // instead of a direct FS+DB write — so it bumps content_version, archives the new
+    // tree as an immutable version snapshot, and (via the funnel) picks up the in-tx
+    // composite/owner fence + op-scoped crash rollback.
+    test('overwrite goes through the version funnel — bumps content_version + snapshots the tree', async () => {
+      const before = await createManagedSkill(h.db, h.fsOpts, {
+        name: 'skill-v',
+        description: 'd',
+        bodyMd: 'b',
         frontmatterExtra: {},
-      },
-      { ownerUserId: ADMIN.user.id },
-    )
-    const buf = buildZip({
-      'dup/SKILL.md': skillMd('dup'),
-      'fresh/SKILL.md': skillMd('fresh'),
+      })
+      expect(before.contentVersion).toBe(1)
+      const buf = buildZip({
+        'skill-v/SKILL.md': skillMd('skill-v', 'd2'),
+        'skill-v/x.md': '# x',
+      })
+      await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-v': await previewOverwrite(h, ADMIN, buf, 'skill-v') },
+        { actor: ADMIN },
+      )
+      const after = await getSkill(h.db, 'skill-v')
+      expect(after!.contentVersion).toBe(2) // versioned via commitSkillVersion, not a raw write
+      // The immutable v2 snapshot exists (the funnel archived the overwritten tree).
+      const snap = join(
+        h.fsOpts.appHome,
+        'skills',
+        before.id,
+        'versions',
+        'v2',
+        'files',
+        'SKILL.md',
+      )
+      expect(existsSync(snap)).toBe(true)
+      expect(readFileSync(snap, 'utf-8')).toContain('description: d2')
     })
-    const { response } = await parseSkillZipBuffer(h.db, ADMIN, buf)
-    const dup = response.skills.find((s) => s.name === 'dup')!
-    expect(dup.conflict).toBe('managed')
-    const fresh = response.skills.find((s) => s.name === 'fresh')!
-    expect(fresh.conflict).toBeUndefined()
-    expect(fresh.overwriteCandidates).toEqual([])
-  })
 
-  test('frontmatterExtra round-trips into rewritten SKILL.md', async () => {
-    const buf = buildZip({
-      'skill-fm/SKILL.md':
-        '---\nname: skill-fm\ndescription: d\nauthor: alice\nversion: 1\n---\nbody\n',
+    test('rename re-targets to new name; original skill name stays free', async () => {
+      const buf = buildZip({ 'skill-orig/SKILL.md': skillMd('skill-orig', 'desc') })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-orig': { action: 'rename', newName: 'skill-new' } },
+        { actor: ADMIN },
+      )
+      expect(r.created.map((s) => s.name)).toEqual(['skill-new'])
+      expect(await getSkill(h.db, 'skill-orig')).toBeNull()
+      expect(
+        existsSync(join(h.fsOpts.appHome, 'skills', r.created[0]!.id, 'files', 'SKILL.md')),
+      ).toBe(true)
     })
-    const result = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { 'skill-fm': { action: 'import' } },
-      { actor: ADMIN },
-    )
-    const md = readFileSync(
-      join(h.fsOpts.appHome, 'skills', result.created[0]!.id, 'files', 'SKILL.md'),
-      'utf-8',
-    )
-    expect(md).toContain('author: alice')
-    expect(md).toContain('version: 1')
-    expect(md).toContain('name: skill-fm')
+
+    test('rename to a name already in DB fails with skill-rename-conflict', async () => {
+      await createManagedSkill(
+        h.db,
+        h.fsOpts,
+        {
+          name: 'taken',
+          description: '',
+          bodyMd: '',
+          frontmatterExtra: {},
+        },
+        { ownerUserId: ADMIN.user.id },
+      )
+      const buf = buildZip({ 'skill-from-zip/SKILL.md': skillMd('skill-from-zip') })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-from-zip': { action: 'rename', newName: 'taken' } },
+        { actor: ADMIN },
+      )
+      expect(r.failed[0]!.code).toBe('skill-rename-conflict')
+    })
+
+    test('two renames to the same target inside one batch — second fails', async () => {
+      const buf = buildZip({
+        'a/SKILL.md': skillMd('a'),
+        'b/SKILL.md': skillMd('b'),
+      })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        {
+          a: { action: 'rename', newName: 'merged' },
+          b: { action: 'rename', newName: 'merged' },
+        },
+        { actor: ADMIN },
+      )
+      expect(r.created.map((s) => s.name)).toEqual(['merged'])
+      expect(r.failed.map((f) => f.code)).toEqual(['skill-rename-conflict'])
+    })
+
+    test('rename newName fails kebab-case → skill-name-invalid', async () => {
+      const buf = buildZip({ 'skill-r/SKILL.md': skillMd('skill-r') })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-r': { action: 'rename', newName: 'Bad Name' as never } },
+        { actor: ADMIN },
+      )
+      expect(r.failed[0]!.code).toBe('skill-name-invalid')
+      expect(r.created).toEqual([])
+    })
+
+    test('candidate without a decision is reported as skipped', async () => {
+      const buf = buildZip({
+        'a/SKILL.md': skillMd('a'),
+        'b/SKILL.md': skillMd('b'),
+      })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { a: { action: 'import' } },
+        { actor: ADMIN },
+      )
+      expect(r.created.map((s) => s.name)).toEqual(['a'])
+      expect(r.skipped.find((s) => s.name === 'b')).toBeDefined()
+    })
+
+    test('decision targeting a non-existent candidate is reported as skipped', async () => {
+      const buf = buildZip({ 'only/SKILL.md': skillMd('only') })
+      const r = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        {
+          only: { action: 'import' },
+          ghost: { action: 'import' },
+        },
+        { actor: ADMIN },
+      )
+      expect(r.skipped.find((s) => s.name === 'ghost')).toBeDefined()
+    })
+
+    test('parseSkillZipBuffer flags DB conflict on candidate view', async () => {
+      await createManagedSkill(
+        h.db,
+        h.fsOpts,
+        {
+          name: 'dup',
+          description: '',
+          bodyMd: '',
+          frontmatterExtra: {},
+        },
+        { ownerUserId: ADMIN.user.id },
+      )
+      const buf = buildZip({
+        'dup/SKILL.md': skillMd('dup'),
+        'fresh/SKILL.md': skillMd('fresh'),
+      })
+      const { response } = await parseSkillZipBuffer(h.db, ADMIN, buf)
+      const dup = response.skills.find((s) => s.name === 'dup')!
+      expect(dup.conflict).toBe('managed')
+      const fresh = response.skills.find((s) => s.name === 'fresh')!
+      expect(fresh.conflict).toBeUndefined()
+      expect(fresh.overwriteCandidates).toEqual([])
+    })
+
+    test('frontmatterExtra round-trips into rewritten SKILL.md', async () => {
+      const buf = buildZip({
+        'skill-fm/SKILL.md':
+          '---\nname: skill-fm\ndescription: d\nauthor: alice\nversion: 1\n---\nbody\n',
+      })
+      const result = await commitSkillZipBuffer(
+        h.db,
+        h.fsOpts,
+        buf,
+        { 'skill-fm': { action: 'import' } },
+        { actor: ADMIN },
+      )
+      const md = readFileSync(
+        join(h.fsOpts.appHome, 'skills', result.created[0]!.id, 'files', 'SKILL.md'),
+        'utf-8',
+      )
+      expect(md).toContain('author: alice')
+      expect(md).toContain('version: 1')
+      expect(md).toContain('name: skill-fm')
+    })
   })
 })
 

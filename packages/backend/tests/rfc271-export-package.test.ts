@@ -23,12 +23,14 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
 import { eq } from 'drizzle-orm'
 import { agents, mcps, workflows } from '../src/db/schema'
 import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { applyPackageSecretInputs } from '../src/services/resourcePackage/secretInputs'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 技能内容在文件系统里（`${appHome}/skills/{id}/files/`），所以导出要 appHome。
@@ -45,7 +47,7 @@ const actorOf = (id: string, permissions: string[] = ['scripts:author']): Actor 
 const defn = (nodes: unknown[]): WorkflowDefinition =>
   ({ $schema_version: 4, inputs: [], nodes, edges: [] }) as unknown as WorkflowDefinition
 
-async function seed(db: DbClient): Promise<{ wf: string }> {
+async function seed(db: ProviderNeutralDatabase): Promise<{ wf: string }> {
   const mcpId = ulid()
   await db
     .insert(mcps)
@@ -110,38 +112,42 @@ const readEntry = (zip: Uint8Array, path: string): string => {
 }
 
 describe('包的目录结构（AC-1：内部结构清晰明确）', () => {
-  test('三个固定条目：manifest.yaml / README.md / bundle.json', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wf },
-      { appHome: APP_HOME },
-    )
-    expect(
-      decodeZip(pkg.zip)
-        .map((e) => e.path)
-        .sort(),
-    ).toEqual(['README.md', 'bundle.json', 'manifest.yaml'])
-    expect(pkg.filename).toContain('audit')
+  describeEachProvider('三个固定条目：manifest.yaml / README.md / bundle.json', (harness) => {
+    test('三个固定条目：manifest.yaml / README.md / bundle.json', async () => {
+      const db = harness.db
+      const { wf } = await seed(db)
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wf },
+        { appHome: APP_HOME },
+      )
+      expect(
+        decodeZip(pkg.zip)
+          .map((e) => e.path)
+          .sort(),
+      ).toEqual(['README.md', 'bundle.json', 'manifest.yaml'])
+      expect(pkg.filename).toContain('audit')
+    })
   })
 
-  test('bundle.json 是机器契约、manifest 是给人看的 —— 两者分开', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wf },
-      { appHome: APP_HOME },
-    )
-    const bundle = JSON.parse(readEntry(pkg.zip, 'bundle.json')) as {
-      ops: unknown[]
-      rootRef: string
-    }
-    expect(bundle.ops).toHaveLength(3) // workflow + agent + mcp
-    expect(bundle.rootRef).toBe('local:workflow-audit')
+  describeEachProvider('bundle.json 是机器契约、manifest 是给人看的 —— 两者分开', (harness) => {
+    test('bundle.json 是机器契约、manifest 是给人看的 —— 两者分开', async () => {
+      const db = harness.db
+      const { wf } = await seed(db)
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wf },
+        { appHome: APP_HOME },
+      )
+      const bundle = JSON.parse(readEntry(pkg.zip, 'bundle.json')) as {
+        ops: unknown[]
+        rootRef: string
+      }
+      expect(bundle.ops).toHaveLength(3) // workflow + agent + mcp
+      expect(bundle.rootRef).toBe('local:workflow-audit')
+    })
   })
 })
 
@@ -381,95 +387,101 @@ describe('② 凭据：位置在包里、值不在包里', () => {
 })
 
 describe('③ 逐字节可复现', () => {
-  test('同一份闭包导出两次，zip 字节完全相同', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { wf } = await seed(db)
-    const a = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wf },
-      { appHome: APP_HOME },
-    )
-    const b = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wf },
-      { appHome: APP_HOME },
-    )
-    expect([...a.zip]).toEqual([...b.zip])
+  describeEachProvider('同一份闭包导出两次，zip 字节完全相同', (harness) => {
+    test('同一份闭包导出两次，zip 字节完全相同', async () => {
+      const db = harness.db
+      const { wf } = await seed(db)
+      const a = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wf },
+        { appHome: APP_HOME },
+      )
+      const b = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wf },
+        { appHome: APP_HOME },
+      )
+      expect([...a.zip]).toEqual([...b.zip])
+    })
   })
 })
 
 describe('requirements —— 导入方需要自备的东西', () => {
-  test('MCP 形态进 requirements（它不是包内容，是前提）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { wf } = await seed(db)
-    const pkg = await exportResourcePackage(
-      db,
-      actorOf('u1'),
-      { type: 'workflow', id: wf },
-      { appHome: APP_HOME },
-    )
-    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
-      requirements: { mcpKinds: string[] }
-    }
-    expect(manifest.requirements.mcpKinds).toEqual(['remote'])
+  describeEachProvider('MCP 形态进 requirements（它不是包内容，是前提）', (harness) => {
+    test('MCP 形态进 requirements（它不是包内容，是前提）', async () => {
+      const db = harness.db
+      const { wf } = await seed(db)
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1'),
+        { type: 'workflow', id: wf },
+        { appHome: APP_HOME },
+      )
+      const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+        requirements: { mcpKinds: string[] }
+      }
+      expect(manifest.requirements.mcpKinds).toEqual(['remote'])
+    })
   })
 
-  test('代码平台与本地 MCP 可执行文件进入预检前提清单', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { wf } = await seed(db)
-    const [agent] = await db.select().from(agents)
-    const localMcpId = ulid()
-    await db
-      .insert(mcps)
-      .values({
-        id: localMcpId,
-        name: 'local-tools',
-        description: '',
-        type: 'local',
-        config: JSON.stringify({ command: ['acme-tool', '--stdio'], env: {} }),
-        enabled: true,
-        ownerUserId: 'u1',
-        visibility: 'private',
-        createdAt: 1,
-        updatedAt: 1,
-      } as never)
-      .run()
-    await db
-      .update(agents)
-      .set({ mcp: JSON.stringify([...JSON.parse(agent!.mcp), localMcpId]) })
-      .where(eq(agents.id, agent!.id))
-      .run()
-    await db
-      .update(workflows)
-      .set({
-        definition: JSON.stringify(
-          defn([
-            { id: 'n1', kind: 'agent-single', agentId: agent!.id },
-            {
-              id: 'host',
-              kind: 'code-host-call',
-              provider: 'gitlab',
-              action: 'comment.create',
-              params: { mr: '1', body: 'hi' },
-            },
-          ]),
-        ),
-      })
-      .where(eq(workflows.id, wf))
-      .run()
+  describeEachProvider('代码平台与本地 MCP 可执行文件进入预检前提清单', (harness) => {
+    test('代码平台与本地 MCP 可执行文件进入预检前提清单', async () => {
+      const db = harness.db
+      const { wf } = await seed(db)
+      const [agent] = await db.select().from(agents)
+      const localMcpId = ulid()
+      await db
+        .insert(mcps)
+        .values({
+          id: localMcpId,
+          name: 'local-tools',
+          description: '',
+          type: 'local',
+          config: JSON.stringify({ command: ['acme-tool', '--stdio'], env: {} }),
+          enabled: true,
+          ownerUserId: 'u1',
+          visibility: 'private',
+          createdAt: 1,
+          updatedAt: 1,
+        } as never)
+        .run()
+      await db
+        .update(agents)
+        .set({ mcp: JSON.stringify([...JSON.parse(agent!.mcp), localMcpId]) })
+        .where(eq(agents.id, agent!.id))
+        .run()
+      await db
+        .update(workflows)
+        .set({
+          definition: JSON.stringify(
+            defn([
+              { id: 'n1', kind: 'agent-single', agentId: agent!.id },
+              {
+                id: 'host',
+                kind: 'code-host-call',
+                provider: 'gitlab',
+                action: 'comment.create',
+                params: { mr: '1', body: 'hi' },
+              },
+            ]),
+          ),
+        })
+        .where(eq(workflows.id, wf))
+        .run()
 
-    const pkg = await exportResourcePackage(
-      db,
-      actorOf('u1', ['scripts:author', 'code-host-calls:author']),
-      { type: 'workflow', id: wf },
-      { appHome: APP_HOME },
-    )
-    const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
-      requirements: { codeHosts: string[]; executables: string[] }
-    }
-    expect(manifest.requirements.codeHosts).toEqual(['gitlab'])
-    expect(manifest.requirements.executables).toEqual(['acme-tool'])
+      const pkg = await exportResourcePackage(
+        db,
+        actorOf('u1', ['scripts:author', 'code-host-calls:author']),
+        { type: 'workflow', id: wf },
+        { appHome: APP_HOME },
+      )
+      const manifest = parseYaml(readEntry(pkg.zip, 'manifest.yaml')) as {
+        requirements: { codeHosts: string[]; executables: string[] }
+      }
+      expect(manifest.requirements.codeHosts).toEqual(['gitlab'])
+      expect(manifest.requirements.executables).toEqual(['acme-tool'])
+    })
   })
 })

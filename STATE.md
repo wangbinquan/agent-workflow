@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第五十一批（2026-09-10）**：16个旧测试文件保留186个原声明/549个完整matcher，其中114例/329 matcher接默认双库，72例/220 matcher保留原行为与预算。1962测试文件，直接构库596文件/1165调用，无harness532→516、有harness498→514；T19f及对应账本685→679。
+> 四文件七个DB参数改为既有中立合同，运行代码保持；完整provider应用等待初始化，清理先于harness释放。复核发现multipart与repository两个provider组同层hook次序缺口，改为内层fixture作用域；原断言与预算保持。
+> 21个core完整backend tsc通过；两份测试清理作用域修正后最终backend tsc必要复验通过且候选hash不变。功能metadata 221 pass/452 expect与canonical 13 pass/55 expect通过，生产源/元数据未随后续作用域修复变化，复用该验证。 scoped lint/format与实际提取函数的受控端口核验按各批证据记录；本地未运行真实业务DB/App/HTTP/PG/Git夹具或完整门禁。
+> W50 exact50b062d034bfe677b96d206edcbd3593c6a3b590 Main34420342896终态38 success/2 failure，13个后端与普通lint全部通过；重点1798/1798、本批新增218/218、另2/2与原hook18/18通过。两OS各1962原生文件无遗漏/重复；完整Main仍未绿，两个非后端失败仅记录任务元数据。
+> W49 exactbb2127ad07e5c227b13f776e41e75cc1d0c6dd08 原full34417550874已终态失败：九端点两库均满足原绝对预算，六端点PG仍较慢。overview SQLite/PG为5.676210/8.656728ms，PG已满足原10ms绝对预算；严格相对P95条件尚未满足。
+> W51尚待发布后的真实双库CI；AC-1/6/8/9/11/12继续开放。
+
 > **RFC-359 W12 第五十批（2026-09-10）**：13个旧测试文件的68个原功能声明（原循环展开72例）接默认双库；98个原声明与273个完整matcher保留，未选30例/75 matcher保持原调用，选定68例保留198个matcher和原预算。
 > catalog私有字符串数组decoder复用既有parser，原caller及已有十个展开纯例不变，生产净减6行；新增纯例原/后各1 pass/35 expect、16条完整观测同字节，三个有效负控失败。
 > 16个core一次完整backend tsc通过；其后仅补回原9行注释，完整Bun/TypeScript输出同字节，复用编译结果。功能metadata先发现账本基线688未随源码685下降，精确修正后221 pass/452 expect；canonical 13 pass/55 expect及严格lint/format通过。1962测试文件、602构库文件/1182调用，无harness545→532、有harness485→498；T19f对应三文件归零退役，账本688→685。

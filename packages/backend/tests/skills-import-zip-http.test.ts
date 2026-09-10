@@ -10,29 +10,49 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-interface H {
-  db: DbClient
-  app: Hono
+interface H<TDb extends ProviderNeutralDatabase = DbClient, TApp = Hono> {
+  db: TDb
+  app: TApp
   appHome: string
   cleanup: () => void
 }
 
-function build(): H {
+type BuildAppInput<TDb extends ProviderNeutralDatabase> = {
+  token: string
+  configPath: string
+  opencodeVersion: string
+  dbVersion: number
+  db: TDb
+}
+
+function buildWithPorts<TDb extends ProviderNeutralDatabase, TApp>(
+  createDatabase: () => TDb,
+  compose: (input: BuildAppInput<TDb>, appHome: string) => TApp,
+): H<TDb, TApp> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-zip-http-'))
   const prev = process.env.AGENT_WORKFLOW_HOME
   process.env.AGENT_WORKFLOW_HOME = appHome
-  const db = createInMemoryDb(MIGRATIONS)
-  const app = createApp({
-    token: TOKEN,
-    configPath: join(appHome, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const db = createDatabase()
+  const app = compose(
+    {
+      token: TOKEN,
+      configPath: join(appHome, 'config.json'),
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      db,
+    },
+    appHome,
+  )
   return {
     db,
     app,
@@ -43,6 +63,55 @@ function build(): H {
       else process.env.AGENT_WORKFLOW_HOME = prev
     },
   }
+}
+
+function build(): H {
+  return buildWithPorts(
+    () => createInMemoryDb(MIGRATIONS),
+    (input) => createApp(input),
+  )
+}
+
+function registerProviderApplication(
+  name: string,
+  register: (useApplication: () => H<ProviderNeutralDatabase>) => void,
+): void {
+  describeEachProvider(name, (harness) => {
+    describe('application lifetime', () => {
+      let pending: H<ProviderNeutralDatabase, Promise<ProviderHttpApplication>> | undefined
+      let application: ProviderHttpApplication | undefined
+      let current: H<ProviderNeutralDatabase> | undefined
+      beforeEach(async () => {
+        pending = buildWithPorts(
+          () => harness.db,
+          (input, appHome) =>
+            createProviderHttpApplication(harness, {
+              token: input.token,
+              configPath: input.configPath,
+              opencodeVersion: input.opencodeVersion,
+              dbVersion: input.dbVersion,
+              appHome,
+            }),
+        )
+        application = await pending.app
+        current = { ...pending, app: application.app }
+      })
+      afterEach(async () => {
+        try {
+          await application?.dispose()
+        } finally {
+          application = undefined
+          current = undefined
+          pending?.cleanup()
+          pending = undefined
+        }
+      })
+      register(() => {
+        if (current === undefined) throw new Error('provider application not initialized')
+        return current
+      })
+    })
+  })
 }
 
 function makeZip(files: Record<string, string | Uint8Array>): Uint8Array {
@@ -75,12 +144,11 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
 const skillMd = (name: string, desc = 'd') =>
   `---\nname: ${name}\ndescription: ${desc}\n---\nbody\n`
 
-describe('POST /api/skills/import-zip/parse', () => {
-  let h: H
+registerProviderApplication('POST /api/skills/import-zip/parse', (useApplication) => {
+  let h: H<ProviderNeutralDatabase>
   beforeEach(() => {
-    h = build()
+    h = useApplication()
   })
-  afterEach(() => h.cleanup())
 
   test('happy path returns skill candidates + no errors', async () => {
     const zip = makeZip({
@@ -109,6 +177,14 @@ describe('POST /api/skills/import-zip/parse', () => {
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('zip-file-missing')
   })
+})
+
+describe('POST /api/skills/import-zip/parse (native slice 2)', () => {
+  let h: H
+  beforeEach(() => {
+    h = build()
+  })
+  afterEach(() => h.cleanup())
 
   test('zip-traversal payload → 422 zip-traversal', async () => {
     const zip = zipSync({ '../escape.md': new TextEncoder().encode('x') })
@@ -120,54 +196,63 @@ describe('POST /api/skills/import-zip/parse', () => {
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('zip-traversal')
   })
-
-  test('conflict field populated for existing managed skill', async () => {
-    // Pre-create a managed skill so the parse response can flag it.
-    await req(h.app, '/api/skills', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'skill-a',
-        description: 'pre',
-        bodyMd: '',
-        frontmatterExtra: {},
-      }),
-    })
-    const zip = makeZip({ 'skill-a/SKILL.md': skillMd('skill-a', 'new') })
-    const res = await req(h.app, '/api/skills/import-zip/parse', {
-      method: 'POST',
-      body: multipartParse(zip),
-    })
-    const body = (await res.json()) as {
-      skills: Array<{
-        name: string
-        conflict?: string
-        overwriteCandidates: Array<{
-          skillId: string
-          ownerUserId: string | null
-          visibility: 'public' | 'private'
-          expectedAclRevision: number
-          expectedToken: string
-        }>
-      }>
-    }
-    expect(body.skills[0]!.conflict).toBe('managed')
-    expect(body.skills[0]!.overwriteCandidates).toHaveLength(1)
-    expect(body.skills[0]!.overwriteCandidates[0]).toMatchObject({
-      visibility: 'private',
-      expectedAclRevision: 0,
-    })
-    expect(body.skills[0]!.overwriteCandidates[0]!.skillId).toBeTruthy()
-    expect(body.skills[0]!.overwriteCandidates[0]!.expectedToken).toBeTruthy()
-  })
 })
 
-describe('POST /api/skills/import-zip/commit', () => {
-  let h: H
+registerProviderApplication(
+  'POST /api/skills/import-zip/parse (provider slice 3)',
+  (useApplication) => {
+    let h: H<ProviderNeutralDatabase>
+    beforeEach(() => {
+      h = useApplication()
+    })
+
+    test('conflict field populated for existing managed skill', async () => {
+      // Pre-create a managed skill so the parse response can flag it.
+      await req(h.app, '/api/skills', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'skill-a',
+          description: 'pre',
+          bodyMd: '',
+          frontmatterExtra: {},
+        }),
+      })
+      const zip = makeZip({ 'skill-a/SKILL.md': skillMd('skill-a', 'new') })
+      const res = await req(h.app, '/api/skills/import-zip/parse', {
+        method: 'POST',
+        body: multipartParse(zip),
+      })
+      const body = (await res.json()) as {
+        skills: Array<{
+          name: string
+          conflict?: string
+          overwriteCandidates: Array<{
+            skillId: string
+            ownerUserId: string | null
+            visibility: 'public' | 'private'
+            expectedAclRevision: number
+            expectedToken: string
+          }>
+        }>
+      }
+      expect(body.skills[0]!.conflict).toBe('managed')
+      expect(body.skills[0]!.overwriteCandidates).toHaveLength(1)
+      expect(body.skills[0]!.overwriteCandidates[0]).toMatchObject({
+        visibility: 'private',
+        expectedAclRevision: 0,
+      })
+      expect(body.skills[0]!.overwriteCandidates[0]!.skillId).toBeTruthy()
+      expect(body.skills[0]!.overwriteCandidates[0]!.expectedToken).toBeTruthy()
+    })
+  },
+)
+
+registerProviderApplication('POST /api/skills/import-zip/commit', (useApplication) => {
+  let h: H<ProviderNeutralDatabase>
   beforeEach(() => {
-    h = build()
+    h = useApplication()
   })
-  afterEach(() => h.cleanup())
 
   test('happy path imports all and lists them via GET /api/skills', async () => {
     const zip = makeZip({
@@ -227,6 +312,14 @@ describe('POST /api/skills/import-zip/commit', () => {
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('zip-decisions-invalid')
   })
+})
+
+describe('POST /api/skills/import-zip/commit (native slice 2)', () => {
+  let h: H
+  beforeEach(() => {
+    h = build()
+  })
+  afterEach(() => h.cleanup())
 
   test('legacy name-only overwrite decision is rejected fail-closed', async () => {
     const zip = makeZip({ 'skill-a/SKILL.md': skillMd('skill-a') })
@@ -238,87 +331,99 @@ describe('POST /api/skills/import-zip/commit', () => {
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('zip-decisions-invalid')
   })
-
-  test('previewed exact-id overwrite round-trips through multipart apply', async () => {
-    const createdRes = await req(h.app, '/api/skills', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'skill-a',
-        description: 'old',
-        bodyMd: '',
-        frontmatterExtra: {},
-      }),
-    })
-    const created = (await createdRes.json()) as { id: string }
-    const zip = makeZip({ 'skill-a/SKILL.md': skillMd('skill-a', 'new') })
-    const previewRes = await req(h.app, '/api/skills/import-zip/parse', {
-      method: 'POST',
-      body: multipartParse(zip),
-    })
-    const preview = (await previewRes.json()) as {
-      skills: Array<{
-        overwriteCandidates: Array<{
-          skillId: string
-          ownerUserId: string | null
-          visibility: 'public' | 'private'
-          expectedAclRevision: number
-          expectedToken: string
-        }>
-      }>
-    }
-    const target = preview.skills[0]!.overwriteCandidates[0]!
-    expect(target.skillId).toBe(created.id)
-
-    const commitRes = await req(h.app, '/api/skills/import-zip/commit', {
-      method: 'POST',
-      body: multipartCommit(zip, {
-        'skill-a': {
-          action: 'overwrite',
-          skillId: target.skillId,
-          expectedOwnerUserId: target.ownerUserId,
-          expectedVisibility: target.visibility,
-          expectedAclRevision: target.expectedAclRevision,
-          expectedToken: target.expectedToken,
-        },
-      }),
-    })
-    expect(commitRes.status).toBe(200)
-    const body = (await commitRes.json()) as {
-      updated: Array<{ id: string; description: string }>
-      failed: unknown[]
-    }
-    expect(body.failed).toEqual([])
-    expect(body.updated).toEqual([expect.objectContaining({ id: created.id, description: 'new' })])
-  })
-
-  test('parse → decide → commit end-to-end produces consistent results', async () => {
-    const zip = makeZip({
-      'one/SKILL.md': skillMd('one', 'one desc'),
-      'two/SKILL.md': skillMd('two', 'two desc'),
-      'bad-NAME/SKILL.md': skillMd('bad-NAME'), // invalid kebab-case
-    })
-
-    const parseRes = await req(h.app, '/api/skills/import-zip/parse', {
-      method: 'POST',
-      body: multipartParse(zip),
-    })
-    const parseBody = (await parseRes.json()) as {
-      skills: Array<{ name: string }>
-      errors: Array<{ code: string }>
-    }
-    expect(parseBody.skills.map((s) => s.name).sort()).toEqual(['one', 'two'])
-    expect(parseBody.errors[0]!.code).toBe('skill-name-invalid')
-
-    const decisions = parseBody.skills.reduce<Record<string, { action: string }>>((acc, s) => {
-      acc[s.name] = { action: 'import' }
-      return acc
-    }, {})
-    const commitRes = await req(h.app, '/api/skills/import-zip/commit', {
-      method: 'POST',
-      body: multipartCommit(zip, decisions),
-    })
-    const commitBody = (await commitRes.json()) as { created: Array<{ name: string }> }
-    expect(commitBody.created.map((s) => s.name).sort()).toEqual(['one', 'two'])
-  })
 })
+
+registerProviderApplication(
+  'POST /api/skills/import-zip/commit (provider slice 3)',
+  (useApplication) => {
+    let h: H<ProviderNeutralDatabase>
+    beforeEach(() => {
+      h = useApplication()
+    })
+
+    test('previewed exact-id overwrite round-trips through multipart apply', async () => {
+      const createdRes = await req(h.app, '/api/skills', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'skill-a',
+          description: 'old',
+          bodyMd: '',
+          frontmatterExtra: {},
+        }),
+      })
+      const created = (await createdRes.json()) as { id: string }
+      const zip = makeZip({ 'skill-a/SKILL.md': skillMd('skill-a', 'new') })
+      const previewRes = await req(h.app, '/api/skills/import-zip/parse', {
+        method: 'POST',
+        body: multipartParse(zip),
+      })
+      const preview = (await previewRes.json()) as {
+        skills: Array<{
+          overwriteCandidates: Array<{
+            skillId: string
+            ownerUserId: string | null
+            visibility: 'public' | 'private'
+            expectedAclRevision: number
+            expectedToken: string
+          }>
+        }>
+      }
+      const target = preview.skills[0]!.overwriteCandidates[0]!
+      expect(target.skillId).toBe(created.id)
+
+      const commitRes = await req(h.app, '/api/skills/import-zip/commit', {
+        method: 'POST',
+        body: multipartCommit(zip, {
+          'skill-a': {
+            action: 'overwrite',
+            skillId: target.skillId,
+            expectedOwnerUserId: target.ownerUserId,
+            expectedVisibility: target.visibility,
+            expectedAclRevision: target.expectedAclRevision,
+            expectedToken: target.expectedToken,
+          },
+        }),
+      })
+      expect(commitRes.status).toBe(200)
+      const body = (await commitRes.json()) as {
+        updated: Array<{ id: string; description: string }>
+        failed: unknown[]
+      }
+      expect(body.failed).toEqual([])
+      expect(body.updated).toEqual([
+        expect.objectContaining({ id: created.id, description: 'new' }),
+      ])
+    })
+
+    test('parse → decide → commit end-to-end produces consistent results', async () => {
+      const zip = makeZip({
+        'one/SKILL.md': skillMd('one', 'one desc'),
+        'two/SKILL.md': skillMd('two', 'two desc'),
+        'bad-NAME/SKILL.md': skillMd('bad-NAME'), // invalid kebab-case
+      })
+
+      const parseRes = await req(h.app, '/api/skills/import-zip/parse', {
+        method: 'POST',
+        body: multipartParse(zip),
+      })
+      const parseBody = (await parseRes.json()) as {
+        skills: Array<{ name: string }>
+        errors: Array<{ code: string }>
+      }
+      expect(parseBody.skills.map((s) => s.name).sort()).toEqual(['one', 'two'])
+      expect(parseBody.errors[0]!.code).toBe('skill-name-invalid')
+
+      const decisions = parseBody.skills.reduce<Record<string, { action: string }>>((acc, s) => {
+        acc[s.name] = { action: 'import' }
+        return acc
+      }, {})
+      const commitRes = await req(h.app, '/api/skills/import-zip/commit', {
+        method: 'POST',
+        body: multipartCommit(zip, decisions),
+      })
+      const commitBody = (await commitRes.json()) as { created: Array<{ name: string }> }
+      expect(commitBody.created.map((s) => s.name).sort()).toEqual(['one', 'two'])
+    })
+  },
+)

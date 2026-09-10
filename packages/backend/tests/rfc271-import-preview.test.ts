@@ -24,7 +24,7 @@ import { stringify } from 'yaml'
 import type { ResourceBundle } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Actor } from '../src/auth/actor'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createInMemoryDb } from '../src/db/client'
 import { mcps, users } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
@@ -37,6 +37,8 @@ import {
   verifyPreviewToken,
 } from '../src/services/resourcePackage/preview'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))
@@ -257,7 +259,7 @@ describe('① 解包与防夹带', () => {
 
 describe('② 预检：候选、可选动作、归属', () => {
   const seedMcp = async (
-    db: DbClient,
+    db: ProviderNeutralDatabase,
     owner: string,
     name: string,
     visibility: 'public' | 'private' = 'public',
@@ -281,16 +283,18 @@ describe('② 预检：候选、可选动作、归属', () => {
     return id
   }
 
-  test('本地没有同名 ⇒ 只能 new', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const pkg = await parseResourcePackage(packageZip())
-    const preview = await buildPackagePreview(db, actorOf('u1'), pkg, {
-      box,
-      importId: 'imp-1',
+  describeEachProvider('本地没有同名 ⇒ 只能 new', (harness) => {
+    test('本地没有同名 ⇒ 只能 new', async () => {
+      const db = harness.db
+      const pkg = await parseResourcePackage(packageZip())
+      const preview = await buildPackagePreview(db, actorOf('u1'), pkg, {
+        box,
+        importId: 'imp-1',
+      })
+      expect(preview.entries[0]?.allowedActions).toEqual(['new'])
+      expect(preview.entries[0]?.defaultAction).toBe('new')
+      expect(preview.entries[0]?.missingPermissions).toEqual([])
     })
-    expect(preview.entries[0]?.allowedActions).toEqual(['new'])
-    expect(preview.entries[0]?.defaultAction).toBe('new')
-    expect(preview.entries[0]?.missingPermissions).toEqual([])
   })
 
   test('有自己的同名 ⇒ new / reuse / overwrite 三选', async () => {
@@ -322,12 +326,14 @@ describe('② 预检：候选、可选动作、归属', () => {
     expect(preview.entries[0]?.candidates.filter((c) => c.owned)).toHaveLength(1)
   })
 
-  test('建议名避开已占用的名字', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    await seedMcp(db, 'u1', 'tools')
-    const pkg = await parseResourcePackage(packageZip())
-    const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
-    expect(preview.entries[0]?.suggestedName).toBe('tools-2')
+  describeEachProvider('建议名避开已占用的名字', (harness) => {
+    test('建议名避开已占用的名字', async () => {
+      const db = harness.db
+      await seedMcp(db, 'u1', 'tools')
+      const pkg = await parseResourcePackage(packageZip())
+      const preview = await buildPackagePreview(db, actorOf('u1'), pkg, { box, importId: 'imp-1' })
+      expect(preview.entries[0]?.suggestedName).toBe('tools-2')
+    })
   })
 
   test('隐藏的他人同名资源与不存在同形，不通过 suggestedName 泄漏名字', async () => {
