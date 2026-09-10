@@ -54,7 +54,6 @@ import {
   type MaintenanceExecutionFence,
 } from '@/platform/persistence/maintenanceExecutionFence'
 import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
-import { runPostgresqlRetentionSweepSlice } from '@/platform/persistence/postgresqlMaintenanceRetention'
 import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
@@ -592,7 +591,12 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
           async runSlice(
             input: Parameters<MaintenanceSystemOperations['retention']['runSlice']>[0],
           ) {
-            const result = await runPostgresqlRetentionSweepSlice(
+            // RFC-359 W57：与下面 SQLite 分支**同一份实现**。此前 PG 走
+            // `platform/persistence/postgresqlMaintenanceRetention.ts` 的孪生，两份逐字相同
+            // （四个候选集构造器连字符都一样，游标解析 / 相位推进 / 计数赋值同形），
+            // 唯一的差别是类型名与 `db` 的标注宽窄——而「候选集怎么变成一条 DELETE」这唯一的
+            // 方言点早就收进了能力矩阵的 `deleteByCandidates`。那份孪生已整份删除。
+            const result = await runRetentionSweepSlice(
               client,
               input,
               input.cursor,

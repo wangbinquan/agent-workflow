@@ -62,6 +62,8 @@ const POSTGRESQL_MAX_BIND_PARAMETERS = 65_535
  * `RETENTION_DELETE_BATCH` 与 `postgresqlMaintenanceRetention.ts` 的
  * `POSTGRESQL_RETENTION_DELETE_BATCH`）——那正是 T25 守卫禁止 `runner.ts` 干的「仓里第二份批大小
  * 推导」，只是它在 DELETE 侧、逃过了那条守卫。现在两侧都从这里取。
+ * （RFC-359 W57：`postgresqlMaintenanceRetention.ts` 那份孪生已整份删除——它与 SQLite 那份逐字相同，
+ * 两个引擎现在跑同一段实现。上面这段保留为退役经过的记录。）
  */
 export const BOUNDED_DELETE_MAX_ROWS = 5_000
 
@@ -107,7 +109,7 @@ export interface EngineCapabilities {
    *   · PostgreSQL —— `WITH candidates AS (…) DELETE … USING candidates WHERE pk = candidates.id`。
    *   · SQLite —— 没有 `USING` 子句，等价写法是 `DELETE … WHERE pk IN (…)`。
    *
-   * 合一前这条方言点在 `postgresqlMaintenanceRetention.ts` 里裸写了 4 次、在
+   * 合一前这条方言点在 `postgresqlMaintenanceRetention.ts`（RFC-359 W57 已整份删除）里裸写了 4 次、在
    * `sqlite/systemMaintenanceRetention.ts` 里另写了 4 次（且 SQLite 那 4 条走的是 `rowid`——
    * 这三张事件表的 `id` 就是 `INTEGER PRIMARY KEY AUTOINCREMENT`、即 rowid 别名，
    * `webhook_trigger_fires` 的 `id` 是 ULID 主键，按主键删与按 rowid 删选中的是同一批行）。

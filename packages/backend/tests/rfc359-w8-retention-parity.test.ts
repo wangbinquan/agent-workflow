@@ -1,17 +1,20 @@
-// RFC-359 W8 —— 保留期清理（retention sweep）的双引擎对拍。
+// RFC-359 W8 / W57 —— 保留期清理（retention sweep）的双引擎判据。
 //
-// 又一对被「按文件名配对」的账本漏掉的成对适配器
-// ==============================================
-//   · SQLite     —— `platform/persistence/sqlite/systemMaintenanceRetention.ts`
-//                   的 `runRetentionSweepSlice`
-//   · PostgreSQL —— `platform/persistence/postgresqlMaintenanceRetention.ts`
-//                   的 `runPostgresqlRetentionSweepSlice`
+// 曾经的一对，W57 已收成一份
+// ==========================
+// W8 写下这条对拍时，这里是两份实现：SQLite 的 `runRetentionSweepSlice` 与
+// `platform/persistence/postgresqlMaintenanceRetention.ts` 的 `runPostgresqlRetentionSweepSlice`
+// ——一对被「按文件名配对」的账本漏掉的成对适配器，PG 那份的头注释写着
+// 「predicates and durable cursor mirror the SQLite oracle」，而 **mirror 是靠人眼保证的**。
 //
-// 两侧同一份判据、同一个游标契约，但**是两台机器**：SQLite 用
-// `DELETE … WHERE rowid IN (SELECT … ORDER BY id LIMIT n)`，PostgreSQL 用
-// `WITH candidates AS (…) DELETE … USING candidates`。PG 那份的头注释写着
-// 「predicates and durable cursor mirror the SQLite oracle」——**mirror 是靠人眼保证的**，
-// 在此之前没有任何一条测试同时跑过两侧。
+// W57 逐行核过：两份**逐字相同**（四个候选集构造器连字符都一样，游标解析 / 相位推进 /
+// 计数赋值同形），唯一的差别是类型名与 `db` 标注的宽窄——而「候选集怎么变成一条 DELETE」
+// 这唯一的方言点（SQLite `DELETE … WHERE id IN (…)` / PG `WITH candidates AS (…) DELETE …
+// USING candidates`）早就收进了能力矩阵的 `deleteByCandidates`。PG 那份已整份删除，
+// 两个引擎现在跑的是同一段代码。
+//
+// **这条判据因此更重要，不是更轻**：它从「两份实现删的是不是同一批」变成「同一份实现在两个
+// 引擎上删的是不是同一批」——后者才是 `deleteByCandidates` 那条方言渲染的真实验收面。
 //
 // 这一族的既有覆盖同样是单引擎倒挂：`rfc311-retention-sweep.test.ts` /
 // `rfc338-maintenance-slices.test.ts` 只跑 SQLite，`rfc349-system-maintenance-provider.test.ts`
@@ -23,8 +26,8 @@
 // webhook 触发记录。删多了是数据丢失，删少了是无界增长。
 //
 // 判据形状：`describeEachProvider` 把同一段 body 在 SQLite 内存库与真 PostgreSQL 上各跑一遍。
-// body **拿不到 provider 名**，只能按 `capabilities.isolation` 选该引擎的那份实现——
-// 于是「两侧期望值必须逐字相同」这件事由 harness 本身强制，写不出「PG 上少删一行也算过」。
+// body **拿不到 provider 名**；合一之后连「按能力选实现」那一步都不需要了——两侧调的是同一个
+// 函数，「两侧期望值必须逐字相同」这件事由 harness 本身强制，写不出「PG 上少删一行也算过」。
 //
 // 已知的**正当**差异：SQLite 侧另有一个 `runRetentionSweep`（把 slice 循环到 done 的
 // 每小时整趟入口），PostgreSQL 侧没有对应物——PG 的整趟循环由
@@ -33,7 +36,6 @@
 
 import { expect, test } from 'bun:test'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   intentSessions,
@@ -50,8 +52,6 @@ import {
   webhookTriggerFires,
   webhookTriggers,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { runPostgresqlRetentionSweepSlice } from '@/platform/persistence/postgresqlMaintenanceRetention'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -90,18 +90,9 @@ function sweepSlice(
   harness: ProviderHarness,
 ): (cursor: unknown, batchSize: number) => Promise<RetentionSlice> {
   const db = harness.db
-  // body 看不见 provider 名，只看得见能力：'exclusive' 是 SQLite 的独占事务形态。
-  const isSqlite = harness.capabilities.isolation === 'exclusive'
+  // W57 起两个引擎同一份实现——不再按能力选分支。
   return async (cursor, batchSize) =>
-    isSqlite
-      ? await runRetentionSweepSlice(db as unknown as DbClient, CONFIG, cursor, NOW, batchSize)
-      : await runPostgresqlRetentionSweepSlice(
-          db as unknown as PostgresqlDatabaseClient,
-          CONFIG,
-          cursor,
-          NOW,
-          batchSize,
-        )
+    await runRetentionSweepSlice(db, CONFIG, cursor, NOW, batchSize)
 }
 
 /** 循环到 done，累加计数并记下走过的相位序列。 */
@@ -493,18 +484,9 @@ describeEachProvider('RFC-359 W8 —— 保留期清理在两个引擎上删同�
   test('③ 保留期关成 0 = 该相位整段跳过，两侧同形', async () => {
     await seed(harness.db)
     const db = harness.db
-    const isSqlite = harness.capabilities.isolation === 'exclusive'
     const offForEvents = { eventStreamRetentionDays: 0, webhookTriggerFiresRetentionDays: 1 }
     const slice = async (cursor: unknown) =>
-      isSqlite
-        ? await runRetentionSweepSlice(db as unknown as DbClient, offForEvents, cursor, NOW, 50)
-        : await runPostgresqlRetentionSweepSlice(
-            db as unknown as PostgresqlDatabaseClient,
-            offForEvents,
-            cursor,
-            NOW,
-            50,
-          )
+      await runRetentionSweepSlice(db, offForEvents, cursor, NOW, 50)
 
     // 事件三胞胎被关掉 ⇒ 第一片直接落在 webhook 相位，三张事件表一行不动。
     const first = await slice(null)

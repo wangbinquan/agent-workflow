@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import { runPostgresqlRetentionSweepSlice } from '@/platform/persistence/postgresqlMaintenanceRetention'
+import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import {
   createPostgresqlEventsArchiveStore,
   runPostgresqlEventsArchiveSlice,
@@ -227,7 +227,10 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
       async close() {},
     }
 
-    const result = await runPostgresqlRetentionSweepSlice(
+    // RFC-359 W57：PG 侧的孪生 `runPostgresqlRetentionSweepSlice` 已删（与这一份逐字相同）。
+    // 这条用例仍是有价值的：它用**假 pool** 断言这一份实现在 PostgreSQL 客户端上发出的
+    // 语句形状（`WITH candidates AS (…) DELETE … USING candidates`）与游标推进。
+    const result = await runRetentionSweepSlice(
       createPostgresqlDatabaseClient(runtime),
       { eventStreamRetentionDays: 30, webhookTriggerFiresRetentionDays: 0 },
       undefined,

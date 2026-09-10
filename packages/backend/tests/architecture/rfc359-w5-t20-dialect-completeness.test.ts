@@ -450,6 +450,7 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   // node run 时 planner 会改选整表扫）由对拍里的 `EXPLAIN QUERY PLAN` 断言接着守住。
   // ──────────────────────────────────────────────────────────────────────────
   // RFC-359 W6-T25 销账：`platform/persistence/postgresqlMaintenanceRetention.ts: delete-using ×4`
+  // （该文件已于 W57 整份删除——它与 SQLite 那份逐字相同，两个引擎现在跑同一段实现）
   // —— 四条保留期清扫语句不再自己拼 `DELETE … USING candidates`，改调矩阵的
   // `EngineCapabilities.deleteByCandidates`（PG 渲染 CTE + USING，SQLite 渲染 `WHERE id IN (…)`）。
   // 两侧此后只提供**谓词与 LIMIT**；SQLite 孪生原来按 `rowid` 删、现在按主键删——这三张事件表的

@@ -5024,6 +5024,52 @@ provider 的真实生产入口」，合理；但副作用是把分叉写进了�
 （`withPostgresqlSerializableTaskExecution` 有 7 个生产调用方，见 §5c 的 Cut I），不是命名债。
 本轮只把它的可见性判据收走。
 
+## 5k. 用**机械手段**找剩下的重复：38 组跨文件逐字相同的函数体（W57 调查）
+
+AC-1 剩的是「跨目录 / 内联真实重复」。此前每一刀都靠人眼在自己碰到的那片里找，找到哪算哪。
+W57 换了个做法：把 `packages/backend/src` 下所有函数 / 方法的**函数体**去注释、压空白后取摘要，
+报告跨文件的逐字重复（≥220 字符）。结果：6384 个够长的函数体里，**38 组**跨文件逐字重复。
+
+这份清单最大的价值是它**不挑食**——它同时照出了 provider 分叉、legacy 孪生、以及与 provider
+无关的普通复制粘贴，而且给出的是可直接接手的 `file:line`。摘录几组（按 字符数 × 处数 排）：
+
+| 处数 | 位置 | 性质 |
+| --- | --- | --- |
+| ×5 | `taskQuestionDispatch` / `review` / `clarifyDecision` / `sqliteTaskDecisionParticipant` / `taskDecisionParticipant` 的 `projectionMember`（586 字符） | 跨两个 bounded context 的复制 |
+| ×2 | `postgresqlIntentApplyResourceParticipants` ↔ `legacyIntentApplyResourceParticipants` 的 preflight（912 字符） | **provider 真分叉**（§5c 记的 7 条之一） |
+| ×2 | `postgresqlTaskRouteOperations` ↔ `services/task.ts` 的 `assertFrozenTaskTriggerPreflight`（811 字符） | provider 侧与 legacy 侧各一份 |
+| ×2 | `postgresqlChildExecutionLaunchOperations` ↔ `postgresqlTaskRouteLaunchOperations` 的 `buildWorkgroupRuntimeConfig`（654 字符） | **两个 PG 文件互相重复** |
+| ×4 组 | `sqlite/systemMaintenanceRetention` ↔ `postgresqlMaintenanceRetention` 的四个候选集构造器 | **本轮已收**，见下 |
+| ×3 | `cli/start.ts` / `cli/postgresqlDaemonApplication.ts` / `server.ts` 的 `nextMutationTimestamp` | 三个装配根各一份 |
+| ×2 | `capabilityTemplateOperations` ↔ `services/capabilityTemplates` 的 `rowFromInput` / `mergeableSnapshot` | 模块化迁移留下的 legacy 孪生 |
+
+### 本轮收掉的一对：保留期清扫（retention sweep）
+
+`platform/persistence/postgresqlMaintenanceRetention.ts` **整份删除**。逐行核过，它与
+`platform/persistence/sqlite/systemMaintenanceRetention.ts` 的对应实现**逐字相同**：四个候选集
+构造器连字符都一样，游标解析（`cursorFor` ↔ `retentionCursor`）、相位表、推进规则、计数赋值、
+返回形状全部同形；唯一的差别是类型名与 `db` 标注的宽窄——而 SQLite 那份的签名**早就是**
+`ProviderNeutralDatabase`。
+
+「候选集怎么变成一条 DELETE」这唯一的方言点（PG `WITH candidates AS (…) DELETE … USING
+candidates` / SQLite `DELETE … WHERE id IN (…)`）W6-T25 时就收进了能力矩阵的
+`deleteByCandidates`——也就是说**分叉的理由在那时就没了，只是文件没删**。
+
+`platform/background/maintenanceWorker.ts` 里那条 provider 分支随之消失：两个引擎现在调同一个
+`runRetentionSweepSlice`。净删 288 行。
+
+**判据反而更重了**：`rfc359-w8-retention-parity` 原本比的是「两份实现删的是不是同一批」，
+现在比的是「同一份实现在两个引擎上删的是不是同一批」——后者才是 `deleteByCandidates` 那条
+方言渲染的真实验收面。它在合一后**一次就绿**（双引擎 10 pass），这也是两份等价的直接证据。
+
+### 给下一刀的话
+
+上表其余各组都还开着。挑的时候注意两件事：
+- **先确认是不是「真重复」**：逐字相同只说明**今天**一样；要看两侧的调用面与孪生位置
+  （§5c 的 Cut I 就是反例——`postgresqlTaskLifecycleTransaction` 里 5 个导出只有 2 个是死的）；
+- **收敛方向朝中立那侧**：本轮两次（overview、retention）都是「中立实现已存在，provider 孪生是
+  剩下的那份」，删 provider 侧即可，不必新写抽象。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；
