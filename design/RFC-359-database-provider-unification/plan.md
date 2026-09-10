@@ -5419,6 +5419,85 @@ drizzle 里加了一列而 SQLite 的迁移 SQL 没跟，SQLite 侧就少一列�
   反过来会让 `sourceDigest` 停在格式化前的内容上，`rfc294-canonical-manifests` 当场红
   （本刀实撞一次）。
 
+## 5o. 同步事务面这一刀该怎么下（W8 踩点，**未动手**，给下一刀的执行说明）
+
+§5n 量出 AC-6 剩余迁移全部卡在同步事务面之后，本节把那一刀**踩清楚**：账本
+`SYNC_TRANSACTION_DEBT` 现值 **7 个调用点 / 4 个文件**，但它们不是七件独立的事，是**一棵树**。
+下面是实测出来的形状，照着做就行，不必再摸一遍。
+
+### 好消息：中立解释器与中立写序列**都已经在仓里了**
+
+- `platform/persistence/transactionProgram.ts`（58 行）——`transactionStep` 把一步写包成
+  generator，`driveSyncProgram` / `driveAsyncProgram` 两个解释器**同一个程序两种跑法**。
+- `modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts`（145 行）——任务生命周期
+  的 CAS + 伴随写 + 事件序列**已经是**一个 provider 中立的 program，它的头注释写得很直白：
+  「The caller owns the transaction and chooses synchronous or asynchronous interpretation.」
+- `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` 的 `setNodeRunStatusTx`
+  已经是中立 async 版本（W7 给协作域合一时立的），collaboration 侧已经在 await 它。
+
+也就是说**要写的不是新机器，是新解释**：把 `sqlite/taskLifecycle.ts` 里那条
+`driveSyncProgram(...)` 换成 `driveAsyncProgram(...)`，事务边界从 `dbTxSync` 换成
+`databaseSessionFor(db).transaction`。同步那条**保留**——RFC-333 的人工门参与者
+（`transitionHumanGateTaskTx`）挂在别人的同步大事务上，它要的就是同步解释。
+
+### 树长什么样（按依赖自底向上）
+
+```
+sqlite/taskLifecycle.ts  setTaskStatus / trySetTaskStatus      ← 根，25 + 2 个调用点（都已 await）
+├─ dbTxSync(args.db, commitTransition)                          ← 债 1
+├─ ownership.withOwnedTaskTx({db, token, now, run})             ← 债 2（sqliteTaskOwnership.ts:234）
+│    体内只有：一条 fence UPDATE（精确 owner 元组 + state='claimed'）RETURNING revision
+│    → async 孪生 `withOwnedTaskWrite` 是**逐行照抄 + await**，20 行
+└─ onTransitionTx?: (tx: DbTxSync, transition, collector) => void   ← 真正的工作量在这里
+     services/task.ts 四处回调：
+       4278  cancelOpenNodeRunsTx(...)         定义在 taskLifecycle.ts:230，1 个调用点
+       4763  opts.onClaimTx + submitContinuationIntentTx(...)   task.ts:327，3 个调用点
+       5516  submitContinuationIntentTx(...)
+       6296  submitContinuationIntentTx(...)
+     submitContinuationIntentTx → taskExecutionModule.intents.submitTx（DbTxSync 面）
+       → 中立孪生 `DrizzleTaskExecutionIntentPersistence.submit` **已存在**
+         （`taskExecutionIntentPersistence.ts`，走 `databaseSessionFor(db).serializable`）
+```
+
+另外两笔（`sqliteTaskExecutionEffect.ts:209,501` 的 `withOwnedTaskTx`）跟着债 2 一起落。
+
+### 捷径已经走完：债 4 当场销掉（本刀落地，`SYNC_TRANSACTION_DEBT` 4 → 3 个文件）
+
+`sqliteTaskExecutionIntent.ts` 的 `submit()`（债 4）**生产零调用方**——生产准入走同类里的
+`submitTx`（`sqliteTaskExecutionIntentAdmission.ts`）与中立的
+`DrizzleTaskExecutionIntentPersistence`；`grep "intents.submit({" src/` 为空。挡着它的只有测试夹具，
+实际清点 **15 处 / 4 个文件**（账本上一版注释记的「38 处 / 12 个文件」已过期）。
+
+因为中立孪生的入参与它**逐字相同**（只少一个 `db`），夹具是**平移**不是改写：
+
+```
+<module>.intents.submit({ db, ...rest })   →   await submitIntent(db, { ...rest })
+```
+
+级联只有一层：三个同步 `test(… , () => {…})` 与一个同步夹具函数
+（`rfc328-codehost-attempt-ledger.ts` 的 `fixture`）翻 async，两处
+`expect(() => …).toThrow(x)` 翻成 `await expect(…).rejects.toEqual(x)`。
+方法与端口声明一并删除，`sqliteTaskExecutionIntent.ts` 的 `dbTxSync` 进口随之退役。
+
+**这一笔的意义不在它本身，在于它证实了上面那棵树的读法**：账本上的数字里，有一部分根本
+不是「技术钉死」，而是「只有测试夹具还挂着」。下刀前先对每一笔问一句「src 侧还有调用方吗」，
+零调用方的先摘，剩下的才是真要改解释器的。
+
+### 一条必须先想清楚的语义变化
+
+`dbTxSync` 是**同步**的：BEGIN 到 COMMIT 之间没有任何别的上下文能插进来。换成显式边界的
+async 事务后就有了事件循环让渡窗口，护栏是 `databaseTransaction.ts` 头注释里的三条
+（writer lease 串行化 / `setImmediate` 旁观者隔离 / **事务体只 await 数据库操作**）。
+四处 `onTransitionTx` 回调改 async 时要逐个确认第三条：目前它们只做库写（`cancelOpenNodeRunsTx` /
+`submitContinuationIntentTx`），没有网络 / 子进程 / 文件系统，符合。**新增回调时这条要继续守住**。
+
+### 落完之后自动塌下来的三样
+
+1. `SYNC_TRANSACTION_DEBT` 7 → 0；
+2. `DbClient` 的放宽（§5n：排除 `db/txSync.ts` 后残留 92 条错、~12 个文件，全部在这棵树的闭包上）；
+3. AC-6 的剩余迁移——本刀实测：对整份积压跑一遍机械迁移，142 个文件里 **138 个**的报错指向
+   `DbClient` 形参，只有 4 个能独立落地。**这三件事是一件事，别分开推。**
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

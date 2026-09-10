@@ -1,8 +1,7 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { taskExecutionIntents, taskExecutionMaintenanceMembers, tasks } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
 import type {
   SubmittedTaskExecutionIntent,
   TaskExecutionIntentStore,
@@ -44,30 +43,6 @@ export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore 
         )
         .limit(1)
         .get() !== undefined
-    )
-  }
-
-  submit(input: {
-    db: DbClient
-    request: CanonicalContinuationRequest
-    intentId?: string
-    replayAuthorizationId?: string | null
-    authorizationScopeJson?: string | null
-    admissionMode?: 'exclusive' | 'successor-after-claimed'
-    now?: number
-  }): SubmittedTaskExecutionIntent {
-    const intentId = input.intentId ?? ulid()
-    const now = input.now ?? Date.now()
-    return dbTxSync(input.db, (tx) =>
-      this.submitTx({
-        tx,
-        request: input.request,
-        intentId,
-        replayAuthorizationId: input.replayAuthorizationId ?? null,
-        authorizationScopeJson: input.authorizationScopeJson ?? null,
-        admissionMode: input.admissionMode ?? 'exclusive',
-        now,
-      }),
     )
   }
 

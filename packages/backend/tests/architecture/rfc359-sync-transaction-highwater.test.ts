@@ -124,12 +124,14 @@ export const SYNC_TRANSACTION_DEBT: readonly string[] = [
   // / `rfc359-w8-*` / `terminal-maintenance-watermark-coverage`）：改异步要把那 53 处连同各自的
   // 同步夹具函数一起翻成 async，属另一刀。
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts: 2',
-  // RFC-359 W10 复核：`sqliteTaskExecutionIntent.ts: 1`（`submit` 的 `dbTxSync`）同样**不是技术
-  // 钉死**——src 侧零调用方（生产准入走 `taskContinuationAdmission.ts` /
-  // `DrizzleTaskExecutionIntentPersistence`，见本文件 W4-B1 批 2g 那条），挡住它的是 **38 处测试
-  // 直调**（12 个测试文件里的 `module.intents.submit(...)` 夹具）。同一刀里连
-  // `sqliteTaskOwnership.ts#claimPendingIntent` 的 ~30 处 `module.claim(...)` 一起翻 async 最省事。
-  'modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts: 1',
+  // RFC-359 W8 销账：`sqliteTaskExecutionIntent.ts: 1 → 0` —— `submit` 的 `dbTxSync` 连同方法
+  // 本身删除。它 src 侧一直是零调用方（生产准入走 `submitTx` + `taskContinuationAdmission.ts` /
+  // `DrizzleTaskExecutionIntentPersistence`），挡着的只有测试夹具；实际清点是 **15 处 / 4 个文件**
+  // （上一版注释记的「38 处 / 12 个文件」已过期）。中立孪生 `DrizzleTaskExecutionIntentPersistence
+  // .submit` 的入参与它逐字相同（只少一个 `db`），所以夹具是**平移**不是改写：
+  // `<module>.intents.submit({ db, ...rest })` → `await submitIntent(db, { ...rest })`。
+  // 级联只有一层：三个同步 test / 一个同步夹具函数（`rfc328-codehost-attempt-ledger` 的
+  // `fixture`）翻 async，两处 `expect(() => …).toThrow` 翻成 `await expect(…).rejects.toEqual`。
   // RFC-359 W10 销账：`sqliteTaskExecutionIntentAdmission.ts: 1 → 0` —— 自带 `dbTxSync` 的独立
   // 入口 `submitTaskContinuation(db, input)` 删除（src / tests 全仓零调用方；事务内参与者
   // `submitTaskContinuationTx` 保留，它的调用方是 `sqliteTaskDecisionParticipant.ts` 自己的事务）。

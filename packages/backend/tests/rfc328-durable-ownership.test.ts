@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { dbTxSync } from '@/db/txSync'
 import {
   nodeRuns,
@@ -22,6 +23,7 @@ import {
   tasks,
 } from '@/db/schema'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
+import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import {
   createExclusiveDaemonLockProof,
@@ -109,8 +111,25 @@ function continuation(
   }
 }
 
+/**
+ * RFC-359 —— intent 提交走**中立**持久化。
+ *
+ * 原来这里调的是 `module.intents.submit(...)`，那是 `SqliteTaskExecutionIntentStore` 上一层
+ * `dbTxSync` 包装（账本 `rfc359-sync-transaction-highwater` 的一条）。它的生产调用方是零
+ * ——`sqliteTaskExecutionIntentAdmission.ts` 用的是同类里的 `submitTx`，走别人的事务句柄。
+ * 也就是说那条同步事务面只为这份测试而活。中立孪生 `DrizzleTaskExecutionIntentPersistence.submit`
+ * 的入参与它**逐字相同**（只少一个 `db`），语义也相同（准入的跨行不变量走 SERIALIZABLE），
+ * 所以这里直接换过来，同步那层随之删除。
+ */
+function submitIntent(
+  db: ProviderNeutralDatabase,
+  input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
+): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
+  return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
+}
+
 describe('RFC-328 ownership domain and durable owner adapter', () => {
-  test('continuation admission compares migrated lineage JSON semantically', () => {
+  test('continuation admission compares migrated lineage JSON semantically', async () => {
     const database = db()
     seedTask(database, 'task-migrated-lineage')
     // SQLite json_object() preserves this insertion order. The application
@@ -125,13 +144,13 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
       .where(eq(tasks.id, 'task-migrated-lineage'))
       .run()
 
-    const module = createTaskExecutionTestModule('daemon-migrated-lineage')
     expect(
-      module.intents.submit({
-        db: database,
-        request: continuation('task-migrated-lineage', 'resume', 1),
-        intentId: 'intent-migrated-lineage',
-      }).state,
+      (
+        await submitIntent(database, {
+          request: continuation('task-migrated-lineage', 'resume', 1),
+          intentId: 'intent-migrated-lineage',
+        })
+      ).state,
     ).toBe('pending')
   })
 
@@ -158,8 +177,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
     const database = db()
     seedTask(database, 'task-owner')
     const module = createTaskExecutionTestModule('daemon-owner')
-    const submitted = module.intents.submit({
-      db: database,
+    const submitted = await submitIntent(database, {
       request: continuation('task-owner'),
       intentId: 'intent-owner-1',
       now: 10,
@@ -210,8 +228,7 @@ describe('RFC-328 ownership domain and durable owner adapter', () => {
       }),
       now: 15,
     })
-    const nextIntent = module.intents.submit({
-      db: database,
+    const nextIntent = await submitIntent(database, {
       request: continuation('task-owner', 'resume', 1),
       intentId: 'intent-owner-2',
       now: 16,
@@ -229,8 +246,7 @@ describe('RFC-328 exact-token runtime registry', () => {
     seedTask(database, 'task-attach-first')
     const module = createTaskExecutionTestModule('daemon-runtime')
 
-    const firstIntent = module.intents.submit({
-      db: database,
+    const firstIntent = await submitIntent(database, {
       request: continuation('task-stop-first'),
       intentId: 'intent-stop-first',
     })
@@ -249,8 +265,7 @@ describe('RFC-328 exact-token runtime registry', () => {
     module.claimGate.leave(first.permit)
     expect((await module.runtimeRegistry.awaitStopped(firstTicket)).kind).toBe('released')
 
-    const secondIntent = module.intents.submit({
-      db: database,
+    const secondIntent = await submitIntent(database, {
       request: continuation('task-attach-first'),
       intentId: 'intent-attach-first',
     })
@@ -278,8 +293,7 @@ describe('RFC-328 exact-token runtime registry', () => {
     const database = db()
     seedTask(database, 'task-module-dispose')
     const module = createTaskExecutionTestModule('daemon-module-dispose')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-module-dispose'),
       intentId: 'intent-module-dispose',
     })
@@ -312,8 +326,7 @@ describe('RFC-328 exact-token runtime registry', () => {
     const database = db()
     seedTask(database, 'task-module-pause')
     const module = createTaskExecutionTestModule('daemon-module-pause')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-module-pause'),
       intentId: 'intent-module-pause',
     })
@@ -354,8 +367,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     const database = db()
     seedTask(database, 'task-local-generation')
     const module = createTaskExecutionTestModule('daemon-local-generation')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-local-generation', 'resume', 7),
       intentId: 'intent-local-generation',
     })
@@ -409,8 +421,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     const database = db()
     seedTask(database, 'task-probe-stop-window')
     const module = createTaskExecutionTestModule('daemon-probe-stop-window')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-probe-stop-window'),
       intentId: 'intent-probe-stop-window',
     })
@@ -478,12 +489,11 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     ).toEqual({ operationGeneration: 0, retryAuthority: 'probe' })
   })
 
-  test('record-before-act holds every resource and settles projection + watermark atomically', () => {
+  test('record-before-act holds every resource and settles projection + watermark atomically', async () => {
     const database = db()
     seedTask(database, 'task-effect')
     const module = createTaskExecutionTestModule('daemon-effect')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-effect'),
       intentId: 'intent-effect',
     })
@@ -576,8 +586,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     const database = db()
     seedTask(database, 'task-unknown')
     const module = createTaskExecutionTestModule('daemon-unknown')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-unknown'),
       intentId: 'intent-unknown',
     })
@@ -750,12 +759,11 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     ).toBe('consumed')
   })
 
-  test('same-task agent and script effects stay parallel unless they share a real resource', () => {
+  test('same-task agent and script effects stay parallel unless they share a real resource', async () => {
     const database = db()
     seedTask(database, 'task-parallel-effects')
     const module = createTaskExecutionTestModule('daemon-parallel-effects')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-parallel-effects'),
       intentId: 'intent-parallel-effects',
     })
@@ -844,16 +852,14 @@ describe('RFC-328 successor-daemon effect recovery', () => {
     const taskId = 'task-gate-successor-before-restart'
     seedTask(database, taskId)
     const oldModule = createTaskExecutionTestModule('daemon-gate-before-restart')
-    const launch = oldModule.intents.submit({
-      db: database,
+    const launch = await submitIntent(database, {
       request: continuation(taskId),
       intentId: 'intent-gate-old-claim',
       now: 100,
     })
     const claim = oldModule.claim({ db: database, intentId: launch.intentId, now: 101 })
     oldModule.claimGate.leave(claim.permit)
-    const successor = oldModule.intents.submit({
-      db: database,
+    const successor = await submitIntent(database, {
       admissionMode: 'successor-after-claimed',
       request: {
         ...continuation(taskId, 'gate-continuation'),
@@ -930,8 +936,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
           spawnLaunchNonce: input.receipt ? `${input.taskId}-nonce` : null,
         })
         .run()
-      const intent = oldModule.intents.submit({
-        db: database,
+      const intent = await submitIntent(database, {
         request: continuation(input.taskId),
         intentId: `${input.taskId}-intent`,
       })
@@ -983,8 +988,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
     // A genuinely ambiguous remote act remains actor-governed. It must not
     // change the two independently recoverable process tasks above.
     seedTask(database, 'task-remote-unknown')
-    const remoteIntent = oldModule.intents.submit({
-      db: database,
+    const remoteIntent = await submitIntent(database, {
       request: continuation('task-remote-unknown'),
       intentId: 'task-remote-unknown-intent',
     })
@@ -1132,8 +1136,7 @@ describe('RFC-328 successor-daemon effect recovery', () => {
           startedAt: 100,
         })
         .run()
-      const intent = oldModule.intents.submit({
-        db: database,
+      const intent = await submitIntent(database, {
         request: continuation(spec.taskId),
         intentId: `${spec.taskId}-intent`,
       })
@@ -1306,7 +1309,6 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
   test('maintenance claim precedes IO and blocks new continuation admission', async () => {
     const database = db()
     seedTask(database, 'task-maintenance', 'done')
-    const module = createTaskExecutionTestModule('daemon-maintenance')
     const terminalMaintenance = new DrizzleTerminalMaintenancePersistence(database)
     const members = await terminalMaintenance.snapshotTree('task-maintenance')
     let claim = await terminalMaintenance.claim({
@@ -1316,13 +1318,12 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
       cleanupPlanJson: '{"v":1,"directories":[]}',
       now: 40,
     })
-    expect(() =>
-      module.intents.submit({
-        db: database,
+    await expect(
+      submitIntent(database, {
         request: continuation('task-maintenance', 'resume', 1),
         intentId: 'maintenance-race-intent',
       }),
-    ).toThrow(expect.objectContaining({ code: 'task-terminal-maintenance-conflict' }))
+    ).rejects.toEqual(expect.objectContaining({ code: 'task-terminal-maintenance-conflict' }))
     claim = await terminalMaintenance.transition({
       claim,
       to: 'io-complete',
@@ -1398,8 +1399,7 @@ describe('RFC-328 retained aggregation and terminal maintenance', () => {
     const database = db()
     seedTask(database, 'task-archive-ledger')
     const module = createTaskExecutionTestModule('daemon-archive-ledger')
-    const intent = module.intents.submit({
-      db: database,
+    const intent = await submitIntent(database, {
       request: continuation('task-archive-ledger'),
       intentId: 'intent-archive-ledger',
     })

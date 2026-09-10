@@ -349,7 +349,7 @@
       "id": "rfc359-sync-transaction-surface",
       "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
       "symbol": "SYNC_TRANSACTION_DEBT",
-      "baseline": 4,
+      "baseline": 3,
       "why": "RFC-359：还在用 bun:sqlite **同步**事务面（`dbTxSync` / `withOwnedTaskTx`）的文件数，按逐文件调用点清点、只降不升。这条面 PostgreSQL 上不存在，所以每一个调用点都是一条「只有一个 provider 能走」的路——正是 RFC-359 要消灭的形态。剩余合一工作不是 N 个独立的 pair 合并，而是把这些调用点迁到已有的中立原语（`databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。基线是**文件数** 28（调用点合计 72）；账本正文逐文件记着各自的调用点数，逐字相等。 RFC-359 W4-D28b：`sqliteOwnedTaskMutation.ts`（2 处 `dbTxSync` + 2 处 `withOwnedTaskTx`）整份退役，5 处调用点迁到中立的 `withTaskExecutionWrite` + `fenceTaskWrite`，30 → 29（调用点 81 → 77）。 RFC-359 W4-D28b 第二刀：runtime 注册表两份 provider 实现合成一份中立实现，`sqliteRuntimeRegistryPersistence.ts`（5 处 `dbTxSync`）随之退役，29 → 28（调用点 77 → 72）。"
     },
     {
@@ -790,7 +790,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 272,
+      "baseline": 271,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -811,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5328,
+      "baseline": 5327,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4789,
+      "baseline": 4788,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -872,7 +872,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7372c50bf06116d5d3967ab87b4b77816abdca502c6bc3ee5c4b9eca347fd47f",
+    "sourceDigest": "sha256:2d4203258fd3814faffa87e9df3d9c22ee928b8d4543b6045bc9f960175be186",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e5059909ec0814b790c7f468a56eb3fbf93480ac",
-    "contentDigest": "sha256:867bada2c362d73184b50749d6419c7aa8ee58596894f0a8528c00028589861a",
+    "currentSnapshotSha": "66e998a3e2103215ddc9c3a60ad5f9610f3d7fa3",
+    "contentDigest": "sha256:3c25bb5e5c1337266daf6a010e82f6fe60b604f3a71fc373d0a8eb5f55377311",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

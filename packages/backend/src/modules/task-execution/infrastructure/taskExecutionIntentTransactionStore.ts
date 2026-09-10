@@ -6,15 +6,6 @@ export type { SubmittedTaskExecutionIntent } from '../application/ports/taskExec
 
 export interface TaskExecutionIntentStore {
   hasPendingGateSuccessor(input: { db: DbClient; taskId: string }): boolean
-  submit(input: {
-    db: DbClient
-    request: CanonicalContinuationRequest
-    intentId?: string
-    replayAuthorizationId?: string | null
-    authorizationScopeJson?: string | null
-    admissionMode?: 'exclusive' | 'successor-after-claimed'
-    now?: number
-  }): SubmittedTaskExecutionIntent
   submitTx(input: {
     tx: DbTxSync
     request: CanonicalContinuationRequest

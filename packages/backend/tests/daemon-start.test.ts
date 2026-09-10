@@ -30,6 +30,13 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
   let token: string
   let sessionToken: string
 
+  // 钩子预算必须**大于它体内 await 的那个 deadline**——否则内层的预算永远用不上。
+  // 这个 beforeAll 里 `waitForReady(child.stdout, 10_000)` 自带 10s，而 bun 的钩子默认只有
+  // **5s**，于是 macOS runner 一慢就是钩子先死：报出来是 `(unnamed)` + 耗时 ≈5000ms，看不出
+  // 是哪一步（W41 一次、2026-09-11 CI macOS shard 6 又一次；下面的 stage 打点就是上次为定位加的，
+  // 这次打到 `operation-04-enter` 就断了，`operation-04` 正是 waitForReady）。
+  // 文件里其余 `waitForReady(…, 10_000)` 的调用方都在带 15s–30s 显式超时的 test 里，只有这个
+  // 钩子一直吃默认值。给足 60s：本来就只在真的起不来时才会用到，起得来时一秒都不多花。
   beforeAll(async () => {
     // W41 macOS reported a 5002.62 ms hook timeout; record only existing operation progress.
     const setupStartedAt = (() => {
@@ -109,13 +116,13 @@ describe('daemon start — HTTP contract on a shared bootstrapped daemon (M1 P-1
     reportSetupStage('operation-09-enter')
     ;({ sessionToken } = (await login.json()) as { sessionToken: string })
     reportSetupStage('operation-09-complete')
-  })
+  }, 60_000)
 
   afterAll(async () => {
     child.kill('SIGTERM')
     await child.exited
     rmSync(tmp, { recursive: true, force: true })
-  })
+  }, 30_000)
 
   test('serves /health with full schema after successful startup', async () => {
     // /health is public and returns the full schema per design.md §4.2.2.

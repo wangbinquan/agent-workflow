@@ -2,6 +2,8 @@
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
 
+import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { describe, expect, test } from 'bun:test'
 import { eq, inArray, sql } from 'drizzle-orm'
 
@@ -241,14 +243,30 @@ async function prepareOpenOperation(input: {
   return result
 }
 
+/**
+ * RFC-359 —— intent 提交走**中立**持久化。
+ *
+ * 原来这里调的是 `<module>.intents.submit(...)`，那是 `SqliteTaskExecutionIntentStore` 上一层
+ * `dbTxSync` 包装（账本 `rfc359-sync-transaction-highwater` 的一条）。它的生产调用方是零
+ * ——`sqliteTaskExecutionIntentAdmission.ts` 用的是同类里的 `submitTx`，走别人的事务句柄。
+ * 也就是说那条同步事务面只为这几份测试而活。中立孪生
+ * `DrizzleTaskExecutionIntentPersistence.submit` 的入参与它**逐字相同**（只少一个 `db`），
+ * 语义也相同（准入的跨行不变量走 SERIALIZABLE），所以直接换过来，同步那层随之删除。
+ */
+function submitIntent(
+  db: ProviderNeutralDatabase,
+  input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
+): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
+  return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
+}
+
 describe('RFC-333 T5 TaskParkTx', () => {
   test('consumes the prepared gate and parks task + lifecycle event in one owned transaction', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-park'
     seedTask(db, taskId, 'running')
     const module = createTaskExecutionTestModule('daemon-rfc333-park')
-    const intent = module.intents.submit({
-      db,
+    const intent = await submitIntent(db, {
       intentId: 'intent-rfc333-park',
       request: {
         taskId,
@@ -320,8 +338,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
     const taskId = 'task-333-park-fault'
     seedTask(db, taskId, 'running')
     const module = createTaskExecutionTestModule('daemon-rfc333-park-fault')
-    const intent = module.intents.submit({
-      db,
+    const intent = await submitIntent(db, {
       request: {
         taskId,
         kind: 'launch',
@@ -441,8 +458,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     const taskId = 'task-333-manual-owner-settle'
     seedTask(db, taskId, 'running')
     const module = createTaskExecutionTestModule('daemon-rfc333-manual')
-    const intent = module.intents.submit({
-      db,
+    const intent = await submitIntent(db, {
       request: {
         taskId,
         kind: 'launch',
@@ -647,14 +663,13 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     expect(db.select().from(taskExecutionIntents).all()).toHaveLength(1)
   })
 
-  test('admits one gate successor behind a claimed owner while every other admission stays exclusive', () => {
+  test('admits one gate successor behind a claimed owner while every other admission stays exclusive', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-decision-handoff'
     seedTask(db, taskId, 'awaiting_review')
     const ids = seedDecisionNodes(db, taskId)
     const module = createTaskExecutionTestModule('daemon-rfc333-decision-handoff')
-    const launch = module.intents.submit({
-      db,
+    const launch = await submitIntent(db, {
       intentId: 'intent-rfc333-handoff-owner',
       request: {
         taskId,
@@ -675,9 +690,8 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     const claimed = module.claim({ db, intentId: launch.intentId, now: NOW + 1 })
     module.claimGate.leave(claimed.permit)
 
-    expect(() =>
-      module.intents.submit({
-        db,
+    await expect(
+      submitIntent(db, {
         intentId: 'intent-rfc333-exclusive-conflict',
         request: {
           taskId,
@@ -695,7 +709,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         },
         now: NOW + 2,
       }),
-    ).toThrow(expect.objectContaining({ code: 'task-continuation-conflict' }))
+    ).rejects.toEqual(expect.objectContaining({ code: 'task-continuation-conflict' }))
 
     const decision = dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))
     const active = db
@@ -711,9 +725,8 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       ]),
     )
 
-    expect(() =>
-      module.intents.submit({
-        db,
+    await expect(
+      submitIntent(db, {
         intentId: 'intent-rfc333-second-successor',
         admissionMode: 'successor-after-claimed',
         request: {
@@ -732,7 +745,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         },
         now: NOW + 3,
       }),
-    ).toThrow(expect.objectContaining({ code: 'task-continuation-conflict' }))
+    ).rejects.toEqual(expect.objectContaining({ code: 'task-continuation-conflict' }))
   })
 
   test('projection, lifecycle-event, and intent faults each roll prior domain writes back', () => {
@@ -867,8 +880,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     const taskId = 'task-333-legacy-task-gate'
     seedTask(db, taskId, 'pending')
     const module = createTaskExecutionTestModule('daemon-rfc333-legacy-task-gate')
-    const submitted = module.intents.submit({
-      db,
+    const submitted = await submitIntent(db, {
       intentId: 'intent-rfc333-legacy-task-gate',
       request: {
         taskId,

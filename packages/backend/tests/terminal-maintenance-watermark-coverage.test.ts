@@ -18,6 +18,8 @@
 //    making `finalizeClaimedWorkspace` throw at a task-terminal event. The
 //    legacy SQLite path (systemWorkspaceGc.ts) classified it as 'busy'.
 
+import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -98,8 +100,7 @@ async function settledTwoGenerationTask(taskId: string): Promise<{
   const database = createInMemoryDb(MIGRATIONS)
   seedTask(database, taskId, '/tmp/worktree')
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
-  const intent = module.intents.submit({
-    db: database,
+  const intent = await submitIntent(database, {
     request: continuation(taskId),
     intentId: `intent-${taskId}`,
   })
@@ -179,6 +180,23 @@ async function claimWorkspaceGc(database: DbClient, taskId: string): Promise<voi
   })
 }
 
+/**
+ * RFC-359 —— intent 提交走**中立**持久化。
+ *
+ * 原来这里调的是 `<module>.intents.submit(...)`，那是 `SqliteTaskExecutionIntentStore` 上一层
+ * `dbTxSync` 包装（账本 `rfc359-sync-transaction-highwater` 的一条）。它的生产调用方是零
+ * ——`sqliteTaskExecutionIntentAdmission.ts` 用的是同类里的 `submitTx`，走别人的事务句柄。
+ * 也就是说那条同步事务面只为这几份测试而活。中立孪生
+ * `DrizzleTaskExecutionIntentPersistence.submit` 的入参与它**逐字相同**（只少一个 `db`），
+ * 语义也相同（准入的跨行不变量走 SERIALIZABLE），所以直接换过来，同步那层随之删除。
+ */
+function submitIntent(
+  db: ProviderNeutralDatabase,
+  input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
+): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
+  return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
+}
+
 describe('terminal maintenance retained-watermark coverage', () => {
   test('a family that settled two generations with different requests can still be claimed', async () => {
     const taskId = 'task-two-generation-family'
@@ -202,8 +220,7 @@ describe('terminal maintenance retained-watermark coverage', () => {
       const database = createInMemoryDb(MIGRATIONS)
       seedTask(database, taskId, join(appHome, 'scratch', taskId))
       const module = createTaskExecutionTestModule('daemon-conflict-is-busy')
-      const intent = module.intents.submit({
-        db: database,
+      const intent = await submitIntent(database, {
         request: continuation(taskId),
         intentId: 'intent-conflict-is-busy',
       })

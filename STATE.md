@@ -18,17 +18,27 @@
 >    建议一次只动一个 context。
 > 3. **AC-6 双库覆盖迁移**：仍有大量行为用例直接建 SQLite 内存库。这是最大的一块。
 >    **2026-09-11 已迁第一批 19 个**（账本 `rfc359-w5-test-engine-hardcoding` 657 → 638），
->    并**量出了真正的闸门**（plan §5n 有完整数字与判据）：迁移后的报错几乎全部是
->    「测试拿到中立库、被调用的生产函数还标着 `DbClient`」。整棵 `src/` 做放宽实验
->    （排除定义文件 `db/client.ts` 与同步事务原语 `db/txSync.ts`）后**只剩 92 条错、~12 个文件**，
->    且全部落在 `SYNC_TRANSACTION_DEBT` 那 4 个文件及其调用闭包上。
->    **`DbClient` 标注绝大多数是纯过窄、白送。**
-> 3.5. **同步事务面收口（新的最高优先级，而且比想象中小）**：账本
->    `SYNC_TRANSACTION_DEBT` 现值是 **7 个调用点 / 4 个文件**（`sqliteTaskOwnership.ts` 2、
->    `sqliteTaskExecutionEffect.ts` 2、`sqlite/taskLifecycle.ts` 2、`sqliteTaskExecutionIntent.ts` 1），
->    换成 `databaseSessionFor(db).transaction`。它同时是两件事的前置：AC-6 的剩余迁移（上一条）
->    与**删重复实现**（plan §6，`sqliteTerminalMaintenance.ts` 519 行删不掉就是卡在这）。
->    **量它的时候别把 `db/txSync.ts` 一起替换**——`DbTxSync` 会塌成 `never`，噪声百余条（本刀实撞）。
+>    2026-09-11 第二批再迁 3 个（账本 638 → **635**）。
+>    并**量出了真正的闸门**（plan §5n 有完整数字与判据）：对整份积压跑一遍机械迁移，
+>    142 个文件里 **138 个**的报错指向「测试拿到中立库、被调用的生产函数还标着 `DbClient`」，
+>    只有 4 个能独立落地。整棵 `src/` 做放宽实验（排除 `db/client.ts` 与 `db/txSync.ts`）后
+>    只剩 **92 条错 / ~12 个文件**，全部落在 `SYNC_TRANSACTION_DEBT` 那 4 个文件及其调用闭包上。
+>    **`DbClient` 标注绝大多数是纯过窄、白送；AC-6 不是「一个个迁」，是等下面那一刀。**
+> 3.5. **同步事务面收口 —— 现在是最高优先级，plan §5o 已经把它踩清楚（未动手）**：账本
+>    `SYNC_TRANSACTION_DEBT` 现值 **7 个调用点 / 4 个文件**，但它们是**一棵树**不是七件事，
+>    根在 `sqlite/taskLifecycle.ts` 的 `setTaskStatus`。**好消息是中立解释器与中立写序列都已在仓里**
+>    （`transactionProgram.ts` 的 `driveAsyncProgram` + `taskLifecycleWriteSequence.ts`
+>    「caller chooses synchronous or asynchronous interpretation」），要写的不是新机器、是新解释。
+>    工作量集中在 `services/task.ts` 的四处 `onTransitionTx` 回调（`cancelOpenNodeRunsTx` /
+>    `submitContinuationIntentTx`）。**2026-09-11 已顺手销掉其中一笔**：
+>    `sqliteTaskExecutionIntent.ts` 的 `submit()` src 侧零调用方，挡着的只有 15 处测试夹具，
+>    平移到中立 `DrizzleTaskExecutionIntentPersistence.submit` 后方法与端口声明一并删除，
+>    账本 `SYNC_TRANSACTION_DEBT` **4 → 3 个文件**。**下刀前先对每一笔问「src 侧还有调用方吗」**
+>    ——账本上的数字里有一部分不是技术钉死，只是测试夹具还挂着。
+>    **语义变化要先想清楚**：`dbTxSync` 是同步、BEGIN..COMMIT 之间无人能插进来；换成显式边界的
+>    async 事务后有了让渡窗口，护栏见 `databaseTransaction.ts` 头注释三条（尤其「事务体只 await
+>    数据库操作」）。落完之后 `DbClient` 放宽与 AC-6 剩余迁移会**跟着一起塌下来，三件是一件事**。
+>    量它的时候别把 `db/txSync.ts` 一起替换——`DbTxSync` 会塌成 `never`，噪声百余条（本刀实撞）。
 > 4. **重复 burn-down 剩 15 组**（机械扫描器见 plan §5k）。下一个靶心是
 >    `services/capabilityTemplates.ts`（506 行）↔ `code-capability/application/capabilityTemplateOperations.ts`
 >    （388 行）——**同一域的两套实现**，共享 `rowFromInput` / `mergeableSnapshot` / `digest` 等一批

@@ -2,6 +2,8 @@
 // attempt, existing transport retries remain live, and earlier ambiguity is
 // retained unless a later applied response resolves the logical operation.
 
+import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
@@ -41,7 +43,7 @@ import { closeOutcomeUnknownAndRelease } from '@/modules/task-execution/infrastr
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-function fixture(
+async function fixture(
   taskId: string,
   action: CodeHostAction = 'custom',
   provider: CodeHostProvider = 'gitlab',
@@ -73,8 +75,7 @@ function fixture(
     .values({ id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
     .run()
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
-  const intent = module.intents.submit({
-    db,
+  const intent = await submitIntent(db, {
     intentId: `intent-${taskId}`,
     request: {
       taskId,
@@ -196,7 +197,7 @@ async function approveResponseLossDriftFixture(input: {
   provider: CodeHostProvider
   drift: (state: ApproveRemoteState) => void
 }): Promise<{ state: ApproveRemoteState; sends: number }> {
-  const h = fixture(input.taskId, 'mr.approve', input.provider)
+  const h = await fixture(input.taskId, 'mr.approve', input.provider)
   const state: ApproveRemoteState = {
     head: 'head-before-approve',
     approved: false,
@@ -265,6 +266,23 @@ async function approveResponseLossDriftFixture(input: {
   ).toBe('requires-actor')
   expect(sends).toBe(1) // actorless closure/recovery performs no second approval send.
   return { state, sends }
+}
+
+/**
+ * RFC-359 —— intent 提交走**中立**持久化。
+ *
+ * 原来这里调的是 `<module>.intents.submit(...)`，那是 `SqliteTaskExecutionIntentStore` 上一层
+ * `dbTxSync` 包装（账本 `rfc359-sync-transaction-highwater` 的一条）。它的生产调用方是零
+ * ——`sqliteTaskExecutionIntentAdmission.ts` 用的是同类里的 `submitTx`，走别人的事务句柄。
+ * 也就是说那条同步事务面只为这几份测试而活。中立孪生
+ * `DrizzleTaskExecutionIntentPersistence.submit` 的入参与它**逐字相同**（只少一个 `db`），
+ * 语义也相同（准入的跨行不变量走 SERIALIZABLE），所以直接换过来，同步那层随之删除。
+ */
+function submitIntent(
+  db: ProviderNeutralDatabase,
+  input: Parameters<DrizzleTaskExecutionIntentPersistence['submit']>[0],
+): ReturnType<DrizzleTaskExecutionIntentPersistence['submit']> {
+  return new DrizzleTaskExecutionIntentPersistence(db).submit(input)
 }
 
 describe('RFC-328 code-host per-send attempt ledger', () => {
@@ -400,7 +418,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('ambiguous mr.approve pauses actorless replay but the existing manual command runs generation N+1', async () => {
-    const h = fixture('task-approve-manual', 'mr.approve', 'gitlab')
+    const h = await fixture('task-approve-manual', 'mr.approve', 'gitlab')
     let ambiguousSends = 0
     const ambiguous = await executeCodeHostCall(
       {
@@ -556,7 +574,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('mr.approve keeps the existing 429 retry and normal success path', async () => {
-    const h = fixture('task-approve-429', 'mr.approve', 'github')
+    const h = await fixture('task-approve-429', 'mr.approve', 'github')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -579,7 +597,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('a response-lost pipeline cancel is adopted after one read-only state probe', async () => {
-    const h = fixture('task-pipeline-cancel-probe', 'pipeline.cancel', 'gitlab')
+    const h = await fixture('task-pipeline-cancel-probe', 'pipeline.cancel', 'gitlab')
     let mutationSends = 0
     let pipelineStatus = 'running'
     const callDeps = deps(
@@ -637,7 +655,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('a still-existing draft authorizes one same-generation delete retry', async () => {
-    const h = fixture('task-draft-delete-probe', 'review.draft-discard', 'gitlab')
+    const h = await fixture('task-draft-delete-probe', 'review.draft-discard', 'gitlab')
     let draftExists = true
     let mutationSends = 0
     const firstDeps = deps(
@@ -726,7 +744,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   test('custom GET/PUT/PATCH/DELETE network, 5xx and every-method 429 retry stay unchanged', async () => {
     const methods = ['GET', 'PUT', 'PATCH', 'DELETE'] as const
     for (const method of methods) {
-      const h = fixture(`task-custom-transport-${method.toLowerCase()}`)
+      const h = await fixture(`task-custom-transport-${method.toLowerCase()}`)
       let sends = 0
       const outcome = await executeCodeHostCall(
         {
@@ -748,7 +766,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     }
 
     for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const) {
-      const h = fixture(`task-custom-429-${method.toLowerCase()}`)
+      const h = await fixture(`task-custom-429-${method.toLowerCase()}`)
       let sends = 0
       const outcome = await executeCodeHostCall(
         {
@@ -770,7 +788,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('custom PUT keeps the network retry and later applied result with prior ambiguity audit', async () => {
-    const h = fixture('task-codehost-success')
+    const h = await fixture('task-codehost-success')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -811,7 +829,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('later definite failure cannot erase the first ambiguous send', async () => {
-    const h = fixture('task-codehost-unknown')
+    const h = await fixture('task-codehost-unknown')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -843,7 +861,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
   })
 
   test('POST still retries 429, records both sends, and performs no new 5xx/network retry', async () => {
-    const h = fixture('task-codehost-post')
+    const h = await fixture('task-codehost-post')
     let sends = 0
     const outcome = await executeCodeHostCall(
       {
@@ -862,7 +880,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
     expect(h.db.select().from(taskExecutionEffectAttempts).all()).toHaveLength(2)
 
-    const network = fixture('task-codehost-post-network')
+    const network = await fixture('task-codehost-post-network')
     let networkSends = 0
     const failed = await executeCodeHostCall(
       {

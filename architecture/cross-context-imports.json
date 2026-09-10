@@ -31553,23 +31553,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:63b09d67dd20e7750449",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "dbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
@@ -81415,9 +81398,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4789,
+    "architectureExceptions": 4788,
     "implementationSccs": 0,
-    "observedEdges": 5328,
+    "observedEdges": 5327,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -114352,22 +114335,6 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#$file",
-      "id": "import:63b09d67dd20e7750449",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "dbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
     },
     {
       "edgeKind": "type",
@@ -167211,7 +167178,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7372c50bf06116d5d3967ab87b4b77816abdca502c6bc3ee5c4b9eca347fd47f",
+  "sourceDigest": "sha256:2d4203258fd3814faffa87e9df3d9c22ee928b8d4543b6045bc9f960175be186",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

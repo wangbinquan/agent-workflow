@@ -1099,6 +1099,27 @@ TypeScript 解析结果。缓存是**共享**的，于是全树解析那笔开�
 （本仓这一族统一 `20_000`），不要依赖「谁先跑」的运气；只给其中几条写、其余吃默认值，
 等于把红留给顺序抽签。识别信号：报错是 `^ this test timed out after 5000ms.` 而不是断言 diff。
 
+## 钩子的预算必须**大于它体内 await 的那个 deadline**（2026-09-11 一天内两条 CI 红都是这个）
+
+bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixture 里常常 await 一个
+自带更长预算的东西。两者不一致时，**外层先死**，报出来的是
+`(unnamed)` + 耗时 ≈5000ms（钩子超时不带名字），完全看不出是哪一步慢：
+
+- `daemon-start.test.ts` 的 `beforeAll` 里 `waitForReady(child.stdout, 10_000)` 自带 10s，
+  而钩子吃默认 5s——同一文件里其余 `waitForReady(…, 10_000)` 的调用方都在带 15s–30s 显式
+  超时的 `test` 里，只有这个钩子一直是默认值。macOS runner 一慢就红（W41 一次、
+  2026-09-11 CI macOS shard 6 又一次）。**内层 10s 的预算从来没有机会被用上。**
+- 同一天另一格红是它的兄弟形态：`rfc305-architecture-lock.test.ts` 里共享解析缓存的守卫，
+  开销落在恰好先跑的那条锁上（见下面那条）。
+
+**规律**：写 fixture 时把「体内最大的内部 deadline」和「钩子 / 用例超时」当成一对，后者必须更大；
+只给其中几处写、其余吃默认值，等于把红留给运行顺序和 runner 负载抽签。
+**识别信号**：`(unnamed)`、耗时 ≈5000ms、没有断言 diff；上一次为定位加的 stage 打点会停在
+最后一个完成的步骤上（本次停在 `operation-04-enter`，那正是 waitForReady）。
+
+排查思路：扫 `beforeAll|afterAll|beforeEach|afterEach(async () => {…}` 的块，
+体内起子进程（`spawn*`）或出现 ≥5000 的时间字面量、而块尾没有 `}, N)` 的，就是同一类隐患。
+
 ## 量「同步事务面还剩多少」时，别把 `db/txSync.ts` 自己算进去（RFC-359 实撞，2026-09-11）
 
 想知道 `DbClient` 标注里有多少是真耦合，最直接的办法是整棵 `src/` 替换成中立类型再看 typecheck。
