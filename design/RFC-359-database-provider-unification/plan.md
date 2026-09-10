@@ -5093,8 +5093,20 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
 | 矩阵守卫那批顺带 | 2 | 同上形状 |
 | node_run 人工门投影 | 1 | **五份副本**，跨两个 bounded context |
 
-剩 23 组。挑的时候优先「一处早就导出了它」那种——零新增边、零账本增长，而且往往说明
-**当初就该用那个导出**。
+剩 21 组。挑的时候优先「一处早就导出了它」那种——零新增边、零账本增长，而且往往说明
+**当初就该用那个导出**（本轮六组里有四组是这个形状）。
+
+**已判定「不该合」的（别再推导一遍）**：
+
+- `decodeFusionSkillToken`（knowledge-evolution）↔ `decodeSkillToken`（resource-catalog）——
+  两个 bounded context **各自拥有自己的令牌类型**（`FusionSkillToken` / `SkillPreconditionToken`）。
+  合它要新开一条 knowledge-evolution → resource-catalog **application 层**的边，而 RFC-294 的
+  模型正是「跨上下文只走 exact public 合同、不共享内部助手」。这是**按设计的重复**，
+  逐字相同只是因为两个类型今天恰好同形。
+
+**下一个真靶心**仍是 `resolvePostgresqlIntentApplyResourcePreflight`（912 字符 ×2，
+§5c 记的 resource-catalog 七条真分叉之一）与 `assertFrozenTaskTriggerPreflight`（811 ×2，
+provider ↔ legacy）。两条都跨层，收之前要先定归宿。
 
 ### 给下一刀的话
 
