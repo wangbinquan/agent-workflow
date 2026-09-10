@@ -4326,3 +4326,33 @@ W6 只把 harness 的 `poolMax` 从 4 改成 16（与生产默认一致），那
 而不是失败退出。`runGit` 已支持 `opts.signal`，可行的处置方向是给凭据租约路径接一个有界的
 AbortSignal，让它超时后以可诊断的错误收场。**未实施，未立项。**
 
+## Windows 前端泳道存在**间歇性数十秒停顿**，撞上谁谁超时（2026-09-10 取证，未修）
+
+**现象**：`Frontend tests (windows-latest shard N/3)` 间歇转红，每次红在**不同用例、不同分片**：
+
+| commit | 分片 | 失败用例 |
+| --- | --- | --- |
+| `3fad84efa` | 1/3 | `plugins-split-page.test.tsx > Upgrade applies only the exact checked hash…` |
+| `a64c5991e` | 3/3 | `relative-time.test.ts > renders <time> … 30s shared ticker advances the label` |
+
+**为什么判成环境而不是某条用例挂住**（三条证据）：
+1. 每次红的用例不同、分片也不同——不是某一条的固有缺陷；
+2. `relative-time` 那条是**同步**用例且用**假定时器**（`vi.useFakeTimers()` +
+   `advanceTimersByTime`），本不该等任何真实时间，却报 43426ms；同步用例要"超时"只能是
+   它阻塞了事件循环，即那 43 秒是某个同步调用的真实墙钟；
+3. **同一次运行里有条通过的用例耗时 26541ms**（`intent-detail-inline` 的一条），
+   整文件 29474ms——说明那一轮整机确实卡过，只是它扛住了。
+   而 `relative-time.test.ts` 内**其余三条只用 20ms / 16ms / 5ms**，也就是停顿是**时间段**的，
+   不是**用例**的。
+
+**注意这与 `rfc321-cached-repo-refresh-credential` 那条相反**：那条的判据是「同文件邻居正常、
+只有它挂死」⇒ 单点挂起；这条是「邻居也慢、每次换人」⇒ 环境停顿。**同一套取证姿势，结论相反**，
+所以不能凭印象套结论，要真去看邻居耗时。
+
+**未处置**：抬超时是最省事的办法，但那是治症状（同 credential 那条的教训）。要修得先知道
+Windows runner 上那几十秒花在哪——候选：ICU/`Intl` 冷启动（`toLocaleString()` 无 locale 参数）、
+jsdom 大文件、杀毒软件扫描临时文件。**未立项、未验证。**
+
+**已知在制**：上一 session 给 `plugins-split-page.test.tsx` 加了 `act()` 包裹与渲染态诊断
+（失败时打印 router/query 状态），显然在追同一件事；那份诊断已随 `c8ed5871a` 落库。
+
