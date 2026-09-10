@@ -12717,6 +12717,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:280a8b343b9f2b24686f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/plugins/pluginApplication.ts#$file",
@@ -13309,23 +13326,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/privilegedNodeLens.ts#privilegedNodeLensFor",
       "toPath": "packages/backend/src/services/privilegedNodeLens.ts",
       "toSymbol": "privilegedNodeLensFor",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#$file",
-      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:29652904b82b62d8f544",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "nodeRunOutputs",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -15099,23 +15099,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2fab303605ac78299c36",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#resourceGrants",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "resourceGrants",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "fromSymbol": "$file",
@@ -16386,23 +16369,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ConflictError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#$file",
-      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:33a6a230f553190120d4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "nodeRunOutputs",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -29562,6 +29528,23 @@
       "toPath": "packages/backend/src/modules/memory/public/catalog.ts",
       "toSymbol": "FusedIntoSkillMemory",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5d67bd0c526f1410b61f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "nodeRunOutputs",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -77608,23 +77591,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f3db642af457ee1509ed",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#resourceGrants",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "resourceGrants",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
       "fromSymbol": "$file",
@@ -81551,9 +81517,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4797,
+    "architectureExceptions": 4795,
     "implementationSccs": 0,
-    "observedEdges": 5330,
+    "observedEdges": 5329,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -94730,6 +94696,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#$file",
+      "id": "import:280a8b343b9f2b24686f",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts",
@@ -95352,22 +95334,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/privilegedNodeLens.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/privilegedNodeLens.ts#privilegedNodeLensFor"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#$file",
-      "id": "import:29652904b82b62d8f544",
-      "owner": "collaboration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "nodeRunOutputs",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs"
     },
     {
       "edgeKind": "value",
@@ -97163,22 +97129,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file",
-      "id": "import:2fab303605ac78299c36",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "resourceGrants",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#resourceGrants"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file",
@@ -98504,22 +98454,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#$file",
-      "id": "import:33a6a230f553190120d4",
-      "owner": "collaboration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "nodeRunOutputs",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs"
     },
     {
       "edgeKind": "value",
@@ -112248,6 +112182,22 @@
       "toContext": "memory",
       "toFile": "packages/backend/src/modules/memory/public/catalog.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/catalog.ts#FusedIntoSkillMemory"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#$file",
+      "id": "import:5d67bd0c526f1410b61f",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "nodeRunOutputs",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunOutputs"
     },
     {
       "edgeKind": "value",
@@ -146379,6 +146329,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#$file",
+      "id": "import:c4b82c500ea821c99aa8",
+      "owner": "collaboration",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/workgroupOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workgroupOperations.ts#$file",
@@ -162716,22 +162682,6 @@
     {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts#$file",
-      "id": "import:f3db642af457ee1509ed",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "resourceGrants",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#resourceGrants"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#$file",
       "id": "import:f3f075fb5ce9b92dcf79",
@@ -167379,7 +167329,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:04e49abc5556af31b3a7d668cf0321a927646fa5baf40ca7e5d85ef72493f404",
+  "sourceDigest": "sha256:2e27e69a4034027dc436a63e79150f871efc2d7bbfc4ae2238bb0417d32ca99d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

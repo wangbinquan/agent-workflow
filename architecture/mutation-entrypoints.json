@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1739,
+    "entries": 1737,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -3490,31 +3490,6 @@
     },
     {
       "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#runIdsWithOutput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#runIdsWithOutput",
-      "symbol": "runIdsWithOutput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
@@ -4205,6 +4180,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
       "symbol": "createHumanGateTerminalSweepCommand",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#runIdsWithOutput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/nodeRunOutputPresence.ts#runIdsWithOutput",
+      "symbol": "runIdsWithOutput",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -4917,31 +4917,6 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#runIdsWithOutput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#runIdsWithOutput",
-      "symbol": "runIdsWithOutput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
         "fenceOrOcc": true,
         "transaction": false
       },
@@ -5004,31 +4979,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#CreateManualTaskQuestionInput",
       "symbol": "CreateManualTaskQuestionInput",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#runIdsWithOutput",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#runIdsWithOutput",
-      "symbol": "runIdsWithOutput",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -41533,7 +41483,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:04e49abc5556af31b3a7d668cf0321a927646fa5baf40ca7e5d85ef72493f404",
+  "sourceDigest": "sha256:2e27e69a4034027dc436a63e79150f871efc2d7bbfc4ae2238bb0417d32ca99d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

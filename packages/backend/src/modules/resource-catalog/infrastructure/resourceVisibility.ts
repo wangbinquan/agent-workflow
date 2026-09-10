@@ -122,6 +122,23 @@ export async function listGrantedResourceIds(
   return new Set(rows.map((row) => row.resourceId))
 }
 
+/**
+ * 「引用检查要看的那批被授权 id」：**bypass 直接给空集**（它看得见全部，授权集无意义），
+ * 否则就是 `listGrantedResourceIds`。
+ *
+ * RFC-359 W57：`workflowPersistenceSemantics.ts` 与 `agentPersistenceSemantics.ts` 此前各存
+ * 一份**逐字相同**的私有 `grantedIds`——而它的查询与本文件的 `listGrantedResourceIds`
+ * 一字不差，两份副本只是各自在前面加了同一句 bypass 短路。收在这里，两个语义文件都直接用。
+ */
+export async function grantedResourceIdsFor(
+  db: Parameters<typeof listGrantedResourceIds>[0],
+  actor: ResourceAclActorProjection,
+  type: GrantResourceType,
+): Promise<ReadonlySet<string>> {
+  if (hasResourceAclBypass(actor)) return new Set()
+  return await listGrantedResourceIds(db, actor, type)
+}
+
 export async function loadGrantLevel(
   db: ProviderNeutralDatabase,
   type: GrantResourceType,

@@ -24,7 +24,7 @@ import { createManualQuestionOpen } from '@/modules/collaboration/public/command
 import { humanGateComposition } from '@/services/humanGateComposition'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import {
   databaseSessionFor,
@@ -46,6 +46,7 @@ import {
   type TaskQuestionPhase,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
+import { runIdsWithOutput } from './nodeRunOutputPresence'
 
 type ClarifyRoundRow = typeof clarifyRounds.$inferSelect
 type TaskQuestionRow = typeof taskQuestions.$inferSelect
@@ -430,18 +431,6 @@ export async function listTaskQuestions(
     })
   }
   return out
-}
-
-async function runIdsWithOutput(
-  db: ProviderNeutralDatabase,
-  runIds: string[],
-): Promise<Set<string>> {
-  if (runIds.length === 0) return new Set()
-  const rows = await db
-    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-    .from(nodeRunOutputs)
-    .where(inArray(nodeRunOutputs.nodeRunId, runIds))
-  return new Set(rows.map((r) => r.nodeRunId))
 }
 
 /** Short human-readable summary of the answer to one question (labels + custom).

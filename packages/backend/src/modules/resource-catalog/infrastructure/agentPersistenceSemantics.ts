@@ -1,7 +1,7 @@
 import type { Agent, AgentSkillRef, AclResourceType } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import { agents, mcps, plugins, resourceGrants, skills, workflows } from '@/db/schema'
+import { agents, mcps, plugins, skills, workflows } from '@/db/schema'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
@@ -12,7 +12,8 @@ import { ConflictError, ValidationError } from '@/util/errors'
 import { assertAgentResourceIntegrity } from '../application/agents/agentResourceIntegrity'
 import type { AgentResourceInventorySource } from '../application/agents/ports'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
-import { hasResourceAclBypass, isVisibleRow, type AclRow } from '../domain/resourceAccess'
+import { isVisibleRow, type AclRow } from '../domain/resourceAccess'
+import { grantedResourceIdsFor } from './resourceVisibility'
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
 import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
@@ -87,19 +88,6 @@ async function rowsByIds(
   }
 }
 
-async function grantedIds(
-  transaction: ResourceCatalogTransaction,
-  authority: AgentOperationContext,
-  type: Extract<AclResourceType, 'agent' | 'skill' | 'mcp' | 'plugin'>,
-): Promise<ReadonlySet<string>> {
-  if (hasResourceAclBypass(authority)) return new Set()
-  const rows = await transaction
-    .select({ resourceId: resourceGrants.resourceId })
-    .from(resourceGrants)
-    .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, authority.user.id)))
-  return new Set(rows.map((row) => row.resourceId))
-}
-
 async function assertReferencesUsable(input: {
   readonly transaction: ResourceCatalogTransaction
   readonly authority: AgentOperationContext
@@ -112,7 +100,7 @@ async function assertReferencesUsable(input: {
   if (ids.length === 0) return
   const [rows, grants] = await Promise.all([
     rowsByIds(input.transaction, input.type, ids),
-    grantedIds(input.transaction, input.authority, input.type),
+    grantedResourceIdsFor(input.transaction, input.authority, input.type),
   ])
   const byId = new Map(rows.map((row) => [row.id, row]))
   const missing = ids.filter((id) => !byId.has(id))

@@ -19,7 +19,7 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions } from '@/db/schema'
+import { clarifyRounds, nodeRuns, taskQuestions } from '@/db/schema'
 import { isTargetNodeConsumed } from './rerunLedger'
 import { createLogger } from '@/util/log'
 import {
@@ -30,6 +30,7 @@ import {
   type TaskQuestionRoleKind,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
+import { runIdsWithOutput } from '../nodeRunOutputPresence'
 
 const log = createLogger('clarify-queue')
 
@@ -397,14 +398,3 @@ export async function buildClarifyQueueContext(
 }
 
 /** node_run ids (within `runIds`) that captured ≥1 `<workflow-output>` row. */
-async function runIdsWithOutput(
-  db: ProviderNeutralDatabase,
-  runIds: string[],
-): Promise<Set<string>> {
-  if (runIds.length === 0) return new Set()
-  const rows = await db
-    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-    .from(nodeRunOutputs)
-    .where(inArray(nodeRunOutputs.nodeRunId, runIds))
-  return new Set(rows.map((r) => r.nodeRunId))
-}

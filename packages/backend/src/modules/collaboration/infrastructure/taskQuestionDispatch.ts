@@ -131,6 +131,7 @@ import {
   type TaskActorRole,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
+import { runIdsWithOutput } from './nodeRunOutputPresence'
 
 const log = createLogger('task-questions.dispatch')
 
@@ -1927,18 +1928,6 @@ async function assertNoInFlightDispatch(
 }
 
 /** node_run ids (within `runIds`) that captured ≥1 <workflow-output> row. */
-async function runIdsWithOutput(
-  db: ProviderNeutralDatabase,
-  runIds: string[],
-): Promise<Set<string>> {
-  if (runIds.length === 0) return new Set()
-  const rows = await db
-    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-    .from(nodeRunOutputs)
-    .where(inArray(nodeRunOutputs.nodeRunId, runIds))
-  return new Set(rows.map((r) => r.nodeRunId))
-}
-
 /** RFC-127 借壳: a borrowed override entry is "home" on `nodeId` when its run is minted
  *  there (home = default ?? override) and the override genuinely names a DIFFERENT node
  *  whose agent is borrowed. Shared by the designer + self/questioner resolvers. */

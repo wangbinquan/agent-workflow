@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:04e49abc5556af31b3a7d668cf0321a927646fa5baf40ca7e5d85ef72493f404`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:2e27e69a4034027dc436a63e79150f871efc2d7bbfc4ae2238bb0417d32ca99d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1803 |
+| backend production TS 文件 | 1804 |
 | `services/` 文件 | 322 |
-| `modules/**` 文件 / 非空 context | 1199 / 17 |
+| `modules/**` 文件 / 非空 context | 1200 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4797 |
+| `architectureExceptions` | 4795 |
 | `backgroundJobs` | 336 |
-| `crossContextImports` | 5330 |
+| `crossContextImports` | 5329 |
 | `facades` | 322 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25043 |
-| `mutationEntrypoints` | 1739 |
+| `moduleSymbolOwners` | 25041 |
+| `mutationEntrypoints` | 1737 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 982 |
 | `transactionExternalEffects` | 272 |
@@ -53,7 +53,7 @@
 | resource-catalog / application | 56 |
 | task-execution / composition | 53 |
 | development-automation / application | 51 |
-| collaboration / infrastructure | 46 |
+| collaboration / infrastructure | 47 |
 | collaboration / application | 35 |
 | resource-catalog / composition | 34 |
 | development-automation / domain | 33 |
@@ -200,9 +200,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3179 |
+| legacy-outbound | 3177 |
 | legacy-inbound | 1438 |
-| infrastructure-external | 277 |
+| infrastructure-external | 278 |
 | offered-consumption | 157 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
@@ -215,7 +215,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3179 |
+| legacy-outbound | 3177 |
 | legacy-inbound | 1438 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2452 |
+| W9 | 2450 |
 | W4-E1 | 815 |
 | W4-C | 399 |
 | W4-E0 | 216 |

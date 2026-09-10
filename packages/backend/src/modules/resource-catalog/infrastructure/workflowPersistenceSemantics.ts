@@ -16,7 +16,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray, notInArray } from 'drizzle-orm'
 
-import { agents, resourceGrants, scheduledTasks, tasks, workflows, workgroups } from '@/db/schema'
+import { agents, scheduledTasks, tasks, workflows, workgroups } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
@@ -25,7 +25,8 @@ import { assertScriptAuthorAllowed } from '@/services/scriptAuthorGate'
 
 import { assertNameUnchangedForEditor } from '../application/resourceAccess'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
-import { hasResourceAclBypass, isVisibleRow, type AclRow } from '../domain/resourceAccess'
+import { isVisibleRow, type AclRow } from '../domain/resourceAccess'
+import { grantedResourceIdsFor } from './resourceVisibility'
 import type { WorkflowOperationContext } from '../public/participants'
 import {
   extractWorkflowAgentRefs,
@@ -139,19 +140,6 @@ async function loadReferenceRows(
   }
 }
 
-async function grantedIds(
-  transaction: ResourceCatalogTransaction,
-  authority: WorkflowOperationContext,
-  type: ReferenceType,
-): Promise<ReadonlySet<string>> {
-  if (hasResourceAclBypass(authority)) return new Set()
-  const rows = await transaction
-    .select({ resourceId: resourceGrants.resourceId })
-    .from(resourceGrants)
-    .where(and(eq(resourceGrants.resourceType, type), eq(resourceGrants.userId, authority.user.id)))
-  return new Set(rows.map((row) => row.resourceId))
-}
-
 async function assertDefinitionReferences(input: {
   readonly transaction: ResourceCatalogTransaction
   readonly authority: WorkflowOperationContext
@@ -171,7 +159,7 @@ async function assertDefinitionReferences(input: {
     if (values.length === 0) continue
     const [rows, grants] = await Promise.all([
       loadReferenceRows(input.transaction, group.type, group.domain, values),
-      grantedIds(input.transaction, input.authority, group.type),
+      grantedResourceIdsFor(input.transaction, input.authority, group.type),
     ])
     if (group.domain === 'id') {
       const byId = new Map(rows.map((row) => [row.id, row]))
