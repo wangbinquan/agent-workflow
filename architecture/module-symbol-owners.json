@@ -6,7 +6,7 @@
     "moduleFiles": 1197,
     "productionFiles": 2581,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25064
+    "symbolsIncludingFileRoots": 25067
   },
   "entries": [
     {
@@ -5923,6 +5923,42 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ProviderNeutralDatabaseForMode",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "taskVisibilityCondition",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#TaskVisibilityReader",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "TaskVisibilityReader",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#TaskVisibilitySubject",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "TaskVisibilitySubject",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -301470,5 +301506,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2fd15932d1b7cd42d7fdd3a94094a1de0ab520f5e8205bc53e3e86c6c9e978b6"
+  "sourceDigest": "sha256:4a08e785804cecf3ba6794be0a1d515675354e5f515c5787e12695de77584d2e"
 }

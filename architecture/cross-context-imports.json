@@ -28835,6 +28835,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5ae78b51b85d7cb904e3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "taskVisibilityCondition",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/intentContextResourceAuthorization.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/intentContextResourceAuthorization.ts",
       "fromSymbol": "$file",
@@ -60013,6 +60030,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bf6fd7ae15bfc11d91f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "taskVisibilityCondition",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
       "fromSymbol": "$file",
@@ -81602,9 +81636,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4800,
+    "architectureExceptions": 4802,
     "implementationSccs": 0,
-    "observedEdges": 5333,
+    "observedEdges": 5335,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -111499,6 +111533,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts#SchedulerRunRowCandidate"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
+      "id": "import:5ae78b51b85d7cb904e3",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "taskVisibilityCondition",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition"
     },
     {
       "edgeKind": "value",
@@ -144430,6 +144480,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#$file",
+      "id": "import:bf6fd7ae15bfc11d91f4",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "taskVisibilityCondition",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilityCondition"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
@@ -167478,7 +167544,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2fd15932d1b7cd42d7fdd3a94094a1de0ab520f5e8205bc53e3e86c6c9e978b6",
+  "sourceDigest": "sha256:4a08e785804cecf3ba6794be0a1d515675354e5f515c5787e12695de77584d2e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
