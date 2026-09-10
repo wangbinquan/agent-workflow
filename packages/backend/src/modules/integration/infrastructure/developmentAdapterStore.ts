@@ -26,7 +26,14 @@ import { ConflictError } from '@/util/errors'
 
 const OWNER_NAME_CONSTRAINT = 'development_adapter_definitions_owner_name_unique'
 
-function toIdentityRow(
+/**
+ * `development_adapters` 行 → 身份投影。
+ *
+ * RFC-359 W57：`developmentToolConnectionStore.ts` 此前有一份**逐字相同**的私有 `identityRow`
+ * （连字段顺序都一样）。这是 ACL 判据要读的那几列，两份实现意味着两条读路径可能对
+ * owner / visibility 给出不同投影。
+ */
+export function toIdentityRow(
   row: typeof developmentAdapterDefinitions.$inferSelect,
 ): DevelopmentAdapterIdentityRow {
   return {

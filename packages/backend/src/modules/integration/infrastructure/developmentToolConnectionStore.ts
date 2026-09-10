@@ -8,6 +8,7 @@ import {
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { DevelopmentAdapterIdentityRow } from '../application/developmentAdapterCommands'
+import { toIdentityRow } from './developmentAdapterStore'
 
 interface DevelopmentToolConnectionStore {
   identity(id: string): Promise<DevelopmentAdapterIdentityRow | null>
@@ -17,23 +18,6 @@ interface DevelopmentToolConnectionStore {
     revision: number,
   ): Promise<{ readonly contentJson: string; readonly contentDigest: string } | null>
   grantedUserIds(id: string): Promise<ReadonlySet<string>>
-}
-
-function identityRow(
-  row: typeof developmentAdapterDefinitions.$inferSelect,
-): DevelopmentAdapterIdentityRow {
-  return {
-    id: row.id,
-    name: row.name,
-    purpose: row.purpose,
-    draftJson: row.draftJson,
-    publishedRevision: row.publishedRevision,
-    ownerUserId: row.ownerUserId,
-    visibility: row.visibility,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    archivedAt: row.archivedAt,
-  }
 }
 
 export function createSqliteDevelopmentToolConnectionStore(
@@ -46,10 +30,10 @@ export function createSqliteDevelopmentToolConnectionStore(
         .from(developmentAdapterDefinitions)
         .where(eq(developmentAdapterDefinitions.id, id))
         .get()
-      return row === undefined ? null : identityRow(row)
+      return row === undefined ? null : toIdentityRow(row)
     },
     async identities() {
-      return db.select().from(developmentAdapterDefinitions).all().map(identityRow)
+      return db.select().from(developmentAdapterDefinitions).all().map(toIdentityRow)
     },
     async revision(id, revision) {
       return (
@@ -97,10 +81,10 @@ export function createPostgresqlDevelopmentToolConnectionStore(
         .where(eq(developmentAdapterDefinitions.id, id))
         .limit(1)
         .get()
-      return row === undefined ? null : identityRow(row)
+      return row === undefined ? null : toIdentityRow(row)
     },
     async identities() {
-      return (await db.select().from(developmentAdapterDefinitions).all()).map(identityRow)
+      return (await db.select().from(developmentAdapterDefinitions).all()).map(toIdentityRow)
     },
     async revision(id, revision) {
       const row = await db

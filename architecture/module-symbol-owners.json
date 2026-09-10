@@ -6,7 +6,7 @@
     "moduleFiles": 1200,
     "productionFiles": 2581,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25040
+    "symbolsIncludingFileRoots": 25038
   },
   "entries": [
     {
@@ -60390,7 +60390,7 @@
     {
       "currentContext": "integration",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
       "id": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#toIdentityRow",
       "removeAfterWave": null,
@@ -60684,18 +60684,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DevelopmentToolConnectionStore",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts",
-      "id": "owner:packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts#identityRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "identityRow",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -79764,18 +79752,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "parseStoredTemplateMetadata",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts#resolveMessageTurnTriggerId",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "resolveMessageTurnTriggerId",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -301182,5 +301158,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b916fdc3abe4976ad28fe4785437a74af066a9e87aa9b92866b7235edcc556b8"
+  "sourceDigest": "sha256:e9c24d1c2afe84aab6274dbd992af89002edf552b0742283cf2d4b51a10ae425"
 }

@@ -16,6 +16,7 @@ import {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
 } from './workgroupTurnsDriver'
+import { resolveMessageTurnTriggerId } from './workgroupTurnContext'
 
 /** Minimal host-run snapshot consumed by the room projection. */
 export interface WorkgroupRoomHostRun {
@@ -152,22 +153,6 @@ function isBetter(candidate: WorkgroupRunEntry, incumbent: WorkgroupRunEntry): b
 
 function noteOf(run: WorkgroupRoomHostRun): WorkgroupRunEntry['note'] {
   return run.failureCode === 'clarify-forbidden' ? 'clarify-suppressed' : null
-}
-
-function resolveMessageTurnTriggerId(
-  memberId: string,
-  maxMsgId: string | null,
-  messages: readonly WorkgroupRoomMessage[],
-): string | null {
-  if (maxMsgId === null || maxMsgId.length === 0 || maxMsgId === '0') return null
-  let best: string | null = null
-  for (const message of messages) {
-    if (message.id > maxMsgId) continue
-    if (message.authorMemberId === memberId) continue
-    if (!message.mentionMemberIds.includes(memberId)) continue
-    if (best === null || message.id > best) best = message.id
-  }
-  return best
 }
 
 /**

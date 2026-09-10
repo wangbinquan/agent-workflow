@@ -1044,8 +1044,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#transaction:204",
-      "line": 204,
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#transaction:211",
+      "line": 211,
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#createDevelopmentAdapterStore",
       "status": "clear",
       "symbol": "createDevelopmentAdapterStore",
@@ -3335,7 +3335,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b916fdc3abe4976ad28fe4785437a74af066a9e87aa9b92866b7235edcc556b8",
+  "sourceDigest": "sha256:e9c24d1c2afe84aab6274dbd992af89002edf552b0742283cf2d4b51a10ae425",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
