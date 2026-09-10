@@ -408,7 +408,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const expected = {
       composeProviderAppDeps: 'bda8a20e8e4f382e244eb75252ff390d066b680fcc82a99ff0b7bfb1f77da8cb',
       composePostgresqlAppDeps: '2ebbeeef1bc8fecbda4f4c93cf8603afc3eec78fe6d4739403d407c2fb185c5b',
-      mountApiRoutes: '266aea41bba47101eab057e8e5b9c981f20c8e40063be12b09bf299e1f5391bd',
+      // gitleaks:allow —— 这是被测装配的 sha256 内容摘要，不是凭据。
+      mountApiRoutes: '266aea41bba47101eab057e8e5b9c981f20c8e40063be12b09bf299e1f5391bd', // gitleaks:allow
       createComposedApp: 'a632acc2c6534ecb769e1bd0e64e4f4d8c423d1be8aee049101837c9847b9e62',
       createApp: '628edbc2da66884bfba5d159423fa972ea9a8d4aca3ecb37ed8e3ed98e18aefa',
     }

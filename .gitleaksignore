@@ -72,3 +72,10 @@ c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generi
 # RFC-333 T9（837f124a0）：clarify decision replay 用例的普通幂等键字面量
 # 撞 generic-api-key；当前值已改为低熵测试值，此处只钉已发布的历史指纹。
 837f124a0d128e6c0c0b9c747394caeaac99e7c8:packages/backend/tests/rfc128-p5-d-autodispatch.test.ts:generic-api-key:130
+
+# RFC-359 W29 / T19h 的测试字面量撞 generic-api-key 的熵值规则：一条是被测装配的
+# sha256 内容摘要（期望值，测的就是它逐字不变），一条是幂等键的可读字面量。两者都不是
+# 凭据。当前行已带同行 `gitleaks:allow`；下面只钉已推送的历史 commit——gitleaks detect
+# 扫全部历史，改当前文件消不掉。（沿用本文件既有纪律：注释里不写出被判命中的完整键值形态。）
+ff67b9eebec3f77c4ce44f881df3b919f92a09c3:packages/backend/tests/rfc359-w29-unstarted-application-composition.test.ts:generic-api-key:269
+67e2cf8c9a756ca3831a083aa4455cc03c2e2287:packages/backend/tests/rfc359-t19h-generation-upgrade.test.ts:generic-api-key:157

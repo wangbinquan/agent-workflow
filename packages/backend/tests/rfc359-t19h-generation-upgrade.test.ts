@@ -154,7 +154,7 @@ function interruptedPointerFixture(version: 'root' | 'head' = 'root') {
   const generationId = `dbg_pg_${operationId.slice(4)}`
   let manifest = createDatabaseMigrationManifest({
     operationId,
-    idempotencyKey: 't19h-pointer-gap-0001',
+    idempotencyKey: 't19h-pointer-gap-0001', // gitleaks:allow —— 测试幂等键字面量，不是凭据。
     sourceGenerationId: base.payload.generationId,
     sourceSchemaDigest: contract.digest,
     sourceDatabaseFingerprint: 'sqlite:checkpoint-source',
