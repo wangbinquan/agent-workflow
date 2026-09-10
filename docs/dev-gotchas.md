@@ -5942,3 +5942,28 @@ const suite = postgresqlSelected ? describe : describe.skip
 **规矩**：hook 里只要有网络 / 建库 / 起进程 / 落盘，一律显式给预算，量级与本文件用例的
 `timeout` 对齐（例如用例 120s，hook 给 60s）。本机跑得快**不构成**不给的理由——
 CI 的冷容器与共享 runner 就是慢那一档。
+
+## **新增一个测试文件**要跑的是「枚举测试文件」的政策 / 清单型守卫（2026-09-11 连撞两条）
+
+本文件已有两条相邻的挑法：改 `src/` 按「谁扫源码语料」挑、改 `tests/helpers/**` 按「谁断言
+harness」挑。**新增测试文件**是第三种，波及的又是另一批守卫——它们枚举的是 `tests/` 而不是 `src/`：
+
+```bash
+cd packages/backend
+grep -rln "guardTestFiles\|'tests'\|/tests\b" tests/*.test.ts tests/architecture/*.test.ts \
+  | xargs grep -ln "readdirSync\|walkTsFiles\|guardTestFiles\|packageTestUnits" | sort -u
+```
+
+实测 21 个文件 / 453 个用例，包含：
+
+- `test-suite-policy.test.ts` —— **每一处 `skip` / `skipIf` 都必须登记**，连带
+  `ledger-baselines.json` 的 `test-suite-allowed-skips` 计数（手维护基线，涨了要手改 + 一次性
+  `allowGrowth`）。加一条 `describe.skip` 就会撞上，红在**别的分片**上、与你改的文件毫无关系。
+- `architecture/rfc317-architecture-ledgers.test.ts` —— 守卫清单与磁盘两向钉死
+  （文件名含 `guard`/`lock`/`preflight` 等关键词的新测试必须进 `guard-manifest.json`）。
+- `architecture/rfc317-guard-corpus-floor` / `-negative-fixture` —— 语料下限、负 fixture 两向钉死。
+- `root-test-entrypoint.test.ts`、`rfc349-postgresql-surface-guard.test.ts` 等清单型守卫。
+
+**三条挑法互不覆盖**，加一个既扫源码、又带 skip、名字里还有 `lock` 的测试文件会同时撞上三批。
+本轮就是这么连推三次红的（macOS provider 门 → 求值型 harness 守卫 → skip 政策 + 计数账本）。
+省事的做法：新增测试文件后，把三条 grep 的结果并起来跑一遍，比等 CI 逐条告诉你便宜得多。

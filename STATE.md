@@ -2,6 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **修 `23b19d46b` 的红：新增测试文件撞上「枚举测试文件」的政策守卫（2026-09-11）**：`describe.skip` 触发 `test-suite-policy` 的「每一处 skip 都必须登记」，连带 `test-suite-allowed-skips` 计数 44 → 45（手维护基线，已手改 + 一次性 permit）。已按既有先例 `rfc359-w6-t26-postgresql-plan-audit.test.ts#skip` 同形登记并写清理由。
+> **第三条挑法落档**：本仓现在有三条互不覆盖的波及面挑法——改 `src/` 按「谁扫源码语料」、改 `tests/helpers/**` 按「谁断言 harness」、**新增测试文件按「谁枚举 tests/」**（实测 21 文件 / 453 用例，含 skip 政策、守卫清单两向钉死、语料下限、负 fixture）。本轮连推三次红正是因为新文件同时命中三批。三条 grep 都已写进 `docs/dev-gotchas.md`，新增测试文件后并起来跑一遍即可。
+
 > **修 `f2b31a4b3` 的红：hook 里做真 I/O 必须显式给超时（2026-09-11）**：新写的 PG 测试在 `beforeAll` 里建两个库（terminate + drop + create ×2），本机 ~1.7s 全绿，CI 的 ubuntu 分片报一条 **`(unnamed)`** 失败、耗时 **5007.19ms**——恰好是 bun 的默认 hook 预算 5s，冷容器上建库慢得多。已给两个 hook 显式 60s（与本文件用例的 120s 同量级）。
 > 教训落 `docs/dev-gotchas.md`（本仓已有「扫全源码树的守卫要给超时」，hook 是同一类且更易漏，因为 `beforeAll(fn, timeout)` 的第二参数常被忘）。两个识别点：失败名是 **`(unnamed)`**（hook 超时没有用例名）、耗时**贴着 5000ms**。看到这个形状先查 hook，别去翻用例。
 

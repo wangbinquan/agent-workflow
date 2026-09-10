@@ -53,6 +53,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // 缺 `AW_TEST_POSTGRESQL_URL`（而不是显式只选 sqlite）时仍然**判红不 skip**，
   // 与 `describeEachProvider` 同一条硬判据。
   'packages/backend/tests/rfc359-w6-t26-postgresql-plan-audit.test.ts#skip': 1,
+  // RFC-359 W8 —— schema 准备锁的**作用域**（按库隔离 / 同库互斥）同样是 PostgreSQL 专属机制：
+  // SQLite 的迁移器根本没有锁，它的隔离天然是「一个文件一个库」。与上一条同一套门控——
+  // 显式 `AW_TEST_PROVIDERS=sqlite` 时留一条**可见的** skip（macOS / Windows 原生 lane 就是这一档，
+  // 它们没有 PG 服务容器）；选了 postgresql 却缺 URL 时仍然**判红不 skip**。
+  // 这条性质有人依赖：audit-backlog 里「每文件一库」那条隔离路线整个建立在它上面。
+  'packages/backend/tests/rfc359-w8-migration-lock-scope.test.ts#skip': 1,
   'packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-route-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,
