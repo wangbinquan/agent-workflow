@@ -1,6 +1,5 @@
 import type { OverviewResponse } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'
 import type {
   DatabaseMigrationArtifactInput,
   DatabaseMigrationArtifactView,
@@ -22,9 +21,6 @@ export interface SystemOverviewAuthority {
   readonly actor: Actor
   readonly authority: RequestAuthority
 }
-
-/** Compatibility export; Task Execution is the single contract owner. */
-export type { TaskOverviewQuery }
 
 /** Closed aggregate consumed by the HTTP overview route. */
 export interface SystemOverviewQuery {

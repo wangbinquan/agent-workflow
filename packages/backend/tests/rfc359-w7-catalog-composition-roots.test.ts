@@ -31,7 +31,7 @@ import {
   composeSqliteSkillArtifactCompensation,
 } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composePostgresqlResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
+import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
@@ -71,11 +71,6 @@ async function seedActor(
       'workflows:read',
     ]),
   } as unknown as Actor
-}
-
-/** Integration owner 交给目录的「已准入 authority 对」；本文件只把它当不透明句柄传递。 */
-function pairOf(actor: Actor): ResourceRequestContext {
-  return { authority: {}, actor } as unknown as ResourceRequestContext
 }
 
 /** 触发器资源快照读要的是 `(authority, actor)` 对，不是单个 authority 句柄。 */
@@ -169,24 +164,16 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
       `agent-${agentId.slice(-6).toLowerCase()}`,
     )
 
-    // 概览：RFC-359 W8 删掉零消费者的 SQLite 别名后只剩这一个具名装配（计数端口本就中立）。
-    const resolver = { resolve: () => owner }
-    const postgresqlOverview = composePostgresqlResourceCatalogOverviewQuery(
-      asPostgresql(harness.db),
-      resolver,
-    )
-    const counts = await postgresqlOverview.load(pairOf(owner))
+    // 概览：RFC-359 W8 删掉零消费者的 SQLite 别名，W57 又把剩下那个具名入口归了中立
+    // （计数端口本就收中立客户端，`Postgresql` 前缀与形参标注是命名债不是分叉），
+    // 并让端口直接收 actor——原来那个 `{ resolve }` 解析器连同调用方要填的 WeakMap 一起删了。
+    const overview = composeResourceCatalogOverviewQuery(harness.db)
+    const counts = await overview.load(owner)
     expect(counts.agents).toBe(1)
     // 没有 skills:read 权限点的维度不查库、直接给 null——这条分支也要被走到。
     expect(counts.skills).toBeNull()
     // 外人看不到这条私有 agent：概览计数随之为 0（同一份计数端口，只是 actor 换了）。
-    expect(
-      (
-        await composePostgresqlResourceCatalogOverviewQuery(asPostgresql(harness.db), {
-          resolve: () => stranger,
-        }).load(pairOf(stranger))
-      ).agents,
-    ).toBe(0)
+    expect((await overview.load(stranger)).agents).toBe(0)
   })
 
   test('memory 的 scope 访问参与者：缺行为 none，公共资源可读，私有资源对外人不可读', async () => {

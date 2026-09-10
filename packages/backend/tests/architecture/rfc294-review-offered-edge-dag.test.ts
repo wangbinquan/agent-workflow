@@ -471,9 +471,9 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/system-operations/public/queries.ts',
+    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
     to: 'task-execution',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。 RFC-359 W57：这条边此前挂在 `public/queries.ts` 上——它把 task-execution 的 `TaskOverviewQuery` 再导出一手，唯一的跨模块消费者是 `services/overview.ts`。`/api/overview` 两侧收成一份后那个 facade 整份删除，再导出的跨模块消费者归零（`rfc294-review-public-consumer-ledger` 判红），于是退役；聚合体改从真正的 owner（task-execution public）取合同，边随之从 public 层挪到 application 层。同一个 bounded-context 对、同一个清偿波次，条目数不变。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {

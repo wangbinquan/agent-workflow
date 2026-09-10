@@ -4,10 +4,10 @@ import type { IntegrationOverviewQueries } from '@/modules/integration/public/qu
 import type { MemoryCatalogOperations } from '@/modules/memory/public/catalog'
 import type { ResourceCatalogOverviewQuery } from '@/modules/resource-catalog/public/queries'
 import type { RepositoryOverviewQueries } from '@/modules/source-control/public/queries'
+import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'
 import type {
   SystemOverviewAuthority,
   SystemOverviewQuery,
-  TaskOverviewQuery,
 } from '@/modules/system-operations/public/queries'
 import { createInFlightCoalescer } from '@/util/inFlight'
 
@@ -40,7 +40,7 @@ export function composeSystemOverviewQuery(input: {
     const canReadTasks =
       actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
     const [catalog, repos, scheduled, memories, tasks] = await Promise.all([
-      input.resourceCatalog.load(authority.authority),
+      input.resourceCatalog.load(actor),
       actor.permissions.has('repos:read')
         ? input.repositories.countCachedRepositories()
         : Promise.resolve(null),

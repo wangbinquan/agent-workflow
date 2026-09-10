@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 858,
+    "consumers": 853,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1062,
+    "methods": 1061,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20460,
-    "symbols": 983
+    "recursiveFields": 20443,
+    "symbols": 982
   },
   "entries": [
     {
@@ -50241,7 +50241,6 @@
       },
       "consumerEdgeIds": [
         "import:1b2384502fc5997ff0a1",
-        "import:2349fc62277071dcf4a7",
         "import:5cb81a2768a79730ff00",
         "import:ae9218baef05fc626909",
         "import:de5c415b39b10df6f013",
@@ -50265,12 +50264,6 @@
           "edgeId": "import:1b2384502fc5997ff0a1",
           "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:2349fc62277071dcf4a7",
-          "file": "packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts#$file"
         },
         {
           "context": "memory",
@@ -50329,7 +50322,6 @@
         "public:resource-catalog:participants:ResourcePackageApplyTx",
         "public:resource-catalog:participants:ResourceRequestContext",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
-        "public:resource-catalog:queries:ResourceCatalogOverviewQuery",
         "public:resource-catalog:queries:ResourceCatalogQuery",
         "public:runtime-management:participants:RealtimeChannelAccess",
         "public:runtime-management:participants:RealtimeCompositionPolicy",
@@ -102133,7 +102125,6 @@
         "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
-        "public:resource-catalog:queries:ResourceCatalogOverviewQuery",
         "public:task-execution:commands:TaskExecutionResourceAuthority"
       ],
       "removeAfterWave": null,
@@ -106026,6 +106017,18 @@
       "fields": [
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$parameter:viewer.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:879441a0fc38c327bb56"
+          ],
+          "fieldPath": "$method:load.$parameter:viewer.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:load.$return.agents.$variant:0",
           "type": "number"
         },
@@ -106096,7 +106099,7 @@
             "import:879441a0fc38c327bb56"
           ],
           "name": "load",
-          "signatureDigest": "sha256:0079c2c83630e6359def2aab6589d46de9f18b23d490d1b210ef5e5e886ec0dd"
+          "signatureDigest": "sha256:a547cc8bc1ef352fae54456b13caf19d489580c01d705c848c9a0613b76e3e8b"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#ResourceCatalogOverviewQuery",
@@ -106111,7 +106114,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:81fac2f22a96e9c657be07c7b5215e1ac11ca995884bfb071af61b0f3ebf95f1",
+      "signatureDigest": "sha256:86e7404ff58f42fa7b2cde2924170cf02f5b7c60e75536b4f8e9e0843973bc9b",
       "status": "target-context-current-surface",
       "symbol": "ResourceCatalogOverviewQuery",
       "transaction": "none",
@@ -125918,7 +125921,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:6330804f7bdfc81bb5ef",
         "import:ee92a2a26791ce51427e"
       ],
       "context": "source-control",
@@ -125940,7 +125942,6 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:6330804f7bdfc81bb5ef",
             "import:ee92a2a26791ce51427e"
           ],
           "name": "countCachedRepositories",
@@ -125949,12 +125950,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/queries.ts#RepositoryOverviewQueries",
       "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:6330804f7bdfc81bb5ef",
-          "file": "packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts#$file"
-        },
         {
           "context": "system-operations",
           "edgeId": "import:ee92a2a26791ce51427e",
@@ -132921,9 +132916,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:2ed358b5ae0e6957a01a"
-      ],
+      "consumerEdgeIds": [],
       "context": "system-operations",
       "dataClass": "confidential",
       "direction": "offered",
@@ -133023,14 +133016,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#SystemOverviewAuthority",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:2ed358b5ae0e6957a01a",
-          "file": "packages/backend/src/services/overview.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/overview.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:system-operations:queries:SystemOverviewQuery"
       ],
@@ -133054,7 +133040,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:0bf66ce91222ec017fb4",
         "import:10bc2fc7ce54544fdc40"
       ],
       "context": "system-operations",
@@ -133171,12 +133156,6 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:0bf66ce91222ec017fb4",
-          "file": "packages/backend/src/services/overview.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/overview.ts#$file"
-        },
-        {
-          "context": "legacy",
           "edgeId": "import:10bc2fc7ce54544fdc40",
           "file": "packages/backend/src/routes/overview.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/overview.ts#$file"
@@ -133188,149 +133167,6 @@
       "signatureDigest": "sha256:9c8f3c0d3346490a4973b563bdf663efc49e11852c34a9f9393fbff8cfe52b8a",
       "status": "target-context-current-surface",
       "symbol": "SystemOverviewQuery",
-      "transaction": "none",
-      "unresolvedTypeRefs": [
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:47ac3bb3aa56e3b24f04"
-      ],
-      "context": "system-operations",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "queries",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.authorityRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.patId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.permissions[]",
-          "type": "(typeof PERMISSIONS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.purpose",
-          "type": "z.infer<typeof PatPurposeSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.source.$variant:0",
-          "type": "'session'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.source.$variant:1",
-          "type": "'pat'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.source.$variant:2",
-          "type": "'daemon'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.role.$variant:0",
-          "type": "'admin'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.role.$variant:1",
-          "type": "'user'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.role.$variant:2",
-          "type": "'manager'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.role.$variant:3",
-          "type": "'guest'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.status.$variant:0",
-          "type": "'active'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.status.$variant:1",
-          "type": "'disabled'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.status.$variant:2",
-          "type": "'invited'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.actor.user.username",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$parameter:input.since",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:load.$return",
-          "type": "z.infer<typeof OverviewTasksSchema>"
-        }
-      ],
-      "file": "packages/backend/src/modules/system-operations/public/queries.ts",
-      "id": "public:system-operations:queries:TaskOverviewQuery",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "load",
-          "signatureDigest": "sha256:7cbff46262bd97d0bbfefa2299a3f9f01c304a1b3259315a4eae91d22c88a1ac"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:47ac3bb3aa56e3b24f04",
-          "file": "packages/backend/src/services/overview.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/overview.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:57cbfa60e45a5ddc5e67207367ee1afacdd63402578041c64c97513e7b979a45",
-      "status": "target-context-current-surface",
-      "symbol": "TaskOverviewQuery",
       "transaction": "none",
       "unresolvedTypeRefs": [
         "z.infer"
@@ -156587,7 +156423,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:1ee8f358016f194cd34c"
+        "import:bed0f2c2ff04f55eb8d1"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -156595,7 +156431,9 @@
       "entrypoint": "queries",
       "fields": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:bed0f2c2ff04f55eb8d1"
+          ],
           "fieldPath": "$method:load.$parameter:input.actor.authorityRevision",
           "type": "number"
         },
@@ -156635,7 +156473,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:bed0f2c2ff04f55eb8d1"
+          ],
           "fieldPath": "$method:load.$parameter:input.actor.user.id",
           "type": "string"
         },
@@ -156680,7 +156520,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:bed0f2c2ff04f55eb8d1"
+          ],
           "fieldPath": "$method:load.$parameter:input.since",
           "type": "number"
         },
@@ -156697,7 +156539,9 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:bed0f2c2ff04f55eb8d1"
+          ],
           "name": "load",
           "signatureDigest": "sha256:7cbff46262bd97d0bbfefa2299a3f9f01c304a1b3259315a4eae91d22c88a1ac"
         }
@@ -156706,9 +156550,9 @@
       "productionConsumers": [
         {
           "context": "system-operations",
-          "edgeId": "import:1ee8f358016f194cd34c",
-          "file": "packages/backend/src/modules/system-operations/public/queries.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#$file"
+          "edgeId": "import:bed0f2c2ff04f55eb8d1",
+          "file": "packages/backend/src/modules/system-operations/application/overview.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/overview.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -161840,7 +161684,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59bb561da62551bd745f7e0716ba386bd3961a09ce94bfb622d669bb5358c3da",
+  "sourceDigest": "sha256:820a01ba0ba60b0ff38a91e269c2eae90339a46302eb4b35bc29012cc3ddc609",
   "targetContexts": [
     "collaboration",
     "development-automation",

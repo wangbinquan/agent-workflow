@@ -30,11 +30,14 @@ const authority = {} as RequestAuthority
 describe('RFC-349 provider-neutral system overview', () => {
   test('assembles owner projections with one clock and exact permission nulls', async () => {
     const calls: string[] = []
+    const requester = actor(['repos:read', 'memory:read', 'tasks:read:own'])
     const query = composeSystemOverviewQuery({
       now: () => Date.UTC(2026, 7, 31),
       resourceCatalog: {
         async load(received) {
-          expect(received).toBe(authority)
+          // RFC-359 W57：端口收的是 actor 本身，不再是请求上下文（原先要靠调用方填的
+          // WeakMap 把上下文反查回 actor）。
+          expect(received).toBe(requester)
           calls.push('resource-catalog')
           return {
             agents: 1,
@@ -88,7 +91,7 @@ describe('RFC-349 provider-neutral system overview', () => {
     expect(
       await query.execute({
         authority,
-        actor: actor(['repos:read', 'memory:read', 'tasks:read:own']),
+        actor: requester,
       }),
     ).toEqual({
       resources: {

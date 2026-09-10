@@ -59,7 +59,7 @@ import {
 import { composePostgresqlResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composePostgresqlResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
-import { composePostgresqlResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
+import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import {
   composeMcpRuntimeTestProvider,
@@ -1784,27 +1784,18 @@ export async function composePostgresqlApplication(
     }),
   })
 
-  const overviewActors = new WeakMap<object, Actor>()
-  const resourceCatalogOverview = composePostgresqlResourceCatalogOverviewQuery(input.db, {
-    resolve(authority) {
-      const actor = overviewActors.get(authority)
-      if (actor === undefined) throw new Error('foreign-overview-authority')
-      return actor
-    },
-  })
-  const systemOverview = composeSystemOverviewQuery({
-    resourceCatalog: resourceCatalogOverview,
-    repositories: core.repositoryWorkspaceOperations.overviewQueries,
-    integration: scheduledTaskRuntime.overview,
-    memories: memoryCatalog,
-    tasks: taskExecutionProvider.overview,
-  })
+  // RFC-359 W57：`/api/overview` 两个 provider 共用这一份装配（SQLite 侧见
+  // `server.ts` 的 `composeSqliteApiRouteMounts`）。原来这里还有一张
+  // `WeakMap<authority, Actor>` 加一层 execute 包装，用来把请求上下文反查回 actor——
+  // 目录概览端口现在直接收 actor，那层胶水连同它的 `foreign-overview-authority` 失败模式
+  // 一并删除。
   const overviewQuery: PostgresqlAppCompositionInput['platform']['overview']['query'] =
-    Object.freeze({
-      async execute(request: Parameters<typeof systemOverview.execute>[0]) {
-        overviewActors.set(request.authority, request.actor)
-        return await systemOverview.execute(request)
-      },
+    composeSystemOverviewQuery({
+      resourceCatalog: composeResourceCatalogOverviewQuery(input.db),
+      repositories: core.repositoryWorkspaceOperations.overviewQueries,
+      integration: scheduledTaskRuntime.overview,
+      memories: memoryCatalog,
+      tasks: taskExecutionProvider.overview,
     })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     config: Object.freeze({

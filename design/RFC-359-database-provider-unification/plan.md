@@ -4881,7 +4881,7 @@ errno 787 / PG `23503`），所以那个状态根本进不去，两条分支是�
 
 `GET /api/overview`（7.13 / 12.64ms）**不是往返数问题，是两套实现问题**——见下节。
 
-## 5i. `/api/overview` 是一引擎一份实现（W57 取证，AC-1 / AC-12 的最大一条）
+## 5i. `/api/overview` 曾是一引擎一份实现——**已收成一份**（W57）
 
 `tests/helpers/productionOverview.ts` 里有一条 `if (isPostgresql(db))` 硬分叉，而
 `rfc311-perf-guards.test.ts` 还用 AST 断言把这条分叉**钉住**（它当时的意图是「性能用例要走各
@@ -4901,6 +4901,29 @@ provider 的真实生产入口」，合理；但副作用是把分叉写进了�
 | tasks | `buildTaskStats` | `taskOverviewQuery.load` + 调用方侧 null 门（`load` 内的零值分支从该调用方够不着） | 等价 |
 | generatedAt / in-flight 合流 | 同形 | 同形 | 等价 |
 
+**已落地**（本节其余内容保留为取证记录）。实际动作与取证时的判断一致，另加四件当时没预见到的：
+
+1. **端口的 authority→actor 反查一并删掉**。`ResourceCatalogOverviewQuery.load` 原先收
+   `ResourceRequestContext`，唯一实现拿到它之后做的唯一一件事是用一张**调用方填的**
+   `WeakMap<authority, Actor>` 反查回请求者——而计数本来就只认请求者。代价是每个装配根抄一份
+   「填 map + 包一层 execute」的胶水（daemon 一份、性能 helper 两份），漏填就是运行时
+   `foreign-overview-authority`。现在直接收 `ResourceAclActorProjection`。
+   ⚠️ 第一版我写的是收 `Actor`，被 `rfc345-resource-catalog-contracts` 判红且**判得对**：
+   资源目录的公共面刻意不依赖 identity-access 的 `Actor`；正解是用本模块自己的闭合投影。
+2. **legacy 层不得直接 import 模块的 application 层**（`rfc317-module-boundary` R1）。
+   新建 `modules/system-operations/composition/overview.ts` 作为装配缝，与
+   `task-execution/composition/taskOverview.ts` 同形；`server.ts` 从那里取。
+3. **`system-operations/public/queries.ts` 对 `TaskOverviewQuery` 的兼容再导出退役**：它唯一的
+   跨模块消费者就是被删掉的 `services/overview.ts`，归零后 `rfc294-review-public-consumer-ledger`
+   判红。聚合体改从真正的 owner（task-execution public）取合同，off-DAG 债务边随之从 public 层
+   挪到 application 层（同一个 bounded-context 对、同一个清偿波次，条目数不变）。
+4. **`rfc311-perf-guards` 那条 AST 断言翻了向**：从「钉住分叉的形状」改成「断言没有分叉」，
+   并把判据从**全文文本**改成 **AST 标识符**——文本匹配会把讲述历史的注释也算成命中
+   （我的新头注释里写了 `isPostgresql`，第一版守卫当场自噬）。
+
+净删 316 行；`architecture/cross-context-imports.json` 与 `facades.json` 各少一条；
+`rfc345-resource-acl-facade-compatibility` 账本 41→40。
+
 **目标形态**：留 `composeSystemOverviewQuery` 一份，SQLite 侧装同样的五个端口
 （`composePostgresqlResourceCatalogOverviewQuery` 内部早已是中立的——计数端口收
 `ProviderNeutralDatabase`，只有形参类型标注写着 `PostgresqlDatabaseClient`；
@@ -4913,9 +4936,12 @@ provider 的真实生产入口」，合理；但副作用是把分叉写进了�
 正解是把 overview 的装配挪到依赖齐备的那一层，**不是**留一个后填的槽——按 §5g 的结论，
 组合根占位的正解是词法作用域。
 
-**安全网**：`rfc190-overview-route.test.ts` 的 oracle（逐 actor 断言「概览计数 === 同一 actor 在
-对应列表端点拿到的行数」）目前**只跑 SQLite、且直接调 `buildOverview`**。合一时它必须改成调
-合成后的查询并按 `describeEachProvider` 双引擎跑——这既是本项的安全网，也是 AC-6 的一格。
+**安全网（已用上）**：`rfc190-overview-route.test.ts` 的 oracle 逐 actor 断言「概览计数 ===
+同一 actor 在对应列表端点拿到的行数」。它已改成打合成后的查询，**一次就绿**（195 条断言）——
+这正是「两份实现语义等价」这个判断的直接验证。
+
+**仍欠的一格（AC-6）**：这条 oracle 目前还是 SQLite 单引擎（它经 `createApp` 起真 HTTP 应用，
+`describeEachProvider` 化要先解决 app 装配的 provider 参数化）。留作 AC-6 的待办。
 
 ## 6. 债与不做的事
 

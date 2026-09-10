@@ -105,11 +105,6 @@ const REMOVE_OWNERS = {
     'packages/backend/src/modules/memory/application/ports/resourceScopeAccess.ts',
     'MemoryResourceScopeAccessParticipant',
   ),
-  overview: owner(
-    'RFC-349 provider cutover',
-    'packages/backend/src/modules/resource-catalog/public/queries.ts',
-    'ResourceCatalogOverviewQuery',
-  ),
   pluginCatalog: owner(
     'RFC-345 T9',
     'packages/backend/src/modules/resource-catalog/public/operations.ts',
@@ -383,13 +378,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['canViewResource'],
     'SQLite task route resource visibility',
     REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'platform/persistence/sqlite/systemOverviewReadModel.ts',
-    ['AclColumnRef', 'visibleRowsCondition'],
-    'system overview ACL read model',
-    REMOVE_OWNERS.overview,
   ),
   edge(
     'services/resourceAcl.ts',

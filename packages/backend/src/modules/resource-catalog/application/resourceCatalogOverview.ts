@@ -1,13 +1,8 @@
-import type { Actor } from '@/auth/actor'
 import type { Permission } from '@agent-workflow/shared'
-import type { ResourceRequestContext } from '../public/participants'
 import type { ResourceCatalogOverviewCounts, ResourceCatalogOverviewQuery } from '../public/queries'
+import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../domain/resourceKinds'
 import type { ResourceCatalogOverviewCountPort } from './ports/resourceCatalogOverview'
-
-export interface ResourceCatalogOverviewAuthorityResolver {
-  resolve(authority: ResourceRequestContext): Actor
-}
 
 const dimensions = Object.freeze([
   Object.freeze({ property: 'agents', kind: 'agent', permission: 'agents:read', builtin: true }),
@@ -39,12 +34,10 @@ const dimensions = Object.freeze([
 }>[])
 
 export function createResourceCatalogOverviewQuery(input: {
-  readonly authority: ResourceCatalogOverviewAuthorityResolver
   readonly counts: ResourceCatalogOverviewCountPort
 }): ResourceCatalogOverviewQuery {
   return Object.freeze({
-    async load(authority: ResourceRequestContext): Promise<ResourceCatalogOverviewCounts> {
-      const actor = input.authority.resolve(authority)
+    async load(actor: ResourceAclActorProjection): Promise<ResourceCatalogOverviewCounts> {
       const load = async (dimension: (typeof dimensions)[number]): Promise<number | null> =>
         actor.permissions.has(dimension.permission)
           ? await input.counts.countVisible(actor, dimension.kind, {

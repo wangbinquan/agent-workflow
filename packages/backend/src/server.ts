@@ -176,7 +176,9 @@ import {
 } from '@/modules/collaboration/public/queries'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOverviewRoutes, type OverviewRouteQuery } from '@/routes/overview'
-import { buildOverview } from '@/services/overview'
+import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
+import { createTaskOverviewQuery } from '@/modules/task-execution/composition/taskOverview'
+import { composeSystemOverviewQuery } from '@/modules/system-operations/composition/overview'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPlantumlRoutes } from '@/routes/plantuml'
@@ -2074,15 +2076,6 @@ export function composeSqliteApplicationDeps(
             resources: provider.resources,
           })
         })()
-  const overviewQuery: OverviewRouteQuery = Object.freeze({
-    execute: (input: Parameters<OverviewRouteQuery['execute']>[0]) =>
-      buildOverview(
-        effectiveDeps.db,
-        { actor: input.actor, authority: input.authority },
-        repositoryBootstrap.repositoryWorkspaceOperations.overviewQueries,
-        memoryCatalog,
-      ),
-  })
   const intentApply = composeSqliteIntentApplyOperations({
     db: effectiveDeps.db,
     appHome,
@@ -2124,7 +2117,6 @@ export function composeSqliteApplicationDeps(
     providerResourceCatalog,
     memoryCatalog,
     agentResourceIntegrity,
-    overviewQuery,
     intentApply,
     taskExecutionPersistence,
     unstarted,
@@ -2335,7 +2327,6 @@ function composeSqliteApiRouteMounts(
   providerResourceCatalog: ReturnType<typeof composeSqliteResourceCatalog>,
   composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
   agentResourceIntegrity: AgentResourceIntegrityComposition,
-  overviewQuery: OverviewRouteQuery,
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createSqliteTaskExecutionPersistence>,
   unstarted?: UnstartedApplicationScope,
@@ -2598,6 +2589,22 @@ function composeSqliteApiRouteMounts(
         agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
     } satisfies Parameters<typeof composeSqliteScheduledTaskRuntime>[0]['validation']),
     resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
+  })
+  // RFC-359 W57 —— `/api/overview` 两个 provider 共用这一份装配（PG 侧见
+  // `cli/postgresqlDaemonApplication.ts`）。此前 SQLite 走
+  // `platform/persistence/sqlite/systemOverviewReadModel.ts::buildOverview`、PG 走这一条，
+  // 两份实现逐个聚合键语义等价（对账见 RFC-359 plan §5i），是纯重复；`buildOverview`
+  // 连同它的私有 in-flight 合流已整份删除。
+  //
+  // 它装在这一层而不是 `composeSqliteApplicationDeps`，是因为 `integration` 这一路要的是
+  // `scheduledTaskRuntime.overview`，而那个 runtime 就在上面几行才装配得起来——依赖在哪层
+  // 齐备就在哪层装，不留后填的槽（RFC-359 plan §5g：组合根占位的正解是词法作用域）。
+  const overviewQuery: OverviewRouteQuery = composeSystemOverviewQuery({
+    resourceCatalog: composeResourceCatalogOverviewQuery(deps.db),
+    repositories: deps.repositoryWorkspaceOperations.overviewQueries,
+    integration: scheduledTaskRuntime.overview,
+    memories: memoryCatalog,
+    tasks: createTaskOverviewQuery(deps.db),
   })
   const scheduledIdentityAccess = Object.freeze({
     ...identityAccess,

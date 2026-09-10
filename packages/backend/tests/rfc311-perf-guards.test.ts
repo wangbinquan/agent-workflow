@@ -730,29 +730,37 @@ describe('RFC-311 性能防护 —— 防护面本身不许缩水', () => {
       ])
     }
 
+    // RFC-359 W57：这条断言**翻了向**。它原来钉的是「helper 里有一条 `if (isPostgresql(db))`，
+    // PG 分支走 composeSystemOverviewQuery、SQLite 分支走 buildOverview」——当时的意图是
+    // 「性能用例要走各 provider 的真实生产入口」，合理；副作用是把**分叉本身**写进了守卫。
+    // `/api/overview` 收成一份之后，正确的判据是「这里没有 provider 分叉」。
     const helper = sourceOf('helpers/productionOverview.ts')
     const entry = helper.statements
       .filter(ts.isFunctionDeclaration)
       .find((node) => node.name?.text === 'runProductionOverview')
-    const pgBranch = entry?.body?.statements.find(ts.isIfStatement)
-    if (pgBranch === undefined || !ts.isBlock(pgBranch.thenStatement))
-      throw new Error('missing-postgresql-overview-branch')
-    expect(pgBranch.expression.getText(helper)).toBe('isPostgresql(db)')
-    const pgReturn = pgBranch.thenStatement.statements.find(ts.isReturnStatement)?.expression
-    if (
-      pgReturn === undefined ||
-      !ts.isCallExpression(pgReturn) ||
-      !ts.isPropertyAccessExpression(pgReturn.expression)
-    )
-      throw new Error('missing-postgresql-overview-execute')
-    expect(pgReturn.expression.name.text).toBe('execute')
-    const root = pgReturn.expression.expression
-    if (!ts.isCallExpression(root)) throw new Error('missing-system-overview-composition')
-    expect(root.expression.getText(helper)).toBe('composeSystemOverviewQuery')
-    const sqliteReturn = entry?.body?.statements.find(ts.isReturnStatement)?.expression
-    if (sqliteReturn === undefined || !ts.isCallExpression(sqliteReturn))
-      throw new Error('missing-sqlite-overview-execute')
-    expect(sqliteReturn.expression.getText(helper)).toBe('buildOverview')
+    if (entry?.body === undefined) throw new Error('missing-run-production-overview')
+    expect(
+      entry.body.statements.some(ts.isIfStatement),
+      'runProductionOverview 不得按 provider 分叉：两个引擎走同一份装配（RFC-359 §5i）',
+    ).toBe(false)
+    // 判据走 **AST 里的标识符**，不是全文文本：文本匹配会把讲述历史的注释也算成命中
+    // （本仓已有前科——`rfc359-w5-t19d-coverage-parity` 曾因头注释里写了一句文件名而虚高）。
+    const identifiers = new Set<string>()
+    const collect = (node: ts.Node): void => {
+      if (ts.isIdentifier(node)) identifiers.add(node.text)
+      ts.forEachChild(node, collect)
+    }
+    collect(helper)
+    for (const forbidden of ['isPostgresql', 'buildOverview', 'assertSqlite']) {
+      expect(
+        identifiers.has(forbidden),
+        `helpers/productionOverview.ts 不得再引用 \`${forbidden}\`——它是旧的一引擎一份实现的残留`,
+      ).toBe(false)
+    }
+    expect(
+      identifiers.has('composeSystemOverviewQuery'),
+      '两个引擎都必须打 composeSystemOverviewQuery 这一份装配',
+    ).toBe(true)
   })
 })
 

@@ -948,7 +948,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 804
+      "lines": 803
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -2417,14 +2417,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:59bb561da62551bd745f7e0716ba386bd3961a09ce94bfb622d669bb5358c3da",
+    "sourceDigest": "sha256:820a01ba0ba60b0ff38a91e269c2eae90339a46302eb4b35bc29012cc3ddc609",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "b0ee9d8e9676fbbc11bf6c69d9dd76f9876cab61",
-    "contentDigest": "sha256:91abf0367e51f46707d30c10d9ed8f6585ec3957a46f5b1bf7b52eae6028ad73",
+    "currentSnapshotSha": "8444455f9bb903c01828ead85060daa9009e70ec",
+    "contentDigest": "sha256:6db14a0b95b79c5b7042f18624ac3ad953f37e839eda64b1430a50fc87889834",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

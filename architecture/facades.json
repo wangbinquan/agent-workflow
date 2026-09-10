@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 323,
-    "thinFacades": 72
+    "serviceFiles": 322,
+    "thinFacades": 71
   },
   "entries": [
     {
@@ -2926,22 +2926,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/orphans.ts#$file",
       "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:0bf66ce91222ec017fb4",
-        "import:2ed358b5ae0e6957a01a",
-        "import:47ac3bb3aa56e3b24f04",
-        "import:85c5a254a8dced519600"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/overview.ts",
-      "id": "facade:packages/backend/src/services/overview.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/overview.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -6762,5 +6746,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59bb561da62551bd745f7e0716ba386bd3961a09ce94bfb622d669bb5358c3da"
+  "sourceDigest": "sha256:820a01ba0ba60b0ff38a91e269c2eae90339a46302eb4b35bc29012cc3ddc609"
 }

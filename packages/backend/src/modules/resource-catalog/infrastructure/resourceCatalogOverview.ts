@@ -1,10 +1,10 @@
 // RFC-359 W4-B2 —— 目录概览的可见计数：一份实现，两个 provider 共用。
 
 import { and, count, eq, type SQL } from 'drizzle-orm'
-import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, workflows } from '@/db/schema'
 import type { ResourceCatalogOverviewCountPort } from '../application/ports/resourceCatalogOverview'
+import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../domain/resourceKinds'
 import { ACL_TABLES, visibleRowsCondition } from './resourceVisibility'
 
@@ -20,7 +20,7 @@ export function createResourceCatalogOverviewCountPort(
 ): ResourceCatalogOverviewCountPort {
   return Object.freeze({
     async countVisible(
-      actor: Actor,
+      actor: ResourceAclActorProjection,
       kind: CatalogSelectorKind,
       options: Readonly<{ excludeBuiltin: boolean }>,
     ): Promise<number> {

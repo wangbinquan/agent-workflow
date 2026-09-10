@@ -6,13 +6,13 @@ import type {
   Workgroup,
 } from '@agent-workflow/shared'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
+import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
 import type { SkillOperationContext } from './participants'
 import type { WorkflowOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
-import type { ResourceRequestContext } from './participants'
 import type {
   AgentCatalogResource,
   AgentDependencyClosureResult,
@@ -76,8 +76,23 @@ export interface ResourceCatalogOverviewCounts {
   readonly workgroups: number | null
 }
 
+/**
+ * RFC-359 W57：`load` 收的是 **actor 本身**，不是请求上下文。
+ *
+ * 原先收 `ResourceRequestContext`，而唯一的实现拿到它之后做的唯一一件事，就是用一张**调用方
+ * 填的** `WeakMap<authority, Actor>` 把它**反查回请求者**——计数本来就只认请求者
+ * （`visibleRowsCondition` 收的就是 `ResourceAclActorProjection`）。代价是每个装配根都要抄一份
+ * 「填 map + 包一层 execute」的胶水（daemon 一份、性能 helper 两份），任何一处漏填就是运行时
+ * `foreign-overview-authority`。而 `SystemOverviewQuery` 的入参（`SystemOverviewAuthority`）
+ * 本来就同时带着请求者与 authority，反查纯属绕路。
+ *
+ * 收的是**本模块自己的闭合投影** `ResourceAclActorProjection`（`{user:{id}, permissions}`），
+ * 不是 `Actor`：资源目录的公共面刻意不依赖 identity-access 的 `Actor`
+ * （`rfc345-resource-catalog-contracts` 的 forbidden import 列表钉着这条，它在我第一版上判红，
+ * 判得对）。`Actor` 结构上可赋值给它，调用方照常传。
+ */
 export interface ResourceCatalogOverviewQuery {
-  load(authority: ResourceRequestContext): Promise<ResourceCatalogOverviewCounts>
+  load(viewer: ResourceAclActorProjection): Promise<ResourceCatalogOverviewCounts>
 }
 
 export interface AgentQueries {

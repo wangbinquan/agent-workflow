@@ -30,7 +30,15 @@ describe('RFC-349 Resource Catalog provider contributions', () => {
     // 就收中立客户端，两个引擎共用；断言翻面，钉住它不许回来。判的是**声明**不是提及：
     // 源码注释里还写着它曾经在这里、为什么走了，那是退役该留的痕。
     expect(composition).not.toContain('export function composeSqliteResourceCatalogOverviewQuery')
-    expect(composition).toContain('composePostgresqlResourceCatalogOverviewQuery')
+    // RFC-359 W57：剩下那个具名入口也归了中立——`composePostgresqlResourceCatalogOverviewQuery`
+    // 的 `Postgresql` 前缀与 `PostgresqlDatabaseClient` 形参标注是**命名债**不是分叉（计数端口
+    // 本来就收中立客户端，函数体里一行方言都没有）；`/api/overview` 两侧收成一份时 SQLite 也要
+    // 装它。两条断言都判**声明**：上一行那条原本写成裸名字，会被讲述退役经过的注释喂饱
+    // （本仓已有前科，见 docs/dev-gotchas.md「覆盖度守卫按提到模块名计数」）。
+    expect(composition).not.toContain(
+      'export function composePostgresqlResourceCatalogOverviewQuery',
+    )
+    expect(composition).toContain('export function composeResourceCatalogOverviewQuery')
     expect(composition).toContain('createResourceCatalogOverviewCountPort')
     expect(publicQueries).not.toContain('DbClient')
     expect(publicQueries).not.toContain('PostgresqlDatabaseClient')

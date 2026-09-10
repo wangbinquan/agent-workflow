@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:59bb561da62551bd745f7e0716ba386bd3961a09ce94bfb622d669bb5358c3da`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:820a01ba0ba60b0ff38a91e269c2eae90339a46302eb4b35bc29012cc3ddc609`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1804 |
-| `services/` 文件 | 323 |
-| `modules/**` 文件 / 非空 context | 1197 / 17 |
+| backend production TS 文件 | 1803 |
+| `services/` 文件 | 322 |
+| `modules/**` 文件 / 非空 context | 1198 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 337 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 288 / 35 |
+| RFC-317 boundary census（inbound / outbound） | 287 / 35 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4802 |
+| `architectureExceptions` | 4795 |
 | `backgroundJobs` | 337 |
-| `crossContextImports` | 5335 |
-| `facades` | 323 |
+| `crossContextImports` | 5328 |
+| `facades` | 322 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25067 |
+| `moduleSymbolOwners` | 25053 |
 | `mutationEntrypoints` | 1739 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 983 |
+| `publicSurfaces` | 982 |
 | `transactionExternalEffects` | 272 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -100,12 +100,12 @@
 | integration / public | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
+| system-operations / composition | 5 |
 | code-capability / composition | 4 |
 | development-automation / public | 4 |
 | event-center / infrastructure | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
-| system-operations / composition | 4 |
 | system-operations / public | 4 |
 | digital-employee / domain | 3 |
 | event-center / domain | 3 |
@@ -141,8 +141,8 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 193 |
-| platform | 150 |
+| task-execution | 192 |
+| platform | 149 |
 | identity-access | 44 |
 | runtime-management | 44 |
 | resource-catalog | 43 |
@@ -163,7 +163,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 126 |
+| task-execution | 125 |
 | runtime-management | 39 |
 | resource-catalog | 30 |
 | workspace-insight | 29 |
@@ -180,7 +180,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 125 |
+| W4-E1 | 124 |
 | W4-E4b | 39 |
 | W4-C | 30 |
 | W4-E5 | 29 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3181 |
-| legacy-inbound | 1441 |
+| legacy-outbound | 3177 |
+| legacy-inbound | 1438 |
 | infrastructure-external | 277 |
 | offered-consumption | 157 |
 | off-dag-offered | 88 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3181 |
-| legacy-inbound | 1441 |
+| legacy-outbound | 3177 |
+| legacy-inbound | 1438 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
 | no-circular | 6 |
@@ -227,10 +227,10 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2451 |
-| W4-E1 | 818 |
-| W4-C | 398 |
-| W4-E0 | 220 |
+| W9 | 2449 |
+| W4-E1 | 816 |
+| W4-C | 399 |
+| W4-E0 | 216 |
 | W4 | 193 |
 | W4-B | 185 |
 | W5 | 153 |
@@ -255,8 +255,8 @@
 | resource-catalog | 248 |
 | task-execution | 208 |
 | collaboration | 126 |
-| system-operations | 63 |
 | identity-access | 62 |
+| system-operations | 62 |
 | digital-employee | 51 |
 | source-control | 44 |
 | development-automation | 39 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 983）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 982）
 
 | context | 数量 |
 | --- | --- |

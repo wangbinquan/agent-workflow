@@ -35,7 +35,12 @@ import {
   composeRepositoryWorkspaceOperations,
   composeSqliteRepositoryWorkspaceStore,
 } from '../src/modules/source-control/composition'
-import { buildOverview as buildOverviewWithAuthority } from '../src/services/overview'
+import { composeIntegrationTriggerResourceSnapshotFactory } from '../src/modules/resource-catalog/composition/integrationTrigger'
+import { composeResourceCatalogOverviewQuery } from '../src/modules/resource-catalog/composition/resourceCatalogOverview'
+import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/composition/scheduledTasks'
+import { composeSystemOverviewQuery } from '../src/modules/system-operations/application/overview'
+import { createTaskOverviewQuery } from '../src/modules/task-execution/composition/taskOverview'
+import { assertNotBuiltin } from '../src/services/systemResources'
 import { createUser } from '../src/services/users'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
@@ -43,18 +48,40 @@ import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
+/** 概览是纯读；调度任务 runtime 的写能力在这条路径上永远不会被触到。 */
+function unusedCapability(): never {
+  throw new Error('overview-query-invoked-unused-write-capability')
+}
+
+/**
+ * RFC-359 W57：oracle 现在打的是**两个 provider 共用的那一份**装配
+ * （`composeSystemOverviewQuery`）。此前它直接调 SQLite 专属的 `buildOverview`——
+ * 那份实现已删（逐个聚合键与本装配语义等价，对账见 RFC-359 plan §5i）。
+ * 这一条 oracle 的价值正在于此：它逐 actor 断言「概览计数 === 同一 actor 在对应列表端点
+ * 拿到的行数」，是这次两份收一份的安全网。
+ */
 function buildOverview(db: DbClient, actor: Actor, now?: () => number) {
-  const repositories = composeRepositoryWorkspaceOperations(
-    composeSqliteRepositoryWorkspaceStore(db),
-    undefined,
-  ).overviewQueries
-  return buildOverviewWithAuthority(
+  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,
-    resourceScopeAuthority(db, actor),
-    repositories,
-    memoryCatalogOf(db),
-    now,
-  )
+    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+    validation: {
+      assertWorkflowLaunchable: unusedCapability,
+      assertAgentIntegrity: unusedCapability,
+    },
+    resourceAclChanged: unusedCapability,
+  })
+  const query = composeSystemOverviewQuery({
+    resourceCatalog: composeResourceCatalogOverviewQuery(db),
+    repositories: composeRepositoryWorkspaceOperations(
+      composeSqliteRepositoryWorkspaceStore(db),
+      undefined,
+    ).overviewQueries,
+    integration: scheduledTaskRuntime.overview,
+    memories: memoryCatalogOf(db),
+    tasks: createTaskOverviewQuery(db),
+    ...(now === undefined ? {} : { now }),
+  })
+  return query.execute(resourceScopeAuthority(db, actor))
 }
 
 interface Harness {
