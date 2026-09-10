@@ -1,24 +1,22 @@
 // RFC-359 W4-B1 —— 任务总览计数：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
 
-import { and, count, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, count, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 
 import type { OverviewTasks } from '@agent-workflow/shared'
 import { currentDatabaseSchemaProvider } from '@/db/providerSchema'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks } from '@/db/schema'
+import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
+import { tasks } from '@/db/schema'
 import type { TaskOverviewQuery } from '../public/queries'
 
 function createCountTemplates(db: ProviderNeutralDatabase, canReadAll: boolean) {
-  const collaboratorTaskIds = db
-    .select({ taskId: taskCollaborators.taskId })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.userId, sql.placeholder('overviewUserId')))
-  const visibility = canReadAll
-    ? undefined
-    : or(
-        eq(tasks.ownerUserId, sql.placeholder('overviewUserId')),
-        inArray(tasks.id, collaboratorTaskIds),
-      )
+  // RFC-359 W57：判据走 `db/query.ts` 的唯一一份。这里的请求者 id 是**预编译占位符**
+  // （模板只编译一次，每次调用换绑定值），共享片段的 subject 因此接受 `Placeholder`——
+  // 不放宽那一处，首页计数就只能自己再抄一份判据，而它正是「概览与列表同口径」那条
+  // oracle（RFC-190）守的东西。
+  const visibility = taskVisibilityCondition(db, {
+    userId: sql.placeholder('overviewUserId'),
+    canReadAllTasks: canReadAll,
+  })
   const countWhere = (status: SQL<unknown>) => {
     const query = db
       .select({ value: count() })

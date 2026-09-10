@@ -41,7 +41,7 @@ import {
   type WorkflowDefinition,
   type WorkflowSyncPreview,
 } from '@agent-workflow/shared'
-import { and, asc, count, desc, eq, gt, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -76,6 +76,10 @@ import type { FrozenTaskExecutionResourceSnapshot } from '@/modules/resource-cat
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
+import {
+  defaultTaskListRowRef,
+  taskListOwnershipScopeCondition,
+} from './taskListPage/authorization'
 import { branchTraceForTask } from '../application/branchTrace'
 import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
@@ -492,21 +496,26 @@ function summaryProjection(
   })
 }
 
+/**
+ * RFC-359 W57：归属范围判据走 `taskListPage/authorization.ts` 的**唯一一份**（同一个 bounded
+ * context 内，直接用）。此前这里是仓里第七份手写副本，而且是 **provider 专属**的那一份——
+ * 正是本 RFC 要消灭的形状：同一条授权判据，PostgreSQL 上一份、别处一份，谁漂了都表现为
+ * 「用户看见不该看见的任务」或「丢掉本该看见的」。
+ *
+ * `shared` 那一支两边写法不同但等价：这里原本写 `IS DISTINCT FROM`，共享那份写
+ * `or(isNull(owner), ne(owner, me))`——SQL 三值逻辑下同义（`owner IS NULL` 时 `ne` 是 NULL
+ * 而不是真，所以必须并上 `isNull`）。三态由 `rfc357-task-list-authorization` 钉住。
+ */
 function visibilityCondition(
   db: PostgresqlDatabaseClient,
   visibility: NonNullable<TaskRouteListFilters['visibility']>,
 ): SQL<unknown> {
-  const memberIds = db
-    .select({ taskId: taskCollaborators.taskId })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.userId, visibility.actorUserId))
-  if (visibility.scope === 'shared') {
-    return and(
-      inArray(tasks.id, memberIds),
-      sql`${tasks.ownerUserId} IS DISTINCT FROM ${visibility.actorUserId}`,
-    )!
-  }
-  return or(eq(tasks.ownerUserId, visibility.actorUserId), inArray(tasks.id, memberIds))!
+  return taskListOwnershipScopeCondition(
+    db,
+    defaultTaskListRowRef(),
+    visibility.actorUserId,
+    visibility.scope,
+  )
 }
 
 /**

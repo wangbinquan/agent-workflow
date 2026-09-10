@@ -4,40 +4,20 @@
 // 各一份，查询逐字相同。PostgreSQL 那份由本文件替代；SQLite 的同步孪生在其余 dbTxSync
 // 调用方迁完前保留（W4 pair-deletion）。
 
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
-import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
-import { taskCollaborators, tasks } from '@/db/schema'
+import { visibleTaskIdsFor, type ProviderNeutralDatabase } from '@/db/query'
+import { taskCollaborators } from '@/db/schema'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
-import { SQL_IN_CHUNK } from '@/util/sqlChunk'
 import type {
   AsyncTaskAuthorizationParticipantInTx,
   TaskActingMembershipInput,
   TaskAuthorizationLookupInput,
   TaskAuthorizationQueries,
-  TaskAuthorizationSubject,
   VisibleTaskIdsInput,
 } from '../application/ports/taskAuthorization'
 
 type TaskAuthorizationReader = Pick<ProviderNeutralDatabase, 'select'>
-
-async function visibleIds(
-  db: TaskAuthorizationReader,
-  subject: TaskAuthorizationSubject,
-  taskIds: readonly string[],
-): Promise<ReadonlySet<string>> {
-  const visible = new Set<string>()
-  for (let offset = 0; offset < taskIds.length; offset += SQL_IN_CHUNK) {
-    const chunk = taskIds.slice(offset, offset + SQL_IN_CHUNK)
-    if (chunk.length === 0) continue
-    const rows = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(and(inArray(tasks.id, chunk), taskVisibilityCondition(db, subject)))
-    for (const row of rows) visible.add(row.id)
-  }
-  return visible
-}
 
 async function canActOnTask(
   db: TaskAuthorizationReader,
@@ -56,10 +36,10 @@ function bind(db: TaskAuthorizationReader) {
   return Object.freeze({
     async canViewTask(input: TaskAuthorizationLookupInput) {
       if (input.taskId.length === 0) return false
-      return (await visibleIds(db, input.subject, [input.taskId])).has(input.taskId)
+      return (await visibleTaskIdsFor(db, input.subject, [input.taskId])).has(input.taskId)
     },
     async visibleTaskIds(input: VisibleTaskIdsInput) {
-      return await visibleIds(db, input.subject, input.taskIds)
+      return await visibleTaskIdsFor(db, input.subject, input.taskIds)
     },
     async canActOnTask(input: TaskActingMembershipInput) {
       return await canActOnTask(db, input)

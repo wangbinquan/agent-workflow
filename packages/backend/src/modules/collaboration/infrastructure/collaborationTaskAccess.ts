@@ -1,11 +1,15 @@
 // RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
 
-import { and, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { clarifyRounds, nodeRuns, taskCollaborators, taskQuestions, tasks } from '@/db/schema'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  type ProviderNeutralDatabase,
+  taskVisibilitySubjectOf,
+  visibleTaskIdsFor,
+} from '@/db/query'
 import type {
   CollaborationTaskAccessDecision,
   CollaborationTaskAccessPort,
@@ -96,34 +100,9 @@ export function createCollaborationTaskAccessPort(
       return { roundExists: true, nodeRunExists: true, taskId: round.taskId, ...decision }
     },
     async visibleTaskIds(actor, taskIds) {
-      if (taskIds.length === 0) return new Set<string>()
-      const result = new Set<string>()
-      for (let offset = 0; offset < taskIds.length; offset += 500) {
-        const chunk = [...new Set(taskIds.slice(offset, offset + 500))]
-        const rows = await db
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(
-            actor.permissions.has('tasks:read:all')
-              ? inArray(tasks.id, chunk)
-              : and(
-                  inArray(tasks.id, chunk),
-                  or(
-                    eq(tasks.ownerUserId, actor.user.id),
-                    inArray(
-                      tasks.id,
-                      db
-                        .select({ taskId: taskCollaborators.taskId })
-                        .from(taskCollaborators)
-                        .where(eq(taskCollaborators.userId, actor.user.id)),
-                    ),
-                  ),
-                ),
-          )
-
-        for (const row of rows) result.add(row.id)
-      }
-      return result
+      // RFC-359 W57：判据 + 分块都走 `db/query.ts` 的唯一一份。此前这一段与
+      // `reviewTaskAccess.ts` 里的**逐字相同**，且两份各自把分块大小硬写成 500。
+      return await visibleTaskIdsFor(db, taskVisibilitySubjectOf(actor), taskIds)
     },
     async questionTaskId(entryId) {
       const row = await db

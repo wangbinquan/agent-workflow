@@ -6,7 +6,7 @@
     "moduleFiles": 1198,
     "productionFiles": 2580,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25053
+    "symbolsIncludingFileRoots": 25056
   },
   "entries": [
     {
@@ -5907,6 +5907,18 @@
       "currentLayer": "db",
       "exported": true,
       "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#defaultTaskVisibilityRowRef",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "defaultTaskVisibilityRowRef",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
       "id": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -5923,6 +5935,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ProviderNeutralDatabaseForMode",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#taskCollaboratorTaskIds",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "taskCollaboratorTaskIds",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -5955,10 +5979,46 @@
       "currentLayer": "db",
       "exported": true,
       "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#TaskVisibilityRowRef",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "TaskVisibilityRowRef",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
       "id": "owner:packages/backend/src/db/query.ts#TaskVisibilitySubject",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "TaskVisibilitySubject",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#taskVisibilitySubjectOf",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "taskVisibilitySubjectOf",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#visibleTaskIdsFor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "visibleTaskIdsFor",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -133314,18 +133374,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#visibleIds",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "visibleIds",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts#$file",
       "removeAfterWave": null,
@@ -134843,18 +134891,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/authorization.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/authorization.ts#collaboratorTaskIds",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "collaboratorTaskIds",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -301338,5 +301374,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5b7679f68d873a7208210a47c8ad6b7b5e3efa487a0dec79c16bbe15dbb75f6c"
+  "sourceDigest": "sha256:41b76f7b09c68735f1cb32fe20aae35aa8dce0f6edcb6e7a0285a6ce9b86b1e8"
 }

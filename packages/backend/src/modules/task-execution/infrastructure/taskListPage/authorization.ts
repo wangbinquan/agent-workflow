@@ -12,7 +12,11 @@
 
 import { and, eq, inArray, isNull, ne, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 
-import { taskCollaborators, tasks } from '@/db/schema'
+import {
+  defaultTaskVisibilityRowRef,
+  taskCollaboratorTaskIds,
+  taskVisibilityCondition,
+} from '@/db/query'
 import type { TaskListPageDb } from './db'
 
 /** 谓词作用的那一行：可以是 `tasks` 本身，也可以是查询里的别名列。 */
@@ -40,27 +44,22 @@ export function taskListViewerOf(actor: {
 }
 
 export function defaultTaskListRowRef(): TaskListRowRef {
-  return { id: tasks.id, ownerUserId: tasks.ownerUserId }
+  return defaultTaskVisibilityRowRef()
 }
 
-function collaboratorTaskIds(db: TaskListPageDb, userId: string) {
-  return db
-    .select({ id: taskCollaborators.taskId })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.userId, userId))
-}
-
-/** 「这一行对该请求者可见吗」。全可见权限直接放行。 */
+/**
+ * 「这一行对该请求者可见吗」。全可见权限直接放行。
+ *
+ * RFC-359 W57：判据本身来自 `db/query.ts` 的**唯一一份**（此前这里是仓里六处逐字重复之一）。
+ * 这一层只做两件本页特有的事：把「无需收窄」的 `undefined` 渲染成 `1 = 1`（本页的调用方要的是
+ * 恒真条件，不是可选值），以及保留本模块的 `ref` / `viewer` 命名。
+ */
 export function taskListVisibilityCondition(
   db: TaskListPageDb,
   ref: TaskListRowRef,
   viewer: TaskListViewer,
 ): SQL<unknown> {
-  if (viewer.canReadAllTasks) return sql`1 = 1`
-  return or(
-    eq(ref.ownerUserId, viewer.userId),
-    inArray(ref.id, collaboratorTaskIds(db, viewer.userId)),
-  )!
+  return taskVisibilityCondition(db, viewer, ref) ?? sql`1 = 1`
 }
 
 /** 用户显式选择的归属范围（全部 / 我的 / 共享给我的），与可见性正交。 */
@@ -71,9 +70,13 @@ export function taskListOwnershipScopeCondition(
   scope: TaskListOwnershipScope,
 ): SQL<unknown> {
   if (scope === 'all') return sql`1 = 1`
-  const collaborator = inArray(ref.id, collaboratorTaskIds(db, actorUserId))
+  // 协作者子查询取共享的那一份（与可见性判据同源，两条路不可能漂）。
+  const collaborator = inArray(ref.id, taskCollaboratorTaskIds(db, actorUserId))
   if (scope === 'shared') {
     return and(collaborator, or(isNull(ref.ownerUserId), ne(ref.ownerUserId, actorUserId)))!
   }
+  // `mine` 与可见性判据**今天恰好等价**，但它们是两个概念（一个是「我要看哪一档」，
+  // 一个是「我能不能看」）。刻意不合并：可见性哪天扩了（例如加上工作组成员），
+  // `mine` 不应该跟着扩。
   return or(eq(ref.ownerUserId, actorUserId), collaborator)!
 }
