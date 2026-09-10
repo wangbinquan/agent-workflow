@@ -5381,27 +5381,32 @@ drizzle 里加了一列而 SQLite 的迁移 SQL 没跟，SQLite 侧就少一列�
 `ownerCommands.workspace.runGcPhase`，实现在 `modules/source-control/application/workspaceMaintenance.ts`，
 不碰 `DbClient`），所以这次放宽零行为变更。
 
-### 真正的闸门：`DbClient` 过窄标注 + 同步事务面（**本刀量出来的数字**）
+### 真正的闸门：`DbClient` 过窄标注，闸门本体只有 **7 个同步事务调用点**（本刀量出来的数字）
 
-把这批 90 个候选文件跑一遍机械迁移后，typecheck 报了 489 条错。按类归并，结论很干净：
+把这批 90 个候选文件跑一遍机械迁移后，typecheck 报了 489 条错。追下去只有一个来源：
+**测试拿到的是中立库，而被调用的生产函数还标着 `DbClient`**——372 条可赋值性错里 **191 条**
+直接指向 `DbClient` 形参。于是问题变成：这 111 个带 `DbClient` 的文件，有多少是真耦合？
 
-| 观测                                         | 数字                                            |
-| -------------------------------------------- | ----------------------------------------------- |
-| `src/` 里带 `DbClient` 的文件 / 出现次数     | **111 / 332**                                   |
-| 全量替换成 `ProviderNeutralDatabase` 后残留错 | **234**，集中在 **28 个文件**                   |
-| 残留错的主类型                                | `TS2339 Property … does not exist on type 'never'`（175 条） |
-| 迁移后测试侧报错的主因                        | 372 条可赋值性错里 **191 条**指向 `DbClient` 形参 |
-| `src/` 里用 `dbTxSync` 的文件                 | **76**                                          |
+拿整棵 `src/` 做替换实验（`DbClient` → `ProviderNeutralDatabase`，进口改从 `@/db/query` 走），
+**唯独 `src/db/client.ts`（定义）与 `src/db/txSync.ts`（同步事务原语）保持原样**：
 
-`'never'` 那 175 条只有一个来源：**联合类型库上的 `db.transaction(cb)` 把 `tx` 推成 `never`**
-（`'sync' | 'async'` 两个重载的形参交出来就是 never）。也就是说——
+| 观测                                     | 数字                               |
+| ---------------------------------------- | ---------------------------------- |
+| `src/` 里带 `DbClient` 的文件 / 出现次数 | **111 / 332**                      |
+| 全量放宽后残留错                          | **92 条，集中在 ~12 个文件**       |
+| 残留错所在文件                            | 全部落在 `SYNC_TRANSACTION_DEBT` 那 4 个文件**及其调用闭包**（`digitalEmployeeExecution` / `services/task.ts` / `taskDelete.ts` …） |
+| 账本 `SYNC_TRANSACTION_DEBT` 现值         | **7 个调用点 / 4 个文件**（4 × `dbTxSync(` + 3 × `withOwnedTaskTx(`） |
 
-> **约七成的 `DbClient` 标注是纯过窄，白送；剩下三成全部卡在同一件事上：同步事务原语。**
+**一条要写下来的踩坑**：第一次做这个实验时**把 `src/db/txSync.ts` 也一起替换了**，残留错当场
+变成 234 条、并冒出 175 条 `TS2339 … does not exist on type 'never'`，看上去像「同步事务面污染了
+几十个文件」。其实是自伤——`DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]`，
+把 `DbClient` 换成联合类型库之后，两个重载的形参交出来就是 `never`，凡是用 `DbTxSync` 当类型的
+地方全部塌掉。**度量同步事务面时必须把它的定义文件排除在外**，否则量到的是自己制造的噪声。
 
-这与 §6「同步事务面是死代码清理的前置」是同一堵墙的两面：那边挡的是**删重复实现**，
-这边挡的是**AC-6 的测试迁移**。两件事排在同一个前置后面，所以下一刀的靶心没有悬念——
-**先把 `dbTxSync` / 裸 `db.transaction` 换成 `databaseSessionFor(db).transaction`，
-`DbClient` 的放宽和 AC-6 的剩余迁移会跟着一起塌下来**，而不是各自单独推。
+所以结论比第一眼干净得多：
+
+> **`DbClient` 标注绝大多数是纯过窄、白送；真正挡路的是 7 个同步事务调用点。**
+> 它们同时也是 §6「同步事务面是死代码清理的前置」挡住的那堵墙——两件事排在同一个前置后面。
 
 ### 给下一刀的话
 

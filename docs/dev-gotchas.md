@@ -1068,6 +1068,21 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 顶层得用对象展开）；而**类实例**（方法在原型上、自有字段寥寥）**不能**用对象展开（原型方法整批抄丢，
 表现为运行时 `xxx is not a function`，得用 Proxy）。两者常常一层套一层，各用各的。
 
+## 量「同步事务面还剩多少」时，别把 `db/txSync.ts` 自己算进去（RFC-359 实撞，2026-09-11）
+
+想知道 `DbClient` 标注里有多少是真耦合，最直接的办法是整棵 `src/` 替换成中立类型再看 typecheck。
+第一次做时把定义同步事务原语的 `src/db/txSync.ts` 也一起替换了，残留错 **234 条**、其中 175 条是
+`TS2339 Property … does not exist on type 'never'`，看上去像「同步事务面污染了几十个文件」。
+
+其实是自伤：`DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]`，`DbClient` 一换成
+`'sync' | 'async'` 的联合类型库，两个重载的形参**交出来就是 `never`**，凡是用 `DbTxSync` 当类型的
+地方全部塌掉。把 `db/txSync.ts` 排除后同一实验只剩 **92 条 / ~12 个文件**，且全部落在
+`SYNC_TRANSACTION_DEBT` 账本那几个文件及其调用闭包上——与账本读数一致。
+
+**规律**：做「全量替换看残留」这类度量时，**定义被替换类型的文件、以及从它派生类型的原语文件，
+必须排除在替换面之外**；否则量到的是自己制造的噪声，还会把结论引到完全相反的方向
+（当时差点据此把「76 个文件用 `dbTxSync`」写进交接，实际是 4 个文件 7 个调用点）。
+
 ## 重跑普查前先 `prettier --write`，顺序反了当场红（RFC-359 实撞，2026-09-11）
 
 `architecture-census.ts` 把 `packages/*/src/**` 的内容摘成 `sourceDigest`。先跑普查、再格式化源文件，
