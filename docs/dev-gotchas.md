@@ -5695,3 +5695,65 @@ RFC-359 AC-11 上折过三个端点，两成一败，差别只有一条：**那�
 一次墙钟再决定。按「语句数多」这个**形状**下结论会做无用功，而且要付代价——那一刀要引入裸
 SQL 路径（`db.all(sql…)` 取代类型化 builder）、为 `numericFromRawRow` 多一条跨层边、以及两条
 账本条目。**语句数是过程指标，不是目的**；目的是墙钟。
+
+## 文件名里出现 `preflight` / `lock` / `guard` …，功能测试就会被算成「架构守卫」（2026-09-10 实撞）
+
+`packages/backend/tests/architecture/census.ts` 的 `GUARD_FILE_NAME_PATTERN` 按**文件名**匹配
+
+```
+architecture|boundary|ratchet|lock|guard|invariants|preflight|callsite|extinction|interlock
+```
+
+（`tests/architecture/` 目录下的所有测试无条件算守卫，目录本身就是声明）。命中即必须登记进
+`architecture/guard-manifest.json`，否则 `rfc317-architecture-ledgers` 的「清单与磁盘逐条相等」
+和 `rfc317-guard-negative-fixture` 的两向钉死**双双转红**——而失败信息只说「不在账本里」，
+不会告诉你是文件名把你卷进来的。
+
+新写一条 `describeEachProvider` 的**功能**测试叫 `rfc359-w8-frozen-trigger-preflight.test.ts`，
+当场撞上。**处置是登记，不是改名**：清单里 `mechanism` 有 `behaviour` 这一档，
+`lifecycle-invariants-*` 全在这档，运行时行为测试登记成它是准确的。
+
+四个元数据字段**别手填**——用 `census.ts` 自己导出的判据现算，与生成器同源：
+
+```ts
+import { sourceUnit, isCorpusScanner, corpusFloor, assertsAbsence, negativeFixtureAssertions } from './tests/architecture/census'
+const u = sourceUnit(relPath, readFileSync(abs, 'utf8'))
+// corpusScanner / minCorpusFiles / assertsAbsence / negativeFixture 全从这四个函数取
+```
+
+`lines` 是 `text.split('\n').length - 1`，且必须**在 prettier 跑完之后**取——先登记再排版，
+排版改了行数就又红一次（本轮为此多推了一轮）。
+
+## 守卫按「文本里提到谁」计数时，你的**注释**就是它的输入（第三次实撞，2026-09-10）
+
+同一个坑今年已经踩到第三次，前两次是 `rfc311-perf-guards`（文本匹配 `isPostgresql` 命中我新写的
+头注释）与 `rfc349-resource-catalog-provider-contributions`（`toContain('compose…')` 被散文满足）。
+第三次换了个方向：
+
+`rfc359-w5-t19d-coverage-parity` 按「**测试文件提到该侧模块名**」统计两个 provider 各被多少测试
+盯着，用来发现「强侧越来越强、弱侧无人看管地漂移」。我新写的双引擎测试在头注释里点了 PG 适配器
+的文件名讲历史，于是那一对的 PG 侧 ref 从 10 涨到 11、与 SQLite 侧拉开到 3，被判成**新的深度倒挂**
+——而这条测试恰恰是 `describeEachProvider`、喂的是两侧，真实效果与账本结论完全相反。
+
+**正解是改措辞，不是往倒挂名单里加一行。** 把一个非信号登记进信号账本，等于把账本本身废掉：
+下一个人看到名单里有这一对，会去「补弱侧」，而弱侧根本不缺。历史细节该落在
+`architecture/commons-debt.json` 的 `why` / `ledger-baselines.json` 的 `allowGrowth.why` 里
+——那两处本来就是给人读的，且不参与任何计数。
+
+推论（写守卫的一侧）：**判 AST 不判文本**。本轮新立的
+`tests/architecture/rfc359-converged-twins.test.ts` 就是按这条设计的——它的头注释写满了被它盯着的
+函数名，而它必须不能把自己判红。
+
+## 账本零增长不该是合一的前提（2026-09-10，RFC-359 W8）
+
+跨层重复合一时，把「不让任何账本涨」当硬门槛，结果一定是**永远不合**——那正是这类 fork 活到今天
+的原因。收 `assertFrozenTaskTriggerPreflight`（两条 provider 路径各一份逐字副本）时最省边的落位只
++1 条边，但被 `rfc349-provider-cutover` 按住（`services/` 面禁止直接拥有 `@/db/*` / drizzle）；
+architecture-correct 的落位要 +6 边 / +5 例外 / +2 符号主，外加一条 `commons-debt` 的
+`R1-inbound-module-internals`。
+
+**付了**。理由写进 permit：换掉的是一处看不见、没测试、必然漂移的 fork，换来的是一条有署名、
+带 `removeAfterWave`、被守卫盯着的耦合。账本的作用是让代价**可见**，不是让代价**不可发生**。
+
+反过来说，这也意味着 permit 的 `why` 必须写足——它是这次交易的全部凭证。要写清：省边的落位是
+哪个、为什么不能用（点名那条守卫）、这些边随哪一波消失、单一性由谁把守。

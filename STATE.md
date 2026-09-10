@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W8 补刀 —— provider 孪生体合一（2026-09-10）**：`assertFrozenTaskTriggerPreflight` 在两条 provider 路由路径上的逐字私有副本（只差 `db` 类型标注、函数体是 provider 中立的单行 `tasks` select）收成一份，正典落 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`。最省边的落位（`services/execution/triggerPreflight.ts`，+1 边）被 `rfc349-provider-cutover` 的 `databaseMechanismDependencies` 按住——`services/` 面禁持 `@/db/*`/drizzle，守卫是对的，不迁就；改 infrastructure 落位后代价 +6 边 / +5 例外 / +2 符号主，三条一次性 `allowGrowth` 与一条 `commons-debt` 的 `R1-inbound-module-internals` 已逐条登记（随 W4-E 消失）。
+> 新立可复用棘轮账本 `tests/architecture/rfc359-converged-twins.test.ts`（判 AST 不判文本；双向：冒出第二个定义点红、白名单陈旧也红），本轮把已收的 5 对一并补登（本条 + 人工门投影 + retention + `/api/overview` 两条）；实测有牙——临时往 `src/` 塞一份私有副本当场转红。以后再收一对只需追加 ~15 行。
+> 新增双引擎功能测试 `tests/rfc359-w8-frozen-trigger-preflight.test.ts`（`describeEachProvider`，两引擎共 20 pass）：合一前它的 5 条分支只有 1 条（`trigger-context-invalid`，经 retry 端点）有双引擎覆盖，其余 4 条两个引擎都没直测。
+> 两条通用踩坑落 `docs/dev-gotchas.md`：① 文件名含 `preflight`/`lock`/`guard` 等关键词的**功能**测试会被 `GUARD_FILE_NAME_PATTERN` 算成架构守卫、必须登记 manifest（处置是登记成 `mechanism: 'behaviour'`，四个元数据字段用 `census.ts` 的判据现算、`lines` 要在 prettier 之后取）；② 按「测试文件提到谁」计数的守卫会被讲历史的注释喂出假信号（今年第三次），正解是改措辞而不是往信号账本里加行。另记一条：账本零增长不该是合一的前提。
+> 计划 §5l 落档；机械重复组 23 → 20。本地：`tests/architecture/` 全绿（655 pass），format/lint/typecheck/depcheck 四门全绿，双引擎用例跑在真 PG 上。
+> **接手说明**：上一批记的「W55 发布后停止新增 RFC 实施批次」已由用户明令解除（「停止 RFC 就是要留给你接手的」「先修好流水线然后继续推进」），RFC-359 继续推进。AC-1/6/8/9/11/12 仍开放。
+
 > **RFC-359 W12 第五十五批（2026-09-10）**：14个旧测试文件保65个原声明/339 matcher；51个DB声明/278 matcher接默认双库，14个原例/61 matcher继续单次执行，全部原预算保持。9次构库调用及8个构库文件退役，T19f664→656；实测1968测试文件、573构库文件/1131调用、483无harness/547有harness，入口计数不等于剩余普通迁移量。
 > 两个资源读取owner的三对完整快照投影收为一份同步实现，7个原调用与全部原字段、浅冻结及错误传播保持；新纯回归3 pass/291 expect。3个真实SQLite原语移入platform/persistence，原函数body及导出保持，T17 provider文件计数59→56；该落位变化不计作业务实现合一。
 > W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34 success/6 failure、13后端10过3红；主2368身份全出现，2353过/15个新PG红，原2227全过，新PG43中28过15红。两OS各1966测试文件完整，独立2/2及原hook18/18、原RFC259两OS通过，两个原Playwright身份在两OS首次通过。

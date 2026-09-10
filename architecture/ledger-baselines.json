@@ -811,8 +811,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5333,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5339,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-359 W8 一次性豁免：`assertFrozenTaskTriggerPreflight` 的两份逐字副本合一。合一前 SQLite 路径（`services/task.ts`）与 PG 路径（`modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`）各有一份文件私有的同名函数，只有 `db` 的类型标注不同（`LegacySqliteTaskDatabase` vs `PostgresqlDatabaseClient`）。它读的是 provider 中立的单行 `tasks` select，没有任何方言面；两份副本存在的唯一后果就是「改一份、漂另一份」，而漂了之后两条路径各自的用例都还绿着——没有任何测试会因此变红，正是 RFC-359 要消灭的形状。正典落在 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`：更省边的落位（`services/execution/triggerPreflight.ts`，只 +1 条边）被 `rfc349-provider-cutover` 的`databaseMechanismDependencies` 判据按住了——`services/` 面禁止直接拥有 `@/db/*` / drizzle，那条守卫是对的，不迁就它。于是新文件带来 6 条新边（drizzle-orm / @/db/query / @/db/schema / @agent-workflow/shared 的三个符号 / @/services/execution/triggerPreflight / `services/task.ts` 的 legacy-inbound），每一条都是仓内既有的大宗形状（module → legacy 今天已有 971 条），随 W9 拆 legacy 一起消失。单一定义点由 `tests/architecture/rfc359-converged-twins.test.ts` 双向棘轮钉死：再 fork 回两份就红。 本条 +6：上面列的 6 条 import 边。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -832,8 +835,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4795,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4800,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W8 一次性豁免：`assertFrozenTaskTriggerPreflight` 的两份逐字副本合一。合一前 SQLite 路径（`services/task.ts`）与 PG 路径（`modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`）各有一份文件私有的同名函数，只有 `db` 的类型标注不同（`LegacySqliteTaskDatabase` vs `PostgresqlDatabaseClient`）。它读的是 provider 中立的单行 `tasks` select，没有任何方言面；两份副本存在的唯一后果就是「改一份、漂另一份」，而漂了之后两条路径各自的用例都还绿着——没有任何测试会因此变红，正是 RFC-359 要消灭的形状。正典落在 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`：更省边的落位（`services/execution/triggerPreflight.ts`，只 +1 条边）被 `rfc349-provider-cutover` 的`databaseMechanismDependencies` 判据按住了——`services/` 面禁止直接拥有 `@/db/*` / drizzle，那条守卫是对的，不迁就它。于是新文件带来 6 条新边（drizzle-orm / @/db/query / @/db/schema / @agent-workflow/shared 的三个符号 / @/services/execution/triggerPreflight / `services/task.ts` 的 legacy-inbound），每一条都是仓内既有的大宗形状（module → legacy 今天已有 971 条），随 W9 拆 legacy 一起消失。单一定义点由 `tests/architecture/rfc359-converged-twins.test.ts` 双向棘轮钉死：再 fork 回两份就红。 本条 +5：同一批 import 里被登记为架构例外的那 5 条机制边。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -867,12 +873,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25035,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25037,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W8 一次性豁免：`assertFrozenTaskTriggerPreflight` 的两份逐字副本合一。合一前 SQLite 路径（`services/task.ts`）与 PG 路径（`modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`）各有一份文件私有的同名函数，只有 `db` 的类型标注不同（`LegacySqliteTaskDatabase` vs `PostgresqlDatabaseClient`）。它读的是 provider 中立的单行 `tasks` select，没有任何方言面；两份副本存在的唯一后果就是「改一份、漂另一份」，而漂了之后两条路径各自的用例都还绿着——没有任何测试会因此变红，正是 RFC-359 要消灭的形状。正典落在 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`：更省边的落位（`services/execution/triggerPreflight.ts`，只 +1 条边）被 `rfc349-provider-cutover` 的`databaseMechanismDependencies` 判据按住了——`services/` 面禁止直接拥有 `@/db/*` / drizzle，那条守卫是对的，不迁就它。于是新文件带来 6 条新边（drizzle-orm / @/db/query / @/db/schema / @agent-workflow/shared 的三个符号 / @/services/execution/triggerPreflight / `services/task.ts` 的 legacy-inbound），每一条都是仓内既有的大宗形状（module → legacy 今天已有 971 条），随 W9 拆 legacy 一起消失。单一定义点由 `tests/architecture/rfc359-converged-twins.test.ts` 双向棘轮钉死：再 fork 回两份就红。 本条 +2：新文件导出的两个符号（`assertFrozenTaskTriggerPreflight` 与 `FrozenTaskTriggerReader`）登记主人。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b0dea7b1018a290144e50893f65c3d2b4510661aa746e72fc507e7fb3d4ad925",
+    "sourceDigest": "sha256:415b7734f5c0e15f360d976b40200e48104ded23247642650a011e14aeb198e1",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d49e600c946b81bd44795dd4b5817ab6e3380a14",
-    "contentDigest": "sha256:6da74622317fe326fc41e837f9fafaa9c2dfa5ad55471019080f05d274f5a0ae",
+    "currentSnapshotSha": "302418f259cdd95133c3a7f5589c30ce73827caa",
+    "contentDigest": "sha256:df931ff5e818a57aa64cb654be5103f21b5e484ef1fade170d96654b9e4c3b26",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

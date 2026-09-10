@@ -222,6 +222,7 @@ import {
   triggerPreflightIssue,
   triggerSourceFromContext,
 } from '@/services/execution/triggerPreflight'
+import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import { collectExecutionRefs } from '@agent-workflow/shared'
 import {
   defaultTaskAuthorizationRef,
@@ -4647,50 +4648,6 @@ export async function resumeDynamicWorkflowExecution(
     // the task in 'executing'/'generating' while still awaiting_review.
     onClaimTx: (tx) => setDwStateTx(tx, id, swap.dw),
   })
-}
-
-/**
- * RFC-292 task-row authority for resume/retry/sync-style operations. The
- * webhook context is always re-read from durable task state; an operation may
- * supply a candidate root+closure, but never a replacement trigger source.
- */
-async function assertFrozenTaskTriggerPreflight(
-  db: LegacySqliteTaskDatabase,
-  taskId: string,
-  candidate?: { workflowSnapshot: string; refClosureJson: string | null },
-): Promise<void> {
-  const frozen = (
-    await db
-      .select({
-        workflowSnapshot: tasks.workflowSnapshot,
-        refClosureJson: tasks.refClosureJson,
-        triggerContextJson: tasks.triggerContextJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-  )[0]
-  if (frozen === undefined) return
-
-  const source = parseTriggerContextJson(frozen.triggerContextJson)
-  if (source.kind === 'invalid') {
-    throw new ValidationError(
-      'trigger-context-invalid',
-      'the frozen task trigger context is invalid',
-    )
-  }
-  const selected = candidate ?? frozen
-  try {
-    const root = migrateWorkflowDefinitionToLatest(
-      WorkflowDefinitionSchema.parse(JSON.parse(selected.workflowSnapshot)),
-    )
-    assertTriggerPreflight({ root, closureJson: selected.refClosureJson, source })
-  } catch (error) {
-    // Historical corrupt workflow snapshots retain their existing recovery
-    // behavior. Trigger failures from a valid snapshot are authoritative and
-    // must occur before any lifecycle or scheduler side effect.
-    if (error instanceof ValidationError && error.code.startsWith('trigger-')) throw error
-  }
 }
 
 /**

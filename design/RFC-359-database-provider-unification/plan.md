@@ -5082,7 +5082,7 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
 **账本里的「不可达」是一次断言，不是一条事实**；它和别的断言一样会过期，而过期的表现是
 偶发红、不是编译错。归一之后该条销账（20 → 19）。
 
-### 本轮 burn down 到哪了：38 → 23 组
+### 本轮 burn down 到哪了：38 → 23 组（§5l 再收一组 → 20）
 
 | 提交 | 收掉的组 | 性质 |
 | --- | --- | --- |
@@ -5104,9 +5104,8 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
   模型正是「跨上下文只走 exact public 合同、不共享内部助手」。这是**按设计的重复**，
   逐字相同只是因为两个类型今天恰好同形。
 
-**下一个真靶心**仍是 `resolvePostgresqlIntentApplyResourcePreflight`（912 字符 ×2，
-§5c 记的 resource-catalog 七条真分叉之一）与 `assertFrozenTaskTriggerPreflight`（811 ×2，
-provider ↔ legacy）。两条都跨层，收之前要先定归宿。
+**下一个真靶心**是 `resolvePostgresqlIntentApplyResourcePreflight`（912 字符 ×2，
+§5c 记的 resource-catalog 七条真分叉之一）。`assertFrozenTaskTriggerPreflight` 已收，见 §5l。
 
 ### 给下一刀的话
 
@@ -5115,6 +5114,71 @@ provider ↔ legacy）。两条都跨层，收之前要先定归宿。
   （§5c 的 Cut I 就是反例——`postgresqlTaskLifecycleTransaction` 里 5 个导出只有 2 个是死的）；
 - **收敛方向朝中立那侧**：本轮两次（overview、retention）都是「中立实现已存在，provider 孪生是
   剩下的那份」，删 provider 侧即可，不必新写抽象。
+
+## 5l. `assertFrozenTaskTriggerPreflight`：一次「明码标价」的合一（W8）
+
+§5k 表里最后一条跨层靶心。它是 RFC-359 命题最纯粹的那种形状——**两条 provider 路由路径各揣一份
+逐字相同的文件私有函数，只有 `db` 的类型标注不同**（`LegacySqliteTaskDatabase` vs
+`PostgresqlDatabaseClient`），而函数体读的是 provider 中立的单行 `tasks` select，**没有任何方言面**。
+两份并存的唯一后果就是「改一份、漂另一份」，且漂完两条路径各自的用例还都绿着。
+
+### 落位不是我挑的，是守卫按住的
+
+最省边的落位是 `services/execution/triggerPreflight.ts`——`assertTriggerPreflight` 本体所在处，
+也是它唯一的逻辑依赖，而且 PG 那个文件**本来就**在 import 该文件，净增只有 1 条边。写完就红：
+`rfc349-provider-cutover` 的 `databaseMechanismDependencies` 判据禁止 `services/` 面直接拥有
+`@/db/*` / drizzle。那条守卫是对的——纯判据留在 `services/`，**带读点的那一层归 infrastructure**。
+于是正典落在 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`。
+
+### 代价：+6 边 / +5 例外 / +2 符号主，三条一次性 permit
+
+| 账本 | 变化 | 内容 |
+| --- | --- | --- |
+| `rfc294-cross-context-observed-imports` | 5333 → 5339 | 新文件的 6 条 import 边 |
+| `rfc294-architecture-exceptions` | 4795 → 4800 | 同一批里被登记为架构例外的 5 条机制边 |
+| `rfc294-module-symbol-owners` | 25035 → 25037 | 新文件导出的两个符号登记主人 |
+
+外加 `commons-debt.json` 一条 `R1-inbound-module-internals`（`services/task.ts` →
+新模块文件），与同文件既有的 `branchTraceSnapshotReader` 同形同命，随 W4-E 一起消失。
+
+**这笔账值得付**：换掉的是一处**看不见、没测试、必然漂移**的 fork，换来的是一条**有署名、有
+removeAfterWave、被守卫盯着**的耦合。不要把「账本零增长」当成合一的前提——那会让所有跨层重复
+永远合不掉，正是这类 fork 存活至今的原因。
+
+### 顺带立了一把可复用的棘轮账本
+
+`tests/architecture/rfc359-converged-twins.test.ts`：每收一对孪生体追加一行（正典定义点 +
+消费白名单），**双向棘轮**——冒出第二个定义点红、白名单条目陈旧也红。本轮把已收的五对一起
+补登（本条 + 人工门投影 + retention + `/api/overview` 两条）。以后再收一对只需追加 ~15 行，
+不必每次新写一把守卫。
+
+判 AST 不判文本：本轮之前已经被自己的注释喂饱过两次守卫（`rfc311-perf-guards`、
+`rfc349-resource-catalog-provider-contributions`），这次直接从设计上排除。守卫自证有牙——
+临时往 `src/` 塞一份私有副本，实测转红。
+
+### 两条新的踩坑（都是自己先踩了）
+
+1. **文件名里的 `preflight` 会把功能测试识别成守卫**。`GUARD_FILE_NAME_PATTERN`
+   （`census.ts`）按文件名匹配 `architecture|boundary|ratchet|lock|guard|invariants|preflight|
+callsite|extinction|interlock`，命中即要求进 `guard-manifest.json`，否则两向钉死红。
+   新测试叫 `rfc359-w8-frozen-trigger-preflight.test.ts`，于是被算成守卫。**处置是登记，不是改名**
+   ——`mechanism: 'behaviour'` 是清单里既有的一档（`lifecycle-invariants-*` 全是这档）。
+   四个元数据字段别手填：用 `census.ts` 导出的 `isCorpusScanner` / `corpusFloor` /
+   `assertsAbsence` / `negativeFixtureAssertions` 现算，`lines` 要**在 prettier 跑完之后**取。
+2. **一句讲历史的散文能把覆盖对等账本推红**。`rfc359-w5-t19d-coverage-parity` 按「测试文件提到
+   该侧模块名」计注意力。新测试的头注释点了 PG 适配器的文件名，于是 `TaskRouteOperations` 的
+   PG 侧 ref 10 → 11、和 SQLite 侧拉开到 3，被判为**新的深度倒挂**。而这条测试恰恰是
+   `describeEachProvider`、喂的是两侧。**正解是改措辞，不是往倒挂名单里加一行**——把非信号
+   登记进信号账本，等于把账本本身废掉。历史细节该落在 `commons-debt.json` 的 why 里。
+
+### 覆盖
+
+`tests/rfc359-w8-frozen-trigger-preflight.test.ts`（`describeEachProvider`，两引擎各 10 条）：
+任务行不存在的静默返回、trigger 上下文损坏的权威拒绝、**该判据先于快照**（两者都坏时仍报
+`trigger-context-invalid`）、损坏快照的容忍、合法快照的权威拒绝、候选快照换定义、候选**不换**
+trigger 源、durable 行损坏时候选救不回来、读点只花一次往返。
+
+合一前这五条分支里**只有一条**（`trigger-context-invalid`，经 retry 端点）有双引擎覆盖。
 
 ## 6. 债与不做的事
 

@@ -1732,6 +1732,18 @@
       "lines": 167
     },
     {
+      "id": "rfc359-converged-twins",
+      "file": "packages/backend/tests/architecture/rfc359-converged-twins.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 1500,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 235
+    },
+    {
       "id": "rfc359-sync-transaction-highwater",
       "file": "packages/backend/tests/architecture/rfc359-sync-transaction-highwater.test.ts",
       "runner": "bun",
@@ -2018,6 +2030,18 @@
       "negativeFixture": true,
       "classified": true,
       "lines": 296
+    },
+    {
+      "id": "rfc359-w8-frozen-trigger-preflight",
+      "file": "packages/backend/tests/rfc359-w8-frozen-trigger-preflight.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 202
     },
     {
       "id": "rfc359-w8-t29-unnormalized-unique-insert",
@@ -2429,14 +2453,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b0dea7b1018a290144e50893f65c3d2b4510661aa746e72fc507e7fb3d4ad925",
+    "sourceDigest": "sha256:415b7734f5c0e15f360d976b40200e48104ded23247642650a011e14aeb198e1",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "d49e600c946b81bd44795dd4b5817ab6e3380a14",
-    "contentDigest": "sha256:9047a517bb661e71fe08b6f07316701ddb24bc1f99d6b97f8baa762abfe381ed",
+    "currentSnapshotSha": "302418f259cdd95133c3a7f5589c30ce73827caa",
+    "contentDigest": "sha256:e79209d05f01e2b26f3d869679b193b66bceb5f3d9752e9fdda1403adf70d41c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

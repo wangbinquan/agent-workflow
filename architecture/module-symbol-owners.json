@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1804,
+    "backendFiles": 1805,
     "frontendFiles": 622,
     "legacyFiles": 604,
-    "moduleFiles": 1200,
-    "productionFiles": 2581,
+    "moduleFiles": 1201,
+    "productionFiles": 2582,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25035
+    "symbolsIncludingFileRoots": 25037
   },
   "entries": [
     {
@@ -127854,6 +127854,54 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts#assertFrozenTaskTriggerPreflight",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertFrozenTaskTriggerPreflight",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts#FrozenTaskTriggerCandidate",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FrozenTaskTriggerCandidate",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts#FrozenTaskTriggerReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FrozenTaskTriggerReader",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#$file",
       "removeAfterWave": null,
@@ -130607,18 +130655,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "actingMember",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#assertFrozenTaskTriggerPreflight",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertFrozenTaskTriggerPreflight",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -189672,18 +189708,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "assertChildTaskDrivable",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/task.ts",
-      "id": "owner:packages/backend/src/services/task.ts#assertFrozenTaskTriggerPreflight",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "assertFrozenTaskTriggerPreflight",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -301123,5 +301147,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b0dea7b1018a290144e50893f65c3d2b4510661aa746e72fc507e7fb3d4ad925"
+  "sourceDigest": "sha256:415b7734f5c0e15f360d976b40200e48104ded23247642650a011e14aeb198e1"
 }

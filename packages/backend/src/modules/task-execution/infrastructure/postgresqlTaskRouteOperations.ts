@@ -133,6 +133,7 @@ import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
+import { assertFrozenTaskTriggerPreflight } from './frozenTaskTriggerPreflight'
 import {
   loadRollbackTargetFrom,
   rollbackNodeRunWorktrees,
@@ -1457,56 +1458,13 @@ async function workflowSyncPreview(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RFC-359 W8 —— retry / syncWorkflow 共用的三件事：冻结溯源预检、快照基线判据、
-// 被取消写节点的工作树回滚。SQLite 的权威实现在 `services/task.ts`
-// （`assertFrozenTaskTriggerPreflight` / `escalateSnapshotLost` /
-// `escalateLiveChildSurvived` / `selectSyncRollbackTargets`）；这里是同口径的 PG 侧实现，
-// 判据与错误码逐条对齐，行为差异只在下面每处注释显式写明的地方。
+// 被取消写节点的工作树回滚。其中**冻结溯源预检已经合一**：两个 provider 都调
+// `services/execution/triggerPreflight.ts` 的 `assertFrozenTaskTriggerPreflight`
+// （RFC-359 W8 收掉了那对逐字相同的私有副本）。另外两件（`escalateSnapshotLost` /
+// `escalateLiveChildSurvived` / `selectSyncRollbackTargets`）的权威实现仍在
+// `services/task.ts`；下面是同口径的 PG 侧实现，判据与错误码逐条对齐，行为差异只在
+// 每处注释显式写明的地方。
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * RFC-292 —— 冻结任务的溯源预检。webhook 上下文永远从**durable 任务行**重读；调用方可以
- * 给一份候选 root+closure（sync 换定义时用），但绝不能替换 trigger 源。
- *
- * 与 SQLite 的 `assertFrozenTaskTriggerPreflight` 同位同序：它必须落在准入 CAS **之前**，
- * 否则一个必然被拒的重试/同步会先把任务状态推走、铸出占位行，再拒绝。
- */
-async function assertFrozenTaskTriggerPreflight(
-  db: PostgresqlDatabaseClient,
-  taskId: string,
-  candidate?: Readonly<{ workflowSnapshot: string; refClosureJson: string | null }>,
-): Promise<void> {
-  const frozen = (
-    await db
-      .select({
-        workflowSnapshot: tasks.workflowSnapshot,
-        refClosureJson: tasks.refClosureJson,
-        triggerContextJson: tasks.triggerContextJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-  )[0]
-  if (frozen === undefined) return
-
-  const source = parseTriggerContextJson(frozen.triggerContextJson)
-  if (source.kind === 'invalid') {
-    throw new ValidationError(
-      'trigger-context-invalid',
-      'the frozen task trigger context is invalid',
-    )
-  }
-  const selected = candidate ?? frozen
-  try {
-    const root = migrateWorkflowDefinitionToLatest(
-      WorkflowDefinitionSchema.parse(JSON.parse(selected.workflowSnapshot)),
-    )
-    assertTriggerPreflight({ root, closureJson: selected.refClosureJson, source })
-  } catch (error) {
-    // 历史上损坏的工作流快照保留既有的恢复姿势；来自**合法**快照的 trigger 失败是权威的，
-    // 必须先于任何生命周期 / 调度副作用发生。
-    if (error instanceof ValidationError && error.code.startsWith('trigger-')) throw error
-  }
-}
 
 /** RFC-359 W8 —— MR/PR 终结栅栏的透传（SQLite 侧由准入 CAS 抛出同名码）。 */
 function assertNotSourceTerminated(task: Pick<TaskRow, 'id' | 'sourceTerminationFence'>): void {
