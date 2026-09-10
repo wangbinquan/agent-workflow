@@ -63,9 +63,9 @@
 //     这两对仍记 `unverified`：脚本 mock 照不出方言 / 语义漂移，而漂移正是本账本要防的东西。
 //   - **假阳性 · 只 import 不驱动**：一个双引擎测试可能把两侧都值 import 进来却只断言某个纯函数。
 //     `import type` 已被排除，残余风险小；今天唯一的 `verified` 是一份真正的行为矩阵。
-//   - **同目录才算一对**：判据要求两侧同目录，所以 `db/sqliteMigrator.ts` 与
-//     `platform/persistence/postgresqlMigrator.ts` 这种**跨目录孪生**不计入——那属于落位问题，
-//     由 T17 的账本负责。这条收窄让「一对」的定义无歧义、可机械复算。
+//   - **同目录才算一对**：判据要求两侧同目录。W55 前 `db/sqliteMigrator.ts` 与
+//     `platform/persistence/postgresqlMigrator.ts` 因跨目录未计入；W55 将前者全文逐字移入
+//     后者目录后首次识别，须补录而不排除。这条同目录定义保持不变，可机械复算。
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
@@ -131,13 +131,15 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 文件头）。本刀只补对拍并把两条实测差异按强侧抬齐（SQLite 关闭后的裸驱动错误、PG 的引用式
   // 快照判等）；围栏本身是文件代号 vs 活跃生成代两台机器，作为能力差异留在账本里。
   'platform/persistence/LogicalSource: sqlite + postgresql — verified by rfc359-w8-logical-source-conformance.test.ts',
+  // W55 CI：原文件落位补入的既有机制对，没有符合原判据的双引擎见证，仍记 unverified。
+  'platform/persistence/Migrator: sqlite + postgresql — unverified',
 ]
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
-export const PROVIDER_PAIR_COUNT = 9
+export const PROVIDER_PAIR_COUNT = 10
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
-export const UNVERIFIED_PAIR_COUNT = 0
+export const UNVERIFIED_PAIR_COUNT = 1
 
 // ---------------------------------------------------------------------------
 // 判据本体：纯函数（输入是路径 / 测试事实，不碰文件系统），供真实树与内存 fixture 共用

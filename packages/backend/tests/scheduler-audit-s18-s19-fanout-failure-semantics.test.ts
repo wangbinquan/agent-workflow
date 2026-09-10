@@ -42,7 +42,7 @@
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -397,7 +397,11 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
     const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
     const attempts = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
+      await h.db
+        .select()
+        .from(nodeRuns)
+        .where(eq(nodeRuns.nodeId, 'inner'))
+        .orderBy(asc(nodeRuns.retryIndex))
     ).filter((row) => row.parentNodeRunId === wrapper.id)
     expect(attempts.map((row) => [row.retryIndex, row.status])).toEqual([
       [0, 'failed'],
@@ -483,7 +487,11 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('failed')
     const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
     const attempts = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'aggNode'))
+      await h.db
+        .select()
+        .from(nodeRuns)
+        .where(eq(nodeRuns.nodeId, 'aggNode'))
+        .orderBy(asc(nodeRuns.retryIndex))
     ).filter((row) => row.parentNodeRunId === wrapper.id)
     expect(attempts.map((row) => [row.retryIndex, row.status])).toEqual([
       [0, 'failed'],

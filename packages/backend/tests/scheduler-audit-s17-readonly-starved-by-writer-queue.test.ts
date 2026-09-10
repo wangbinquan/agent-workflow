@@ -27,7 +27,7 @@
 //     acquire ⇒ w1 取 writeSem + global 槽 1，w2/w3 睡在 writeSem 上（不占
 //     global 槽），readonly auditor 直接拿 global 槽 2 起跑。
 //   - 翻转后的断言依旧是结构性的：auditor 不取 writeSem，w1 持锁期间它即拿到
-//     第 2 个 global 槽 spawn；每个写者至少跑 WRITER_DELAY_MS=300ms，auditor
+//     第 2 个 global 槽 spawn；每个写者至少跑 WRITER_DELAY_MS（见其声明处的实测订正），auditor
 //     起跑只需常数管线开销 ⇒ auditor.start < min(写者 end) 有 ~300ms 结构余量，
 //     不依赖毫秒级竞速。修复前语义下该断言稳定为红（auditor 只能在首个写者完整
 //     结束后才有槽）。
@@ -42,6 +42,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
+import { initScratchRepo } from '../src/util/git'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, tasks, workflows } from '../src/db/schema'
 import {
@@ -52,7 +53,18 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 
 const ulid = monotonicFactory()
 
-const WRITER_DELAY_MS = 300
+// RFC-359 W55（2026-09-10 实测订正）：本常量原为 300ms，在 SQLite 上够用、在 PostgreSQL 上
+// **必红**——而红的原因不是调度语义分叉，是**派生开销**。实测同一份用例、同一台机器：
+//   · SQLite 泳道相邻节点派生间隔 ~170ms  ⇒ 300ms 的写者两两重叠，断言有余量；
+//   · PostgreSQL 泳道 ~700ms–1s（走完整 HTTP 应用 + 真库往返的测试拓扑）⇒ 间隔 > 时长，
+//     写者天然不可能重叠，断言恒假。
+// 两侧的 iso 隔离都已生效（每个节点各有独立 iso 工作树，无 passthrough 警告），锁序
+// writeSem ≺ pool ≺ subprocess 也未变——变的只是「一次派生要多久」。
+// 本文件头自己写明「不依赖毫秒级竞速」，300ms 在 PG 上恰恰退化成了竞速，故把余量做成
+// **结构性**的：2500ms 相对实测最坏间隔（~1s）留 2.4× 余量，两个引擎同值、不按引擎分叉。
+// 代价：PG 泳道单测 3.4s → 9.4s。若哪天 PG 派生间隔再涨到 2s 量级，先查派生开销为什么涨，
+// **不要**再抬这个数字（同 `rfc321-cached-repo-refresh-credential` 的教训）。
+const WRITER_DELAY_MS = 2500
 
 // Minimal opencode stand-in generated into the temp dir (fixtures/mock-opencode
 // has no per-agent delay knob and this file must not modify shared fixtures).
@@ -174,6 +186,13 @@ function registerProviderCases1(provider: ProviderHarness) {
     execution = undefined
     fixture = buildHarness(provider)
     h = fixture
+    // Per-node isolation needs a real Git HEAD; passthrough writers share one workspace.
+    const initialized = await initScratchRepo({
+      dir: h.worktreePath,
+      gitUserName: 't',
+      gitUserEmail: 't@t.test',
+    })
+    if (!initialized.ok) throw new Error(initialized.error)
     execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
   afterEach(async () => {
@@ -218,7 +237,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       id: taskId,
       workflowId,
       workflowSnapshot: JSON.stringify(canonicalDef),
-      repoPath: '/tmp/repo',
+      repoPath: h.worktreePath,
       worktreePath: h.worktreePath,
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
@@ -276,6 +295,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // writers has overlapping subprocess lifetimes (the exact opposite of the
     // pre-RFC-130 disjoint lock; pre-fix they serialized on writeSem).
     const anyWriterOverlap = writers.some((a) => writers.some((b) => a < b && overlaps(a, b)))
+    if (!anyWriterOverlap) console.error('S17 subprocess trace:', trace)
     expect(anyWriterOverlap).toBe(true)
 
     // globalSem cap still holds: with maxConcurrentNodes=2, at most 2 node runs

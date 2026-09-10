@@ -384,8 +384,11 @@
       "id": "rfc359-w5-coverage-parity",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "COVERAGE_PARITY_LEDGER",
-      "baseline": 9,
-      "why": "RFC-359 W5-T19d：成对适配器两侧的测试引用 / 驱动数。倒挂说明一侧几乎没有行为覆盖。"
+      "baseline": 10,
+      "why": "RFC-359 W5-T19d：成对适配器两侧的测试引用 / 驱动数。倒挂说明一侧几乎没有行为覆盖。",
+      "allowGrowth": {
+        "why": "RFC-359 W55 将既有 sqliteMigrator.ts 原字节从 db 移入 platform/persistence 后，同目录匹配器首次识别原已存在的 Migrator 配对。本次补录扫描盲区，保留 unverified 状态、原扫描与对拍判据；没有新增迁移器实现或排除条目。"
+      }
     },
     {
       "id": "rfc359-w5-dead-provider-adapter",
@@ -405,8 +408,11 @@
       "id": "rfc359-w5-inverted-pairs",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19d-coverage-parity.test.ts",
       "symbol": "INVERTED_PAIRS",
-      "baseline": 5,
-      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。"
+      "baseline": 6,
+      "why": "RFC-359 W5-T19d：两侧引用差 >= 3 的深度倒挂观察名单——这些对里弱侧的实现几乎零行为覆盖。",
+      "allowGrowth": {
+        "why": "RFC-359 W55 将既有 sqliteMigrator.ts 原字节从 db 移入 platform/persistence 后，同目录匹配器首次识别原已存在的 Migrator 配对。本次补录扫描盲区，保留 unverified 状态、原扫描与对拍判据；没有新增迁移器实现或排除条目。"
+      }
     },
     {
       "id": "rfc359-w5-name-collision-definition-drift",
@@ -454,8 +460,11 @@
       "id": "rfc359-w5-provider-pair-conformance",
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-pair-conformance.test.ts",
       "symbol": "PROVIDER_PAIR_CONFORMANCE_LEDGER",
-      "baseline": 9,
-      "why": "RFC-359：成对 provider 适配器的清单 + 对拍覆盖状态位。这个数就是合一进度，降到 0 是完工线。"
+      "baseline": 10,
+      "why": "RFC-359：成对 provider 适配器的清单 + 对拍覆盖状态位。这个数就是合一进度，降到 0 是完工线。",
+      "allowGrowth": {
+        "why": "RFC-359 W55 将既有 sqliteMigrator.ts 原字节从 db 移入 platform/persistence 后，同目录匹配器首次识别原已存在的 Migrator 配对。本次补录扫描盲区，保留 unverified 状态、原扫描与对拍判据；没有新增迁移器实现或排除条目。"
+      }
     },
     {
       "id": "rfc359-w5-provider-runtime-unexercised",
@@ -885,8 +894,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "3fad84efa451b5e0747aff8b8d7428a013cb2808",
-    "contentDigest": "sha256:0a52f0ca255ff379b31c12b0fbdaba7e137b524807e72a9b408ee6e93f9f25d9",
+    "currentSnapshotSha": "dcc24b711622f639be0b80525d0d12576054bf46",
+    "contentDigest": "sha256:416ffbb9d4aa2dc29012a9396ca33f0f0b5d7a18fc63b80a01ad4c4132a8f64c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

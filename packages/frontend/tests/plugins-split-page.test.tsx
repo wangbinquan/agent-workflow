@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { Route as RootRoute } from '../src/routes/__root'
@@ -50,6 +50,7 @@ let resolveDeferredCheck: ((response: Response) => void) | null = null
 let deferUpgrade = false
 let resolveDeferredUpgrade: (() => void) | null = null
 let latestQueryClient: QueryClient | null = null
+let pluginRenderState: (() => unknown) | null = null
 let failSave = false
 let failCheck = false
 let staleCheckOnce = false
@@ -158,7 +159,17 @@ function installFetch() {
   )
 }
 
-function renderPlugins(initial: string) {
+function onPluginRenderTimeout(error: Error): Error {
+  try {
+    error.message +=
+      '\nPlugin initial render state:\n' + JSON.stringify(pluginRenderState?.(), null, 2)
+  } catch {
+    // Diagnostic failures must not replace the original wait error.
+  }
+  return error
+}
+
+async function renderPlugins(initial: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   seedFullAccessActor(qc)
   latestQueryClient = qc
@@ -169,12 +180,40 @@ function renderPlugins(initial: string) {
     routeTree: tree,
     history: createMemoryHistory({ initialEntries: [initial] }),
   })
+  const initialLoad = vi.spyOn(router, 'load')
+  pluginRenderState = () => ({
+    location: router.state.location.pathname,
+    status: router.state.status,
+    matches: router.state.matches.map(({ routeId, status, error }) => ({
+      routeId,
+      status,
+      error: error instanceof Error ? error.message : String(error ?? ''),
+    })),
+    queries: qc
+      .getQueryCache()
+      .findAll({ queryKey: ['plugins'] })
+      .map((query) => ({
+        key: query.queryKey,
+        status: query.state.status,
+        fetchStatus: query.state.fetchStatus,
+        dataUpdatedAt: query.state.dataUpdatedAt,
+        error: query.state.error?.message,
+      })),
+    requests: requests.map(({ method, path }) => ({ method, path })),
+    detail: screen.queryByTestId('split-detail')?.innerHTML ?? null,
+  })
   render(
     <QueryClientProvider client={qc}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <RouterProvider router={router as any} />
     </QueryClientProvider>,
   )
+  // Await the load already started by the mounted Transitioner, without loading twice.
+  const loadResult = initialLoad.mock.results[0]
+  if (loadResult?.type !== 'return') throw new Error('Plugin router did not start its initial load')
+  await act(async () => {
+    await loadResult.value
+  })
   return router
 }
 
@@ -188,6 +227,7 @@ beforeEach(() => {
   deferUpgrade = false
   resolveDeferredUpgrade = null
   latestQueryClient = null
+  pluginRenderState = null
   failSave = false
   failCheck = false
   staleCheckOnce = false
@@ -204,8 +244,10 @@ afterEach(() => {
 
 describe('/plugins split page', () => {
   test('empty pane; card click opens the two-tab detail', async () => {
-    const router = renderPlugins('/plugins')
-    const card = await waitFor(() => screen.getByTestId('split-card-p1'))
+    const router = await renderPlugins('/plugins')
+    const card = await waitFor(() => screen.getByTestId('split-card-p1'), {
+      onTimeout: onPluginRenderTimeout,
+    })
     expect(card.querySelector('[data-icon="plugin"]')).not.toBeNull()
     expect(card.textContent).toContain('Plugin')
     expect(card.textContent).toContain('my-plugin@^1')
@@ -246,8 +288,10 @@ describe('/plugins split page', () => {
   })
 
   test('new route uses the shared back and keeps the rail create CTA unique', async () => {
-    renderPlugins('/plugins/new')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }))
+    await renderPlugins('/plugins/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     expect(screen.getByTestId('plugins-mobile-back').getAttribute('href')).toBe('/plugins')
     expect(screen.getAllByTestId('plugins-mobile-back')).toHaveLength(1)
     expect(screen.getAllByTestId('split-new-button')).toHaveLength(1)
@@ -265,8 +309,10 @@ describe('/plugins split page', () => {
   })
 
   test('package commit locks creation modes and the manual create scope until it settles', async () => {
-    renderPlugins('/plugins/new')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }))
+    await renderPlugins('/plugins/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     const packagePanel = document.getElementById('plugins-create-panel-package') as HTMLElement
     const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
     const manualTab = document.getElementById('plugins-create-tab-manual') as HTMLButtonElement
@@ -287,8 +333,10 @@ describe('/plugins split page', () => {
   })
 
   test('unknown package outcome blocks manual creation but leaves retry enabled', async () => {
-    renderPlugins('/plugins/new')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }))
+    await renderPlugins('/plugins/new')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: /New plugin/ }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     const packagePanel = document.getElementById('plugins-create-panel-package') as HTMLElement
     const scope = packagePanel.closest('fieldset') as HTMLFieldSetElement
     const manualTab = document.getElementById('plugins-create-tab-manual') as HTMLButtonElement
@@ -306,8 +354,10 @@ describe('/plugins split page', () => {
   })
 
   test('check-update in the Updates tab lights up the list card chip (shared cache)', async () => {
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     expect(screen.queryByTestId('plugin-update-my-plugin')).toBeNull() // not checked yet
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(await waitFor(() => screen.getByTestId('plugin-check-update')))
@@ -316,8 +366,10 @@ describe('/plugins split page', () => {
   })
 
   test('dirty Save and check publishes the exact PUT receipt before operation', async () => {
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.change(screen.getByLabelText(/^Spec/), { target: { value: 'my-plugin@^2' } })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     const button = screen.getByTestId('plugin-check-update')
@@ -333,8 +385,10 @@ describe('/plugins split page', () => {
   })
 
   test('invalid draft returns to Config and performs zero save/check request', async () => {
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.change(screen.getByLabelText(/^Options \(JSON object\)/), {
       target: { value: '{broken' },
     })
@@ -354,8 +408,10 @@ describe('/plugins split page', () => {
 
   test('Save failure performs zero Check request and keeps the draft dirty', async () => {
     failSave = true
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.change(screen.getByLabelText(/^Spec/), { target: { value: 'my-plugin@^2' } })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
@@ -366,8 +422,10 @@ describe('/plugins split page', () => {
 
   test('no-change receipt is explicit and keeps Upgrade disabled', async () => {
     checkAvailable = false
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
     await waitFor(() => expect(screen.getByText('This saved plugin is up to date.')).toBeTruthy())
@@ -376,8 +434,10 @@ describe('/plugins split page', () => {
 
   test('Check transport error has a working exact-operation retry', async () => {
     failCheck = true
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
     await waitFor(() => expect(screen.getByText(/check failed/)).toBeTruthy())
@@ -389,8 +449,10 @@ describe('/plugins split page', () => {
 
   test('stale Check reloads the saved hash so Retry uses the new exact basis', async () => {
     staleCheckOnce = true
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
     await waitFor(() => expect(screen.getByText(/older saved revision/)).toBeTruthy())
@@ -409,8 +471,10 @@ describe('/plugins split page', () => {
   })
 
   test('Upgrade applies only the exact checked hash and clears the ready chip', async () => {
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
     await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
@@ -425,8 +489,10 @@ describe('/plugins split page', () => {
 
   test('late Check receipt cannot populate cache after a newer resource hash wins', async () => {
     deferCheck = true
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
     await waitFor(() => expect(resolveDeferredCheck).not.toBeNull())
@@ -442,8 +508,10 @@ describe('/plugins split page', () => {
 
   test('late Upgrade receipt cannot roll the detail query back over a newer PUT hash', async () => {
     deferUpgrade = true
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     fireEvent.click(screen.getByTestId('plugin-check-update'))
     await waitFor(() => expect(screen.getByTestId('plugin-update-my-plugin')).toBeTruthy())
@@ -473,8 +541,10 @@ describe('/plugins split page', () => {
 
   test('file source explains external management and exposes no Check/Upgrade actions', async () => {
     plugins[0] = { ...plugins[0]!, sourceKind: 'file', spec: '/tmp/external-plugin' }
-    renderPlugins('/plugins/p1')
-    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }))
+    await renderPlugins('/plugins/p1')
+    await waitFor(() => screen.getByRole('heading', { level: 2, name: 'my-plugin' }), {
+      onTimeout: onPluginRenderTimeout,
+    })
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
     expect(screen.getByText('Managed by an external path')).toBeTruthy()
     expect(screen.queryByTestId('plugin-check-update')).toBeNull()

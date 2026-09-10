@@ -112,6 +112,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // W19: the hosted SQL regression directly constructs the actual PG source
   // with a controlled connection; this is a driver count, not a real-PG claim.
   'platform/persistence/LogicalSource: sqlite 12/8, postgresql 7/5',
+  // W55 CI：原 SQLite 迁移器全文逐字移入既有 PostgreSQL 迁移器所在目录，
+  // 同目录判据首次识别这两个原文件；补录原 ref/drive，不代表新增实现或行覆盖。
+  'platform/persistence/Migrator: sqlite 2/1, postgresql 10/9',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -128,6 +131,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   'modules/task-execution/infrastructure/TaskExecutionRuntimeParticipants: 10 vs 6',
   'modules/task-execution/infrastructure/TaskRouteLaunchOperations: 2 vs 5',
   'platform/persistence/LogicalSource: 12 vs 7',
+  // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
+  'platform/persistence/Migrator: 2 vs 10',
 ]
 
 interface Side {
