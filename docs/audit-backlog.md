@@ -4356,3 +4356,52 @@ jsdom 大文件、杀毒软件扫描临时文件。**未立项、未验证。**
 **已知在制**：上一 session 给 `plugins-split-page.test.tsx` 加了 `act()` 包裹与渲染态诊断
 （失败时打印 router/query 状态），显然在追同一件事；那份诊断已随 `c8ed5871a` 落库。
 
+
+## 双引擎 harness 与「多个测试文件共用一个 PostgreSQL 库」（2026-09-10 CI 实撞，未处置）
+
+**症状**：`53d670270` 的 ubuntu 分片 7/8 红一条——
+`RFC-359 W51 multipart database [postgresql] > … empty uploads with minCount=0 still creates the task`，
+错误是 PostgreSQL 的 **`deadlock detected`（SQLSTATE 40P01）**：
+
+```
+Process 1719 waits for AccessExclusiveLock on relation 493986 of database 16384; blocked by process 1721.
+Process 1721 waits for AccessShareLock  on relation 493965 of database 16384; blocked by process 1719.
+```
+
+`AccessExclusiveLock` = `TRUNCATE`（`tests/helpers/eachProvider.ts::resetToSnapshot` 每个用例前做的
+重置）；`AccessShareLock` = 某个 `SELECT`。两个会话互等。
+
+**归因**：不是本次改动引入的（那一提只动了测试里的精确锁常量与文档）。`resetToSnapshot` 的
+TRUNCATE 已经是**单条语句**列出全部表，两条同样的 TRUNCATE 之间锁序确定、不会互锁；对手方是
+**另一个测试文件残留的读**。也就是说：CI 分片里多个文件共用同一个 `awtest` 库，`--isolate`
+通常让它们顺序跑，但文件切换处会重叠（上一个文件的 afterAll / 连接池排空还没完，下一个文件
+已经开始重置）。
+
+**比锁更严重的那一半**：重叠期间**数据也是互相踩的**——一个文件的 `TRUNCATE … CASCADE` 会把另一个
+文件正在用的行整表清掉。今天没有大面积翻车，只是因为重叠窗口很短。
+
+**为什么不随手补**：候选修法各有代价，需要先量再选——
+- `DELETE` 换 `TRUNCATE`：拿掉 AccessExclusiveLock、消掉这一类死锁，但**解决不了数据互踩**；
+- 每个文件一个 schema：`db/providerSchema.ts` 的 `pgSchema('agent_workflow')` 是模块级常量，
+  按文件换要动 provider 投影本身，影响面大；
+- 每个文件一个数据库：干净，但每个文件都要跑一次迁移，CI 时间要重新测；
+- 文件级 advisory lock（beforeAll 拿、afterAll 放）：能同时解决锁与数据两半，但 `pg_advisory_lock`
+  是**会话级**的，在连接池上要保证同一条连接持有，写法有讲究。
+
+**处置建议**：作为 RFC-359 的 harness 独立一刀，先量「每文件一库」的迁移开销再定。
+在那之前把它当**已知的间歇红**：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据莫名消失，
+先对照本条，别去改被判红的那条业务用例。
+
+## 前端 `rfc152-batch-import-ws-path` 间歇红（2026-09-10 CI 实撞，未处置）
+
+`53d670270` 的 Frontend 分片 3/3 红一条：
+`RFC-152 — BatchImportDialog subscribes via WS_PATHS.repoImport > row.update / batch.completed
+frames on the subscription still drive the table`，报
+`Unable to find an element with the text: /再来一批|Import more/`。
+
+**不是 i18n race**：匹配器两种语言都收。DOM 快照里对话框已经渲染、表格行也已经是
+`data-row-status="done"` / `Cloned`（即 `batch.completed` 帧确实到了），但 footer 里只有
+`Close`——「再来一批」那个按钮该出现却没出现。像是完成态到达与 footer 重渲染之间的 `act()` 时序。
+
+同一条在 `b0ee9d8e9`（40/40 全绿）上是过的，此后触及前端的提交都不是这条链路。
+**未立项**：需要该文件的 owner 按「用 `findByRole` 等待、而不是同步 `getByText`」的定式修一次。

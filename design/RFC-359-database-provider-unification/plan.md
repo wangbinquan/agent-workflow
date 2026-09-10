@@ -23,7 +23,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 
 | AC    | 判据                                              | 实测                                                                                                                                                                                                                                                                                                     | 状态   |
 | ----- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录153→9对已登记；W55将两个读取owner的三对完整资源快照投影共享，保原7调用及完整冻结/返回合同。三个SQLite原语的落位单独记为T17 59→56，不计业务合一。跨目录/内联真实重复缺口仍开；按用户要求W55后停止新RFC批次。                                                                                        | 进行中 |
+| AC-1  | 已登记的机制差异保留对拍，其余重复实现合一        | 同目录153→9对已登记；W55将两个读取owner的三对完整资源快照投影共享，保原7调用及完整冻结/返回合同。三个SQLite原语的落位单独记为T17 59→56，不计业务合一。**W57 收掉两条内联真实重复**：①`/api/overview` 的两套完整实现（SQLite `buildOverview` / PG `composeSystemOverviewQuery`，逐个聚合键语义等价）收成一份，删 316 行；②任务可见性判据 `or(owner=我, id IN 我参与的)` 的**七份**逐字副本（含一份 provider 专属）收成一份，连带四份分块 `visibleTaskIds`（其中两份逐字相同、三份硬写字面量 500）；两条都带新守卫，可见性那条在收敛前 HEAD 上验红 6/6。跨目录真实重复缺口仍开。                                                                                        | 进行中 |
 | AC-2  | 一个 boot 序列，无 provider literal 执行分支      | `servePostgresqlDaemon` 已删除，入口 provider literal 分支为 0                                                                                                                                                                                                                                           | ✅     |
 | AC-3  | 双引擎原子性对拍；裸驱动事务归零                  | 按 TypeScript 接收者类型扫描，裸驱动事务账本为 0；生成器 runner 的 27 次中立事务不误计                                                                                                                                                                                                                   | ✅     |
 | AC-4  | 方言 exact 清单，每项真实双引擎执行               | `RAW_DIALECT_DEBT` 与 `UNSHIMMED_FUNCTION_DEBT` 都为 0；`greatest` 的 NULL 前提有显式断言                                                                                                                                                                                                                | ✅     |
@@ -34,7 +34,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34/6，13后端10/3；主2353/15、原2227全过，独立2/2及hook18/18、原RFC259两OS、两个原Playwright身份两OS通过。W55最终39core编译、metadata63/111与canonical13/55通过且候选稳定，首轮缺import失败保留；完整新SHA待托管，发布后仅修流水线。 | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                                                                                         | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核W52 full34427756137的360样本/18组P95仍有两绝对失败：SQLite tasks-first 150.616ms未低于150ms、PG workgroup-pending 11.571ms未低于10ms；其余16项通过，六PG端点相对较慢。W54 full34433823331仍由唯一watcher跟踪，原语料/判据不变，不以诊断代替性能结果。                                            | 进行中 |
-| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；新增双库行为和澄清上下文转交修复待新SHA托管。                                                                                    | 进行中 |
+| AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；**W57 退役一个纯命名债入口**：`composePostgresqlResourceCatalogOverviewQuery` → `composeResourceCatalogOverviewQuery`（形参 `PostgresqlDatabaseClient` → `ProviderNeutralDatabase`；它的计数端口本就收中立客户端、函数体零方言，`/api/overview` 收成一份时 SQLite 也装它）。新增双库行为和澄清上下文转交修复待新SHA托管。                                                                                    | 进行中 |
 
 ### AC-9 取证（2026-09-10，exact `03b34a783`）
 
@@ -4950,6 +4950,61 @@ provider 的真实生产入口」，合理；但副作用是把分叉写进了�
 
 **仍欠的一格（AC-6）**：这条 oracle 目前还是 SQLite 单引擎（它经 `createApp` 起真 HTTP 应用，
 `describeEachProvider` 化要先解决 app 装配的 provider 参数化）。留作 AC-6 的待办。
+
+## 5j. 任务可见性判据：**七份**逐字副本收成一份（W57）
+
+`or(owner = 我, id IN (我参与的任务))` 是**授权判据**——漂一处，用户要么看见不该看见的任务，
+要么丢掉本该看见的。落这一刀时它在仓里被逐字抄了七份：
+
+| # | 位置 | 形态 |
+| --- | --- | --- |
+| 1 | `db/query.ts` | 本次定为唯一一份 |
+| 2 | `task-execution/infrastructure/taskListPage/authorization.ts` | RFC-357，ref 参数化 |
+| 3 | `collaboration/infrastructure/collaborationTaskAccess.ts` | 内联在分块 `visibleTaskIds` 里 |
+| 4 | `collaboration/infrastructure/reviewTaskAccess.ts` | **与 3 逐字相同**（同一模块两个文件） |
+| 5 | `task-execution/infrastructure/taskOverviewQuery.ts` | `sql.placeholder` 预编译形态 |
+| 6 | `task-execution/infrastructure/postgresqlTaskRouteOperations.ts` | **provider 专属**那一份 |
+| 7 | `task-execution/infrastructure/taskAuthorization.ts` | 先前已收敛 |
+
+**七份里没有一份是「按引擎必须不同」**。差异只有三样，现在都由唯一那份的参数承担：
+命名（`ref`/`viewer` vs `subject`）、返回约定（`undefined` vs `1 = 1`）、绑定形态
+（字面量 vs `Placeholder`）。
+
+**第二处重复**：分块版 `visibleTaskIds` 有四份，两份逐字相同，其中三份把分块大小硬写成字面量
+`500`——而 `util/sqlChunk.ts` 的 `SQL_IN_CHUNK` 就是这个数，它存在的理由正是「别把某个具体
+数字写进判据」。现在统一走 `visibleTaskIdsFor`（存在性过滤语义原样保留）。
+
+**刻意不合并的一处**：`taskListOwnershipScopeCondition` 的 `mine` 分支与可见性判据今天恰好
+等价，但一个是「我要看哪一档」、一个是「我能不能看」。可见性哪天扩了（例如加上工作组成员），
+`mine` 不该跟着扩。
+
+### 守卫写法上的两条教训（都是自己先踩了）
+
+1. **判 AST，不判文本**。文本匹配会把讲述历史的注释算成命中——本条守卫的头注就写满了这些名字，
+   第一版直接自噬。同一天在 `rfc311-perf-guards` 与 `rfc349-resource-catalog-provider-contributions`
+   上各撞一次：前者被我新写的 helper 注释喂饱，后者被我新写的 composition 注释喂饱（那条本想钉
+   导出声明，结果被散文满足，等于**静默失效**）。
+2. **抓不全的守卫比没有更危险**。第一版按「`inArray` 第二个实参子树里有没有提到
+   `taskCollaborators`」判，在收敛前的 HEAD 上只抓到 **2/6**——七份里有四份先把子查询绑到局部
+   变量（`collaboratorIds` / `collaboratorTaskIds` / `memberIds`）再传进去。改成**文件级**限定后
+   才 6/6。它让人以为已经守住了，是最坏的一种。
+   （文件级限定本身也必要：无限定时它先命中了 `scheduledTaskPersistence.ts` 的
+   `or(owner = 我, id IN (我被 grant 的定时任务))`——同一个句式，但那是 `scheduled_tasks` ×
+   `resource_grants`。判据要认的是**概念**，不是句式。）
+
+### 采法记一条：`allowGrowth` 的契约与顺序
+
+- 契约是**对象** `{ why }`，不是字符串——写成字符串会被普查**静默丢掉**（`rfc294Canonical.ts:4089`
+  的 `typeof permit === 'object'`）；
+- 顺序必须是「**先手写许可 → 再跑普查**」：普查会把对象形态的许可读回保留**并重算
+  contentDigest**；反过来先采后改，digest 对不上，N1a 判红。
+
+### 下一个靶心（未动）
+
+`postgresqlTaskRouteOperations.ts`（2601 行）连同 `postgresqlTaskRouteLaunchOperations` /
+`postgresqlTaskRouteRepairOperations` / `postgresqlTaskLifecycleTransaction` 是一族**真分叉**
+（`withPostgresqlSerializableTaskExecution` 有 7 个生产调用方，见 §5c 的 Cut I），不是命名债。
+本轮只把它的可见性判据收走。
 
 ## 6. 债与不做的事
 
