@@ -4,7 +4,7 @@
 // 各一份，查询逐字相同。PostgreSQL 那份由本文件替代；SQLite 的同步孪生在其余 dbTxSync
 // 调用方迁完前保留（W4 pair-deletion）。
 
-import { and, eq, inArray, or } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks } from '@/db/schema'

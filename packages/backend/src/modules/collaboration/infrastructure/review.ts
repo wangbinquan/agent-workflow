@@ -27,6 +27,7 @@ import { dirname, join } from 'node:path'
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   exists,
@@ -1935,7 +1936,10 @@ export async function countPendingReviews(
     )
   }
   const counted = await db
-    .select({ total: sql<number>`count(*)` })
+    // RFC-349：必须走 drizzle 的 `count()`（= ``sql`count(*)`.mapWith(Number)``）。
+    // 裸 `sql<number>\`count(*)\`` 在 PostgreSQL 上没有 mapper——`count(*)` 是 int8，
+    // 驱动按规范原样交回**字符串**，于是同一段代码在两个引擎上类型不同。
+    .select({ total: count() })
     .from(docVersions)
     .innerJoin(
       nodeRuns,
@@ -1947,7 +1951,7 @@ export async function countPendingReviews(
     )
     .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(and(...conditions))
-  return Number(counted[0]?.total ?? 0)
+  return counted[0]?.total ?? 0
 }
 
 export async function getReviewDetail(

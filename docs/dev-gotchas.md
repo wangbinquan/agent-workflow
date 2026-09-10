@@ -2019,6 +2019,31 @@ grep -rlIP '\x00' packages/backend/src packages/backend/tests || echo "clean"
 **规矩**：写对拍时**两个引擎的那一遍都不是冗余**——各自钉的是不同类的缺陷。
 看到「只有一个引擎红」不要当成用例写坏了，先判它属于上面哪一类；两类都说得通才叫查清楚。
 
+## lint / 格式要在**最终形态**上跑，不是在中途跑（2026-09-10 实撞，把主干推红）
+
+一次改动做了四轮搬移（判据从模块里抽出 → 放公共面 → 被守卫拒 → 落到共享词汇层 → 并进既有模块）。
+我在**第二轮**跑过 `eslint --max-warnings 0` 并且是干净的，之后就没再跑；而 `or` 这个 import
+是在**最后一轮搬移**中才变成未使用的。CI 上一条 warning 即红（`--max-warnings 0`），主干因此被我推红。
+
+**规矩**：`git add` 之后、`git commit` 之前，对**暂存区里的全部文件**再跑一次
+prettier + eslint。中途跑过不算数——搬移会让"上一轮还在用"的符号变成死的。
+（本仓 RFC-140 事故同源：一个 unused import 就双 OS 红。）
+
+## `count(*)` 在 PostgreSQL 上回来是**字符串**——裸 `sql<number>` 没有 mapper（同上）
+
+`count(*)` 在 PG 里是 **int8**、`sum(bigint)` 是 **numeric**，两者都超出 IEEE754 安全整数范围，
+驱动按规范原样交回**字符串**。而 ``sql<number>`count(*)` `` 只是 TypeScript 的断言，**运行时没有
+任何转换**：SQLite 上一直是 number，PG 上是字符串，于是 `total + 1` 变成字符串拼接、
+JSON 响应里 `3000` 变成 `"3000"`、分页与配额判断被静默改写。
+
+**修法**：走 drizzle 的 `count()`（等价于 ``sql`count(*)`.mapWith(Number)``），
+自定义聚合显式 `.mapWith(Number)`。本仓有守卫钉这条
+（`rfc349-postgresql-numeric-projection`），例外要在 `DECODED_BY_CALLER` 里写明谁负责解码。
+
+**注意一个自我麻痹**：我当时在外面裹了 `Number(...)`，结果是对的，所以行为测试全绿——
+但守卫仍然（正确地）拒了这个模式，因为**下一个人把那层去掉就静默出错**。
+守卫钉的是形状，不是这一次的结果；绿了不代表该这么写。
+
 ## 把既有用例接上 `describeEachProvider` 时，**先算「派生开销 vs 断言余量」**（2026-09-10 实撞）
 
 W55 首次给两条调度器回归锁加上双引擎，两条当场在 PostgreSQL 上红。**只有一条是真缺陷**：
