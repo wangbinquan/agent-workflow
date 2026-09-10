@@ -1,6 +1,7 @@
 import { pluginCachedPathQuery } from './pluginCachedPathQuery'
+import { assertManagedPath, errorValue } from './resourcePackageMaintenancePaths'
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { BUNDLE_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -116,16 +117,6 @@ function parseArtifacts(json: string): readonly PostgresqlArtifact[] {
  */
 function parseReceipt(journal: ResourcePackageApplyJournalSnapshot): ApplyReceipt {
   return ApplyReceiptSchema.parse(JSON.parse(assertCommittedApplyReceipt(journal)))
-}
-
-function assertManagedPath(root: string, path: string): void {
-  const rel = relative(resolve(root), resolve(path))
-  if (rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))) return
-  throw new Error('resource-package-maintenance-path-outside-managed-root')
-}
-
-function errorValue(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
 }
 
 function assertOperationInReceipt(receipt: ApplyReceipt, artifact: PostgresqlArtifact): void {

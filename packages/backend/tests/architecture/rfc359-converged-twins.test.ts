@@ -46,6 +46,15 @@ interface ConvergedTwin {
   readonly consumers: readonly string[]
   /** 合一前它在哪两处各有一份——留给以后翻账的人，不参与判定。 */
   readonly forkedFrom: readonly [string, string]
+  /**
+   * **同名异物**：仓里另有同名函数，但那是另一个实现，不属于这一对。
+   *
+   * 这一格是必需的：守卫判的是「这个名字在仓里只有一个定义点」，而同名异物会让它恒红。
+   * 但也不能因此把判据放宽成「至少有一个定义点」——那样真的 fork 回两份就抓不到了。
+   * 折中是把已知的同名异物**逐条登记**：多出一个没登记的同名定义仍然红，逼人来这里说明
+   * 「它是另一个东西」还是「它是又一份副本」。每条都要写清为什么不合。
+   */
+  readonly homonyms?: readonly { readonly path: string; readonly why: string }[]
 }
 
 const B = 'packages/backend/src/'
@@ -141,6 +150,25 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
       `${B}modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts`,
     ],
   },
+  {
+    what: '资源包维护的托管根路径判据（两个 provider 维护适配器曾各一份，纯路径判断、零方言）',
+    fn: 'assertManagedPath',
+    definedIn: `${B}modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts`,
+    consumers: [
+      `${B}modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts`,
+      `${B}modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts`,
+    ],
+    forkedFrom: [
+      `${B}modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts`,
+      `${B}modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts`,
+    ],
+    homonyms: [
+      {
+        path: `${B}modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts`,
+        why: '同名异物：走 `pathInside` 判定、抛 `intent-apply-maintenance-path-outside-managed-root`，属于 intent 上下文自己的托管根合同。合它要新开一条 intent → resource-catalog 的内部边，而两个上下文的「托管根」本来就不是同一个根。',
+      },
+    ],
+  },
 ]
 
 /** 函数形状的声明名：`function f` / `const f = () =>` / `const f = function` / 方法 `f() {}`。 */
@@ -195,10 +223,19 @@ describe('RFC-359 —— 已合一孪生体的定义点唯一', () => {
       const definitions = UNITS.filter((u) => declaredFunctionNames(u).has(twin.fn)).map(
         (u) => u.path,
       )
-      expect(definitions, `${twin.fn} 的定义点`).toEqual([twin.definedIn])
+      const expected = [twin.definedIn, ...(twin.homonyms ?? []).map((entry) => entry.path)].sort()
+      expect(
+        definitions.sort(),
+        `${twin.fn} 的定义点。多出来的那个是**又一份副本**（合掉它）还是**同名异物**` +
+          '（登记进 homonyms 并写清为什么不合）？两者都不许沉默。',
+      ).toEqual(expected)
 
+      const homonymPaths = new Set((twin.homonyms ?? []).map((entry) => entry.path))
       const referring = UNITS.filter(
-        (u) => u.path !== twin.definedIn && referencesIdentifier(u, twin.fn),
+        (u) =>
+          u.path !== twin.definedIn &&
+          !homonymPaths.has(u.path) &&
+          referencesIdentifier(u, twin.fn),
       ).map((u) => u.path)
       const allowed = new Set(twin.consumers)
       expect(

@@ -5082,7 +5082,7 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
 **账本里的「不可达」是一次断言，不是一条事实**；它和别的断言一样会过期，而过期的表现是
 偶发红、不是编译错。归一之后该条销账（20 → 19）。
 
-### 本轮 burn down 到哪了：38 → 23 组（§5l 再收两组 → 19）
+### 本轮 burn down 到哪了：38 → 23 组（§5l 再收四组 → 18）
 
 | 提交 | 收掉的组 | 性质 |
 | --- | --- | --- |
@@ -5192,6 +5192,29 @@ callsite|extinction|interlock`，命中即要求进 `guard-manifest.json`，否�
 于是新增 `tests/rfc359-w8-intent-apply-preflight.test.ts`（`describeEachProvider`，两引擎共 6 pass）：
 不重复 T14/T15 的语义细分，只锁**跨引擎一致性**——占用名集合（大小写归一）、copy-only 目标与拒绝理由、
 六类资源都被问过一遍（空库上是六个空集合而不是缺键）、返回值冻结。
+
+### 第三、四对：`notSyncable` 与 `assertManagedPath`（都零边）
+
+- **`notSyncable`**（`sqlite/postgresqlTaskRouteOperations.ts` 各一份）——纯投影，把一个拒绝理由
+  包成 `WorkflowSyncPreview` 的否定形态。收进 `domain/workflowSyncPreview.ts`；domain 只依赖
+  `@agent-workflow/shared`，而 **shared 不计入跨上下文账本**（`observedEdges` 的 external 那一档
+  今天只有 `drizzle-orm` 一个 specifier），所以零新增边。
+- **`assertManagedPath` + `errorValue`**（`sqlite/postgresqlResourcePackageMaintenance.ts` 各一份）
+  ——纯路径判据 + 错误归一。收进同目录的 `resourcePackageMaintenancePaths.ts`：同模块同层，
+  零新增边，`rfc294-module-symbol-owners` 反而 −1。
+  `assertManagedPath` 尤其不该有两份：它决定「哪些路径算在托管根之内」，两侧一旦漂开，同一个
+  清扫动作在两个 provider 上会得出不同的「可删」结论，而两条路径各自的用例都还绿着。
+
+#### 棘轮账本因此长出一格：`homonyms`
+
+`modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts` 里也有一个叫
+`assertManagedPath` 的函数，但那是**另一个实现**（走 `pathInside`、抛另一个错误码，属于 intent
+自己的托管根合同）。守卫判的是「这个名字在仓里只有一个定义点」，于是它恒红。
+
+放宽成「至少有一个定义点」是错的——真 fork 回两份就抓不到了。正解是把已知的同名异物**逐条
+登记**（`homonyms: [{ path, why }]`）：多出一个**没登记**的同名定义仍然红，逼下一个人来账本里
+回答「它是又一份副本（合掉）还是同名异物（写清为什么不合）」。实测有牙：往第三个文件塞一个
+同名空函数当场转红。
 
 ### 覆盖
 

@@ -1,6 +1,7 @@
 import { pluginCachedPathQuery } from './pluginCachedPathQuery'
+import { assertManagedPath, errorValue } from './resourcePackageMaintenancePaths'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
@@ -75,16 +76,6 @@ type LegacySkillVersionArtifact = z.infer<typeof LegacySkillVersionStageArtifact
 
 function parseArtifacts(json: string): readonly LegacyArtifact[] {
   return z.array(LegacyArtifactSchema).parse(JSON.parse(json))
-}
-
-function assertManagedPath(root: string, path: string): void {
-  const rel = relative(resolve(root), resolve(path))
-  if (rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))) return
-  throw new Error('resource-package-maintenance-path-outside-managed-root')
-}
-
-function errorValue(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
 }
 
 async function publishStagedVersion(

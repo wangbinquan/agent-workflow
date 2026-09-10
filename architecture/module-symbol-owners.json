@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1807,
+    "backendFiles": 1808,
     "frontendFiles": 622,
     "legacyFiles": 604,
-    "moduleFiles": 1203,
-    "productionFiles": 2584,
+    "moduleFiles": 1204,
+    "productionFiles": 2585,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25031
+    "symbolsIncludingFileRoots": 25030
   },
   "entries": [
     {
@@ -97376,18 +97376,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#assertManagedPath",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertManagedPath",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#assertOperationInReceipt",
       "removeAfterWave": null,
       "status": "current-module",
@@ -97428,18 +97416,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createPostgresqlResourcePackageApplyArtifactRecovery",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#errorValue",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "errorValue",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -98076,6 +98052,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "writeSkillTree",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts#assertManagedPath",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertManagedPath",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts#errorValue",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "errorValue",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -98912,18 +98924,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#assertManagedPath",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertManagedPath",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#compensateArtifact",
       "removeAfterWave": null,
       "status": "current-module",
@@ -98940,18 +98940,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSqliteResourcePackageApplyArtifactRecovery",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#errorValue",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "errorValue",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301075,5 +301063,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4076e6cdb187e77dd0ac84b678535e616bc3fd1f37d307dd6a2d19b3c9d4a8f5"
+  "sourceDigest": "sha256:f063309116c9b38121d2dfad824fbe615c50bef20bc6001cfb3b43c9c3cc1aab"
 }
