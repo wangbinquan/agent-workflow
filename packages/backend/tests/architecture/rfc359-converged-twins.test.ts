@@ -115,6 +115,19 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
       `${B}services/overview.ts`,
     ],
   },
+  {
+    what: 'Intent apply 会话的归属预检：占用名集合 + 只能复制的目标（两个适配器曾各一份，纯命名分叉）',
+    fn: 'resolveIntentApplyResourcePreflight',
+    definedIn: `${B}modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts`,
+    consumers: [
+      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts`,
+      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,
+    ],
+    forkedFrom: [
+      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts`,
+      `${B}modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts`,
+    ],
+  },
 ]
 
 /** 函数形状的声明名：`function f` / `const f = () =>` / `const f = function` / 方法 `f() {}`。 */

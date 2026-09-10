@@ -21,7 +21,7 @@ import { buildActor } from '../src/auth/actor'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { plugins, skills } from '../src/db/schema'
-import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants'
+import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight'
 import { createResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/aclReadRepository'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

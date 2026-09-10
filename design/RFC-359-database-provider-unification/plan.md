@@ -5082,7 +5082,7 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
 **账本里的「不可达」是一次断言，不是一条事实**；它和别的断言一样会过期，而过期的表现是
 偶发红、不是编译错。归一之后该条销账（20 → 19）。
 
-### 本轮 burn down 到哪了：38 → 23 组（§5l 再收一组 → 20）
+### 本轮 burn down 到哪了：38 → 23 组（§5l 再收两组 → 19）
 
 | 提交 | 收掉的组 | 性质 |
 | --- | --- | --- |
@@ -5104,8 +5104,8 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
   模型正是「跨上下文只走 exact public 合同、不共享内部助手」。这是**按设计的重复**，
   逐字相同只是因为两个类型今天恰好同形。
 
-**下一个真靶心**是 `resolvePostgresqlIntentApplyResourcePreflight`（912 字符 ×2，
-§5c 记的 resource-catalog 七条真分叉之一）。`assertFrozenTaskTriggerPreflight` 已收，见 §5l。
+**§5k 点名的两个靶心都已收**（`assertFrozenTaskTriggerPreflight` 与
+`resolvePostgresqlIntentApplyResourcePreflight`），见 §5l。下一刀从上表其余各组里挑。
 
 ### 给下一刀的话
 
@@ -5170,6 +5170,28 @@ callsite|extinction|interlock`，命中即要求进 `guard-manifest.json`，否�
    PG 侧 ref 10 → 11、和 SQLite 侧拉开到 3，被判为**新的深度倒挂**。而这条测试恰恰是
    `describeEachProvider`、喂的是两侧。**正解是改措辞，不是往倒挂名单里加一行**——把非信号
    登记进信号账本，等于把账本本身废掉。历史细节该落在 `commons-debt.json` 的 why 里。
+
+### 同一刀里的第二对：Intent apply 归属预检（纯命名分叉，代价为负）
+
+`resolveIntentApplyResourcePreflight` 与它的三个 interface 在
+`modules/resource-catalog/infrastructure/aggregateAdapters/` 的两个适配器里各有一份**逐字相同**的
+副本，差别只有类型名上的 `Legacy` / `Postgresql` 前缀。它是 §5c 记的 resource-catalog 七条真分叉里
+**最容易的一条**——函数体只经 `ResourceCatalogAclIdentityReadPort` 这个闭合端口取数，一行方言都没有，
+所以它根本不是能力分叉，是**命名分叉**。
+
+抽到同目录的 `intentApplyResourcePreflight.ts`（同 bounded context、同层），**零新增跨上下文边**；
+`rfc294-module-symbol-owners` 反而 25037 → 25033（少了 4 个重复导出）。收敛方向朝中立那侧的那类，
+挑的时候优先——它们通常连账本都不用动。
+
+一条顺带的：两个适配器原来各自 import `CATALOG_SELECTOR_KINDS` 的**值**只为这段用；抽走之后两处
+都只剩类型用法，`--max-warnings 0` 当场红。**删函数体之后要重跑 lint**，别凭记忆判断哪些 import
+还活着（本轮又验证了一次这条老规矩）。
+
+覆盖：既有的 `rfc271-intent-skill-plugin-update.test.ts`（T14/T15）把语义钉得很细，但**只在 SQLite 上**
+（`createInMemoryDb` + bun:sqlite 同步 `.run()`）。合一之后「两个 provider 共用」这句话本身需要证据，
+于是新增 `tests/rfc359-w8-intent-apply-preflight.test.ts`（`describeEachProvider`，两引擎共 6 pass）：
+不重复 T14/T15 的语义细分，只锁**跨引擎一致性**——占用名集合（大小写归一）、copy-only 目标与拒绝理由、
+六类资源都被问过一遍（空库上是六个空集合而不是缺键）、返回值冻结。
 
 ### 覆盖
 

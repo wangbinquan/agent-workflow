@@ -43,7 +43,13 @@ import type {
   ResourceSummaryRevision,
   VersionedIntentResourceChangesetPlan,
 } from '../../public/types'
-import { CATALOG_SELECTOR_KINDS, type CatalogSelectorKind } from '../../domain/resourceKinds'
+import type { CatalogSelectorKind } from '../../domain/resourceKinds'
+import {
+  resolveIntentApplyResourcePreflight,
+  type IntentApplyChangeset,
+  type IntentApplyManifestEntry,
+  type IntentApplyResourcePreflight,
+} from './intentApplyResourcePreflight'
 import type { ResourceCatalogAclIdentityReadPort } from '../../application/ports/providerResourceCatalogPersistence'
 import { encodeSkillToken } from '../legacy/skillToken'
 import { mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
@@ -425,61 +431,6 @@ export interface LegacyIntentApplyCommitContext {
   }
 }
 
-export interface LegacyIntentApplyManifestEntry {
-  readonly handle: string
-  readonly resourceType: string
-  readonly resourceId: string
-}
-
-export interface LegacyIntentApplyChangeset {
-  readonly ops: ReadonlyArray<{
-    readonly action: string
-    readonly resourceType: string
-    readonly target?: string
-  }>
-}
-
-export interface LegacyIntentApplyResourcePreflight {
-  readonly occupiedNames: ReadonlyMap<CatalogSelectorKind, ReadonlySet<string>>
-  readonly copyOnlyTargets: ReadonlyMap<string, string>
-}
-
-function isCatalogSelectorKind(value: string): value is CatalogSelectorKind {
-  return CATALOG_SELECTOR_KINDS.some((kind) => kind === value)
-}
-
-/**
- * Provider-neutral ownership preflight for one named Intent apply session.
- * Persistence identity stays in the owner adapter; Intent receives only the
- * two closed decisions needed by bundle resolution.
- */
-export async function resolveIntentApplyResourcePreflight(
-  identities: ResourceCatalogAclIdentityReadPort,
-  ownerUserId: string,
-  manifest: readonly LegacyIntentApplyManifestEntry[],
-  changeset: LegacyIntentApplyChangeset,
-): Promise<LegacyIntentApplyResourcePreflight> {
-  const occupiedNames = new Map<CatalogSelectorKind, ReadonlySet<string>>()
-  for (const type of CATALOG_SELECTOR_KINDS) {
-    const names = await identities.listOwnedNames(type, ownerUserId)
-    occupiedNames.set(type, new Set(names.map((name) => name.toLowerCase())))
-  }
-
-  const copyOnlyTargets = new Map<string, string>()
-  const byHandle = new Map(manifest.map((entry) => [entry.handle, entry] as const))
-  for (const op of changeset.ops) {
-    if (op.action !== 'update' || op.target === undefined) continue
-    const entry = byHandle.get(op.target)
-    if (entry === undefined || !isCatalogSelectorKind(entry.resourceType)) continue
-    const resourceOwnerUserId = await identities.getOwner(entry.resourceType, entry.resourceId)
-    if (resourceOwnerUserId !== undefined && resourceOwnerUserId !== ownerUserId) {
-      copyOnlyTargets.set(op.target, 'owned by another user or built-in')
-    }
-  }
-
-  return Object.freeze({ occupiedNames, copyOnlyTargets })
-}
-
 function requireRevisionRow<T>(row: T | undefined, kind: CatalogSelectorKind): T {
   if (row === undefined) throw new NotFoundError(`${kind}-not-found`, `${kind} not found`)
   return row
@@ -577,9 +528,9 @@ export function loadLegacyIntentSkillOperationState(db: DbClient, opId: string) 
 
 export interface LegacyIntentApplyResourceSession {
   preflight(
-    manifest: readonly LegacyIntentApplyManifestEntry[],
-    changeset: LegacyIntentApplyChangeset,
-  ): Promise<LegacyIntentApplyResourcePreflight>
+    manifest: readonly IntentApplyManifestEntry[],
+    changeset: IntentApplyChangeset,
+  ): Promise<IntentApplyResourcePreflight>
   prepare(
     plan: VersionedIntentResourceChangesetPlan,
     context: LegacyIntentApplyPrepareContext,

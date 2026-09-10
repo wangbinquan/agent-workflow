@@ -2,6 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W8 补刀之二 —— Intent apply 归属预检（2026-09-10）**：`resolveIntentApplyResourcePreflight` 与它的三个 interface 在 `resource-catalog/infrastructure/aggregateAdapters/` 的两个适配器里各有一份逐字副本，差别只有类型名上的 `Legacy`/`Postgresql` 前缀——**纯命名分叉**（函数体只经 `ResourceCatalogAclIdentityReadPort` 闭合端口取数，零方言）。抽到同目录的 `intentApplyResourcePreflight.ts`：同 bounded context、同层，**零新增跨上下文边**，`rfc294-module-symbol-owners` 反而 25037 → 25033。§5k 点名的两个跨层靶心至此都已收。
+> 新增 `tests/rfc359-w8-intent-apply-preflight.test.ts`（`describeEachProvider`，两引擎共 6 pass）：既有 T14/T15 把语义钉得细但只在 SQLite 上，这条只锁**跨引擎一致性**（占用名大小写归一、copy-only 目标与理由、六类都问过一遍、返回值冻结）。上一提交的三条 `allowGrowth` 已按一次性契约摘除。
+> 顺带一条老规矩再验证：删掉函数体后两个适配器的 `CATALOG_SELECTOR_KINDS` **值**导入变成死的，`--max-warnings 0` 当场红——**删完要重跑 lint**，别凭记忆判断哪些 import 还活着。机械重复组 23 → 19。
+
 > **RFC-359 W8 补刀 —— provider 孪生体合一（2026-09-10）**：`assertFrozenTaskTriggerPreflight` 在两条 provider 路由路径上的逐字私有副本（只差 `db` 类型标注、函数体是 provider 中立的单行 `tasks` select）收成一份，正典落 `modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`。最省边的落位（`services/execution/triggerPreflight.ts`，+1 边）被 `rfc349-provider-cutover` 的 `databaseMechanismDependencies` 按住——`services/` 面禁持 `@/db/*`/drizzle，守卫是对的，不迁就；改 infrastructure 落位后代价 +6 边 / +5 例外 / +2 符号主，三条一次性 `allowGrowth` 与一条 `commons-debt` 的 `R1-inbound-module-internals` 已逐条登记（随 W4-E 消失）。
 > 新立可复用棘轮账本 `tests/architecture/rfc359-converged-twins.test.ts`（判 AST 不判文本；双向：冒出第二个定义点红、白名单陈旧也红），本轮把已收的 5 对一并补登（本条 + 人工门投影 + retention + `/api/overview` 两条）；实测有牙——临时往 `src/` 塞一份私有副本当场转红。以后再收一对只需追加 ~15 行。
 > 新增双引擎功能测试 `tests/rfc359-w8-frozen-trigger-preflight.test.ts`（`describeEachProvider`，两引擎共 20 pass）：合一前它的 5 条分支只有 1 条（`trigger-context-invalid`，经 retry 端点）有双引擎覆盖，其余 4 条两个引擎都没直测。

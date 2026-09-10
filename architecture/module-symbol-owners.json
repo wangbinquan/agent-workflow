@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1805,
+    "backendFiles": 1806,
     "frontendFiles": 622,
     "legacyFiles": 604,
-    "moduleFiles": 1201,
-    "productionFiles": 2582,
+    "moduleFiles": 1202,
+    "productionFiles": 2583,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25037
+    "symbolsIncludingFileRoots": 25033
   },
   "entries": [
     {
@@ -86767,6 +86767,78 @@
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts#IntentApplyChangeset",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyChangeset",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts#IntentApplyManifestEntry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyManifestEntry",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts#IntentApplyResourcePreflight",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyResourcePreflight",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts#isCatalogSelectorKind",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isCatalogSelectorKind",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts#resolveIntentApplyResourcePreflight",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "resolveIntentApplyResourcePreflight",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#$file",
       "removeAfterWave": null,
@@ -86802,18 +86874,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#isCatalogSelectorKind",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isCatalogSelectorKind",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyArtifact",
@@ -86828,34 +86888,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyChangeset",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LegacyIntentApplyChangeset",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyCommitContext",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "LegacyIntentApplyCommitContext",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyManifestEntry",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LegacyIntentApplyManifestEntry",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -86892,18 +86928,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "LegacyIntentApplyResourceDependencies",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyResourcePreflight",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LegacyIntentApplyResourcePreflight",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -87036,18 +87060,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "requireRevisionRow",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#resolveIntentApplyResourcePreflight",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "resolveIntentApplyResourcePreflight",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -87560,18 +87572,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#isCatalogSelectorKind",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isCatalogSelectorKind",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#missingPreparation",
       "removeAfterWave": null,
       "status": "current-module",
@@ -87608,34 +87608,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#PostgresqlIntentApplyChangeset",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlIntentApplyChangeset",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#PostgresqlIntentApplyCommitContext",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlIntentApplyCommitContext",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#PostgresqlIntentApplyManifestEntry",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlIntentApplyManifestEntry",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -87704,18 +87680,6 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#PostgresqlIntentApplyResourcePreflight",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlIntentApplyResourcePreflight",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#PostgresqlIntentApplyResourceSession",
       "removeAfterWave": null,
       "status": "current-module",
@@ -87756,18 +87720,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ReceiptOf",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#resolvePostgresqlIntentApplyResourcePreflight",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "resolvePostgresqlIntentApplyResourcePreflight",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301147,5 +301099,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:415b7734f5c0e15f360d976b40200e48104ded23247642650a011e14aeb198e1"
+  "sourceDigest": "sha256:fc8f8f2debeebc631d6b3b44cc90a79b46e84ddb83609e440c9a1dbd6259a89f"
 }

@@ -4,8 +4,14 @@ import type {
   VersionedIntentResourceChangesetPlan,
 } from '../../public/types'
 import type { ResourceRequestContext } from '../../public/participants'
-import { CATALOG_SELECTOR_KINDS, type CatalogSelectorKind } from '../../domain/resourceKinds'
+import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { ResourceCatalogAclIdentityReadPort } from '../../application/ports/providerResourceCatalogPersistence'
+import {
+  resolveIntentApplyResourcePreflight,
+  type IntentApplyChangeset,
+  type IntentApplyManifestEntry,
+  type IntentApplyResourcePreflight,
+} from './intentApplyResourcePreflight'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
@@ -127,9 +133,9 @@ export interface PostgresqlIntentApplyResourceTransactionAttempt {
 
 export interface PostgresqlIntentApplyResourceSession {
   preflight(
-    manifest: readonly PostgresqlIntentApplyManifestEntry[],
-    changeset: PostgresqlIntentApplyChangeset,
-  ): Promise<PostgresqlIntentApplyResourcePreflight>
+    manifest: readonly IntentApplyManifestEntry[],
+    changeset: IntentApplyChangeset,
+  ): Promise<IntentApplyResourcePreflight>
   prepare(
     plan: VersionedIntentResourceChangesetPlan,
     context: PostgresqlIntentApplyPrepareContext,
@@ -150,55 +156,6 @@ export interface PostgresqlIntentApplyResourceSession {
 export interface PostgresqlIntentApplyResourceSessionOptions {
   readonly actor: DirectAuthenticatedAuthority
   readonly authority: ResourceRequestContext
-}
-
-export interface PostgresqlIntentApplyManifestEntry {
-  readonly handle: string
-  readonly resourceType: string
-  readonly resourceId: string
-}
-
-export interface PostgresqlIntentApplyChangeset {
-  readonly ops: ReadonlyArray<{
-    readonly action: string
-    readonly resourceType: string
-    readonly target?: string
-  }>
-}
-
-export interface PostgresqlIntentApplyResourcePreflight {
-  readonly occupiedNames: ReadonlyMap<CatalogSelectorKind, ReadonlySet<string>>
-  readonly copyOnlyTargets: ReadonlyMap<string, string>
-}
-
-function isCatalogSelectorKind(value: string): value is CatalogSelectorKind {
-  return CATALOG_SELECTOR_KINDS.some((kind) => kind === value)
-}
-
-async function resolvePostgresqlIntentApplyResourcePreflight(
-  identities: ResourceCatalogAclIdentityReadPort,
-  ownerUserId: string,
-  manifest: readonly PostgresqlIntentApplyManifestEntry[],
-  changeset: PostgresqlIntentApplyChangeset,
-): Promise<PostgresqlIntentApplyResourcePreflight> {
-  const occupiedNames = new Map<CatalogSelectorKind, ReadonlySet<string>>()
-  for (const type of CATALOG_SELECTOR_KINDS) {
-    const names = await identities.listOwnedNames(type, ownerUserId)
-    occupiedNames.set(type, new Set(names.map((name) => name.toLowerCase())))
-  }
-
-  const copyOnlyTargets = new Map<string, string>()
-  const byHandle = new Map(manifest.map((entry) => [entry.handle, entry] as const))
-  for (const op of changeset.ops) {
-    if (op.action !== 'update' || op.target === undefined) continue
-    const entry = byHandle.get(op.target)
-    if (entry === undefined || !isCatalogSelectorKind(entry.resourceType)) continue
-    const resourceOwnerUserId = await identities.getOwner(entry.resourceType, entry.resourceId)
-    if (resourceOwnerUserId !== undefined && resourceOwnerUserId !== ownerUserId) {
-      copyOnlyTargets.set(op.target, 'owned by another user or built-in')
-    }
-  }
-  return Object.freeze({ occupiedNames, copyOnlyTargets })
 }
 
 function missingPreparation(plan: VersionedIntentResourceChangesetPlan): Error {
@@ -236,7 +193,7 @@ export function createPostgresqlIntentApplyResourceSession<
 
   const session: PostgresqlIntentApplyResourceSession = {
     preflight(manifest, changeset) {
-      return resolvePostgresqlIntentApplyResourcePreflight(
+      return resolveIntentApplyResourcePreflight(
         identities,
         options.actor.user.id,
         manifest,

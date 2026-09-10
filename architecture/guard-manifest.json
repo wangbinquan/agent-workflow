@@ -1741,7 +1741,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 235
+      "lines": 248
     },
     {
       "id": "rfc359-sync-transaction-highwater",
@@ -2042,6 +2042,18 @@
       "negativeFixture": false,
       "classified": true,
       "lines": 202
+    },
+    {
+      "id": "rfc359-w8-intent-apply-preflight",
+      "file": "packages/backend/tests/rfc359-w8-intent-apply-preflight.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 150
     },
     {
       "id": "rfc359-w8-t29-unnormalized-unique-insert",
@@ -2453,14 +2465,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:415b7734f5c0e15f360d976b40200e48104ded23247642650a011e14aeb198e1",
+    "sourceDigest": "sha256:fc8f8f2debeebc631d6b3b44cc90a79b46e84ddb83609e440c9a1dbd6259a89f",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "302418f259cdd95133c3a7f5589c30ce73827caa",
-    "contentDigest": "sha256:e79209d05f01e2b26f3d869679b193b66bceb5f3d9752e9fdda1403adf70d41c",
+    "currentSnapshotSha": "1d3340a22d5a3dfdae2514d5e5456e23dacf593b",
+    "contentDigest": "sha256:e6f4138106398b525aea69c3a3d393678456debb31e4a057af9432e3978c76cb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
