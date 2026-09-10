@@ -12,6 +12,14 @@ const portsPath = join(
   'src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts',
 )
 const compositionPath = join(root, 'src/modules/resource-catalog/composition/intentApply.ts')
+// RFC-359 W8：归属预检的两份 provider 副本（只差类型名前缀）合一到这里。**锚点跟着实现走**
+// ——这两条断言原本打在 participant 文件里那段被抄了两份的函数体上；实现搬家后，继续钉旧位置
+// 只会得到一个恒假（红）或恒真（更糟：默默失效）的断言。participant 那侧改钉「确实把预检委托
+// 给了唯一那份实现」，判据本身钉在唯一那份实现上。
+const preflightPath = join(
+  root,
+  'src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight.ts',
+)
 
 describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
   test('binds six exhaustive mutations to the caller-owned transaction', () => {
@@ -59,9 +67,15 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     const source = readFileSync(participantPath, 'utf8')
     const ports = readFileSync(portsPath, 'utf8')
 
+    const preflight = readFileSync(preflightPath, 'utf8')
+
     expect(source).toContain('preflight(')
-    expect(source).toContain('listOwnedNames(type, ownerUserId)')
-    expect(source).toContain('getOwner(entry.resourceType, entry.resourceId)')
+    // participant 只负责把会话的 actor 交给唯一那份预检，不再自带一份判据。
+    expect(source).toContain('return resolveIntentApplyResourcePreflight(')
+    expect(source).toContain('options.actor.user.id')
+    // 判据本体：占用名按 kind 全量取、copy-only 按 manifest 行的真实 owner 判。
+    expect(preflight).toContain('listOwnedNames(type, ownerUserId)')
+    expect(preflight).toContain('getOwner(entry.resourceType, entry.resourceId)')
     expect(source).toContain('recordArtifact(artifact: PostgresqlIntentApplyArtifact)')
     expect(source).toContain('rollForwardCommitted?')
     expect(source).toContain('abortPrepared?')
