@@ -26,9 +26,13 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -40,7 +44,6 @@ import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 // seal + auto-dispatch), which creates + dispatches the questioner AND designer entries itself and
 // mints the 承接 rerun(s) — no hand-seeded dispatched entries needed.
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
 
@@ -49,7 +52,7 @@ const actor = { userId: 'u1', role: 'owner' as const }
 // exercise) is now minted by reassigning the answered round's questioner card to the graph designer
 // node + dispatching that designer entry; buildClarifyQueueContext then injects its Q&A on rerun.
 async function reassignThenDispatchDesigner(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   intermediaryNodeRunId: string,
 ) {
@@ -66,14 +69,15 @@ async function reassignThenDispatchDesigner(
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-sched-cross-clarify-'))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -91,9 +95,10 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -101,7 +106,11 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, outputs: string[] = ['main']): Promise<void> {
+async function seedAgent(
+  db: ProviderNeutralDatabase,
+  name: string,
+  outputs: string[] = ['main'],
+): Promise<void> {
   await db.insert(agents).values({
     id: `agent-${name}`,
     name,
@@ -138,6 +147,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { taskId }
 }
@@ -226,12 +243,28 @@ function defaultDef(): WorkflowDefinition {
 // cross-clarify round of several exceeds the default 5s. 60s headroom (POSIX unaffected).
 setDefaultTimeout(60_000)
 
-describe('RFC-056 scheduler cross-clarify dispatch', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('questioner agent emits clarify → task awaiting_human, cross_clarify_session created, questioner node_run done', async () => {
     await seedAgent(h.db, 'designer', ['design'])
@@ -785,6 +818,10 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
       'CCQ_TITLE_MARKER_为何',
     )
   })
+}
+
+describeEachProvider('RFC-056 scheduler cross-clarify dispatch', (provider) => {
+  describe('runtime fixture', () => registerProviderCases1(provider))
 })
 
 // RFC-056 A16 (completed) — the scheduler now honors the cross-clarify node's
@@ -795,12 +832,28 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
 // isolated → no `--session`. Building blocks (resolveCrossClarifySessionMode +
 // the RFC-026 fallback) are unit-tested in cross-clarify-inline-fallback.test.ts;
 // this locks the scheduler WIRING end-to-end.
-describe('RFC-056 A16 — cross-clarify questioner inline session resume', () => {
+function registerProviderCases2(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   // input → questioner → cross1 → designer (external feedback). The questioner
   // asks; the user answers with stop; the questioner stop-rerun
@@ -986,6 +1039,10 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
     expect(rerun.argv).toContain('--session')
     expect(rerun.argv[rerun.argv.indexOf('--session') + 1]).toBe('opc_Q0')
   })
+}
+
+describeEachProvider('RFC-056 A16 — cross-clarify questioner inline session resume', (provider) => {
+  describe('runtime fixture', () => registerProviderCases2(provider))
 })
 
 describe('RFC-217 T9 跟修（Codex impl-gate P2-3）— 调度器尊重短路裁决', () => {

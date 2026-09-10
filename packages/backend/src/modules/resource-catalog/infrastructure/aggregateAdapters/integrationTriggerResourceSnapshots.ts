@@ -5,7 +5,7 @@
 // integration owners. RFC-359 W4-D1：一份实现，两个 provider 共用——每一次 ACL 与内容读取都绑定到
 // Integration owner 交来的那一个事务句柄与那一对已准入的 authority。
 
-import type { AclResourceType, Agent, WorkflowDetail, Workgroup } from '@agent-workflow/shared'
+import type { AclResourceType } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
@@ -23,13 +23,11 @@ import type { ResourceRequestContext } from '../../public/participants'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
-  TaskExecutionAgentSnapshot,
-  TaskExecutionWorkflowSnapshot,
-  TaskExecutionWorkgroupSnapshot,
 } from '../../public/types'
 import { agentFromPersistenceRow } from '../agentPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
+import { agentSnapshot, workflowSnapshot, workgroupSnapshot } from './resourceSnapshotProjection'
 
 export interface IntegrationTriggerResourceDependencies {
   readonly assertNotBuiltin: (
@@ -43,60 +41,6 @@ export interface IntegrationTriggerResourceSnapshotReader {
     authority: ResourceRequestContext,
     requests: readonly IntegrationTriggerResourceRequest[],
   ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]>
-}
-
-function workflowSnapshot(workflow: WorkflowDetail): TaskExecutionWorkflowSnapshot {
-  return Object.freeze({
-    id: workflow.id,
-    name: workflow.name,
-    version: workflow.version,
-    definition: workflow.definition,
-  })
-}
-
-function agentSnapshot(agent: Agent): TaskExecutionAgentSnapshot {
-  return Object.freeze({
-    id: agent.id,
-    name: agent.name,
-    description: agent.description,
-    outputs: agent.outputs,
-    outputKinds: agent.outputKinds,
-    branchPorts: agent.branchPorts,
-    inputs: agent.inputs,
-    outputWrapperPortNames: agent.outputWrapperPortNames,
-    role: agent.role,
-    syncOutputsOnIterate: agent.syncOutputsOnIterate,
-    runtime: agent.runtime,
-    permission: agent.permission,
-    skills: agent.skills,
-    dependsOn: agent.dependsOn,
-    mcp: agent.mcp,
-    plugins: agent.plugins,
-    frontmatterExtra: agent.frontmatterExtra,
-    bodyMd: agent.bodyMd,
-    schemaVersion: agent.schemaVersion,
-    createdAt: agent.createdAt,
-    updatedAt: agent.updatedAt,
-  })
-}
-
-function workgroupSnapshot(workgroup: Workgroup): TaskExecutionWorkgroupSnapshot {
-  return Object.freeze({
-    id: workgroup.id,
-    name: workgroup.name,
-    description: workgroup.description,
-    instructions: workgroup.instructions,
-    mode: workgroup.mode,
-    outputContract: workgroup.outputContract,
-    leaderMemberId: workgroup.leaderMemberId,
-    switches: workgroup.switches,
-    maxRounds: workgroup.maxRounds,
-    completionGate: workgroup.completionGate,
-    clarifyBudget: workgroup.clarifyBudget,
-    fanOut: workgroup.fanOut,
-    members: workgroup.members,
-    version: workgroup.version,
-  })
 }
 
 async function canView(

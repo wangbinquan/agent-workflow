@@ -26,24 +26,28 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-sched-midbatch-'))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -61,9 +65,10 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -71,7 +76,11 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
+async function seedAgent(
+  db: ProviderNeutralDatabase,
+  name: string,
+  outputs: string[],
+): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
@@ -110,6 +119,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { taskId }
 }
@@ -129,12 +146,28 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('runScope — mid-batch rescan + no-fail-fast (RFC-023 bug 13)', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('rescan picks up a pending row minted between the first agent batch and the scheduler stall check', async () => {
     // Single-agent scope: input → agent. The agent runs once and is done.
@@ -316,4 +349,8 @@ describe('runScope — mid-batch rescan + no-fail-fast (RFC-023 bug 13)', () => 
     // 无负载下 3 跑红 2，且在 RFC-287 迁移**之前**（443ba01e）就是这样，与迁移无关。
     // 按仓规「flaky 不能掩盖红 case」：不靠重跑，给它与同文件另一条同档的显式预算。
   }, 20_000)
+}
+
+describeEachProvider('runScope — mid-batch rescan + no-fail-fast (RFC-023 bug 13)', (provider) => {
+  describe('runtime fixture', () => registerProviderCases1(provider))
 })

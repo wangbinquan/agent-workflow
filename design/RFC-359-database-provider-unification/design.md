@@ -20,6 +20,15 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W55 task execution与integration trigger两个读取owner共用三份完整资源快照投影；
+  原7处调用不变，全部字段按原顺序读取，保留新对象、浅冻结、嵌套引用和getter错误传播。
+  SQLite迁移器、写入重试和committed-event解释器三个真实引擎原语只归位platform/persistence，
+  原函数body、导出及运行合同保持；provider文件计数变化与业务逻辑合一分别记录。
+  澄清链路从原nodeMechanics已有的executionContext接入mechanics common与CreateRoundCommon，
+  显式输入优先并以??保留ambient回退，原调用时序、业务测试输入及预算保持。
+  新增双库注册复用原fixture及生命周期，14个保留例继续单次执行；纯端口控制不替代真实PG运行。
+  W55发布后停止新增RFC批次，仅跟进流水线修复与exact-SHA验证，原验收目标及开放项保持。
+
 - W54 runtime-registry在composition层只保留一个接收ProviderNeutralDatabase的同步factory，
   每次仍构造原Drizzle持久化对象并传给原service factory；19个调用的数据库实参、惰性fallback、
   返回与错误传播保持。两个provider名称不再作为导出别名保留，底层注册业务、查询和事务不变。

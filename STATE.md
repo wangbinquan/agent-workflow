@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第五十五批（2026-09-10）**：14个旧测试文件保65个原声明/339 matcher；51个DB声明/278 matcher接默认双库，14个原例/61 matcher继续单次执行，全部原预算保持。9次构库调用及8个构库文件退役，T19f664→656；实测1968测试文件、573构库文件/1131调用、483无harness/547有harness，入口计数不等于剩余普通迁移量。
+> 两个资源读取owner的三对完整快照投影收为一份同步实现，7个原调用与全部原字段、浅冻结及错误传播保持；新纯回归3 pass/291 expect。3个真实SQLite原语移入platform/persistence，原函数body及导出保持，T17 provider文件计数59→56；该落位变化不计作业务实现合一。
+> W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34 success/6 failure、13后端10过3红；主2368身份全出现，2353过/15个新PG红，原2227全过，新PG43中28过15红。两OS各1966测试文件完整，独立2/2及原hook18/18、原RFC259两OS通过，两个原Playwright身份在两OS首次通过。
+> 15个新PG澄清失败已定位executionContext在既有调用链转交时丢失：原nodeMechanics三处已有输入，mechanics common与CreateRoundCommon未接全。本批两生产文件补显式转交及显式值??ambient回退，原15测试、输入断言及预算保持。实际完整函数配fake ports，原4过2红/32 expect→修后6 pass/60 expect；只证明上下文字段转交，真实修复待新SHA托管。
+> 本批新增2个测试文件/9个纯例。首轮编译遗漏beforeEach import的失败收据保留；补回后最终39core backend编译通过且候选稳定，相关metadata63 pass/111 expect、canonical13 pass/55 expect通过，13份生成投影已刷新。范围lint/format及原函数纯控制通过。W54原full34433823331仍在唯一watcher跟踪，最新已核性能结论仍为W52两项绝对失败、六PG端点相对较慢，原判据不变。
+> 按用户要求，W55发布后停止新增RFC实施批次，后续只处理流水线失败及其验证。RFC-359仍为In Progress；AC-1/6/8/9/11/12继续开放，本地受控通过不替代新SHA真实业务或完整CI通过。
+
 > **RFC-359 W12 第五十四批（2026-09-10）**：12个旧测试文件保留44个原声明/236 matcher，42个DB声明/232 matcher接默认双库，原kind循环展开43个DB运行身份；2个纯例/4 matcher继续单次执行，全部原预算保持。实测1966测试文件、581构库文件/1140调用、497无harness/533有harness；12个构库文件退役，T19f及账本676→664。
 > runtime-registry两个逐字相同的装配body收为一个中立factory，19个实际调用只换callee/import；W29保8个原完整call与9个digest，旧锁真实红后8 pass/46 expect，纯构造18份受控记录/129个Node断言通过。provider命名文件计数保持，下层注册业务和查询原样。
 > 性能切片只把每request的CPU诊断改用真实bun:jsc.profile、100us采样，移除整进程采样旗标；正式bench/corpus/seed/comparator四文件保持。Bun1.3.13实际接口5 pass/112 expect、Node受控36 request/36 EXPLAIN通过，真实原full规模采样仍待托管。

@@ -7,7 +7,10 @@ import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { resolve } from 'node:path'
-import { migrateSqlite, rewriteLegacyOrderedJsonAggregates } from '../src/db/sqliteMigrator'
+import {
+  migrateSqlite,
+  rewriteLegacyOrderedJsonAggregates,
+} from '../src/platform/persistence/sqliteMigrator'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

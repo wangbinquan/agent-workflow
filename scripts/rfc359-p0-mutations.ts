@@ -649,7 +649,7 @@ const sourceFiles = [
   'packages/backend/src/platform/events/committed/append.ts',
   'packages/backend/src/platform/events/committed/appendProgram.ts',
   'packages/backend/src/platform/events/committed/appendShared.ts',
-  'packages/backend/src/platform/events/committed/sqliteStore.ts',
+  'packages/backend/src/platform/persistence/sqliteCommittedEventStore.ts',
   'packages/backend/src/services/orphanReconcile.ts',
   'packages/backend/src/services/orphans.ts',
   'packages/backend/src/services/autoRepair.ts',

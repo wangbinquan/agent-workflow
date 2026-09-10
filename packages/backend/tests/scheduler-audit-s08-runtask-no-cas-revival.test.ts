@@ -30,8 +30,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
 // 同毫秒多次 ulid() 的随机分量可逆序；monotonicFactory 保证后铸 id 恒更大
@@ -41,15 +47,18 @@ const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-interface Harness {
-  db: DbClient
+interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+  db: TDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+function buildHarness(): Promise<Harness<DbClient>>
+function buildHarness(provider: ProviderHarness): Promise<Harness>
+async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-audit-s08-'))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -67,9 +76,10 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
   return {
     db,
+    postgresql: provider?.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -122,21 +132,36 @@ async function seedTaskWithStatus(
     inputs: JSON.stringify({ req: 'hello' }),
     startedAt: Date.now(),
     ...extra,
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
 
-async function invokeRunTask(h: Harness, taskId: string): Promise<void> {
-  await runTask({
-    taskId,
-    db: h.db,
-    appHome: h.appHome,
-    binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-  })
+function bindInvokeRunTask<TDatabase extends ProviderNeutralDatabase>(
+  runTask: (
+    options: Parameters<ProviderTaskExecutionTestTopology['runTask']>[0] & { db: TDatabase },
+  ) => Promise<void>,
+) {
+  return async function invokeRunTask(h: Harness<TDatabase>, taskId: string): Promise<void> {
+    await runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+    })
+  }
 }
 
-describe('RFC-097 guard: runTask entry CAS (allowedFrom={pending}) — no revival, no takeover', () => {
-  let h: Harness
+function registerNativeCases1() {
+  let h: Harness<DbClient>
+  const invokeRunTask = bindInvokeRunTask<DbClient>(runTask)
   beforeEach(async () => {
     h = await buildHarness()
   })
@@ -193,6 +218,36 @@ describe('RFC-097 guard: runTask entry CAS (allowedFrom={pending}) — no reviva
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(runs.length).toBe(0)
   })
+}
+
+describe(
+  'RFC-097 guard: runTask entry CAS (allowedFrom={pending}) — no revival, no takeover',
+  registerNativeCases1,
+)
+
+function registerProviderCases2(provider: ProviderHarness) {
+  let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  const invokeRunTask = bindInvokeRunTask<ProviderNeutralDatabase>(runTask)
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
+  })
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('positive control: pending task is claimed and driven to done (2 virtual node_runs)', async () => {
     // 证明上面三条的"零行 / 状态不变"不是 harness 失效的空洞绿：
@@ -211,4 +266,11 @@ describe('RFC-097 guard: runTask entry CAS (allowedFrom={pending}) — no reviva
     expect(runs.map((r) => r.nodeId).sort()).toEqual(['in', 'out'])
     expect(runs.every((r) => r.status === 'done')).toBe(true)
   })
-})
+}
+
+describeEachProvider(
+  'RFC-097 guard: runTask entry CAS (allowedFrom={pending}) — no revival, no takeover',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases2(provider))
+  },
+)

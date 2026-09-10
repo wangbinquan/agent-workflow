@@ -3,7 +3,7 @@ import {
   retrySqliteWrite,
   sqliteWriteDiagnostic,
   type SqliteWriteRetryInfo,
-} from '../src/db/sqliteWriteRetry'
+} from '../src/platform/persistence/sqliteWriteRetry'
 
 function sqliteError(code: string, message: string, cause?: unknown): Error & { code: string } {
   const error = new Error(message, cause === undefined ? undefined : { cause }) as Error & {

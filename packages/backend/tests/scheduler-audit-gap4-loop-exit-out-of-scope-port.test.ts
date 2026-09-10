@@ -18,8 +18,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
 const ulid = monotonicFactory()
@@ -30,8 +35,9 @@ const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencod
 // "read the latest value" semantics 5 < 3 is false on EVERY iteration.
 const FINDINGS = 'f1\nf2\nf3\nf4\nf5'
 
-interface Harness {
-  db: DbClient
+interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+  db: TDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   stateDir: string
@@ -43,7 +49,9 @@ function agentId(name: string): string {
   return `agent-${name}`
 }
 
-function buildHarness(): Harness {
+function buildHarness(): Harness<DbClient>
+function buildHarness(provider: ProviderHarness): Harness
+function buildHarness(provider?: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap4-loop-exit-'))
   const worktreePath = join(appHome, 'wt')
   const stateDir = join(appHome, 'scenario-state')
@@ -57,9 +65,10 @@ function buildHarness(): Harness {
       worker: [{ output: { out: 'iter-result' } }],
     }),
   )
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
   return {
     db,
+    postgresql: provider?.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     stateDir,
@@ -68,7 +77,11 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
+async function seedAgent(
+  db: ProviderNeutralDatabase,
+  name: string,
+  outputs: string[],
+): Promise<void> {
   await db.insert(agents).values({
     id: agentId(name),
     name,
@@ -140,6 +153,14 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
     status: 'pending',
     inputs: '{}',
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -159,8 +180,8 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', () => {
-  let h: Harness
+function registerNativeCases1() {
+  let h: Harness<DbClient>
   beforeEach(() => {
     h = buildHarness()
   })
@@ -193,6 +214,32 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
       'wrapper-loop-output-binding-out-of-scope',
     ])
   })
+}
+
+describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', registerNativeCases1)
+
+function registerProviderCases2(provider: ProviderHarness) {
+  let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
+  })
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   // 15s is a WALL-CLOCK allowance, not tolerance for this test getting slower
   // (`gate:local` runs four shards in parallel; see docs/dev-gotchas.md on the
@@ -224,4 +271,11 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'worker')))
     expect(workerRuns).toHaveLength(0)
   }, 15_000)
-})
+}
+
+describeEachProvider(
+  'gap4 — wrapper-loop exitCondition referencing an out-of-loop node',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases2(provider))
+  },
+)

@@ -11,7 +11,7 @@ import {
   assertPhysicalSchema,
   readExpectedMigrationChain,
 } from './schemaAdmission'
-import { migrateSqlite } from './sqliteMigrator'
+import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
 
 export type DbClient = ReturnType<typeof drizzle<typeof schema>>

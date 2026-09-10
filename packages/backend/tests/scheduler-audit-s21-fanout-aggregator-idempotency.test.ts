@@ -31,8 +31,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // Same-ms ULID ordering guard (precedent: scheduler-clarify-dispatch.test.ts:33-40):
@@ -52,20 +57,24 @@ const WRAPPER_MECHANICS_SRC = resolve(
   'wrapperMechanics.ts',
 )
 
-interface Harness {
-  db: DbClient
+interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+  db: TDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(): Harness<DbClient>
+function buildHarness(provider: ProviderHarness): Harness
+function buildHarness(provider?: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-audit-s21-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
   return {
     db,
+    postgresql: provider?.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
@@ -73,7 +82,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
@@ -119,6 +128,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -186,12 +203,28 @@ function fanoutWithAggregatorDef(): WorkflowDefinition {
   }
 }
 
-describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (regression lock)', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   // ---------------------------------------------------------------------------
   // ① 重启恢复：shard 子行被复用（不重跑），aggregator 残留的 interrupted
@@ -323,6 +356,21 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
       .where(eq(nodeRunOutputs.nodeRunId, wrapperRunId))
     expect(wrapperOuts.find((o) => o.portName === 'final')?.content).toBe('AGG')
   }, 60_000)
+}
+
+describeEachProvider(
+  'scheduler-audit S-21 — fanout aggregator idempotency + done-filter (regression lock)',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases1(provider))
+  },
+)
+
+function registerNativeCases2() {
+  let h: Harness<DbClient>
+  beforeEach(() => {
+    h = buildHarness()
+  })
+  afterEach(() => h.cleanup())
 
   // ---------------------------------------------------------------------------
   // ② 源码文本兜底（正向形态）：聚合输入挑行必须走共享的 done-filter +
@@ -375,4 +423,9 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
     const shardBody = src.slice(shardStart, start)
     expect(shardBody).toContain('pickReusableShardRun(candidates, {')
   })
-})
+}
+
+describe(
+  'scheduler-audit S-21 — fanout aggregator idempotency + done-filter (regression lock)',
+  registerNativeCases2,
+)

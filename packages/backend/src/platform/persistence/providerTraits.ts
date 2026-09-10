@@ -15,7 +15,7 @@
 // declared without answering every field here.
 
 import { postgresqlSerializationFailureCode } from '@/platform/persistence/postgresqlSerializationRetry'
-import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
+import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 
 import { type DatabaseProvider } from './databaseProviders'
 

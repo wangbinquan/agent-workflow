@@ -16,10 +16,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -27,7 +31,6 @@ import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
 const P = 'P'
@@ -47,13 +50,14 @@ function ans(qid: string, idx: number, label: string) {
 }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
   cleanup: () => void
 }
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-t5-'))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -67,9 +71,10 @@ async function buildHarness(): Promise<Harness> {
     await runGit(p, ['add', '.'])
     await runGit(p, ['commit', '-m', 'init'])
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -90,14 +95,6 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
     }
   })
 }
-const run = (h: Harness, taskId: string) =>
-  runTask({
-    taskId,
-    db: h.db,
-    appHome: h.appHome,
-    binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-    defaultNodeRetries: 0,
-  })
 
 async function selfEntryId(h: Harness, taskId: string, originNodeRunId: string): Promise<string> {
   const rows = await h.db
@@ -113,15 +110,37 @@ async function selfEntryId(h: Harness, taskId: string, originNodeRunId: string):
   return rows[0]!.id
 }
 
-describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老化累积)', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  const run = (h: Harness, taskId: string) =>
+    runTask({
+      taskId,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+      defaultNodeRetries: 0,
+    })
   beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
     resetBroadcastersForTests()
-    h = await buildHarness()
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => {
-    h.cleanup()
-    resetBroadcastersForTests()
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+      resetBroadcastersForTests()
+    }
   })
 
   // docs/dev-gotchas.md — a two-round scheduler e2e: it rests near bun's 5000ms
@@ -193,6 +212,14 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
       status: 'pending',
       inputs: JSON.stringify({ req: 'build dashboard' }),
       startedAt: Date.now(),
+      ...(h.postgresql
+        ? {
+            executionLineageId: taskId,
+            lineageSlotPathJson: JSON.stringify([
+              { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+            ]),
+          }
+        : {}),
     })
 
     // ---- ROUND 1: P 问 ----
@@ -264,4 +291,11 @@ describe('RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老�
     expect(prompt).toContain('ROUND2_LANGUAGE_Q')
     expect(prompt).not.toContain('### Round')
   }, 30_000)
-})
+}
+
+describeEachProvider(
+  'RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e (派生老化累积)',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases1(provider))
+  },
+)

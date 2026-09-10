@@ -10,14 +10,14 @@ import {
   appendCommittedEventProgram,
   changeCommittedEventCutoverProgram,
   readCommittedEventCutoverProgram,
-} from './appendProgram'
+} from '@/platform/events/committed/appendProgram'
 import type {
   AppendCommittedEventInput,
   AppendCommittedEventReceipt,
   CommittedEventCutover,
   CommittedEventFamily,
   CommittedEventProducer,
-} from './types'
+} from '@/platform/events/committed/types'
 
 export function readCommittedEventCutoverTx(
   tx: DbTxSync,

@@ -4,7 +4,7 @@
 // 的 `appendCommittedEventTx`。其余 dbTxSync 调用方迁到 `DatabaseSession` 后本文件删除。
 
 import type { DbTxSync } from '@/db/txSync'
-import { appendCommittedEventTx } from '@/platform/events/committed/sqliteStore'
+import { appendCommittedEventTx } from '@/platform/persistence/sqliteCommittedEventStore'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import {
   taskCreatedCommittedEventInput,

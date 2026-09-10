@@ -11,23 +11,32 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { runGit } from '../src/util/git'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-interface Harness {
-  db: DbClient
+interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+  db: TDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+function buildHarness(): Promise<Harness<DbClient>>
+function buildHarness(provider: ProviderHarness): Promise<Harness>
+async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-sched-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
@@ -40,9 +49,10 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, '.seed'), 'seed\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
   return {
     db,
+    postgresql: provider?.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
@@ -50,7 +60,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[] = ['summary'],
 ): Promise<string> {
@@ -109,6 +119,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { workflowId, taskId }
 }
@@ -132,12 +150,28 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 // a loop/merge of several exceeds the default 5s. 60s headroom (POSIX unaffected).
 setDefaultTimeout(60_000)
 
-describe('runTask: linear DAG (M1)', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('input -> agent-single happy path', async () => {
     await seedAgent(h.db, 'auditor', ['findings'])
@@ -335,6 +369,18 @@ describe('runTask: linear DAG (M1)', () => {
     expect(t?.failedNodeId).toBe('a1')
     expect(t?.errorMessage).toContain('exited with code 5')
   })
+}
+
+describeEachProvider('runTask: linear DAG (M1)', (provider) => {
+  describe('runtime fixture', () => registerProviderCases1(provider))
+})
+
+function registerNativeCases2() {
+  let h: Harness<DbClient>
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+  afterEach(() => h.cleanup())
 
   test('output nodes mint a virtual done node_run + snapshot bound port content', async () => {
     // RFC-053 T3 alignment (see lifecycleInvariants.ts §T3). Previously the
@@ -443,6 +489,32 @@ describe('runTask: linear DAG (M1)', () => {
     )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('canceled')
+  })
+}
+
+describe('runTask: linear DAG (M1)', registerNativeCases2)
+
+function registerProviderCases3(provider: ProviderHarness) {
+  let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
+  })
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
   })
 
   test('multiple edges to same target port are concatenated', async () => {
@@ -775,14 +847,34 @@ process.exit(0)
       expect(r?.mergeState).toBe('merged')
     }
   })
+}
+
+describeEachProvider('runTask: linear DAG (M1)', (provider) => {
+  describe('runtime fixture', () => registerProviderCases3(provider))
 })
 
-describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
+function registerProviderCases4(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('loop exits on iteration 0 when port-empty satisfied', async () => {
     await seedReadonlyAgent(h.db, 'auditor', ['findings'])
@@ -1161,9 +1253,17 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
     expect(wgRuns[0]?.status).toBe('done')
     expect(wgRuns[0]?.iteration).toBe(0)
   })
+}
+
+describeEachProvider('runTask: loop wrapper (M4 P-4-01 / P-4-03)', (provider) => {
+  describe('runtime fixture', () => registerProviderCases4(provider))
 })
 
-async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
+async function seedReadonlyAgent(
+  db: ProviderNeutralDatabase,
+  name: string,
+  outputs: string[],
+): Promise<string> {
   const id = ulid()
   await db.insert(agents).values({
     id,

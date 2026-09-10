@@ -176,6 +176,8 @@ const frameIs = (containerRunId: string | null) =>
 interface CreateRoundCommon {
   db: ProviderNeutralDatabase
   taskId: string
+  /** Preserve the running task's context across runtime callbacks. */
+  executionContext?: TaskExecutionContextRef
   /** Asking agent node id (self: source agent; cross: questioner). */
   askingNodeId: string
   /** node_runs.id of the asking agent's run. */
@@ -381,7 +383,7 @@ export async function createClarifyRound(
   )
   const committedHere = prepared.kind === 'prepared'
   if (committedHere) {
-    const executionContext = currentTaskExecutionContext(args.taskId)
+    const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
     await humanGateComposition.parkPreparedHumanGate({
       db: args.db,
       prepared: prepared.prepared,

@@ -69,7 +69,7 @@ import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
-import { migrateSqlite } from '@/db/sqliteMigrator'
+import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 
 const MIGRATIONS_FOLDER = resolve(import.meta.dir, '..', '..', 'db', 'migrations')

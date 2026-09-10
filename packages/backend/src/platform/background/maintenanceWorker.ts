@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { createTokenCallAudit } from '@/auth/composition'
 import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { openDb, type DbClient } from '@/db/client'
-import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
+import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 import {
   composePostgresqlIntentMaintenanceCommandsForAppHome,
   composeSqliteIntentMaintenanceCommandsForAppHome,

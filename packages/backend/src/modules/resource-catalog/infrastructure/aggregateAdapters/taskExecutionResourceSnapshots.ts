@@ -13,14 +13,7 @@
 // 事务由 task-execution 侧的 `snapshotRead` 打开（PG: REPEATABLE READ READ ONLY；
 // SQLite: BEGIN IMMEDIATE，与合一前 `dbTxSync` 同一条边界），闭包递归取数全绑在那一笔上。
 
-import type {
-  AclResourceType,
-  Agent,
-  Mcp,
-  Plugin,
-  WorkflowDetail,
-  Workgroup,
-} from '@agent-workflow/shared'
+import type { AclResourceType, Agent, Mcp, Plugin } from '@agent-workflow/shared'
 import { asc, eq, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
@@ -32,12 +25,12 @@ import { mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginFromPersistenceRow } from '../pluginPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
+import { agentSnapshot, workflowSnapshot, workgroupSnapshot } from './resourceSnapshotProjection'
 import { canViewResourceForTx } from '../resourceAclTransaction'
 import type { TaskExecutionResourceSnapshotPorts } from '../../application/participants/taskExecutionResourceSnapshot'
 import type { ResourceRequestContext } from '../../public/participants'
 import type {
   FrozenTaskExecutionResourceSnapshot,
-  TaskExecutionAgentSnapshot,
   TaskExecutionMcpSnapshot,
   TaskExecutionPluginSnapshot,
   TaskExecutionResourceRequest,
@@ -92,41 +85,6 @@ export interface TaskExecutionResourceOptions {
   readonly actor: Actor
 }
 
-function workflowSnapshot(workflow: WorkflowDetail): TaskExecutionWorkflowSnapshot {
-  return Object.freeze({
-    id: workflow.id,
-    name: workflow.name,
-    version: workflow.version,
-    definition: workflow.definition,
-  })
-}
-
-function agentSnapshot(agent: Agent): TaskExecutionAgentSnapshot {
-  return Object.freeze({
-    id: agent.id,
-    name: agent.name,
-    description: agent.description,
-    outputs: agent.outputs,
-    outputKinds: agent.outputKinds,
-    branchPorts: agent.branchPorts,
-    inputs: agent.inputs,
-    outputWrapperPortNames: agent.outputWrapperPortNames,
-    role: agent.role,
-    syncOutputsOnIterate: agent.syncOutputsOnIterate,
-    runtime: agent.runtime,
-    permission: agent.permission,
-    skills: agent.skills,
-    dependsOn: agent.dependsOn,
-    mcp: agent.mcp,
-    plugins: agent.plugins,
-    frontmatterExtra: agent.frontmatterExtra,
-    bodyMd: agent.bodyMd,
-    schemaVersion: agent.schemaVersion,
-    createdAt: agent.createdAt,
-    updatedAt: agent.updatedAt,
-  })
-}
-
 function mcpSnapshot(mcp: Mcp): TaskExecutionMcpSnapshot {
   return Object.freeze({
     id: mcp.id,
@@ -151,25 +109,6 @@ function pluginSnapshot(plugin: Plugin): TaskExecutionPluginSnapshot {
       ? plugin.cachedPath
       : `file://${plugin.cachedPath}`,
     resolvedVersion: plugin.resolvedVersion,
-  })
-}
-
-function workgroupSnapshot(workgroup: Workgroup): TaskExecutionWorkgroupSnapshot {
-  return Object.freeze({
-    id: workgroup.id,
-    name: workgroup.name,
-    description: workgroup.description,
-    instructions: workgroup.instructions,
-    mode: workgroup.mode,
-    outputContract: workgroup.outputContract,
-    leaderMemberId: workgroup.leaderMemberId,
-    switches: workgroup.switches,
-    maxRounds: workgroup.maxRounds,
-    completionGate: workgroup.completionGate,
-    clarifyBudget: workgroup.clarifyBudget,
-    fanOut: workgroup.fanOut,
-    members: workgroup.members,
-    version: workgroup.version,
   })
 }
 

@@ -46,7 +46,7 @@ import { observeDbTransaction, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { retryPostgresqlSerialization } from '@/platform/persistence/postgresqlSerializationRetry'
-import { retrySqliteWrite } from '@/db/sqliteWriteRetry'
+import { retrySqliteWrite } from '@/platform/persistence/sqliteWriteRetry'
 import { runInExplicitTransactionScope } from '@/db/transactionScope'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {

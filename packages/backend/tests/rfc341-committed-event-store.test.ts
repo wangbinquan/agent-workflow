@@ -20,7 +20,7 @@ import { createCommittedEventDeliveryPersistence } from '@/platform/events/commi
 import {
   appendCommittedEventTx,
   changeCommittedEventCutoverTx,
-} from '@/platform/events/committed/sqliteStore'
+} from '@/platform/persistence/sqliteCommittedEventStore'
 import {
   committedEventGroupId,
   type AppendCommittedEventInput,

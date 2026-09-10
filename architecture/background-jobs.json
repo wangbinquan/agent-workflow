@@ -5710,29 +5710,6 @@
       "dependencies": [
         "timer"
       ],
-      "file": "packages/backend/src/db/sqliteWriteRetry.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/db/sqliteWriteRetry.ts#$setTimeout:105",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/db/sqliteWriteRetry.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:105",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
       "file": "packages/backend/src/mcp/watch.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/mcp/watch.ts#$setTimeout:57",
@@ -10796,6 +10773,29 @@
       "dependencies": [
         "timer"
       ],
+      "file": "packages/backend/src/platform/persistence/sqliteWriteRetry.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/persistence/sqliteWriteRetry.ts#$setTimeout:105",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteWriteRetry.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:105",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
       "file": "packages/backend/src/platform/persistence/writerLease.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/writerLease.ts#$setTimeout:64",
@@ -12895,5 +12895,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ada00a84c5d6b71f08ab7d55bd6f738613235434a9e4cdf64c4db287c5597afd"
+  "sourceDigest": "sha256:2fd15932d1b7cd42d7fdd3a94094a1de0ab520f5e8205bc53e3e86c6c9e978b6"
 }

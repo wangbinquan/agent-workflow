@@ -8,7 +8,7 @@ import { Database } from 'bun:sqlite'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { migrateSqlite } from './sqliteMigrator'
+import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 
 export type SchemaDriftStage =
   | 'migration-history-preflight'

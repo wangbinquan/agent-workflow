@@ -39,15 +39,18 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const WRITER_DELAY_MS = 300
 
@@ -86,7 +89,8 @@ process.exit(0)
 `
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   mockPath: string
@@ -94,7 +98,7 @@ interface Harness {
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-s17-starve-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
@@ -102,9 +106,10 @@ function buildHarness(): Harness {
   writeFileSync(mockPath, GATED_MOCK_SOURCE)
   const tracePath = join(appHome, 'trace.jsonl')
   writeFileSync(tracePath, '')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     mockPath,
@@ -113,7 +118,7 @@ function buildHarness(): Harness {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<void> {
+async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
@@ -156,12 +161,28 @@ function readTrace(path: string): TraceEvent[] {
     .map((l) => JSON.parse(l) as TraceEvent)
 }
 
-describe('S-17 — queued writers no longer hold global slots; readonly runs parallel to the first writer (RFC-098 B1 regression lock)', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('with maxConcurrentNodes=2, a ready readonly node starts BEFORE the first writer completes', async () => {
     // Definition order drives dispatch order: w1, w2 take the 2 global
@@ -204,6 +225,14 @@ describe('S-17 — queued writers no longer hold global slots; readonly runs par
       status: 'pending',
       inputs: '{}',
       startedAt: Date.now(),
+      ...(h.postgresql
+        ? {
+            executionLineageId: taskId,
+            lineageSlotPathJson: JSON.stringify([
+              { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+            ]),
+          }
+        : {}),
     })
 
     await withEnv(
@@ -265,4 +294,11 @@ describe('S-17 — queued writers no longer hold global slots; readonly runs par
     }
     expect(maxLive).toBeLessThanOrEqual(2)
   }, 20_000)
-})
+}
+
+describeEachProvider(
+  'S-17 — queued writers no longer hold global slots; readonly runs parallel to the first writer (RFC-098 B1 regression lock)',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases1(provider))
+  },
+)

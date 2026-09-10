@@ -45,6 +45,9 @@ export function createCollaborationRuntimeMechanics(
         containerRunId: input.frame?.containerRunId ?? null,
         intermediaryNodeId: input.intermediaryNodeId,
         questions: [...input.questions],
+        ...(input.executionContext === undefined
+          ? {}
+          : { executionContext: input.executionContext }),
         ...(input.truncationWarnings === undefined
           ? {}
           : { truncationWarnings: [...input.truncationWarnings] }),

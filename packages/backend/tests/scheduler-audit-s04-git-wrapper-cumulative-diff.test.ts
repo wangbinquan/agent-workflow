@@ -22,20 +22,22 @@
 // sleep/轮询；节点顺序由显式边保证。
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---------------------------------------------------------------------------
 // Runtime-generated shim opencode.
@@ -108,7 +110,8 @@ process.exit(0)
 `
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
@@ -117,7 +120,7 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(slug: string): Promise<Harness> {
+async function createHarness(provider: ProviderHarness, slug: string): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), `aw-audit-s04-${slug}-`))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -134,9 +137,10 @@ async function buildHarness(slug: string): Promise<Harness> {
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
   const shimPath = join(appHome, 'shim-opencode.ts')
   writeFileSync(shimPath, SHIM_SOURCE)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -146,7 +150,11 @@ async function buildHarness(slug: string): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
+async function seedAgent(
+  db: ProviderNeutralDatabase,
+  name: string,
+  outputs: string[],
+): Promise<void> {
   await db.insert(agents).values({
     id: ulid(),
     name,
@@ -183,6 +191,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: '{}',
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { taskId }
 }
@@ -210,9 +226,30 @@ async function readGitDiffPaths(h: Harness, wrapperRunId: string): Promise<strin
   return (rows[0]?.content ?? '').split('\n').filter((p) => p.length > 0)
 }
 
-describe('AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existing dirt', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
-  afterEach(() => h.cleanup())
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  const buildHarness = async (slug: string): Promise<Harness> => {
+    fixture = await createHarness(provider, slug)
+    execution = await createProviderTaskExecutionTestTopology(provider, fixture.appHome)
+    return fixture
+  }
+  beforeEach(() => {
+    fixture = undefined
+    execution = undefined
+  })
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('S-4a sequential wrapper-git pair: second wrapper git_diff excludes first-stage residue', async () => {
     h = await buildHarness('seq')
@@ -406,4 +443,11 @@ describe('AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existin
       'iter-0.txt',
     ])
   }, 20000)
-})
+}
+
+describeEachProvider(
+  'AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existing dirt',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases1(provider))
+  },
+)

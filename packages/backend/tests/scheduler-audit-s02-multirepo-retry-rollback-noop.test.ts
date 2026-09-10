@@ -35,8 +35,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRuns, taskRepos, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -90,8 +95,9 @@ process.stdout.write(
 process.exit(0)
 `
 
-interface Harness {
-  db: DbClient
+interface Harness<TDatabase extends ProviderNeutralDatabase = ProviderNeutralDatabase> {
+  db: TDatabase
+  postgresql: boolean
   appHome: string
   /** plain-mkdir container dir — mirrors task.ts:558-560 multi-repo layout */
   containerDir: string
@@ -101,7 +107,9 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+function buildHarness(): Promise<Harness<DbClient>>
+function buildHarness(provider: ProviderHarness): Promise<Harness>
+async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-s02-multirepo-'))
   // Production multi-repo layout: tasks.worktreePath is a PLAIN mkdir container
   // (task.ts:558-560); each repo is a git worktree in a sub-directory. Plain
@@ -121,9 +129,10 @@ async function buildHarness(): Promise<Harness> {
   }
   const miniMockPath = join(appHome, 's2-mini-opencode.ts')
   writeFileSync(miniMockPath, MINI_MOCK_SOURCE)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
   return {
     db,
+    postgresql: provider?.applicationBinding.provider === 'postgresql',
     appHome,
     containerDir,
     repoA,
@@ -133,7 +142,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedWriterAgent(db: DbClient, name: string): Promise<string> {
+async function seedWriterAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
   const id = ulid()
   await db.insert(agents).values({
     id,
@@ -189,6 +198,14 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
     repoCount: 2,
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   await h.db.insert(taskRepos).values([
     {
@@ -228,12 +245,28 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC-092 REGRESSION LOCK)', () => {
+function registerProviderCases1(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   // docs/dev-gotchas.md — two real git repos, a failed attempt and a rollback:
   // close enough to bun's 5000ms default that four parallel shards push it over.
@@ -311,6 +344,21 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
     expect(readFileSync(join(h.repoA, 'src.txt'), 'utf-8')).toBe('base\n')
     expect(readFileSync(join(h.repoB, 'src.txt'), 'utf-8')).toBe('base\n')
   }, 30_000)
+}
+
+describeEachProvider(
+  'S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC-092 REGRESSION LOCK)',
+  (provider) => {
+    describe('runtime fixture', () => registerProviderCases1(provider))
+  },
+)
+
+function registerNativeCases2() {
+  let h: Harness<DbClient>
+  beforeEach(async () => {
+    h = await buildHarness()
+  })
+  afterEach(() => h.cleanup())
 
   test('contrast oracle: retry path and resume path now share ONE rollback authority (services/nodeRollback.ts)', () => {
     // Source-text companion tying the rollback call sites together (the
@@ -355,4 +403,9 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
     expect(mechanicsSrc.includes('createNodeIso(')).toBe(false)
     expect(mechanicsSrc.includes('await readSnapshotForLatestRun(')).toBe(false)
   })
-})
+}
+
+describe(
+  'S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC-092 REGRESSION LOCK)',
+  registerNativeCases2,
+)

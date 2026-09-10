@@ -8,7 +8,7 @@ import {
 import { ulid } from 'ulid'
 
 import { openDb } from '@/db/client'
-import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
+import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWriteRetry'
 import type { MaintenanceRunStore } from './maintenanceRunStorePort'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
