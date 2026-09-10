@@ -5,7 +5,7 @@ import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/publ
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { composePostgresqlRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
@@ -88,7 +88,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
   const runtimeSessionLeases =
     dependencies.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db)
   const memoryInjectionQueries = composePostgresqlMemoryInjectionQueries(db)
-  const runtimeRegistry = composePostgresqlRuntimeRegistryOperations(db)
+  const runtimeRegistry = composeRuntimeRegistryOperations(db)
   const childLaunch = createPostgresqlChildExecutionLaunchOperations({
     db,
     persistence,

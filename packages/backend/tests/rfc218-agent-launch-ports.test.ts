@@ -47,7 +47,7 @@ import {
 import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
@@ -126,7 +126,7 @@ function makeTempDir(prefix: string): string {
 }
 
 async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
-  await composeSqliteRuntimeRegistryOperations(db).createRuntime({
+  await composeRuntimeRegistryOperations(db).createRuntime({
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',

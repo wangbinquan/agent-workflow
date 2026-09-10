@@ -32,28 +32,32 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { clarifyRounds, agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const DESIGNER_AGENT_ID = '00000000000000000000000001'
 const actor = { userId: 'u1', role: 'owner' as const }
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(slug: string): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness, slug: string): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), `aw-rfc040-${slug}-`))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -71,9 +75,10 @@ async function buildHarness(slug: string): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -82,7 +87,7 @@ async function buildHarness(slug: string): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[] = ['design'],
 ): Promise<void> {
@@ -122,6 +127,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { workflowId, taskId }
 }
@@ -153,12 +166,28 @@ const CLARIFY_BODY = JSON.stringify({
   ],
 })
 
-describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', () => {
+function registerLoopCases(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness('loop-clarify')
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider, 'loop-clarify')
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('loop(maxIter=3) ∋ {agent, clarify}: only 1 clarify_session, wrapper awaiting_human, progress.iteration=0', async () => {
     await seedAgent(h.db, 'designer', ['design'])
@@ -402,14 +431,37 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
     expect(gateRuns[0]?.containerRunId).toBe(wrapperRunIdBefore)
     expect(gateRuns[0]?.iteration).toBe(0)
   })
-})
+}
 
-describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper)', () => {
+describeEachProvider(
+  'RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)',
+  (provider) => {
+    describe('runtime fixture', () => registerLoopCases(provider))
+  },
+)
+
+function registerGitCases(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness('git-clarify')
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider, 'git-clarify')
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('agent inside wrapper-git asks clarify → no git_diff written, baseline persisted', async () => {
     await seedAgent(h.db, 'designer', ['design'])
@@ -604,14 +656,37 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
     expect(gateRuns.map((r) => r.status)).toEqual(['done'])
     expect(gateRuns[0]?.containerRunId).toBe(gwRunIdBefore)
   })
-})
+}
 
-describe('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', () => {
+describeEachProvider(
+  'RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper)',
+  (provider) => {
+    describe('runtime fixture', () => registerGitCases(provider))
+  },
+)
+
+function registerNestedCases(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness('nested')
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider, 'nested')
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('inner loop bubble propagates through outer git wrapper — both park, no diff', async () => {
     await seedAgent(h.db, 'designer', ['design'])
@@ -695,4 +770,8 @@ describe('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', () 
     const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
   })
+}
+
+describeEachProvider('RFC-040 nested wrapper-git ∋ wrapper-loop ∋ {agent, clarify}', (provider) => {
+  describe('runtime fixture', () => registerNestedCases(provider))
 })

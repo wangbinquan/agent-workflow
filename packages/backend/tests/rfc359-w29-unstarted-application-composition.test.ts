@@ -121,6 +121,68 @@ function oldSqliteStoreReturn(source: ts.SourceFile, body: ts.Block): ts.Block {
   ])
 }
 
+// W54 removes the duplicate provider names while keeping this original body lock.
+function oldRuntimeRegistryFactory(source: ts.SourceFile, body: ts.Block): ts.Block {
+  const imports = source.statements.filter(
+    (node): node is ts.ImportDeclaration =>
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === '@/platform/runtime-registry/composition',
+  )
+  const clause = imports[0]?.importClause
+  const names = clause?.namedBindings
+  if (
+    imports.length !== 1 ||
+    clause === undefined ||
+    clause.name !== undefined ||
+    clause.isTypeOnly ||
+    names === undefined ||
+    !ts.isNamedImports(names) ||
+    names.elements.length !== 1 ||
+    names.elements[0]?.isTypeOnly ||
+    names.elements[0]?.propertyName !== undefined ||
+    names.elements[0]?.name.text !== 'composeRuntimeRegistryOperations'
+  )
+    throw new Error('runtime registry must use the single neutral composition import')
+
+  const calls = namedCalls(body, source, 'composeRuntimeRegistryOperations')
+  const call = calls[0]
+  const bindings = descendants(
+    body,
+    (node) => ts.isVariableDeclaration(node) && node.name.getText(source) === 'runtimeRegistry',
+  )
+  if (
+    calls.length !== 1 ||
+    call === undefined ||
+    call.typeArguments !== undefined ||
+    call.questionDotToken !== undefined ||
+    call.arguments.length !== 1 ||
+    compact(call.arguments[0]!, source) !== 'deps.db' ||
+    bindings.length !== 1 ||
+    compact(bindings[0]!, source) !==
+      'runtimeRegistry=deps.runtimeRegistry??deps.providerCore?.runtimeRegistry??composeRuntimeRegistryOperations(deps.db)'
+  )
+    throw new Error('runtime registry must preserve its original database and lazy fallbacks')
+
+  const transformed = ts.transform(body, [
+    (context) => {
+      const visit: ts.Visitor = (node) =>
+        node === call
+          ? ts.factory.updateCallExpression(
+              call,
+              ts.factory.createIdentifier('composeSqliteRuntimeRegistryOperations'),
+              call.typeArguments,
+              call.arguments,
+            )
+          : ts.visitEachChild(node, visit, context)
+      return (node) => ts.visitEachChild(node, visit, context)
+    },
+  ])
+  const restored = transformed.transformed[0]!
+  transformed.dispose()
+  return restored
+}
+
 function isDaemonChoice(node: ts.Node, source: ts.SourceFile): node is ts.ConditionalExpression {
   return (
     ts.isConditionalExpression(node) && compact(node.condition, source) === "phase.kind==='daemon'"
@@ -140,7 +202,7 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const body = functionBody(source, name)
   const original =
     source === server && name === 'composeSqliteApplicationDeps'
-      ? oldSqliteStoreReturn(source, body)
+      ? oldRuntimeRegistryFactory(source, oldSqliteStoreReturn(source, body))
       : body
   const transformed = ts.transform(original, [
     (context) => {

@@ -5349,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3119",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3116",
       "kind": "register-call",
-      "line": 3119,
+      "line": 3116,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5360,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1310",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1307",
       "kind": "register-call",
-      "line": 1310,
+      "line": 1307,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2912",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2909",
       "kind": "register-call",
-      "line": 2912,
+      "line": 2909,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3186",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3183",
       "kind": "register-call",
-      "line": 3186,
+      "line": 3183,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -5454,8 +5454,8 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 9,
-    "entries": 338,
-    "executionLocal": 43,
+    "entries": 337,
+    "executionLocal": 42,
     "longRunning": 76,
     "managed": 11,
     "periodic": 210
@@ -10844,7 +10844,7 @@
       ],
       "file": "packages/backend/src/platform/runtime-registry/composition.ts",
       "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/platform/runtime-registry/composition.ts#composePostgresqlRuntimeRegistryOperations",
+      "id": "background:packages/backend/src/platform/runtime-registry/composition.ts#composeRuntimeRegistryOperations",
       "kind": "execution-local",
       "lifecycle": {
         "health": false,
@@ -10856,32 +10856,9 @@
       },
       "lifetime": "execution-local",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composePostgresqlRuntimeRegistryOperations",
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composeRuntimeRegistryOperations",
       "phase": "execution",
-      "symbol": "composePostgresqlRuntimeRegistryOperations",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/platform/runtime-registry/composition.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/platform/runtime-registry/composition.ts#composeSqliteRuntimeRegistryOperations",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composeSqliteRuntimeRegistryOperations",
-      "phase": "execution",
-      "symbol": "composeSqliteRuntimeRegistryOperations",
+      "symbol": "composeRuntimeRegistryOperations",
       "targetContext": "platform"
     },
     {
@@ -12918,5 +12895,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f09d5978f2f7e85e079b8cc741b2fe158d8465d55c9042a69969b9164fc258a6"
+  "sourceDigest": "sha256:ada00a84c5d6b71f08ab7d55bd6f738613235434a9e4cdf64c4db287c5597afd"
 }

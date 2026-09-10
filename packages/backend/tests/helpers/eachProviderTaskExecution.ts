@@ -54,7 +54,7 @@ import {
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { startTask } from '@/services/task'
@@ -159,7 +159,7 @@ export async function createEachProviderTaskExecution(
           workgroupTurns,
           dynamicWorkflow,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-          runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
+          runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
           codeHostConnections: unusedCapability('code-host connection'),
         },

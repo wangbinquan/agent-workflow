@@ -26,7 +26,7 @@ import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/comp
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTestWorkgroupTurns } from './helpers/workgroupTurns'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import {
   createTaskExecutionTestIdentity,
   createTestRepositoryPublicationTransport,
@@ -170,7 +170,7 @@ describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
         collaborationRuntime: createCollaborationRuntimeMechanics(sqlite),
         persistence: createSqliteTaskExecutionPersistence(sqlite),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-        runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
+        runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
         workgroupTurns: composeTestWorkgroupTurns(sqlite),
         dynamicWorkflow: {
           persistence: composeDynamicWorkflowPersistence(sqlite),

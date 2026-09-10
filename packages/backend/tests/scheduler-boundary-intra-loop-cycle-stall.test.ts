@@ -36,35 +36,40 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
 import { agents } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   cleanup: () => void
 }
-function buildHarness(): Harness {
+function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-red-intraloopcycle-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
   }
 }
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
@@ -108,6 +113,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -126,13 +139,27 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('scheduler: intra-loop same-iteration data cycle must not stall opaquely (RED until cycle is rejected/detected)', () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => {
-    h.cleanup()
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
   })
 
   function cyclicLoopDef(): WorkflowDefinition {
@@ -190,7 +217,14 @@ describe('scheduler: intra-loop same-iteration data cycle must not stall opaquel
     // (scheduler.ts:624-630) so this FAILS for exactly the right reason.
     expect(task!.errorSummary ?? '').not.toContain('stalled')
   }, 120_000)
-})
+}
+
+describeEachProvider(
+  'scheduler: intra-loop same-iteration data cycle must not stall opaquely (RED until cycle is rejected/detected)',
+  (provider) => {
+    describe('runtime fixture', () => registerCases(provider))
+  },
+)
 
 describe('validateWorkflowDef surfaces an intra-loop data cycle as a warning (clarify exemption preserved)', () => {
   const loopWith = (edges: WorkflowDefinition['edges']): WorkflowDefinition =>

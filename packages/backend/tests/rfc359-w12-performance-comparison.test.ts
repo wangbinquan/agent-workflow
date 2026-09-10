@@ -60,15 +60,9 @@ describe('performance CPU sampling stays outside the measured workers', () => {
     }
   })
 
-  test('only the two diagnostic workers emit separate sampled JSON profiles', () => {
+  test('diagnostic workers leave process-wide profiling off and scope their requests internally', () => {
     for (const stage of ['profile-sqlite', 'profile-postgresql']) {
-      expect(performanceWorkerArguments(input, stage)).toEqual([
-        '--cpu-prof',
-        '--cpu-prof-interval=100',
-        `--cpu-prof-dir=${input.output}`,
-        `--cpu-prof-name=${stage}-cpu-profile.json`,
-        ...originalArguments(stage, input.tier),
-      ])
+      expect(performanceWorkerArguments(input, stage)).toEqual(originalArguments(stage, input.tier))
     }
   })
 

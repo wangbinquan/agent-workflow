@@ -510,7 +510,7 @@
       "id": "rfc359-w5-test-engine-hardcoding",
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "baseline": 676,
+      "baseline": 664,
       "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。"
     },
     {
@@ -797,7 +797,7 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 338,
+      "baseline": 337,
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -867,12 +867,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25067,
+      "baseline": 25066,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f09d5978f2f7e85e079b8cc741b2fe158d8465d55c9042a69969b9164fc258a6",
+    "sourceDigest": "sha256:ada00a84c5d6b71f08ab7d55bd6f738613235434a9e4cdf64c4db287c5597afd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5ab4ecb83871f27cc86c7231cf0fffbd7f019da2",
-    "contentDigest": "sha256:2d3124c6c4cb9b0912c0a9fe4e428ba2f16860d2bf4dcb657da47030752cd121",
+    "currentSnapshotSha": "4cbc2eed495d58516db7cb071648036c4e144773",
+    "contentDigest": "sha256:7437f1c38c15f42ba754db3807088692e6da418bfeacf08d98a30ff10d1b84c5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

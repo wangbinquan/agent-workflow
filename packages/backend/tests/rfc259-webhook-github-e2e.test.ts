@@ -225,7 +225,19 @@ describe('RFC-259 · GitHub HTTP 入站 → 真分发器 → 任务行（全链�
       body: second.body,
     })
     expect(res2.status).toBe(200)
-    await waitFor(async () => (h.canceled.length > 0 ? true : null))
+    const { deliveryId: secondDeliveryId } = (await res2.json()) as { deliveryId: string }
+    // Cancellation is visible before the successor insert; wait for its persisted fire receipt.
+    const secondFire = await waitFor(async () => {
+      const rows = await h.db
+        .select()
+        .from(webhookTriggerFires)
+        .where(eq(webhookTriggerFires.deliveryId, secondDeliveryId))
+      return rows[0] ?? null
+    })
+    expect({ outcome: secondFire.outcome, error: secondFire.error }).toEqual({
+      outcome: 'launched',
+      error: null,
+    })
     expect(h.canceled).toEqual([task?.id ?? '(missing)'])
     const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
     expect(running.length).toBe(1) // 每流至多一活任务

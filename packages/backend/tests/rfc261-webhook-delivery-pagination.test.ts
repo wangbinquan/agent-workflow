@@ -20,7 +20,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { webhookDeliveries } from '../src/db/schema'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
-import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { gcDeliveries } from '../src/services/webhook/deliveryStore'
 import { retentionFromConfig, runDeliveryGcSweep } from '../src/services/webhook/webhookGc'
 import type { WebhookDeliveryStatus } from '@agent-workflow/shared'
@@ -333,7 +333,7 @@ describe("RFC-261 · D9' 保留天数可配", () => {
   async function configHarness(initialConfig?: Record<string, unknown>) {
     const db = createInMemoryDb(MIGRATIONS)
     // 打底内置 runtime，避免配置接口测试依赖主机上的 runtime 安装状态。
-    const runtimeRegistry = composeSqliteRuntimeRegistryOperations(db)
+    const runtimeRegistry = composeRuntimeRegistryOperations(db)
     await runtimeRegistry.seedBuiltinRuntimes()
     await runtimeRegistry.updateRuntime('opencode', { model: 'openai/gpt-5' })
     const adminSession = 'a'.repeat(64) // daemon token（settings:write 全权）

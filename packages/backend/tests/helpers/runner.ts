@@ -6,7 +6,7 @@ import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import type { ProviderNeutralDatabase } from '../../src/db/query'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
 
 export * from '../../src/services/runner'
 
@@ -33,6 +33,6 @@ export async function runNode(options: RunNodeOptions) {
     memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
     runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     persistence: options.persistence ?? createTaskExecutionPersistence(db),
-    runtimeRegistry: options.runtimeRegistry ?? composeSqliteRuntimeRegistryOperations(db),
+    runtimeRegistry: options.runtimeRegistry ?? composeRuntimeRegistryOperations(db),
   })
 }

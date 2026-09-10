@@ -20,6 +20,18 @@
 
 ## W12 已落地的装配约束（2026-09-08）
 
+- W54 runtime-registry在composition层只保留一个接收ProviderNeutralDatabase的同步factory，
+  每次仍构造原Drizzle持久化对象并传给原service factory；19个调用的数据库实参、惰性fallback、
+  返回与错误传播保持。两个provider名称不再作为导出别名保留，底层注册业务、查询和事务不变。
+  W29先验证唯一真实中立import/callee/deps.db及原fallback，再将该一处callee精确逆回原完整body锁；
+  原digest不换。此项只减少一个重复装配body，provider命名文件及真实后台任务保持。
+  新迁测试复用既有provider执行拓扑及生命周期，原kind循环、断言、预算与纯用例注册保持；
+  CPU诊断在每次请求及读body的窗口内采样，EXPLAIN留在采样窗口外，正式测量与比较合同不变。
+  RFC259沿原dispatcher完成顺序等待第二delivery终态fire，保原断言与等待预算，另核launched/null。
+  E2E专用标记writer先写同目录临时文件，再rename到原最终路径；原编译/环境条件、载荷和
+  永不resolve合同保持，所有原Playwright用例及预算原样。两项修复的本地证据限于纯受控端口，
+  真实macOS回归等待新SHA托管。
+
 - W53 普通查询与执行拓扑测试通过既有provider合同运行原owner，保留原调用、输入、断言及预算。
   SQLite继续原完整拓扑；PostgreSQL等待完整应用的有限初始化，沿既有intent/claim/attach取得
   实际executionContext，等待drive及release与终态收尾，再在外层harness释放前dispose。

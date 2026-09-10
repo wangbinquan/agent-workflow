@@ -314,10 +314,7 @@ import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/co
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
-import {
-  composePostgresqlRuntimeRegistryOperations,
-  composeSqliteRuntimeRegistryOperations,
-} from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -580,7 +577,7 @@ export function composeSqliteDaemonProviderCore(
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createHealthDatabaseReadModel(input.db),
-    runtimeRegistry: composeSqliteRuntimeRegistryOperations(input.db),
+    runtimeRegistry: composeRuntimeRegistryOperations(input.db),
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository,
@@ -634,7 +631,7 @@ export function composePostgresqlDaemonProviderCore(
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createHealthDatabaseReadModel(input.db),
-    runtimeRegistry: composePostgresqlRuntimeRegistryOperations(input.db),
+    runtimeRegistry: composeRuntimeRegistryOperations(input.db),
     repositoryWorkspaceStore,
     repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository,
@@ -1811,7 +1808,7 @@ export function composeSqliteApplicationDeps(
   const runtimeRegistry =
     deps.runtimeRegistry ??
     deps.providerCore?.runtimeRegistry ??
-    composeSqliteRuntimeRegistryOperations(deps.db)
+    composeRuntimeRegistryOperations(deps.db)
   const configConcurrencyHotApply =
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
   const memoryInjectionQueries =

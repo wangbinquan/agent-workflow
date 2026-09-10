@@ -43,7 +43,7 @@ import { createIntentSession } from '@/modules/intent/application/session'
 import { createIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '../src/modules/resource-catalog/public/participants'
-import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
@@ -304,7 +304,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     const configPath = join(appHome, 'config.json')
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
     const db = createInMemoryDb(MIGRATIONS)
-    await composeSqliteRuntimeRegistryOperations(db).createRuntime({
+    await composeRuntimeRegistryOperations(db).createRuntime({
       name: INTENT_RUNTIME,
       protocol: 'opencode',
       binaryPath: makeStubOpencode(appHome),

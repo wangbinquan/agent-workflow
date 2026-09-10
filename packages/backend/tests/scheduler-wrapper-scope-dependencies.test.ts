@@ -13,22 +13,26 @@
 // consumed provenance.
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   repoPath: string
   worktreePath: string
@@ -41,7 +45,7 @@ function agentId(name: string): string {
   return `agent-${name}`
 }
 
-async function buildHarness(slug: string): Promise<Harness> {
+async function createHarness(provider: ProviderHarness, slug: string): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), `aw-wrapper-scope-${slug}-`))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'worktree')
@@ -56,7 +60,8 @@ async function buildHarness(slug: string): Promise<Harness> {
   await runGit(worktreePath, ['add', 'base.txt'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'base'])
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: provider.db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     repoPath,
     worktreePath,
@@ -67,7 +72,7 @@ async function buildHarness(slug: string): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[],
   options: {
@@ -116,6 +121,14 @@ async function seedTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -144,7 +157,7 @@ async function waitForFile(path: string, timeoutMs: number): Promise<boolean> {
 }
 
 async function waitForNodeRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   timeoutMs: number,
@@ -205,9 +218,30 @@ function orderingDefinition(kind: 'wrapper-loop' | 'wrapper-git'): WorkflowDefin
   }
 }
 
-describe('scheduler wrapper scope dependencies', () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
-  afterEach(() => h?.cleanup())
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  const buildHarness = async (slug: string): Promise<Harness> => {
+    fixture = await createHarness(provider, slug)
+    execution = await createProviderTaskExecutionTestTopology(provider, fixture.appHome)
+    return fixture
+  }
+  beforeEach(() => {
+    fixture = undefined
+    execution = undefined
+  })
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   for (const kind of ['wrapper-loop', 'wrapper-git'] as const) {
     test(`${kind}: external upstream completes before the inner agent is spawned`, async () => {
@@ -845,4 +879,8 @@ describe('scheduler wrapper scope dependencies', () => {
     expect(rows.filter((row) => row.nodeId === 'editor')).toHaveLength(1)
     expect(rows.filter((row) => row.nodeId === 'sink')).toHaveLength(1)
   }, 30_000)
+}
+
+describeEachProvider('scheduler wrapper scope dependencies', (provider) => {
+  describe('runtime fixture', () => registerCases(provider))
 })

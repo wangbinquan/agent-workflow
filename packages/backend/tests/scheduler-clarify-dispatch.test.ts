@@ -36,9 +36,13 @@ import { monotonicFactory } from 'ulid'
 // later-seeded rerun always sorts freshest — mirrors scheduler-clarify-mid-batch.test.ts.
 const ulid = monotonicFactory()
 import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
@@ -52,7 +56,7 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 // carries no directive — the scheduler reads nodeStopOverride), so callers pair this with
 // setNodeClarifyDirective(...,'stop').
 async function seedDispatchedSelfQuestions(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   originNodeRunId: string,
   questionIds: string[],
@@ -116,7 +120,7 @@ async function seedDispatchedSelfQuestions(
 // the answer channel (autoDispatchClarifyRound). We mirror the update onto
 // `clarify_rounds` so the new read path observes the same state.
 async function mirrorClarifyAnswered(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   sessionId: string,
   fields: { answersJson: string; directive?: 'continue' | 'stop' },
 ): Promise<void> {
@@ -132,18 +136,18 @@ async function mirrorClarifyAnswered(
     .where(eq(clarifyRounds.id, sessionId))
 }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-sched-clarify-'))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -165,9 +169,10 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -176,7 +181,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[] = ['summary'],
 ): Promise<void> {
@@ -218,6 +223,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { workflowId, taskId }
 }
@@ -249,12 +262,28 @@ const CLARIFY_BODY = JSON.stringify({
   ],
 })
 
-describe('scheduler RFC-023 clarify dispatch', () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('agent-single emits clarify → task awaiting_human, clarify_session created, agent node_run done', async () => {
     await seedAgent(h.db, 'designer', ['design'])
@@ -1212,6 +1241,10 @@ describe('scheduler RFC-023 clarify dispatch', () => {
     expect(prompt).toContain('Postgres')
     expect(prompt).toContain('Staging')
   })
+}
+
+describeEachProvider('scheduler RFC-023 clarify dispatch', (provider) => {
+  describe('runtime fixture', () => registerCases(provider))
 })
 
 // RFC-060 PR-E: agent-multi removed; the prior per-shard clarify dispatch

@@ -6,7 +6,7 @@
     "moduleFiles": 1196,
     "productionFiles": 2580,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25067
+    "symbolsIncludingFileRoots": 25066
   },
   "entries": [
     {
@@ -155983,22 +155983,10 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/runtime-registry/composition.ts",
-      "id": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composePostgresqlRuntimeRegistryOperations",
+      "id": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composeRuntimeRegistryOperations",
       "removeAfterWave": "W9",
       "status": "legacy-target",
-      "symbol": "composePostgresqlRuntimeRegistryOperations",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/runtime-registry/composition.ts",
-      "id": "owner:packages/backend/src/platform/runtime-registry/composition.ts#composeSqliteRuntimeRegistryOperations",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "composeSqliteRuntimeRegistryOperations",
+      "symbol": "composeRuntimeRegistryOperations",
       "targetContext": "platform",
       "targetLayer": "runtime-registry"
     },
@@ -301506,5 +301494,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f09d5978f2f7e85e079b8cc741b2fe158d8465d55c9042a69969b9164fc258a6"
+  "sourceDigest": "sha256:ada00a84c5d6b71f08ab7d55bd6f738613235434a9e4cdf64c4db287c5597afd"
 }

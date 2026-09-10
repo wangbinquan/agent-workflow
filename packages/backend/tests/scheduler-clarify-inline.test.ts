@@ -22,24 +22,28 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { clarifyRounds, agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 // RFC-132 (PR-C): the unified flat injector reads DISPATCHED task_questions, so these tests answer
 // via the real PR-B path (autoDispatchClarifyRound = seal + auto-dispatch + mint the 承接 rerun +
 // write the node clarify state) instead of the legacy immediate mint, which created no dispatched
 // entry.
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 
 const actor = { userId: 'u1', role: 'owner' as const }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   repoPath: string
@@ -47,7 +51,7 @@ interface Harness {
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc026-sched-'))
   const repoPath = join(appHome, 'repo')
   const worktreePath = join(appHome, 'wt')
@@ -66,9 +70,10 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     repoPath,
@@ -77,7 +82,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function seedAgent(db: DbClient, name: string): Promise<string> {
+async function seedAgent(db: ProviderNeutralDatabase, name: string): Promise<string> {
   const id = ulid()
   await db.insert(agents).values({
     id,
@@ -156,6 +161,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify({ req: 'go' }),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return { taskId }
 }
@@ -207,12 +220,28 @@ const SECOND_CLARIFY_BODY = JSON.stringify({
   ],
 })
 
-describe('RFC-026 scheduler clarify inline-mode', () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
   beforeEach(async () => {
-    h = await buildHarness()
+    fixture = undefined
+    execution = undefined
+    fixture = await buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('opencode session id is persisted to node_runs.opencode_session_id after a normal clarify-channel run', async () => {
     const agentId = await seedAgent(h.db, 'designer')
@@ -587,4 +616,8 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(rerun.promptText ?? '').toContain('## Clarify Q&A')
     expect(rerun.promptText ?? '').not.toContain('Prior Rounds (Answers)')
   })
+}
+
+describeEachProvider('RFC-026 scheduler clarify inline-mode', (provider) => {
+  describe('runtime fixture', () => registerCases(provider))
 })

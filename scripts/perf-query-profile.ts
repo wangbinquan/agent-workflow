@@ -1,6 +1,7 @@
 // RFC-359 AC11 diagnosis only. These requests run after both original HTTP
 // reports and their comparison have been saved. They never supply P95 samples.
 import type { Database } from 'bun:sqlite'
+import { profile as sampleCpu } from 'bun:jsc'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
@@ -18,6 +19,19 @@ export interface ProfileStatement {
 }
 
 export type ProfileExplainMode = 'analyze' | 'plan-only'
+
+// The process-wide CPU clock cannot be reliably mapped to performance.now().
+// Start and stop the sampler around the awaited request instead: EXPLAIN and
+// the later corpus receipt then never enter this profile. These are diagnostic
+// requests only; the original HTTP report supplies every performance sample.
+export async function captureRequestCpu<T>(operation: () => Promise<T>) {
+  let outcome: { value: T } | undefined
+  const cpuProfile = await sampleCpu(async () => {
+    outcome = { value: await operation() }
+  }, 100)
+  if (outcome === undefined) throw new Error('CPU profile did not finish its request')
+  return { ...outcome, cpuProfile }
+}
 
 // Diagnostic classification only: a WITH may contain an UPDATE even when its
 // final operation is SELECT. Keep those plans, but do not request ANALYZE.
@@ -121,8 +135,8 @@ export function createQueryCapture() {
           wallMs: end - wall,
           cpuMicros: used.user + used.system,
           statements,
-          // Only diagnostic requests use this capture. Retain their clock
-          // interval to separate CPU samples from later EXPLAIN/receipt work.
+          // Diagnostic wall-clock interval only. It does not establish a
+          // mapping to the CPU profiler's separate clock.
           timing: {
             timeOriginUnixMs: performance.timeOrigin,
             startTimeMs: wall,
@@ -233,6 +247,7 @@ export async function profilePerformanceQueries(input: {
     'complete' | 'scenarios' | 'sourceSha' | 'executionId' | 'provider' | 'tier'
   >
   readonly capture: ReturnType<typeof createQueryCapture>
+  readonly sampleCpu?: boolean
   readonly explain: (statement: ProfileStatement, mode: ProfileExplainMode) => Promise<unknown>
 }) {
   if (
@@ -243,15 +258,19 @@ export async function profilePerformanceQueries(input: {
     throw new Error('query profile requires a complete ordered HTTP report')
   const results = []
   for (const scenario of input.report.scenarios) {
-    const observed = await input.capture.capture(async () => {
-      const response = await input.app.request(scenario.path, {
-        headers: { Authorization: `Bearer ${input.token}` },
+    const observeRequest = () =>
+      input.capture.capture(async () => {
+        const response = await input.app.request(scenario.path, {
+          headers: { Authorization: `Bearer ${input.token}` },
+        })
+        const bytes = await response.arrayBuffer()
+        if (response.status !== 200)
+          throw new Error(`profile ${scenario.path}: HTTP ${response.status}`)
+        return { status: response.status, bytes: bytes.byteLength }
       })
-      const bytes = await response.arrayBuffer()
-      if (response.status !== 200)
-        throw new Error(`profile ${scenario.path}: HTTP ${response.status}`)
-      return { status: response.status, bytes: bytes.byteLength }
-    })
+    const { value: observed, cpuProfile } = input.sampleCpu
+      ? await captureRequestCpu(observeRequest)
+      : { value: await observeRequest(), cpuProfile: null }
     const plans = []
     const seen = new Set<string>()
     for (const statement of observed.statements) {
@@ -281,7 +300,7 @@ export async function profilePerformanceQueries(input: {
         })
       }
     }
-    results.push({ id: scenario.id, path: scenario.path, ...observed, plans })
+    results.push({ id: scenario.id, path: scenario.path, ...observed, cpuProfile, plans })
   }
   return {
     version: 1,

@@ -35,27 +35,32 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-red-fanout-resume-dup-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
@@ -63,7 +68,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[],
   extra: Record<string, unknown> = {},
@@ -108,6 +113,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -127,12 +140,28 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('wrapper-fanout resume — shard children must be idempotent (no duplicate rows per shardKey)', () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('resume of a half-done fanout does NOT re-mint already-present shard children', async () => {
     await seedAgent(h.db, 'worker', ['result'])
@@ -282,4 +311,11 @@ describe('wrapper-fanout resume — shard children must be idempotent (no duplic
     expect(byKey.get('a.md')).toBe(1)
     expect(byKey.get('b.md')).toBe(1)
   })
-})
+}
+
+describeEachProvider(
+  'wrapper-fanout resume — shard children must be idempotent (no duplicate rows per shardKey)',
+  (provider) => {
+    describe('runtime fixture', () => registerCases(provider))
+  },
+)

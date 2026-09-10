@@ -56,18 +56,9 @@ interface RunInput {
 }
 
 export function performanceWorkerArguments(input: RunInput, workerStage: string): string[] {
-  // CPU sampling belongs only to the existing post-comparison diagnostics.
-  // Timed HTTP workers, corpus setup and archive workers keep their original argv.
-  const profile = workerStage === 'profile-sqlite' || workerStage === 'profile-postgresql'
+  // Diagnostic workers scope CPU sampling to each awaited request themselves.
+  // A process-wide profiler would also include setup, EXPLAIN and corpus checks.
   return [
-    ...(profile
-      ? [
-          '--cpu-prof',
-          '--cpu-prof-interval=100',
-          `--cpu-prof-dir=${input.output}`,
-          `--cpu-prof-name=${workerStage}-cpu-profile.json`,
-        ]
-      : []),
     'scripts/perf-run.ts',
     '--output',
     input.output,
@@ -330,6 +321,7 @@ async function withDatabase(
           token: PERF_CORPUS_ENTRY.bearerToken,
           report,
           capture: (pgProfile ?? sqliteProfile)!.capture,
+          sampleCpu: true,
           explain: async (statement, mode) => {
             if (sqlite !== null)
               return sqlite.$client

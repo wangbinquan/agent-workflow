@@ -5,7 +5,7 @@
 // before the composition invokes the immediate wake; boot must then recover the
 // already-committed canonical intent.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 declare const AW_E2E_BUILD: boolean | undefined
@@ -24,11 +24,12 @@ export async function waitAtHumanGateDecisionCommitBarrier(input: {
   if (barrierDir === undefined || barrierKind !== input.kind) return
 
   mkdirSync(barrierDir, { recursive: true })
-  writeFileSync(
-    join(barrierDir, `${input.kind}.committed.json`),
-    JSON.stringify({ ...input, committedAt: Date.now() }),
-    'utf8',
-  )
+  const markerPath = join(barrierDir, `${input.kind}.committed.json`)
+  const pendingPath = `${markerPath}.${process.pid}.tmp`
+  // The reader treats the final path's existence as readiness. Publish only
+  // after all JSON bytes are written; otherwise it can observe an empty file.
+  writeFileSync(pendingPath, JSON.stringify({ ...input, committedAt: Date.now() }), 'utf8')
+  renameSync(pendingPath, markerPath)
 
   // Intentionally never resolves. The Playwright harness observes the marker
   // and externally SIGKILLs the daemon, which models a real process crash more

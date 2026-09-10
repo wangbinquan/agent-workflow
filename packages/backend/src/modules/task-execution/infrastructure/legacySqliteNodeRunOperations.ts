@@ -1,6 +1,6 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DbTxSync } from '@/db/txSync'
-import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { DrizzleNodeExecutionPersistence } from './nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from './nodeRunLifecyclePersistence'
 import { createSqliteNodeRunMintParticipantInTx } from './sqliteNodeRunMintParticipant'
@@ -15,7 +15,7 @@ export function createLegacySqliteNodeRunOperations(db: ProviderNeutralDatabase)
     lifecycle: new DrizzleNodeRunLifecyclePersistence(db),
     projections: new DrizzleNodeExecutionPersistence(db),
     runtimes: new DrizzleNodeRunRuntimePersistence(db),
-    runtimeRegistry: composeSqliteRuntimeRegistryOperations(db),
+    runtimeRegistry: composeRuntimeRegistryOperations(db),
   })
 }
 

@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W12 第五十四批（2026-09-10）**：12个旧测试文件保留44个原声明/236 matcher，42个DB声明/232 matcher接默认双库，原kind循环展开43个DB运行身份；2个纯例/4 matcher继续单次执行，全部原预算保持。实测1966测试文件、581构库文件/1140调用、497无harness/533有harness；12个构库文件退役，T19f及账本676→664。
+> runtime-registry两个逐字相同的装配body收为一个中立factory，19个实际调用只换callee/import；W29保8个原完整call与9个digest，旧锁真实红后8 pass/46 expect，纯构造18份受控记录/129个Node断言通过。provider命名文件计数保持，下层注册业务和查询原样。
+> 性能切片只把每request的CPU诊断改用真实bun:jsc.profile、100us采样，移除整进程采样旗标；正式bench/corpus/seed/comparator四文件保持。Bun1.3.13实际接口5 pass/112 expect、Node受控36 request/36 EXPLAIN通过，真实原full规模采样仍待托管。
+> 两项W53真实CI失败已补最小修复：RFC259等待第二delivery终态fire，保13原matcher及4000ms/default预算，新增launched/null断言，4组纯端口控制/39个Node断言；Playwright标记writer改为同目录临时文件写完后rename发布，原载荷、门控及Playwright用例预算保持，fakeFS旧writer1过2红→新writer3 pass/22 expect。两项修复均待新SHA托管确认。
+> 初始35core编译通过的收据保留；加入两项CI修复后的最终38core backend编译通过且候选不变，四个受影响metadata/guard文件63 pass/111 expect与canonical13 pass/55 expect通过。13份生成投影刷新，background登记338→337、symbolOwners25067→25066对应重复factory退役，真实后台任务保持。
+> W53 exact4cbc2eed495d58516db7cb071648036c4e144773 Main34430614669终态36 success/4 failure，13后端12过1红，普通lint通过；主2227/2227、独立2/2及原hook18/18通过，新PG21/21、旧PG HTTP9/9及W29两OS16/16通过。上述本地修复不改变该原SHA终态。
+> 最新W52原full仍有两项绝对失败：SQLite tasks-first P95 150.616ms未低于150ms，PG workgroup-pending max 11.571ms未低于10ms；其余16绝对项通过、六PG端点相对较慢。W54本地仅源码与受控端口，真实业务/PG及Bun1.4原语料采样待托管；无性能改善或历史根因结论，AC-1/6/8/9/11/12继续开放。
+
 > **RFC-359 W12 第五十三批（2026-09-10）**：7个旧测试文件保留40个原声明/122个回调matcher及1个原helper matcher，其中21个原DB例/60 matcher接默认双库，19例/62 matcher保持原注册与预算。SQLite旧拓扑保持；PG等待完整应用初始化，经真实intent/claim/attach/drive/release完成执行，并在harness释放前dispose。
 > 实测1964测试文件、593构库文件/1152调用、509无harness/521有harness；T19f及对应账本679→676。两个已覆盖双库的task-catalog文件保持原样；无harness总数是入口清点，不等同剩余普通业务迁移量。
 > 首轮15core编译发现PG夹具缺少必需executionContext；补齐真实执行上下文与终态收尾后，最终backend编译通过且候选不变。四个受影响metadata/guard文件及W29纯装配共71 pass/157 expect，canonical13 pass/55 expect通过；八canonical与RFC294 status原字节保持，四份metadata更新provenance/账本并移除W52两项到期增长标记。

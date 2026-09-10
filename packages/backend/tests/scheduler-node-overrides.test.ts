@@ -21,32 +21,37 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, tasks, workflows } from '../src/db/schema'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import {
+  createProviderTaskExecutionTestTopology,
+  type ProviderTaskExecutionTestTopology,
+} from './helpers/providerTaskExecutionTestTopology'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
+  postgresql: boolean
   appHome: string
   worktreePath: string
   capturePath: string
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-override-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   const capturePath = join(appHome, 'inline-config.jsonl')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = provider.db
   return {
     db,
+    postgresql: provider.applicationBinding.provider === 'postgresql',
     appHome,
     worktreePath,
     capturePath,
@@ -55,7 +60,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgentWithDefaults(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   name: string,
   outputs: string[],
   defaults: { model?: string; variant?: string; temperature?: number },
@@ -115,6 +120,14 @@ async function seedWorkflowAndTask(
     status: 'pending',
     inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
+    ...(h.postgresql
+      ? {
+          executionLineageId: taskId,
+          lineageSlotPathJson: JSON.stringify([
+            { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+          ]),
+        }
+      : {}),
   })
   return taskId
 }
@@ -147,12 +160,28 @@ function readCapture(path: string): Array<{
     .map((l) => JSON.parse(l))
 }
 
-describe("RFC-113: the agent's RUNTIME drives the model; node param overrides are IGNORED", () => {
+function registerCases(provider: ProviderHarness) {
   let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+  let fixture: Harness | undefined
+  let execution: ProviderTaskExecutionTestTopology | undefined
+  const runTask: ProviderTaskExecutionTestTopology['runTask'] = (options) => {
+    if (execution === undefined) throw new Error('task runtime fixture not initialized')
+    return execution.runTask(options)
+  }
+  beforeEach(async () => {
+    fixture = undefined
+    execution = undefined
+    fixture = buildHarness(provider)
+    h = fixture
+    execution = await createProviderTaskExecutionTestTopology(provider, h.appHome)
   })
-  afterEach(() => h.cleanup())
+  afterEach(async () => {
+    try {
+      await execution?.dispose()
+    } finally {
+      fixture?.cleanup()
+    }
+  })
 
   test('a node param override is IGNORED — the agent runtime model comes through (D3)', async () => {
     await seedAgentWithDefaults(h.db, 'writer', ['summary'], {
@@ -314,4 +343,11 @@ describe("RFC-113: the agent's RUNTIME drives the model; node param overrides ar
   // through the same agent-single path (covered by the agent-single override
   // test above) — see task-execution/composition/wrapperMechanics.ts:dispatchFanoutShard, which
   // forwards `pickOverrides(innerNode)` into `runNode(...)`.
-})
+}
+
+describeEachProvider(
+  "RFC-113: the agent's RUNTIME drives the model; node param overrides are IGNORED",
+  (provider) => {
+    describe('runtime fixture', () => registerCases(provider))
+  },
+)

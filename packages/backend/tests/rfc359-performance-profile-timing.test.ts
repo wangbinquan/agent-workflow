@@ -1,5 +1,5 @@
-// RFC-359 AC11: locate diagnostic HTTP work inside the CPU profile without
-// including the later EXPLAINs or corpus receipt in its request interval.
+// RFC-359 AC11: preserve the diagnostic request's wall-clock interval, excluding
+// EXPLAIN and corpus checks. This does not map the CPU profiler's separate clock.
 import { expect, test } from 'bun:test'
 import { PERF_HTTP_SCENARIOS } from '../../../scripts/perf-compare'
 import { createQueryCapture, profilePerformanceQueries } from '../../../scripts/perf-query-profile'

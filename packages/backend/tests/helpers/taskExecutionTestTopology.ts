@@ -15,7 +15,7 @@ import { taskExecutionResourceDependencies } from '../../src/services/execution/
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { runGit } from '../../src/util/git'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
-import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
 import { createWorkgroupClarifyAskGate } from '../../src/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '../../src/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTurnsOperations } from '../../src/modules/resource-catalog/composition/workgroupTurns'
@@ -85,7 +85,7 @@ export function composeTaskExecutionTestRuntime(
         createWorkgroupClarifyAskGate(db),
       ),
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
-      runtimeRegistry: composeSqliteRuntimeRegistryOperations(db),
+      runtimeRegistry: composeRuntimeRegistryOperations(db),
       dynamicWorkflow: {
         persistence: composeSqliteDynamicWorkflowPersistence(db),
         validationContext: { load: () => buildWorkflowValidationContext(db) },
@@ -193,8 +193,7 @@ export function runTaskWithRealTestTopology(
   const persistence = options.persistence ?? createSqliteTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
-  const runtimeRegistry =
-    options.runtimeRegistry ?? composeSqliteRuntimeRegistryOperations(options.db)
+  const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
   const dynamicWorkflow =

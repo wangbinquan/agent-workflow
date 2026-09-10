@@ -1,5 +1,5 @@
 import type { ProviderNeutralDatabase } from '../../src/db/query'
-import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
 
 export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
 
@@ -10,7 +10,7 @@ export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
  * product-valid.
  */
 export async function seedTestDefaultOpencodeRuntime(db: ProviderNeutralDatabase): Promise<void> {
-  const runtimeRegistry = composeSqliteRuntimeRegistryOperations(db)
+  const runtimeRegistry = composeRuntimeRegistryOperations(db)
   const existing = await runtimeRegistry.getRuntime('opencode')
   if (existing === null) {
     await runtimeRegistry.createRuntime({

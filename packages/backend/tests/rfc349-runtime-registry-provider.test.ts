@@ -8,10 +8,7 @@ import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import {
-  composePostgresqlRuntimeRegistryOperations,
-  composeSqliteRuntimeRegistryOperations,
-} from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -87,7 +84,7 @@ function postgresqlFixture() {
     async close() {},
   }
   return {
-    registry: composePostgresqlRuntimeRegistryOperations(createPostgresqlDatabaseClient(runtime)),
+    registry: composeRuntimeRegistryOperations(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }
@@ -142,7 +139,7 @@ describe('RFC-349 runtime registry provider operations', () => {
 
 describeEachProvider('RFC-349 runtime registry provider operations', (harness) => {
   test('SQLite composition preserves seed, CRUD, resolution and delete guards', async () => {
-    const registry = composeSqliteRuntimeRegistryOperations(harness.db)
+    const registry = composeRuntimeRegistryOperations(harness.db)
     await registry.seedBuiltinRuntimes()
     expect((await registry.listRuntimes()).map((row) => row.name).sort()).toEqual([
       'claude-code',

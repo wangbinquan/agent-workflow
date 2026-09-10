@@ -74,7 +74,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
-import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { composeRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
@@ -119,7 +119,7 @@ function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimePa
     collaborationRuntime: createCollaborationRuntimeMechanics(client),
     persistence,
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
-    runtimeRegistry: composeSqliteRuntimeRegistryOperations(client),
+    runtimeRegistry: composeRuntimeRegistryOperations(client),
     workgroupTurns: passthrough('workgroupTurns'),
     dynamicWorkflow: createTestDynamicWorkflowOperations(db),
     identityAccess: passthrough('identityAccess'),
