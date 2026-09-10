@@ -2,11 +2,12 @@
 // Catalog's transaction-bound authorization participant. Preflight catalog
 // summaries are useful UX, but they cannot authorize a later write.
 
-import { describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import { users } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
@@ -21,7 +22,6 @@ import type {
   ResourceRequestContext,
 } from '@/modules/resource-catalog/public/participants'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const INTENT_ROOT = resolve(import.meta.dir, '../src/modules/intent')
 
 const SESSION: IntentSessionRecord = {
@@ -73,8 +73,8 @@ function authorization(): IntentContextResourceAuthorization {
   })
 }
 
-function seedOwner() {
-  const db = createInMemoryDb(MIGRATIONS)
+function seedOwner(__db: ProviderNeutralDatabase) {
+  const db = __db
   db.insert(users)
     .values({
       id: SESSION.ownerUserId,
@@ -99,11 +99,11 @@ function session(
   })
 }
 
-describe('RFC-349 Intent transaction-bound context authorization', () => {
+describeEachProvider('RFC-349 Intent transaction-bound context authorization', (harness) => {
   // RFC-359 W7：SQLite 侧的 `dbTxSync` 已换成中立事务原语，断言的东西没变——
   // 授权仍必须发生在**驱动本程序的那一笔事务**里，失败要把 Intent 的插入一起回滚。
   test('the runner validates the resource inside the same transaction before inserting', async () => {
-    const db = seedOwner()
+    const db = seedOwner(harness.db)
     const current = authorization()
     let factoryCalls = 0
     let authorizationCalls = 0
@@ -139,7 +139,7 @@ describe('RFC-349 Intent transaction-bound context authorization', () => {
   })
 
   test('an invisible resource is rejected and the Intent insert rolls back', async () => {
-    const db = seedOwner()
+    const db = seedOwner(harness.db)
     const current = authorization()
     const persistence = composeIntentPersistence({
       db,
@@ -188,7 +188,12 @@ describe('RFC-349 Intent transaction-bound context authorization', () => {
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join('\n')
-    expect(runnerCode).not.toMatch(/as unknown|DbClient|PostgresqlDatabaseClient|dbTxSync/)
+    expect(runnerCode).not.toMatch(
+      // 注意：这里是**判据里的正则字面量**，不是类型标注——`DbClient` 三个字必须原样留着。
+      // 2026-09-11 的 AC-6 机械迁移曾把它一起改成 `ProviderNeutralDatabase`，判据当场反转成
+      // 「不许出现中立类型」，两个引擎一起红。
+      /as unknown|DbClient|PostgresqlDatabaseClient|dbTxSync/,
+    )
     for (const retired of [
       'infrastructure/sqliteIntentSqlProgramRunner.ts',
       'infrastructure/postgresqlIntentSqlProgramRunner.ts',

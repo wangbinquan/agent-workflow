@@ -49,6 +49,11 @@ function relativeToRepo(file: string): string {
 
 // 每条锁都要扫整棵 src 树，而 TypeScript 解析是这里的大头；源码在一次运行里不会变，按路径缓存解析结果，
 // 否则十几条锁各自重解析全树，CI 分片负载一高就撞 20s 超时（2026-09-05 shard 3 实撞）。
+//
+// 缓存是**共享**的，于是全树解析那笔开销落在**恰好先跑的那条锁**头上，而 bun 的用例顺序不固定：
+// 2026-09-11 macOS shard 1 上「AST 字面量消费者」这条排到了最前，5.4s 撞死在 bun 默认的 5s 超时上，
+// 而同一条锁在上一次绿的 run 里只花 473ms（那次先跑的是「roles 只是展示数据」，它自带 20s）。
+// 因此**凡是要扫整棵树的锁都显式写 20_000**，不靠「谁先跑」的运气。
 const parsedSources = new Map<string, ts.SourceFile>()
 
 function parse(file: string): ts.SourceFile {
@@ -404,7 +409,7 @@ describe('RFC-305 identity-access architecture', () => {
       'UserAccessFenceReader',
       'ValidatedIdempotencyKey',
     ])
-  })
+  }, 20_000)
 
   test('module composition and public contracts have only the reviewed consumers', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
@@ -715,7 +720,7 @@ describe('RFC-305 permission catalog architecture', () => {
       ),
     )
     expect([...SYSTEM_DOMAIN_POINTS].filter((permission) => !consumed.has(permission))).toEqual([])
-  })
+  }, 20_000)
 
   test('both user dialogs render the shared catalog and contain no permission id table', () => {
     const createDialog = resolve(FRONTEND_SRC, 'components', 'users', 'CreateUserDialog.tsx')
@@ -915,7 +920,7 @@ describe('RFC-317 T13 —— 语料非空', () => {
     expect(
       sourceFiles(BACKEND_SRC).length + sourceFiles(FRONTEND_SRC, ['.ts', '.tsx']).length,
     ).toBeGreaterThanOrEqual(900)
-  })
+  }, 20_000)
 })
 
 // RFC-317 T14 —— 负 fixture：把伪造的源码喂给**扫描用的同一份判据**。

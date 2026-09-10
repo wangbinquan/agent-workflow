@@ -5,10 +5,10 @@
 
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   __resetBatchImportForTests,
   startBatchImport,
@@ -20,20 +20,18 @@ import type { resolveCachedRepo } from '../src/services/gitRepoCache'
 import type { RepoImportWsMessage } from '@agent-workflow/shared'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 type StubResolver = typeof resolveCachedRepo
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   events: Array<{ batchId: string; msg: RepoImportWsMessage }>
   resolverCalls: string[]
   peakInFlight: number
   inFlight: number
 }
 
-function makeHarness(): Harness {
-  const db = createInMemoryDb(MIGRATIONS)
+function makeHarness(__db: ProviderNeutralDatabase): Harness {
+  const db = __db
   const events: Harness['events'] = []
   return { db, events, resolverCalls: [], peakInFlight: 0, inFlight: 0 }
 }
@@ -100,7 +98,7 @@ async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise
   throw new Error('timed out waiting for batch.completed')
 }
 
-describe('startBatchImport (RFC-033-T2)', () => {
+describeEachProvider('startBatchImport (RFC-033-T2)', (harness) => {
   beforeEach(() => {
     __resetBatchImportForTests()
   })
@@ -109,7 +107,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('happy path: 3 URLs all done; order preserved', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const r = startBatchImport(
       deps(h, stubResolver(h)),
       {
@@ -130,7 +128,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('invalid URL stays terminal and does not occupy a worker', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const r = startBatchImport(
       deps(h, stubResolver(h)),
       {
@@ -148,7 +146,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('clone failure isolated: other rows still complete', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const resolver = stubResolver(h, (url) => {
       if (url === 'https://h/b.git') {
         throw new DomainError('repo-clone-failed', `git clone failed: ${url}`, 400)
@@ -172,7 +170,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('concurrency cap is honored', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const r = startBatchImport(
       deps(h, stubResolver(h), 2),
       {
@@ -192,7 +190,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('duplicate URLs in the same batch are de-duped', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const r = startBatchImport(
       deps(h, stubResolver(h)),
       {
@@ -206,7 +204,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('all-invalid batch flips to completed without starting any worker', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const r = startBatchImport(
       deps(h, stubResolver(h)),
       {
@@ -222,7 +220,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('empty URLs throws batch-empty', () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     expect(() =>
       startBatchImport(deps(h, stubResolver(h)), { urls: [] }, { userId: 'u_batch_owner' }),
     ).toThrow(DomainError)
@@ -240,7 +238,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('too-large batch throws batch-too-large', () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const urls = Array.from({ length: 101 }, (_, i) => `https://h/${i}.git`)
     try {
       startBatchImport(deps(h, stubResolver(h)), { urls }, { userId: 'u_batch_owner' })
@@ -252,7 +250,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('WS broadcast emits row.update + batch.completed', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const r = startBatchImport(
       deps(h, stubResolver(h)),
       {
@@ -271,7 +269,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('credential URL never leaks via row payload', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const cred = 'https://x-token-auth:s3cr3t@github.com/foo/bar.git'
     const r = startBatchImport(
       deps(h, stubResolver(h)),
@@ -289,7 +287,7 @@ describe('startBatchImport (RFC-033-T2)', () => {
   })
 
   test('threads the SecretBox into the cache resolver so imported credentials are durable', async () => {
-    const h = makeHarness()
+    const h = makeHarness(harness.db)
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 27))
     let receivedSecretBox = false
     const resolver: StubResolver = (async (cacheDeps, input) => {

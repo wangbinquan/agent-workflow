@@ -8,12 +8,13 @@
 // a real Basic-authenticated Git smart-HTTP remote so removing the refresh lease
 // makes both cases deterministically red.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   afterAll,
   afterEach,
   beforeAll,
   beforeEach,
-  describe,
   expect,
   setDefaultTimeout,
   spyOn,
@@ -22,9 +23,8 @@ import {
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { readdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb } from '../src/db/client'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
 import { refreshDueRepos } from '../src/services/submoduleRefresh'
@@ -34,8 +34,6 @@ import {
   startGitHttpRemote,
   stopGitHttpRemote,
 } from './helpers/gitHttpRemote'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // 墙钟预算：每条用例的 body 都在真跑 git（init / commit / bare clone / 经 smart-HTTP 的冷
 // clone / 再一次 fetch），绿的时候就要 2.7–4.6s（CI run 32835038793 的 Ubuntu 分片 3.4s、
@@ -264,7 +262,7 @@ function installRefreshDiagnostics(): RefreshDiagnostics {
   }
 }
 
-async function authenticatedFixture() {
+async function authenticatedFixture(__db: ProviderNeutralDatabase) {
   const diagnostics = refreshDiagnostics()
   const root = mkdtempSync(join(tmpdir(), 'aw-private-refresh-'))
   const appHome = mkdtempSync(join(tmpdir(), 'aw-private-refresh-home-'))
@@ -287,7 +285,7 @@ async function authenticatedFixture() {
   )
   await diagnostics.stage('bare-clone', () => runGit(root, ['clone', '--bare', working, bare]))
   const url = credentialedRemoteUrlFor(bare, 'refresh-bot', 'refresh-secret')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   const cached = await diagnostics.stage('resolve-cached-repo', () =>
     resolveCachedRepo(
       { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
@@ -331,10 +329,10 @@ afterAll(() => {
   stopGitHttpRemote()
 })
 
-describe('private cached-repo refresh credential lease', () => {
+describeEachProvider('private cached-repo refresh credential lease', (harness) => {
   test('manual refresh unseals the URL for one fetch and keeps origin credential-free', async () => {
     const diagnostics = refreshDiagnostics()
-    const { appHome, cached, db } = await authenticatedFixture()
+    const { appHome, cached, db } = await authenticatedFixture(harness.db)
 
     const refreshed = await diagnostics.stage('manual-refresh', () =>
       refreshCachedRepo(
@@ -354,7 +352,7 @@ describe('private cached-repo refresh credential lease', () => {
 
   test('background refresh threads the same SecretBox into the cached fetch', async () => {
     const diagnostics = refreshDiagnostics()
-    const { appHome, cached, db } = await authenticatedFixture()
+    const { appHome, cached, db } = await authenticatedFixture(harness.db)
     const now = Date.now()
     const result = await diagnostics.stage('background-refresh', () =>
       refreshDueRepos(

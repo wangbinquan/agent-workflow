@@ -25,6 +25,7 @@ import type { DatabaseConfig } from '@agent-workflow/shared'
 import * as schema from '@/db/schema'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { isPostgresqlSerializationFailure } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import {
   databaseSessionFor,
@@ -532,17 +533,59 @@ async function snapshotSchema(raw: RawQuery): Promise<PostgresqlSchemaSnapshot> 
   }
 }
 
+/**
+ * RFC-359 —— 夹具复位的 `TRUNCATE` 要能扛住 `40P01`。
+ *
+ * 每文件一库消掉的是**跨文件**的争用；文件**内部**这一条还在：`createProviderHttpApplication`
+ * 起的是真 HTTP 应用，维护 ticker 之类的后台作业会在用例之间继续读表。`TRUNCATE` 要在一条语句里
+ * 拿下全部表的 AccessExclusiveLock，而后台读者手上已经攥着其中一张的 AccessShareLock 又要去拿
+ * 另一张——锁序相反，PostgreSQL 判定 40P01 并挑一边杀掉。2026-09-11 CI ubuntu shard 6 实撞
+ * （`tasks-multipart.test.ts`，两个 backend 在同一个库里对着 210529 / 210550 互等）。
+ *
+ * 40P01 是 PostgreSQL 明确要求调用方重试的错（同 40001，仓内 `retryPostgresqlSerialization`
+ * 就是那一条的既有处置）。这里做**有界**重试：后台读者的那条语句最多跑到它自己结束，
+ * 重试一次通常就拿得到锁。**不是「重跑就过了」**——被重试的是一条幂等的夹具 DDL，不是判据；
+ * 次数用尽仍然原样抛出，红照样是红；非 40001/40P01 的错**一次都不重试**。
+ *
+ * 判据在 `tests/rfc359-w8-harness-truncate-retry.test.ts`（纯函数四条：一次成功 / 重试后成功 /
+ * 非序列化错立即抛 / 预算耗尽照抛）。
+ */
+export async function retryOnPostgresqlSerializationFailure<T>(
+  run: () => Promise<T>,
+  options: {
+    readonly maxAttempts: number
+    readonly sleep: (ms: number) => Promise<void>
+  },
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await run()
+    } catch (error) {
+      if (attempt >= options.maxAttempts || !isPostgresqlSerializationFailure(error)) throw error
+      await options.sleep(25 * attempt)
+    }
+  }
+}
+
+const HARNESS_TRUNCATE_ATTEMPTS = 4
+
+async function truncateAll(raw: RawQuery, tables: readonly string[]): Promise<void> {
+  const statement =
+    `truncate table ${tables.map((table) => `"agent_workflow"."${table}"`).join(', ')} ` +
+    `restart identity cascade`
+  await retryOnPostgresqlSerializationFailure(async () => await raw(statement), {
+    maxAttempts: HARNESS_TRUNCATE_ATTEMPTS,
+    sleep: async (ms) => await new Promise((resolve) => setTimeout(resolve, ms)),
+  })
+}
+
 async function resetToSnapshot(
   raw: RawQuery,
   snapshot: PostgresqlSchemaSnapshot,
   options: DescribeEachProviderOptions,
 ): Promise<void> {
   if (snapshot.tables.length === 0) return
-  await raw(
-    `truncate table ${snapshot.tables
-      .map((table) => `"agent_workflow"."${table}"`)
-      .join(', ')} restart identity cascade`,
-  )
+  await truncateAll(raw, snapshot.tables)
   for (const seed of snapshot.seeds) {
     // 不走绑定参数：Bun.SQL 会把字符串参数按 json 类型二次序列化成 JSON 标量（"[...]"），
     // json_populate_recordset 收到的就不是数组。用带唯一标签的美元引号把数组文本内联进去。
