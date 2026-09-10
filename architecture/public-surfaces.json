@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 857,
+    "consumers": 845,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1061,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20443,
-    "symbols": 983
+    "symbols": 984
   },
   "entries": [
     {
@@ -113983,20 +113983,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:c5b43600cf318a1ef9ac",
-        "import:d7f2dbf86f5455c74097"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:c5b43600cf318a1ef9ac",
-            "import:d7f2dbf86f5455c74097"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<BundleOp, { kind: 'agent-create' | 'agent-update' }>"
         }
@@ -114009,20 +114003,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedAgentPackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:c5b43600cf318a1ef9ac",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:d7f2dbf86f5455c74097",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:AgentPackageMutationParticipant",
         "public:resource-catalog:participants:AgentPackageMutationParticipantInTx",
@@ -114050,20 +114031,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:c309a95453a58cb23ee7",
-        "import:d42cbc80d6c530d638ea"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:c309a95453a58cb23ee7",
-            "import:d42cbc80d6c530d638ea"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<\n  BundleOp,\n  {\n    kind:\n      | 'capability-framework-create'\n      | 'capability-framework-update'\n      | 'capability-binding-create'\n      | 'capability-binding-update'\n      | 'capability-template-create'\n      | 'capability-template-update'\n  }\n>"
         }
@@ -114076,20 +114051,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedCapabilityTemplatePackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:c309a95453a58cb23ee7",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:d42cbc80d6c530d638ea",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipant",
         "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipantInTx",
@@ -114117,20 +114079,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:637aa8f88bc9f13e78b9",
-        "import:b5696c44e4c0ef416a46"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:637aa8f88bc9f13e78b9",
-            "import:b5696c44e4c0ef416a46"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<BundleOp, { kind: 'mcp-create' | 'mcp-update' }>"
         }
@@ -114143,20 +114099,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedMcpPackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:637aa8f88bc9f13e78b9",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:b5696c44e4c0ef416a46",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:McpPackageMutationParticipant",
         "public:resource-catalog:participants:McpPackageMutationParticipantInTx",
@@ -114174,6 +114117,52 @@
       "unresolvedTypeRefs": [
         "Extract"
       ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:5ed6e2f10e267fccae96",
+        "import:e1bf9c6f2389170987e8"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:preparedPackageMutation",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#preparedPackageMutation",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:5ed6e2f10e267fccae96",
+          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e1bf9c6f2389170987e8",
+          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:647b57609dbc996769196de807fd8e2788374c9d4d127905edfa61a0693dc0d5",
+      "status": "target-context-current-surface",
+      "symbol": "preparedPackageMutation",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -114289,20 +114278,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:45c2ea82b4a8f0bbdc41",
-        "import:94d0a081a3f59f29b48e"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:45c2ea82b4a8f0bbdc41",
-            "import:94d0a081a3f59f29b48e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<BundleOp, { kind: 'plugin-create' | 'plugin-update' }>"
         }
@@ -114315,20 +114298,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPluginPackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:45c2ea82b4a8f0bbdc41",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:94d0a081a3f59f29b48e",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:PluginPackageMutationParticipant",
         "public:resource-catalog:participants:PluginPackageMutationParticipantInTx",
@@ -114356,20 +114326,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:2c57cc1b32afa6d0e94f",
-        "import:670ee242ab6cca3eafca"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:2c57cc1b32afa6d0e94f",
-            "import:670ee242ab6cca3eafca"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<BundleOp, { kind: 'skill-create' | 'skill-update' }>"
         }
@@ -114382,20 +114346,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedSkillPackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:2c57cc1b32afa6d0e94f",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:670ee242ab6cca3eafca",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
@@ -114423,20 +114374,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:4d1616dd88478a35cc22",
-        "import:a61690ce2fa1d907dcfd"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:4d1616dd88478a35cc22",
-            "import:a61690ce2fa1d907dcfd"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<\n  BundleOp,\n  { kind: 'workflow-create' | 'workflow-update' }\n>"
         }
@@ -114449,20 +114394,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkflowPackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:4d1616dd88478a35cc22",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:a61690ce2fa1d907dcfd",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
@@ -114490,20 +114422,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:3c2ed482c633a2b1ca3b",
-        "import:647757fca961e0888329"
-      ],
+      "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:3c2ed482c633a2b1ca3b",
-            "import:647757fca961e0888329"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "mutation",
           "type": "Extract<\n  BundleOp,\n  { kind: 'workgroup-create' | 'workgroup-update' }\n>"
         }
@@ -114516,20 +114442,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkgroupPackageMutation",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:3c2ed482c633a2b1ca3b",
-          "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:647757fca961e0888329",
-          "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:resource-catalog:participants:ResourcePackageApplyScenarioProvider",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
@@ -161744,7 +161657,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f063309116c9b38121d2dfad824fbe615c50bef20bc6001cfb3b43c9c3cc1aab",
+  "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -169,20 +169,49 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
       },
     ],
   },
+  {
+    what: '「这条已准备好的包变更属于哪类资源」的七个类型谓词（两个应用引擎曾各揣整族一份）',
+    fn: 'preparedPackageMutation',
+    definedIn: `${B}modules/resource-catalog/public/types.ts`,
+    consumers: [
+      `${B}platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`,
+      `${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`,
+    ],
+    forkedFrom: [
+      `${B}platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`,
+      `${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`,
+    ],
+  },
 ]
 
-/** 函数形状的声明名：`function f` / `const f = () =>` / `const f = function` / 方法 `f() {}`。 */
+/**
+ * 一个名字的**定义点**：函数声明、类声明、任何带初始化器的变量绑定、类方法 / 对象属性。
+ *
+ * 判据刻意不限于「函数形状」。被盯着的这些名字里，
+ * `preparedPackageMutation` 是 `const X = Object.freeze({ …七个类型谓词… })`——初始化器是一次
+ * **调用**，不是箭头函数。只认函数形状的初版对它恒红（一个定义点都数不出来）。
+ * 账本要问的是「这个名字全仓只有一个定义点吗」，那就该把任何模块级绑定都算进去；
+ * 局部变量若与被盯的名字重名也会被算上——那不是误报，是「有人在函数里又实现了一份」，
+ * 正是要人来账本里回答的那个问题。
+ *
+ * **唯一的例外是纯别名**：`const A = B` / `const A = ns.B`（初始化器就是一个标识符或属性访问）
+ * 绑定的是**同一个值**，不可能是第二份实现。`public/participants.ts` 里
+ * `export const humanGateNodeProjectionMember = humanGateNodeProjectionMemberInternal` 就是这个
+ * 形状——公共面把 domain 的实现原样转出去。把它算成定义点等于禁止一切再导出。
+ */
 function declaredFunctionNames(unit: SourceUnit): ReadonlySet<string> {
   const names = new Set<string>()
   const isFunctionLike = (node: ts.Node): boolean =>
     ts.isArrowFunction(node) || ts.isFunctionExpression(node)
   const visit = (node: ts.Node): void => {
     if (ts.isFunctionDeclaration(node) && node.name !== undefined) names.add(node.name.text)
+    else if (ts.isClassDeclaration(node) && node.name !== undefined) names.add(node.name.text)
     else if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined &&
-      isFunctionLike(node.initializer)
+      !ts.isIdentifier(node.initializer) &&
+      !ts.isPropertyAccessExpression(node.initializer)
     ) {
       names.add(node.name.text)
     } else if (
@@ -276,11 +305,24 @@ describe('RFC-359 —— 孪生体守卫自证有牙', () => {
     expect(declaredFunctionNames(forked).has('runRetentionSweepSlice')).toBe(true)
   })
 
+  test('`const X = Object.freeze({…})` 也算一个定义点（初始化器是调用，不是函数）', () => {
+    const forked = fixture(`const preparedPackageMutation = Object.freeze({ isAgent: () => true })`)
+    expect(declaredFunctionNames(forked).has('preparedPackageMutation')).toBe(true)
+  })
+
+  test('纯别名再导出**不算**定义点——否则等于禁止一切 re-export', () => {
+    const reexport = fixture(
+      `import { a as inner } from './x'\nexport const humanGateNodeProjectionMember = inner\nexport const b = ns.member`,
+    )
+    expect(declaredFunctionNames(reexport).has('humanGateNodeProjectionMember')).toBe(false)
+    expect(declaredFunctionNames(reexport).has('b')).toBe(false)
+  })
+
   test('只在注释里提到函数名不算定义点，也不算消费点', () => {
     const prose = fixture(`// 历史：composeSystemOverviewQuery 曾经有两份。
     /** 见 assertFrozenTaskTriggerPreflight。 */
     export const x = 1`)
-    expect([...declaredFunctionNames(prose)]).toEqual([])
+    expect([...declaredFunctionNames(prose)]).toEqual(['x'])
     expect(referencesIdentifier(prose, 'assertFrozenTaskTriggerPreflight')).toBe(false)
   })
 

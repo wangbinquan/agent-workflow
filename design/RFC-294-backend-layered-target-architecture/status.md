@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f063309116c9b38121d2dfad824fbe615c50bef20bc6001cfb3b43c9c3cc1aab`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4801 |
+| `architectureExceptions` | 4789 |
 | `backgroundJobs` | 335 |
-| `crossContextImports` | 5340 |
+| `crossContextImports` | 5328 |
 | `facades` | 322 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25030 |
+| `moduleSymbolOwners` | 25017 |
 | `mutationEntrypoints` | 1736 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 983 |
+| `publicSurfaces` | 984 |
 | `transactionExternalEffects` | 272 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -201,7 +201,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3182 |
-| legacy-inbound | 1439 |
+| legacy-inbound | 1427 |
 | infrastructure-external | 280 |
 | offered-consumption | 160 |
 | off-dag-offered | 88 |
@@ -216,7 +216,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3182 |
-| legacy-inbound | 1439 |
+| legacy-inbound | 1427 |
 | off-dag-offered | 88 |
 | temporary-internal-debt | 81 |
 | no-circular | 6 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2454 |
+| W9 | 2442 |
 | W4-E1 | 817 |
 | W4-C | 399 |
 | W4-E0 | 216 |
@@ -252,7 +252,7 @@
 
 | context | 数量 |
 | --- | --- |
-| resource-catalog | 248 |
+| resource-catalog | 249 |
 | task-execution | 209 |
 | collaboration | 126 |
 | identity-access | 62 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 983）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 984）
 
 | context | 数量 |
 | --- | --- |

@@ -15,16 +15,10 @@ import type { PostgresqlResourcePackageProviderComposition } from '@/modules/res
 import type { ResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type {
-  PreparedAgentPackageMutation,
-  PreparedCapabilityTemplatePackageMutation,
-  PreparedMcpPackageMutation,
   PreparedPackageMutation,
-  PreparedPluginPackageMutation,
-  PreparedSkillPackageMutation,
-  PreparedWorkflowPackageMutation,
-  PreparedWorkgroupPackageMutation,
   ResourcePackageMutationReceipt,
 } from '@/modules/resource-catalog/public/types'
+import { preparedPackageMutation } from '@/modules/resource-catalog/public/types'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import {
   databaseSessionFor,
@@ -521,57 +515,6 @@ async function assertActiveHumanMappings(
   }
 }
 
-function isPreparedAgent(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedAgentPackageMutation {
-  return prepared.mutation.kind === 'agent-create' || prepared.mutation.kind === 'agent-update'
-}
-
-function isPreparedSkill(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedSkillPackageMutation {
-  return prepared.mutation.kind === 'skill-create' || prepared.mutation.kind === 'skill-update'
-}
-
-function isPreparedMcp(prepared: PreparedPackageMutation): prepared is PreparedMcpPackageMutation {
-  return prepared.mutation.kind === 'mcp-create' || prepared.mutation.kind === 'mcp-update'
-}
-
-function isPreparedPlugin(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedPluginPackageMutation {
-  return prepared.mutation.kind === 'plugin-create' || prepared.mutation.kind === 'plugin-update'
-}
-
-function isPreparedWorkflow(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedWorkflowPackageMutation {
-  return (
-    prepared.mutation.kind === 'workflow-create' || prepared.mutation.kind === 'workflow-update'
-  )
-}
-
-function isPreparedWorkgroup(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedWorkgroupPackageMutation {
-  return (
-    prepared.mutation.kind === 'workgroup-create' || prepared.mutation.kind === 'workgroup-update'
-  )
-}
-
-function isPreparedCapabilityTemplate(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedCapabilityTemplatePackageMutation {
-  return (
-    prepared.mutation.kind === 'capability-framework-create' ||
-    prepared.mutation.kind === 'capability-framework-update' ||
-    prepared.mutation.kind === 'capability-binding-create' ||
-    prepared.mutation.kind === 'capability-binding-update' ||
-    prepared.mutation.kind === 'capability-template-create' ||
-    prepared.mutation.kind === 'capability-template-update'
-  )
-}
-
 async function prepareOperations(
   session: PostgresqlResourcePackageMutationSession,
   operations: readonly BundleOp[],
@@ -623,34 +566,34 @@ async function commitPrepared(
   switch (prepared.mutation.kind) {
     case 'agent-create':
     case 'agent-update':
-      if (isPreparedAgent(prepared))
+      if (preparedPackageMutation.isPreparedAgent(prepared))
         return await transactionSession.participants.agents.commit(prepared)
       break
     case 'skill-create':
     case 'skill-update':
-      if (isPreparedSkill(prepared))
+      if (preparedPackageMutation.isPreparedSkill(prepared))
         return await transactionSession.participants.skills.commit(prepared)
       break
     case 'mcp-create':
     case 'mcp-update':
-      if (isPreparedMcp(prepared))
+      if (preparedPackageMutation.isPreparedMcp(prepared))
         return await transactionSession.participants.mcps.commit(prepared)
       break
     case 'plugin-create':
     case 'plugin-update':
-      if (isPreparedPlugin(prepared)) {
+      if (preparedPackageMutation.isPreparedPlugin(prepared)) {
         return await transactionSession.participants.plugins.commit(prepared)
       }
       break
     case 'workflow-create':
     case 'workflow-update':
-      if (isPreparedWorkflow(prepared)) {
+      if (preparedPackageMutation.isPreparedWorkflow(prepared)) {
         return await transactionSession.participants.workflows.commit(prepared)
       }
       break
     case 'workgroup-create':
     case 'workgroup-update':
-      if (isPreparedWorkgroup(prepared)) {
+      if (preparedPackageMutation.isPreparedWorkgroup(prepared)) {
         return await transactionSession.participants.workgroups.commit(prepared)
       }
       break
@@ -660,7 +603,7 @@ async function commitPrepared(
     case 'capability-binding-update':
     case 'capability-template-create':
     case 'capability-template-update':
-      if (isPreparedCapabilityTemplate(prepared)) {
+      if (preparedPackageMutation.isPreparedCapabilityTemplate(prepared)) {
         return await transactionSession.participants.capabilityTemplates.commit(prepared)
       }
       break

@@ -5082,7 +5082,7 @@ why 写的是「**已实测不可达**」，依据是「唯一的生产入口更
 **账本里的「不可达」是一次断言，不是一条事实**；它和别的断言一样会过期，而过期的表现是
 偶发红、不是编译错。归一之后该条销账（20 → 19）。
 
-### 本轮 burn down 到哪了：38 → 23 组（§5l 再收四组 → 18）
+### 本轮 burn down 到哪了：38 → 23 组（§5l 再收五组 → 17）
 
 | 提交 | 收掉的组 | 性质 |
 | --- | --- | --- |
@@ -5215,6 +5215,52 @@ callsite|extinction|interlock`，命中即要求进 `guard-manifest.json`，否�
 登记**（`homonyms: [{ path, why }]`）：多出一个**没登记**的同名定义仍然红，逼下一个人来账本里
 回答「它是又一份副本（合掉）还是同名异物（写清为什么不合）」。实测有牙：往第三个文件塞一个
 同名空函数当场转红。
+
+### 第五对：`preparedPackageMutation` —— 整族七个类型谓词，账本净降 12 条边
+
+两个包应用引擎（`platform/persistence/sqlite/legacyResourcePackageBundleApply.ts` 与
+`platform/persistence/postgresqlResourcePackageAtomicApply.ts`）各揣**整族七个**逐字相同的类型
+谓词，差别只有函数名（`isPreparedAgentPackageMutation` vs `isPreparedAgent`）。
+
+判据是 `PreparedPackageMutation` 这个可辨识联合的**性质**，不是任一 provider 的性质：
+`mutation.kind` 的取值由公共合同定义，两个引擎只是消费者。两份并存的后果很具体——往联合里加
+一种 kind 时漏改一侧，那一侧会**静默跳过**该类变更（谓词返回 false，走不到对应分支），
+而两条路径各自的用例都还绿着。
+
+落 `modules/resource-catalog/public/types.ts`（该文件本就有运行时导出），收成**一个冻结对象**
+而不是七个具名导出——消费者只多一条边，而不是七条。账本因此**大幅下降**：
+
+| 账本 | 变化 |
+| --- | --- |
+| `rfc294-cross-context-observed-imports` | 5340 → **5328**（−12） |
+| `rfc294-architecture-exceptions` | 4801 → **4789**（−12） |
+| `rfc294-module-symbol-owners` | 25030 → **25017**（−13） |
+| `rfc294-public-surfaces` | 983 → 984（+1，一次性 permit） |
+
+−12 是因为两个消费者各自的**七条** `Prepared*PackageMutation` type import 只服务于那族谓词的
+返回类型，谓词搬走后全部变死，只换来一条值 import。
+
+#### 两条落位上的教训
+
+1. **对象属性上的类型谓词照样 narrow。** `preparedPackageMutation.isPreparedAgent(x)` 在
+   `if (!…) throw` 之后，TypeScript 对 `x` 的收窄与自由函数完全一样。收成对象不牺牲类型能力。
+2. **键名会撞进别的守卫的判据。** 初版键叫 `isAgent`，`rfc317-registry-reverse-completeness`
+   的**键级**判据按键名文本找消费者（`census.ts` 的注释自陈了这个弱点、靠符号级判据兜底），
+   于是它把我的 `isAgent` 算成 `NODE_KIND_BEHAVIORS.isAgent` 的直接消费者，把那条豁免判成过期。
+   **让路的应该是新代码**：我的键名是任意的，注册表的不是。改成 `isPrepared*` 前缀，
+   并把理由写在导出处——否则下一个人会把它改回短名。
+
+#### 棘轮账本第二次长个儿：定义点判据放宽 + 别名例外
+
+`const X = Object.freeze({…})` 的初始化器是一次**调用**，只认「函数形状」的初版对它恒红
+（一个定义点都数不出来）。账本要问的是「这个名字全仓只有一个定义点吗」，判据因此放宽到
+**任何模块级绑定**（函数 / 类 / 带初始化器的变量 / 方法 / 对象属性）。
+
+放宽立刻照出一处必须排除的形状：`public/participants.ts` 的
+`export const humanGateNodeProjectionMember = humanGateNodeProjectionMemberInternal`
+是**纯别名再导出**，绑定的是同一个值、不可能是第二份实现。所以加一条例外：初始化器是**标识符
+或属性访问**时不算定义点——否则这条守卫等于禁止一切 re-export。两条都配了负 fixture，
+并实测「往第三个文件塞一个同名 const」仍然转红。
 
 ### 覆盖
 

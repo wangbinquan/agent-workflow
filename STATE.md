@@ -2,6 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W8 补刀之五 —— 包变更类型谓词整族合一，账本净降 12 条边（2026-09-10）**：两个包应用引擎各揣**整族七个**逐字相同的类型谓词（差别只有函数名）。判据是 `PreparedPackageMutation` 这个公共可辨识联合的**性质**，不是任一 provider 的——漏改一侧会让那一侧**静默跳过**该类变更而两边用例都绿。收成 `public/types.ts` 的一个冻结对象 `preparedPackageMutation`：跨上下文边 5340 → **5328**、架构例外 −12、符号主 −13（两个消费者各七条只服务于谓词返回类型的 type import 全部变死），只有公共面 +1（一次性 permit，**下一提必须摘**）。
+> 两条落位教训：① 对象属性上的类型谓词照样 narrow，收成对象不牺牲类型能力；② 初版键名 `isAgent` 撞进 `rfc317-registry-reverse-completeness` 的**键级**判据（按键名文本找消费者），把 `NODE_KIND_BEHAVIORS.isAgent` 的豁免判成过期——**让路的是新代码**，改 `isPrepared*` 前缀并把理由写在导出处。
+> 棘轮账本第二次长个儿：定义点判据从「函数形状」放宽到**任何模块级绑定**（否则 `const X = Object.freeze({…})` 数不出定义点），同时加一条**纯别名例外**（`const A = B` 绑的是同一个值，否则等于禁止一切 re-export）。两条都配负 fixture，实测仍抓得到重复定义。机械重复组 18 → 17。
+
 > **RFC-359 W8 补刀之四 —— 资源包维护的托管根判据（2026-09-10）**：`assertManagedPath` + `errorValue` 在两个 provider 维护适配器里各一份逐字副本，收进同目录的 `resourcePackageMaintenancePaths.ts`：同模块同层，**零新增边**，`rfc294-module-symbol-owners` 反而 −1。`assertManagedPath` 决定「哪些路径算在托管根之内」，两侧漂开会让同一个清扫动作在两个 provider 上得出不同的「可删」结论，而两条路径各自的用例都还绿着。
 > 棘轮账本因此长出一格 `homonyms`：intent 模块里也有一个同名函数，但那是**另一个实现**（走 `pathInside`、另一个错误码）。放宽成「至少有一个定义点」会让真 fork 抓不到，正解是把同名异物逐条登记并写清为什么不合；没登记的同名定义仍然红（实测有牙）。机械重复组 19 → 18。
 

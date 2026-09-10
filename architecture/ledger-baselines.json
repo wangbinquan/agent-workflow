@@ -811,7 +811,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5340,
+      "baseline": 5328,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -832,7 +832,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4801,
+      "baseline": 4789,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -846,8 +846,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 983,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 984,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-359 W8 一次性豁免：`preparedPackageMutation`（七个类型谓词的冻结对象）进入 resource-catalog 的公共面。合一前 `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts` 与 `platform/persistence/postgresqlResourcePackageAtomicApply.ts` 各揣**整族七个**逐字相同的谓词，差别只有函数名。判据是 `PreparedPackageMutation` 这个可辨识联合的**性质**，不是任一 provider 的性质——往联合里加一种 kind 时漏改一侧，那一侧的应用引擎会静默跳过该类变更，而两条路径各自的用例都还绿着。所以它属于公共合同，`public/types.ts` 是正确落位（该文件本就有运行时导出）。这一条 +1 换来的是同批账本的大幅下降：跨上下文边 5340 → 5328（−12，两个消费者各自的七条 Prepared*PackageMutation type import 变死、只换来一条值 import）、架构例外 −12、符号主 −13。收成一个冻结对象而不是七个具名导出，正是为了让消费者只多一条边。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -867,12 +870,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25030,
+      "baseline": 25017,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f063309116c9b38121d2dfad824fbe615c50bef20bc6001cfb3b43c9c3cc1aab",
+    "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -885,8 +888,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8504cc1674b4d4b3d85475ff0d14d7c8bf683cd8",
-    "contentDigest": "sha256:1f25b3c8e8031d9f913a07583a0df53a24ca3457c9d8b5925ef560d2e1cd4da1",
+    "currentSnapshotSha": "b94f541c04a820b27099fc0295a3012cd7decdd6",
+    "contentDigest": "sha256:b0c1d39406a5f9c931cbd9c96e9e4e87165c1e9e05530fbf7405d71c4a9313a4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

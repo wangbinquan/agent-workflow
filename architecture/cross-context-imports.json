@@ -14113,23 +14113,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2c57cc1b32afa6d0e94f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedSkillPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedSkillPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
       "fromSymbol": "$file",
@@ -19092,23 +19075,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3c2ed482c633a2b1ca3b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkgroupPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedWorkgroupPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts#$file",
@@ -22324,23 +22290,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:45c2ea82b4a8f0bbdc41",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPluginPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedPluginPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromSymbol": "$file",
@@ -24615,23 +24564,6 @@
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "DatabaseTransaction",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4d1616dd88478a35cc22",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkflowPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedWorkflowPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -30059,6 +29991,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5ed6e2f10e267fccae96",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#preparedPackageMutation",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toSymbol": "preparedPackageMutation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/domain/humanGateOperation.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/domain/humanGateOperation.ts",
       "fromSymbol": "$file",
@@ -31570,23 +31519,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:637aa8f88bc9f13e78b9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedMcpPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedMcpPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts#$file",
@@ -31805,23 +31737,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toSymbol": "taskCollaborators",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:647757fca961e0888329",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkgroupPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedWorkgroupPackageMutation",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -32503,23 +32418,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "mcpRuntimeTestSessionLeases",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:670ee242ab6cca3eafca",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedSkillPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedSkillPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -46530,23 +46428,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:94d0a081a3f59f29b48e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPluginPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedPluginPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
@@ -52021,23 +51902,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a61690ce2fa1d907dcfd",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkflowPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedWorkflowPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -56730,23 +56594,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b5696c44e4c0ef416a46",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedMcpPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedMcpPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/closure.ts#$file",
@@ -61339,23 +61186,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c309a95453a58cb23ee7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedCapabilityTemplatePackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedCapabilityTemplatePackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/taskFeedback.ts#$file",
       "fromPath": "packages/backend/src/routes/taskFeedback.ts",
       "fromSymbol": "$file",
@@ -62304,23 +62134,6 @@
       "toPath": "packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts",
       "toSymbol": "hasResourceAclBypass",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c5b43600cf318a1ef9ac",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedAgentPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedAgentPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -67151,23 +66964,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d42cbc80d6c530d638ea",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedCapabilityTemplatePackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedCapabilityTemplatePackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts#$file",
@@ -68696,23 +68492,6 @@
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "DbTxSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d7f2dbf86f5455c74097",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedAgentPackageMutation",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toSymbol": "PreparedAgentPackageMutation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -71688,6 +71467,23 @@
       "toPath": "external:drizzle-orm",
       "toSymbol": "*",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e1bf9c6f2389170987e8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#preparedPackageMutation",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toSymbol": "preparedPackageMutation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -81619,9 +81415,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4801,
+    "architectureExceptions": 4789,
     "implementationSccs": 0,
-    "observedEdges": 5340,
+    "observedEdges": 5328,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -96255,22 +96051,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:2c57cc1b32afa6d0e94f",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedSkillPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedSkillPackageMutation"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts#$file",
@@ -101438,22 +101218,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionProgram.ts#TransactionProgramStep"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:3c2ed482c633a2b1ca3b",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedWorkgroupPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkgroupPackageMutation"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts",
@@ -104735,22 +104499,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:45c2ea82b4a8f0bbdc41",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedPluginPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPluginPackageMutation"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "knowledge-evolution",
       "fromFile": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
@@ -107084,22 +106832,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:4d1616dd88478a35cc22",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedWorkflowPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkflowPackageMutation"
     },
     {
       "edgeKind": "value",
@@ -112879,6 +112611,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
+      "id": "import:5ed6e2f10e267fccae96",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "preparedPackageMutation",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#preparedPackageMutation"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/domain/humanGateOperation.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/domain/humanGateOperation.ts#$file",
@@ -114558,22 +114306,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:637aa8f88bc9f13e78b9",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedMcpPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedMcpPackageMutation"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "runtime-management",
       "fromFile": "packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts",
@@ -114844,22 +114576,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:647757fca961e0888329",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedWorkgroupPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkgroupPackageMutation"
     },
     {
       "edgeKind": "value",
@@ -115644,22 +115360,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessionLeases"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:670ee242ab6cca3eafca",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedSkillPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedSkillPackageMutation"
     },
     {
       "edgeKind": "value",
@@ -130334,22 +130034,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineCommandOperation"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:94d0a081a3f59f29b48e",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedPluginPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPluginPackageMutation"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts",
@@ -136142,22 +135826,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomation"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:a61690ce2fa1d907dcfd",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedWorkflowPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedWorkflowPackageMutation"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -141166,22 +140834,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#codeWorkItems"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:b5696c44e4c0ef416a46",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedMcpPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedMcpPackageMutation"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/execution/closure.ts",
@@ -145839,22 +145491,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:c309a95453a58cb23ee7",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedCapabilityTemplatePackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedCapabilityTemplatePackageMutation"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file",
@@ -146876,22 +146512,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#hasResourceAclBypass"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:c5b43600cf318a1ef9ac",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedAgentPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedAgentPackageMutation"
     },
     {
       "edgeKind": "value",
@@ -152030,22 +151650,6 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "id": "import:d42cbc80d6c530d638ea",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedCapabilityTemplatePackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedCapabilityTemplatePackageMutation"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts",
@@ -153532,22 +153136,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "id": "import:d7f2dbf86f5455c74097",
-      "owner": "platform",
-      "removeAfterWave": "W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedAgentPackageMutation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedAgentPackageMutation"
     },
     {
       "edgeKind": "type",
@@ -156780,6 +156368,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
+      "id": "import:e1bf9c6f2389170987e8",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "preparedPackageMutation",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#preparedPackageMutation"
     },
     {
       "edgeKind": "type",
@@ -167607,7 +167211,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f063309116c9b38121d2dfad824fbe615c50bef20bc6001cfb3b43c9c3cc1aab",
+  "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -64,16 +64,10 @@ import type {
   ResourceRequestContext,
 } from '@/modules/resource-catalog/public/participants'
 import type {
-  PreparedAgentPackageMutation,
-  PreparedCapabilityTemplatePackageMutation,
-  PreparedMcpPackageMutation,
   PreparedPackageMutation,
-  PreparedPluginPackageMutation,
-  PreparedSkillPackageMutation,
-  PreparedWorkflowPackageMutation,
-  PreparedWorkgroupPackageMutation,
   ResourcePackageApplyScenarioPlan,
 } from '@/modules/resource-catalog/public/types'
+import { preparedPackageMutation } from '@/modules/resource-catalog/public/types'
 import {
   legacyResourcePackageMutationDependencies,
   legacyResourcePackageMutationRuntimeFactory,
@@ -163,59 +157,6 @@ const withApplyLock = createResourcePackageApplyLock()
 const ACTIVE_BUNDLE_APPLIES = new Set<string>()
 /** I9：再加一条下限——一个慢 npm 安装跨过小时 tick 是 ACTIVE，不是崩溃。 */
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
-
-function isPreparedAgentPackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedAgentPackageMutation {
-  return prepared.mutation.kind === 'agent-create' || prepared.mutation.kind === 'agent-update'
-}
-
-function isPreparedSkillPackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedSkillPackageMutation {
-  return prepared.mutation.kind === 'skill-create' || prepared.mutation.kind === 'skill-update'
-}
-
-function isPreparedMcpPackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedMcpPackageMutation {
-  return prepared.mutation.kind === 'mcp-create' || prepared.mutation.kind === 'mcp-update'
-}
-
-function isPreparedPluginPackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedPluginPackageMutation {
-  return prepared.mutation.kind === 'plugin-create' || prepared.mutation.kind === 'plugin-update'
-}
-
-function isPreparedWorkflowPackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedWorkflowPackageMutation {
-  return (
-    prepared.mutation.kind === 'workflow-create' || prepared.mutation.kind === 'workflow-update'
-  )
-}
-
-function isPreparedWorkgroupPackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedWorkgroupPackageMutation {
-  return (
-    prepared.mutation.kind === 'workgroup-create' || prepared.mutation.kind === 'workgroup-update'
-  )
-}
-
-function isPreparedCapabilityTemplatePackageMutation(
-  prepared: PreparedPackageMutation,
-): prepared is PreparedCapabilityTemplatePackageMutation {
-  return (
-    prepared.mutation.kind === 'capability-framework-create' ||
-    prepared.mutation.kind === 'capability-framework-update' ||
-    prepared.mutation.kind === 'capability-binding-create' ||
-    prepared.mutation.kind === 'capability-binding-update' ||
-    prepared.mutation.kind === 'capability-template-create' ||
-    prepared.mutation.kind === 'capability-template-update'
-  )
-}
 
 export async function applyResourceBundle(
   deps: BundleApplyDeps,
@@ -441,37 +382,37 @@ async function applyInner(
           switch (item.mutation.kind) {
             case 'agent-create':
             case 'agent-update':
-              if (!isPreparedAgentPackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedAgent(item)) {
                 throw new Error('resource-package-agent-capability-kind-mismatch')
               }
               return applyTx.agents.commit(item)
             case 'skill-create':
             case 'skill-update':
-              if (!isPreparedSkillPackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedSkill(item)) {
                 throw new Error('resource-package-skill-capability-kind-mismatch')
               }
               return applyTx.skills.commit(item)
             case 'mcp-create':
             case 'mcp-update':
-              if (!isPreparedMcpPackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedMcp(item)) {
                 throw new Error('resource-package-mcp-capability-kind-mismatch')
               }
               return applyTx.mcps.commit(item)
             case 'plugin-create':
             case 'plugin-update':
-              if (!isPreparedPluginPackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedPlugin(item)) {
                 throw new Error('resource-package-plugin-capability-kind-mismatch')
               }
               return applyTx.plugins.commit(item)
             case 'workflow-create':
             case 'workflow-update':
-              if (!isPreparedWorkflowPackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedWorkflow(item)) {
                 throw new Error('resource-package-workflow-capability-kind-mismatch')
               }
               return applyTx.workflows.commit(item)
             case 'workgroup-create':
             case 'workgroup-update':
-              if (!isPreparedWorkgroupPackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedWorkgroup(item)) {
                 throw new Error('resource-package-workgroup-capability-kind-mismatch')
               }
               return applyTx.workgroups.commit(item)
@@ -481,7 +422,7 @@ async function applyInner(
             case 'capability-binding-update':
             case 'capability-template-create':
             case 'capability-template-update':
-              if (!isPreparedCapabilityTemplatePackageMutation(item)) {
+              if (!preparedPackageMutation.isPreparedCapabilityTemplate(item)) {
                 throw new Error('resource-package-capability-template-kind-mismatch')
               }
               return applyTx.capabilityTemplates.commit(item)

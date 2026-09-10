@@ -6,7 +6,7 @@
     "moduleFiles": 1204,
     "productionFiles": 2585,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25030
+    "symbolsIncludingFileRoots": 25017
   },
   "entries": [
     {
@@ -103522,6 +103522,19 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#preparedPackageMutation",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:647b57609dbc996769196de807fd8e2788374c9d4d127905edfa61a0693dc0d5",
+      "status": "current-module",
+      "symbol": "preparedPackageMutation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PreparedPackageMutation",
       "removeAfterWave": null,
       "signatureDigest": "sha256:792257a4ede25f622382527c69789e53dd7b183d8e9e391e636599e7ed3526d4",
@@ -148112,90 +148125,6 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedAgent",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedAgent",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedCapabilityTemplate",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedCapabilityTemplate",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedMcp",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedMcp",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedPlugin",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedPlugin",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedSkill",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedSkill",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedWorkflow",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedWorkflow",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#isPreparedWorkgroup",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedWorkgroup",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#PACKAGE_IDEMPOTENCY_SCOPE",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -150144,90 +150073,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "convergeResourceBundleApplies",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedAgentPackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedAgentPackageMutation",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedCapabilityTemplatePackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedCapabilityTemplatePackageMutation",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedMcpPackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedMcpPackageMutation",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedPluginPackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedPluginPackageMutation",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedSkillPackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedSkillPackageMutation",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedWorkflowPackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedWorkflowPackageMutation",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "id": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#isPreparedWorkgroupPackageMutation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isPreparedWorkgroupPackageMutation",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -301063,5 +300908,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f063309116c9b38121d2dfad824fbe615c50bef20bc6001cfb3b43c9c3cc1aab"
+  "sourceDigest": "sha256:6305ba0cd59e32c78d68f9831fbf04441f3e1ed9ffa0f2a95bfdc282d05b6edd"
 }
