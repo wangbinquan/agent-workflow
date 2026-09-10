@@ -131,28 +131,27 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 文件头）。本刀只补对拍并把两条实测差异按强侧抬齐（SQLite 关闭后的裸驱动错误、PG 的引用式
   // 快照判等）；围栏本身是文件代号 vs 活跃生成代两台机器，作为能力差异留在账本里。
   'platform/persistence/LogicalSource: sqlite + postgresql — verified by rfc359-w8-logical-source-conformance.test.ts',
-  // RFC-359 W8：仍记 unverified，**理由已查清并落档**，不是「还没做」。
-  // 本守卫认的见证是机械的：`describeEachProvider` + **两侧实现各有一条值 import**
-  // （`witnessesPair`）——即对拍必须真的驱动两个实现，不能只观察它们的结果。
-  // 对迁移器，「驱动 PG 侧」意味着再跑一次 `migratePostgresqlSchema`，而它的 schema 名
-  // （`agent_workflow`）是写死的：在测试里重跑会打到 harness 共用的那个 schema 上，
-  // 破坏同集群其他测试文件的库（PG 的 advisory lock 还是集群级的，见 docs/dev-gotchas.md）。
-  // 换句话说，缺的不是意愿，是**迁移器暂时不支持在隔离 schema 上被驱动**。
+  // RFC-359 W8：**见证补上了**，AC-1 的成对面至此全部有对拍。
+  // 这一对不合一是对的——两侧是机制本身不同的两份实现：一侧把编号 SQL 文件逐条喂给 bun:sqlite
+  // （还要重写历史上的有序 JSON 聚合），另一侧在 advisory lock 下按 drizzle 声明准备 schema 并记
+  // 生成代。硬合一等于把一侧的机制塞进另一侧。
   //
-  // 与此同时，AC-1 判据要的「用户可见契约那一层」已经有了：
-  // `tests/rfc359-w8-migrator-conformance.test.ts`（双引擎）拿
-  // `buildLogicalSchemaContract()` 的花名册去问**活库**——每张声明的表、每一列都取一遍，
-  // 两个引擎逐字相同。它锁住了迁移器对应用的全部承诺（「跑完之后库真的实现了这份 schema」），
-  // 只是不满足本守卫的机械判据，所以状态位不动。放宽 `witnessesPair` 去迁就它是错的：
-  // 那条判据挡的正是「拿一个不驱动实现的测试冒充对拍」。
-  'platform/persistence/Migrator: sqlite + postgresql — unverified',
+  // 此前见不了证的**卡点是可测试性**，不是排期：驱动 PG 侧要重跑 `migratePostgresqlSchema`，
+  // 而它的 schema 名写死为 `agent_workflow`，在测试里重跑会打到 harness 共用的那个 schema 上、
+  // 破坏同集群其他测试文件的库。**harness 改成每文件一库之后这条限制没了**——对拍现在能再开一个
+  // 一次性库，把 PG 迁移器从零跑一遍；SQLite 侧对应一个全新内存库。
+  //
+  // 判据落在**用户可见契约**那一层（AC-1 的要求）：跑完之后这个库真的实现了应用声明的那份 schema
+  // ——每张声明的表、每一列都问各自引擎的目录表（`PRAGMA table_info` / `information_schema.columns`），
+  // 少一表或少一列都红。
+  'platform/persistence/Migrator: sqlite + postgresql — verified by rfc359-w8-migrator-conformance.test.ts',
 ]
 
 /** 还成对共存的 provider 适配器对数。**只降不升**——降到 0 就是 RFC-359 的合一完工线。 */
 export const PROVIDER_PAIR_COUNT = 10
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
-export const UNVERIFIED_PAIR_COUNT = 1
+export const UNVERIFIED_PAIR_COUNT = 0
 
 // ---------------------------------------------------------------------------
 // 判据本体：纯函数（输入是路径 / 测试事实，不碰文件系统），供真实树与内存 fixture 共用

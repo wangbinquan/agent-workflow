@@ -121,15 +121,16 @@ function actualRegistration(options: harness.DescribeEachProviderOptions = {}) {
       return () => {}
     },
     createPostgresqlHarnessDatabase: factory,
-    // RFC-359 W8：harness 在 beforeAll 抢一把库级 advisory lock、afterAll 释放
-    // （`acquirePostgresqlFileLock`，用来关掉文件边界的重叠窗口，见其头注）。
-    // 本控制面是纯注册面、不连库，所以这里给一个记账替身——它同时把「拿了必须放」
-    // 钉进 `calls` 序列：少了 `file.unlock` 就说明某条清理路径漏放锁了。
-    acquirePostgresqlFileLock: async () => {
-      calls.push('file.lock')
+    // RFC-359 W8：harness 在 beforeAll 给本文件建一个自己的 PostgreSQL 库、afterAll 删掉
+    // （`createPostgresqlFileDatabase`，把数据 / DDL 锁 / advisory lock 三样按库分开，见其头注）。
+    // 本控制面是纯注册面、不连库，所以这里给一个记账替身——它同时把「建了必须删」钉进
+    // `calls` 序列：少了 `database.drop` 就说明某条清理路径会把库留在集群里。
+    createPostgresqlFileDatabase: async () => {
+      calls.push('database.create')
       return {
-        release: async () => {
-          calls.push('file.unlock')
+        url: undefined,
+        drop: async () => {
+          calls.push('database.drop')
         },
       }
     },
@@ -353,13 +354,13 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
     })
     await microtasks()
     expect(cleanupDone).toBe(false)
-    expect(control.calls).toEqual(['body.register', 'file.lock', 'factory.enter'])
+    expect(control.calls).toEqual(['body.register', 'database.create', 'factory.enter'])
     control.initialized.resolve()
     await setup
     await microtasks()
     expect(control.calls).toEqual([
       'body.register',
-      'file.lock',
+      'database.create',
       'factory.enter',
       'factory.return',
       'runtime.close',
@@ -367,16 +368,16 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
     expect(cleanupDone).toBe(false)
     control.closed.resolve()
     await cleanup
-    // RFC-359 W8：`file.lock` 必须在**任何** DDL / 建库之前，`file.unlock` 必须在
-    // `runtime.close` 之后——下一个文件拿到锁时，本文件已经没有任何连接留在库上。
-    // 这个顺序就是那把锁全部的价值所在；顺序错了它挡不住文件边界的重叠。
+    // RFC-359 W8：`database.create` 必须在**任何** DDL 之前（主库要建在它上面），
+    // `database.drop` 必须在 `runtime.close` **之后**——`drop database` 要求库上没有连接。
+    // 顺序错了要么建不出主库，要么删库失败、把库留在集群里。
     expect(control.calls).toEqual([
       'body.register',
-      'file.lock',
+      'database.create',
       'factory.enter',
       'factory.return',
       'runtime.close',
-      'file.unlock',
+      'database.drop',
       'schema.restore',
     ])
     expect(control.observerCreations).toBe(0)
@@ -395,16 +396,16 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
     const failure = await cleanup.catch((caught: unknown) => caught)
     expect(failure).toBeInstanceOf(Error)
     expect((failure as Error).cause).toBe(error)
-    // RFC-359 W8：`file.lock` 必须在**任何** DDL / 建库之前，`file.unlock` 必须在
-    // `runtime.close` 之后——下一个文件拿到锁时，本文件已经没有任何连接留在库上。
-    // 这个顺序就是那把锁全部的价值所在；顺序错了它挡不住文件边界的重叠。
+    // RFC-359 W8：`database.create` 必须在**任何** DDL 之前（主库要建在它上面），
+    // `database.drop` 必须在 `runtime.close` **之后**——`drop database` 要求库上没有连接。
+    // 顺序错了要么建不出主库，要么删库失败、把库留在集群里。
     expect(control.calls).toEqual([
       'body.register',
-      'file.lock',
+      'database.create',
       'factory.enter',
       'factory.return',
       'runtime.close',
-      'file.unlock',
+      'database.drop',
       'schema.restore',
     ])
     expect(control.observerCreations).toBe(0)

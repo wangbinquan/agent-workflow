@@ -636,6 +636,11 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // PostgreSQL 那一支根本没有「文件」这个概念（它的围栏守的是活跃生成代）。
   // 用别名 / 动态 import 把它藏过文本判据是本文件注释亲口点名的绕法，所以宁可占一格。
   'rfc359-w8-logical-source-conformance.test.ts: 1',
+  // RFC-359 W8：与上一格同形——整份判据跑在 `describeEachProvider` 里（两个引擎各一遍），
+  // 这条 `new Database(` 在它 SQLite 能力分支的**里面**：本对拍要「把本引擎的迁移器**从零**跑一遍」，
+  // SQLite 侧的「从零」就是一个全新内存库，PostgreSQL 侧对应的是再开一个一次性库。
+  // 判据是纯文本、不该为它开洞，所以照样占一格。
+  'rfc359-w8-migrator-conformance.test.ts: 1',
   'routes-clarify.test.ts: 1',
   'routes-cross-clarify.test.ts: 1',
   'routes-inventory.test.ts: 1',

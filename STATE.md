@@ -4,19 +4,21 @@
 
 > ## 🔜 RFC-359 下一刀该做什么（2026-09-11 交接，按「先做哪个」排序）
 >
-> 干净基线：**`ca0c200fe` CI 42/42 全绿、零失败**。40P01 死锁已由文件级 advisory lock 止住。
-> 下面四件都是**结构性一刀**（各自一个批次），不要混在一次提交里：
+> 干净基线：**`ea6ef5acc` CI 42/42 全绿、零失败**。40P01 死锁已由**每文件一库**结构性消除。
+> 下面几件都是**结构性一刀**（各自一个批次），不要混在一次提交里：
 >
-> 1. **harness 每文件一库**（同时解锁 AC-1 最后一对）。选型与成本已量完（`docs/audit-backlog.md`：
->    迁移开销不是增量、`CREATE DATABASE` ~83ms、锁按库隔离）。要动的是
->    `closePostgresqlHarnessDatabases` 的契约——清理现在是「用主库连接 drop 附加库」，主库变成
->    一次性库后要改成用 base URL 开管理连接；那条契约由整个 `rfc359-w12-provider-cleanup.test.ts`
->    钉着。**做完 AC-1 就能收口**（迁移器要在隔离库上被驱动才能拿到对拍见证，见 plan §5m）。
+> 1. ~~**harness 每文件一库**~~ ✅ **2026-09-11 已落地**，并**顺势收口 AC-1**：
+>    `PROVIDER_PAIR_CONFORMANCE_LEDGER` 的 `Migrator` 从 unverified 变成 verified，
+>    `UNVERIFIED_PAIR_COUNT` 1 → 0，成对面全部有双引擎对拍。文件级 advisory lock 随之退役。
+>    清理契约**没动**（主库现在就是本文件的一次性库，删附加库照样成立；本文件的库在 `closeAll()`
+>    之后由 base URL 的管理连接删掉），所以 `rfc359-w12-provider-cleanup.test.ts` 一个字没改。
 > 2. **AC-12 provider 命名债**：账本 `PROVIDER_NAMED_FILE_DEBT` 现 59 条，其中 40 条无孪生。
 >    但「无孪生」≠「命名债」——登记在册的机制分叉要**保留** provider 名（AC-12 修订条款）。
 >    需要逐条判定：死代码删、命名债改名、登记分叉留。改名是高 churn（路径钉死的守卫多），
 >    建议一次只动一个 context。
 > 3. **AC-6 双库覆盖迁移**：仍有大量行为用例直接建 SQLite 内存库。这是最大的一块。
+>    **注意**：每文件一库落地后，把行为用例迁到 `describeEachProvider` 的代价比此前低了——
+>    不再有跨文件数据互踩，迁一批就能稳一批。
 > 4. **重复 burn-down 剩 15 组**（机械扫描器见 plan §5k）。下一个靶心是
 >    `services/capabilityTemplates.ts`（506 行）↔ `code-capability/application/capabilityTemplateOperations.ts`
 >    （388 行）——**同一域的两套实现**，共享 `rowFromInput` / `mergeableSnapshot` / `digest` 等一批
@@ -25,6 +27,11 @@
 >
 > **动手前先读 `docs/dev-gotchas.md` 的三条波及面挑法**（改 src / 改 tests/helpers / 新增测试文件，
 > 三条互不覆盖）——本轮连推四次红全是因为挑法不覆盖下一批。
+
+> **RFC-359 AC-1 收口 + harness 每文件一库（2026-09-11）**：`createPostgresqlFileDatabase` 让每个 `describeEachProvider` 注册面在 beforeAll 建一个自己的 PG 库、afterAll 删掉——数据 / DDL 锁 / advisory lock 三样**结构性**分开，文件级 advisory lock（当天的止血）随之退役。**清理契约没动**：主库现在就是本文件的一次性库，`closePostgresqlHarnessDatabases` 仍是「用主库连接删附加库、再关主库」，本文件的库在 `closeAll()` 之后由 base URL 的管理连接删掉，于是 `rfc359-w12-provider-cleanup.test.ts` 钉的那套契约一个字没改。
+> 一处必须一起做的对齐（被真实测试照出来）：**`process.env[urlEnv]` 要指向本文件的库**——本仓有一批测试自己从环境变量建 PG runtime（`rfc359-w8-logical-source-conformance` 等），改成每文件一库后它们会连到 base 库、看到空 schema（实测当场红 9 条）。`--isolate` 下改 `process.env` 是文件级安全的，afterAll 原样还原。
+> **AC-1 因此收口**：此前 `Migrator` 见不了证的卡点是「驱动 PG 侧要重跑 `migratePostgresqlSchema`、而它的 schema 名写死」。现在对拍能再开一个一次性库把 PG 迁移器从零跑一遍（SQLite 侧一个全新内存库），判据落在用户可见契约那一层——问各自引擎的**目录表**（`PRAGMA table_info` / `information_schema.columns`）核对声明的每表每列。`UNVERIFIED_PAIR_COUNT` 1 → 0，**成对面全部有双引擎对拍**。
+> 顺带又撞了一次已记录的坑：`drizzle-orm/sqlite-core` 的 `getTableConfig` 在 PostgreSQL 投影上会抛——所以列级核对走目录表而不是 drizzle 表对象，判据反而更强（读的是库里实际存在的东西，不是应用声明的回声）。账本：`rfc359-w5-test-engine-hardcoding` 656 → 657（一次性 permit），T19d 的 Migrator 一行两侧各 +1（倒挂绝对差不变，性质从「强侧独自变强」变成「两侧同步」）。
 
 > **修 `23b19d46b` 的红：新增测试文件撞上「枚举测试文件」的政策守卫（2026-09-11）**：`describe.skip` 触发 `test-suite-policy` 的「每一处 skip 都必须登记」，连带 `test-suite-allowed-skips` 计数 44 → 45（手维护基线，已手改 + 一次性 permit）。已按既有先例 `rfc359-w6-t26-postgresql-plan-audit.test.ts#skip` 同形登记并写清理由。
 > **第三条挑法落档**：本仓现在有三条互不覆盖的波及面挑法——改 `src/` 按「谁扫源码语料」、改 `tests/helpers/**` 按「谁断言 harness」、**新增测试文件按「谁枚举 tests/」**（实测 21 文件 / 453 用例，含 skip 政策、守卫清单两向钉死、语料下限、负 fixture）。本轮连推三次红正是因为新文件同时命中三批。三条 grep 都已写进 `docs/dev-gotchas.md`，新增测试文件后并起来跑一遍即可。

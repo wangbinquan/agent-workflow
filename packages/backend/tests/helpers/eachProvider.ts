@@ -687,57 +687,69 @@ function recordingRuntime(
   return { ...runtime, providerPool: () => recordingPool } as InstrumentedPostgresqlDatabaseRuntime
 }
 
-/**
- * RFC-359 W8 —— **文件级互斥**：一个测试文件独占 harness 库的 setup/teardown 窗口。
- *
- * 症状：CI 的 `[postgresql]` 分片间歇报 `40P01 deadlock detected`，`pg_locks` 的现场永远是
- * 「一边等 AccessExclusiveLock、另一边等 AccessShareLock」——前者是本文件 `beforeEach` 的
- * `TRUNCATE`（或 `drop schema`），后者是**上一个测试文件还没排空的读**。
- *
- * 成因是**文件边界的重叠**，不是某条业务用例：`bun test --isolate` 一个文件一个进程、基本顺序跑，
- * 但上一个文件的 afterAll / 连接池排空与下一个文件的 beforeAll 会短暂交叠，而整个 backend 套件的
- * PostgreSQL lane **共用同一个库**。重叠期间不只是锁会绕环——`TRUNCATE … CASCADE` 还会把另一个
- * 文件正在用的行整表清掉（`docs/audit-backlog.md` 记着这更严重的一半）。
- *
- * 处置：每个文件在 beforeAll 抢一把**库级** advisory lock、afterAll 释放，把那个窗口关掉。
- * 三点让它成立：
- *   · advisory lock 是**按数据库**的（2026-09-11 实测更正了此前「集群级」的记载，
- *     见 `docs/dev-gotchas.md`），而这些文件共用一个库——所以这把锁恰好覆盖需要互斥的范围；
- *   · 锁必须由**一条专属连接**持有：`pg_advisory_lock` 是会话级的，从连接池借的连接可能换人；
- *   · **自愈**：进程被 kill、连接断开时 PostgreSQL 自动释放，不会把后续文件永久挡住。
- *
- * 代价接近零：`--isolate` 下文件本就基本顺序执行，这把锁只是把「基本」变成「确实」。
- */
 async function closeQuietly(connection: PostgresqlHarnessDropConnection): Promise<void> {
   try {
     await connection.close({ timeout: 5 })
   } catch {
-    // 关闭失败不改变调用方的结果；连接终会被服务端回收，锁随之释放。
+    // 关闭失败不改变调用方的结果；连接终会被服务端回收。
   }
 }
 
-async function acquirePostgresqlFileLock(
+/**
+ * RFC-359 W8 —— **每个测试文件一个 PostgreSQL 数据库**。
+ *
+ * 症状（合一前）：CI 的 `[postgresql]` 分片间歇报 `40P01 deadlock detected`，现场永远是
+ * 「一边等 AccessExclusiveLock、另一边等 AccessShareLock」——前者是本文件 `beforeEach` 的
+ * `TRUNCATE`，后者是**上一个测试文件还没排空的读**。成因是文件边界的重叠：`bun test --isolate`
+ * 一个文件一个进程、基本顺序跑，但上一个文件的 afterAll / 连接池排空与下一个文件的 beforeAll
+ * 会短暂交叠，而整个 lane 此前**共用同一个库**。比锁更严重的是另一半：重叠期间
+ * `TRUNCATE … CASCADE` 会把另一个文件正在用的行整表清掉。
+ *
+ * 处置：每个 `describeEachProvider` 注册面在 beforeAll 建一个自己的库、afterAll 删掉。
+ * 三样东西因此**结构上**分开，不再需要任何互斥：
+ *   · 数据（`TRUNCATE` 只影响自己的库）；
+ *   · DDL 锁（AccessExclusiveLock 按库）；
+ *   · advisory lock（PostgreSQL 的 advisory lock **按数据库**——2026-09-11 实测更正了
+ *     此前「集群级」的记载，见 `docs/dev-gotchas.md`；迁移器的 schema 准备锁因此也不再跨文件争用）。
+ *
+ * 成本实测：`CREATE DATABASE` ~83ms，而**迁移开销不是增量**——harness 本来就在每个文件
+ * `drop schema … cascade` + 跑一次完整迁移（PG-only 单断言文件端到端 1.57–1.69s，
+ * SQLite-only 0.54–0.55s，差出来的 ~1.05s 就是那份已经在付的开销）。改成每文件一库只是把它
+ * 跑在自己的库上。选型过程见 `docs/audit-backlog.md`。
+ *
+ * 泄漏：进程被 kill 时库会留下。名字带 pid，建库前先 `drop if exists` 同名库（pid 复用即自愈）；
+ * CI 的 PG 服务每分片一个容器、每 job 全新，不会累积。本地清理见 audit-backlog 的一行命令。
+ */
+async function createPostgresqlFileDatabase(
   sourceUrl: string | undefined,
-): Promise<{ release: () => Promise<void> }> {
-  if (sourceUrl === undefined) return { release: async () => undefined }
-  const connection = createPostgresqlHarnessDropConnection(sourceUrl)
+  ordinal: number,
+): Promise<{ readonly url: string | undefined; readonly drop: () => Promise<void> }> {
+  if (sourceUrl === undefined) return { url: undefined, drop: async () => undefined }
+  const name = `aw_t_${String(process.pid)}_${String(ordinal)}`
+  const admin = createPostgresqlHarnessDropConnection(sourceUrl)
   try {
-    await connection.unsafe("select pg_advisory_lock(hashtextextended('aw-each-provider-file', 0))")
-  } catch (error) {
-    await closeQuietly(connection)
-    throw error
+    await admin.unsafe(`drop database if exists "${name}"`)
+    await admin.unsafe(`create database "${name}"`)
+  } finally {
+    await closeQuietly(admin)
   }
+  const url = new URL(sourceUrl)
+  url.pathname = `/${name}`
   return {
-    release: async () => {
-      // 先显式解锁再关连接：关连接也会释放，但显式解锁让「锁在谁手上」在 pg_locks 里立刻干净。
+    url: url.toString(),
+    drop: async () => {
+      const connection = createPostgresqlHarnessDropConnection(sourceUrl)
       try {
+        // 本文件的连接此刻已经全关（本函数只在 closeAll 之后被调用），但别人的诊断连接
+        // 可能还挂着；先踢掉再删，否则 `drop database` 会因「正在被访问」失败。
         await connection.unsafe(
-          "select pg_advisory_unlock(hashtextextended('aw-each-provider-file', 0))",
+          `select pg_terminate_backend(pid) from pg_stat_activity ` +
+            `where datname = '${name}' and pid <> pg_backend_pid()`,
         )
-      } catch {
-        // 连接已断 = 锁已由服务端释放，这里没有别的补救动作。
+        await connection.unsafe(`drop database if exists "${name}"`)
+      } finally {
+        await closeQuietly(connection)
       }
-      await closeQuietly(connection)
     },
   }
 }
@@ -1131,7 +1143,10 @@ function registerPostgresql(
   let restoreProvider: (() => void) | undefined
   let initialization: Promise<void> | undefined
   let cleanup: Promise<void> | undefined
-  let fileLock: { release: () => Promise<void> } | undefined
+  let fileDatabase:
+    | { readonly url: string | undefined; readonly drop: () => Promise<void> }
+    | undefined
+  let restoreUrlEnv: (() => void) | undefined
   const closeAll = () =>
     (cleanup ??= closePostgresqlHarnessDatabases(
       databases,
@@ -1143,11 +1158,25 @@ function registerPostgresql(
     runProviderHarnessLifecycle(lifecycle, 'beforeAll.setup', async (phase): Promise<void> => {
       providerBefore = currentDatabaseSchemaProvider()
       try {
-        const sourceUrl = process.env[urlEnv]
-        // 任何 DDL / TRUNCATE 之前先独占本库的 setup 窗口（见 acquirePostgresqlFileLock 头注）。
-        fileLock = await runProviderHarnessLifecycleStep(phase, 'file.lock', () =>
-          acquirePostgresqlFileLock(sourceUrl),
+        // 本文件自己的库：数据 / DDL 锁 / advisory lock 三样都随之与别的文件分开
+        // （见 createPostgresqlFileDatabase 头注）。
+        fileDatabase = await runProviderHarnessLifecycleStep(phase, 'database.create', () =>
+          createPostgresqlFileDatabase(process.env[urlEnv], databaseCount),
         )
+        const sourceUrl = fileDatabase.url
+        // **把环境变量也指过去**：本仓有一批测试自己从 `process.env[urlEnv]` 建 PG runtime
+        // （`rfc359-w8-logical-source-conformance` 等），它们默认「env 指的就是 harness 那个库」。
+        // 合一前两者天然同一个库；改成每文件一库后必须显式对齐，否则那些测试会连到 base 库、
+        // 看到一个空的 schema。`--isolate` 下一个文件一个进程，改 `process.env` 是文件级安全的；
+        // afterAll 原样还原。
+        if (sourceUrl !== undefined) {
+          const before = process.env[urlEnv]
+          process.env[urlEnv] = sourceUrl
+          restoreUrlEnv = () => {
+            if (before === undefined) delete process.env[urlEnv]
+            else process.env[urlEnv] = before
+          }
+        }
         const primary = await runProviderHarnessLifecycleStep(phase, 'factory.prepare', () =>
           createPostgresqlHarnessDatabase(urlEnv, undefined, phase),
         )
@@ -1168,8 +1197,10 @@ function registerPostgresql(
         } catch (cleanupError) {
           throw new AggregateError([error, cleanupError], 'PostgreSQL harness setup cleanup failed')
         } finally {
-          await fileLock?.release()
-          fileLock = undefined
+          restoreUrlEnv?.()
+          restoreUrlEnv = undefined
+          await fileDatabase?.drop()
+          fileDatabase = undefined
           if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
         }
         throw error
@@ -1237,10 +1268,13 @@ function registerPostgresql(
         )
         await runProviderHarnessLifecycleStep(phase, 'cleanup.close', () => closeAll())
       } finally {
-        // 连接全部关掉之后才放锁：下一个文件拿到锁时，本文件已经没有任何读残留在库上。
-        await runProviderHarnessLifecycleStep(phase, 'file.unlock', async () => {
-          await fileLock?.release()
-          fileLock = undefined
+        // **必须在 closeAll 之后**：`drop database` 要求库上没有连接，而 closeAll 才关掉
+        // 本文件的全部 runtime（附加库也在那一步里由主库连接删掉）。
+        await runProviderHarnessLifecycleStep(phase, 'database.drop', async () => {
+          restoreUrlEnv?.()
+          restoreUrlEnv = undefined
+          await fileDatabase?.drop()
+          fileDatabase = undefined
         })
         if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
       }

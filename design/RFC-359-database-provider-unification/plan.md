@@ -5271,12 +5271,18 @@ trigger 源、durable 行损坏时候选救不回来、读点只花一次往返�
 
 合一前这五条分支里**只有一条**（`trigger-context-invalid`，经 retry 端点）有双引擎覆盖。
 
-## 5m. AC-1 的最后一对：`Migrator` 为什么仍记 unverified（W8 查清，不是「还没做」）
+## 5m. AC-1 收口：`Migrator` 的见证补上了（W8，成对面 unverified 归零）
 
 成对适配器账本今天是 **10 对 / 9 对已见证 / 1 对未见证**（proposal §7 里「仍缺 5 对」的历史实测
 早已过期）。剩的那一对是 `platform/persistence/Migrator`。
 
-### 缺的不是意愿，是「迁移器暂时不支持在隔离 schema 上被驱动」
+> **2026-09-11 更新：已收口。** 下面记的卡点在同日被 harness「每文件一库」解开——对拍现在
+> 再开一个一次性库、把 PG 迁移器从零跑一遍，SQLite 侧对应一个全新内存库，
+> `witnessesPair` 的机械判据（两侧实现各一条值 import）因此满足。
+> `PROVIDER_PAIR_CONFORMANCE_LEDGER` 的状态位已改为 verified，`UNVERIFIED_PAIR_COUNT` 1 → 0，
+> **成对面至此全部有双引擎对拍**。原始分析保留在下面，因为它解释了「为什么不能靠放宽判据收口」。
+
+### （历史）缺的不是意愿，是「迁移器暂时不支持在隔离 schema 上被驱动」
 
 `rfc359-w5-provider-pair-conformance` 认的见证是**机械**判据（`witnessesPair`）：
 `describeEachProvider` + **两侧实现各有一条值 import**——对拍必须真的驱动两个实现，
@@ -5308,8 +5314,24 @@ drizzle 里加了一列而 SQLite 的迁移 SQL 没跟，SQLite 侧就少一列�
 ——只看「失败列表为空」的话，循环若被某个 `continue` 悄悄跳过大半张花名册，测试照样绿。
 另配一条负 fixture：查一张不存在的表必须抛，否则上一条判据对「表根本不存在」是瞎的。
 
-**状态位不动**：这条对拍不满足 `witnessesPair` 的机械判据，所以账本仍记 unverified。
-放宽那条判据去迁就它是错的——它挡的就是这个。
+**当时状态位没动**：那一版对拍不满足 `witnessesPair` 的机械判据，所以账本仍记 unverified。
+放宽那条判据去迁就它是错的——它挡的就是这个。**正确的解法是把被挡住的能力补上**
+（让迁移器能在隔离库上被驱动），而不是把判据改松；这也正是同日发生的事。
+
+### 收口后的形态
+
+`tests/rfc359-w8-migrator-conformance.test.ts` 现在有两半，都跑在 `describeEachProvider` 里：
+
+1. **契约那一半**（原有）：拿 `buildLogicalSchemaContract()` 的花名册去问 **harness 迁好的活库**，
+   每张声明的表发一条不带投影的 `select`。整个循环跑在 `recordStatements()` 里，
+   断言查询数 ≥ 花名册长度——防的是「循环被某个 continue 悄悄跳过大半张花名册」。
+2. **驱动那一半**（新增，AC-1 要的见证）：**从零跑一遍本引擎的迁移器**——SQLite 侧一个全新内存库
+   + `migrateSqlite`，PostgreSQL 侧再开一个一次性库 + `migratePostgresqlSchema`——然后问各自引擎的
+   **目录表**（`PRAGMA table_info` / `information_schema.columns`）核对声明的每一张表、每一列。
+
+第二半刻意**不用** drizzle 的表对象：`drizzle-orm/sqlite-core` 的 `getTableConfig` 在 PostgreSQL
+投影上会抛（`docs/dev-gotchas.md` 有这条，本轮又撞了一次）。走目录表反而更强——它读的是**库里
+实际存在的东西**，不是应用声明的回声。
 
 ## 6. 债与不做的事
 

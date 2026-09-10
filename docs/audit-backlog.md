@@ -4418,7 +4418,7 @@ TRUNCATE 已经是**单条语句**列出全部表，两条同样的 TRUNCATE 之
 `packages/backend/tests/rfc359-w8-migration-lock-scope.test.ts` 钉住（同库仍 fail-fast、
 不同库不互斥），改造时不会把它带坏。
 
-### 2026-09-11 已落地的**止血**：文件级 advisory lock（不是完整方案，但当天就止住了红）
+### 2026-09-11 **完整方案已落地：每文件一库**（止血的文件级 advisory lock 随之退役）
 
 `每文件一库` 那个完整方案要动 `closePostgresqlHarnessDatabases` 的契约（清理路径现在是「用主库的连接
 drop 附加库」，主库自己变成一次性库就得改成用 base URL 开管理连接），而那条契约有一整个
@@ -4443,10 +4443,40 @@ drop 附加库」，主库自己变成一次性库就得改成用 base URL 开�
 
 实测：60 个双引擎文件分两批跑，**357 + 419 = 776 pass / 0 fail**。
 
-**完整方案（每文件一库）仍然值得做**——它还解锁 AC-1 最后一对的对拍见证（迁移器要在隔离库上
-被驱动，见 `design/RFC-359-*/plan.md` §5m）。止血不替代它，只是把「每次 run 都红」降回可用。
+#### 同日落地的完整方案
 
-**在完整方案落地之前**仍把它当已知的间歇红：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据
+止血之后当天把完整方案也做了：`createPostgresqlFileDatabase` 在每个 `describeEachProvider`
+注册面的 beforeAll 建一个自己的库、afterAll 删掉。**文件级 advisory lock 因此退役**——
+数据、DDL 锁、advisory lock 三样现在都按库**结构性**分开，不再需要任何互斥，也不再因为
+互斥而串行化文件。
+
+两处必须一起做的对齐（都在改的时候被真实测试照出来）：
+
+- **清理契约没动**。`closePostgresqlHarnessDatabases` 仍然是「用主库连接删附加库、再关主库」
+  ——主库现在就是本文件那个一次性库，删附加库照样成立；本文件的库在 `closeAll()` **之后**
+  由一条 base URL 的管理连接删掉。于是 `rfc359-w12-provider-cleanup.test.ts` 钉的那套契约
+  一个字都不用改。
+- **`process.env[urlEnv]` 要指向本文件的库**。本仓有一批测试自己从环境变量建 PG runtime
+  （`rfc359-w8-logical-source-conformance` 等），它们默认「env 指的就是 harness 那个库」。
+  合一前两者天然同一个库；改成每文件一库后必须显式对齐，否则那些测试会连到 base 库、看到
+  一个空 schema（实测当场红 9 条）。`--isolate` 下一个文件一个进程，改 `process.env` 是文件级
+  安全的，afterAll 原样还原。
+
+**它解锁了 AC-1 的最后一对**：`platform/persistence/Migrator` 此前见不了证，卡点是
+「驱动 PG 侧要重跑 `migratePostgresqlSchema`，而它的 schema 名写死为 `agent_workflow`」。
+每文件一库之后，对拍可以再开一个一次性库把 PG 迁移器从零跑一遍，
+`UNVERIFIED_PAIR_COUNT` 因此 1 → 0。
+
+**泄漏兜底**：库名带 pid，建库前先 `drop if exists` 同名库（pid 复用即自愈）；
+CI 的 PG 服务每分片一个容器、每 job 全新，不会累积。本地清理一行：
+
+```bash
+docker exec <pg容器> psql -U postgres -tAq \
+  -c "select 'drop database \"'||datname||'\";' from pg_database where datname like 'aw\_%'" \
+  | docker exec -i <pg容器> psql -U postgres
+```
+
+**历史（止血那一版）**：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据
 莫名消失，先对照本条，别去改被判红的那条业务用例。
 
 ## 工作组回合引擎 `rfc359-w4-d19c` 的 `[postgresql]` 间歇红（2026-09-11 实撞一次，未定性）
