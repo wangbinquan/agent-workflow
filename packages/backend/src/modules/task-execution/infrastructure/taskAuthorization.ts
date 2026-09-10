@@ -6,9 +6,8 @@
 
 import { and, eq, inArray, or } from 'drizzle-orm'
 
-import type { ProviderNeutralDatabase } from '@/db/query'
+import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks } from '@/db/schema'
-import { taskVisibilityCondition } from '@/db/taskVisibility'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { SQL_IN_CHUNK } from '@/util/sqlChunk'
 import type {

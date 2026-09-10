@@ -98,8 +98,8 @@ import type {
   ReviewRoundSummary,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import { taskVisibilityCondition } from '@/db/taskVisibility'
+import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
+
 import {
   databaseSessionFor,
   engineOf,
