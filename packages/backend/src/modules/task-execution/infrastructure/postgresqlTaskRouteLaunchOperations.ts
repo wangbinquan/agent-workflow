@@ -2,13 +2,11 @@ import {
   UPLOAD_INPUTS_DIR,
   StartTaskSchema,
   TaskSchema,
-  WorkgroupRuntimeConfigSchema,
   applySpaceFields,
   buildClarifyEdges,
   initialDwState,
   migrateWorkflowDefinitionToLatest,
   redactGitUrl,
-  resolveWorkgroupOutputContract,
   type Agent,
   type GitCommitIdentity,
   type PlannedDirectoryNode,
@@ -98,6 +96,7 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
+import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
 
 // These values are wire-frozen in task snapshots and node-run identities. They
 // are repeated here deliberately: TaskExecution must not import Resource
@@ -367,32 +366,6 @@ export interface PostgresqlTaskExecutionLaunchParticipant {
       guard?: ProtectedMrLaunchGuard
     }>,
   ): Promise<Task>
-}
-
-function buildWorkgroupRuntimeConfig(group: Workgroup, goal: string): WorkgroupRuntimeConfig {
-  return WorkgroupRuntimeConfigSchema.parse({
-    workgroupId: group.id,
-    workgroupName: group.name,
-    mode: group.mode,
-    outputContract: resolveWorkgroupOutputContract(group.outputContract),
-    leaderMemberId: group.leaderMemberId,
-    switches: group.switches,
-    maxRounds: group.maxRounds,
-    completionGate: group.completionGate,
-    clarifyBudget: group.clarifyBudget,
-    fanOut: group.fanOut,
-    instructions: group.instructions,
-    goal,
-    members: group.members.map((member) => ({
-      id: member.id,
-      memberType: member.memberType,
-      agentName: member.agentName,
-      agentId: member.agentId ?? null,
-      userId: member.userId,
-      displayName: member.displayName,
-      roleDesc: member.roleDesc,
-    })),
-  })
 }
 
 function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDefinition {

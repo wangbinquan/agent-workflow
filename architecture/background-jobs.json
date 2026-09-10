@@ -8672,7 +8672,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$setTimeout:652",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$setTimeout:640",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8686,7 +8686,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:652",
+      "symbol": "$setTimeout:640",
       "targetContext": "task-execution"
     },
     {
@@ -12870,5 +12870,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:856472f9fe9a5a736018832647b555900c9faa202b1084298c9ba590058005d1"
+  "sourceDigest": "sha256:f370436c7b0af676b4fb244a59fb86e248345e5b7dd280fed362fd348e239a58"
 }

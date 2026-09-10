@@ -136,7 +136,7 @@ import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
   loadRollbackTargetFrom,
   rollbackNodeRunWorktrees,
-  type RollbackOutcome,
+  snapshotMissingDetail,
 } from '@/services/nodeRollback'
 import { selectSyncRollbackTargets } from '@/services/task'
 import {
@@ -1518,19 +1518,6 @@ function assertNotSourceTerminated(task: Pick<TaskRow, 'id' | 'sourceTermination
   )
 }
 
-/** `snapshot-missing` 的合并说明；没有这类失败时返回 null。 */
-function snapshotLostDetail(outcome: RollbackOutcome): string | null {
-  const failures = outcome.failures.filter((failure) => failure.code === 'snapshot-missing')
-  if (failures.length === 0) return null
-  return failures
-    .map((failure) =>
-      failure.worktreeDirName === undefined
-        ? failure.message
-        : `${failure.worktreeDirName}: ${failure.message}`,
-    )
-    .join('; ')
-}
-
 /**
  * RFC-098 WP-9 —— 承诺要恢复的基线已被 gc prune：失败关闭。任务落 `failed`
  * （`errorSummary='snapshot-lost'` / `'live-child-survived'`），调用方拿 409。返回 `never`。
@@ -1609,7 +1596,7 @@ async function assertRollbackBaselinesPresent(
       { resetOnEmptySnapshot: false, checkOnly: true },
       log,
     )
-    const detail = snapshotLostDetail(outcome)
+    const detail = snapshotMissingDetail(outcome)
     if (detail !== null) {
       await escalateUnsafeContinuation(dependencies, {
         taskId: input.taskId,
@@ -1674,7 +1661,7 @@ async function rollbackRunsForContinuation(
       { resetOnEmptySnapshot: false },
       log,
     )
-    const detail = snapshotLostDetail(outcome)
+    const detail = snapshotMissingDetail(outcome)
     if (detail !== null) {
       await escalateUnsafeContinuation(dependencies, {
         taskId: input.taskId,

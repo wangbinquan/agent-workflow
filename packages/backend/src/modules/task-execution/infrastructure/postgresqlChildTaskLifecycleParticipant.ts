@@ -30,7 +30,7 @@ import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
   loadRollbackTargetFrom,
   rollbackNodeRunWorktrees,
-  type RollbackOutcome,
+  snapshotMissingDetail,
 } from '@/services/nodeRollback'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -112,18 +112,6 @@ function selectResumeRollbackTargets(runs: readonly ResumeRun[]): readonly Resum
   return [...latest.values()].filter(
     (run) => (run.status === 'failed' || run.status === 'interrupted') && run.childTaskId === null,
   )
-}
-
-function snapshotLost(outcome: RollbackOutcome): string | null {
-  const failures = outcome.failures.filter((failure) => failure.code === 'snapshot-missing')
-  if (failures.length === 0) return null
-  return failures
-    .map((failure) =>
-      failure.worktreeDirName === undefined
-        ? failure.message
-        : `${failure.worktreeDirName}: ${failure.message}`,
-    )
-    .join('; ')
 }
 
 function validateFrozenTrigger(task: ResumeTask): void {
@@ -487,7 +475,7 @@ async function rollbackForResume(
       { resetOnEmptySnapshot: false, checkOnly: true },
       log,
     )
-    const missing = snapshotLost(outcome)
+    const missing = snapshotMissingDetail(outcome)
     if (missing !== null) {
       await markUnsafeResume(dependencies, {
         taskId: input.taskId,
@@ -516,7 +504,7 @@ async function rollbackForResume(
       { resetOnEmptySnapshot: false },
       log,
     )
-    const missing = snapshotLost(outcome)
+    const missing = snapshotMissingDetail(outcome)
     if (missing !== null) {
       await markUnsafeResume(dependencies, {
         taskId: input.taskId,

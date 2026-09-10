@@ -2718,17 +2718,17 @@
         "import:1752c3fec470dee560f6",
         "import:2d2f5d3d9b8adb8c0c95",
         "import:2ee8db50244e2d468365",
-        "import:53533672fe0d660b70db",
         "import:6133af78893426a061d6",
-        "import:88914d884f2803e2d0a7",
         "import:8e569ddadff3d51b6e9a",
+        "import:95a7e13b34f4cb5f375b",
         "import:9847b98735db84703ad4",
         "import:a11dc495c174c3dd4863",
         "import:b5d44617eeddcf857eee",
         "import:d28779cca316098b7600",
         "import:d6138ae2ff4d2f57d68b",
         "import:d9127123cdef27f883d8",
-        "import:e05ad997158ac33d4288"
+        "import:e05ad997158ac33d4288",
+        "import:eaf3b508250fc6c203fe"
       ],
       "exportedSymbols": [
         "PlannedNodeRunRollbackTarget",
@@ -2738,7 +2738,8 @@
         "loadRollbackTarget",
         "loadRollbackTargetFrom",
         "planNodeRunRollbackTargets",
-        "rollbackNodeRunWorktrees"
+        "rollbackNodeRunWorktrees",
+        "snapshotMissingDetail"
       ],
       "file": "packages/backend/src/services/nodeRollback.ts",
       "id": "facade:packages/backend/src/services/nodeRollback.ts",
@@ -6746,5 +6747,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:856472f9fe9a5a736018832647b555900c9faa202b1084298c9ba590058005d1"
+  "sourceDigest": "sha256:f370436c7b0af676b4fb244a59fb86e248345e5b7dd280fed362fd348e239a58"
 }

@@ -1,12 +1,10 @@
 import {
-  WorkgroupRuntimeConfigSchema,
   WorkflowDefinitionSchema,
   WORKFLOW_SCHEMA_VERSION,
   buildClarifyEdges,
   initialDwState,
   migrateWorkflowDefinitionToLatest,
   redactGitUrl,
-  resolveWorkgroupOutputContract,
   type StartTask,
   type TaskCatalogVisibility,
   type TaskLaunchOrigin,
@@ -30,7 +28,6 @@ import {
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import {
   FrozenWorkgroupGroupSchema,
-  type FrozenWorkgroupGroup,
 } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
@@ -63,6 +60,7 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
+import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
 
 // Wire-frozen task/workflow identities. TaskExecution repeats them here rather
 // than importing Resource Catalog provider-private infrastructure.
@@ -175,35 +173,6 @@ function parseLineage(raw: string | null, executionLineageId: string): readonly 
       workflowRevision: null,
     },
   ]
-}
-
-function buildWorkgroupRuntimeConfig(
-  group: FrozenWorkgroupGroup,
-  goal: string,
-): WorkgroupRuntimeConfig {
-  return WorkgroupRuntimeConfigSchema.parse({
-    workgroupId: group.id,
-    workgroupName: group.name,
-    mode: group.mode,
-    outputContract: resolveWorkgroupOutputContract(group.outputContract),
-    leaderMemberId: group.leaderMemberId,
-    switches: group.switches,
-    maxRounds: group.maxRounds,
-    completionGate: group.completionGate,
-    clarifyBudget: group.clarifyBudget,
-    fanOut: group.fanOut,
-    instructions: group.instructions,
-    goal,
-    members: group.members.map((member) => ({
-      id: member.id,
-      memberType: member.memberType,
-      agentName: member.agentName,
-      agentId: member.agentId ?? null,
-      userId: member.userId,
-      displayName: member.displayName,
-      roleDesc: member.roleDesc,
-    })),
-  })
 }
 
 function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDefinition {

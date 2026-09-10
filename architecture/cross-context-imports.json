@@ -26608,23 +26608,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:53533672fe0d660b70db",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#RollbackOutcome",
-      "toPath": "packages/backend/src/services/nodeRollback.ts",
-      "toSymbol": "RollbackOutcome",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/taskRoutes.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/public/taskRoutes.ts",
       "fromSymbol": "$file",
@@ -43028,23 +43011,6 @@
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:88914d884f2803e2d0a7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#RollbackOutcome",
-      "toPath": "packages/backend/src/services/nodeRollback.ts",
-      "toSymbol": "RollbackOutcome",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
@@ -46782,6 +46748,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:95a7e13b34f4cb5f375b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#snapshotMissingDetail",
+      "toPath": "packages/backend/src/services/nodeRollback.ts",
+      "toSymbol": "snapshotMissingDetail",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -74612,6 +74595,23 @@
       "toPath": "packages/backend/src/modules/collaboration/public/events.ts",
       "toSymbol": "collaborationCommittedEventCatalogJson",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:eaf3b508250fc6c203fe",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#snapshotMissingDetail",
+      "toPath": "packages/backend/src/services/nodeRollback.ts",
+      "toSymbol": "snapshotMissingDetail",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -109148,22 +109148,6 @@
     {
       "edgeKind": "type",
       "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
-      "id": "import:53533672fe0d660b70db",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/nodeRollback",
-      "syntax": "static-import",
-      "targetSymbol": "RollbackOutcome",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/nodeRollback.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#RollbackOutcome"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/public/taskRoutes.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/taskRoutes.ts#$file",
       "id": "import:536c976bd1fd4396631e",
@@ -126538,22 +126522,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants.ts#PostgresqlIntentApplyArtifact"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
-      "id": "import:88914d884f2803e2d0a7",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/nodeRollback",
-      "syntax": "static-import",
-      "targetSymbol": "RollbackOutcome",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/nodeRollback.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#RollbackOutcome"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
@@ -130520,6 +130488,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
+      "id": "import:95a7e13b34f4cb5f375b",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/nodeRollback",
+      "syntax": "static-import",
+      "targetSymbol": "snapshotMissingDetail",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/nodeRollback.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#snapshotMissingDetail"
     },
     {
       "edgeKind": "value",
@@ -159691,6 +159675,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
+      "id": "import:eaf3b508250fc6c203fe",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/nodeRollback",
+      "syntax": "static-import",
+      "targetSymbol": "snapshotMissingDetail",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/nodeRollback.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#snapshotMissingDetail"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
@@ -167379,7 +167379,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:856472f9fe9a5a736018832647b555900c9faa202b1084298c9ba590058005d1",
+  "sourceDigest": "sha256:f370436c7b0af676b4fb244a59fb86e248345e5b7dd280fed362fd348e239a58",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
