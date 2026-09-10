@@ -1099,6 +1099,40 @@ TypeScript 解析结果。缓存是**共享**的，于是全树解析那笔开�
 （本仓这一族统一 `20_000`），不要依赖「谁先跑」的运气；只给其中几条写、其余吃默认值，
 等于把红留给顺序抽签。识别信号：报错是 `^ this test timed out after 5000ms.` 而不是断言 diff。
 
+## 「包 db 代理拦 `db.transaction`」的并发注入器，在统一事务原语下**静默失效**（RFC-359 实测，2026-09-11）
+
+本仓有一类并发回归用例，靠包一层 db 代理来模拟外部竞争写者：
+
+```ts
+new Proxy(db, { get: (t, p) => (p === 'transaction' ? (...a) => { sabotage(); return … } : …) })
+```
+
+在 `dbTxSync` 时代这成立——它确实走 drizzle 的 `db.transaction(cb)`。统一事务原语
+（`databaseSessionFor(db).transaction`）**不走它**：自己发 `db.run(sql.raw('BEGIN IMMEDIATE'))`。
+于是同一个注入器**一次都不触发**，竞争写者不发生、CAS 照常成功——**用例照样绿，但一个并发场景
+都没验**。这是最难发现的一类失效：没有报错、没有红、判据只是不再验任何东西。
+
+三条一起塌，写清楚免得下次重摸：
+
+1. **边界信号变了**：拦 `transaction` 要改成「拦 `run`、参数里含 BEGIN」。
+   （`JSON.stringify(sql.raw('BEGIN IMMEDIATE'))` 里就有 `"BEGIN IMMEDIATE"`，可直接判。）
+2. **SQLite 上事务句柄就是 db 对象本身**（`createSqliteDatabaseSession`：
+   `const tx = db as unknown as DatabaseTransaction`），所以「把回调里的 tx 再包一层」无处可包；
+   反过来说，直接包 `db.update` 就能拦到事务内的语句。
+3. **新原语串行化写者**：事务开着时用别的句柄写，会被 `guardForeignStatements` 判成跨上下文写入
+   并抛 `CrossContextTransactionError`（守卫是对的：那笔写会加入别人的事务并随它回滚）。
+   把搅动挪进事务里能绕开守卫，但它**跟着 CAS 一起回滚**——固定轮换的目标状态于是会与 CAS 的
+   期望值对上号，几轮之后 CAS 反而赢了。要搅就「读当前值再翻到另一个」，别用固定轮换。
+   还有一条更硬的：**代理与裸 db 是两个不同的 client 对象**，而 `databaseSessionFor` / `reuseFrame`
+   按对象身份缓存与复用，混用会在同一条 SQLite 连接上开出第二笔事务
+   （`Failed to run the query 'BEGIN IMMEDIATE'`）。
+
+**结论**：跨越统一事务原语的并发注入只有两条路——注入点做在**被测代码内部**（钩子 / 端口），
+或者用**两个真连接**（PostgreSQL 上可行，SQLite 内存库上不行）。继续在客户端外面套代理，
+只会在下一处再塌一次。全仓 `prop === 'transaction'` 的注入器共 3 处
+（`rfc097-task-status-cas` / `rfc300-terminal-workspace-policy` / `retry-cascade-kind-matrix`），
+生命周期写事务哪天真切过去，这三处要一起看。
+
 ## 钩子的预算必须**大于它体内 await 的那个 deadline**（2026-09-11 一天内两条 CI 红都是这个）
 
 bun 的 `test` / `beforeAll` / `beforeEach` 默认超时都是 **5s**，而 fixture 里常常 await 一个

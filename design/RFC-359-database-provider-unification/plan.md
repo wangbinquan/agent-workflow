@@ -5525,6 +5525,72 @@ async 事务后就有了事件循环让渡窗口，护栏是 `databaseTransactio
 3. AC-6 的剩余迁移——本刀实测：对整份积压跑一遍机械迁移，142 个文件里 **138 个**的报错指向
    `DbClient` 形参，只有 4 个能独立落地。**这三件事是一件事，别分开推。**
 
+## 5p. `setTaskStatus` 切到中立事务：**做完了、又整刀退回**（W8，附可复用补丁）
+
+按 §5o 的执行说明把根那一刀（`sqlite/taskLifecycle.ts` 的两笔）真做了一遍。生产侧**全部完成**，
+typecheck 干净，`sqlite/taskLifecycle.ts` 的同步事务调用点 **2 → 0**。卡住的不是生产代码，
+是三份并发回归用例的**注入手法**。整刀已回退，diff 原样存在
+`design/RFC-359-database-provider-unification/settaskstatus-cutover.patch`（868 行），
+下一刀直接 `git apply` 即可从这里接着走，不必重摸。
+
+### 生产侧做了什么（全部落地、typecheck 干净）
+
+| 改动 | 位置 | 说明 |
+| --- | --- | --- |
+| `withOwnedTaskWrite` | `sqliteTaskOwnership.ts` | `withOwnedTaskTx` 的中立异步孪生，体内逐行等价（同一条 owner fence UPDATE），CAS 判据换成「取回行数为 0」 |
+| `writeTaskStatusAsync` | `sqlite/taskLifecycle.ts` | 同一个 `taskLifecycleWriteSequence` program，换 `driveAsyncProgram` + 中立的 `appendTaskLifecycleTransitionCommittedEvent` |
+| `cancelOpenNodeRuns` | `sqlite/taskLifecycle.ts` | `cancelOpenNodeRunsTx` 的中立孪生，判据一字不差 |
+| `setTaskStatus` / `trySetTaskStatus` | 同上 | `dbTxSync` / `withOwnedTaskTx` → `databaseSessionFor(db).transaction` / `withOwnedTaskWrite`；`onTransitionTx` 的 tx 类型放宽成 `DatabaseTransaction`、返回值允许 Promise |
+| 四处 `onTransitionTx` 回调 | `services/task.ts` | 改用中立孪生：`cancelOpenNodeRuns` / `revokeExactOwnerInTransaction` / `terminalizeTaskExecutionIntentsInTransaction` / `submitTaskContinuationInTransaction` |
+| `setDwStateTx` | `legacy/workgroup/state.ts` | 唯一生产调用方是 resume 准入的 `onClaimTx`，签名放宽到中立句柄并 async |
+| 三个中立参与者出 public | `public/participants.ts` | 与既有的 `setNodeRunStatusInTransaction` 同一姿势 |
+
+**同步那份全部保留**：RFC-333 的人工门参与者（`transitionHumanGateTaskTx`）挂在别人的同步大事务上，
+它要的就是同步解释——这正是 `taskLifecycleWriteSequence` 头注释说的「caller chooses …
+interpretation」的用法。
+
+### 退回的原因：三份用例的注入手法钉在 `db.transaction` 上
+
+29 个相关文件跑下来 6 条红，全是**注入手法**、不是产品行为。前五条已经修好（补丁里带着）：
+
+- `rfc097-task-status-cas` / `rfc300-terminal-workspace-policy` 的 `dbWithCompetingWriter`
+  只拦 `db.transaction`。统一原语不走它，而是自己发 `db.run(sql.raw('BEGIN IMMEDIATE'))`
+  ——**旧写法在新原语下一次都不触发**，竞争写者不发生、CAS 照常成功，判据于是静默退化成
+  「没有并发」（这是最危险的一类：不报错，只是不再验任何东西）。改成两种边界都拦即可。
+- `rfc333-human-gate-source-locks` 是源码锁，锚点跟着实现走（同步锚保留、异步锚新增）。
+- `rfc359-w16-task-lifecycle-write-sequence` 的 companion 回调改 async 并逐条 await。
+
+**卡住的是第六条**：`review-cancel-concurrency` 的
+「parent cascade surfaces child cancel starvation」。它要模拟「外部写者在每次 CAS 前把子任务
+搅到另一个可取消状态」，实现是**包一层 db 代理拦 `transaction`**。在中立原语下这条路三处同时塌：
+
+1. 边界信号变了（同上）；
+2. **SQLite 上事务句柄就是 db 对象本身**（`createSqliteDatabaseSession`：
+   `const tx = db as unknown as DatabaseTransaction`），于是「拿回调里的 tx 再包一层」无处可包；
+3. 更本质的一条：新原语**串行化写者**。事务开着时用别的句柄写，会被
+   `guardForeignStatements` 判成跨上下文写入并抛 `CrossContextTransactionError`——那条守卫是对的，
+   那笔写确实会加入别人的事务并随它回滚。把搅动挪进事务里能绕开守卫，但它**跟着 CAS 一起回滚**，
+   于是固定轮换的目标状态会与 CAS 的期望值对上号，第三次就让 CAS 赢了（实测）。改成「读当前值再翻到
+   另一个」修掉了这一点，随后又撞上 `Failed to run the query 'BEGIN IMMEDIATE'`——代理与裸 db
+   是**两个不同的 client 对象**，`databaseSessionFor` / `reuseFrame` 按对象身份缓存与复用，
+   混用就会在同一条 SQLite 连接上开出第二笔事务。
+
+也就是说：**这条用例要验的产品行为（取消重试到饥饿）仍然成立，但「用 db 代理模拟外部并发写者」
+这套手法在统一事务原语下不再可用**。要么给它换一种注入（例如让被测入口接受一个可注入的
+「每次 CAS 前的钩子」，而不是从外面猴补客户端），要么重新表达这条判据。**这是在改一条既有回归
+判据的意图，与 §5o 里 `onSettledTx` 那条同类——先确认再动**，所以整刀退回。
+
+### 给下一刀的话
+
+- 补丁在 `settaskstatus-cutover.patch`，`git apply` 后只剩 `review-cancel-concurrency` 一条红。
+- **先把「怎么注入并发」这件事定下来再动手**。本刀实测：跨越统一事务原语的并发注入只有两条路
+  ——注入点在**被测代码内部**（钩子 / 端口），或者干脆用两个真连接（PostgreSQL 上可行，
+  SQLite 内存库上不行）。继续在客户端外面套代理只会在下一处再塌一次。
+- 顺带记住这条最阴的失效形态：**只拦 `db.transaction` 的注入器在新原语下静默失效**，
+  用例照样绿，但它一个并发场景都没验。全仓 `prop === 'transaction'` 的注入器共 3 处
+  （`rfc097-task-status-cas` / `rfc300-terminal-workspace-policy` / `retry-cascade-kind-matrix`），
+  哪一天根那一刀落地，这三处都要一起看。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

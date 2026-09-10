@@ -24,7 +24,17 @@
 >    只有 4 个能独立落地。整棵 `src/` 做放宽实验（排除 `db/client.ts` 与 `db/txSync.ts`）后
 >    只剩 **92 条错 / ~12 个文件**，全部落在 `SYNC_TRANSACTION_DEBT` 那 4 个文件及其调用闭包上。
 >    **`DbClient` 标注绝大多数是纯过窄、白送；AC-6 不是「一个个迁」，是等下面那一刀。**
-> 3.5. **同步事务面收口 —— 现在是最高优先级，plan §5o 已经把它踩清楚（未动手）**：账本
+> 3.5. **同步事务面收口 —— 最高优先级。根那一刀 2026-09-11 已经做完又整刀退回，
+>    diff 存在 `design/RFC-359-database-provider-unification/settaskstatus-cutover.patch`（868 行），
+>    `git apply` 即可接着走（plan §5p 是完整复盘）**。生产侧全部落地、typecheck 干净、
+>    `sqlite/taskLifecycle.ts` 同步事务调用点 2 → 0；卡住的是**三份并发回归用例的注入手法**
+>    ——它们靠「包 db 代理拦 `db.transaction`」模拟外部并发写者，而统一原语不走 `db.transaction`
+>    （自己发 `BEGIN IMMEDIATE`）、SQLite 上 tx 就是 db 对象本身、而且会串行化写者。
+>    其中五条已修好（补丁里带着），第六条
+>    （`review-cancel-concurrency` 的 parent-cascade starvation）要改这条回归判据的表达方式，
+>    **属于「改既有判据意图」，先确认再动**。**最阴的一点**：只拦 `db.transaction` 的注入器在新
+>    原语下**静默失效**——用例照样绿，但一个并发场景都没验。全仓这样的注入器有 3 处，
+>    根那一刀落地时要一起看。以下是原有的踩点记录：账本
 >    `SYNC_TRANSACTION_DEBT` 现值 **7 个调用点 / 4 个文件**，但它们是**一棵树**不是七件事，
 >    根在 `sqlite/taskLifecycle.ts` 的 `setTaskStatus`。**好消息是中立解释器与中立写序列都已在仓里**
 >    （`transactionProgram.ts` 的 `driveAsyncProgram` + `taskLifecycleWriteSequence.ts`
