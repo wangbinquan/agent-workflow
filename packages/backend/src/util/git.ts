@@ -33,9 +33,32 @@ export interface GitRunResult {
  *     still reject when a known host's fingerprint changes (MITM defense).
  *   - GIT_TERMINAL_PROMPT=0 — same treatment for HTTPS credential prompts.
  */
+/**
+ * RFC-359 W57 —— 从继承的环境里清掉会**改写 git 认定的仓库 / 工作区 / 索引**的那几个变量。
+ *
+ * `GIT_DIR` 的优先级**高于 `-C`**：`-C` 只改工作目录，仓库位置仍以 `GIT_DIR` 为准。所以
+ * 只要进程环境里带着它，`git -C <任务工作树> …` 会绕过调用方指定的工作区、打到那一个仓库上。
+ * daemon 给每个任务 spawn 的正是这个形状（从 git hook 起的进程、或有人在 shell 里 export 过，
+ * 都会让整台机器的任务写错仓库）。
+ *
+ * 2026-09-10 实撞：一轮带 `GIT_DIR=<真仓库>/.git` 的 `bun test` 让某个夹具的
+ * `git add` / `git commit` 打进了开发者的真仓库——main 上凭空多出一笔提交、README 被删到 1 行、
+ * 还留下 0 字节的 `index.lock` 死锁。判据见 `rfc359-w57-git-env-repo-isolation.test.ts`。
+ *
+ * 调用方**显式**经 `opts.env` 注入的同名变量不受影响（`runGit` 在这之后 spread），
+ * `snapshotFullState` 的临时索引（RFC-130 D25 的 `GIT_INDEX_FILE`）继续照常工作。
+ */
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
   return {
     ...process.env,
+    // 值为 undefined 即「这次 spawn 不带这个变量」，见 runGit 的 opts.env 说明。
+    GIT_DIR: undefined,
+    GIT_WORK_TREE: undefined,
+    GIT_INDEX_FILE: undefined,
+    GIT_OBJECT_DIRECTORY: undefined,
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: undefined,
+    GIT_COMMON_DIR: undefined,
+    GIT_NAMESPACE: undefined,
     GIT_SSH_COMMAND: [
       process.env.GIT_SSH_COMMAND ?? 'ssh',
       '-o',

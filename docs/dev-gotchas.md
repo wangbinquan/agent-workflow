@@ -1130,6 +1130,10 @@ cp <scratch>/headtree/architecture/*.json  <repo>/architecture/       # 只把�
   那份代码」，只是本地算一遍。
 - **`GIT_DIR` 指回真仓库**：`--snapshot-sha` 与 provenance 要跑 `git rev-parse`，副本里没有
   `.git`，靠环境变量借用真仓库的即可。
+
+  ☠️ **只给普查脚本与 `tests/architecture/`，绝不要给整轮 `bun test`。** 那两者是纯文件读；
+  而行为用例里有会 `git init` + `git commit` 的夹具，`GIT_DIR` 的优先级**高于 `-C`**，
+  于是它们的提交会打进**你的真仓库**。2026-09-10 实撞的代价见下一条。
 - **守卫也要在副本上跑**：它们同样读文件系统，在共享树上跑会看见别人的在制品，结论不可归因。
   跑完 446 个架构用例全绿，才是「CI 会绿」的有效证据。
 
@@ -1782,6 +1786,44 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 ⚠️ **别写成 `grep -c allowGrowth`**（2026-09-10 实撞）：这份文件的 `note` 字段本身就在正文里
 解释 `allowGrowth`，裸词恒能命中一次，于是判据**永远返回 1**、永远像「上一笔留了债」。
 必须带引号匹配 **JSON 键**（`"allowGrowth"`）才数得到真条目。
+## `GIT_DIR` 会**盖过 `git -C`**：一轮带它的 `bun test` 把测试夹具的提交打进了真仓库（2026-09-10 实撞）
+
+**损失**：main 上凭空多出一笔提交，作者 `Execution Chain Fixture <execution-chain@example.test>`，
+message 是 `fixture`，内容是把 `README.md` 从 330 行删到 1 行；同时留下一个 0 字节的
+`.git/index.lock`，让此后所有 `git add` / `git commit` / `git reset` 全部 `fatal: Unable to
+create index.lock`。所幸没推出去。
+
+**机制**（三件事叠加，缺一不成立）：
+
+1. 我为了给一批失败做归因，按上文普查配方把 `GIT_DIR=<真仓库>/.git` 导出给了**一整轮
+   `bun test`**——配方本意只覆盖普查脚本与架构守卫（纯文件读，无害），我把作用域放大了。
+2. `rfc359-w5-t21b-execution-chain` 这个夹具在临时目录里 `git init`，然后
+   `git add README.md && git commit -m fixture`。
+3. **`GIT_DIR` 的优先级高于 `-C`**：`-C` 只改工作目录，仓库位置仍以 `GIT_DIR` 为准。
+   于是 `init` 建的是临时仓库，而 `add` / `commit` 打进了真仓库。
+
+**不只是测试卫生问题**：daemon 给每个任务 spawn 的正是 `git -C <任务工作树> …`。只要 daemon
+进程的环境里带着 `GIT_DIR`（从 git hook 起的进程、或有人在 shell 里 export 过），**所有任务的
+git 操作都会写错仓库**——不报错、不告警，只是悄悄打到别处。
+
+**已修**：`util/git.ts` 的 `nonInteractiveGitEnv()` 现在把 `GIT_DIR` / `GIT_WORK_TREE` /
+`GIT_INDEX_FILE` / `GIT_OBJECT_DIRECTORY` / `GIT_ALTERNATE_OBJECT_DIRECTORIES` /
+`GIT_COMMON_DIR` / `GIT_NAMESPACE` 从**继承的环境**里清掉（值置 `undefined` = 这次 spawn 不带）。
+调用方经 `opts.env` **显式**注入的同名变量不受影响——`snapshotFullState` 的临时索引
+（RFC-130 D25 的 `GIT_INDEX_FILE`）继续照常工作，判据在
+`rfc359-w57-git-env-repo-isolation.test.ts` 里正反两面各钉一条。
+
+**清理姿势**（同样实撞过一遍）：
+
+- 那笔提交**未推**、且工作树里的 `README.md` 还是原文（只有 HEAD 与 index 被改坏），所以
+  `git reset --soft <上一笔>` + `git reset -- README.md` 就复原了——`--soft` 不动工作树与
+  暂存区，共享工作树上其他 session 的在制品毫发无伤。**不要用 `reset --hard`**。
+- `index.lock` 判死锁看三件事：**0 字节**、mtime 与事故时刻吻合、`ps` 里没有任何 git 进程。
+  三条齐了才手动删；缺一条就等，别去抢别人正在跑的 git。
+
+**规矩**：`GIT_DIR` / `GIT_WORK_TREE` 这类变量只能**贴着单条命令**写
+（`GIT_DIR=… git rev-parse …`），永远不要 `export` 给一段会跑测试的 shell。
+
 ## 普查产物钉的是**源码摘要**：删掉一行 import 也会让 N1b 红（2026-09-10 实撞）
 
 上一条讲的是「账本涨了要重采」，这一条讲的是更常被漏掉的那半：**任何触及

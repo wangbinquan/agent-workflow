@@ -12759,7 +12759,7 @@
       ],
       "file": "packages/backend/src/util/git.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/git.ts#$setTimeout:245",
+      "id": "background:packages/backend/src/util/git.ts#$setTimeout:268",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -12773,7 +12773,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/git.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:245",
+      "symbol": "$setTimeout:268",
       "targetContext": "source-control"
     },
     {
@@ -12895,5 +12895,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:820a01ba0ba60b0ff38a91e269c2eae90339a46302eb4b35bc29012cc3ddc609"
+  "sourceDigest": "sha256:5b7679f68d873a7208210a47c8ad6b7b5e3efa487a0dec79c16bbe15dbb75f6c"
 }
