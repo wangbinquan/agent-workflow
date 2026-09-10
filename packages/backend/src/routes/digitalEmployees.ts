@@ -18,8 +18,11 @@ import { directOperationAuthority } from '@/routes/operationAuthority'
 import { registerRoute } from '@/routes/registry'
 import {
   canManageCaseMembers,
-  canOperateCase,
-  canViewCase,
+  // RFC-359 W57：`loadVisibleCase` / `requireCaseOperator` 此前在本文件里各有一份**逐字相同**的
+  // 局部闭包——而本文件早就从这个服务取三个判据了。它们决定「这个案子对你可见吗 / 你能不能操作」，
+  // 两份实现意味着路由与服务可能对同一个 actor 给出不同答案。
+  loadVisibleCase,
+  requireCaseOperator,
   type CaseAclRow,
 } from '@/services/employeeCaseMembers'
 import { assertNotBuiltin } from '@/services/systemResources'
@@ -259,34 +262,6 @@ export function mountDigitalEmployeeRoutes(
     const row = await loadVisibleJobTemplate(c, id)
     const access = await persistence.requireResourceEdit(actorOf(c), 'employee_job_template', row)
     return { row, access }
-  }
-  const loadVisibleCase = async (
-    runtime: DigitalEmployeeCaseRuntime,
-    actor: Actor,
-    caseId: string,
-  ): Promise<CaseAclRow> => {
-    const row = await runtime.queries.getCaseAcl(caseId)
-    if (row === null) {
-      throw new NotFoundError('employee-case-not-found', 'employee case not found')
-    }
-    const role = await runtime.queries.getCaseMemberRole(caseId, actor.user.id)
-    if (!canViewCase(actor, row, role)) {
-      throw new NotFoundError('employee-case-not-found', 'employee case not found')
-    }
-    return row
-  }
-  const requireCaseOperator = async (
-    runtime: DigitalEmployeeCaseRuntime,
-    actor: Actor,
-    caseId: string,
-  ): Promise<CaseAclRow> => {
-    const row = await loadVisibleCase(runtime, actor, caseId)
-    const role = await runtime.queries.getCaseMemberRole(caseId, actor.user.id)
-    if (canOperateCase(actor, row, role)) return row
-    throw new ForbiddenError(
-      'employee-case-observer-read-only',
-      'you can only watch this employee case; resuming, terminating and policy upgrades are reserved for its owner and collaborators',
-    )
   }
   const requireCaseOwner = async (
     runtime: DigitalEmployeeCaseRuntime,

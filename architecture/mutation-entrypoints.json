@@ -33375,7 +33375,7 @@
       },
       "file": "packages/backend/src/routes/digitalEmployees.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:367",
+      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:342",
       "missingControls": [
         "audit",
         "authority",
@@ -33385,7 +33385,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
-      "symbol": "$http:delete:367",
+      "symbol": "$http:delete:342",
       "targetContext": "source-control",
       "targetLayer": "inbound"
     },
@@ -41483,7 +41483,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:69b1e3e26b0db7cb027dda3e2a273a832af2ca018ebb5f3a85134942387a44c4",
+  "sourceDigest": "sha256:b0dea7b1018a290144e50893f65c3d2b4510661aa746e72fc507e7fb3d4ad925",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
