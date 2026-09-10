@@ -99,6 +99,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { taskVisibilityCondition } from '@/db/taskVisibility'
 import {
   databaseSessionFor,
   engineOf,
@@ -140,11 +141,7 @@ import {
 import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
 import { chunkedAll } from '@/util/sqlChunk'
 import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
-import {
-  loadFrameChain,
-  resolveSourceFrame,
-  taskVisibilityCondition,
-} from '@/modules/task-execution/public/queries'
+import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
 import { parseConsumedJson } from '@/services/freshness'
 import { assertNodeRunSourceTerminationAdmission } from '@/services/lifecycle'
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
@@ -1916,8 +1913,8 @@ export async function countPendingReviews(
     // 原 `visibleIds` 的可见性谓词恒真，此处同样不加条件（少一层无谓的 OR）。
     conditions.push(
       or(
-        // 可见性判据向 task-execution 公共面要 SQL 片段——规则归它所有，这里只把它
-        // 下推进本条语句（AC-11：省掉「先捞 taskId 列表再问一次」的那次往返）。
+        // 可见性判据取自共享持久化词汇 `db/taskVisibility`——与 `taskAuthorization.visibleIds`
+        // 同一份代码，这里只是把它下推进本条语句（AC-11：省掉「先捞列表再问一次」的那次往返）。
         taskVisibilityCondition(db, {
           userId: actor.user.id,
           canReadAllTasks: actor.permissions.has('tasks:read:all'),

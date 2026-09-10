@@ -10,10 +10,6 @@ export { parseLoopExitCondition } from '@agent-workflow/shared'
 // the environment-chain vocabulary stays inside the context.
 export { containerMemberRuns, containerMemberRunsInRound } from '../domain/containerMembership'
 export { loadFrameChain, type FrameChain } from '../application/frameChain'
-// RFC-359 AC-11：任务可见性判据的 SQL 片段形态。别的上下文（评审徽标等）把它 AND 进
-// 自己那一条语句，就不必先捞 taskId 列表再问一次——规则仍归本上下文所有，调用方也
-// 不需要 import `task_collaborators` 表。与 `visibleIds` 同一份代码，不可能漂。
-export { taskVisibilityCondition } from '../infrastructure/taskAuthorization'
 export {
   resolveSourceFrame,
   type ContainerRunRow,

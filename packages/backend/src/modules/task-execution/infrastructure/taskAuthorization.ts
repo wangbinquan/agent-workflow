@@ -4,10 +4,11 @@
 // 各一份，查询逐字相同。PostgreSQL 那份由本文件替代；SQLite 的同步孪生在其余 dbTxSync
 // 调用方迁完前保留（W4 pair-deletion）。
 
-import { and, eq, inArray, or, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, or } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks } from '@/db/schema'
+import { taskVisibilityCondition } from '@/db/taskVisibility'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { SQL_IN_CHUNK } from '@/util/sqlChunk'
 import type {
@@ -20,31 +21,6 @@ import type {
 } from '../application/ports/taskAuthorization'
 
 type TaskAuthorizationReader = Pick<ProviderNeutralDatabase, 'select'>
-
-/**
- * 任务可见性判据的 **SQL 片段**形态，给「已经 join 了 `tasks`」的查询直接下推用。
- *
- * 与 `visibleIds` 是**同一份代码**——下面那个函数就调它，所以两条路不可能漂。
- * 区别只在调用姿势：`visibleIds` 要先把 taskId 列表捞出来再问一次（一次往返），
- * 而拿到片段的调用方可以把它 AND 进自己那条语句，把那次往返省掉。
- *
- * RFC-359 AC-11：这件事在 SQLite 上无所谓（进程内调用 ~0μs），在 PostgreSQL 上每一次
- * 往返都是真实 RTT——徽标类轻端点的 P95 差值几乎全部来自往返次数。片段形态是让
- * **规则仍归 task-execution 所有**、同时不必把 `task_collaborators` 表暴露给调用方上下文。
- *
- * `canReadAllTasks` 为真时返回 `undefined`（无需收窄），可直接交给 `and(...)`。
- */
-export function taskVisibilityCondition(
-  db: TaskAuthorizationReader,
-  subject: TaskAuthorizationSubject,
-): SQL | undefined {
-  if (subject.canReadAllTasks) return undefined
-  const collaboratorIds = db
-    .select({ taskId: taskCollaborators.taskId })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.userId, subject.userId))
-  return or(eq(tasks.ownerUserId, subject.userId), inArray(tasks.id, collaboratorIds))
-}
 
 async function visibleIds(
   db: TaskAuthorizationReader,
