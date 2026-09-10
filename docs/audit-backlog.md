@@ -4418,7 +4418,35 @@ TRUNCATE 已经是**单条语句**列出全部表，两条同样的 TRUNCATE 之
 `packages/backend/tests/rfc359-w8-migration-lock-scope.test.ts` 钉住（同库仍 fail-fast、
 不同库不互斥），改造时不会把它带坏。
 
-**在改造落地之前**仍把它当已知的间歇红：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据
+### 2026-09-11 已落地的**止血**：文件级 advisory lock（不是完整方案，但当天就止住了红）
+
+`每文件一库` 那个完整方案要动 `closePostgresqlHarnessDatabases` 的契约（清理路径现在是「用主库的连接
+drop 附加库」，主库自己变成一次性库就得改成用 base URL 开管理连接），而那条契约有一整个
+`tests/rfc359-w12-provider-cleanup.test.ts` 在钉。那是独立一刀。
+
+与此同时死锁已经**每次 run 都红**（`fb1a83a51` / `1d46913a5` 连着两次，落在不同的测试文件上），
+所以先上了一个小得多、对症的止血：**每个测试文件在 `beforeAll` 抢一把库级 advisory lock、
+`afterAll` 释放**（`tests/helpers/eachProvider.ts::acquirePostgresqlFileLock`）。
+
+它为什么对症：死锁的现场永远是「本文件的 `TRUNCATE` 等 AccessExclusiveLock，上一个文件未排空的
+读等 AccessShareLock」——成因是**文件边界的重叠**，不是某条业务用例。`--isolate` 下文件本就基本
+顺序跑，这把锁只是把「基本」变成「确实」，代价接近零。三点让它成立：
+
+- advisory lock 是**按数据库**的（2026-09-11 实测更正，见 `docs/dev-gotchas.md`），而这些文件共用
+  一个库——锁的作用域恰好等于需要互斥的范围；CI 上 PG 服务是每分片一个，也正好对上。
+- 锁由**一条专属连接**持有（`pg_advisory_lock` 是会话级的，从池里借的连接可能换人）。
+  那条连接复用 `createPostgresqlHarnessDropConnection`，它本就带 `-c lock_timeout=60000`
+  ——`lock_timeout` 对 advisory lock 同样生效，所以等待有上界、不会挂死。
+- **自愈**：进程被 kill / 连接断开时 PostgreSQL 自动释放，不会把后续文件永久挡住。
+
+它同时顺手消掉了另一半：重叠期间 `TRUNCATE … CASCADE` 踩别的文件的数据，现在也不可能了。
+
+实测：60 个双引擎文件分两批跑，**357 + 419 = 776 pass / 0 fail**。
+
+**完整方案（每文件一库）仍然值得做**——它还解锁 AC-1 最后一对的对拍见证（迁移器要在隔离库上
+被驱动，见 `design/RFC-359-*/plan.md` §5m）。止血不替代它，只是把「每次 run 都红」降回可用。
+
+**在完整方案落地之前**仍把它当已知的间歇红：看到 `[postgresql]` lane 报 40P01 / 或跨文件的数据
 莫名消失，先对照本条，别去改被判红的那条业务用例。
 
 ## 前端 `rfc152-batch-import-ws-path` 间歇红（2026-09-10 CI 实撞，未处置）

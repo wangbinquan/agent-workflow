@@ -2,6 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 harness 止血：文件级 advisory lock（2026-09-11）**：40P01 死锁已经**每次 run 都红**（`fb1a83a51` / `1d46913a5` 连着两次、落在不同测试文件上），所以先上了对症的小干预——每个测试文件在 `beforeAll` 抢一把**库级** advisory lock、`afterAll` 释放（`tests/helpers/eachProvider.ts::acquirePostgresqlFileLock`）。死锁的成因是**文件边界重叠**（本文件的 TRUNCATE 等 AccessExclusiveLock，上一个文件未排空的读等 AccessShareLock），`--isolate` 下文件本就基本顺序跑，这把锁只是把「基本」变成「确实」，代价接近零；它同时消掉「重叠期间 TRUNCATE CASCADE 踩别的文件数据」那一半。锁由专属连接持有（会话级）、复用的连接自带 `lock_timeout=60000`（对 advisory lock 同样生效，等待有上界）、进程被 kill 时 PG 自动释放（自愈）。实测 60 个双引擎文件分两批 **776 pass / 0 fail**。
+> **完整方案（每文件一库）没做**：它要动 `closePostgresqlHarnessDatabases` 的契约（清理现在是「用主库连接 drop 附加库」），而那条契约有整个 `rfc359-w12-provider-cleanup.test.ts` 钉着——是 backlog 说的独立一刀，且它还解锁 AC-1 最后一对的见证。止血不替代它。
+> **顺带修掉我自己推的一格红**：新写的 `rfc359-w8-migration-lock-scope.test.ts` 把「缺库即红」写得不分青红皂白，在 SQLite-only 的 macOS 分片上当场红（`cc13b5d7b`）。已改成跟着 `AW_TEST_PROVIDERS` 走：选了 postgresql 却没 URL ⇒ 红；显式只选 sqlite ⇒ 整条 describe 跳过。另修掉它自己的一处竞态（不等第一笔真握上锁就发第二笔，靠运气绿过三次）——改成用 `afterCommitted` 作「已握锁」的确定信号，5 次复跑稳定，牙也复验过。
+
 > **RFC-359 harness 选型定案 + 一条记反的机制更正（2026-09-11）**：`docs/audit-backlog.md` 里「先量再选」的 harness 那一刀，两个未知数都测掉了——① 迁移开销**不是增量**（harness 今天已经在每个文件 drop schema + 跑一次完整迁移，实测 PG-only 单断言文件端到端 1.57–1.69s、SQLite-only 0.54–0.55s，差出来的 ~1.05s 就是这份已在付的开销）；② `CREATE DATABASE` 只要 **~83ms**（5 次中位数）。按 ~500 个 PG 文件 / 8 分片算每分片 +5s。**选型确定：每文件一个数据库**，它同时消掉 40P01 死锁、跨文件数据互踩，并解锁 AC-1 最后一对的对拍见证（迁移器要在隔离库上被驱动）。
 > **顺带更正一条记反的机制**：`docs/dev-gotchas.md` 原写「PostgreSQL 的 advisory lock 是**集群级**的，按库隔离不隔离锁」——**是错的**。实测 `pg_locks` 里 advisory 行带非零 `database` OID，三会话并发验证：同键不同库**不互斥**、同键同库互斥。那条结论一直在挡「每文件/每进程一库」这条本来可行的隔离路线；已按实测重写（含两分钟复现步骤），并把「实例级资源不隔离」那一半保留。
 > **一次被红先写救回来的误改**：我据那条错误 gotcha 判定 `migratePostgresqlSchema` 的锁作用域写错（以为同集群不同库的部署会互相 fail-fast），先写红——**结果是绿的**，生产代码本来就对。测试留了下来：`tests/rfc359-w8-migration-lock-scope.test.ts` 钉住「不同库不互斥 + 同库仍 fail-fast」，因为每文件一库那条路线**整个建立在这个性质上**而此前没有任何测试钉着它。②的牙实测过（把锁判据改成恒假当场转红）。

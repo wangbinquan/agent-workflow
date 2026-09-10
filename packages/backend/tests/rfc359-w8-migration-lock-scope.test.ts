@@ -33,7 +33,7 @@ import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
-import { resolvePostgresqlTestUrlEnv } from './helpers/eachProvider'
+import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 const URL_ENV = resolvePostgresqlTestUrlEnv(process.env)
 const BASE_URL = URL_ENV === undefined ? undefined : process.env[URL_ENV]
@@ -74,13 +74,30 @@ async function admin<T>(run: (sql: SQL) => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * 本条锁的是 PostgreSQL 专属机制，所以它跟着 `AW_TEST_PROVIDERS` 走：
+ *   · 选了 postgresql（缺省）却没给 URL ⇒ **红**（与 `describeEachProvider` 同一条纪律：
+ *     「无库则跳过」正是 dual-provider-parity 审计里 12 条 P0 穿过验收的机制）；
+ *   · 显式只选 sqlite ⇒ 整条 describe 不注册。macOS / Windows 原生 lane 就是这一档
+ *     （它们没有 PostgreSQL 服务容器），初版把这两档混成一条「缺库即红」，当场把 macOS 分片推红。
+ */
+const postgresqlSelected = resolveTestProviders(process.env).includes('postgresql')
 const configured = BASE_URL !== undefined && BASE_URL.length > 0
 
-describe('RFC-359 W8 —— schema 准备锁按库隔离', () => {
+const suite = postgresqlSelected ? describe : describe.skip
+
+suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
   beforeAll(async () => {
     if (!configured) return
     await admin(async (sql) => {
       for (const name of [DB_A, DB_B]) {
+        // 上一轮若留下连接，`drop database` 会失败——先把别人的会话踢掉再删。
+        // （实撞：紧接着复跑一次，第二次的 beforeAll 撞上前一次尚未排空的连接。）
+        await sql.unsafe(
+          'select pg_terminate_backend(pid) from pg_stat_activity ' +
+            'where datname = $1 and pid <> pg_backend_pid()',
+          [name],
+        )
         await sql.unsafe(`drop database if exists ${name}`)
         await sql.unsafe(`create database ${name}`)
       }
@@ -90,7 +107,14 @@ describe('RFC-359 W8 —— schema 准备锁按库隔离', () => {
   afterAll(async () => {
     if (!configured) return
     await admin(async (sql) => {
-      for (const name of [DB_A, DB_B]) await sql.unsafe(`drop database if exists ${name}`)
+      for (const name of [DB_A, DB_B]) {
+        await sql.unsafe(
+          'select pg_terminate_backend(pid) from pg_stat_activity ' +
+            'where datname = $1 and pid <> pg_backend_pid()',
+          [name],
+        )
+        await sql.unsafe(`drop database if exists ${name}`)
+      }
     })
   })
 
@@ -131,16 +155,24 @@ describe('RFC-359 W8 —— schema 准备锁按库隔离', () => {
     const second = runtimeFor(DB_A)
     try {
       let release: (() => void) | undefined
+      let reached: (() => void) | undefined
       const held = new Promise<void>((resolve) => {
         release = resolve
       })
-      // 第一笔在 afterCommitted 里挂住不放，锁仍握在手上；此时第二笔必须撞上。
+      // **必须等第一笔真的握上锁再发第二笔**。初版直接「发了第一笔就发第二笔」，两者谁先抢到锁
+      // 是随机的——它靠运气绿过三次，然后在一次普通复跑里红了。`afterCommitted` 跑在锁仍持有的
+      // 窗口内（`migratePostgresqlSchema` 的 finally 才释放），所以它是「已握锁」的确定信号。
+      const firstHoldsLock = new Promise<void>((resolve) => {
+        reached = resolve
+      })
       const running = migratePostgresqlSchema({
         runtime: first,
         afterCommitted: async () => {
+          reached?.()
           await held
         },
       })
+      await firstHoldsLock
       const loser = await migratePostgresqlSchema({ runtime: second }).then(
         () => null,
         (error: unknown) => error,

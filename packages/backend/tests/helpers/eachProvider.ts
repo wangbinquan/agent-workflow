@@ -687,6 +687,61 @@ function recordingRuntime(
   return { ...runtime, providerPool: () => recordingPool } as InstrumentedPostgresqlDatabaseRuntime
 }
 
+/**
+ * RFC-359 W8 —— **文件级互斥**：一个测试文件独占 harness 库的 setup/teardown 窗口。
+ *
+ * 症状：CI 的 `[postgresql]` 分片间歇报 `40P01 deadlock detected`，`pg_locks` 的现场永远是
+ * 「一边等 AccessExclusiveLock、另一边等 AccessShareLock」——前者是本文件 `beforeEach` 的
+ * `TRUNCATE`（或 `drop schema`），后者是**上一个测试文件还没排空的读**。
+ *
+ * 成因是**文件边界的重叠**，不是某条业务用例：`bun test --isolate` 一个文件一个进程、基本顺序跑，
+ * 但上一个文件的 afterAll / 连接池排空与下一个文件的 beforeAll 会短暂交叠，而整个 backend 套件的
+ * PostgreSQL lane **共用同一个库**。重叠期间不只是锁会绕环——`TRUNCATE … CASCADE` 还会把另一个
+ * 文件正在用的行整表清掉（`docs/audit-backlog.md` 记着这更严重的一半）。
+ *
+ * 处置：每个文件在 beforeAll 抢一把**库级** advisory lock、afterAll 释放，把那个窗口关掉。
+ * 三点让它成立：
+ *   · advisory lock 是**按数据库**的（2026-09-11 实测更正了此前「集群级」的记载，
+ *     见 `docs/dev-gotchas.md`），而这些文件共用一个库——所以这把锁恰好覆盖需要互斥的范围；
+ *   · 锁必须由**一条专属连接**持有：`pg_advisory_lock` 是会话级的，从连接池借的连接可能换人；
+ *   · **自愈**：进程被 kill、连接断开时 PostgreSQL 自动释放，不会把后续文件永久挡住。
+ *
+ * 代价接近零：`--isolate` 下文件本就基本顺序执行，这把锁只是把「基本」变成「确实」。
+ */
+async function closeQuietly(connection: PostgresqlHarnessDropConnection): Promise<void> {
+  try {
+    await connection.close({ timeout: 5 })
+  } catch {
+    // 关闭失败不改变调用方的结果；连接终会被服务端回收，锁随之释放。
+  }
+}
+
+async function acquirePostgresqlFileLock(
+  sourceUrl: string | undefined,
+): Promise<{ release: () => Promise<void> }> {
+  if (sourceUrl === undefined) return { release: async () => undefined }
+  const connection = createPostgresqlHarnessDropConnection(sourceUrl)
+  try {
+    await connection.unsafe("select pg_advisory_lock(hashtextextended('aw-each-provider-file', 0))")
+  } catch (error) {
+    await closeQuietly(connection)
+    throw error
+  }
+  return {
+    release: async () => {
+      // 先显式解锁再关连接：关连接也会释放，但显式解锁让「锁在谁手上」在 pg_locks 里立刻干净。
+      try {
+        await connection.unsafe(
+          "select pg_advisory_unlock(hashtextextended('aw-each-provider-file', 0))",
+        )
+      } catch {
+        // 连接已断 = 锁已由服务端释放，这里没有别的补救动作。
+      }
+      await closeQuietly(connection)
+    },
+  }
+}
+
 interface PostgresqlHarnessDatabase {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly applicationBinding: Extract<ProviderApplicationBinding, { provider: 'postgresql' }>
@@ -1076,6 +1131,7 @@ function registerPostgresql(
   let restoreProvider: (() => void) | undefined
   let initialization: Promise<void> | undefined
   let cleanup: Promise<void> | undefined
+  let fileLock: { release: () => Promise<void> } | undefined
   const closeAll = () =>
     (cleanup ??= closePostgresqlHarnessDatabases(
       databases,
@@ -1088,6 +1144,10 @@ function registerPostgresql(
       providerBefore = currentDatabaseSchemaProvider()
       try {
         const sourceUrl = process.env[urlEnv]
+        // 任何 DDL / TRUNCATE 之前先独占本库的 setup 窗口（见 acquirePostgresqlFileLock 头注）。
+        fileLock = await runProviderHarnessLifecycleStep(phase, 'file.lock', () =>
+          acquirePostgresqlFileLock(sourceUrl),
+        )
         const primary = await runProviderHarnessLifecycleStep(phase, 'factory.prepare', () =>
           createPostgresqlHarnessDatabase(urlEnv, undefined, phase),
         )
@@ -1108,6 +1168,8 @@ function registerPostgresql(
         } catch (cleanupError) {
           throw new AggregateError([error, cleanupError], 'PostgreSQL harness setup cleanup failed')
         } finally {
+          await fileLock?.release()
+          fileLock = undefined
           if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
         }
         throw error
@@ -1175,6 +1237,11 @@ function registerPostgresql(
         )
         await runProviderHarnessLifecycleStep(phase, 'cleanup.close', () => closeAll())
       } finally {
+        // 连接全部关掉之后才放锁：下一个文件拿到锁时，本文件已经没有任何读残留在库上。
+        await runProviderHarnessLifecycleStep(phase, 'file.unlock', async () => {
+          await fileLock?.release()
+          fileLock = undefined
+        })
         if (providerBefore !== undefined) selectDatabaseSchemaProvider(providerBefore)
       }
     })
