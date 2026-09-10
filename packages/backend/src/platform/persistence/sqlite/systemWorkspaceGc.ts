@@ -34,7 +34,6 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { Config, TaskStatus } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -338,7 +337,11 @@ async function resumeWorkspaceGcClaim(
  * `webhook-terminal` claims are resumed only by its dedicated recovery path.
  * Returns whether THIS caller owns the delete.
  */
-async function claimWorkspacePrune(db: DbClient, taskId: string, now: number): Promise<boolean> {
+async function claimWorkspacePrune(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  now: number,
+): Promise<boolean> {
   const updated = await db
     .update(tasks)
     .set({ workspacePruningAt: now })
@@ -415,7 +418,7 @@ export interface WorkspaceGcRecoveryResult {
  * finalize is repaired without minting a new claim or waiting for its legacy
  * lease timestamp to expire. */
 export async function recoverInterruptedWorkspaceGc(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   now: number = Date.now(),
 ): Promise<WorkspaceGcRecoveryResult> {
   const result: WorkspaceGcRecoveryResult = { completed: [], failed: [], skipped: 0 }
@@ -497,7 +500,7 @@ export interface ClaimedWebhookWorkspacePruneResult {
  * `staleOnly` is used by the periodic ticker; boot owns the singleton daemon
  * lock and may take over every claim. */
 export async function runClaimedWebhookWorkspacePrunes(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   options: {
     isTaskActive: (taskId: string) => boolean
     now?: number
@@ -577,7 +580,7 @@ export async function runClaimedWebhookWorkspacePrunes(
 }
 
 export async function runWorktreeGc(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   config: Pick<Config, 'worktreeAutoGc'>,
   now: number = Date.now(),
   isTaskActive: (taskId: string) => boolean = () => false,
@@ -721,7 +724,9 @@ async function isMerged(
  * revive path 410s deterministically instead of resurrecting a ghost.
  * Runs after migrations and BEFORE the HTTP server starts serving.
  */
-export async function reconcileLegacyPrunedWorkspaces(db: DbClient): Promise<number> {
+export async function reconcileLegacyPrunedWorkspaces(
+  db: ProviderNeutralDatabase,
+): Promise<number> {
   const rows = await db
     .select({ id: tasks.id, worktreePath: tasks.worktreePath })
     .from(tasks)
@@ -756,7 +761,7 @@ export async function reconcileLegacyPrunedWorkspaces(db: DbClient): Promise<num
  * and a 24h age floor (covers a restart that wiped the lease map).
  */
 export async function runScratchOrphanGc(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   now: number = Date.now(),
 ): Promise<{ scanned: number; removed: string[] }> {
@@ -876,7 +881,7 @@ export async function runPartialCloneGc(
 }
 
 export async function runWorktreeOrphanGc(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   now: number = Date.now(),
 ): Promise<{ scanned: number; removed: string[] }> {
@@ -933,7 +938,10 @@ export async function runWorktreeOrphanGc(
 /** RFC-243 §4.4 — does any call row of `taskId` reference a child task that is
  *  non-terminal or interrupted (revivable)? Such a child's canonical workspace
  *  lives inside this task's iso container — the container must survive it. */
-async function hasLiveOrRevivableChild(db: DbClient, taskId: string): Promise<boolean> {
+async function hasLiveOrRevivableChild(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<boolean> {
   const callRows = await db
     .select({ childTaskId: nodeRuns.childTaskId })
     .from(nodeRuns)
@@ -950,7 +958,7 @@ async function hasLiveOrRevivableChild(db: DbClient, taskId: string): Promise<bo
 }
 
 export async function runIsoWorktreeGc(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   isTaskActive: (taskId: string) => boolean = () => false,
 ): Promise<{ scanned: number; removed: string[] }> {
@@ -1085,7 +1093,7 @@ export async function runIsoWorktreeGc(
  * (RFC-165 F9) each tick.
  */
 export function startWorktreeGc(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   // RFC-287：半成品目录的年龄阈值要随 `gitCloneTimeoutMs` 放大（无上限的配置项），
   // 所以这里比原来多读一个字段。仍是**窄投影**，不是整份 Config。
   loadConfig: () => Pick<Config, 'worktreeAutoGc' | 'gitCloneTimeoutMs'>,

@@ -27,22 +27,22 @@
 // worktree"的另一半由 setTaskStatus 的 revival 门保护（pruned→410 / pruning→409 /
 // 目录缺失→补墓碑+410，services/lifecycle.ts），专项锁见 rfc165-workspace-gc.test.ts。
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { runWorktreeGc } from '../src/services/gc'
 import { createWorktree, runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY_MS = 24 * 60 * 60 * 1000
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   repoPath: string
   cleanup: () => void
@@ -50,14 +50,14 @@ interface Harness {
 
 // Real git repo in a temp dir (no network, no stash) — same harness shape as
 // gc.test.ts so createWorktree/removeWorktree operate on genuine worktrees.
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap3-gc-'))
   const repoPath = join(appHome, 'repo')
   await runGit(appHome, ['init', '-q', '-b', 'main', 'repo'])
   await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
   await runGit(repoPath, ['config', 'user.name', 'Test'])
   await runGit(repoPath, ['commit', '--allow-empty', '-q', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   return {
     db,
     appHome,
@@ -97,104 +97,107 @@ async function seedTask(
   return taskId
 }
 
-describe('gap3 — worktree GC candidate set vs resume semantics (current-behavior lock)', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(() => h.cleanup())
+describeEachProvider(
+  'gap3 — worktree GC candidate set vs resume semantics (current-behavior lock)',
+  (harness) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(harness.db)
+    })
+    afterEach(() => h.cleanup())
 
-  test('candidate set is exactly {done,failed,canceled,interrupted}: paused/live statuses are not scanned, resumable terminals are', async () => {
-    // Phase 1 — only non-candidates in the DB: nothing is scanned.
-    for (const status of ['pending', 'running', 'awaiting_review', 'awaiting_human'] as const) {
-      await seedTask(h, { status })
-    }
-    const r1 = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true } })
-    expect(r1.scanned).toBe(0)
-    expect(r1.removed).toEqual([])
+    test('candidate set is exactly {done,failed,canceled,interrupted}: paused/live statuses are not scanned, resumable terminals are', async () => {
+      // Phase 1 — only non-candidates in the DB: nothing is scanned.
+      for (const status of ['pending', 'running', 'awaiting_review', 'awaiting_human'] as const) {
+        await seedTask(h, { status })
+      }
+      const r1 = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true } })
+      expect(r1.scanned).toBe(0)
+      expect(r1.removed).toEqual([])
 
-    // Phase 2 — add one task per TERMINAL_STATUSES member (worktreePath ''
-    // keeps this DB-only: each is counted scanned, then skipped at gc.ts:54).
-    // DEFECT LOCK: scanned === 4 pins 'interrupted' and 'failed' — both
-    // resumable per resumeTask's gate (task.ts:974-979) — inside the GC
-    // candidate set. After a fix that excludes resumable statuses (or guards
-    // them further), this count drops — flip the expectation accordingly.
-    for (const status of ['done', 'failed', 'canceled', 'interrupted'] as const) {
-      await seedTask(h, { status })
-    }
-    const r2 = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true } })
-    expect(r2.scanned).toBe(4)
-    expect(r2.skipped).toBe(4)
-    expect(r2.removed).toEqual([])
-  })
-
-  test('an old interrupted/failed task loses its real worktree to GC — exactly what a later resumeTask would need', async () => {
-    const longAgo = Date.now() - 10 * DAY_MS
-    const seeded: Array<{ taskId: string; worktreePath: string }> = []
-    for (const status of ['interrupted', 'failed'] as const) {
-      const taskId = ulid()
-      const wt = await createWorktree({ repoPath: h.repoPath, taskId, appHome: h.appHome })
-      const workflowId = ulid()
-      await h.db.insert(workflows).values({
-        id: workflowId,
-        name: 'wf',
-        definition: '{}',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      await h.db.insert(tasks).values({
-        name: 'fixture-task',
-        id: taskId,
-        workflowId,
-        workflowSnapshot: '{}',
-        repoPath: h.repoPath,
-        worktreePath: wt.worktreePath,
-        baseBranch: 'main',
-        branch: wt.branch,
-        status,
-        inputs: '{}',
-        startedAt: longAgo,
-        finishedAt: longAgo,
-      })
-      seeded.push({ taskId, worktreePath: wt.worktreePath })
-    }
-
-    const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
-
-    // DEFECT LOCK: both resumable tasks' worktrees are removed from disk.
-    // resumeTask performs no existence check before rollback + runTask
-    // (task.ts:969ff), so a subsequent resume operates on a missing
-    // directory. After a fix this should leave (at least) the interrupted
-    // task's worktree alone — flip to expect it survives.
-    expect(r.removed.sort()).toEqual(seeded.map((s) => s.taskId).sort())
-    for (const s of seeded) {
-      expect(existsSync(s.worktreePath)).toBe(false)
-    }
-  })
-
-  test('multi-repo container dir: per-repo teardown then container rm (RFC-165 R3-1 closed the gap-3 leak)', async () => {
-    // Multi-repo tasks set worktreePath to a PLAIN mkdir container directory
-    // (task.ts RFC-066 path), not a git worktree. The pre-RFC-165 defect this
-    // case used to lock: GC treated every row uniformly, `git worktree remove
-    // <plain dir>` always failed, and the container (plus every per-repo
-    // worktree inside) leaked permanently — re-scanned and re-skipped hourly.
-    // RFC-165 tears down per task_repos row first, then removes the container
-    // itself and finalizes the workspace tombstone.
-    const container = join(h.appHome, 'multi-container')
-    mkdirSync(join(container, 'repo-a'), { recursive: true })
-    await seedTask(h, {
-      status: 'interrupted',
-      worktreePath: container,
-      repoCount: 2,
-      finishedAt: Date.now() - 10 * DAY_MS,
+      // Phase 2 — add one task per TERMINAL_STATUSES member (worktreePath ''
+      // keeps this DB-only: each is counted scanned, then skipped at gc.ts:54).
+      // DEFECT LOCK: scanned === 4 pins 'interrupted' and 'failed' — both
+      // resumable per resumeTask's gate (task.ts:974-979) — inside the GC
+      // candidate set. After a fix that excludes resumable statuses (or guards
+      // them further), this count drops — flip the expectation accordingly.
+      for (const status of ['done', 'failed', 'canceled', 'interrupted'] as const) {
+        await seedTask(h, { status })
+      }
+      const r2 = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true } })
+      expect(r2.scanned).toBe(4)
+      expect(r2.skipped).toBe(4)
+      expect(r2.removed).toEqual([])
     })
 
-    const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
+    test('an old interrupted/failed task loses its real worktree to GC — exactly what a later resumeTask would need', async () => {
+      const longAgo = Date.now() - 10 * DAY_MS
+      const seeded: Array<{ taskId: string; worktreePath: string }> = []
+      for (const status of ['interrupted', 'failed'] as const) {
+        const taskId = ulid()
+        const wt = await createWorktree({ repoPath: h.repoPath, taskId, appHome: h.appHome })
+        const workflowId = ulid()
+        await h.db.insert(workflows).values({
+          id: workflowId,
+          name: 'wf',
+          definition: '{}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+        await h.db.insert(tasks).values({
+          name: 'fixture-task',
+          id: taskId,
+          workflowId,
+          workflowSnapshot: '{}',
+          repoPath: h.repoPath,
+          worktreePath: wt.worktreePath,
+          baseBranch: 'main',
+          branch: wt.branch,
+          status,
+          inputs: '{}',
+          startedAt: longAgo,
+          finishedAt: longAgo,
+        })
+        seeded.push({ taskId, worktreePath: wt.worktreePath })
+      }
 
-    expect(r.scanned).toBe(1)
-    expect(r.removed.length).toBe(1)
-    expect(r.skipped).toBe(0)
-    expect(existsSync(container)).toBe(false)
-    expect(existsSync(join(container, 'repo-a'))).toBe(false)
-  })
-})
+      const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
+
+      // DEFECT LOCK: both resumable tasks' worktrees are removed from disk.
+      // resumeTask performs no existence check before rollback + runTask
+      // (task.ts:969ff), so a subsequent resume operates on a missing
+      // directory. After a fix this should leave (at least) the interrupted
+      // task's worktree alone — flip to expect it survives.
+      expect(r.removed.sort()).toEqual(seeded.map((s) => s.taskId).sort())
+      for (const s of seeded) {
+        expect(existsSync(s.worktreePath)).toBe(false)
+      }
+    })
+
+    test('multi-repo container dir: per-repo teardown then container rm (RFC-165 R3-1 closed the gap-3 leak)', async () => {
+      // Multi-repo tasks set worktreePath to a PLAIN mkdir container directory
+      // (task.ts RFC-066 path), not a git worktree. The pre-RFC-165 defect this
+      // case used to lock: GC treated every row uniformly, `git worktree remove
+      // <plain dir>` always failed, and the container (plus every per-repo
+      // worktree inside) leaked permanently — re-scanned and re-skipped hourly.
+      // RFC-165 tears down per task_repos row first, then removes the container
+      // itself and finalizes the workspace tombstone.
+      const container = join(h.appHome, 'multi-container')
+      mkdirSync(join(container, 'repo-a'), { recursive: true })
+      await seedTask(h, {
+        status: 'interrupted',
+        worktreePath: container,
+        repoCount: 2,
+        finishedAt: Date.now() - 10 * DAY_MS,
+      })
+
+      const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
+
+      expect(r.scanned).toBe(1)
+      expect(r.removed.length).toBe(1)
+      expect(r.skipped).toBe(0)
+      expect(existsSync(container)).toBe(false)
+      expect(existsSync(join(container, 'repo-a'))).toBe(false)
+    })
+  },
+)

@@ -18,22 +18,22 @@
 //      defensive "argv simply lacks --session" misuse test is replaced by
 //      the positive assertion).
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, runtimeSessionLeases, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -61,13 +61,13 @@ function makeAgent(): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc042-runner-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
   const argvLog = join(appHome, 'argv.log')
   writeFileSync(argvLog, '')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -100,13 +100,13 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 
-function seedReleasedSession(db: DbClient, taskId: string, sessionId: string): void {
+function seedReleasedSession(db: ProviderNeutralDatabase, taskId: string, sessionId: string): void {
   db.insert(runtimeSessionLeases)
     .values({
       protocol: 'opencode',
@@ -133,10 +133,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('RFC-042 runner envelope followup (promptMode followup arm)', () => {
+describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

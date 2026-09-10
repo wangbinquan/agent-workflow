@@ -17,22 +17,22 @@
 // The complementary "happy path" lock: when the agent ALSO writes the file
 // to disk first, the same envelope succeeds and the new column stays NULL.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -60,11 +60,11 @@ function makeAgent(): Agent {
   } as Agent
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc049-eager-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -96,7 +96,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
     id,
@@ -124,11 +124,11 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('RFC-049 runner eager port-validation', () => {
+describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
   let h: Harness
 
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => {
     h.cleanup()

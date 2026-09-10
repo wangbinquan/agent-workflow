@@ -5333,6 +5333,87 @@ drizzle 里加了一列而 SQLite 的迁移 SQL 没跟，SQLite 侧就少一列�
 投影上会抛（`docs/dev-gotchas.md` 有这条，本轮又撞了一次）。走目录表反而更强——它读的是**库里
 实际存在的东西**，不是应用声明的回声。
 
+## 5n. AC-6 第一批机械迁移：19 个行为套件转双引擎，并**量出了真正的闸门**（W8）
+
+本刀做两件事：把一批直接建 SQLite 内存库的行为用例迁到 `describeEachProvider`，以及——更重要的
+——**把「为什么剩下的迁不动」量成数字**，让下一刀不用再重新摸一遍。
+
+### 迁了什么
+
+`rfc359-w5-test-engine-hardcoding` 账本 **657 → 638**（19 条，其中 `admin-only-gate.test.ts`
+是上一刀留下的半截）。迁法是纯机械的三步：`describe(name, () => {}` → `describeEachProvider(name,
+(harness) => {}`、构造点换成 `harness.db`、`DbClient` 标注换成 `ProviderNeutralDatabase`。
+构造点落在模块级工厂函数里时（`buildHarness()` 这一类），把库当**参数**传进去而不是提到闭包里
+——工厂本来就在 `describeEachProvider` 外面，`harness` 不在它的作用域内。
+
+### 双引擎对拍当场照出的三条真实分叉
+
+这批用例过去只在 SQLite 上跑，迁完立刻红了三条。三条各代表一类，都值得单独记：
+
+1. **`runner-parent-stdout-broadcast`：漏 `await` 的播种**。`seedTask()` 里两条
+   `db.insert(...).run()` 都没 await——同步 SQLite 上语句已经落库，PostgreSQL 上返回的是**没人等的
+   Promise**，于是紧跟着插 `node_runs` 直接撞 `node_runs_task_id_tasks_id_fk`。
+   这不是 PG 的毛病，是用例一直在**依赖同步驱动的副作用顺序**；async 只是让它现了形。
+   修法：`seedTask` / `buildHarness` 改 async，逐条 await。
+
+2. **`runner-inject-snapshot-eager-write` E4：注入点扎进了 SQLite 适配器的内部形状**。
+   原写法猴补 `h.db.update(...).set(...)`，靠「载荷恰好只有 `injectedMemoriesJson`」认出
+   eager-write 那一次。但 eager-write 走的是 `opts.persistence.nodeExecution.patch(...)`——
+   **PostgreSQL 的持久化实现根本不经过那条 drizzle builder**，于是同一条用例在 PG 上一次也拦不到，
+   `eagerWriteIntercepted` 恒为 false。修法是把注入点**上移到端口边界**：包一层
+   `TaskExecutionPersistence`，只让第一次「载荷只有 `injectedMemoriesJson`」的 patch 抛。
+   两个引擎同一形状，而且比原写法更贴合被断言的功能（「eager 写失败不致命」）。
+   包法本身也踩了两个坑，都写进注释了：`nodeExecution` 是**类实例**（方法在原型上、自有字段只有
+   `db`），对象展开会把 `appendEvents` 整批抄丢；而顶层 `realPersistence` 是 `Object.freeze` 的，
+   非可配置属性上 Proxy 的 `get` 不许返回别的值（直接 TypeError）。所以顶层用展开、
+   `nodeExecution` 用 Proxy。
+
+3. **`rfc165-migration-0085`：不该迁**。它把 `0085_*.sql` 里的 UPDATE **逐字重放**，
+   而那是 SQLite 方言（反引号标识符，PG 上 `syntax error at or near "\`"`）。
+   这条判据锁的就是「**发出去的那份 SQLite 迁移脚本**回填对不对」，PG 有自己的迁移路径、
+   由 `rfc359-w8-migrator-conformance` 见证。已回退，账本那一行保留——**「没迁」和「迁不了」要分开记**。
+
+### 顺带放宽的一处生产标注：`systemWorkspaceGc.ts`
+
+`gc.test.ts` 迁完撞上 `runWorktreeGc(db: DbClient, ...)`。整份文件 11 处 `DbClient` 标注一起换成
+`ProviderNeutralDatabase` 后**零报错**——函数体本来就只用中立 drizzle 与 `databaseSessionFor`，
+那 11 处纯粹是**过窄标注**，不是真的耦合。生产装配面早就是中立的（hourly GC 走
+`ownerCommands.workspace.runGcPhase`，实现在 `modules/source-control/application/workspaceMaintenance.ts`，
+不碰 `DbClient`），所以这次放宽零行为变更。
+
+### 真正的闸门：`DbClient` 过窄标注 + 同步事务面（**本刀量出来的数字**）
+
+把这批 90 个候选文件跑一遍机械迁移后，typecheck 报了 489 条错。按类归并，结论很干净：
+
+| 观测                                         | 数字                                            |
+| -------------------------------------------- | ----------------------------------------------- |
+| `src/` 里带 `DbClient` 的文件 / 出现次数     | **111 / 332**                                   |
+| 全量替换成 `ProviderNeutralDatabase` 后残留错 | **234**，集中在 **28 个文件**                   |
+| 残留错的主类型                                | `TS2339 Property … does not exist on type 'never'`（175 条） |
+| 迁移后测试侧报错的主因                        | 372 条可赋值性错里 **191 条**指向 `DbClient` 形参 |
+| `src/` 里用 `dbTxSync` 的文件                 | **76**                                          |
+
+`'never'` 那 175 条只有一个来源：**联合类型库上的 `db.transaction(cb)` 把 `tx` 推成 `never`**
+（`'sync' | 'async'` 两个重载的形参交出来就是 never）。也就是说——
+
+> **约七成的 `DbClient` 标注是纯过窄，白送；剩下三成全部卡在同一件事上：同步事务原语。**
+
+这与 §6「同步事务面是死代码清理的前置」是同一堵墙的两面：那边挡的是**删重复实现**，
+这边挡的是**AC-6 的测试迁移**。两件事排在同一个前置后面，所以下一刀的靶心没有悬念——
+**先把 `dbTxSync` / 裸 `db.transaction` 换成 `databaseSessionFor(db).transaction`，
+`DbClient` 的放宽和 AC-6 的剩余迁移会跟着一起塌下来**，而不是各自单独推。
+
+### 给下一刀的话
+
+- 迁移脚本可复用（本刀是一次性脚本，形状记在上面「迁了什么」一节，重写只要十几行）：
+  它的**跳过判据**比迁移判据更值钱——`ctor-count != 1` / `new Database(` / 任何 `Sqlite` 命名符号 /
+  顶层 `describe` 不唯一，四条挡掉的都是「机械改会改错」的形状。
+- **别把 typecheck 干净当成迁移成功**。本批 19 个文件 typecheck 全绿，跑起来仍有 3 个红，
+  且三条各属不同类别（漏 await / 注入点错层 / 根本不该迁）。**双引擎实跑是唯一判据**。
+- 迁完 `packages/*/src/**` 有改动就要重跑普查，而且**顺序是先 `prettier --write` 再普查**——
+  反过来会让 `sourceDigest` 停在格式化前的内容上，`rfc294-canonical-manifests` 当场红
+  （本刀实撞一次）。
+
 ## 6. 债与不做的事
 
 - `legacySqlite*` 家族（clarify 子系统 3,401 行等）合一后仍带 legacy 命名与分层位置；

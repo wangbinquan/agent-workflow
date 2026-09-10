@@ -2,11 +2,17 @@
 // sha256(raw) lands in DB. Caller is responsible for setting actor.user only
 // after status='active' is confirmed (handled here by lookupActiveSession).
 
+// RFC-359 AC-6：`db` 的类型放宽成 `ProviderNeutralDatabase`。
+// 这些夹具只用 drizzle 的中立面（select / insert / update，全部 await），没有任何 bun:sqlite
+// 的同步 API，所以两个引擎都跑得通。放宽是**向后兼容**的——`DbClient` 本身就是
+// `BaseSQLiteDatabase<'sync', …>` 的子类型，既有的 SQLite 调用点一个字都不用改。
+// 之所以必须放宽：AC-6 要把行为用例迁到 `describeEachProvider`，而**每一个 HTTP 用例都要先建会话**，
+// 会话夹具卡在 `DbClient` 上就等于整条路堵死。
 import { randomBytes } from 'node:crypto'
 import { and, eq, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { userSessions, users } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -43,7 +49,7 @@ export function hashToken(raw: string): string {
 }
 
 export interface CreateSessionInput {
-  db: DbClient
+  db: ProviderNeutralDatabase
   userId: string
   userAgent?: string | null
   ttlMs?: number
@@ -119,7 +125,7 @@ export interface ResolvedSession {
 }
 
 export async function lookupActiveSession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   raw: string,
   now: number = Date.now(),
 ): Promise<ResolvedSession | null> {
@@ -139,7 +145,7 @@ export async function lookupActiveSession(
  * "just used" merely because a tab was left open.
  */
 export async function lookupActiveSessionByHash(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   hash: string,
   now: number = Date.now(),
   opts: { touch?: boolean } = {},
@@ -176,7 +182,7 @@ export async function lookupActiveSessionByHash(
 }
 
 export async function revokeSession(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   sessionId: string,
   now: number = Date.now(),
 ): Promise<void> {
@@ -186,7 +192,7 @@ export async function revokeSession(
 }
 
 export async function revokeAllSessionsForUser(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   userId: string,
   now: number = Date.now(),
 ): Promise<void> {
@@ -200,7 +206,7 @@ export async function revokeAllSessionsForUser(
 }
 
 export async function sweepExpiredSessions(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   now: number = Date.now(),
 ): Promise<number> {
   // Hard-delete fully-expired rows that were already revoked — sessions store grows otherwise.
@@ -213,7 +219,7 @@ export async function sweepExpiredSessions(
 }
 
 export async function listActiveSessionsForUser(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   userId: string,
   now: number = Date.now(),
 ): Promise<SessionRecord[]> {

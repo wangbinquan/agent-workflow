@@ -1,12 +1,12 @@
 // RFC-036 — OIDC providers service CRUD: create / patch (clientSecret keep
 // vs overwrite) / delete with force / encrypted-at-rest invariant.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createOidcProvidersService,
   type OidcProvidersService,
@@ -28,15 +28,13 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
   }
 }
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   svc: OidcProvidersService
 }
 
-function buildHarness(): Harness {
-  const db = createInMemoryDb(MIGRATIONS)
+function buildHarness(__db: ProviderNeutralDatabase): Harness {
+  const db = __db
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   return { db, svc: createOidcProvidersService({ db, secretBox }) }
 }
@@ -54,10 +52,10 @@ const SAMPLE = {
   enabled: true,
 }
 
-describe('OidcProvidersService', () => {
+describeEachProvider('OidcProvidersService', (harness) => {
   let h: Harness
   beforeEach(() => {
-    h = buildHarness()
+    h = buildHarness(harness.db)
   })
 
   test('create + findById materializes everything except the encrypted secret', async () => {

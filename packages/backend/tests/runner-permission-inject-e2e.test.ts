@@ -16,21 +16,21 @@
 // framework-side contract: the config is serialized into the child's env with
 // the load-bearing key order + the anti-revival strip intact.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -57,11 +57,11 @@ function makeAgent(permission: Record<string, unknown> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc073-runner-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -93,7 +93,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'n1', status: 'pending' })
   return id
@@ -143,46 +143,51 @@ async function captureSpawnedConfig(h: Harness, agent: Agent): Promise<string> {
   return readFileSync(capturePath, 'utf-8')
 }
 
-describe('RFC-276 explicit permission reaches the spawned OpenCode subprocess', () => {
-  let h: Harness
-  beforeEach(async () => {
-    h = await buildHarness()
-  })
-  afterEach(() => h.cleanup())
+describeEachProvider(
+  'RFC-276 explicit permission reaches the spawned OpenCode subprocess',
+  (harness) => {
+    let h: Harness
+    beforeEach(async () => {
+      h = await buildHarness(harness.db)
+    })
+    afterEach(() => h.cleanup())
 
-  test('the top-level workspace boundary is injected (RFC-281 revises RFC-276)', async () => {
-    const raw = await captureSpawnedConfig(h, makeAgent())
-    const cfg = JSON.parse(raw) as {
-      permission?: { external_directory?: Record<string, string> }
-    }
-    // RFC-281 T1 revises RFC-276: the platform now emits a top-level
-    // external_directory boundary (deny baseline) so opencode's NATIVE subagents
-    // (general/explore, which have no platform entry) inherit the deny instead of
-    // the upstream `ask` that `--auto` would auto-approve. This is the only
-    // platform-added permission overlay.
-    expect(cfg.permission?.external_directory?.['*']).toBe('deny')
-  })
+    test('the top-level workspace boundary is injected (RFC-281 revises RFC-276)', async () => {
+      const raw = await captureSpawnedConfig(h, makeAgent())
+      const cfg = JSON.parse(raw) as {
+        permission?: { external_directory?: Record<string, string> }
+      }
+      // RFC-281 T1 revises RFC-276: the platform now emits a top-level
+      // external_directory boundary (deny baseline) so opencode's NATIVE subagents
+      // (general/explore, which have no platform entry) inherit the deny instead of
+      // the upstream `ask` that `--auto` would auto-approve. This is the only
+      // platform-added permission overlay.
+      expect(cfg.permission?.external_directory?.['*']).toBe('deny')
+    })
 
-  test("the author's explicit map is preserved, boundary appended after it", async () => {
-    const explicit = { question: 'allow', bash: 'deny', '*': 'ask' }
-    const raw = await captureSpawnedConfig(h, makeAgent(explicit))
-    const cfg = JSON.parse(raw) as {
-      agent: Record<string, { permission?: Record<string, unknown> }>
-    }
-    const entryPerm = cfg.agent['test-agent']!.permission ?? {}
-    // RFC-281 revises RFC-276: the author's CONCRETE keys survive verbatim and
-    // the platform appends its own `external_directory`. The author's top-level
-    // `'*'` is EXPANDED into concrete permission names (2nd impl-gate P2):
-    // opencode merges config with mergeDeep, which keeps an existing key's
-    // position, so a project config that pre-declares external_directory would
-    // otherwise lift the platform key above a surviving `'*'` and dissolve the
-    // boundary. With no wildcard left, nothing can outrank it.
-    expect(entryPerm.question).toBe('allow')
-    expect(entryPerm.bash).toBe('deny')
-    expect(entryPerm['*']).toBeUndefined()
-    // the wildcard's value is preserved on every concrete key it covered
-    expect(entryPerm.read).toBe('ask')
-    expect(entryPerm.skill).toBe('ask')
-    expect((entryPerm.external_directory as Record<string, string> | undefined)?.['*']).toBe('deny')
-  })
-})
+    test("the author's explicit map is preserved, boundary appended after it", async () => {
+      const explicit = { question: 'allow', bash: 'deny', '*': 'ask' }
+      const raw = await captureSpawnedConfig(h, makeAgent(explicit))
+      const cfg = JSON.parse(raw) as {
+        agent: Record<string, { permission?: Record<string, unknown> }>
+      }
+      const entryPerm = cfg.agent['test-agent']!.permission ?? {}
+      // RFC-281 revises RFC-276: the author's CONCRETE keys survive verbatim and
+      // the platform appends its own `external_directory`. The author's top-level
+      // `'*'` is EXPANDED into concrete permission names (2nd impl-gate P2):
+      // opencode merges config with mergeDeep, which keeps an existing key's
+      // position, so a project config that pre-declares external_directory would
+      // otherwise lift the platform key above a surviving `'*'` and dissolve the
+      // boundary. With no wildcard left, nothing can outrank it.
+      expect(entryPerm.question).toBe('allow')
+      expect(entryPerm.bash).toBe('deny')
+      expect(entryPerm['*']).toBeUndefined()
+      // the wildcard's value is preserved on every concrete key it covered
+      expect(entryPerm.read).toBe('ask')
+      expect(entryPerm.skill).toBe('ask')
+      expect((entryPerm.external_directory as Record<string, string> | undefined)?.['*']).toBe(
+        'deny',
+      )
+    })
+  },
+)

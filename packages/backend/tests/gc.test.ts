@@ -1,25 +1,24 @@
 // P-4-09: worktree GC scan.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { runWorktreeGc } from '../src/services/gc'
 import { createWorktree, runGit } from '../src/util/git'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   repoPath: string
   cleanup: () => void
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gc-'))
   const repoPath = join(appHome, 'repo')
   // init a real repo so createWorktree works.
@@ -27,7 +26,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(repoPath, ['config', 'user.email', 'test@example.com'])
   await runGit(repoPath, ['config', 'user.name', 'Test'])
   await runGit(repoPath, ['commit', '--allow-empty', '-q', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   return {
     db,
     appHome,
@@ -73,10 +72,10 @@ async function seedDoneTask(
   return { taskId, worktreePath: wt.worktreePath }
 }
 
-describe('runWorktreeGc', () => {
+describeEachProvider('runWorktreeGc', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

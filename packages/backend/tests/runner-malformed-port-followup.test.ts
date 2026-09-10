@@ -13,22 +13,22 @@
 // (scheduler-envelope-followup-branch.test.ts) 据此前缀 + 本测试断言的 sessionId/agentText
 // 触发同会话重试——两条测试合起来闭环「producer 失败 → 重试」。
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -59,11 +59,11 @@ function makeAgent(): Agent {
   } as Agent
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-malformed-port-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -95,7 +95,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
     id,
@@ -123,11 +123,11 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('runner malformed-port guard', () => {
+describeEachProvider('runner malformed-port guard', (harness) => {
   let h: Harness
 
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => {
     h.cleanup()

@@ -12,22 +12,22 @@
 // `node.status: done` are intentionally NOT asserted here — they're
 // implementation details that would over-constrain the test.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src/ws/broadcaster'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -54,42 +54,38 @@ function makeAgent(): Agent {
   }
 }
 
-function seedTask(db: DbClient): string {
+async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
   const wfId = ulid()
-  db.insert(workflows)
-    .values({
-      id: wfId,
-      name: 'wf',
-      definition: '{}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    .run()
+  await db.insert(workflows).values({
+    id: wfId,
+    name: 'wf',
+    definition: '{}',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })
   const taskId = ulid()
-  db.insert(tasks)
-    .values({
-      name: 'fixture-task',
-      id: taskId,
-      workflowId: wfId,
-      workflowSnapshot: '{}',
-      repoPath: '/tmp/repo',
-      worktreePath: '/tmp/wt',
-      baseBranch: 'main',
-      branch: `agent-workflow/${taskId}`,
-      status: 'running',
-      inputs: '{}',
-      startedAt: Date.now(),
-    })
-    .run()
+  await db.insert(tasks).values({
+    name: 'fixture-task',
+    id: taskId,
+    workflowId: wfId,
+    workflowSnapshot: '{}',
+    repoPath: '/tmp/repo',
+    worktreePath: '/tmp/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'running',
+    inputs: '{}',
+    startedAt: Date.now(),
+  })
   return taskId
 }
 
-function buildHarness(): Harness {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-parent-broadcast-'))
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
-  const taskId = seedTask(db)
+  const db = __db
+  const taskId = await seedTask(db)
   return {
     db,
     appHome,
@@ -114,10 +110,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('runner parent-stdout live broadcast', () => {
+describeEachProvider('runner parent-stdout live broadcast', (harness) => {
   let h: Harness
-  beforeEach(() => {
-    h = buildHarness()
+  beforeEach(async () => {
+    h = await buildHarness(harness.db)
     resetBroadcastersForTests()
   })
   afterEach(() => {

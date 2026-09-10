@@ -9,27 +9,26 @@
 //     a dead discovery-provided jwks_uri must not fail an otherwise working
 //     pure-OAuth2 provider (gate round 6).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { beforeEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import {
   createOidcProvidersService,
   type OidcProvidersService,
 } from '../src/services/oidcProviders'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ISSUER = 'https://idp.example.com'
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   svc: OidcProvidersService
 }
 
-function buildHarness(): Harness {
-  const db = createInMemoryDb(MIGRATIONS)
+function buildHarness(__db: ProviderNeutralDatabase): Harness {
+  const db = __db
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   return { db, svc: createOidcProvidersService({ db, secretBox }) }
 }
@@ -71,11 +70,11 @@ function stubFetch(opts: {
   return { fetcher, calls }
 }
 
-describe('RFC-220 S2 — probe readiness', () => {
+describeEachProvider('RFC-220 S2 — probe readiness', (harness) => {
   let h: Harness
   beforeEach(() => {
     clearEndpointCaches()
-    h = buildHarness()
+    h = buildHarness(harness.db)
   })
 
   test('discovery-complete OIDC provider with reachable jwks → ready, sources=discovery', async () => {

@@ -12,21 +12,21 @@
 // agent reads the rules; when absent, the standard output-only block is the
 // only protocol block present.
 
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Agent } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   worktreePath: string
   taskId: string
@@ -54,11 +54,11 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   }
 }
 
-async function buildHarness(): Promise<Harness> {
+async function buildHarness(__db: ProviderNeutralDatabase): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-runner-clarify-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = __db
   const workflowId = ulid()
   const taskId = ulid()
   await db.insert(workflows).values({
@@ -89,7 +89,7 @@ async function buildHarness(): Promise<Harness> {
   }
 }
 
-async function insertPendingNodeRun(db: DbClient, taskId: string): Promise<string> {
+async function insertPendingNodeRun(db: ProviderNeutralDatabase, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({ id, taskId, nodeId: 'asker', status: 'pending' })
   return id
@@ -110,10 +110,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
   })
 }
 
-describe('runNode envelope branching (RFC-023)', () => {
+describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
   let h: Harness
   beforeEach(async () => {
-    h = await buildHarness()
+    h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
 

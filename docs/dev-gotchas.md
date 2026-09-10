@@ -1050,6 +1050,32 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 文件」**。前者是你写下来的意图，后者是所有人的现状。正确姿势是把自己动过的路径逐条写进
 清单（或直接列在命令行上），提交前 `git diff --cached --stat` 再核一眼。
 
+## 把用例迁到 `describeEachProvider` 时，typecheck 干净 ≠ 迁移成功（RFC-359 AC-6 实测，2026-09-11）
+
+一批 19 个行为套件机械迁到双引擎，`bun run typecheck` **全绿**，实跑仍红三条，而且三条各属不同类：
+
+1. **漏 `await` 的播种**。`db.insert(...).values(...).run()` 没 await：同步 SQLite 上语句已经落库，
+   PostgreSQL 上那是**没人等的 Promise**，紧接着插子表就撞外键。用例一直在依赖同步驱动的副作用顺序，
+   async 只是让它现形。迁移时把播种助手连同它的调用链一起改 async 是**默认动作**，不是可选项。
+2. **注入点扎进了某一侧适配器的内部形状**。猴补 `db.update(...).set(...)` 认「载荷只有某一列」的写法，
+   在另一侧 provider 上一次也拦不到（它的持久化实现根本不走那条 builder），断言于是恒 false 而**不报错**。
+   注入要上移到**端口边界**（包一层 `TaskExecutionPersistence` 这类端口对象）。
+3. **根本不该迁**。逐字重放 `*.sql` 迁移脚本的用例锁的就是「发出去的那份 SQLite 脚本」，
+   反引号标识符在 PG 上直接语法错。这类要**回退并把账本那一行留着**——「没迁」和「迁不了」分开记。
+
+**判据只有一条：两个引擎实跑。** 顺带两个包端口对象的坑（都当场 TypeError / 静默丢方法）：
+用 `Object.freeze` 冻过的对象**不能**用 Proxy 改写属性（非可配置属性上 `get` 返回别的值直接 TypeError，
+顶层得用对象展开）；而**类实例**（方法在原型上、自有字段寥寥）**不能**用对象展开（原型方法整批抄丢，
+表现为运行时 `xxx is not a function`，得用 Proxy）。两者常常一层套一层，各用各的。
+
+## 重跑普查前先 `prettier --write`，顺序反了当场红（RFC-359 实撞，2026-09-11）
+
+`architecture-census.ts` 把 `packages/*/src/**` 的内容摘成 `sourceDigest`。先跑普查、再格式化源文件，
+digest 就停在**格式化前**的内容上，`rfc294-canonical-manifests` 的「七份清单是精确投影」当场红，
+而报错只显示一对 sha256，看不出是格式化造成的。**固定顺序：改代码 → `prettier --write` → 跑普查 →
+（如需手改账本）→ 再跑一次普查。** 手改 `ledger-baselines.json` 之后同样要重跑，否则 provenance 的
+`contentDigest` 对不上（`RFC-294 N1a` 那条）。
+
 ## 「SQL 长得一样」证明不了「两个 provider 行为一样」（RFC-349 实测，2026-09-03）
 
 双 provider 的对照测试如果比的是**渲染出来的 SQL 文本**（假 runtime 记录语句、再断言两侧一致），

@@ -10,9 +10,9 @@
 // If this is red, the contract that an agent declaring an MCP id results in
 // the display-keyed `mcp.x: {...}` runtime config is broken — RFC-028 §1 fails.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { beforeEach, expect, test } from 'bun:test'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
@@ -22,14 +22,14 @@ import { getAgentById } from '../src/modules/resource-catalog/infrastructure/leg
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
 
-const dependencyLookup = (db: DbClient) => ({ get: (id: string) => getAgentById(db, id) })
+const dependencyLookup = (db: ProviderNeutralDatabase) => ({
+  get: (id: string) => getAgentById(db, id),
+})
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-028 end-to-end inline injection', () => {
-  let db: DbClient
+describeEachProvider('RFC-028 end-to-end inline injection', (harness) => {
+  let db: ProviderNeutralDatabase
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('single agent + single MCP → inline JSON has mcp.{name} with opencode wire fields', async () => {

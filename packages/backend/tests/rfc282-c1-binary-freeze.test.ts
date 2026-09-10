@@ -8,24 +8,22 @@
 // protocol" stays DRIVER knowledge (defaultBinary差分), zero kind literals in
 // the mint (the rfc143 bypass-zero lock enforces that side).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveFrozenRuntime } from '../src/services/nodeRunMint'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('RFC-282 C1-2 — config binary fallback freezes at mint', () => {
-  let db: DbClient
+describeEachProvider('RFC-282 C1-2 — config binary fallback freezes at mint', (harness) => {
+  let db: ProviderNeutralDatabase
   let nodeRunId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     await seedTestDefaultOpencodeRuntime(db)
     const taskId = ulid()
     await db.insert(workflows).values({

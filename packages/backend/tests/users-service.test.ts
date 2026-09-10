@@ -1,9 +1,9 @@
 // RFC-036 — users service: PR1 scope (create + reset-password + disable +
 // last-access-administrator protection + search + __system__ immutability).
 
-import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { beforeEach, expect, test } from 'bun:test'
 import {
   countNonSystemUsers,
   createUser,
@@ -18,13 +18,11 @@ import {
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { verifyPassword } from '../src/auth/passwords'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('users service', () => {
-  let db: DbClient
+describeEachProvider('users service', (harness) => {
+  let db: ProviderNeutralDatabase
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
   })
 
   test('seed includes __system__ row + countNonSystemUsers excludes it', async () => {

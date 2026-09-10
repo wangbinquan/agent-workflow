@@ -4,11 +4,12 @@
 // skill would otherwise leak e.g. ~/.ssh/id_rsa to any authorized/public reader.
 // Design-gate round 3 caught this while adversarially reviewing RFC-170.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { join } from 'node:path'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -23,10 +24,8 @@ import { getSkill } from './helpers/resourceLookup'
 import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ValidationError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-describe('readSkillFile symlink containment', () => {
-  let db: DbClient
+describeEachProvider('readSkillFile symlink containment', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
   let outsideDir: string
   let fsOpts: SkillFsOptions
@@ -36,7 +35,7 @@ describe('readSkillFile symlink containment', () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-skill-symlink-'))
     outsideDir = mkdtempSync(join(tmpdir(), 'aw-outside-'))
     writeFileSync(join(outsideDir, 'host-secret.txt'), 'TOP SECRET HOST FILE', 'utf-8')
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     fsOpts = { appHome }
     const skill = await createManagedSkill(db, fsOpts, {
       name: 'foo',

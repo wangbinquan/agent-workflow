@@ -17,8 +17,16 @@
 >    需要逐条判定：死代码删、命名债改名、登记分叉留。改名是高 churn（路径钉死的守卫多），
 >    建议一次只动一个 context。
 > 3. **AC-6 双库覆盖迁移**：仍有大量行为用例直接建 SQLite 内存库。这是最大的一块。
->    **注意**：每文件一库落地后，把行为用例迁到 `describeEachProvider` 的代价比此前低了——
->    不再有跨文件数据互踩，迁一批就能稳一批。
+>    **2026-09-11 已迁第一批 19 个**（账本 `rfc359-w5-test-engine-hardcoding` 657 → 638），
+>    并**量出了真正的闸门**（plan §5n 有完整数字与判据）：`src/` 里 111 个文件带 `DbClient`，
+>    全量放宽后残留 234 条错、集中在 28 个文件，主类型是联合类型库上 `db.transaction(cb)` 把
+>    `tx` 推成 `never`（175 条）。**约七成 `DbClient` 标注是纯过窄、白送；剩下三成全部卡在同步
+>    事务原语上**（76 个文件用 `dbTxSync`）。所以顺序是——
+>    **先做下面第 3.5 条，AC-6 的剩余迁移和 `DbClient` 放宽会跟着一起塌下来**，别单独硬推。
+> 3.5. **同步事务面收口（新的最高优先级）**：把 `dbTxSync` / 裸 `db.transaction(` 换成
+>    `databaseSessionFor(db).transaction`。它同时是两件事的前置：AC-6 的测试迁移（上一条）
+>    与**删重复实现**（plan §6「同步事务面是死代码清理的前置」，`sqliteTerminalMaintenance.ts`
+>    519 行删不掉就是卡在这）。一个 context 一批。
 > 4. **重复 burn-down 剩 15 组**（机械扫描器见 plan §5k）。下一个靶心是
 >    `services/capabilityTemplates.ts`（506 行）↔ `code-capability/application/capabilityTemplateOperations.ts`
 >    （388 行）——**同一域的两套实现**，共享 `rowFromInput` / `mergeableSnapshot` / `digest` 等一批
