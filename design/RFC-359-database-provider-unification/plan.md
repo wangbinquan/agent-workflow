@@ -30,11 +30,47 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | AC-5  | 守卫锁住新增分叉                                  | T17/T18/T19/T19b–g/T20 已落；W12 补全 T18 接收者变异与守卫元数据                                                                                                                                                                                                                                         | ✅     |
 | AC-6  | 全量 backend 行为套件在真 PostgreSQL 上进 push CI | 当前1968测试文件、573构库文件/1131调用、483无harness/547有harness；W55新迁14旧文件51个DB声明/278 matcher，保65原声明/339 matcher、14原单次及全部预算。新增2文件9pure；真实新双库行为待托管，入口数不等于待迁普通业务量。                                                                                 | 进行中 |
 | AC-7  | 12 条 P0 消失且有回归证明                         | exact `67e2cf8c9a756ca3831a083aa4455cc03c2e2287` 独立真 PG job `102039466503` 成功；Bun1.4 两库各17阶段/89次执行，67 pass+22指定历史失败/827 expect，99源码与34原始日志摘要已核                                                                                                                          | ✅     |
-| AC-8  | 用户可见行为逐字不变                              | W54主2368身份全出现、2353过15新PG红，原2227全过；新43PG中28过15红，15红已定位澄清executionContext转交缺口。W55补两生产文件，纯字段转交回归6/60通过，原15测试及预算不变，真实修复待新SHA；全量双库覆盖仍未闭合。                                                                                          | 进行中 |
+| AC-8  | 用户可见行为逐字不变                              | **W54 那 15 条新 PG 红已在绿 SHA 上验证消失**：exact `03b34a783` 的 CI run `34440781011`，八个 ubuntu 后端分片（真 postgres:17 服务）合计 **19821 pass / 0 fail**，其中 `[postgresql]` 身份 **3317** 个、clarify × PostgreSQL 身份 **173** 个全过，八片零 `(fail)` 行。W54 定位的「mechanics common 与 CreateRoundCommon 没接全 executionContext」由 W55 两个生产文件的显式转交（显式值 ?? ambient 回退）修复，本次是它第一次落在全绿 exact SHA 上。**仍开放**：全量双库覆盖未闭合（见 AC-6），即「已跑的都对」不等于「该跑的都跑了」。 | 进行中 |
 | AC-9  | 含全部 RFC 改动的 exact-SHA CI 全绿               | W54 exact3fad84efa451b5e0747aff8b8d7428a013cb2808 Main34433766182终态34/6，13后端10/3；主2353/15、原2227全过，独立2/2及hook18/18、原RFC259两OS、两个原Playwright身份两OS通过。W55最终39core编译、metadata63/111与canonical13/55通过且候选稳定，首轮缺import失败保留；完整新SHA待托管，发布后仅修流水线。 | 待办   |
 | AC-10 | 业务 provider literal 分支为零                    | 当前精确账本为 0                                                                                                                                                                                                                                                                                         | ✅     |
 | AC-11 | 两引擎 P95 基线，PG 各端点不劣于 SQLite           | 最新已核W52 full34427756137的360样本/18组P95仍有两绝对失败：SQLite tasks-first 150.616ms未低于150ms、PG workgroup-pending 11.571ms未低于10ms；其余16项通过，六PG端点相对较慢。W54 full34433823331仍由唯一watcher跟踪，原语料/判据不变，不以诊断代替性能结果。                                            | 进行中 |
 | AC-12 | 全量装配，无晚绑定占位，退役未豁免 provider 文件  | 当前占位文本32→9、未构造根0保持；provider文件88→56，其中W55的59→56来自三个真实SQLite原语归位platform/persistence，原body和导出保持。三份资源快照投影共享不改变调用装配；新增双库行为和澄清上下文转交修复待新SHA托管。                                                                                    | 进行中 |
+
+### AC-9 取证（2026-09-10，exact `03b34a783`）
+
+**主干在连红 10+ 笔后首次全绿。** CI run `34440781011`，**39/39 作业全部 success、零失败**，含：
+
+| 面 | 结果 |
+| --- | --- |
+| 后端 × 真 PostgreSQL（ubuntu 8 分片，postgres:17 服务） | **19821 pass / 0 fail**，`[postgresql]` 身份 3317 |
+| 后端 × SQLite（macOS 4 分片） | 全绿 |
+| 前端（ubuntu / macOS / windows） | 全绿 |
+| Playwright e2e（四 OS 共 10 分片） | 全绿 |
+| 静态扫描（audit + actionlint + shellcheck + gitleaks） | 全绿 |
+| 单二进制 build smoke（三 OS） | 全绿 |
+
+**这一笔绿是怎么来的**——连红的四个成因逐条销掉，没有一条是「重跑就过了」：
+
+1. `c8ed5871a`：W55 首次给 S17 / S18-S19 两条调度器回归锁接上 `describeEachProvider`，两条当场在 PG 上红。
+   **S18/S19 是真缺陷**（读回 `node_runs` 后按数组序断言重试序列，SQLite 扫描序碰巧等于插入序、
+   PG 不是）——补 `ORDER BY retryIndex`。**S17 不是缺陷，是余量失效**：断言余量 = 写者时长 −
+   相邻节点派生间隔，实测 SQLite ~170ms / PG ~700ms–1s（PG 测试拓扑走完整 HTTP 应用 + 真库往返），
+   而写者只跑 300ms ⇒ 在 PG 上恒不重叠；两侧 iso 隔离都已生效、锁序未变。把余量做成结构性
+   （300 → 2500ms，两引擎同值）。
+2. `c8ed5871a`：根 overrides 把 `js-yaml` 钉在 4.3.1，正落在 GHSA-2883-xcg3-v3hh 的受影响区间，
+   改钉 4.3.2。
+3. `a64c5991e`：gitleaks 两条误报（被测装配的 sha256 内容摘要、幂等键字面量），按本仓定式
+   钉历史指纹 + 行内 `gitleaks:allow`。
+4. `03b34a783`：`c8ed5871a` 为 W55 账本补录开的**三条一次性 `allowGrowth`** 在下一笔上过期，
+   删掉并在 HEAD 只读导出上重采普查。
+
+**AC-9 尚未可判达成**：本 SHA 只证明「当前主干全绿」，而 AC-9 要求的是**含全部 RFC-359 改动**
+的那一笔。AC-1 / AC-6 / AC-11 / AC-12 仍有开放项，它们的修复会产生新 SHA，取证需随最终 SHA 重取。
+**本节的价值是把「流水线红」这个前置障碍清掉**——在此之前任何 exact-SHA 取证都无从谈起。
+
+**同批未修、已带证据落档**（`docs/audit-backlog.md`）：Windows 前端泳道存在间歇性数十秒停顿，
+每次红在不同用例与分片；判据与 `rfc321-cached-repo-refresh-credential` 那条**相反**（那条是
+「同文件邻居正常、只有它挂死」⇒ 单点挂起；这条是「邻居也慢、每次换人」⇒ 环境停顿）。
 
 **W6 三件已收口**（2026-09-08 更正，此前记载过期）：**T23 判定为不可行并留下守卫**（jsonb 的
 20× 买不起——三类活着的字节保真判据，逐条见 §5b）；**T24 已完成**（`q` 搜索 2.06×）；
