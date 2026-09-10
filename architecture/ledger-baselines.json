@@ -812,10 +812,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5333,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "5330 → 5333。RFC-359 W57：`node_runs` 行 → 人工门投影成员（18 个同名字段）此前在**五处**被逐字抄了一遍——collaboration 的 `taskQuestionDispatch` / `review` / `clarifyDecision`，以及 task-execution 的 `sqliteTaskDecisionParticipant` / `taskDecisionParticipant`。它是决策路径交给 `humanGateNodeProjectionFence` 算摘要的那份载荷：给 `node_runs` 加一个决策要读的列，五处都得记得改，漏一处的表现是该路径的围栏摘要与别处对不上。收进 `domain/humanGateContinuation.ts`（类型与围栏本来就在那儿），并经既有的公共缝`public/participants` 导出——collaboration 的三处因此各多一条指向该 public 的边（+3），public 面多一个导出（+1）。形参收的是 `HumanGateNodeProjectionMember` 而不是 drizzle 的行类型，公共面不泄漏 ORM 类型（N1b 判据）。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -850,10 +847,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 983,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "982 → 983。RFC-359 W57：`node_runs` 行 → 人工门投影成员（18 个同名字段）此前在**五处**被逐字抄了一遍——collaboration 的 `taskQuestionDispatch` / `review` / `clarifyDecision`，以及 task-execution 的 `sqliteTaskDecisionParticipant` / `taskDecisionParticipant`。它是决策路径交给 `humanGateNodeProjectionFence` 算摘要的那份载荷：给 `node_runs` 加一个决策要读的列，五处都得记得改，漏一处的表现是该路径的围栏摘要与别处对不上。收进 `domain/humanGateContinuation.ts`（类型与围栏本来就在那儿），并经既有的公共缝`public/participants` 导出——collaboration 的三处因此各多一条指向该 public 的边（+3），public 面多一个导出（+1）。形参收的是 `HumanGateNodeProjectionMember` 而不是 drizzle 的行类型，公共面不泄漏 ORM 类型（N1b 判据）。**一次性许可，下一提删除。**"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -891,8 +885,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4aa21f8d2e9ba5a3c502b6b5ae712af87524ddb5",
-    "contentDigest": "sha256:8fc81299bcd0d1cf087077537a9fd2a8dd1921cff24e92080ebe019fcd01c6ae",
+    "currentSnapshotSha": "b123c77ee2ff26046fe5531930e1034213e6fcff",
+    "contentDigest": "sha256:8da0813e5411b9bef30d3e0c81fb1d94d636032b72f80e3e0c2f5934cef195ef",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
