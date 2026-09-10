@@ -5879,3 +5879,47 @@ CLAUDE.md 那条规则原本是针对 opencode 源码的 GitHub 外链写的，*
 
 **别做的事**：不要为此把整个主机加进 `--exclude`——那会让该站所有链接从此不被检查，
 而真正失效的链接（打字错、页面下线）恰恰需要被检查出来。
+
+## 改**共享测试 harness**时，波及面按「谁断言 harness 自身」找——不是语料扫描、也不是守卫关键词（2026-09-11 实撞）
+
+给 `tests/helpers/eachProvider.ts` 加了两个生命周期阶段（`file.lock` / `file.unlock`）后推上去，
+红在 `tests/rfc359-w39-provider-harness-lifecycle-diagnostics.test.ts`——那条守卫把 harness 的
+`registerPostgresql` / `initializeDatabases` **源码抽出来求值**，逐条钉住 `calls` 序列。
+
+它躲过了本文件另外两条挑法：
+- 文件名里没有 guard/lock/architecture 等关键词（叫 "lifecycle diagnostics"）；
+- 它不扫 `src/` 语料，所以「谁扫源码树」那条挑法也罩不住它。
+
+**正确挑法**（改 harness 时用）：
+
+```bash
+cd packages/backend
+grep -rln "helpers/eachProvider" tests/*.test.ts tests/architecture/*.test.ts \
+  | xargs grep -ln "closePostgresqlHarnessDatabases\|createPostgresqlHarnessDropConnection\|runProviderHarnessLifecycle\|registerPostgresql\|eachProvider.ts\|resolveTestProviders\|createProviderHarnessLifecycleObserver"
+```
+
+实测捞出 16 个文件（178 个用例），包含那条求值型守卫、清理契约守卫
+（`rfc359-w12-provider-cleanup`）、注册面守卫（`rfc359-w31-provider-fixture-registration`）。
+**只 import `describeEachProvider` 的普通双引擎测试不在此列**——它们消费 harness，不断言 harness。
+
+推论：`tests/helpers/**` 是**被测试钉着的生产面**，改它要按「改生产代码」的规格找波及面，
+不能当成「顺手改个测试工具」。
+
+## PG-only 的测试要跟着 `AW_TEST_PROVIDERS` 走，别照抄「缺库即红」（2026-09-11 推红一格）
+
+`describeEachProvider` 的纪律是「PostgreSQL 缺 URL **不是 skip 而是 fail**」——那条纪律的前提是
+**这个 lane 本来就该跑 PostgreSQL**。写一条 PG 专属机制的测试时照抄这句，会在
+**macOS / Windows 原生 lane** 上当场红：那些分片没有 PostgreSQL 服务容器，显式跑
+`AW_TEST_PROVIDERS=sqlite`。
+
+正确写法是把两档分开：
+
+```ts
+const postgresqlSelected = resolveTestProviders(process.env).includes('postgresql')
+const suite = postgresqlSelected ? describe : describe.skip
+// 选了 postgresql 却没给 URL ⇒ 仍然红（那才是「无库则跳过」要防的事）
+// 显式只选 sqlite ⇒ 整条 describe 不注册
+```
+
+判据：本地 `AW_TEST_PROVIDERS=sqlite bun test <file>` 应当是「全 skip、零 fail」，
+而不是报缺库。落盘前跑这一条，比等 macOS 分片告诉你便宜得多。

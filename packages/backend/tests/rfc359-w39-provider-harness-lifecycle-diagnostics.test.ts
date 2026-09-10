@@ -121,6 +121,18 @@ function actualRegistration(options: harness.DescribeEachProviderOptions = {}) {
       return () => {}
     },
     createPostgresqlHarnessDatabase: factory,
+    // RFC-359 W8：harness 在 beforeAll 抢一把库级 advisory lock、afterAll 释放
+    // （`acquirePostgresqlFileLock`，用来关掉文件边界的重叠窗口，见其头注）。
+    // 本控制面是纯注册面、不连库，所以这里给一个记账替身——它同时把「拿了必须放」
+    // 钉进 `calls` 序列：少了 `file.unlock` 就说明某条清理路径漏放锁了。
+    acquirePostgresqlFileLock: async () => {
+      calls.push('file.lock')
+      return {
+        release: async () => {
+          calls.push('file.unlock')
+        },
+      }
+    },
     createProviderHarnessLifecycleObserver: (
       ...args: Parameters<typeof harness.createProviderHarnessLifecycleObserver>
     ) => {
@@ -341,12 +353,13 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
     })
     await microtasks()
     expect(cleanupDone).toBe(false)
-    expect(control.calls).toEqual(['body.register', 'factory.enter'])
+    expect(control.calls).toEqual(['body.register', 'file.lock', 'factory.enter'])
     control.initialized.resolve()
     await setup
     await microtasks()
     expect(control.calls).toEqual([
       'body.register',
+      'file.lock',
       'factory.enter',
       'factory.return',
       'runtime.close',
@@ -354,11 +367,16 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
     expect(cleanupDone).toBe(false)
     control.closed.resolve()
     await cleanup
+    // RFC-359 W8：`file.lock` 必须在**任何** DDL / 建库之前，`file.unlock` 必须在
+    // `runtime.close` 之后——下一个文件拿到锁时，本文件已经没有任何连接留在库上。
+    // 这个顺序就是那把锁全部的价值所在；顺序错了它挡不住文件边界的重叠。
     expect(control.calls).toEqual([
       'body.register',
+      'file.lock',
       'factory.enter',
       'factory.return',
       'runtime.close',
+      'file.unlock',
       'schema.restore',
     ])
     expect(control.observerCreations).toBe(0)
@@ -377,11 +395,16 @@ describe('RFC359 W39 passive fixture lifecycle diagnostics', () => {
     const failure = await cleanup.catch((caught: unknown) => caught)
     expect(failure).toBeInstanceOf(Error)
     expect((failure as Error).cause).toBe(error)
+    // RFC-359 W8：`file.lock` 必须在**任何** DDL / 建库之前，`file.unlock` 必须在
+    // `runtime.close` 之后——下一个文件拿到锁时，本文件已经没有任何连接留在库上。
+    // 这个顺序就是那把锁全部的价值所在；顺序错了它挡不住文件边界的重叠。
     expect(control.calls).toEqual([
       'body.register',
+      'file.lock',
       'factory.enter',
       'factory.return',
       'runtime.close',
+      'file.unlock',
       'schema.restore',
     ])
     expect(control.observerCreations).toBe(0)

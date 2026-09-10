@@ -2,6 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **修 `f6148edf3` 的红：改共享 harness 要按「谁断言 harness」找波及面（2026-09-11）**：加两个生命周期阶段后红在 `rfc359-w39-provider-harness-lifecycle-diagnostics`——它把 harness 的 `registerPostgresql`/`initializeDatabases` **源码抽出来求值**、逐条钉 `calls` 序列。它同时躲过我今天用的另外两条挑法（文件名无守卫关键词、不扫 `src/` 语料）。已给它补 `acquirePostgresqlFileLock` 的记账替身，并把新顺序**显式钉进**三处序列断言：`file.lock` 必须在任何 DDL 之前、`file.unlock` 必须在 `runtime.close` 之后——那个顺序就是这把锁全部的价值。
+> **正确挑法已落 `docs/dev-gotchas.md`**：`grep -rln "helpers/eachProvider" tests/**` 再筛断言 harness 内部符号的，实测 16 文件 / 178 用例（含求值型守卫、清理契约守卫、注册面守卫）；只 import `describeEachProvider` 的普通双引擎测试不在此列——它们消费 harness，不断言 harness。推论：`tests/helpers/**` 是**被测试钉着的生产面**，改它要按改生产代码的规格找波及面。另落一条：PG-only 测试要跟着 `AW_TEST_PROVIDERS` 走，别照抄「缺库即红」（本地 `AW_TEST_PROVIDERS=sqlite` 应当全 skip 零 fail，落盘前跑这一条比等 macOS 分片便宜）。
+
 > **RFC-359 harness 止血：文件级 advisory lock（2026-09-11）**：40P01 死锁已经**每次 run 都红**（`fb1a83a51` / `1d46913a5` 连着两次、落在不同测试文件上），所以先上了对症的小干预——每个测试文件在 `beforeAll` 抢一把**库级** advisory lock、`afterAll` 释放（`tests/helpers/eachProvider.ts::acquirePostgresqlFileLock`）。死锁的成因是**文件边界重叠**（本文件的 TRUNCATE 等 AccessExclusiveLock，上一个文件未排空的读等 AccessShareLock），`--isolate` 下文件本就基本顺序跑，这把锁只是把「基本」变成「确实」，代价接近零；它同时消掉「重叠期间 TRUNCATE CASCADE 踩别的文件数据」那一半。锁由专属连接持有（会话级）、复用的连接自带 `lock_timeout=60000`（对 advisory lock 同样生效，等待有上界）、进程被 kill 时 PG 自动释放（自愈）。实测 60 个双引擎文件分两批 **776 pass / 0 fail**。
 > **完整方案（每文件一库）没做**：它要动 `closePostgresqlHarnessDatabases` 的契约（清理现在是「用主库连接 drop 附加库」），而那条契约有整个 `rfc359-w12-provider-cleanup.test.ts` 钉着——是 backlog 说的独立一刀，且它还解锁 AC-1 最后一对的见证。止血不替代它。
 > **顺带修掉我自己推的一格红**：新写的 `rfc359-w8-migration-lock-scope.test.ts` 把「缺库即红」写得不分青红皂白，在 SQLite-only 的 macOS 分片上当场红（`cc13b5d7b`）。已改成跟着 `AW_TEST_PROVIDERS` 走：选了 postgresql 却没 URL ⇒ 红；显式只选 sqlite ⇒ 整条 describe 跳过。另修掉它自己的一处竞态（不等第一笔真握上锁就发第二笔，靠运气绿过三次）——改成用 `afterCommitted` 作「已握锁」的确定信号，5 次复跑稳定，牙也复验过。
