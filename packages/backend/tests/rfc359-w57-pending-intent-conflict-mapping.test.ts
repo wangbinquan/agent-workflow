@@ -11,26 +11,37 @@
 //   · 部分唯一索引先抛 —— **23505**，既不是序列化失败（重试不接）、此前**也没有映射**，
 //     于是驱动错误原样漏给调用方——用户看到 500，而不是 409 冲突。✗
 //
-// 第二条路少见但真实：CI run 上 ubuntu 分片 1/8 的那条 40 轮对拍就这样红过一次，
-// 报的是 `Error:Failed query: insert into "agent_workflow"."task_execution_intents" …`。
+// 第二条路少见但真实：CI run 上 ubuntu 分片的那条 40 轮对拍两次红在这里，报的都是
+// `Error:Failed query: insert into "agent_workflow"."task_execution_intents" …`。
 //
-// 判据分两层，两层都在**两个引擎**上各跑一遍：
+// 2026-09-10 第二次红之后的修正（这轮改了判据的形状）
+// ---------------------------------------------------
+// 初版映射按**约束名正则**判（`idx_task_execution_intents_pending_task` / SQLite 的列清单），
+// 挂在整笔事务外面。它漏掉了第三档：两个引擎的 `uniqueViolationTarget` 都是三态回答——
+// `undefined` = 不是唯一冲突；`''` = **是**唯一冲突但驱动没说是哪条；非空串 = 名字。
+// `''` 被正则判成 false ⇒ 驱动错误照样漏成 500。本机 200 轮并发复现不出来，说明是窄路径。
+//
+// 判据因此改成「**这条 insert 上**的任何唯一冲突」，并从事务外挪到贴着那条 insert：
+// 只有贴着语句才知道撞的必然是 intents 自己那条部分唯一索引（同事务还 UPDATE
+// `taskExecutionLineageOperationRecords`，它也带唯一索引——那正是初版被迫认名字的原因）。
+//
+// 判据分三层，都在**两个引擎**上各跑一遍：
 //   ① 冲突目标的**真实写法**——由真驱动抛出的错误取回，钉住 PG 的约束名与 SQLite 的列清单
-//      两种形状。这是最容易悄悄烂掉的一格：索引改名、驱动换版本都会让判据静默失配，
-//      而失配的表现正是「偶发 500」，不会有任何测试变红。
-//   ② 映射本身——同一个真错误经 `admitWithPendingIntentConflict` 之后必须是
+//      两种形状。索引改名 / 驱动换版本会让它变化，而变化本身不该再影响映射（②），
+//      所以这一条现在是**观测**而不是判据的前提。
+//   ② 映射本身——真错误经 `pendingIntentInsertConflict` 出来必须是
 //      `TaskExecutionError('task-continuation-conflict')`。
+//   ③ **没有名字的那一档**（`''`）同样被映射；不是唯一冲突的错误原样抛。这两条正是这次修的洞。
 import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
 import { taskExecutionIntents, tasks, users, workflows } from '../src/db/schema'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
 import { TaskExecutionError } from '../src/modules/task-execution/application/taskExecutionError'
-import {
-  admitWithPendingIntentConflict,
-  isPendingIntentUniqueConflict,
-} from '../src/modules/task-execution/infrastructure/taskContinuationAdmission'
+import { pendingIntentInsertConflict } from '../src/modules/task-execution/infrastructure/taskContinuationAdmission'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000
@@ -102,59 +113,80 @@ describeEachProvider('RFC-359 W57 —— pending intent 唯一冲突的领域映
       engine.classifyError(raised),
       '这条驱动错误必须被分类成唯一冲突——分不出来，下面的映射就无从谈起',
     ).toBe('unique-violation')
+    // 观测（不是判据的前提）：两个引擎都能报出一个**非 undefined** 的冲突目标。
+    // 映射只看「是不是 undefined」，所以这里即使将来变成 `''` 也不影响 ② 的结论。
     const target = engine.uniqueViolationTarget(raised)
     expect(
-      isPendingIntentUniqueConflict(target),
-      '判据必须认得出本引擎报的冲突目标写法（PG 给约束名、SQLite 给列清单）。' +
-        `实际收到：${String(target)}。它一旦失配，表现是**偶发 500**——没有任何别的测试会因此变红。`,
-    ).toBe(true)
+      target,
+      '本引擎必须把这条错误认成唯一冲突（undefined 表示「不是唯一冲突」，那样映射无从谈起）',
+    ).not.toBeUndefined()
   })
 
   test('映射：同一个真错误出来是 task-continuation-conflict，不是驱动错误', async () => {
     await seed(h.db)
     await insertPending(h.db)
     const engine = databaseSessionFor(h.db).engine
-    const mapped = await admitWithPendingIntentConflict(
-      engine.uniqueViolationTarget,
-      TASK_ID,
-      async () => {
-        await insertPending(h.db)
-        return 'unreachable'
-      },
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    )
+    let raised: unknown
+    try {
+      await insertPending(h.db)
+    } catch (error) {
+      raised = error
+    }
+    const mapped = ((): unknown => {
+      try {
+        pendingIntentInsertConflict(engine.uniqueViolationTarget, TASK_ID, raised)
+      } catch (error) {
+        return error
+      }
+    })()
     expect(mapped).toBeInstanceOf(TaskExecutionError)
     expect((mapped as TaskExecutionError).code).toBe('task-continuation-conflict')
   })
 
-  test('不相干的唯一冲突原样抛出，不被误翻成续跑冲突', async () => {
-    await seed(h.db)
-    const engine = databaseSessionFor(h.db).engine
-    const raised = await admitWithPendingIntentConflict(
-      engine.uniqueViolationTarget,
-      TASK_ID,
-      async () => {
-        // 同一个 users.id 再插一次：唯一冲突，但撞的是别的约束。
-        await h.db.insert(users).values({
-          id: 'owner',
-          username: 'owner2',
-          displayName: 'owner2',
-          role: 'admin',
-          createdAt: NOW,
-          updatedAt: NOW,
-        })
-        return 'unreachable'
-      },
-    ).then(
-      () => null,
-      (error: unknown) => error,
+  test("没有名字的那一档（`''`）同样被映射——这次红的就是它", () => {
+    // 驱动报了 23505 / UNIQUE 但**没说是哪条**约束时，能力矩阵返回空串。初版按约束名正则判，
+    // 于是这一档被当成「不是冲突」，驱动错误原样漏成 500。判据现在只看「是不是 undefined」。
+    const mapped = ((): unknown => {
+      try {
+        pendingIntentInsertConflict(() => '', TASK_ID, new Error('unique violation, unnamed'))
+      } catch (error) {
+        return error
+      }
+    })()
+    expect(mapped).toBeInstanceOf(TaskExecutionError)
+    expect((mapped as TaskExecutionError).code).toBe('task-continuation-conflict')
+  })
+
+  test('不是唯一冲突的错误原样抛出，不被伪装成续跑冲突', () => {
+    const original = new Error('connection reset')
+    const mapped = ((): unknown => {
+      try {
+        pendingIntentInsertConflict(() => undefined, TASK_ID, original)
+      } catch (error) {
+        return error
+      }
+    })()
+    expect(mapped).toBe(original)
+  })
+
+  test('作用域：映射只包住那条 insert，同事务的其余写不在里面', () => {
+    // 判据放宽成「任何唯一冲突」的**唯一**安全依据就是作用域。同事务还 UPDATE
+    // `taskExecutionLineageOperationRecords`（它自己带两条唯一索引）；那条 UPDATE 一旦落进
+    // 同一个 try，一处无关的唯一冲突就会被伪装成「续跑冲突」——用户看到 409，真 bug 被藏起来。
+    const source = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/task-execution/infrastructure/taskContinuationAdmission.ts',
+      ),
+      'utf8',
     )
-    expect(raised).toBeDefined()
-    expect(
-      raised instanceof TaskExecutionError,
-      '别的唯一冲突不得被翻成 task-continuation-conflict——那会把无关失败伪装成续跑冲突',
-    ).toBe(false)
+    const guarded = source.slice(
+      source.indexOf('  try {'),
+      source.indexOf('pendingIntentInsertConflict(engineOf(tx)'),
+    )
+    expect(guarded).toContain('.insert(taskExecutionIntents)')
+    expect(guarded).not.toContain('.update(')
+    expect(guarded).not.toContain('taskExecutionLineageOperationRecords')
   })
 })

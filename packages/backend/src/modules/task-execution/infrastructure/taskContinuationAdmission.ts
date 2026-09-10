@@ -15,7 +15,7 @@ import {
   taskExecutionMaintenanceMembers,
   tasks,
 } from '@/db/schema'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type {
   SubmittedTaskExecutionIntent,
   SubmitTaskContinuationInput,
@@ -36,50 +36,33 @@ import {
 const MAX_INTENT_PAYLOAD_BYTES = 64 * 1024
 
 /**
- * 「每个任务至多一个 pending intent」这条**部分唯一索引**冲突时，两个引擎各自的冲突目标写法。
+ * 那条 insert 撞唯一索引 ⇒ **领域错误**。
  *
- * · PostgreSQL —— 约束名：`idx_task_execution_intents_pending_task`
- * · SQLite —— `UNIQUE constraint failed:` 之后的列清单：`task_execution_intents.task_id`
+ * 为什么判据是「是不是唯一冲突」而不是「撞的是哪条约束」（2026-09-10 修）：
+ * 两个引擎的 `uniqueViolationTarget` 都用三态回答——`undefined` = 不是唯一冲突；
+ * `''` = **是**唯一冲突但驱动没说是哪条（PG 的 23505 有时不带 `constraint`，SQLite 的
+ * message 也可能匹配不出列清单）；非空串 = 约束名 / 列清单。初版按约束名正则判，于是
+ * `''` 这一档被判成「不是冲突」，驱动错误原样漏给调用方——用户拿到 500 而不是 409。
+ * 本机 200 轮并发复现不出来，CI 的 ubuntu 分片偶发地红过一次，说明它是真实可达的窄路径。
  *
- * （两侧的索引同名，见 `db/migrations/0213_rfc333_gate_continuation_handoff.sql` 与
- * `db/postgresql-migrations/0000_rfc349_baseline.sql`；驱动报的**形状**不同，判据两边都认。）
+ * 判据改成「这条 insert 上的任何唯一冲突」之所以安全，靠的是**作用域**：它只包住
+ * `insert(taskExecutionIntents)` 这一条语句。该表能被违反的唯一约束只有它自己那两条部分唯一
+ * 索引，而插入的是 `state: 'pending'` 的行，撞得到的只有 pending 那条。同事务还写
+ * `taskExecutionLineageOperationRecords`（它也带唯一索引），但那是 UPDATE、不在这个 try 里
+ * ——早先把映射放在整笔事务外面时，正是这一点逼着判据必须认约束名。
  */
-const PENDING_INTENT_UNIQUE_TARGET =
-  /idx_task_execution_intents_pending_task|task_execution_intents\.task_id/
-
-/** 这条驱动错误是不是「已有活跃 continuation」撞上了那条部分唯一索引。 */
-export function isPendingIntentUniqueConflict(target: string | undefined): boolean {
-  return target !== undefined && PENDING_INTENT_UNIQUE_TARGET.test(target)
-}
-
-/**
- * 把那条唯一索引冲突翻成**领域错误**。
- *
- * 为什么需要它（2026-09-10 CI 实撞）：准入是「先读活跃 intent、再插一行 pending」，整笔在
- * SERIALIZABLE 里。两个并发续跑都读到「没有活跃 intent」时，输家的收场有**两种**，谁先冒是
- * 随机的（`rfc359-w8-t29-unique-insert-conflict` 的头注就写着这件事）：
- *   · SSI 先判 —— 40001，`databaseSessionFor(db).serializable` 会重试，重放时读到赢家那行、
- *     走 `task-continuation-conflict`；✓
- *   · 部分唯一索引先抛 —— **23505**，既不是序列化失败（重试不接）、此前也没有映射，
- *     于是**驱动错误原样漏给调用方**。用户看到的是 500，而不是 409 冲突。✗
- * 第二条路少见但真实：CI 上 40 轮的那条对拍偶发地这样红过。
- */
-export async function admitWithPendingIntentConflict<T>(
+export function pendingIntentInsertConflict(
   uniqueViolationTarget: (error: unknown) => string | undefined,
   taskId: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await run()
-  } catch (error) {
-    if (isPendingIntentUniqueConflict(uniqueViolationTarget(error))) {
-      throw new TaskExecutionError(
-        'task-continuation-conflict',
-        `task '${taskId}' already has an active continuation`,
-      )
-    }
-    throw error
+  error: unknown,
+): never {
+  if (uniqueViolationTarget(error) !== undefined) {
+    throw new TaskExecutionError(
+      'task-continuation-conflict',
+      `task '${taskId}' already has an active continuation`,
+    )
   }
+  throw error
 }
 
 function encodedIntentPayload(payload: unknown): string {
@@ -191,27 +174,31 @@ export async function submitCanonicalTaskExecutionIntent(
       `task '${request.taskId}' lineage changed before continuation admission`,
     )
   }
-  await tx
-    .insert(taskExecutionIntents)
-    .values({
-      id: intentId,
-      taskId: request.taskId,
-      kind: request.kind,
-      state: 'pending',
-      source: request.source,
-      requestHash: hash,
-      payloadJson: encodedIntentPayload(request.payload),
-      executionLineageId: request.scope.executionLineageId,
-      continuationSlotKey: request.scope.continuationSlotKey,
-      slotPathJson: encodeLineageSlotPath(request.scope.slotPath),
-      operationGeneration: request.scope.operationGeneration,
-      replayAuthorizationId: input.replayAuthorizationId ?? null,
-      authorizationScopeJson: input.authorizationScopeJson ?? null,
-      expectedTaskRevision: request.expectedTaskRevision,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run()
+  try {
+    await tx
+      .insert(taskExecutionIntents)
+      .values({
+        id: intentId,
+        taskId: request.taskId,
+        kind: request.kind,
+        state: 'pending',
+        source: request.source,
+        requestHash: hash,
+        payloadJson: encodedIntentPayload(request.payload),
+        executionLineageId: request.scope.executionLineageId,
+        continuationSlotKey: request.scope.continuationSlotKey,
+        slotPathJson: encodeLineageSlotPath(request.scope.slotPath),
+        operationGeneration: request.scope.operationGeneration,
+        replayAuthorizationId: input.replayAuthorizationId ?? null,
+        authorizationScopeJson: input.authorizationScopeJson ?? null,
+        expectedTaskRevision: request.expectedTaskRevision,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run()
+  } catch (error) {
+    pendingIntentInsertConflict(engineOf(tx).uniqueViolationTarget, request.taskId, error)
+  }
   return { intentId, state: 'pending', idempotent: false, requestHash: hash }
 }
 

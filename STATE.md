@@ -2,6 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> **RFC-359 W8 修红之二 —— 唯一冲突映射的第三档（2026-09-10）**：`90dc5d46e` 还红了两格。① `rfc349-resource-catalog-intent-apply-postgresql` 的字面量锚点钉在被搬走的函数体上，已按「锚点跟着实现走」挪（`3dc167004`）。② `rfc359-w8-t29` 的并发对拍偶发漏成 500：`uniqueViolationTarget` 是**三态**（`undefined` 不是冲突 / `''` 是冲突但驱动没报名字 / 名字），我此前那条按约束名的正则把 `''` 判成 false。本机 200 轮并发复现不出来，是真实可达的窄路径。
+> **正解是缩小作用域而不是把正则写全**：映射从整笔事务外挪到贴着那条 `insert(taskExecutionIntents)`，判据退化成 `target !== undefined`；同事务对 `taskExecutionLineageOperationRecords`（也带唯一索引）的 UPDATE 留在 try 外，并有一条源码断言钉住这个边界——实测把 UPDATE 挪进 try 当场转红。`admitWithPendingIntentConflict` / `isPendingIntentUniqueConflict` 连同那条正则一并删除，两个调用点直接走 `serializable`。
+> 配套让失败自述：T29 的拒因形态现在带上三态判决（`Error[unique:<unnamed>]:…`），下一次复发是诊断不是猜（这条红了两次，第一次猜错了方向）。教训落 `docs/dev-gotchas.md`。
+
 > **RFC-359 W8 补刀之三 + 修红（2026-09-10）**：`1d3340a22` 在 CI 上红了一格——`tests/rfc331-task-execution-topology.test.ts` 的 `REGISTERED_PREEXISTING_DEEP_IMPORTS` 账本要登记 `services/task.ts → frozenTaskTriggerPreflight` 这条新的深 import。**漏红的原因是挑测试的方法错了**：我按 `GUARD_FILE_NAME_PATTERN` 的关键词从 `tests/` 根下挑了 99 个守卫跑，而那个文件名里一个关键词都没有（"topology" 不在表里）。已补账本条目 + 一次性 `allowGrowth`（10 → 11），并把正确挑法（按「谁扫源码语料」挑，实测 336 个文件）与「`ledger-baselines.json` 只有 N1 系是 census 复算的、其余基线要手改」两条落 `docs/dev-gotchas.md`。
 > 同批再收一对 provider 孪生：`notSyncable`（`sqlite/postgresqlTaskRouteOperations.ts` 各一份逐字副本，纯投影、不碰 DB）收成 `domain/workflowSyncPreview.ts` 的 `notSyncableWorkflowPreview`，零新增边（domain 只依赖 `@agent-workflow/shared`，而 shared 不计入跨上下文账本——只有 drizzle-orm 计）。机械重复组 19 → 18。
 

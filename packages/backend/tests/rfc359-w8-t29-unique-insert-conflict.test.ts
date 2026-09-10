@@ -85,6 +85,7 @@ import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infras
 import type { RepositoryGroupNodeRecord } from '@/modules/source-control/public/operations'
 import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { postgresqlUniqueViolationConstraint } from '../src/platform/persistence/capabilities'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeTestSkillCatalog } from './helpers/skillCatalog'
 
@@ -97,7 +98,13 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 function rejectionShape(reason: unknown): string {
   const named = reason as { name?: string; code?: string; message?: string }
   if (typeof named?.code === 'string') return `${String(named.name)}:${named.code}`
-  return `${String(named?.name ?? 'unknown')}:${String(named?.message ?? reason).slice(0, 200)}`
+  // 裸驱动错误：把**为什么没被翻成领域错误**一并带出来。只报 message 的话，断言 diff 里只有
+  // 「Failed query: insert into …」，看不出 SQLSTATE、也看不出能力矩阵怎么判的——2026-09-10
+  // 这条红了两次，两次都只能靠猜（第一次猜错了一轮）。三态：`undefined` = 没被认成唯一冲突；
+  // `''` = 是唯一冲突但驱动没报名字；非空串 = 约束名 / 列清单。
+  const target = postgresqlUniqueViolationConstraint(reason)
+  const verdict = target === undefined ? 'not-unique-violation' : `unique:${target || '<unnamed>'}`
+  return `${String(named?.name ?? 'unknown')}[${verdict}]:${String(named?.message ?? reason).slice(0, 160)}`
 }
 
 /** `Promise.allSettled` 的结果归一成可排序的字符串数组（成功侧由调用方给形状）。 */

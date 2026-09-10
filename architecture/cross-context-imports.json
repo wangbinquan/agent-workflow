@@ -66592,6 +66592,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d298c90528b7e84cddb1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "engineOf",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -81602,9 +81619,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4800,
+    "architectureExceptions": 4801,
     "implementationSccs": 0,
-    "observedEdges": 5339,
+    "observedEdges": 5340,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -151406,6 +151423,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#$file",
+      "id": "import:d298c90528b7e84cddb1",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "engineOf",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -167574,7 +167607,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:27bb53c4f28a49a86aa302c541d462b4103a6a60f301ca503b5f7365d5114f9d",
+  "sourceDigest": "sha256:4076e6cdb187e77dd0ac84b678535e616bc3fd1f37d307dd6a2d19b3c9d4a8f5",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

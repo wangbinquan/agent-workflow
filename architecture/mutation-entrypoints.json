@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1737,
+    "entries": 1736,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27684,30 +27684,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#admitWithPendingIntentConflict",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#admitWithPendingIntentConflict",
-      "symbol": "admitWithPendingIntentConflict",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -41483,7 +41459,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:27bb53c4f28a49a86aa302c541d462b4103a6a60f301ca503b5f7365d5114f9d",
+  "sourceDigest": "sha256:4076e6cdb187e77dd0ac84b678535e616bc3fd1f37d307dd6a2d19b3c9d4a8f5",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43335,8 +43311,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#194:taskExecutionIntents",
-        "line": 194,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#178:taskExecutionIntents",
+        "line": 178,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#submitCanonicalTaskExecutionIntent",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -43351,8 +43327,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#333:taskExecutionLineageOperationRecords",
-        "line": 333,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#320:taskExecutionLineageOperationRecords",
+        "line": 320,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#submitTaskContinuation",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",

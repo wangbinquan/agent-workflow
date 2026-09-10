@@ -5800,3 +5800,28 @@ for f in chunk-*; do bun test --isolate $(cat $f | tr '\n' ' '); done
 于是「改了守卫里的账本数组 → 跑一遍 census → 以为基线跟着走了」是错的：census 跑完 `baseline`
 还是旧值，而钉死它的守卫会红。**手改数组的同时要手改 `baseline`**，然后才轮到 `allowGrowth`
 （涨了才写，一次性）。判断某条是不是 N1：跑一次 census，看它的 `baseline` 有没有自己动。
+
+## `uniqueViolationTarget` 是**三态**：`undefined` / `''` / 名字——按名字正则判会漏掉中间那档（2026-09-10 两次红）
+
+`platform/persistence/capabilities.ts` 两个引擎的 `uniqueViolationTarget` 都这样回答：
+
+| 返回值 | 含义 |
+| --- | --- |
+| `undefined` | 这条错误**不是**唯一冲突 |
+| `''` | **是**唯一冲突，但驱动没说是哪条约束（PG 的 23505 不带 `constraint`；SQLite 的 message 匹配不出列清单） |
+| 非空串 | 约束名（PG）/ 列清单（SQLite） |
+
+把「是不是我关心的那条冲突」写成**约束名正则**，`''` 这一档就被判成 false，驱动错误原样漏到
+HTTP 边界——用户拿到 **500 而不是 409**。这种漏法本地极难复现（并发 200 轮全绿），只在 CI 上偶发。
+
+**正解是缩小作用域，而不是把正则写得更全**：把映射从「整笔事务外面」挪到**贴着那条语句**，
+判据就能退化成 `target !== undefined`（「这条语句上的任何唯一冲突」），不再依赖驱动报不报名字。
+安全性由作用域保证——同事务里别的表若也带唯一索引，它们的写不在那个 `try` 里。RFC-359 W8 的
+`taskContinuationAdmission.ts` 是范例：`try` 只包 `insert(taskExecutionIntents)`，同事务对
+`taskExecutionLineageOperationRecords` 的 UPDATE 留在外面，并有一条源码断言钉住这个边界
+（把 UPDATE 挪进 `try` 实测转红）。
+
+配套：**让这类失败自述**。并发对拍的拒因只报 `message` 时，断言 diff 里只有
+`Failed query: insert into …`，看不出 SQLSTATE、也看不出能力矩阵怎么判的——同一条红了两次、
+第一次还猜错了方向。把 `uniqueViolationTarget` 的三态判决拼进拒因形态
+（`Error[unique:<unnamed>]:…` / `Error[not-unique-violation]:…`），下一次复发就是诊断而不是猜。
